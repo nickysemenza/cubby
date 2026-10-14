@@ -88,6 +88,7 @@ import {
   vendor,
   aiUsage,
   aiEvaluation,
+  aiEvaluationRequest,
   auditLog,
   cookbook,
   device,
@@ -1411,6 +1412,18 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
+    "AiEvaluationRequest.runId": {
+      column: aiEvaluationRequest.runId,
+      role: "history",
+      label: "AI work requests",
+      description:
+        "Frozen work membership and independent receipts requested by this Run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Request receipts retain their Run identity through archival and deletion.",
+      },
+    },
     "AiEvaluation.runId": {
       column: aiEvaluation.runId,
       role: "history",

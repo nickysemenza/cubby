@@ -123,6 +123,11 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "AiEvaluationRequest.runId": {
+    classification: "metadata",
+    reason:
+      "retains requesting Run membership and receipts without exposing a navigable implementation row",
+  },
   "AiEvaluation.runId": {
     classification: "metadata",
     reason: "records the Run that owns the durable target evaluation",

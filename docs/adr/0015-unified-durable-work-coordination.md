@@ -35,7 +35,9 @@ demonstrated recovery gap. A universal scheduler is not required for authorized
 work to become automatic and self-healing.
 
 Identical pending requests share execution when target, model, policy and
-evidence agree, while each requesting Run retains its own receipt. Cancelling
+evidence agree, while each requesting Run retains its own receipt. Request
+receipts are history references that retain their Run identity through archival
+and deletion, rather than navigable entity relationships. Cancelling
 one request leaves work requested by another intact; a later deliberate rerun
 creates fresh execution. Member work has priority with background fairness.
 Suggestion Sweep fixes roster membership at launch and rechecks current values

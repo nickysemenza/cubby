@@ -94,6 +94,9 @@ subqueries unless an `includes-deleted: <reason>` comment makes the exception
 intentional. Removal paths clean `SearchDocument` and `EntityEmbedding` in the
 same transaction and propagate dependent staleness. Declare exhaustive,
 operation-specific incoming-edge policy from `entity-incoming-edges.ts`.
+Every new entity-targeting FK also needs a stable `ENTITY_EDGES` declaration
+and graph coverage or an explicit non-graph metadata classification. Run
+`entity-manifest-fk.unit.test.ts` after adding one, including ledger child tables.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
