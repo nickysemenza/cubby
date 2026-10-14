@@ -760,7 +760,7 @@ function SearchPicker<TId extends string>({
     : `No ${noun} found.`;
 
   return (
-    <div className={cn("min-w-0", className)}>
+    <div className={cn("w-full min-w-0", className)}>
       <ComboboxPrimitive.Root<ComboboxItem<TId>>
         items={orderedItems}
         filteredItems={orderedItems}
@@ -786,10 +786,12 @@ function SearchPicker<TId extends string>({
         autoHighlight
         disabled={gate.disabled}
       >
+        {/* A container so a field squeezed into a narrow cell (a recipe
+            ingredient row) gives its width to the text, not the chrome. */}
         <ComboboxPrimitive.InputGroup
           ref={anchorRef}
           data-hydrating={gate["data-hydrating"]}
-          className={fieldFrameClass(compact)}
+          className={cn(fieldFrameClass(compact), "@container/picker")}
         >
           {open ? null : <SelectedLead value={value} />}
           <ComboboxPrimitive.Input
@@ -805,7 +807,7 @@ function SearchPicker<TId extends string>({
           {clearable && value ? (
             <ComboboxPrimitive.Clear
               aria-label={clearLabel}
-              className="flex h-full shrink-0 items-center justify-center px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
+              className="hidden h-full shrink-0 items-center justify-center px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11 @min-[9rem]/picker:flex"
               onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -818,7 +820,7 @@ function SearchPicker<TId extends string>({
           ) : null}
           <ComboboxPrimitive.Trigger
             aria-label={`Show ${noun} options`}
-            className="flex h-full min-w-7 shrink-0 items-center justify-center max-sm:min-w-11"
+            className="hidden h-full min-w-7 shrink-0 items-center justify-center max-sm:min-w-11 @min-[9rem]/picker:flex"
           >
             <CaretGlyph open={open} />
           </ComboboxPrimitive.Trigger>
@@ -893,7 +895,7 @@ function ChoosePicker<TId extends string>({
   );
 
   return (
-    <div className={cn("min-w-0", className)}>
+    <div className={cn("w-full min-w-0", className)}>
       <SelectPrimitive.Root<string>
         items={labels}
         value={value?.id ?? null}
