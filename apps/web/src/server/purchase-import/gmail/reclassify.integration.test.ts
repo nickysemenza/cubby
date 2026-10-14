@@ -16,6 +16,7 @@ import {
   TEST_AI_WORK_LAUNCHER,
   reclassifyForTest as reclassifyEmails,
 } from "tooling/ai-work";
+import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,7 +26,6 @@ import {
   aiEvaluation,
   aiEvaluationRequest,
   email as emailTable,
-  emailClassificationLabel,
   emailClassificationObservation,
   orderMail,
   run,
@@ -468,7 +468,7 @@ describe("member Reclassify", () => {
           classificationVersion: "synthetic-history",
         })
         .returning();
-      await getDb(ctx.db).insert(emailClassificationLabel).values({
+      await seedEmailClassificationFeedback(ctx.db, {
         predictionId: prediction!.id,
         classification: "related",
         reason: "Synthetic independent member review",
@@ -526,7 +526,7 @@ describe("member Reclassify", () => {
         classificationVersion: "synthetic-history",
       })
       .returning();
-    await getDb(ctx.db).insert(emailClassificationLabel).values({
+    await seedEmailClassificationFeedback(ctx.db, {
       predictionId: prediction!.id,
       classification: "related",
       reason: "Synthetic member review",

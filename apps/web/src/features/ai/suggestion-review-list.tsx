@@ -2,9 +2,9 @@ import {
   formatConfidence,
   suggestionReviewListInput,
   suggestionStatus,
-  type SuggestionReviewBatchOut,
   type SuggestionReviewRow,
 } from "@cubby/schemas/ai";
+import type { AssessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -18,7 +18,10 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { enumFieldLabel } from "~/entity/enum-field-display";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  ai,
+  assessment,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
@@ -50,7 +53,7 @@ import {
   type SuggestionReviewFilters,
 } from "./suggestion-review-filters";
 
-type Outcome = SuggestionReviewBatchOut[number];
+type Outcome = AssessmentReviewBatchOut[number];
 type ReviewState = {
   key: string;
   generation: number;
@@ -494,7 +497,7 @@ function ReviewFilters({
 /**
  * The Review tab: stored Suggestions on the shared table, filtered from the
  * URL, settled one at a time from each row's body or in bulk through
- * `ai.acceptSuggestions` / `ai.rejectSuggestions`, whose per-id results stay
+ * `assessment.reviewBatch`, whose per-id results stay
  * beside their rows.
  */
 export function SuggestionReviewList({
@@ -531,12 +534,28 @@ export function SuggestionReviewList({
   const settle = async (action: "accept" | "reject", ids: string[]) => {
     const generation = review.generation;
     const shown = list.data ?? [];
-    const results =
-      action === "accept"
-        ? await ai.acceptSuggestions.call({ ids })
-        : await ai.rejectSuggestions.call({ ids });
+    const idsByAssessment = new Map(
+      shown.map((row) => [row.id, row.assessmentId]),
+    );
+    const results = await assessment.reviewBatch.call({
+      items: ids.map((id) => ({
+        assessmentId: idsByAssessment.get(id)!,
+        operationId: crypto.randomUUID(),
+        verdict: action === "accept" ? "correct" : "wrong",
+        correction: { present: false },
+        intent: action === "accept" ? "apply" : "history",
+        reason: null,
+        evidence: null,
+      })),
+    });
     const failed = new Set(
-      results.filter((result) => !result.ok).map((result) => result.id),
+      results
+        .filter((result) => !result.ok)
+        .map((result) => {
+          return [...idsByAssessment].find(
+            ([, assessmentId]) => assessmentId === result.assessmentId,
+          )?.[0];
+        }),
     );
     setReview((previous) =>
       previous.generation !== generation
@@ -545,7 +564,16 @@ export function SuggestionReviewList({
             ...previous,
             outcomes: new Map([
               ...previous.outcomes,
-              ...results.map((result) => [result.id, result] as const),
+              ...results.map(
+                (result) =>
+                  [
+                    [...idsByAssessment].find(
+                      ([, assessmentId]) =>
+                        assessmentId === result.assessmentId,
+                    )?.[0] ?? "",
+                    result,
+                  ] as const,
+              ),
             ]),
             // Failed rows as they were when settled: accepting one selected
             // row can supersede another, which then fails and leaves the

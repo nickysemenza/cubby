@@ -1,7 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/data-quality-value";
 import { fieldClearing } from "~/entity/editing/field-clearing";
@@ -11,6 +11,7 @@ import { entityDetailLink } from "~/entity/entities";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { formatCurrency } from "~/lib/utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   FormWrapper,
   NullableNumericField,
@@ -166,14 +167,25 @@ function EditableCalendarItem({
     },
     operations,
   );
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
   const error = session.issues.find((issue) => !issue.field)?.message;
 
   return (
     <FormWrapper
       form={session.form}
       onSubmit={() => {
-        void session.submit().then((result) => {
-          if (result.ok) onSaved?.();
+        void session.submit().then(async (result) => {
+          if (!result.ok) return;
+          if (item.kind === "meal") {
+            try {
+              await receiptHandler.current?.(item.id);
+            } catch (error) {
+              showErrorToast(error, "Saved, but suggestion receipt failed");
+            }
+          }
+          onSaved?.();
         });
       }}
       error={error}
@@ -203,6 +215,7 @@ function EditableCalendarItem({
         <FieldSuggestionProvider
           entity="meal"
           mode="edit"
+          receiptHandler={receiptHandler}
           fieldKeys={["mealType", "mealKind"]}
         >
           <PickerField

@@ -2,14 +2,10 @@ import {
   imageDescriptionResult,
   selectImageDescription,
 } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  aiAnalysis,
-  image,
-  imageDescriptionCorrection,
-} from "~/server/db/schema";
+import { aiAnalysis, image, assessmentState } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
@@ -48,15 +44,17 @@ export async function loadSelectedDescriptions(
   const corrections = await unwrapDb(db)
     .select({
       shortcode: image.shortcode,
-      description: imageDescriptionCorrection.description,
+      description: sql<string>`${assessmentState.confirmedValue}->>'value'`,
     })
-    .from(imageDescriptionCorrection)
-    .innerJoin(image, eq(image.id, imageDescriptionCorrection.imageId))
+    .from(assessmentState)
+    .innerJoin(image, eq(image.id, assessmentState.recordId))
     .where(
       and(
         inArray(image.shortcode, shortcodes),
         notDeleted(image),
-        notDeleted(imageDescriptionCorrection),
+        eq(assessmentState.active, true),
+        eq(assessmentState.family, "image_description"),
+        sql`${assessmentState.confirmedValue} @> ${JSON.stringify({ present: true })}::jsonb`,
       ),
     );
   const correctionsByImage = new Map(

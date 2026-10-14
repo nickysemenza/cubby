@@ -7,6 +7,8 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  assessment,
+  assessmentState,
   entityAttachment,
   entityExternalId,
   inventoryEntry,
@@ -14,6 +16,7 @@ import {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createPlanting } from "~/server/repo/garden";
 import { createUploadedImageRecord } from "~/server/repo/image";
@@ -24,7 +27,6 @@ import {
   listProductComponents,
 } from "~/server/repo/product-components";
 import {
-  dismissProductMatch,
   listProductMatchRows,
   productPairKey,
   upsertAgentProductMatch,
@@ -42,6 +44,7 @@ import {
   insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 
 import type { ProductRepoCreateInput } from "./crud";
 
@@ -414,7 +417,21 @@ describe("mergeProducts", () => {
       evidence: "loser matches third",
       sourceUrls: ["https://example.com/a"],
     });
-    await dismissProductMatch(ctx.db, [keeper.id, fourth.id]);
+    const preference = await upsertAgentProductMatch(ctx.db, {
+      productIds: [keeper.id, fourth.id],
+      evidence: "Synthetic preference",
+      sourceUrls: [],
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: preference.id,
+      operationId: crypto.randomUUID(),
+      verdict: "dismissed",
+      suppression: {
+        scope: "product_pair",
+        candidateKey: productPairKey(keeper.id, fourth.id),
+        fingerprint: null,
+      },
+    });
     await upsertAgentProductMatch(ctx.db, {
       productIds: [loser.id, fourth.id],
       evidence: "loser matches fourth",
@@ -427,24 +444,34 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    const rows = await listProductMatchRows(ctx.db);
-    const byPair = new Map(
-      rows.map((row) => [productPairKey(row.productAId, row.productBId), row]),
-    );
-    expect(rows).toHaveLength(2);
-    expect(byPair.get(productPairKey(keeper.id, third.id))).toMatchObject({
-      source: "agent",
-      state: "open",
-      evidence: "loser matches third",
-      sourceUrls: ["https://example.com/a"],
+    const history = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.family, "product_pair"));
+    expect(history).toHaveLength(4);
+    expect(
+      history.some(
+        (row) =>
+          row.subject.kind === "product_pair" &&
+          [row.subject.recordId, row.subject.otherId].includes(loser.id),
+      ),
+    ).toBe(true);
+    const states = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.family, "product_pair"));
+    expect(
+      states.find(
+        (row) => row.data && JSON.stringify(row.data).includes(third.id),
+      ),
+    ).toMatchObject({
+      recordId: keeper.id,
+      status: "superseded",
+      fingerprint: null,
     });
-    // The person's dismissal stands; the loser's agent evidence rides along.
-    expect(byPair.get(productPairKey(keeper.id, fourth.id))).toMatchObject({
-      source: "agent",
-      state: "dismissed",
-      evidence: "loser matches fourth",
-      sourceUrls: ["https://example.com/b"],
-    });
+    expect(await listProductMatchRows(ctx.db)).toMatchObject([
+      { state: "dismissed" },
+    ]);
   });
 
   it("dedupes separately stored product images with the same verified hash", async () => {

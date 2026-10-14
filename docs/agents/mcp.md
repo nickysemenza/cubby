@@ -48,8 +48,8 @@ load or resume a Workflow. Discovery has no coordinator conversation, so its own
 decisions are reachable on MCP too
 (`run.approve_execution`, `run.discover_mail`, `run.commit_prepared`,
 `run.resolve_finding`, `photo_run.approve_groups`,
-`product_enrichment.merge_match`, suggestion review: `entity.accept_suggestion(s)`,
-`entity.reject_suggestion(s)`, each batch returning a per-id `ok`/`error`
+`product_enrichment.merge_match`, suggestion review: `entity.review_assessment`,
+`entity.review_assessments`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
 on the member's explicit instruction for that specific budget or scope. An
 exact-checksum member-selected Luna Email import or its member-controlled retry

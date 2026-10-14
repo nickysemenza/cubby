@@ -1,3 +1,4 @@
+import { feedbackAuthority } from "@cubby/schemas/assessment";
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,
@@ -65,7 +66,7 @@ const emailLinkedDecisionPurchasesSql = (includeDeleted = false): SQL => sql`
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "OrderMailCandidateDecision" decision ON decision."eventId" = event."id"
+  INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
@@ -109,7 +110,7 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
       )
     UNION
     SELECT candidate."id"
-    FROM "OrderMailCandidateDecision" decision
+    FROM "AssessmentEmailLink" decision
     JOIN "OrderMailEvent" event ON event."id" = decision."eventId"
     JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND candidate."deletedAt" IS NULL
     WHERE decision."purchaseId" = ${purchaseId}
@@ -131,13 +132,13 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
 export const emailMemberClassificationSql =
   () => sql<MailboxClassification | null>`
   CASE WHEN "Email"."classificationStage" = ${resolution} THEN "Email"."classification" ELSE (
-    SELECT label."classification"
-    FROM "EmailClassificationLabel" label
-    INNER JOIN "EmailClassificationObservation" prediction ON prediction."id" = label."predictionId"
+    SELECT label.correction->>'value'
+    FROM "Feedback" label
+    INNER JOIN "EmailClassificationObservation" prediction ON prediction."id"::text = label.metadata->>'predictionId'
     INNER JOIN "LedgerParty" owner ON owner."id" = "Email"."ledgerPartyId"
     WHERE prediction."emailId" = "Email"."id"
       AND prediction."checksum" = "Email"."checksum"
-      AND label."actorUserId" = owner."userId"
+      AND label."actorUserId" = owner."userId" AND label.authority = ${feedbackAuthority.enum.member}
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
   ) END

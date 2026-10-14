@@ -38,7 +38,7 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink,
   orderMailEvent,
   product,
   purchase,
@@ -1231,20 +1231,20 @@ export async function commitPurchaseImport(
           // conflict outcome that is not linked.
           if (result.purchaseId && mailSource && !linksMail) {
             const [dismissed] = await database
-              .select({ id: orderMailCandidateDecision.id })
-              .from(orderMailCandidateDecision)
+              .select({ id: assessmentEmailLink.id })
+              .from(assessmentEmailLink)
               .innerJoin(
                 orderMailEvent,
-                eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+                eq(orderMailEvent.id, assessmentEmailLink.eventId),
               )
               .where(
                 and(
                   eq(orderMailEvent.orderMailId, mailSource.id),
                   eq(
-                    orderMailCandidateDecision.purchaseId,
+                    assessmentEmailLink.purchaseId,
                     parseEntityId("purchase", result.purchaseId),
                   ),
-                  eq(orderMailCandidateDecision.decision, "dismissed"),
+                  eq(assessmentEmailLink.decision, "dismissed"),
                 ),
               )
               .limit(1);

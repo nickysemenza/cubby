@@ -88,7 +88,7 @@ Cards load as they approach the viewport and retain unfinished edits after
 scrolling away. Approved and discarded details stay collapsed until opened.
 
 Proposal values name their last recorded writer. They are not Jev/Clef field
-suggestions; catalogue match rankings are deterministic. Older proposals whose
+suggestions. Product identity detection reads every live Product through durable AI refresh work; review surfaces read stored pair Assessments. Exact identifiers and verified variants carry the decision evidence. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
 writer was not recorded say so. Manufacturer is text on a Product, not a
 separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative

@@ -11,19 +11,19 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
   email as emailTable,
   ledgerParty,
   orderMail,
-  orderMailCandidateDecision,
   orderMailEvent,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
+import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
 import {
   databaseForTransaction,
   getDb,
@@ -59,7 +59,7 @@ export async function decideEmailPurchase(
   } catch (error) {
     if (
       input.decision !== "linked" ||
-      !isUniqueViolation(error, "OrderMailCandidateDecision_one_link_key")
+      !isUniqueViolation(error, "AssessmentState_email_one_link_key")
     )
       throw error;
     return decideOnce(db, input, actor);
@@ -200,51 +200,22 @@ async function decideOnce(
     }
     if (events.size === 0)
       throw new Error(`Nothing links this Email to ${input.purchaseId}.`);
-    const eventIds = [...events.keys()];
 
     if (input.decision === "linked") {
       await ensureMailVendorAccount(tx, {
         vendorId: target.vendorId,
         ledgerPartyId: email.ledgerPartyId,
       });
-      // One linked Purchase per event: this member's link replaces another.
-      await tx
-        .update(orderMailCandidateDecision)
-        .set({ decision: "dismissed", updatedAt: new Date() })
-        .where(
-          and(
-            inArray(orderMailCandidateDecision.eventId, eventIds),
-            eq(orderMailCandidateDecision.decision, "linked"),
-            ne(orderMailCandidateDecision.purchaseId, purchaseId),
-          ),
-        );
     }
     for (const [eventId, row] of events)
-      await tx
-        .insert(orderMailCandidateDecision)
-        .values({
-          eventId,
-          purchaseId: parseEntityId("purchase", purchaseId),
-          decision: input.decision,
-          evidenceChecksum: input.expectedChecksum,
-          decidedByUserId: actor.userId,
-          // A suggestion the member acted on was the heuristic's proposal.
-          proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
-        })
-        .onConflictDoUpdate({
-          target: [
-            orderMailCandidateDecision.eventId,
-            orderMailCandidateDecision.purchaseId,
-          ],
-          // An existing decision keeps its proposer: a dismissed agent link
-          // stays an agent proposal the member rejected.
-          set: {
-            decision: input.decision,
-            evidenceChecksum: input.expectedChecksum,
-            decidedByUserId: actor.userId,
-            updatedAt: new Date(),
-          },
-        });
+      await publishEmailLinkDecision(databaseForTransaction(tx), {
+        eventId,
+        purchaseId: parseEntityId("purchase", purchaseId),
+        decision: input.decision,
+        evidenceChecksum: input.expectedChecksum,
+        decidedByUserId: actor.userId,
+        proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
+      });
 
     // A member's link is relevance evidence (ADR 0011): it resolves the Email
     // related, even when a rule or model already said so, so a rerun cannot

@@ -12,15 +12,12 @@ import type {
 import { refreshEntityEmbeddings } from "~/server/background-tasks/embedding";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import {
-  getDuplicateProductRecommendationWorkflow,
-  dismissDuplicateProductRecommendationWorkflow,
-  dismissTagPropagationWorkflow,
-  dismissProductRecommendationWorkflow,
-} from "~/server/operations/recommendations.server";
+import { getDuplicateProductRecommendationWorkflow } from "~/server/operations/recommendations.server";
 import { requestEmbeddingRefreshWorkflow } from "~/server/operations/search.server";
 import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
+import { publishProductPair } from "~/server/repo/product-match-candidate";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -35,6 +32,7 @@ import {
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/repo/search-document";
 import { getActiveSuggestionDismissalKeys } from "~/server/repo/suggestion-dismissal";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   createInMemoryVectorizeIndex,
@@ -185,7 +183,7 @@ describe("semantic search background tasks", () => {
       }),
       ctx.actor,
     );
-    await createProduct(
+    const duplicate = await createProduct(
       ctx.db,
       makeProductInput({
         name: "Duplicate identity two",
@@ -197,16 +195,29 @@ describe("semantic search background tasks", () => {
       }),
       ctx.actor,
     );
+    await publishProductPair(ctx.db, {
+      productIds: [source.entityId, duplicate.entityId],
+      source: "detector",
+      actionable: true,
+      evidence: "Synthetic retained exact identity",
+      sourceUrls: [],
+    });
+    const recommendation = await getDuplicateProductRecommendationWorkflow(
+      ctx.db,
+      { sourceId: source.id },
+    );
+    expect(recommendation?.review).toBeTruthy();
     expect(
       await getDuplicateProductRecommendationWorkflow(ctx.db, {
         sourceId: source.id,
       }),
     ).not.toBeNull();
-    expect(
-      await dismissDuplicateProductRecommendationWorkflow(ctx.db, {
-        sourceId: source.id,
-      }),
-    ).toEqual({ ok: true });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      ...recommendation!.review!,
+      operationId: crypto.randomUUID(),
+      verdict: "dismissed",
+      intent: "history",
+    });
     expect(
       await getDuplicateProductRecommendationWorkflow(ctx.db, {
         sourceId: source.id,
@@ -231,23 +242,24 @@ describe("semantic search background tasks", () => {
       makeProductInput({ name: "Unrelated target" }),
       ctx.actor,
     );
-    await expect(
-      dismissDuplicateProductRecommendationWorkflow(ctx.db, {
+    expect(
+      await getDuplicateProductRecommendationWorkflow(ctx.db, {
         sourceId: source.id,
       }),
-    ).rejects.toThrow("Duplicate recommendation is no longer current");
+    ).toBeNull();
     await expect(
-      dismissTagPropagationWorkflow(ctx.db, {
-        sourceId: source.id,
-        tag: "collection:unproposed",
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: crypto.randomUUID(),
+        operationId: crypto.randomUUID(),
+        verdict: "dismissed",
+        intent: "history",
+        suppression: {
+          scope: "product.related",
+          candidateKey: target.id,
+          fingerprint: null,
+        },
       }),
-    ).rejects.toThrow("Tag recommendation is no longer current");
-    await expect(
-      dismissProductRecommendationWorkflow(ctx.db, {
-        sourceId: source.id,
-        targetId: target.id,
-      }),
-    ).rejects.toThrow("Recommendation is no longer current");
+    ).rejects.toThrow("Assessment not found");
     for (const suggestionKind of [
       "product.duplicate",
       "product.tag-propagation",

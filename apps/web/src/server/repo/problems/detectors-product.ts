@@ -1,4 +1,5 @@
-import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
+import { displayGtin } from "@cubby/schemas/external-id";
+import { productShortcode } from "@cubby/schemas/identifiers";
 /**
  * Product-centric Problems detectors.
  *
@@ -20,7 +21,6 @@ import { createLogger } from "@cubby/worker-tracing";
 import {
   and,
   eq,
-  exists,
   gt,
   inArray,
   isNotNull,
@@ -29,6 +29,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -37,7 +38,6 @@ import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import {
-  entityExternalId,
   entityLink,
   expense,
   ingredient,
@@ -53,11 +53,12 @@ import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
-import { canonicalLabelKey } from "~/server/repo/label-canonical";
 import {
   categoryFeatureSql,
   categorySummarySql,
 } from "~/server/repo/product-category-sql";
+import { loadProductMatchSides } from "~/server/repo/product-match";
+import { listProductMatchRows } from "~/server/repo/product-match-candidate";
 import {
   loadPrimaryGtins,
   productHasAnyGtin,
@@ -264,192 +265,91 @@ export const findToolsUsedOutsideOwnership = async (
   );
 };
 
-/** Name variants are merge suggestions only: candidates must not share live evidence and never auto-merge. */
+/** Each actionable Problem is one independently assessed pair; grouping never authorizes a transitive merge. */
 export const findDuplicateProductIdentities = async (
   db: Database,
 ): Promise<ProblemItem<"duplicateProductIdentities">[]> => {
-  const dbClient = getDb(db);
-  const manufacturerKey = canonicalLabelKey(product.manufacturer);
-  // JavaScript's trim/lower contract is authoritative below. On ASCII-only
-  // models, this SQL form is identical (the vertical tab is octal because
-  // PostgreSQL escape strings do not spell it as `\v`). Any manufacturer that
-  // contains a non-ASCII model takes the conservative fallback path below,
-  // since JavaScript handles Unicode whitespace/case differently.
-  const asciiModelKey = sql<string>`lower(btrim(${product.model}, E' \\t\\n\\r\\f\\013'))`;
-  const isAsciiModel = sql`${product.model} ~ '^[[:ascii:]]*$'`;
-  // Keep the first read to model groups that can actually produce a duplicate,
-  // except for the Unicode fallback described above. The semantic exclusions
-  // below remain in TypeScript because `isMiscProduct` and
-  // `isUnspecifiedManufacturer` are shared application predicates, not SQL
-  // policy; a group can therefore still be discarded after this prefilter.
-  const duplicateAsciiModelGroups = dbClient
-    .select({
-      manufacturerKey: manufacturerKey.as("manufacturerKey"),
-      modelKey: asciiModelKey.as("modelKey"),
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        isNotNull(product.model),
-        isAsciiModel,
-        sql`${asciiModelKey} <> ''`,
-      ),
-    )
-    .groupBy(manufacturerKey, asciiModelKey)
-    .having(sql`count(*) > 1`)
-    .as("duplicate_product_identity_ascii_groups");
-
-  const manufacturersWithNonAsciiModels = dbClient
-    .select({
-      manufacturerKey: manufacturerKey.as("manufacturerKey"),
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        isNotNull(product.model),
-        sql`NOT ${isAsciiModel}`,
-      ),
-    )
-    .groupBy(manufacturerKey)
-    .as("product_manufacturers_with_non_ascii_models");
-
-  const belongsToDuplicateAsciiModelGroup = exists(
-    dbClient
-      .select({ one: sql`1` })
-      .from(duplicateAsciiModelGroups)
-      .where(
-        and(
-          eq(duplicateAsciiModelGroups.manufacturerKey, manufacturerKey),
-          eq(duplicateAsciiModelGroups.modelKey, asciiModelKey),
-        ),
-      ),
+  const pairs = (await listProductMatchRows(db)).filter(
+    (row) => row.state === "open" && row.actionable,
   );
-  const belongsToUnicodeFallbackManufacturer = exists(
-    dbClient
-      .select({ one: sql`1` })
-      .from(manufacturersWithNonAsciiModels)
-      .where(
-        eq(manufacturersWithNonAsciiModels.manufacturerKey, manufacturerKey),
-      ),
+  const sides = await loadProductMatchSides(
+    db,
+    pairs.flatMap((row) => [row.productAId, row.productBId]),
   );
-
-  const rows = await dbClient
-    .select({
-      id: product.id,
-      shortcode: product.shortcode,
-      name: product.name,
-      manufacturer: product.manufacturer,
-      model: product.model,
-      // The SAME canonical key `findManufacturerSpellingVariants` and
-      // `resolveEstablishedManufacturer` use, so `Ryobi`/`RYOBI` can't split a
-      // real duplicate apart before this detector can group it.
-      manufacturerKey,
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        isNotNull(product.model),
-        or(
-          belongsToDuplicateAsciiModelGroup,
-          belongsToUnicodeFallbackManufacturer,
+  const headers = new Map(
+    (
+      await getDb(db)
+        .select({
+          id: product.id,
+          manufacturer: product.manufacturer,
+          model: product.model,
+        })
+        .from(product)
+        .where(
+          inArray(
+            product.id,
+            pairs.flatMap((row) => [row.productAId, row.productBId]),
+          ),
+        )
+    ).map((row) => [row.id, row]),
+  );
+  const groups: Array<typeof pairs> = [];
+  for (const pair of pairs) {
+    const connected = groups.filter((group) =>
+      group.some((member) =>
+        [member.productAId, member.productBId].some(
+          (id) => id === pair.productAId || id === pair.productBId,
         ),
       ),
     );
-
-  const candidates = rows.filter(
-    (row): row is typeof row & { model: string } =>
-      row.model != null &&
-      row.model.trim() !== "" &&
-      !isUnspecifiedManufacturer(row.manufacturer) &&
-      !isMiscProduct(row.name),
-  );
-  if (candidates.length === 0) return [];
-
-  const identifiers = await dbClient
-    .select({
-      productId: entityExternalId.entityId,
-      source: entityExternalId.source,
-      kind: entityExternalId.kind,
-      externalId: entityExternalId.externalId,
-    })
-    .from(entityExternalId)
-    .where(
-      and(
-        inArray(
-          entityExternalId.entityId,
-          candidates.map((row) => row.id),
-        ),
-        notDeleted(entityExternalId),
-      ),
-    );
-
-  const byProduct = new Map<
-    string,
-    Array<{ source: string; kind: string; externalId: string }>
-  >();
-  for (const row of identifiers) {
-    const list = byProduct.get(row.productId) ?? [];
-    list.push(row);
-    byProduct.set(row.productId, list);
-  }
-
-  // Model is an exact identifier, so only case and surrounding whitespace are
-  // normalized away; the manufacturer half of the key was canonicalized in SQL.
-  const groups = new Map<string, typeof candidates>();
-  for (const row of candidates) {
-    const key = `${row.manufacturerKey}\u0000${row.model.trim().toLowerCase()}`;
-    const group = groups.get(key) ?? [];
-    group.push(row);
-    groups.set(key, group);
-  }
-
-  const out: ProblemItem<"duplicateProductIdentities">[] = [];
-  for (const group of groups.values()) {
-    if (group.length < 2) continue;
-
-    const withIds = group.filter(
-      (row) => (byProduct.get(row.id) ?? []).length > 0,
-    );
-    if (withIds.length < 2) continue;
-    const sources = uniq(
-      withIds.flatMap((row) =>
-        (byProduct.get(row.id) ?? []).map((id) => id.source),
-      ),
-    );
-    if (sources.length < 2) continue;
-
-    const bySlot = new Map<string, Set<string>>();
-    for (const row of group) {
-      for (const id of byProduct.get(row.id) ?? []) {
-        const slot = `${id.source}\u0000${id.kind}`;
-        const values = bySlot.get(slot) ?? new Set<string>();
-        values.add(id.externalId);
-        bySlot.set(slot, values);
-      }
+    if (!connected.length) groups.push([pair]);
+    else {
+      const merged = connected.flat();
+      merged.push(pair);
+      for (const group of connected) groups.splice(groups.indexOf(group), 1);
+      groups.push(merged);
     }
-    if ([...bySlot.values()].some((values) => values.size > 1)) continue;
-
-    out.push({
-      manufacturer: group[0]!.manufacturer,
-      model: group[0]!.model,
-      products: group.map((row) => ({
-        id: parseShortcodeFor("product", row.shortcode),
-        name: row.name,
-        gtins: (byProduct.get(row.id) ?? [])
-          .filter((id) => id.source === GTIN_SOURCE)
-          .map((id) => id.externalId)
-          .sort(),
-        sources: uniq(
-          (byProduct.get(row.id) ?? []).map((id) => id.source),
-        ).sort(),
-      })),
-    });
   }
-
-  return out;
+  return groups.flatMap((group) => {
+    const members = [
+      ...new Set(group.flatMap((row) => [row.productAId, row.productBId])),
+    ]
+      .map((id) => sides.get(id))
+      .filter((value) => value !== undefined);
+    const first = group[0];
+    if (!first || members.length < 2) return [];
+    return [
+      {
+        assessmentId: first.id,
+        fingerprint: first.fingerprint,
+        identityConflict: group.some((row) => row.conflict),
+        manufacturer: headers.get(first.productAId)?.manufacturer ?? "",
+        model: headers.get(first.productAId)?.model ?? "",
+        products: members.map((side) => ({
+          id: side.id,
+          name: side.name,
+          gtins: side.gtins,
+          sources: side.sources,
+        })),
+        pairs: group.flatMap((row) => {
+          const a = sides.get(row.productAId),
+            b = sides.get(row.productBId);
+          return a && b
+            ? [
+                {
+                  assessmentId: row.id,
+                  fingerprint: row.fingerprint,
+                  identityConflict: row.conflict,
+                  productIds: z
+                    .tuple([productShortcode, productShortcode])
+                    .parse([a.id, b.id]),
+                },
+              ]
+            : [];
+        }),
+      },
+    ];
+  });
 };
 
 // Synthesize a product's *effective* conversion edges (stored mappings + price

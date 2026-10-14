@@ -6,6 +6,7 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
   entityMedia,
   recommendations,
+  assessment,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
@@ -53,7 +54,20 @@ describe("RecommendationWorkbench tag propagation", () => {
         async () => ({
           status: "ready",
           currentTags: ["existing"],
-          proposals: [{ tag: "workshop", supportingProductCount: 3 }],
+          proposals: [
+            {
+              tag: "workshop",
+              supportingProductCount: 3,
+              review: {
+                assessmentId: "11111111-1111-4111-8111-111111111111",
+                suppression: {
+                  scope: "tag_propagation",
+                  candidateKey: `product:${sourceId}:tag:workshop`,
+                  fingerprint: "a".repeat(64),
+                },
+              },
+            },
+          ],
         }),
       ),
       productUpdateMutationOptions,
@@ -96,6 +110,14 @@ describe("RecommendationWorkbench product relationships", () => {
             title: "Pictured workbench product",
             score: 0.91,
             evidence: [{ signal: "Similar meaning", detail: null, weight: 1 }],
+            review: {
+              assessmentId: "22222222-2222-4222-8222-222222222222",
+              suppression: {
+                scope: "product_relatedness",
+                candidateKey: `product:${sourceId}:${picturedId}`,
+                fingerprint: "b".repeat(64),
+              },
+            },
           },
           {
             entity: "product" as const,
@@ -103,6 +125,14 @@ describe("RecommendationWorkbench product relationships", () => {
             title: "Unpictured workbench product",
             score: 0.72,
             evidence: [{ signal: "Shared tag", detail: null, weight: 1 }],
+            review: {
+              assessmentId: "33333333-3333-4333-8333-333333333333",
+              suppression: {
+                scope: "product_relatedness",
+                candidateKey: `product:${sourceId}:${unpicturedId}`,
+                fingerprint: "c".repeat(64),
+              },
+            },
           },
         ],
       })),
@@ -174,6 +204,17 @@ describe("RecommendationWorkbench product matches", () => {
     items: [
       {
         source: "agent" as const,
+        assessmentId: "66666666-6666-4666-8666-666666666666",
+        fingerprint: null,
+        identityConflict: false,
+        review: {
+          assessmentId: "66666666-6666-4666-8666-666666666666",
+          suppression: {
+            scope: "product_match",
+            candidateKey: `product-match:${keeperId}:${photoId}`,
+            fingerprint: null,
+          },
+        },
         keeper: side(keeperId, "Crew tee, grey", "purchase"),
         other: side(photoId, "Gray crew t-shirt — M", "photo"),
         evidence: "Vendor photo shows the same pocket seam",
@@ -193,18 +234,22 @@ describe("RecommendationWorkbench product matches", () => {
   };
 
   it("shows both covers with evidence, and dismisses the exact pair", async () => {
-    const dismissed: unknown[] = [];
+    const reviews: unknown[] = [];
     const operations = {
       ...productionRecommendationWorkbenchOperations,
       productMatches: recommendations.productMatches.withTransport(
         async () => queue,
       ),
-      dismissProductMatch: recommendations.dismissProductMatch.withTransport(
-        async ({ input }) => {
-          dismissed.push(input);
-          return { ok: true as const };
-        },
-      ),
+      reviewAssessment: assessment.review.withTransport(async ({ input }) => {
+        reviews.push(input);
+        return {
+          assessmentId:
+            input.assessmentId ?? "66666666-6666-4666-8666-666666666666",
+          feedbackId: "88888888-8888-4888-8888-888888888888",
+          status: "recorded",
+          applied: false,
+        };
+      }),
       displayImages: entityMedia.displayImages.withTransport(async () => ({
         [`product:${keeperId}`]: { url: "https://images.example/vendor.jpg" },
         [`product:${photoId}`]: { url: "https://images.example/photo.jpg" },
@@ -232,9 +277,21 @@ describe("RecommendationWorkbench product matches", () => {
     expect(screen.getByText(/Merging sums their quantities/)).toBeVisible();
     expect(screen.getByText("Keep · From a purchase")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: /Not the same/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide pair" }));
     await waitFor(() =>
-      expect(dismissed).toEqual([{ productIds: [keeperId, photoId] }]),
+      expect(reviews).toEqual([
+        expect.objectContaining({
+          assessmentId: "66666666-6666-4666-8666-666666666666",
+          operationId: expect.any(String),
+          verdict: "dismissed",
+          intent: "history",
+          suppression: {
+            scope: "product_match",
+            candidateKey: `product-match:${keeperId}:${photoId}`,
+            fingerprint: "d".repeat(64),
+          },
+        }),
+      ]),
     );
   });
 

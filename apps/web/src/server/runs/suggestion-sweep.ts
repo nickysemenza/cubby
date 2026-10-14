@@ -33,7 +33,7 @@ import type { Database } from "~/server/db";
 import {
   aiEvaluation,
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -339,7 +339,10 @@ export async function publishSweepSuggestions(
         )
       )
         throw new Error("Suggestion target changed during inference");
-      const rejected = predecessors.filter((row) => row.status === "rejected");
+      const rejected = predecessors.filter(
+        (row) =>
+          row.status === "rejected" && row.suppression?.scope === "field_value",
+      );
       const unordered =
         decisionCatalogRows().find(
           (row) => row.entity === input.entity && row.field === input.field,
@@ -570,7 +573,7 @@ export async function prepareSuggestionSweep(
           entity: input.entity,
           recordId: target.entityId,
           field: target.field,
-          suggestionIds: [],
+          assessmentIds: [],
         },
         provenance: {
           dependencies: dependencyStamps(

@@ -859,9 +859,11 @@ const DECLARED_SECTIONS = [
     problemKeys: ["duplicateProductIdentities"],
     entity: "product",
     renderItem: (dupe) => ({
-      key: `${dupe.manufacturer}/${dupe.model}`,
+      key: dupe.assessmentId,
       title: `${dupe.manufacturer} ${dupe.model}`,
-      subtitle: `${dupe.products.length} products share this part number`,
+      subtitle: dupe.identityConflict
+        ? "Exact identifier conflicts with verified identity evidence"
+        : "An independently assessed Product pair",
       badges: dupe.products.map((p) => entityBadge("product", p)),
       details: [
         ...dupe.products.map((p) => (
@@ -888,12 +890,15 @@ const DECLARED_SECTIONS = [
         </Link>,
       ],
       route: entityDetailLink("product", dupe.products[0]?.id ?? ""),
-      inlineFix: {
-        label: "Merge",
-        render: (close) => (
-          <DuplicateProductMergeFix variant={dupe} close={close} />
-        ),
-      },
+      inlineFix:
+        dupe.identityConflict || !dupe.fingerprint
+          ? undefined
+          : {
+              label: "Merge",
+              render: (close) => (
+                <DuplicateProductMergeFix variant={dupe} close={close} />
+              ),
+            },
     }),
   }),
   section({

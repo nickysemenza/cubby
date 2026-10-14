@@ -1,3 +1,4 @@
+import { assessmentChildren } from "./assessment.js";
 import { emailObservationChildren } from "./email-observations.js";
 import { emailAccuracyChildren } from "./email-accuracy.js";
 import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
@@ -14,6 +15,7 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
 export const ENTITY_SOURCE_QUOTE_MAX = 2000;
 
 export const modulesChildren = [
+  ...assessmentChildren,
   ...importObservationChildren,
   ...emailObservationChildren,
   ...emailAccuracyChildren,
@@ -336,86 +338,6 @@ export const modulesChildren = [
         on: ["orderMailId", "sourceKey"],
       },
       { name: "OrderMailEvent_order_idx", on: ["orderId"] },
-    ],
-  }),
-  /** Human decisions about a specific mail event and proposed Purchase match. */
-  defineChildTable({
-    name: "OrderMailCandidateDecision",
-    exportName: "orderMailCandidateDecision",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "eventId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "orderMailEvent", column: "id" },
-      },
-      {
-        key: "purchaseId",
-        kind: "uuid",
-        notNull: true,
-        type: "PurchaseId",
-        reference: { table: "purchase", column: "id" },
-      },
-      {
-        key: "decision",
-        kind: "text",
-        notNull: true,
-        type: '"linked" | "dismissed"',
-      },
-      { key: "evidenceChecksum", kind: "text", notNull: true },
-      { key: "decidedByUserId", kind: "text", notNull: true },
-      /**
-       * Who proposed this link (`emailLinkProposer`); a dismissal keeps it so
-       * a dismissed agent link stays measurable. Null before it was recorded.
-       */
-      { key: "proposedBy", kind: "text", type: "EmailLinkProposer" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-    ],
-    types: [
-      { module: "@cubby/schemas/identifiers", exports: ["PurchaseId"] },
-      { module: "@cubby/schemas/email-fields", exports: ["EmailLinkProposer"] },
-    ],
-    indexes: [
-      {
-        name: "OrderMailCandidateDecision_event_purchase_key",
-        unique: true,
-        on: ["eventId", "purchaseId"],
-      },
-      {
-        name: "OrderMailCandidateDecision_one_link_key",
-        unique: true,
-        on: ["eventId"],
-        where: "{decision} = 'linked'",
-      },
-      { name: "OrderMailCandidateDecision_purchase_idx", on: ["purchaseId"] },
-    ],
-    checks: [
-      {
-        name: "OrderMailCandidateDecision_decision_check",
-        sql: "{decision} IN ('linked', 'dismissed')",
-      },
-      {
-        name: "OrderMailCandidateDecision_proposedBy_check",
-        sql: "{proposedBy} IS NULL OR {proposedBy} IN ('member', 'agent', 'import', 'heuristic')",
-      },
     ],
   }),
   defineChildTable({

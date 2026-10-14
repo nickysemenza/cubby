@@ -3,8 +3,6 @@ const retainedTableReasons = {
   upcLookupCache: "Vendor-neutral provider cache, not owned by one Product.",
   entityEmbedding: "Shared search infrastructure across entity kinds.",
   searchDocument: "Shared lexical projection across entity kinds.",
-  suggestionDismissal: "Shared suggestion state across entity kinds.",
-  productMatchCandidate: "Pair-grain Product recommendation state.",
   dataExceptionRecord: "Shared evidence exceptions across entity kinds.",
   entityAttachment: "Shared typed attachments across entity kinds.",
   entityLink: "Shared typed relation edges across entity kinds.",

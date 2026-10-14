@@ -1,17 +1,20 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import {
+  listFeedbackByKind,
+  seedEmailClassificationFeedback,
+  seedEmailLinkDecision,
+} from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   emailClassificationObservation,
-  emailClassificationLabel,
   email as emailTable,
   importSourceClaim,
   importSourceOrder,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
   orderMailEvent,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -263,15 +266,13 @@ describe("Email generic persisted reads", () => {
         })
         .returning();
       if (!event) throw new Error("Synthetic event did not persist");
-      await getDb(ctx.db)
-        .insert(orderMailCandidateDecision)
-        .values({
-          eventId: event.id,
-          purchaseId: purchase.id,
-          decision: messageId === "dismissed" ? "dismissed" : "linked",
-          evidenceChecksum: content.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        });
+      await seedEmailLinkDecision(ctx.db, {
+        eventId: event.id,
+        purchaseId: purchase.id,
+        decision: messageId === "dismissed" ? "dismissed" : "linked",
+        evidenceChecksum: content.rawChecksum,
+        decidedByUserId: ctx.actor.userId,
+      });
     }
     // Retention removes bodies, not accepted source identity or association.
     await getDb(ctx.db).execute(
@@ -360,7 +361,7 @@ describe("Email generic persisted reads", () => {
       })
       .returning();
     if (!prediction) throw new Error("Synthetic prediction missing");
-    await getDb(ctx.db).insert(emailClassificationLabel).values({
+    await seedEmailClassificationFeedback(ctx.db, {
       predictionId: prediction.id,
       classification: "related",
       reason: "Synthetic independent message review",
@@ -604,7 +605,7 @@ describe("Email generic persisted reads", () => {
       checksum: "b".repeat(64),
     });
     expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
+      await listFeedbackByKind(ctx.db, "email_classification_review"),
     ).toHaveLength(3);
   });
 });

@@ -4,10 +4,6 @@ import {
 } from "@cubby/schemas/entity-recommendations";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
-  dismissDuplicateProductRecommendationInput,
-  dismissProductRecommendationInput,
-  dismissProductMatchInput,
-  dismissTagPropagationInput,
   duplicateProductRecommendationInput,
   duplicateProductRecommendationOut,
   mergeProductMatchInput,
@@ -77,21 +73,6 @@ export const recommendationsContract = defineContract("recommendations", {
     input: tagPropagationRecommendationInput,
     output: tagPropagationRecommendationOut,
   }),
-  dismissDuplicateProduct: mutation({
-    input: dismissDuplicateProductRecommendationInput,
-    output: recommendationOkSchema,
-    invalidates: ["recommendations"],
-  }),
-  dismissTagPropagation: mutation({
-    input: dismissTagPropagationInput,
-    output: recommendationOkSchema,
-    invalidates: ["recommendations"],
-  }),
-  dismissProduct: mutation({
-    input: dismissProductRecommendationInput,
-    output: recommendationOkSchema,
-    invalidates: ["recommendations"],
-  }),
   productMatches: query({
     input: productMatchQueueInput,
     output: productMatchQueueOut,
@@ -100,11 +81,6 @@ export const recommendationsContract = defineContract("recommendations", {
   proposeProductMatch: mutation({
     input: proposeProductMatchInput,
     output: proposeProductMatchOut,
-    invalidates: ["recommendations"],
-  }),
-  dismissProductMatch: mutation({
-    input: dismissProductMatchInput,
-    output: recommendationOkSchema,
     invalidates: ["recommendations"],
   }),
   mergeProductMatch: mutation({

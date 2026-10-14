@@ -1,7 +1,6 @@
 import {
   type InventoryShortcode,
   type ProductShortcode,
-  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -19,6 +18,7 @@ import {
 import { RelatedProductRow } from "~/entity/relatedness/related-product-row";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
+  assessment,
   inventory,
   entityMedia,
   recommendations,
@@ -44,9 +44,6 @@ export interface RecommendationWorkbenchOperations extends ProductMatchQueueOper
   readonly tagPropagation: typeof recommendations.tagPropagation;
   readonly product: typeof recommendations.product;
   readonly duplicateProduct: typeof recommendations.duplicateProduct;
-  readonly dismissTagPropagation: typeof recommendations.dismissTagPropagation;
-  readonly dismissProduct: typeof recommendations.dismissProduct;
-  readonly dismissDuplicateProduct: typeof recommendations.dismissDuplicateProduct;
   readonly moveEntries: typeof inventory.moveEntries;
   readonly productUpdateMutationOptions: typeof productUpdateMutationOptions;
   readonly displayImages: EntityDisplayImagesQueryOptions;
@@ -58,11 +55,8 @@ export const productionRecommendationWorkbenchOperations: RecommendationWorkbenc
     tagPropagation: recommendations.tagPropagation,
     product: recommendations.product,
     duplicateProduct: recommendations.duplicateProduct,
-    dismissTagPropagation: recommendations.dismissTagPropagation,
-    dismissProduct: recommendations.dismissProduct,
-    dismissDuplicateProduct: recommendations.dismissDuplicateProduct,
     productMatches: recommendations.productMatches,
-    dismissProductMatch: recommendations.dismissProductMatch,
+    reviewAssessment: assessment.review,
     mergeProductMatch: recommendations.mergeProductMatch,
     moveEntries: inventory.moveEntries,
     productUpdateMutationOptions,
@@ -251,9 +245,7 @@ function TagPropagationRecommendation({
       },
     }),
   );
-  const dismiss = useMutation(
-    operations.dismissTagPropagation.mutationOptions({}),
-  );
+  const dismiss = useMutation(operations.reviewAssessment.mutationOptions({}));
 
   if (recommendation.isLoading) {
     return (
@@ -338,7 +330,15 @@ function TagPropagationRecommendation({
               size="sm"
               variant="outline"
               disabled={dismiss.isPending}
-              onClick={() => dismiss.mutate({ sourceId, tag: proposal.tag })}
+              onClick={() =>
+                proposal.review &&
+                dismiss.mutate({
+                  ...proposal.review,
+                  operationId: crypto.randomUUID(),
+                  verdict: "dismissed",
+                  intent: "history",
+                })
+              }
             >
               <XIcon className="size-3" />
               Dismiss
@@ -361,7 +361,7 @@ function ProductRelatednessRecommendation({
   const matches = useQuery(
     operations.productMatches.queryOptions({ productId: sourceId }),
   );
-  const dismiss = useMutation(operations.dismissProduct.mutationOptions({}));
+  const dismiss = useMutation(operations.reviewAssessment.mutationOptions({}));
   // A neighbour that is also an open same-item match is reviewed in the match
   // queue, not here — one surface per pair.
   const matched = useMemo(
@@ -449,9 +449,12 @@ function ProductRelatednessRecommendation({
                 item={item}
                 pending={dismiss.isPending}
                 onDismiss={() =>
+                  item.review &&
                   dismiss.mutate({
-                    sourceId,
-                    targetId: parseShortcodeFor("product", item.shortcode),
+                    ...item.review,
+                    operationId: crypto.randomUUID(),
+                    verdict: "dismissed",
+                    intent: "history",
                   })
                 }
               />
@@ -510,9 +513,7 @@ function DuplicateProductRecommendation({
   const recommendation = useQuery(
     operations.duplicateProduct.queryOptions({ sourceId }),
   );
-  const dismiss = useMutation(
-    operations.dismissDuplicateProduct.mutationOptions({}),
-  );
+  const dismiss = useMutation(operations.reviewAssessment.mutationOptions({}));
 
   if (merged) {
     return <p className="text-sm text-positive">Products merged.</p>;
@@ -560,7 +561,15 @@ function DuplicateProductRecommendation({
           type="button"
           variant="outline"
           disabled={dismiss.isPending}
-          onClick={() => dismiss.mutate({ sourceId })}
+          onClick={() =>
+            recommendation.data?.review &&
+            dismiss.mutate({
+              ...recommendation.data.review,
+              operationId: crypto.randomUUID(),
+              verdict: "dismissed",
+              intent: "history",
+            })
+          }
         >
           <XIcon className="size-3" />
           Dismiss

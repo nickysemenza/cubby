@@ -11,12 +11,16 @@ import { describe, expect, it } from "vitest";
 import { entityAttachment } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
+import {
+  publishProductPair,
+  upsertAgentProductMatch,
+  productPairKey,
+} from "~/server/repo/product-match-candidate";
 import { listProductMatchRows } from "~/server/repo/product-match-candidate";
-import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
-import { mergeProducts } from "~/server/repo/product/merge";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   createImageFixture,
@@ -30,33 +34,15 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 import {
-  dismissProductMatchPair,
   getProductMatchQueue,
   mergeProductMatch,
   proposeProductMatch,
 } from "~/server/services/product-match.service";
-import type { ProductMatchDependencies } from "~/server/services/product-match.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
-
-/** Vector index is absent in tests, so ranking runs on names, category, owner. */
-const namesOnly = {
-  vectorStore: {
-    configured: () => false,
-    upsert: async () => {},
-    deleteByIds: async () => {},
-    query: async () => [],
-    queryById: async () => [],
-  },
-  semanticConfigured: () => false,
-  decideVariant: async ({
-    firstTitle,
-    secondTitle,
-  }: Parameters<NonNullable<ProductMatchDependencies["decideVariant"]>>[0]) =>
-    unknownProductVariantComparison(firstTitle, secondTitle),
-};
 
 type Category = Parameters<typeof taxonomyShortcode>[0];
 
@@ -83,78 +69,30 @@ describe("product match queue", () => {
       ctx.actor,
     );
 
-  it("opens a directed photo-review pair even before the detector has enough history", async () => {
-    const source = await product("ForgeWear dark pocket tee");
-    const candidate = await product("ForgeWear black small pocket tee");
-    const queue = await getProductMatchQueue(
-      ctx.db,
-      { productId: source.id, candidateId: candidate.id },
-      namesOnly,
-      ctx.actor,
-    );
-    expect(queue.items).toHaveLength(1);
-    expect([queue.items[0]?.keeper.id, queue.items[0]?.other.id]).toEqual([
-      source.id,
-      candidate.id,
-    ]);
-    expect(queue.items[0]?.signals).toContain("Suggested from photo review");
-  });
-
-  it("surfaces an explicit model-reported conflict using the original titles", async () => {
-    const source = await product("ForgeWear dark pocket tee");
-    const other = await product("ForgeWear black small pocket tee");
-    const deps = {
-      ...namesOnly,
-      decideVariant: async ({
-        firstTitle,
-        secondTitle,
-      }: Parameters<
-        NonNullable<ProductMatchDependencies["decideVariant"]>
-      >[0]) => ({
-        color: { relation: "different" as const },
-        size: { relation: "unknown" as const },
-        evidence: { firstTitle, secondTitle },
-      }),
-    };
-
-    const queue = await getProductMatchQueue(
-      ctx.db,
-      { productId: source.id, candidateId: other.id },
-      deps,
-      ctx.actor,
-    );
-
-    expect(queue.items[0]).toMatchObject({
-      variant: {
-        color: { relation: "different" },
-        size: { relation: "unknown" },
-        evidence: {
-          firstTitle: source.name,
-          secondTitle: other.name,
-        },
-      },
-      warnings: [expect.stringContaining("conflict on color")],
+  it("requires stored pair evidence for a directed photo-review comparison", async () => {
+    const source = await product("Synthetic directed source"),
+      candidate = await product("Synthetic directed candidate");
+    expect(
+      (
+        await getProductMatchQueue(ctx.db, {
+          productId: source.id,
+          candidateId: candidate.id,
+        })
+      ).items,
+    ).toEqual([]);
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [source.entityId, candidate.entityId],
+      evidence: "Synthetic member investigation",
+      sourceUrls: [],
     });
-  });
-
-  it("propagates variant decision failures instead of returning a partial queue", async () => {
-    const source = await product("ForgeWear navy pocket tee");
-    const other = await product("ForgeWear black pocket tee");
-    const deps = {
-      ...namesOnly,
-      decideVariant: async () => {
-        throw new Error("variant decision gateway failed");
-      },
-    };
-
-    await expect(
-      getProductMatchQueue(
-        ctx.db,
-        { productId: source.id, candidateId: other.id },
-        deps,
-        ctx.actor,
-      ),
-    ).rejects.toThrow("variant decision gateway failed");
+    expect(
+      (
+        await getProductMatchQueue(ctx.db, {
+          productId: source.id,
+          candidateId: candidate.id,
+        })
+      ).items,
+    ).toHaveLength(1);
   });
 
   /** Stocked, never bought: what a wardrobe photo import creates. */
@@ -242,227 +180,40 @@ describe("product match queue", () => {
   };
 
   const queueFor = async (id: ProductShortcode) =>
-    (
-      await getProductMatchQueue(
-        ctx.db,
-        { productId: id },
-        namesOnly,
-        ctx.actor,
-      )
-    ).items;
+    (await getProductMatchQueue(ctx.db, { productId: id })).items;
 
-  const pairOf = (item: { keeper: { id: string }; other: { id: string } }) => [
-    item.keeper.id,
-    item.other.id,
-  ];
-
-  it.each([
-    {
-      name: "pairs a stocked never-bought product with a purchased one, keeping the purchase side",
-      run: async () => {
-        const owner = await member("Synthetic wearer");
-        const photo = await photoProduct("Gray crew t-shirt — M", { owner });
-        const bought = await purchasedProduct(
-          "Crew neck t-shirt, grey, medium",
-          { owner },
-        );
-        const items = await queueFor(photo.id);
-        expect(items.map(pairOf)).toEqual([[bought.id, photo.id]]);
-        expect(items[0]).toMatchObject({
-          source: "detector",
-          keeper: {
-            role: "purchase",
-            purchase: { vendor: "Synthetic outfitter" },
-          },
-          other: { role: "photo", inventoryCount: 1 },
-          warnings: [],
-        });
-        expect(items[0]!.signals).toEqual(
-          expect.arrayContaining([
-            "Shared name words: crew, gray, shirt",
-            "Same owner",
-          ]),
-        );
-      },
-    },
-    {
-      name: "recognizes an itemized purchase recorded only by its Expense",
-      run: async () => {
-        const photo = await photoProduct("Gray crew shirt");
-        const bought = await purchasedProduct("Heather crew tee", {
-          expenseOnly: true,
-        });
-        await proposeProductMatch(ctx.db, {
-          productIds: [photo.id, bought.id],
-          evidence: "Synthetic order line matches the photographed shirt",
-        });
-        const items = await queueFor(photo.id);
-        expect(items).toMatchObject([
-          {
-            source: "agent",
-            keeper: {
-              id: bought.id,
-              role: "purchase",
-              purchase: { vendor: "Synthetic outfitter" },
-            },
-            other: { id: photo.id, role: "photo", inventoryCount: 1 },
-          },
-        ]);
-      },
-    },
-    {
-      name: "does not treat an Expense-only sale as an acquisition",
-      run: async () => {
-        const photo = await photoProduct("Wool scarf");
-        const sold = await purchasedProduct("Wool scarf, resold", {
-          expenseOnly: true,
-          expenseCost: -20,
-        });
-        await proposeProductMatch(ctx.db, {
-          productIds: [photo.id, sold.id],
-          evidence: "Synthetic pair for direction check",
-        });
-        const items = await queueFor(photo.id);
-        expect(items).toHaveLength(1);
-        expect([items[0]?.keeper, items[0]?.other]).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: photo.id, role: "photo" }),
-            expect.objectContaining({ id: sold.id, role: "other" }),
-          ]),
-        );
-      },
-    },
-    {
-      name: "does not pair when the stocked side was also bought",
-      run: async () => {
-        const stockedAndBought = await purchasedProduct("Canvas tote bag");
-        const shelf = await createLocationFixture(
-          ctx.db,
-          makeLocationInput({ name: "Tote shelf" }),
-          ctx.actor,
-        );
-        await stock(stockedAndBought.entityId, shelf.entityId);
-        await purchasedProduct("Canvas tote bag, natural");
-        expect(await queueFor(stockedAndBought.id)).toEqual([]);
-      },
-    },
-    {
-      name: "ranks a category mismatch below a match without excluding it",
-      run: async () => {
-        const photo = await photoProduct("Linen apron", {
-          category: "apparel",
-        });
-        const same = await purchasedProduct("Linen apron, olive", {
-          category: "apparel",
-        });
-        const other = await purchasedProduct("Linen apron tool roll", {
-          category: "tools",
-        });
-        const items = await queueFor(photo.id);
-        expect(items.map((item) => item.keeper.id)).toEqual([
-          same.id,
-          other.id,
-        ]);
-        expect(items[1]!.signals).toContain("Different top-level category");
-      },
-    },
-    {
-      name: "ranks an owner mismatch below an owner match without excluding it",
-      run: async () => {
-        const [wearer, someoneElse] = await Promise.all([
-          member("Synthetic wearer"),
-          member("Synthetic sibling"),
-        ]);
-        const photo = await photoProduct("Wool beanie", { owner: wearer });
-        const theirs = await purchasedProduct("Wool beanie (charcoal)", {
-          owner: someoneElse,
-        });
-        const mine = await purchasedProduct("Wool beanie, charcoal", {
-          owner: wearer,
-        });
-        const items = await queueFor(photo.id);
-        expect(items.map((item) => item.keeper.id)).toEqual([
-          mine.id,
-          theirs.id,
-        ]);
-        expect(items[1]!.signals).toContain("Different owners");
-      },
-    },
-    {
-      name: "drops a dismissed pair and persists the dismissal",
-      run: async () => {
-        const photo = await photoProduct("Rain shell jacket");
-        const bought = await purchasedProduct("Rain shell jacket, navy");
-        await dismissProductMatchPair(ctx.db, {
-          productIds: [photo.id, bought.id],
-        });
-        expect(await queueFor(photo.id)).toEqual([]);
-        expect(await listProductMatchRows(ctx.db)).toMatchObject([
-          { source: "detector", state: "dismissed" },
-        ]);
-      },
-    },
-    {
-      name: "drops a merged pair and discards its review row",
-      run: async () => {
-        const photo = await photoProduct("Trail running sock");
-        const bought = await purchasedProduct("Trail running sock, 3 pair");
-        await proposeProductMatch(ctx.db, {
-          productIds: [photo.id, bought.id],
-          evidence: "Same cuff stripe on the vendor page",
-        });
-        await mergeProducts(
-          ctx.db,
-          { keepId: bought.id, mergeIds: [photo.id] },
-          ctx.actor,
-        );
-        expect(await queueFor(bought.id)).toEqual([]);
-        expect(await listProductMatchRows(ctx.db)).toEqual([]);
-      },
-    },
-    {
-      name: "ranks an agent proposal, with its evidence, above detector pairs",
-      run: async () => {
-        const photo = await photoProduct("Striped scarf");
-        const detected = await purchasedProduct("Striped scarf, wool");
-        const proposed = await purchasedProduct("Neck wrap SKU 4471");
-        await proposeProductMatch(ctx.db, {
-          productIds: [proposed.id, photo.id],
-          evidence: "Vendor photo shows the same stripe pattern",
-          sourceUrls: ["https://vendor.example/p/4471"],
-        });
-        const items = await queueFor(photo.id);
-        expect(items.map(pairOf)).toEqual([
-          [proposed.id, photo.id],
-          [detected.id, photo.id],
-        ]);
-        expect(items[0]).toMatchObject({
-          source: "agent",
-          evidence: "Vendor photo shows the same stripe pattern",
-          sourceUrls: ["https://vendor.example/p/4471"],
-        });
-      },
-    },
-    {
-      name: "warns when both sides are stocked, since a merge sums quantities",
-      run: async () => {
-        const photo = await photoProduct("Leather belt");
-        const bought = await purchasedProduct("Leather belt, brown");
-        const shelf = await createLocationFixture(
-          ctx.db,
-          makeLocationInput({ name: "Received shelf" }),
-          ctx.actor,
-        );
-        await stock(bought.entityId, shelf.entityId);
-        const [item] = await queueFor(photo.id);
-        expect(item?.warnings).toEqual([
-          expect.stringContaining("Merging sums their quantities"),
-        ]);
-      },
-    },
-  ])("$name", async ({ run }) => {
-    expect.hasAssertions();
-    await run();
+  it("reads a stored pair across intake paths, keeps purchase history, and never discovers on read", async () => {
+    const owner = await member("Synthetic stored pair owner");
+    const photo = await photoProduct("Synthetic stored photo item", { owner });
+    const bought = await purchasedProduct("Synthetic stored purchase item", {
+      owner,
+    });
+    expect(await queueFor(photo.id)).toEqual([]);
+    await publishProductPair(ctx.db, {
+      productIds: [photo.entityId, bought.entityId],
+      source: "detector",
+      evidence: "Synthetic retained identity",
+      sourceUrls: [],
+    });
+    const [item] = await queueFor(photo.id);
+    expect(item?.keeper.id).toBe(bought.id);
+    expect(item?.other).toMatchObject({
+      id: photo.id,
+      role: "photo",
+      inventoryCount: 1,
+    });
+    expect(item?.keeper.owner?.id).toBe(owner);
+    expect(item?.variant.color.relation).toBe("unknown");
+    expect((await listProductMatchRows(ctx.db)).length).toBe(1);
+    await dismissPair(
+      ctx.db,
+      { productIds: [photo.id, bought.id] },
+      kernelCtx(ctx),
+    );
+    expect(await queueFor(photo.id)).toEqual([]);
+    expect(await listProductMatchRows(ctx.db)).toMatchObject([
+      { state: "dismissed" },
+    ]);
   });
 
   it("merges a match and leads the survivor's covers with the household's own photo", async () => {
@@ -488,9 +239,19 @@ describe("product match queue", () => {
     });
     if (!base.actorContext) throw new Error("Test actor is required");
 
+    const pair = await upsertAgentProductMatch(ctx.db, {
+      productIds: [bought.entityId, photo.entityId],
+      evidence: "Synthetic reviewed identity",
+      sourceUrls: [],
+    });
     await mergeProductMatch(
       { ...base, actorContext: base.actorContext },
-      { keepId: bought.id, mergeId: photo.id },
+      {
+        keepId: bought.id,
+        mergeId: photo.id,
+        assessmentId: pair.id,
+        expectedFingerprint: pair.fingerprint!,
+      },
     );
 
     const order = await getDb(ctx.db)
@@ -586,9 +347,13 @@ describe("product_enrichment.propose_match", () => {
 
   it("keeps a dismissed pair dismissed when re-proposed", async () => {
     const [photo, vendor] = await twoProducts();
-    await dismissProductMatchPair(ctx.db, {
-      productIds: [photo.id, vendor.id],
-    });
+    await dismissPair(
+      ctx.db,
+      {
+        productIds: [photo.id, vendor.id],
+      },
+      kernelCtx(ctx),
+    );
     const result = await call({
       productIds: [photo.id, vendor.id],
       evidence: "Still think these match",
@@ -599,3 +364,28 @@ describe("product_enrichment.propose_match", () => {
     });
   });
 });
+
+async function dismissPair(
+  db: Parameters<typeof proposeProductMatch>[0],
+  input: { productIds: readonly [ProductShortcode, ProductShortcode] },
+  context: Parameters<typeof reviewAssessment>[1],
+) {
+  const ids = await Promise.all(
+    input.productIds.map((id) => resolveOrThrow(db, "product", id)),
+  );
+  const pair = await upsertAgentProductMatch(db, {
+    productIds: [ids[0]!, ids[1]!],
+    evidence: "Synthetic hide preference",
+    sourceUrls: [],
+  });
+  return reviewAssessment(db, context, {
+    assessmentId: pair.id,
+    operationId: crypto.randomUUID(),
+    verdict: "dismissed",
+    suppression: {
+      scope: "product_pair",
+      candidateKey: productPairKey(ids[0]!, ids[1]!),
+      fingerprint: null,
+    },
+  });
+}

@@ -40,6 +40,7 @@ const baseRecord = {
   categoryId: null,
 };
 const proposal = {
+  assessmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   value: categoryId,
   label: "Synthetic food",
   detail: null,
@@ -52,9 +53,13 @@ const proposal = {
 };
 const stored: StoredSuggestionOperations = {
   list: async () => [],
-  accept: async ({ id }) => ({ id, status: "applied" }),
-  acceptMany: async () => [],
-  reject: async ({ id }) => ({ id, status: "rejected" }),
+  review: async ({ assessmentId, intent }) => ({
+    assessmentId,
+    feedbackId: "55555555-5555-4555-8555-555555555555",
+    status: "recorded",
+    applied: intent === "apply",
+  }),
+  reviewBatch: async () => [],
 };
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

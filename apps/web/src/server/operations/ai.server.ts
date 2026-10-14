@@ -8,10 +8,12 @@ import {
   type RunId,
   type LocationId,
 } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
@@ -22,6 +24,7 @@ import {
   listRecentAiUsage,
   summarizeAiUsage,
 } from "~/server/repo/ai-usage";
+import { publishAssessment } from "~/server/repo/assessment";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import {
   resolveAllOrThrow,
@@ -29,13 +32,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
-  acceptSuggestion,
-  acceptSuggestions,
   latestSuggestionSweepStatus,
   listSuggestions,
-  rejectSuggestion,
-  rejectSuggestions,
-  recordFieldSuggestionMiss,
   suggestionCounts,
 } from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
@@ -224,13 +222,81 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
 const suggestionsForContext = async (
   context: AuthenticatedStartOperationContext,
   input: FieldSuggestionsInput,
-) =>
-  suggestFields(
-    context.db,
-    await actorAiRun(context, { runKey: input.runKey }),
-    input,
-    input.decisionModel ? { decisionModel: input.decisionModel } : undefined,
+) => {
+  const runId = await actorAiRun(context, { runKey: input.runKey });
+  const captured = await withAiInputs(false, () =>
+    suggestFields(
+      context.db,
+      runId,
+      input,
+      input.decisionModel ? { decisionModel: input.decisionModel } : undefined,
+    ),
   );
+  const output = captured.result;
+  const recordId = input.entityId
+    ? await resolveOrThrow(context.db, input.entity, input.entityId)
+    : null;
+  for (const [field, outcome] of Object.entries(output.outcomes ?? {})) {
+    if (outcome.kind !== "evaluated") continue;
+    const suggestion = output.suggestions[field];
+    const inputs = captured.inputs.filter(
+      (value) => value.operation === `suggestFields.${input.entity}.${field}`,
+    );
+    const producer = inputs.at(-1);
+    const fingerprint = await sha256Hex(
+      JSON.stringify({ basis: input.basis, inputs, field }),
+    );
+    const prediction = await publishAssessment(
+      context.db,
+      {
+        publicationKey: `field-inference:${runId}:${recordId}:${field}:${fingerprint}:${await sha256Hex(JSON.stringify({ suggestion, outcome }))}`,
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: input.entity,
+          recordId,
+          field,
+          draft: !input.entityId,
+        },
+        judgment: z
+          .json()
+          .parse({
+            value: suggestion?.value ?? null,
+            ...(suggestion
+              ? {
+                  operation: suggestion.operation,
+                  removals: suggestion.removals,
+                }
+              : {}),
+            outcome,
+          }),
+        fingerprint,
+        producer: producer
+          ? {
+              kind: "model",
+              model: producer.model,
+              revision: producer.promptVersion,
+              runId,
+              evaluationId: null,
+            }
+          : null,
+        evidence: z.json().parse({ basis: input.basis, inputs }),
+      },
+      {
+        runId,
+        model: producer?.model ?? "unknown",
+        suggestedValue: suggestion?.value ?? null,
+        confidence: suggestion?.probability ?? outcome.probability ?? 0,
+        financeReviewFingerprint:
+          suggestion?.financeReview?.fingerprint ?? null,
+        status: suggestion ? "pending" : "resolved",
+      },
+    );
+    outcome.assessmentId = prediction.id;
+    if (suggestion) suggestion.assessmentId = prediction.id;
+  }
+  return output;
+};
 
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
@@ -317,25 +383,11 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     applyFinanceCategorySuggestion(context, input),
   listSuggestionReviewQueue: (context, input) =>
     listSuggestions(context.db, input),
-  acceptSuggestion: (context, input) =>
-    acceptSuggestion(context.db, context, input),
-  acceptSuggestions: (context, input) =>
-    acceptSuggestions(context.db, context, input),
-  rejectSuggestion: (context, input) =>
-    rejectSuggestion(context.db, context, input),
-  rejectSuggestions: (context, input) =>
-    rejectSuggestions(context.db, context, input),
   suggestionCounts: (context, input) => suggestionCounts(context.db, input),
   decisionCatalog: async (context) => {
     const { decisionCatalog } = await import("~/server/ai/decision-catalog");
     return decisionCatalog(context.db);
   },
-  recordFieldSuggestionMiss: async (context, input) =>
-    recordFieldSuggestionMiss(
-      context.db,
-      await actorAiRun(context, { runKey: input.runKey }),
-      input,
-    ),
   startSuggestionSweep: (context, input) =>
     startSuggestionSweep(context.db, input, { context }),
   pauseSuggestionSweep: async (context, input) => {

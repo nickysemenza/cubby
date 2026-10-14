@@ -8,7 +8,11 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { photoRunImage, suggestion, runFinding } from "~/server/db/schema";
+import {
+  photoRunImage,
+  assessmentState as suggestion,
+  runFinding,
+} from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";

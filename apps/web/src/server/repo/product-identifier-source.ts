@@ -34,13 +34,14 @@ const hostSource = (host: string) =>
   );
 
 /** Resolve and register the issuer once for exact lookup, grouping and learning. */
-export async function resolveProductIdentifierSource(
+async function productIdentifierSource(
   db: Database | DrizzleTransaction,
   input: {
     url?: string;
     vendorId?: typeof vendor.$inferSelect.id;
   },
-): Promise<string> {
+  register: boolean,
+): Promise<string | null> {
   const database = unwrapDb(db);
   const pageHost = input.url ? canonicalHost(input.url) : null;
   const vendors = await database
@@ -80,15 +81,31 @@ export async function resolveProductIdentifierSource(
     : externalIdSource.parse(`vendor-${owner!.id}`);
   // Register with explicit ownership; ensureExternalSources' name matching is
   // not authority for a retained page. Never change an existing registry row.
-  await database
-    .insert(externalSource)
-    .values({ slug, label: issuerHost ?? slug, vendorId: owner?.id ?? null })
-    .onConflictDoNothing();
+  if (register)
+    await database
+      .insert(externalSource)
+      .values({ slug, label: issuerHost ?? slug, vendorId: owner?.id ?? null })
+      .onConflictDoNothing();
   const [registered] = await database
     .select()
     .from(externalSource)
     .where(eq(externalSource.slug, slug));
+  if (!registered && !register) return null;
   if (!registered || registered.vendorId !== (owner?.id ?? null))
     throw new Error("Identifier issuer has incompatible source ownership.");
   return registered.slug;
+}
+
+export const lookupProductIdentifierSource = (
+  db: Database | DrizzleTransaction,
+  input: Parameters<typeof productIdentifierSource>[1],
+) => productIdentifierSource(db, input, false);
+export async function resolveProductIdentifierSource(
+  db: Database | DrizzleTransaction,
+  input: Parameters<typeof productIdentifierSource>[1],
+): Promise<string> {
+  const source = await productIdentifierSource(db, input, true);
+  if (!source)
+    throw new Error("Identifier issuer registration returned no source");
+  return source;
 }

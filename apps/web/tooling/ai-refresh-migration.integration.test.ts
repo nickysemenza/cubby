@@ -80,7 +80,9 @@ it("preserves legacy decisions, member resolutions and suggestion history throug
             )
           ).rows,
         );
-      await migrateDatabase(drizzle(client));
+      await migrateDatabase(drizzle(client), {
+        through: journal.entries[expansion]!.tag,
+      });
       for (const table of tables) {
         const after = (
           await client.query(

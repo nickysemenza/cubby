@@ -1,9 +1,13 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { listProductStock } from "~/server/repo/inventory/product-stock";
-import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
+import {
+  listProductMatchRows,
+  productPairKey,
+} from "~/server/repo/product-match-candidate";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createLocationFixture,
@@ -11,29 +15,10 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 
-import {
-  dismissProductMatchPair,
-  proposeProductMatch,
-  type ProductMatchDependencies,
-} from "./product-match.service";
+import { proposeProductMatch } from "./product-match.service";
 import { getReceivingContext } from "./receiving-context.service";
-
-const namesOnly = {
-  vectorStore: {
-    configured: () => false,
-    upsert: async () => {},
-    deleteByIds: async () => {},
-    query: async () => [],
-    queryById: async () => [],
-  },
-  semanticConfigured: () => false,
-  decideVariant: async ({
-    firstTitle,
-    secondTitle,
-  }: Parameters<NonNullable<ProductMatchDependencies["decideVariant"]>>[0]) =>
-    unknownProductVariantComparison(firstTitle, secondTitle),
-};
 
 // Failure modes: a photo-created stocked Product that is probably the same
 // item is invisible at receive time (double count); a dismissed pair keeps
@@ -75,7 +60,7 @@ describe("receiving context", () => {
       .reduce((sum, row) => sum + row.value, 0);
   const read = (
     productId: Parameters<typeof getReceivingContext>[1]["productId"],
-  ) => getReceivingContext(ctx.db, { productId }, ctx.actor, namesOnly);
+  ) => getReceivingContext(ctx.db, { productId });
 
   it("surfaces a stocked photo Product proposed as the same item, and not once dismissed", async () => {
     const photo = await product("Synthetic canvas tote");
@@ -98,8 +83,16 @@ describe("receiving context", () => {
     ]);
     expect(await totalUnits(photo.entityId, bought.entityId)).toBe(before);
 
-    await dismissProductMatchPair(ctx.db, {
-      productIds: [bought.id, photo.id],
+    const [pair] = await listProductMatchRows(ctx.db, bought.entityId);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pair!.id,
+      operationId: crypto.randomUUID(),
+      verdict: "dismissed",
+      suppression: {
+        scope: "product_pair",
+        candidateKey: productPairKey(bought.entityId, photo.entityId),
+        fingerprint: null,
+      },
     });
     expect((await read(bought.id)).matches).toEqual([]);
   });

@@ -1,5 +1,5 @@
 {
-  "apps/web/src/server/db/schema.ts": 21,
+  "apps/web/src/server/db/schema.ts": 17,
   "apps/web/src/server/db/shape-constraints.integration.test.ts": 2,
   "apps/web/src/server/purchase-import/retained-settlement.ts": 2,
   "apps/web/src/server/repo/category-connections.ts": 11,
@@ -31,7 +31,6 @@
   "apps/web/src/server/repo/merchant-vendor-inference.ts": 1,
   "apps/web/src/server/repo/problems/detectors-product.ts": 1,
   "apps/web/src/server/repo/product-category-feature-query.integration.test.ts": 3,
-  "apps/web/src/server/repo/product-match-candidate.ts": 9,
   "apps/web/src/server/repo/product/conversion-coverage.ts": 4,
   "apps/web/src/server/repo/project/tools.ts": 3,
   "apps/web/src/server/repo/purchase-evidence-policy.integration.test.ts": 13,
@@ -79,6 +78,5 @@
   "apps/web/src/server/repo/entity-embedding-cleanup.ts": 5,
   "apps/web/src/server/repo/product/orphan-condition.ts": 1,
   "apps/web/src/server/runs/ensure-run.ts": 2,
-  "apps/web/src/server/repo/product/classification-evidence.ts": 2,
   "apps/web/src/server/repo/entity-embedding-refresh.ts": 2
 }

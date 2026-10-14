@@ -166,7 +166,7 @@ describe("Suggestion supersede", () => {
         }),
       ),
     );
-    const suggestionIds = [];
+    const assessmentIds = [];
     for (const expense of expenses) {
       const { id } = await seedPending(ctx, {
         entity: "expense",
@@ -176,7 +176,7 @@ describe("Suggestion supersede", () => {
         suggestedValue: "Synthetic vendor C",
         kind: "correction",
       });
-      suggestionIds.push(id);
+      assessmentIds.push(id);
     }
     // A: the Expense vendor edit rewrites its Purchase.
     await updateExpense(
@@ -197,7 +197,7 @@ describe("Suggestion supersede", () => {
       .where(eq(purchaseTable.id, purchases[2]!.id));
     expect(
       await Promise.all(
-        suggestionIds.map((id) => suggestionStatus(ctx.db, id)),
+        assessmentIds.map((id) => suggestionStatus(ctx.db, id)),
       ),
     ).toEqual(["superseded", "superseded", "pending"]);
   });

@@ -58,7 +58,7 @@ const emailPurchaseEvidenceSql = (): SQL => sql`
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "OrderMailCandidateDecision" decision ON decision."eventId" = event."id"
+  INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND p."deletedAt" IS NULL
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
@@ -79,7 +79,7 @@ const emailPurchaseEvidenceSql = (): SQL => sql`
     AND event."supersededAt" IS NULL
     AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
     AND NOT EXISTS (
-      SELECT 1 FROM "OrderMailCandidateDecision" decided
+      SELECT 1 FROM "AssessmentEmailLink" decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id"
     )
     AND (

@@ -23,7 +23,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   product,
-  emailClassificationLabel,
+  feedback,
   emailClassificationObservation,
   ledgerParty,
   email as emailTable,
@@ -343,8 +343,8 @@ const hydrateRead = async (
             : await unwrapDb(db)
                 .select({
                   emailId: emailTable.id,
-                  classification: emailClassificationLabel.classification,
-                  reason: emailClassificationLabel.reason,
+                  classification: sql<string>`${feedback.correction}->>'value'`,
+                  reason: feedback.reason,
                 })
                 .from(emailTable)
                 .innerJoin(
@@ -362,16 +362,14 @@ const hydrateRead = async (
                   ),
                 )
                 .innerJoin(
-                  emailClassificationLabel,
+                  feedback,
                   and(
                     eq(
-                      emailClassificationLabel.predictionId,
-                      emailClassificationObservation.id,
+                      sql`${feedback.metadata}->>'predictionId'`,
+                      sql`${emailClassificationObservation.id}::text`,
                     ),
-                    eq(
-                      emailClassificationLabel.actorUserId,
-                      ledgerParty.userId,
-                    ),
+                    eq(feedback.authority, "member"),
+                    eq(feedback.actorUserId, ledgerParty.userId),
                   ),
                 )
                 .where(
@@ -384,10 +382,7 @@ const hydrateRead = async (
                     notDeleted(ledgerParty),
                   ),
                 )
-                .orderBy(
-                  desc(emailClassificationLabel.createdAt),
-                  desc(emailClassificationLabel.id),
-                ),
+                .orderBy(desc(feedback.createdAt), desc(feedback.id)),
           readEmailPurchaseLinks(
             db,
             rows.map((row) => parseEntityId("email", row.id)),

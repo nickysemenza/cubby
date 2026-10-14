@@ -1,5 +1,6 @@
 import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
@@ -9,7 +10,6 @@ import {
   importSourceOrder,
   orderMail,
   orderMailEvent,
-  orderMailCandidateDecision,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -78,7 +78,7 @@ it("keeps purchase evidence bounded against a large unrelated mailbox", async ()
     })
     .returning();
   if (!event) throw new Error("Missing event");
-  await db.insert(orderMailCandidateDecision).values({
+  await seedEmailLinkDecision(ctx.db, {
     eventId: event.id,
     purchaseId: purchases[0].id,
     decision: "linked",

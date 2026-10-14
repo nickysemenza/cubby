@@ -18,27 +18,59 @@ import {
 } from "@cubby/schemas/email-accuracy";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
-import type { z } from "zod";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   emailAccuracyEvaluation,
-  emailAccuracyGrade,
-  emailClassificationLabel,
+  feedback,
   emailClassificationObservation,
   ledgerParty,
   email as emailTable,
 } from "~/server/db/schema";
+import { recordFeedback } from "~/server/repo/assessment";
+import {
+  ensureEmailAssessment,
+  emailGradeMetadata,
+} from "~/server/repo/assessment-email";
 import {
   getDb,
+  databaseForTransaction,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
 
 type Client = DrizzleClient | DrizzleTransaction;
 type Evaluation = typeof emailAccuracyEvaluation.$inferSelect;
-type Grade = typeof emailAccuracyGrade.$inferSelect;
+const gradeRow = emailGradeMetadata.extend({
+  id: z.uuid(),
+  reason: z.string().nullable(),
+  createdAt: z.date(),
+});
+type Grade = z.infer<typeof gradeRow>;
+async function readGrades(
+  client: Client,
+  evaluationId: string,
+): Promise<Grade[]> {
+  const rows = await client
+    .select()
+    .from(feedback)
+    .where(
+      and(
+        eq(feedback.authority, "evaluation"),
+        sql`${feedback.metadata} @> ${JSON.stringify({ kind: "email_accuracy", evaluationId })}::jsonb`,
+      ),
+    );
+  return rows.map((row) =>
+    gradeRow.parse({
+      ...z.object({}).passthrough().parse(row.metadata),
+      id: row.id,
+      reason: row.reason,
+      createdAt: row.createdAt,
+    }),
+  );
+}
 
 async function assertMember(client: Client, actor: ActorContext) {
   if (actor.runId !== null || actor.channel === "system")
@@ -365,10 +397,7 @@ export async function listBlindEmailAccuracyItems(
   const emails = new Map(
     (await rosterEmails(client, roster)).map((email) => [email.id, email]),
   );
-  const grades = await client
-    .select({ predictionId: emailAccuracyGrade.predictionId })
-    .from(emailAccuracyGrade)
-    .where(eq(emailAccuracyGrade.evaluationId, parsed.evaluationId));
+  const grades = await readGrades(client, parsed.evaluationId);
   const graded = new Set(grades.map((grade) => grade.predictionId));
   return listBlindEmailAccuracyItemsOut.parse({
     evaluationId: parsed.evaluationId,
@@ -430,16 +459,9 @@ export async function gradeEmailAccuracyItem(
       throw new Error(
         "Prediction is not in this frozen Email accuracy evaluation.",
       );
-    const [previous] = await tx
-      .select()
-      .from(emailAccuracyGrade)
-      .where(
-        and(
-          eq(emailAccuracyGrade.evaluationId, parsed.evaluationId),
-          eq(emailAccuracyGrade.predictionId, parsed.predictionId),
-        ),
-      )
-      .limit(1);
+    const previous = (await readGrades(tx, parsed.evaluationId)).find(
+      (row) => row.predictionId === parsed.predictionId,
+    );
     if (previous) {
       if (
         previous.grade !== parsed.grade ||
@@ -451,7 +473,6 @@ export async function gradeEmailAccuracyItem(
         );
       return gradeOutput(previous);
     }
-    let reviewedLabelId: string | null = null;
     if (parsed.grade !== "unavailable") {
       if (!item.checksum || parsed.reviewedChecksum !== item.checksum)
         throw new Error(
@@ -481,32 +502,44 @@ export async function gradeEmailAccuracyItem(
         throw new Error(
           "Email accuracy labels require a live Email owned by this member.",
         );
-      const [label] = await tx
-        .insert(emailClassificationLabel)
-        .values({
-          predictionId: item.predictionId,
-          classification: parsed.grade,
-          reason: parsed.reason,
-          actorUserId: actor.userId,
-        })
-        .returning({ id: emailClassificationLabel.id });
-      if (!label)
-        throw new Error(
-          "Email accuracy reviewed label insert returned no row.",
-        );
-      reviewedLabelId = label.id;
     }
-    const [grade] = await tx
-      .insert(emailAccuracyGrade)
-      .values({
+    const transactionDb = databaseForTransaction(tx);
+    const prediction = await ensureEmailAssessment(
+      transactionDb,
+      item.predictionId,
+    );
+    const event = await recordFeedback(transactionDb, {
+      assessmentId: prediction.id,
+      operationId: `email-accuracy:${parsed.evaluationId}:${item.predictionId}`,
+      authority: "evaluation",
+      actorUserId: actor.userId,
+      verdict:
+        parsed.grade === "uncertain"
+          ? "uncertain"
+          : parsed.grade === "unavailable"
+            ? "ungraded"
+            : parsed.grade === item.classification
+              ? "correct"
+              : "wrong",
+      correction:
+        parsed.grade === "unavailable"
+          ? { present: false }
+          : { present: true, value: parsed.grade },
+      reason: parsed.reason,
+      metadata: {
+        kind: "email_accuracy",
         evaluationId: parsed.evaluationId,
         predictionId: item.predictionId,
         grade: parsed.grade,
-        reason: parsed.reason,
         reviewedChecksum: parsed.reviewedChecksum,
-        reviewedLabelId,
-      })
-      .returning();
+      },
+    });
+    const grade = gradeRow.parse({
+      ...emailGradeMetadata.parse(event.metadata),
+      id: event.id,
+      reason: event.reason,
+      createdAt: event.createdAt,
+    });
     if (!grade) throw new Error("Email accuracy grade insert returned no row.");
     return gradeOutput(grade);
   });
@@ -612,12 +645,10 @@ export async function getEmailAccuracyReport(
     actor,
   );
   const grades = new Map(
-    (
-      await client
-        .select()
-        .from(emailAccuracyGrade)
-        .where(eq(emailAccuracyGrade.evaluationId, evaluation.id))
-    ).map((grade) => [grade.predictionId, grade]),
+    (await readGrades(client, evaluation.id)).map((grade) => [
+      grade.predictionId,
+      grade,
+    ]),
   );
   const emails = new Map(
     (await rosterEmails(client, roster)).map((email) => [email.id, email]),

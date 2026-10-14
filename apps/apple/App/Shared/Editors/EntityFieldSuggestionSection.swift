@@ -72,7 +72,7 @@ struct EntityFieldSuggestionSection: View {
                                 }
                                 .disabled(review.isApplying || review.isLoading)
                                 .accessibilityIdentifier("editor.suggestions.\(field.key).apply")
-                                Button("Dismiss") { review.dismiss(field.key) }
+                                Button("Dismiss") { Task { try? await review.dismiss(field.key) } }
                                     .disabled(review.isApplying)
                             }
                             .buttonStyle(.borderless)
@@ -151,7 +151,8 @@ struct EntityFieldSuggestionSection: View {
         EntityFieldSuggestionSection(
             review: FieldSuggestionReviewModel(
                 editor: editor, fetch: { _ in .init(suggestions: []) },
-                saveCategory: { _ in throw CancellationError() }),
+                saveCategory: { _ in throw CancellationError() },
+                reviewAssessment: { _ in throw CancellationError() }),
             pickedTitles: [:], onSavedCategory: { _, _, _ in })
     }
     .formStyle(.grouped)

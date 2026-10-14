@@ -130,58 +130,6 @@ export const emailObservationChildren = [
     ],
   }),
   defineChildTable({
-    name: "EmailClassificationLabel",
-    exportName: "emailClassificationLabel",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "predictionId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "emailClassificationObservation", column: "id" },
-      },
-      {
-        key: "classification",
-        kind: "text",
-        notNull: true,
-        type: "MailboxClassification",
-      },
-      { key: "reason", kind: "text", notNull: true },
-      {
-        key: "actorUserId",
-        kind: "text",
-        notNull: true,
-        reference: { table: "user", column: "id" },
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/mailbox-research",
-        exports: ["MailboxClassification"],
-      },
-    ],
-    indexes: [
-      { name: "EmailClassificationLabel_prediction_idx", on: ["predictionId"] },
-    ],
-    checks: [
-      {
-        name: "EmailClassificationLabel_classification_check",
-        sql: "{classification} IN ('related', 'unrelated', 'uncertain')",
-      },
-    ],
-  }),
-  defineChildTable({
     name: "EmailRetrievalFailure",
     exportName: "emailRetrievalFailure",
     columns: [

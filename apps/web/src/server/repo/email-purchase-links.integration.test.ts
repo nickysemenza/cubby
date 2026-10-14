@@ -6,7 +6,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 /**
  * Email↔Purchase failure modes (ADR 0011: links are derived, never stored as
  * a second graph): accepted sources, reviewed links and live suggestions must
@@ -25,14 +26,19 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink as orderMailCandidateDecision,
+  assessmentState,
   orderMailEvent,
   purchase as purchaseTable,
   vendorAccount,
 } from "~/server/db/schema";
 import { decideEmailPurchase } from "~/server/purchase-import/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/purchase-import/gmail/retained-mail.fixtures";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { listEmailsRead } from "~/server/repo/email";
 import { buildEntityReport } from "~/server/repo/entity-report";
 import { mergePurchases } from "~/server/repo/purchase";
@@ -385,7 +391,7 @@ describe("Email Purchase links", () => {
       mailboxId: "synthetic-other-mailbox",
       vendorId: null,
     });
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+    await seedEmailLinkDecision(ctx.db, {
       eventId: f.event.id,
       purchaseId: f.purchase.id,
       decision: "linked",
@@ -815,7 +821,7 @@ describe("Email Purchase links", () => {
       commitAutomatic = resolve;
     });
     const automaticLink = withTransaction(ctx.db, async (tx) => {
-      await tx.insert(orderMailCandidateDecision).values({
+      await seedEmailLinkDecision(databaseForTransaction(tx), {
         eventId: event!.id,
         purchaseId: automatic!.id,
         decision: "linked",
@@ -1008,7 +1014,7 @@ describe("Email Purchase links", () => {
       vendorId: f.vendor.id,
       orderId: "SYNTHETIC-OTHER",
     });
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+    await seedEmailLinkDecision(ctx.db, {
       eventId: f.event.id,
       purchaseId: other.id,
       decision: "linked",
@@ -1030,22 +1036,33 @@ describe("Email Purchase links", () => {
       }),
     ]);
     await decide(f.email, f.purchase, f.checksum, "linked");
-    const decisions = await getDb(ctx.db)
-      .select({
-        purchaseId: orderMailCandidateDecision.purchaseId,
-        decision: orderMailCandidateDecision.decision,
-        proposedBy: orderMailCandidateDecision.proposedBy,
-      })
-      .from(orderMailCandidateDecision)
-      .where(eq(orderMailCandidateDecision.eventId, f.event.id));
-    expect(decisions).toEqual(
+    const states = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(
+        and(
+          eq(assessmentState.family, "email_link"),
+          sql`${assessmentState.data}->>'eventId' = ${f.event.id}`,
+        ),
+      );
+    expect(states).toEqual(
       expect.arrayContaining([
-        { purchaseId: other.id, decision: "dismissed", proposedBy: "agent" },
-        {
-          purchaseId: f.purchase.id,
-          decision: "linked",
-          proposedBy: "heuristic",
-        },
+        expect.objectContaining({
+          status: "superseded",
+          active: false,
+          data: expect.objectContaining({
+            purchaseId: other.id,
+            proposedBy: "agent",
+          }),
+        }),
+        expect.objectContaining({
+          status: "resolved",
+          active: true,
+          data: expect.objectContaining({
+            purchaseId: f.purchase.id,
+            proposedBy: "heuristic",
+          }),
+        }),
       ]),
     );
   });

@@ -22,6 +22,9 @@ import {
   run,
   runFinding,
 } from "~/server/db/schema";
+import { recordFeedback } from "~/server/repo/assessment";
+import { ensureEmailAssessment } from "~/server/repo/assessment-email";
+import { databaseForTransaction } from "~/server/repo/database-helpers";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { readRetainedMail } from "~/server/repo/retained-mail";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
@@ -166,6 +169,22 @@ export async function recordEmailClassificationObservation(
       throw new Error(
         "Email classification observation insert returned no row",
       );
+    const assessment = await ensureEmailAssessment(
+      databaseForTransaction(tx),
+      observation.id,
+    );
+    if (parsed.stage === "resolution")
+      await recordFeedback(databaseForTransaction(tx), {
+        assessmentId: assessment.id,
+        operationId: "resolution",
+        verdict: "correct",
+        authority: parsed.runId ? "automatic" : "member",
+        actorUserId: null,
+        intent: "apply",
+        correction: { present: true, value: parsed.classification },
+        reason: parsed.reason,
+        metadata: { kind: "email_resolution", predictionId: observation.id },
+      });
     // A review conflict is a worklist filter, not a Run finding.
     if (parsed.conflict?.kind === "accepted_unrelated" && parsed.runId)
       await tx.insert(runFinding).values({

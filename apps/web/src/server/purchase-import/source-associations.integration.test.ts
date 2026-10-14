@@ -16,7 +16,7 @@ import {
   importSourceOrder,
   email as emailTable,
   orderMail,
-  orderMailCandidateDecision,
+  assessmentEmailLink as orderMailCandidateDecision,
   orderMailEvent,
   product,
   purchase,

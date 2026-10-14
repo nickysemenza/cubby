@@ -9,20 +9,22 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   expense as expenseTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
+import { publishAssessment } from "~/server/repo/assessment";
+import {
+  reviewAssessment,
+  reviewAssessmentBatch,
+} from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
-  acceptSuggestions,
   listSuggestions,
-  recordFieldSuggestionMiss,
-  rejectSuggestion,
-  rejectSuggestions,
+  applyFieldCorrection,
   suggestionCounts,
 } from "~/server/repo/suggestion-review";
 import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
@@ -182,8 +184,13 @@ describe("Suggestion review", () => {
     const correctedRow = pendingFor(corrected.id);
     expect(dismissedRow.kind).toBe("correction");
 
-    await rejectSuggestion(ctx.db, context, { id: dismissedRow.id });
-    await rejectSuggestion(ctx.db, context, {
+    await reviewAssessment(ctx.db, context, {
+      assessmentId: dismissedRow.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
+    await applyFieldCorrection(ctx.db, context, {
       id: correctedRow.id,
       correctValue: taxonomyShortcode("household"),
     });
@@ -260,19 +267,50 @@ describe("Suggestion review", () => {
     });
     const idFor = (recordId: string) =>
       pending.find((row) => row.recordId === recordId)?.id ?? "";
-    const accept = await acceptSuggestions(ctx.db, context, {
-      ids: [idFor(accepted.id)],
+    const accept = await reviewAssessmentBatch(ctx.db, context, {
+      items: [
+        {
+          assessmentId: idFor(accepted.id),
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+        },
+      ],
     });
     expect(accept).toEqual([
-      { id: idFor(accepted.id), ok: true, status: "applied" },
+      expect.objectContaining({
+        assessmentId: idFor(accepted.id),
+        ok: true,
+        status: "applied",
+        applied: true,
+      }),
     ]);
     // The already-applied id fails on its own; the pending one still rejects.
-    const reject = await rejectSuggestions(ctx.db, context, {
-      ids: [idFor(accepted.id), idFor(rejected.id)],
+    const reject = await reviewAssessmentBatch(ctx.db, context, {
+      items: [
+        {
+          assessmentId: idFor(accepted.id),
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+          expectedFingerprint: "synthetic-stale-fingerprint",
+        },
+        {
+          assessmentId: idFor(rejected.id),
+          operationId: crypto.randomUUID(),
+          verdict: "wrong",
+          intent: "history",
+        },
+      ],
     });
     expect(reject).toEqual([
-      expect.objectContaining({ id: idFor(accepted.id), ok: false }),
-      { id: idFor(rejected.id), ok: true, status: "rejected" },
+      expect.objectContaining({ assessmentId: idFor(accepted.id), ok: false }),
+      expect.objectContaining({
+        assessmentId: idFor(rejected.id),
+        ok: true,
+        status: "rejected",
+        applied: false,
+      }),
     ]);
     expect(await productCategoryId(ctx.db, accepted.id)).toBe(
       taxonomyId(SUGGESTED_CATEGORY),
@@ -291,7 +329,7 @@ describe("Suggestion review", () => {
     ]);
   });
 
-  it("records a per-record dismissal as a Miss on its ai_suggest Run", async () => {
+  it("records a per-record wrong verdict as a Miss on its ai_suggest Run", async () => {
     const context = kernelCtx(ctx);
     const product = await productFixture(ctx, "Synthetic dismissed item", {
       categoryId: taxonomyId("tools"),
@@ -301,13 +339,36 @@ describe("Suggestion review", () => {
       context.actorContext,
       aiCallRunInput(context.actorContext, { runKey: crypto.randomUUID() }),
     );
-    await recordFieldSuggestionMiss(ctx.db, runId, {
-      entity: "product",
-      entityId: product.id,
-      field: "categoryId",
-      currentValue: taxonomyShortcode("tools"),
-      suggestedValue: taxonomyShortcode("food"),
-      confidence: 0.91,
+    const prediction = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: "synthetic:live-field-miss",
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "product",
+          recordId: await recordId(ctx.db, product.id, "product"),
+          field: "categoryId",
+        },
+        judgment: { value: taxonomyShortcode("food") },
+        fingerprint: null,
+        producer: null,
+        evidence: null,
+      },
+      {
+        runId,
+        model: "unknown",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.91,
+        kind: "correction",
+      },
+    );
+    await reviewAssessment(ctx.db, context, {
+      assessmentId: prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
     });
     expect(await runSuggestions(ctx.db, runId)).toEqual([
       expect.objectContaining({

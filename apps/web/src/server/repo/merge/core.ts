@@ -26,6 +26,7 @@ import { repointEntitySources } from "~/server/repo/entity-source";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import { repointAssessmentTargetsTx } from "~/server/repo/suggestion-dismissal";
 
 type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
 
@@ -157,6 +158,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   const { entity, table, keepId, loserIds, removal, actor } = args;
   if (loserIds.length === 0) return { removed: 0 };
   const ids = [...loserIds];
+  await repointAssessmentTargetsTx(tx, entity, keepId, loserIds);
 
   if (entity === "purchase" || entity === "expense" || entity === "product") {
     const findings = await tx

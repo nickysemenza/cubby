@@ -226,6 +226,13 @@ export const INGREDIENT_MERGE_FEATURE = defineFeature({
  * `FIELD_SUGGEST_REGISTRY` (`field-suggest/registry.ts`) needs no new entry
  * here.
  */
+export const PRODUCT_IDENTITY_FEATURE = defineFeature({
+  feature: "product-identity",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-10-14.2",
+}) satisfies AiDecisionFeature;
+
 export const FIELD_SUGGESTION_FEATURE = defineFeature({
   feature: "field-suggestion",
   tier: "decision",
@@ -576,6 +583,7 @@ export const AI_FEATURES = [
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,
+  PRODUCT_IDENTITY_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,

@@ -6,7 +6,7 @@ import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { UseMutationOptions } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   FormProvider,
   useForm,
@@ -34,6 +34,7 @@ import {
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -248,6 +249,9 @@ export function BulkEditDialogBody({
   searchProviderFor?: SearchProviderFor;
 }) {
   const form = useForm<FieldValues>();
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
   // Reading `dirtyFields` here (not only inside a callback) is what
   // subscribes this component to RHF's proxy-tracked form state, so the
   // preview below and the submit payload both follow the live selection of
@@ -341,6 +345,13 @@ export function BulkEditDialogBody({
       data[key] = value === "" ? null : (value ?? null);
     }
     await onSubmit(data);
+    if (singleItem) {
+      try {
+        await receiptHandler.current?.(singleItem.id);
+      } catch (error) {
+        showErrorToast(error, "Updated, but suggestion receipt failed");
+      }
+    }
   });
 
   return (
@@ -390,6 +401,7 @@ export function BulkEditDialogBody({
             // SAFETY: see the `suggestionStaticBasis` cast above.
             entity={entity as ShortcodeEntity}
             mode="edit"
+            receiptHandler={receiptHandler}
             staticBasis={suggestionStaticBasis}
             fieldKeys={fieldKeys}
           >

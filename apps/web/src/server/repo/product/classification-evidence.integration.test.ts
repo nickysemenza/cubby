@@ -7,11 +7,12 @@ import { describe, expect, it } from "vitest";
 import {
   aiAnalysis,
   image,
-  imageDescriptionCorrection,
   imageProcessingJob,
   productCategory,
 } from "~/server/db/schema";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { insertEntityAttachments } from "~/server/repo/repo.fixtures";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 
 import { getDb } from "../database-helpers";
 import { createUploadedImageRecord } from "../image";
@@ -145,12 +146,13 @@ describe("retained classification evidence", () => {
           result: { description: "Uncertain fabric lettering" },
         },
       ]);
-    await getDb(ctx.db)
-      .insert(imageDescriptionCorrection)
-      .values({
-        imageId: parseEntityId("image", label.id),
-        description: "Label confirms 100% cotton",
-      });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      standalone: { kind: "image_description", id: label.shortcode },
+      operationId: crypto.randomUUID(),
+      verdict: "correct",
+      correction: { present: true, value: "Label confirms 100% cotton" },
+      intent: "apply",
+    });
     const before = await getProductClassificationEvidence(ctx.db, product.id);
     expect(before).toContain("item: Blue jacket with long sleeves");
     expect(before).toContain(

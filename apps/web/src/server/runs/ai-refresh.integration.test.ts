@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
 import {
   aiEvaluation,
-  suggestion,
+  assessmentState as suggestion,
   run,
   email,
   product,
@@ -28,10 +28,10 @@ import {
   saveAiDiscoveryCursor,
   readAiDiscoveryCursor,
 } from "~/server/repo/ai-refresh";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { rejectSuggestion } from "~/server/repo/suggestion-review";
 import { controlWorkflowRun } from "~/server/workflow-runs/control";
 
 import {
@@ -218,7 +218,12 @@ describe("targeted prompt refresh", () => {
       .from(suggestion)
       .where(eq(suggestion.status, "pending"));
     expect(pending).toBeDefined();
-    await rejectSuggestion(ctx.db, kernelCtx(ctx), { id: pending!.id });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pending!.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
     await executeAiRefreshTarget(ctx.db, evaluations[0]!.id, ports);
     expect(
       (
@@ -550,7 +555,12 @@ describe("targeted prompt refresh", () => {
       { context: kernelCtx(ctx), ...categoryPorts(0.6) },
     );
     const [original] = await getDb(ctx.db).select().from(suggestion);
-    await rejectSuggestion(ctx.db, kernelCtx(ctx), { id: original!.id });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: original!.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
     await seedPending(ctx, {
       entity: "product",
       recordId: original!.recordId,

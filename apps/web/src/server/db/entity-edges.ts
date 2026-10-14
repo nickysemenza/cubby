@@ -107,7 +107,6 @@ import {
   gardenEntry,
   image,
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
   runFinding,
@@ -136,7 +135,6 @@ import {
   email as emailTable,
   merchantVendorRule,
   orderMail,
-  orderMailCandidateDecision,
   orderMailAttachment,
   photoGroupProposal,
   photoRunImage,
@@ -145,7 +143,6 @@ import {
   productCategory,
   spendingCategory,
   productConversionCoverage,
-  productMatchCandidate,
   productUnitMappings,
   project,
   purchase,
@@ -156,7 +153,7 @@ import {
   plant,
   planting,
   statementRow,
-  suggestion,
+  assessmentState,
   task,
   vendorAccount,
 } from "./schema";
@@ -482,14 +479,6 @@ export const ENTITY_EDGES = {
       label: "image processing jobs",
       description:
         "Durable processing state for this original image; queue delivery is only a wakeup for this record.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImageDescriptionCorrection.imageId": {
-      column: imageDescriptionCorrection.imageId,
-      role: "metadata",
-      label: "confirmed image descriptions",
-      description:
-        "A user-confirmed image description that remains separate from generated analysis history.",
       liveness: { kind: "must-target-live" },
     },
     "ImportPreparedOrder.primaryDocumentImageId": {
@@ -883,22 +872,6 @@ export const ENTITY_EDGES = {
           "A rebuildable conversion-graph projection owned by this product.",
         liveness: { kind: "must-target-live" },
       },
-      "ProductMatchCandidate.productAId": {
-        column: productMatchCandidate.productAId,
-        role: "metadata",
-        label: "product match reviews",
-        description:
-          'One side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
-        liveness: { kind: "must-target-live" },
-      },
-      "ProductMatchCandidate.productBId": {
-        column: productMatchCandidate.productBId,
-        role: "metadata",
-        label: "product match reviews",
-        description:
-          'The other side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
-        liveness: { kind: "must-target-live" },
-      },
       "Planting.sourceProductId": {
         column: planting.sourceProductId,
         role: "history",
@@ -1231,18 +1204,6 @@ export const ENTITY_EDGES = {
           kind: "allow-target-deleted",
           reason:
             "Preparation retains its original target tombstone. Deletion or merge invalidates commit and requires preparation against the current Purchase.",
-        },
-      },
-      "OrderMailCandidateDecision.purchaseId": {
-        column: orderMailCandidateDecision.purchaseId,
-        role: "history",
-        label: "reviewed order email matches",
-        description:
-          "A human link or dismissal for one mail event and Purchase candidate; deletion retains the decision as historical evidence, while merge moves it to the survivor.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Purchase deletion retains reviewed mail history against its tombstone.",
         },
       },
       "ImportSourceOrder.purchaseId": {
@@ -1583,13 +1544,17 @@ export const ENTITY_EDGES = {
         "A device's Live Activity or notification push registration for this Run; deleting the Run removes it.",
       liveness: { kind: "must-target-live" },
     },
-    "Suggestion.runId": {
-      column: suggestion.runId,
-      role: "owned-child",
+    "AssessmentState.runId": {
+      column: assessmentState.runId,
+      role: "history",
       label: "Suggestions",
       description:
-        "A Suggestion this Run computed; deleting the Run takes its Suggestions with it.",
-      liveness: { kind: "must-target-live" },
+        "Nullable execution provenance; deleting the Run preserves Assessment and Feedback history.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Field reviews retain execution provenance after archival or deletion.",
+      },
     },
     "Purchase.runId": {
       column: purchase.runId,

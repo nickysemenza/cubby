@@ -187,18 +187,6 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
-  "ProductMatchCandidate.productAId": {
-    code: "repoint-match-review",
-    effect: "repoint",
-    description:
-      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
-  },
-  "ProductMatchCandidate.productBId": {
-    code: "repoint-match-review",
-    effect: "repoint",
-    description:
-      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
-  },
   "Planting.sourceProductId": {
     code: "preserve-garden-source",
     effect: "preserve",
@@ -1732,9 +1720,6 @@ export const mergeProducts = async (
         },
         // Pair endpoints are re-canonicalised together, so both edges are
         // folded by one call keyed on the first.
-        "ProductMatchCandidate.productAId": () =>
-          repointProductMatchCandidatesTx(tx, keepId, plan.loserIds),
-        "ProductMatchCandidate.productBId": async () => {},
       },
     });
     summary.tasksMoved = repointed["Task.subjectProductId"] ?? 0;
@@ -1766,6 +1751,7 @@ export const mergeProducts = async (
       discardedUnitMappings,
     );
 
+    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
     const { removed } = await finalizeMerge(tx, {
       entity: "product",
       table: product,

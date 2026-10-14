@@ -61,6 +61,7 @@ const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
     correctValue: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
+    assessmentId: overrides.assessmentId ?? overrides.id ?? rowId,
   }) satisfies SuggestionReviewRow;
 
 function shortcodeSuggestion(recordId: string) {
@@ -75,25 +76,43 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
         return suggestionReviewListOut.parse(stored);
       },
     ),
-    accept: vi.fn(async ({ id }: { id: string }) => ({
-      id,
-      status: "applied" as const,
-    })),
-    acceptMany: vi.fn(async ({ ids }: { ids: string[] }) =>
-      ids.map((id) => ({ id, ok: true as const, status: "applied" as const })),
+    review: vi.fn(
+      async ({
+        assessmentId,
+        intent,
+      }: {
+        assessmentId: string;
+        intent: string;
+      }) => ({
+        assessmentId,
+        feedbackId: "55555555-5555-4555-8555-555555555555",
+        status: "recorded",
+        applied: intent === "apply",
+      }),
     ),
-    reject: vi.fn(async ({ id }: { id: string }) => ({
-      id,
-      status: "rejected" as const,
-    })),
+    reviewBatch: vi.fn(
+      async ({ items }: { items: { assessmentId: string }[] }) =>
+        items.map(({ assessmentId }) => ({
+          assessmentId,
+          feedbackId: "55555555-5555-4555-8555-555555555555",
+          status: "applied",
+          applied: true,
+          ok: true as const,
+        })),
+    ),
   } satisfies StoredSuggestionOperations;
 }
 
 function setup(
   stored: SuggestionReviewRow[],
-  mutations: Pick<StoredSuggestionOperations, "accept" | "reject"> = {
-    accept: vi.fn(async () => ({ id: rowId, status: "applied" as const })),
-    reject: vi.fn(async () => ({ id: rowId, status: "rejected" as const })),
+  mutations: Pick<StoredSuggestionOperations, "review" | "reviewBatch"> = {
+    review: vi.fn(async ({ assessmentId, intent }) => ({
+      assessmentId,
+      feedbackId: "55555555-5555-4555-8555-555555555555",
+      status: "recorded",
+      applied: intent === "apply",
+    })),
+    reviewBatch: vi.fn(async () => []),
   },
   currentCategory?: ProductCategorySummary,
 ) {
@@ -103,7 +122,6 @@ function setup(
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
     list: vi.fn(async () => stored),
-    acceptMany: vi.fn(async () => []),
     ...mutations,
   };
   const liveOperations: EntitySuggestionsOperations = {
@@ -217,10 +235,14 @@ describe("stored suggestions in generic list cells", () => {
 
   it("edits only the suggested field and commits through the correction operation", async () => {
     const harness = createBrowserTestHarness();
-    const reject = vi.fn(async () => ({
-      id: rowId,
-      status: "rejected" as const,
-    }));
+    const review = vi.fn(
+      async ({ assessmentId }: { assessmentId: string }) => ({
+        assessmentId,
+        feedbackId: "55555555-5555-4555-8555-555555555555",
+        status: "applied",
+        applied: true,
+      }),
+    );
     const expense = {
       id: testShortcode("expense", "suggestion-editor"),
       name: "Synthetic expense",
@@ -236,7 +258,7 @@ describe("stored suggestions in generic list cells", () => {
         suggestedValue: "materials",
       }),
     ]);
-    operations.reject = reject;
+    operations.review = review;
     render(
       <RecordSuggestionsProvider
         entity="expense"
@@ -266,12 +288,13 @@ describe("stored suggestions in generic list cells", () => {
     expect(screen.queryByLabelText("Cost")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
-      expect(reject).toHaveBeenCalledWith(
-        {
-          id: rowId,
-          correctValue: "services",
-        },
-        expect.anything(),
+      expect(review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "wrong",
+          correction: { present: true, value: "services" },
+          intent: "apply",
+        }),
       ),
     );
     harness.dispose();
@@ -294,11 +317,15 @@ describe("stored suggestions in generic list cells", () => {
         suggestedValue: "storage",
       }),
     ]);
-    const reject = vi.fn(async () => ({
-      id: rowId,
-      status: "rejected" as const,
-    }));
-    operations.reject = reject;
+    const review = vi.fn(
+      async ({ assessmentId }: { assessmentId: string }) => ({
+        assessmentId,
+        feedbackId: "55555555-5555-4555-8555-555555555555",
+        status: "applied",
+        applied: true,
+      }),
+    );
+    operations.review = review;
     render(
       <RecordSuggestionsProvider
         entity="location"
@@ -328,9 +355,13 @@ describe("stored suggestions in generic list cells", () => {
     expect(screen.queryByText("Collections")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
-      expect(reject).toHaveBeenCalledWith(
-        { id: rowId, correctValue: "room" },
-        expect.anything(),
+      expect(review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "wrong",
+          correction: { present: true, value: "room" },
+          intent: "apply",
+        }),
       ),
     );
     harness.dispose();
@@ -353,11 +384,15 @@ describe("stored suggestions in generic list cells", () => {
         suggestedValue: "invoice",
       }),
     ]);
-    const reject = vi.fn(async () => ({
-      id: rowId,
-      status: "rejected" as const,
-    }));
-    operations.reject = reject;
+    const review = vi.fn(
+      async ({ assessmentId }: { assessmentId: string }) => ({
+        assessmentId,
+        feedbackId: "55555555-5555-4555-8555-555555555555",
+        status: "applied",
+        applied: true,
+      }),
+    );
+    operations.review = review;
     render(
       <RecordSuggestionsProvider
         entity="financialTransaction"
@@ -392,9 +427,13 @@ describe("stored suggestions in generic list cells", () => {
     expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
     await waitFor(() =>
-      expect(reject).toHaveBeenCalledWith(
-        { id: rowId, correctValue: "receipt" },
-        expect.anything(),
+      expect(review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "wrong",
+          correction: { present: true, value: "receipt" },
+          intent: "apply",
+        }),
       ),
     );
     harness.dispose();
@@ -444,7 +483,16 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
     await waitFor(() =>
-      expect(operations.acceptMany).toHaveBeenCalledWith({ ids: [rowId] }),
+      expect(operations.reviewBatch).toHaveBeenCalledWith({
+        items: [
+          expect.objectContaining({
+            assessmentId: rowId,
+            verdict: "correct",
+            intent: "apply",
+            correction: { present: false },
+          }),
+        ],
+      }),
     );
     harness.dispose();
   });
@@ -495,7 +543,16 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Accept" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(operations.accept).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(operations.review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "correct",
+          intent: "apply",
+          correction: { present: false },
+        }),
+      ),
+    );
     harness.dispose();
   });
 
@@ -628,45 +685,37 @@ describe("stored suggestions in generic list cells", () => {
   });
 
   it("accepts the stored Suggestion when its ghost is clicked", async () => {
-    const accept = vi.fn(async () => ({
-      id: rowId,
-      status: "applied" as const,
-    }));
-    const { harness, operations } = setup([suggestion()], {
-      accept,
-      reject: vi.fn(),
-    });
+    const { harness, operations } = setup([suggestion()]);
     fireEvent.click(
       await screen.findByRole("button", {
         name: /^Accept suggested value/,
       }),
     );
     await waitFor(() =>
-      expect(operations.accept).toHaveBeenCalledWith(
-        { id: rowId },
-        expect.anything(),
+      expect(operations.review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "correct",
+          intent: "apply",
+        }),
       ),
     );
     harness.dispose();
   });
 
   it("records Reject as a Miss from the ghost menu", async () => {
-    const reject = vi.fn(async () => ({
-      id: rowId,
-      status: "rejected" as const,
-    }));
-    const { harness, operations } = setup([suggestion()], {
-      accept: vi.fn(),
-      reject,
-    });
+    const { harness, operations } = setup([suggestion()]);
     fireEvent.click(
       await screen.findByRole("button", { name: /suggestion actions/i }),
     );
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     await waitFor(() =>
-      expect(operations.reject).toHaveBeenCalledWith(
-        expect.objectContaining({ id: rowId }),
-        expect.anything(),
+      expect(operations.review).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assessmentId: rowId,
+          verdict: "wrong",
+          intent: "history",
+        }),
       ),
     );
     harness.dispose();
@@ -682,13 +731,24 @@ describe("stored suggestions in generic list cells", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /accept suggestions/i }),
     );
-    // One batch call, not a sequential loop of single accepts.
+    // One batch call, not a sequential loop of single reviews.
     await waitFor(() =>
-      expect(operations.acceptMany).toHaveBeenCalledExactlyOnceWith({
-        ids: [rowId, second.id],
+      expect(operations.reviewBatch).toHaveBeenCalledExactlyOnceWith({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            assessmentId: rowId,
+            verdict: "correct",
+            intent: "apply",
+          }),
+          expect.objectContaining({
+            assessmentId: second.id,
+            verdict: "correct",
+            intent: "apply",
+          }),
+        ]),
       }),
     );
-    expect(operations.accept).not.toHaveBeenCalled();
+    expect(operations.review).not.toHaveBeenCalled();
     harness.dispose();
   });
 });

@@ -14,11 +14,11 @@ import {
   importSourceProduct,
   inventoryEntry,
   product,
-  productMatchCandidate,
   purchase,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { listProductMatchRows } from "~/server/repo/product-match-candidate";
 import { syncProductExternalIds } from "~/server/repo/product/update-helpers";
 import {
   createProductFixture,
@@ -195,28 +195,13 @@ describe("purchase import identifier collisions", () => {
       identifiers.filter((row) => row.externalId === "B0COLLIDE1"),
     ).toHaveLength(1);
 
-    const proposals = await getDb(ctx.db)
-      .select({
-        state: productMatchCandidate.state,
-        evidence: productMatchCandidate.evidence,
-      })
-      .from(productMatchCandidate)
-      .where(
-        and(
-          eq(
-            productMatchCandidate.productAId,
-            owner.entityId < reviewed.entityId
-              ? owner.entityId
-              : reviewed.entityId,
-          ),
-          eq(
-            productMatchCandidate.productBId,
-            owner.entityId < reviewed.entityId
-              ? reviewed.entityId
-              : owner.entityId,
-          ),
-        ),
-      );
+    const proposals = (await listProductMatchRows(ctx.db, owner.entityId))
+      .filter(
+        (row) =>
+          row.productAId === reviewed.entityId ||
+          row.productBId === reviewed.entityId,
+      )
+      .map((row) => ({ state: row.state, evidence: row.evidence }));
     expect(proposals).toEqual([
       { state: "open", evidence: expect.stringContaining("B0COLLIDE1") },
     ]);

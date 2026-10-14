@@ -19,6 +19,8 @@ import {
   imageProcessingOrphan,
   searchDocument,
 } from "~/server/db/schema";
+import { reviewAssessment } from "~/server/repo/assessment-review";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 
 import { getDb } from "./database-helpers";
@@ -32,7 +34,6 @@ import {
   loadImageRepresentations,
   getImageProcessingReadProjection,
   saveImageDescriptionAnalysis,
-  saveImageDescriptionCorrection,
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
@@ -434,9 +435,12 @@ describe("durable image representations", () => {
       .update(image)
       .set({ sha256: hash })
       .where(eq(image.id, imageId));
-    await saveImageDescriptionCorrection(ctx.db, {
-      imageId,
-      description: "Confirmed navy cotton shirt",
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      standalone: { kind: "image_description", id: row.shortcode },
+      operationId: crypto.randomUUID(),
+      verdict: "correct",
+      correction: { present: true, value: "Confirmed navy cotton shirt" },
+      intent: "apply",
     });
     expect(
       (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
@@ -514,9 +518,15 @@ describe("durable image representations", () => {
       imageId,
       sortOrder: 0,
     });
-    await saveImageDescriptionCorrection(ctx.db, {
-      imageId,
-      description: "Confirmed searchable cobalt textile",
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      standalone: { kind: "image_description", id: row.shortcode },
+      operationId: crypto.randomUUID(),
+      verdict: "correct",
+      correction: {
+        present: true,
+        value: "Confirmed searchable cobalt textile",
+      },
+      intent: "apply",
     });
 
     const before = await getDb(ctx.db)

@@ -55,7 +55,7 @@ import {
   purchase,
   vendor,
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { obsoleteExecutionFindingSql } from "~/server/purchase-import/run-retirement";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
@@ -249,8 +249,8 @@ async function workQueueProjection(
     count(*)::text || CASE WHEN count(*) = 1 THEN ' pending suggestion' ELSE ' pending suggestions' END AS reason,
     'Accept or reject them in AI Review.'::text AS "nextAction",
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
-    FROM ${suggestionTable} JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
-    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${reviewableSuggestionSql}
+    FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
+    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${"field"} AND ${reviewableSuggestionSql}
     GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
 
   // The declared unsettled view owns missing payment evidence. Receipt

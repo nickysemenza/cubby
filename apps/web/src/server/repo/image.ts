@@ -148,6 +148,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { softDeleteSuggestionDismissalsTx } from "~/server/repo/suggestion-dismissal";
 import type {
   DeriveImageCaptureCurrent as ImageCaptureStateRow,
   DeriveImageCaptureSighting as SightingCaptureRow,
@@ -1203,7 +1204,6 @@ const imageReferenceCondition = (
     // delete path below clears them after it locks the original image.
     "ImageProcessingJob.imageId": sql`FALSE`,
     "ImageDerivative.imageId": sql`FALSE`,
-    "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
     "PhotoRunImage.imageId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
@@ -1816,12 +1816,6 @@ export const IMAGE_HARD_DELETE = {
     description:
       "Non-gallery derivative records are removed with their original image.",
   },
-  "ImageDescriptionCorrection.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "A confirmed description cannot outlive the image it describes.",
-  },
   "ImageSighting.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1869,7 +1863,6 @@ const PROCESSING_EDGES: ReadonlySet<string> = new Set([
   "PhotoRunImage.imageId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
-  "ImageDescriptionCorrection.imageId",
   "ImageSighting.imageId",
 ]);
 
@@ -2113,6 +2106,7 @@ const deleteImagesTx = async (
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
+  await softDeleteSuggestionDismissalsTx(tx, "image", ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
   await touchUpdatedAt(

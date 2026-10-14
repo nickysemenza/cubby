@@ -35,6 +35,7 @@ import {
   EXTERNAL_ID_KINDS,
   entityExternalIdKind,
 } from "@cubby/schemas/external-id";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   DeviceId,
   ExpenseId,
@@ -91,10 +92,8 @@ import {
   mealRecipe,
   mealRecipePortion,
   orderMailAttachment,
-  orderMailCandidateDecision,
   orderMailEvent,
   photoGroupProposal,
-  productMatchCandidate,
   runFinding,
   photoRunImage,
   statementImport,
@@ -121,6 +120,7 @@ import {
   sourceOrderObservationFixture,
 } from "~/server/purchase-import/order-import.fixtures";
 import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
+import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
 import {
   databaseForTransaction,
   getDb,
@@ -129,6 +129,7 @@ import {
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
 import { attachExistingImageToEntity } from "~/server/repo/image";
+import { publishProductPair } from "~/server/repo/product-match-candidate";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -853,7 +854,7 @@ async function seedMealChildRows(db: Database, ids: StagingIds) {
 
 /**
  * A second live product, ordered against the first, for
- * `ProductMatchCandidate`'s canonical-pair check (`productAId < productBId`).
+ * the shared immutable canonical pair subject.
  */
 async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
   if (!ids.productId) return;
@@ -862,13 +863,12 @@ async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
     manufacturer: "Delete policy",
   }).catch(() => undefined);
   if (!other) return;
-  const [productAId, productBId] = [ids.productId, other.id].sort();
-  await insertAndReturn(db, productMatchCandidate, {
-    productAId: productAId!,
-    productBId: productBId!,
+  await publishProductPair(db, {
+    productIds: [parseEntityId("product", ids.productId), other.id],
     source: "detector",
-    state: "open",
-  }).catch(() => undefined);
+    evidence: null,
+    sourceUrls: [],
+  });
 }
 
 /** LedgerSourceClaim: exactly one of expenseId/ledgerTransferId, never both. */
@@ -1165,12 +1165,13 @@ async function seedOrderMailAttachment(db: Database, ids: StagingIds) {
       event: "ordered",
       sourceKey: "delete-policy-event-1",
     });
-    await insertAndReturn(db, orderMailCandidateDecision, {
+    await publishEmailLinkDecision(db, {
       eventId: event.id,
       purchaseId: ids.purchaseId,
       decision: "dismissed",
       evidenceChecksum: "delete-policy-checksum",
       decidedByUserId: "delete-policy-fixture",
+      proposedBy: null,
     });
   }
   await insertAndReturn(db, orderMailAttachment, {

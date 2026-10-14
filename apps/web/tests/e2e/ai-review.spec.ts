@@ -5,7 +5,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   product as productTable,
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";

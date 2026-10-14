@@ -323,7 +323,7 @@ export const amazonAsin = (url: string | undefined): string | null => {
   );
 };
 
-const lineIdentifiers = (
+export const lineIdentifiers = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
 ) => {
   const asin = amazonAsin(line.productUrl);

@@ -3,6 +3,10 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { getTableColumns, getTableName } from "drizzle-orm";
 
 import { SHORTCODE_TABLE } from "../repo/generated/shortcode-tables.gen";
+import {
+  assessmentHistoryDdl,
+  productIdentityInvalidationDdl,
+} from "./assessment-ddl";
 import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
@@ -65,6 +69,15 @@ const suggestionSupersedingTriggerSql = (): string => {
         });
         byTable.set(tableName, entry);
       }
+      for (const basis of field.control.suggest.basis ?? []) {
+        const watched = Object.values(columns).find(
+          (candidate) => candidate.name === basis,
+        );
+        if (!watched || basis === field.key) continue;
+        const entry = byTable.get(tableName) ?? { tableName, columns: [] };
+        entry.columns.push({ entity, field: field.key, watched: watched.name });
+        byTable.set(tableName, entry);
+      }
       for (const backing of backedBy ?? []) {
         if ("entity" in backing) {
           const backingTable = Object.entries(SHORTCODE_TABLE).find(
@@ -104,7 +117,7 @@ const suggestionSupersedingTriggerSql = (): string => {
           field,
           watched,
         }) => `  IF OLD.${quoteIdentifier(watched)} IS DISTINCT FROM NEW.${quoteIdentifier(watched)} THEN
-    UPDATE "Suggestion"
+    UPDATE "AssessmentState"
     SET "status" = 'superseded', "updatedAt" = now(),
         "supersessionReceipt" = jsonb_build_object('reason', ${quoteLiteral(watched === field ? "target_changed" : "input_changed")}, 'evaluationId', NULL, 'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
     WHERE "entity" = ${quoteLiteral(entity)}
@@ -133,7 +146,7 @@ CREATE TRIGGER ${quoteIdentifier(triggerName)} AFTER UPDATE OF ${updatedColumns}
       return `CREATE OR REPLACE FUNCTION ${quoteIdentifier(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.${quoteIdentifier(column)} IS DISTINCT FROM NEW.${quoteIdentifier(column)} THEN
-    UPDATE "Suggestion" AS s SET "status" = 'superseded', "updatedAt" = now(), "supersessionReceipt" = jsonb_build_object('reason', 'input_changed', 'evaluationId', NULL, 'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+    UPDATE "AssessmentState" AS s SET "status" = 'superseded', "updatedAt" = now(), "supersessionReceipt" = jsonb_build_object('reason', 'input_changed', 'evaluationId', NULL, 'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
     FROM ${quoteIdentifier(table)} AS r
     WHERE s."entity" = ${quoteLiteral(entity)} AND s."field" = ${quoteLiteral(field)}
       AND s."status" = 'pending' AND r."id" = s."recordId" AND r.${quoteIdentifier(via)} = NEW."id";
@@ -205,5 +218,5 @@ const classificationConstraintSql = (): string =>
  * migrations already contain.
  */
 export function renderDerivedDdl(): string {
-  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n`;
+  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${productIdentityInvalidationDdl(entityFieldModels.product.fields.filter((field) => field.control?.suggest?.basis.some((basis) => String(basis) === "classificationEvidence")).map((field) => field.key))}\n`;
 }

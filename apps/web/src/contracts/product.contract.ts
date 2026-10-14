@@ -140,7 +140,7 @@ export const productContract = defineContract("product", {
       omit: "deferred_capability",
       note: "Keeper and incoming field winners and blockers; entity_read.connections reports only edge dispositions",
     },
-    input: mergeProductMatchInput,
+    input: mergeProductMatchInput.pick({ keepId: true, mergeId: true }),
     output: productMergePreview,
     cache: { tags: [] },
   }),

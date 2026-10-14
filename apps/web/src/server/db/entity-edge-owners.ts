@@ -25,7 +25,6 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
@@ -97,7 +96,6 @@ export const ENTITY_EDGE_OWNERS = {
   PhotoRunImage: { owner: photoRunImage.runId },
   PhotoGroupProposal: { owner: photoGroupProposal.runId },
   ImageDerivative: { owner: imageDerivative.imageId },
-  ImageDescriptionCorrection: { owner: imageDescriptionCorrection.imageId },
   // An Image job's attempts, events and submission memberships belong to the job.
   ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
@@ -113,7 +111,7 @@ export const ENTITY_EDGE_OWNERS = {
   },
   AuditLog: { excluded: "History attribution." },
   RunFinding: { excluded: WORKFLOW },
-  Suggestion: { excluded: WORKFLOW },
+  AssessmentState: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
   SourceOrderObservation: { excluded: "Immutable source extraction history." },
   EmailCandidateObservation: { excluded: "Immutable Email candidate history." },
@@ -137,9 +135,5 @@ export const ENTITY_EDGE_OWNERS = {
   MailboxCursor: { excluded: WORKFLOW },
   MerchantVendorRule: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },
-  OrderMailCandidateDecision: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
-  ProductMatchCandidate: {
-    excluded: "A review queue of possible duplicates, not a relationship.",
-  },
 } satisfies Record<string, EntityEdgeOwner>;

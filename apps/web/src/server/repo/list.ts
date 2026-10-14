@@ -223,7 +223,7 @@ export function declaredFilterPredicates<Filters extends object>(
   const suggestionPredicate =
     suggestionKind && hasSuggestTargets
       ? sql`EXISTS (
-        SELECT 1 FROM "Suggestion" s
+        SELECT 1 FROM "AssessmentState" s
         INNER JOIN "Run" r ON r."id" = s."runId"
         WHERE s."entity" = ${entity}
           AND s."recordId" = ${sql.identifier(getTableName(table))}."id"

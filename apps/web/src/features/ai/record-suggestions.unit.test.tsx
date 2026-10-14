@@ -52,11 +52,16 @@ afterEach(() => {
 const id = testShortcode("product", "first");
 const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
   list: async () => [],
-  accept: async ({ id }) => ({ id, status: "applied" }),
-  acceptMany: async () => [],
-  reject: async ({ id }) => ({ id, status: "rejected" }),
+  review: async ({ assessmentId, intent }) => ({
+    assessmentId,
+    feedbackId: crypto.randomUUID(),
+    status: "recorded",
+    applied: intent === "apply",
+  }),
+  reviewBatch: async () => [],
 };
 const food = {
+  assessmentId: "00000000-0000-4000-8000-000000000001",
   value: "CAT-2222",
   label: "Food",
   confidence: "high" as const,
@@ -190,6 +195,7 @@ describe("record suggestions", () => {
   it("loads hidden suggest fields for bulk acceptance and skips live queries for stored pairs", async () => {
     const recordId = "11111111-1111-4111-8111-111111111111";
     const storedRow = suggestionReviewRowSchema.parse({
+      assessmentId: "00000000-0000-4000-8000-000000000001",
       id: "22222222-2222-4222-8222-222222222222",
       runId: "RUN-3333",
       entity: "product",
@@ -220,15 +226,24 @@ describe("record suggestions", () => {
           });
         },
       ),
-      accept: vi.fn(async ({ id }) => ({ id, status: "applied" as const })),
-      acceptMany: vi.fn(async ({ ids }) =>
-        ids.map((id: string) => ({
-          id,
-          ok: true as const,
-          status: "applied" as const,
-        })),
+      review: vi.fn(async ({ assessmentId, intent }) => ({
+        assessmentId,
+        feedbackId: "55555555-5555-4555-8555-555555555555",
+        status: "recorded",
+        applied: intent === "apply",
+      })),
+      reviewBatch: vi.fn(
+        async ({
+          items,
+        }: Parameters<StoredSuggestionOperations["reviewBatch"]>[0]) =>
+          items.map(({ assessmentId }) => ({
+            assessmentId,
+            feedbackId: "55555555-5555-4555-8555-555555555555",
+            status: "applied",
+            applied: true,
+            ok: true as const,
+          })),
       ),
-      reject: vi.fn(async ({ id }) => ({ id, status: "rejected" as const })),
     };
     const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
     const operations: EntitySuggestionsOperations = {
@@ -278,8 +293,15 @@ describe("record suggestions", () => {
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
     await waitFor(() =>
-      expect(stored.acceptMany).toHaveBeenCalledWith({
-        ids: ["22222222-2222-4222-8222-222222222222"],
+      expect(stored.reviewBatch).toHaveBeenCalledWith({
+        items: [
+          expect.objectContaining({
+            assessmentId: "00000000-0000-4000-8000-000000000001",
+            verdict: "correct",
+            intent: "apply",
+            correction: { present: false },
+          }),
+        ],
       }),
     );
     expect(suggestFields).not.toHaveBeenCalled();
@@ -392,7 +414,6 @@ describe("record suggestions", () => {
       "green pear": 0.97,
       "steel wrench": 0.4,
     };
-    const misses: unknown[] = [];
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
         const probability =
@@ -428,12 +449,6 @@ describe("record suggestions", () => {
           },
         };
       }),
-      recordFieldSuggestionMiss: ai.recordFieldSuggestionMiss.withTransport(
-        async ({ input }) => {
-          misses.push(input);
-          return { recorded: true as const };
-        },
-      ),
     };
     function Cell({ name }: { name: keyof typeof answers }) {
       const record = { id, name, manufacturer: null, categoryId: null };
@@ -470,7 +485,11 @@ describe("record suggestions", () => {
     expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
-    await waitFor(() => expect(misses).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /^Accept suggested value/ }),
+      ).toBeNull(),
+    );
     expect(
       screen.queryByRole("button", { name: /^Accept suggested value/ }),
     ).toBeNull();
@@ -485,7 +504,7 @@ describe("record suggestions", () => {
     );
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
-    await waitFor(() => expect(misses).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: /^Accept suggested value/ }),
@@ -597,6 +616,7 @@ describe("record suggestions", () => {
       tags: ["jacquemus", "collection:favorites", "mount"],
     };
     const removeSuggestion = {
+      assessmentId: "00000000-0000-4000-8000-000000000002",
       value: "jacquemus",
       label: "Remove jacquemus",
       confidence: "high" as const,
@@ -673,6 +693,7 @@ describe("record suggestions", () => {
       tags: ["jacquemus", "mount"],
     };
     const removeSuggestion = {
+      assessmentId: "00000000-0000-4000-8000-000000000003",
       value: "jacquemus",
       label: "Remove jacquemus",
       confidence: "high" as const,

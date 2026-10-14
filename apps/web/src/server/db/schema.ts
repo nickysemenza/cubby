@@ -1,3 +1,4 @@
+export { assessmentEmailLink } from "./assessment-email-link-schema";
 import type {
   AiAnalysisEntityKind,
   AiAnalysisRuntime,
@@ -17,7 +18,6 @@ import type {
   ExpenseId,
   RunId,
   LedgerTransferId,
-  ProductId,
   UserId,
   VendorId,
 } from "@cubby/schemas/identifiers";
@@ -316,86 +316,6 @@ export const searchDocument = pgTable(
     index("SearchDocument_normalized_gist_idx")
       .using("gist", sql`${table.normalizedText} gist_trgm_ops`)
       .where(sql`${table.deletedAt} IS NULL`),
-  ],
-);
-
-export const suggestionDismissal = pgTable(
-  "SuggestionDismissal",
-  {
-    id: pkUuid(),
-    ...entityRef<SearchableEntity>({ nullable: false }),
-    suggestionKind: text("suggestionKind").notNull(),
-    candidateKey: text("candidateKey").notNull(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("SuggestionDismissal_active_key")
-      .on(
-        table.entityKind,
-        table.entityId,
-        table.suggestionKind,
-        table.candidateKey,
-      )
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("SuggestionDismissal_source_idx").on(
-      table.entityKind,
-      table.entityId,
-    ),
-    entityRefFk("SuggestionDismissal_entity_fk", table),
-  ],
-);
-
-/**
- * A reviewed or agent-proposed "same real item" pair of Products — the one
- * durable half of the product match queue (the detector's own pairs are
- * recomputed live and only land here once dismissed).
- *
- * Hard-delete-only review metadata: deleting or merging away either Product
- * discards the row (see the product delete/merge edge policies), so a merged
- * pair can never survive as a self-pair. The pair is stored canonically
- * (`productAId < productBId`) so re-proposing in either order hits the same
- * row.
- */
-export const productMatchCandidate = pgTable(
-  "ProductMatchCandidate",
-  {
-    id: pkUuid(),
-    productAId: uuid("productAId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    productBId: uuid("productBId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    source: text("source").notNull().$type<"agent" | "detector">(),
-    state: text("state").notNull().$type<"open" | "dismissed">(),
-    evidence: text("evidence"),
-    sourceUrls: text("sourceUrls")
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    uniqueIndex("ProductMatchCandidate_pair_key").on(
-      table.productAId,
-      table.productBId,
-    ),
-    index("ProductMatchCandidate_productB_idx").on(table.productBId),
-    check(
-      "ProductMatchCandidate_canonical_pair_check",
-      sql`${table.productAId} < ${table.productBId}`,
-    ),
-    check(
-      "ProductMatchCandidate_source_check",
-      sql`${table.source} IN ('agent', 'detector')`,
-    ),
-    check(
-      "ProductMatchCandidate_state_check",
-      sql`${table.state} IN ('open', 'dismissed')`,
-    ),
   ],
 );
 

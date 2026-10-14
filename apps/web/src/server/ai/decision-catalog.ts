@@ -32,6 +32,7 @@ import {
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,
+  PRODUCT_IDENTITY_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
@@ -52,6 +53,8 @@ import {
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
 import { suggestionCounts } from "~/server/repo/suggestion-review";
+
+import { productIdentityPrompt } from "./product-identity";
 
 type CatalogRow = Omit<DecisionCatalogRow, "counts">;
 type Option = DecisionCatalogRow["options"][number];
@@ -270,6 +273,13 @@ function featureRows(): CatalogRow[] {
         secondTitle: "Example trail shirt, navy, large",
       }),
       { options: plainOptions(PRODUCT_VARIANT_RELATION_FEATURE.choices) },
+    ),
+    featureRow(
+      PRODUCT_IDENTITY_FEATURE.feature,
+      "Product identity",
+      "Compare one pair against exact identifiers and verified variant evidence",
+      PRODUCT_IDENTITY_FEATURE,
+      productIdentityPrompt("Two synthetic Product records"),
     ),
     featureRow(
       MAILBOX_TRIAGE_FEATURE.feature,

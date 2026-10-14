@@ -11,6 +11,7 @@ export {
   getDb,
   isTransaction,
   parentTransactionDatabase,
+  runAfterCommit,
   unwrapDb,
   withTransaction,
   withTransactionDatabase,

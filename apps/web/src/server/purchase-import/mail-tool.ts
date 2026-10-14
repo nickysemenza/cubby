@@ -40,13 +40,14 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink,
   orderMailEvent,
   purchase,
   runOperation,
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
 import {
   getDb,
   withTransaction,
@@ -453,17 +454,17 @@ export async function linkOrderMail(
   // A member's dismissal of this Email for this Purchase, on any of its
   // events, wins over a later automatic or session link.
   const [dismissed] = await tx
-    .select({ id: orderMailCandidateDecision.id })
-    .from(orderMailCandidateDecision)
+    .select({ id: assessmentEmailLink.id })
+    .from(assessmentEmailLink)
     .innerJoin(
       orderMailEvent,
-      eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+      eq(orderMailEvent.id, assessmentEmailLink.eventId),
     )
     .where(
       and(
         eq(orderMailEvent.orderMailId, input.mail.id),
-        eq(orderMailCandidateDecision.purchaseId, chosen.id),
-        eq(orderMailCandidateDecision.decision, "dismissed"),
+        eq(assessmentEmailLink.purchaseId, chosen.id),
+        eq(assessmentEmailLink.decision, "dismissed"),
       ),
     )
     .limit(1);
@@ -474,12 +475,12 @@ export async function linkOrderMail(
   // One accepted Purchase per event: an existing link elsewhere stays the
   // member's to change through review.
   const [other] = await tx
-    .select({ purchaseId: orderMailCandidateDecision.purchaseId })
-    .from(orderMailCandidateDecision)
+    .select({ purchaseId: assessmentEmailLink.purchaseId })
+    .from(assessmentEmailLink)
     .where(
       and(
-        eq(orderMailCandidateDecision.eventId, event.id),
-        eq(orderMailCandidateDecision.decision, "linked"),
+        eq(assessmentEmailLink.eventId, event.id),
+        eq(assessmentEmailLink.decision, "linked"),
       ),
     )
     .limit(1);
@@ -488,14 +489,18 @@ export async function linkOrderMail(
       "This Email event is already linked to another Purchase; review it before relinking.",
     );
   if (!other)
-    await tx.insert(orderMailCandidateDecision).values({
-      eventId: event.id,
-      purchaseId: chosen.id,
-      decision: "linked",
-      evidenceChecksum: input.mail.rawChecksum,
-      decidedByUserId: input.actorUserId,
-      proposedBy: input.proposedBy,
-    });
+    await publishEmailLinkDecision(
+      db,
+      {
+        eventId: event.id,
+        purchaseId: chosen.id,
+        decision: "linked",
+        evidenceChecksum: input.mail.rawChecksum,
+        decidedByUserId: input.actorUserId,
+        proposedBy: input.proposedBy,
+      },
+      "automatic",
+    );
   await ensureMailVendorAccount(db, {
     vendorId: chosen.vendorId,
     ledgerPartyId: input.mail.ledgerPartyId,
@@ -793,17 +798,17 @@ export async function resolveMail(
           "The Email and a Purchase belong to different members.",
         );
       const [dismissed] = await getDb(tdb)
-        .select({ id: orderMailCandidateDecision.id })
-        .from(orderMailCandidateDecision)
+        .select({ id: assessmentEmailLink.id })
+        .from(assessmentEmailLink)
         .innerJoin(
           orderMailEvent,
-          eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+          eq(orderMailEvent.id, assessmentEmailLink.eventId),
         )
         .where(
           and(
             eq(orderMailEvent.orderMailId, mail.id),
-            inArray(orderMailCandidateDecision.purchaseId, ids),
-            eq(orderMailCandidateDecision.decision, "dismissed"),
+            inArray(assessmentEmailLink.purchaseId, ids),
+            eq(assessmentEmailLink.decision, "dismissed"),
           ),
         )
         .limit(1);

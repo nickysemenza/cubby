@@ -65,7 +65,6 @@ import {
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
-  orderMailCandidateDecision,
   product,
   purchase,
 } from "~/server/db/schema";
@@ -192,12 +191,6 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
   },
-  "OrderMailCandidateDecision.purchaseId": {
-    code: "preserve-reviewed-mail-history",
-    effect: "preserve",
-    description:
-      "A reviewed email decision retains the deleted Purchase tombstone.",
-  },
   "ImportSourceOrder.purchaseId": {
     code: "clear-import-order",
     effect: "hard-delete",
@@ -248,12 +241,6 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "preserve",
     description:
       "A merge invalidates preparation against the original target rather than silently changing its approved identity.",
-  },
-  "OrderMailCandidateDecision.purchaseId": {
-    code: "move-dedupe-to-survivor",
-    effect: "move-dedupe",
-    description:
-      "Reviewed mail decisions follow the survivor; an existing survivor decision wins a conflict.",
   },
   "ImportSourceOrder.purchaseId": {
     code: "repoint-import-claim",
@@ -2192,26 +2179,6 @@ export const foldChargeInto = async (
       // Duplicate document links collapse instead of aborting the merge.
       "EntityAttachment.entityId": () =>
         moveChargeImages(tx, deadId, survivorId),
-      // An existing survivor decision wins a conflict.
-      "OrderMailCandidateDecision.purchaseId": async () => {
-        const mailDecisions = await tx
-          .select()
-          .from(orderMailCandidateDecision)
-          .where(eq(orderMailCandidateDecision.purchaseId, deadId));
-        if (mailDecisions.length === 0) return;
-        await tx
-          .delete(orderMailCandidateDecision)
-          .where(eq(orderMailCandidateDecision.purchaseId, deadId));
-        await tx
-          .insert(orderMailCandidateDecision)
-          .values(
-            mailDecisions.map((decision) => ({
-              ...decision,
-              purchaseId: survivorId,
-            })),
-          )
-          .onConflictDoNothing();
-      },
     },
   });
 

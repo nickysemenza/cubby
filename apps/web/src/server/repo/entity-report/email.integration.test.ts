@@ -1,6 +1,7 @@
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +12,6 @@ import {
   importSourceOrder,
   orderMailAttachment,
   orderMailEvent,
-  orderMailCandidateDecision,
   email as emailTable,
   orderMail,
   purchase as purchaseTable,
@@ -182,15 +182,13 @@ describe("Email review report", () => {
         })
         .returning();
       if (!event) throw new Error("Synthetic event missing");
-      await getDb(ctx.db)
-        .insert(orderMailCandidateDecision)
-        .values({
-          eventId: event.id,
-          purchaseId: purchase.id,
-          decision: source === dismissed ? "dismissed" : "linked",
-          evidenceChecksum: source.original.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        });
+      await seedEmailLinkDecision(ctx.db, {
+        eventId: event.id,
+        purchaseId: purchase.id,
+        decision: source === dismissed ? "dismissed" : "linked",
+        evidenceChecksum: source.original.rawChecksum,
+        decidedByUserId: ctx.actor.userId,
+      });
     }
     const report = async (id: string) =>
       (

@@ -38,13 +38,13 @@ import {
   aiUsage,
   emailCandidateObservation,
   emailClassificationObservation,
-  emailClassificationLabel,
+  feedback,
   emailAccuracyEvaluation,
   emailRetrievalFailure,
   ledgerParty,
   email as emailTable,
   orderMail,
-  orderMailCandidateDecision,
+  assessmentEmailLink,
   orderMailEvent,
   purchase,
   run,
@@ -670,7 +670,7 @@ const correctRelevanceCommand = (
 
 function memberRow(
   email: EmailRow,
-  review: { label: typeof emailClassificationLabel.$inferSelect } | undefined,
+  review: { label: typeof feedback.$inferSelect } | undefined,
   correct: ReportCommand,
 ) {
   if (email.classificationStage === "resolution")
@@ -684,7 +684,7 @@ function memberRow(
   if (review)
     return pipelineRow("Member review", "Ran", {
       lines: [
-        `Reviewed ${MAILBOX_CLASSIFICATION_LABEL[review.label.classification]}`,
+        `Reviewed ${MAILBOX_CLASSIFICATION_LABEL[mailboxClassification.parse(review.label.correction.present ? review.label.correction.value : null)]}`,
         review.label.reason,
       ],
       at: review.label.createdAt,
@@ -1104,27 +1104,25 @@ export async function emailReviewReport(
       .limit(5),
     client
       .select({
-        label: emailClassificationLabel,
+        label: feedback,
         prediction: emailClassificationObservation,
       })
-      .from(emailClassificationLabel)
+      .from(feedback)
       .innerJoin(
         emailClassificationObservation,
         eq(
-          emailClassificationObservation.id,
-          emailClassificationLabel.predictionId,
+          sql`${emailClassificationObservation.id}::text`,
+          sql`${feedback.metadata}->>'predictionId'`,
         ),
       )
       .where(
         and(
           eq(emailClassificationObservation.emailId, id),
-          eq(emailClassificationLabel.actorUserId, actor.userId),
+          eq(feedback.actorUserId, actor.userId),
+          eq(feedback.authority, "member"),
         ),
       )
-      .orderBy(
-        desc(emailClassificationLabel.createdAt),
-        desc(emailClassificationLabel.id),
-      )
+      .orderBy(desc(feedback.createdAt), desc(feedback.id))
       .limit(20),
   ]);
   const retained = await hasRetainedEmailImportContent(
@@ -1247,10 +1245,10 @@ export async function emailReviewReport(
       rows: reviews.map(({ label, prediction }) => ({
         id: label.id,
         cells: [
-          label.classification,
+          label.correction.present ? String(label.correction.value) : "Unknown",
           prediction.classification,
           prediction.checksum === email.checksum ? "Current" : "Stale",
-          label.reason,
+          label.reason ?? "Unknown",
         ],
       })),
       empty: "No member review label is recorded for this Email.",
@@ -1328,14 +1326,14 @@ export async function emailAccuracyViewReport(
     // proposer survives the dismissal so agent links stay measurable.
     client
       .select({
-        proposedBy: orderMailCandidateDecision.proposedBy,
-        linked: sql<number>`count(*) FILTER (WHERE ${eq(orderMailCandidateDecision.decision, "linked")})::int`,
-        dismissed: sql<number>`count(*) FILTER (WHERE ${eq(orderMailCandidateDecision.decision, "dismissed")})::int`,
+        proposedBy: assessmentEmailLink.proposedBy,
+        linked: sql<number>`count(*) FILTER (WHERE ${eq(assessmentEmailLink.decision, "linked")})::int`,
+        dismissed: sql<number>`count(*) FILTER (WHERE ${eq(assessmentEmailLink.decision, "dismissed")})::int`,
       })
-      .from(orderMailCandidateDecision)
+      .from(assessmentEmailLink)
       .innerJoin(
         orderMailEvent,
-        eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+        eq(orderMailEvent.id, assessmentEmailLink.eventId),
       )
       .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
       .innerJoin(
@@ -1347,8 +1345,8 @@ export async function emailAccuracyViewReport(
         ),
       )
       .where(isNull(orderMailEvent.supersededAt))
-      .groupBy(orderMailCandidateDecision.proposedBy)
-      .orderBy(orderMailCandidateDecision.proposedBy),
+      .groupBy(assessmentEmailLink.proposedBy)
+      .orderBy(assessmentEmailLink.proposedBy),
   ]);
   const accuracyBlocks: ReportBlock[] = latestEvaluation
     ? emailAccuracyReviewBlocks(

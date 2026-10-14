@@ -32,7 +32,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
-import { type FC, useEffect, useMemo } from "react";
+import { type FC, useEffect, useMemo, useRef } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -48,6 +48,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { requiredLocationCode } from "~/ui/form-fields";
 import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -142,6 +143,9 @@ export const ProductBulkAddToInventoryDialog: FC<
 
   const locationId =
     locationShortcode.safeParse(form.watch("location")).data ?? null;
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
 
   // The server owns the proposed amount and the warnings (parts already
   // account for every unit bought; stock already at this location), so web and
@@ -199,7 +203,14 @@ export const ProductBulkAddToInventoryDialog: FC<
           ? `Stocked ${countLabel(data.createdCount, "product")}`
           : `Stocked ${countLabel(data.items.length, "product")} — ${data.mergedCount} merged into stock already there`,
       ),
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      if (sole && data.items.length === 1) {
+        try {
+          await receiptHandler.current?.(data.items[0]!.id);
+        } catch (error) {
+          showErrorToast(error, "Stocked, but suggestion receipt failed");
+        }
+      }
       handleOpenChange(false);
       onComplete?.();
     },
@@ -261,6 +272,7 @@ export const ProductBulkAddToInventoryDialog: FC<
             <FieldSuggestionProvider
               entity="inventory"
               mode="create"
+              receiptHandler={receiptHandler}
               staticBasis={{ productId: sole.id }}
               fieldKeys={["locationId"]}
               paths={{ locationId: "location" }}

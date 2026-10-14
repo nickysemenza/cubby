@@ -27,6 +27,7 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -78,6 +79,8 @@ export interface FieldSuggestionContextValue {
    * inside this form (e.g. `ExternalIdKindSuggestion`) reuses it instead of
    * filing its call under the actor's hourly run. */
   readonly runKey: string;
+  reviewDraft: (field: string, proposal: FieldSuggestion) => Promise<void>;
+  acknowledgeSaved: (recordId: string) => Promise<void>;
   readonly applyFinanceCategory: ReturnType<
     typeof useFinanceCategoryApply
   >["apply"];
@@ -182,6 +185,7 @@ export function FieldSuggestionProvider({
   fieldKeys,
   record,
   scopeKey,
+  receiptHandler,
   children,
 }: {
   entity: ShortcodeEntity;
@@ -204,9 +208,54 @@ export function FieldSuggestionProvider({
    * intent while edit-mode suggestions are reviewed as explicit alternatives. */
   record?: unknown;
   scopeKey?: string;
+  receiptHandler?: { current: ((recordId: string) => Promise<void>) | null };
   children: ReactNode;
 }) {
   const form = useFormContext();
+  const reviewedDrafts = useRef(
+    new Map<string, { assessmentId: string; proposal: FieldSuggestion }>(),
+  );
+  const reviewDraft = useCallback(
+    async (field: string, proposal: FieldSuggestion) => {
+      if (!proposal.assessmentId)
+        throw new Error("Suggestion Assessment is missing");
+      await assessment.review.call({
+        assessmentId: proposal.assessmentId,
+        operationId: crypto.randomUUID(),
+        verdict: "correct",
+        intent: "draft",
+      });
+      reviewedDrafts.current.set(field, {
+        assessmentId: proposal.assessmentId,
+        proposal,
+      });
+    },
+    [],
+  );
+  const acknowledgeSaved = useCallback(
+    async (recordId: string) => {
+      for (const [field, reviewed] of reviewedDrafts.current) {
+        const savedValue = basisValueOf(
+          form.getValues(paths?.[field] ?? field),
+        );
+        if (
+          reviewed.proposal.operation === "set" &&
+          savedValue !== reviewed.proposal.value
+        )
+          continue;
+        await assessment.review.call({
+          assessmentId: reviewed.assessmentId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "saved_field", recordId },
+        });
+        reviewedDrafts.current.delete(field);
+      }
+    },
+    [form, paths],
+  );
+  if (receiptHandler) receiptHandler.current = acknowledgeSaved;
   const [batchFailure, setBatchFailure] = useState<unknown>(null);
   // One id per page mount, grouping every suggestFields call this provider
   // makes into one `ai_suggest` run.
@@ -579,6 +628,8 @@ export function FieldSuggestionProvider({
       clearAutoFilled,
       isAutoFilled,
       runKey,
+      reviewDraft,
+      acknowledgeSaved,
       applyFinanceCategory: async (suggestion) => {
         try {
           return await applyFinanceCategory(suggestion);
@@ -606,6 +657,8 @@ export function FieldSuggestionProvider({
       clearAutoFilled,
       isAutoFilled,
       runKey,
+      reviewDraft,
+      acknowledgeSaved,
       applyFinanceCategory,
       refetchSuggested,
       refetchAlternatives,

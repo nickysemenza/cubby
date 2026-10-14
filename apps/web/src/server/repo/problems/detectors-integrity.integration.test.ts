@@ -21,7 +21,6 @@ import {
   externalSource,
   financialTransactionAllocation,
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
   importPreparedOrder,
@@ -38,11 +37,10 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
-  suggestion,
+  assessmentState as suggestion,
   photoGroupProposal,
   runPushRegistration,
   productConversionCoverage,
-  productMatchCandidate,
   productUnitMappings,
   purchasePaymentEvidence,
   recipeSection,
@@ -151,17 +149,6 @@ const mkProduct = (db: Database) =>
   });
 
 /** The pair table stores `productAId < productBId`; mint until the uuid lands on the requested side. */
-const mkProductOrderedAgainst = async (
-  db: Database,
-  target: string,
-  side: "before" | "after",
-) => {
-  for (;;) {
-    const candidate = await mkProduct(db);
-    if (side === "after" ? candidate.id > target : candidate.id < target)
-      return candidate;
-  }
-};
 
 const mkLocation = (db: Database) =>
   insertWithShortcode(db, "location", {
@@ -635,12 +622,6 @@ const SOURCE_FACTORIES = {
       state: "pending",
       sourceContentHash: uniq("source-hash"),
       processorRevision: 1,
-    }),
-
-  "ImageDescriptionCorrection.imageId": (db, targetId) =>
-    insertAndReturn(db, imageDescriptionCorrection, {
-      imageId: parseEntityId("image", targetId),
-      description: "Confirmed liveness fixture description",
     }),
 
   "SourceOrderObservation.primaryDocumentImageId": (db, targetId) =>
@@ -1537,28 +1518,6 @@ const SOURCE_FACTORIES = {
     return { id: targetId };
   },
 
-  "ProductMatchCandidate.productAId": async (db, targetId) => {
-    const target = parseEntityId("product", targetId);
-    const other = await mkProductOrderedAgainst(db, target, "after");
-    return insertAndReturn(db, productMatchCandidate, {
-      productAId: target,
-      productBId: other.id,
-      source: "agent",
-      state: "open",
-    });
-  },
-
-  "ProductMatchCandidate.productBId": async (db, targetId) => {
-    const target = parseEntityId("product", targetId);
-    const other = await mkProductOrderedAgainst(db, target, "before");
-    return insertAndReturn(db, productMatchCandidate, {
-      productAId: other.id,
-      productBId: target,
-      source: "agent",
-      state: "open",
-    });
-  },
-
   "Purchase.runId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "purchase", {
@@ -1609,7 +1568,7 @@ const SOURCE_FACTORIES = {
   "PhotoRunImage.runId": (db, targetId) =>
     mkPhotoRunImage(db, { runId: parseEntityId("run", targetId) }),
 
-  "Suggestion.runId": async (db, targetId) => {
+  "AssessmentState.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     return insertAndReturn(db, suggestion, {
       runId: parseEntityId("run", targetId),
