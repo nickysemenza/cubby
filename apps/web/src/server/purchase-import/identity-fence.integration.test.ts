@@ -439,6 +439,51 @@ describe("member prepare and commit identity fences", () => {
     },
   );
 
+  // A photo title and catalog title can differ while describing the same variant.
+  it("requires review of a strong live descriptive candidate before creating a Product", async () => {
+    const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
+    const existing = await existingProduct({
+      name: "Synthetic Works linen camp shirt — Green, M",
+      manufacturer: "Synthetic Works",
+    });
+    const line = {
+      title: "Synthetic Works embroidered linen camp shirt — Light green, M",
+    };
+    const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "descriptive-fork",
+      defaultTrade: "other",
+      orders: [productOrder(vendor.shortcode, line, { kind: "new" })],
+    });
+    expect(preparation.prepared.orders[0]?.lines[0]?.candidates).toContainEqual(
+      expect.objectContaining({
+        productId: existing.shortcode,
+        matchReason: expect.stringContaining("Review"),
+      }),
+    );
+    await expect(preparation.commit()).rejects.toThrow(/distinctFrom/);
+    await expectNothingWritten();
+    expect(await liveProductIds()).toEqual([existing.id]);
+    const reviewed = await memberImport(ctx.db, ctx.actor, {
+      key: "descriptive-distinct",
+      defaultTrade: "other",
+      orders: [
+        productOrder(vendor.shortcode, line, {
+          kind: "new",
+          distinctFrom: [
+            {
+              productId: parseShortcodeFor("product", existing.shortcode),
+              url: "https://example.com/shirt",
+              quote:
+                "The ordered shirt has embroidery; the existing shirt is plain.",
+            },
+          ],
+        }),
+      ],
+    });
+    expect(reviewed.committed.items[0]?.outcome).toBe("created");
+    expect(await liveProductIds()).toHaveLength(2);
+  });
+
   async function identifierOwner() {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const owner = await existingProduct({

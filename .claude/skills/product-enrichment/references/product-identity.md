@@ -64,16 +64,20 @@ record it with an `entity.update product` `externalIds` add patch
 direct-selling brand's per-variant SKU printed on its own tag may be stored as
 `retailer_sku` under that brand's vendor source slug.
 
-**Descriptive-only match** — the photo Product has no identifier (a cut tag,
-an unreadable label): purchase-import does not claim it directly. Create the
-purchase's own vendor Product (vendor name plus catalog image), then record
-the candidate pair with `product_enrichment.propose_match`
-(`{productIds: [photoProductId, vendorProductId], evidence, sourceUrls?}`)
-for a human to review side by side in the web recommendations workbench.
-The purchase import does not claim a descriptive-only match directly, and a
-later merge requires human confirmation. A Product whose name or alias is the
-order line's exact title, with no recorded field contradicting it, is not
-descriptive-only: resolve the line to it.
+**Descriptive match** — compare the existing Product's own photos, labels and
+Sources against the purchased variant before creating. A different title or
+missing identifier alone does not justify another Product. Reuse a candidate
+when brand, item, model, size, color and pack evidence support the same variant
+without contradictions. When identity remains ambiguous, leave the line
+`unresolved` and ask for the missing distinction; create only when the evidence
+supports a separate item. The import writer requires `distinctFrom` evidence
+for strong live brand/item candidates as well as exact-name candidates.
+Similarity prompts comparison; it never proves identity or authorizes a merge.
+A missing search hit can reflect indexing delay: read live Products through
+`entity_read.list` with `filters.nameFilter` and inspect their full records.
+Keep unresolved size/color unknown, including when a retailer page defaults to
+one of several variants. Record tentative disposal recollections in Sources
+and notes; a disposal ledger event needs a confirmed item, quantity and date.
 
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before

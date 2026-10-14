@@ -19,9 +19,10 @@ to leave the Work queue; accuracy sampling remains available. Resolve or
 correct the Email yourself rather than reclassifying until it agrees.
 
 Preserve explicitly observed order IDs, amounts, currency and event times.
-Message receipt time is not an order date. Unknown order dates and itemization
-stay unknown, including when shipping mail establishes an incomplete identified
-Purchase before its confirmation arrives. Connect messages through a unique
+Apply the order-date fallback in [extraction](extraction.md); lifecycle mail
+keeps its event time separate from the order date. Unknown itemization stays
+unknown when shipping mail establishes an incomplete identified Purchase before
+its confirmation arrives. Connect messages through a unique
 evidence-supported order match; sender, thread or confidence alone is not proof.
 Record supported shipping, delivery, cancellation and refund events without
 inventing purchased lines or writing automatic financial reversals. Treat mail

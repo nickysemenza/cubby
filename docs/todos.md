@@ -42,6 +42,12 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🟢 🛠️ **Audit legacy image orientation mismatches.** After the hash-guarded
+  verification fix deploys, review existing `metadata_mismatch` rows through
+  explicit verification. Normalize swapped dimensions only when the stored
+  original hash, byte length and MIME agree. Preserve files, attachments,
+  own-photo covers and labels; investigate remaining failures separately.
+
 - 🟢 ✨ **Data-quality check for a missing cutout.** Wardrobe galleries prefer
   the transparent representation (`representations.transparent`), so a Product
   with photos but no cutout looks out of place. Add a Product check so "no
@@ -249,6 +255,13 @@ See also the image operational passes at the end of this file.
   `SUM(Expense.cost)`. Decide whether a per-program balance is in scope.
 
 ### Review and apply corrections
+
+- 🤔 🛠️ **Review later printed dates against email-derived order dates.**
+  Missing confirmation dates now default from retained Email with field-scoped
+  provenance. Design a reviewed correction that recognizes an unchanged
+  fallback versus a member override and updates only acquisition Expenses
+  still carrying that fallback. Preserve payment posting, refund and shipment
+  event dates and accepted source replay; never bulk-shift independent dates.
 
 - 🤔 🛠️ **Simplify tests with unnecessary infrastructure dependencies.** Audit
   tests that start PostgreSQL, IntegreSQL, Workers or other services even though
@@ -526,6 +539,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 ---
 
 ## Inventory, products & locations
+
+- 🤔 🧪 **Measure duplicate-candidate recall beyond live lexical matching.**
+  The purchase-import pre-create fence now reviews strong brand/item word matches without
+  waiting for indexing. Evaluate abbreviated receipt names, missing brands
+  and visually described photo Products against the existing semantic/photo
+  candidate paths. Add recall only where measured misses justify it; keep
+  variant evidence and reviewed reuse-or-distinct decisions, never automatic
+  merges from an embedding score.
 
 - 🤔 🐛 **Accept legitimate fractional acquisition quantities in Product pricing
   reads.** A detailed Product read can fail validation because

@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditLog,
   entityAttachment,
+  entitySource,
   entityExternalId,
   expense,
   externalSource,
@@ -72,6 +73,111 @@ const checksum = (digit: string) => digit.repeat(64);
 // `mail.resolve`, and nothing launches unattended Product research.
 describe("caller-driven purchase import", () => {
   const ctx = withTestDb();
+
+  // Only purchase confirmation/receipt mail may default missing order dates; lifecycle mail stays separate.
+  it.each([
+    {
+      event: "confirmation" as const,
+      printed: null,
+      existing: null,
+      expected: "2026-09-19",
+    },
+    {
+      event: "confirmation" as const,
+      printed: "2026-09-17",
+      existing: null,
+      expected: "2026-09-17",
+    },
+    {
+      event: "confirmation" as const,
+      printed: null,
+      existing: "2026-09-16",
+      expected: "2026-09-16",
+    },
+    {
+      event: "confirmation" as const,
+      printed: null,
+      existing: "2026-09-19",
+      expected: "2026-09-19",
+    },
+    {
+      event: "shipped" as const,
+      printed: null,
+      existing: null,
+      expected: null,
+    },
+  ])(
+    "resolves order dates with provenance ($event/$printed/$existing)",
+    async ({ event, printed, existing, expected }) => {
+      const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
+      const mail = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        messageId: "date-fallback",
+        checksum: checksum("d"),
+        receivedAt: new Date("2026-09-20T01:00:00Z"),
+      });
+      const target = existing
+        ? await insertWithShortcode(ctx.db, "purchase", {
+            vendorId: vendor.id,
+            date: existing,
+          })
+        : null;
+      const input = {
+        key: "date-fallback",
+        defaultTrade: "other" as const,
+        orders: [
+          {
+            stableOrderId: "date-fallback",
+            vendorId: vendor.shortcode,
+            targetPurchaseId: target?.shortcode,
+            source: mailSource(mail),
+            extraction: {
+              status: "ready" as const,
+              candidate: {
+                orderId: "DATE-ONE",
+                orderedAt: printed,
+                sourceEvent: event,
+                merchant: vendor.name,
+                currency: "USD",
+                printedGrandTotal: 10,
+                lines: [
+                  {
+                    title: "Synthetic service",
+                    amount: 10,
+                    quantity: 1,
+                    lineKind: "principal" as const,
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+          },
+        ],
+      };
+      const result = await memberImport(ctx.db, ctx.actor, input);
+      const [order] = await getDb(ctx.db).select().from(purchase);
+      expect(order?.date).toBe(expected);
+      const expenses = await getDb(ctx.db).select().from(expense);
+      expect(expenses.map((row) => row.date)).toEqual(
+        expected ? [expected] : [],
+      );
+      const sources = await getDb(ctx.db)
+        .select()
+        .from(entitySource)
+        .where(eq(entitySource.entityId, order!.id));
+      expect(
+        sources.some(
+          (row) =>
+            row.fieldPath === "date" &&
+            row.quote?.includes("email receipt time"),
+        ),
+      ).toBe(printed === null && existing === null && expected !== null);
+      expect((await memberImport(ctx.db, ctx.actor, input)).committed).toEqual(
+        result.committed,
+      );
+    },
+  );
 
   const retainedMail = (
     partyId: LedgerPartyId,
