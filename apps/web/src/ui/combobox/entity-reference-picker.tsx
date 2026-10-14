@@ -8,8 +8,8 @@ import { Image } from "~/ui/primitives/image";
 
 import type { ProductPickerIntent } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
-import { EntityPicker, type EntityPickerProps } from "./entity-picker";
 import type { EntitySearchScope } from "./entity-search-hooks";
+import { Picker, type RecordPickerProps } from "./picker";
 import {
   type EntitySearchEntity,
   useEntityListSource,
@@ -27,7 +27,7 @@ type EntityReferencePickerProps<E extends EntitySearchEntity> = {
     items: ComboboxItem<ShortcodeFor<E>>[],
   ) => ComboboxItem<ShortcodeFor<E>>[];
 } & Omit<
-  EntityPickerProps<ShortcodeFor<E>>,
+  RecordPickerProps<ShortcodeFor<E>>,
   | "entity"
   | "items"
   | "onSearchChange"
@@ -58,10 +58,16 @@ export function EntityReferencePicker<E extends EntitySearchEntity>({
   const withImage = (item: ComboboxItem<ShortcodeFor<E>>) => {
     const imageUrl =
       images[entityDisplayImageKey({ entityKind: entity, entityId: item.id })]
-        ?.url ?? item.imageUrl;
+        ?.url ??
+      item.thumb?.imageUrl ??
+      null;
     return {
       ...item,
-      imageUrl,
+      thumb: {
+        ...item.thumb,
+        imageUrl,
+        fallback: item.thumb?.fallback ?? item.icon,
+      },
       icon: imageUrl ? (
         <Image
           src={imageUrl}
@@ -78,7 +84,7 @@ export function EntityReferencePicker<E extends EntitySearchEntity>({
   return (
     <>
       {dialog}
-      <EntityPicker
+      <Picker
         {...picker}
         {...search}
         entity={entity}

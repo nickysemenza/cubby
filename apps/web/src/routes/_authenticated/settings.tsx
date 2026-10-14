@@ -7,7 +7,7 @@ import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -30,6 +30,8 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -51,7 +53,6 @@ import {
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { StatusText } from "~/ui/primitives/status-text";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -125,6 +126,14 @@ function MerchantVendorRulesCard() {
   const [merchant, setMerchant] = useState("");
   const [vendorId, setVendorId] = useState("");
   const rules = useQuery(runOperations.merchantRules.queryOptions());
+  const vendorOptions = useMemo(
+    () =>
+      (rules.data?.vendors ?? []).map((vendor): PickerOption => ({
+        value: vendor.shortcode,
+        label: vendor.name,
+      })),
+    [rules.data],
+  );
   const save = useMutation({
     mutationFn: () =>
       runOperations.confirmMerchantRule.call({
@@ -166,24 +175,17 @@ function MerchantVendorRulesCard() {
                   placeholder="AMZN Mktp"
                 />
               </label>
-              <label
-                className="grid gap-1 text-sm font-medium"
-                htmlFor="purchase-merchant-vendor"
-              >
-                Vendor
-                <NativeSelect
-                  id="purchase-merchant-vendor"
-                  value={vendorId}
-                  onChange={(event) => setVendorId(event.target.value)}
-                >
-                  <option value="">Choose a vendor</option>
-                  {rules.data?.vendors.map((vendor) => (
-                    <option key={vendor.shortcode} value={vendor.shortcode}>
-                      {vendor.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="purchase-merchant-vendor">Vendor</label>
+                <Picker
+                  inputId="purchase-merchant-vendor"
+                  label="Vendor"
+                  placeholder="Choose a vendor"
+                  options={vendorOptions}
+                  value={vendorId || null}
+                  onValueChange={(next) => setVendorId(next ?? "")}
+                />
+              </div>
               <Button
                 type="button"
                 disabled={!merchant.trim() || !vendorId || save.isPending}
@@ -257,33 +259,16 @@ function MemberLoginsCard() {
                     {authUser.email}
                   </div>
                 </div>
-                <NativeSelect
-                  aria-label={`Ledger party for ${authUser.name}`}
+                <MemberLoginPicker
+                  userId={authUser.id}
+                  userName={authUser.name}
                   value={authUser.ledgerParty?.shortcode ?? ""}
+                  parties={roster.data.parties}
                   disabled={update.isPending}
-                  onChange={(event) =>
-                    update.mutate({
-                      userId: authUser.id,
-                      ledgerParty: event.target.value || null,
-                    })
+                  onChange={(ledgerParty) =>
+                    update.mutate({ userId: authUser.id, ledgerParty })
                   }
-                >
-                  <option value="">Not linked</option>
-                  {roster.data.parties.map((party) => (
-                    <option
-                      key={party.shortcode}
-                      value={party.shortcode}
-                      disabled={
-                        party.userId !== null && party.userId !== authUser.id
-                      }
-                    >
-                      {party.name}
-                      {party.userId !== null && party.userId !== authUser.id
-                        ? " — linked"
-                        : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
+                />
               </div>
             ))}
           </Stack>
@@ -292,6 +277,51 @@ function MemberLoginsCard() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MemberLoginPicker({
+  userId,
+  userName,
+  value,
+  parties,
+  disabled,
+  onChange,
+}: {
+  userId: string;
+  userName: string;
+  value: string;
+  parties: readonly {
+    shortcode: string;
+    name: string;
+    userId: string | null;
+  }[];
+  disabled: boolean;
+  onChange: (ledgerParty: string | null) => void;
+}) {
+  const options = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "Not linked" },
+      ...parties.map((party) => ({
+        value: party.shortcode,
+        label: party.name,
+        ...(party.userId !== null &&
+          party.userId !== userId && {
+            disabledReason: "Linked to another login",
+          }),
+      })),
+    ],
+    [parties, userId],
+  );
+  return (
+    <Picker
+      mode="choose"
+      label={`Ledger party for ${userName}`}
+      options={options}
+      value={value}
+      disabled={disabled}
+      onValueChange={(next) => onChange(next || null)}
+    />
   );
 }
 

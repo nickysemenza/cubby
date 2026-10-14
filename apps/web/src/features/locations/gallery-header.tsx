@@ -13,10 +13,10 @@ import { captureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
@@ -129,8 +129,10 @@ export function GalleryHeader({
           <Label className="hidden text-muted-foreground sm:inline">
             Type:
           </Label>
-          <FilterableCombobox
-            items={[
+          <Picker
+            mode="choose"
+            label="Location type"
+            options={[
               { value: "all", label: "All" },
               ...locationTypeOptionsWithTheme,
             ]}
@@ -142,7 +144,7 @@ export function GalleryHeader({
                   : (locationType.safeParse(value).data ?? null),
               )
             }
-            className="h-8 w-[120px]"
+            className="w-[120px]"
             placeholder="All"
           />
         </Row>
@@ -152,8 +154,10 @@ export function GalleryHeader({
           <Label className="hidden text-muted-foreground sm:inline">
             Status:
           </Label>
-          <FilterableCombobox
-            items={[
+          <Picker
+            mode="choose"
+            label="Location status"
+            options={[
               { value: "all", label: "All" },
               {
                 value: "withItems",
@@ -184,7 +188,7 @@ export function GalleryHeader({
                 emptyFilterSchema.safeParse(value ?? "all").data ?? "all",
               )
             }
-            className="h-8 w-[120px]"
+            className="w-[120px]"
             placeholder="All"
           />
         </Row>

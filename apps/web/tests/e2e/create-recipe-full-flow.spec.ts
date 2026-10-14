@@ -27,12 +27,11 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByLabel("Yield Unit").fill("cookies");
 
     // Add ingredient row (the add button is labeled just "Ingredient"). The
-    // row combobox has no field label, so its aria-label falls back to the
-    // generic "item".
+    // row combobox has no field label, so its accessible name is the entity's.
     await page.getByRole("button", { name: "Ingredient", exact: true }).click();
     await selectComboboxItem(
       page,
-      page.getByRole("combobox", { name: "item" }),
+      page.getByRole("combobox", { name: "Ingredient", exact: true }),
       ingredientName,
     );
 

@@ -26,6 +26,9 @@ import { EntityIcon, entityDetailLink } from "~/entity/entities";
 import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { cn, formatCount } from "~/lib/utils";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
@@ -43,7 +46,6 @@ import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 import type { CollectionAssignmentSearch } from "./collection-assignment-search";
@@ -58,6 +60,29 @@ const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
 const EMPTY_COLLECTIONS: CollectionSlug[] = [];
 type MatrixRow = CollectionMatrixRow;
 type CollectionAssignmentSubject = "product" | "location";
+
+const SUBJECT_OPTIONS: readonly PickerOption[] = [
+  { value: "product", label: "Products" },
+  { value: "location", label: "Locations" },
+];
+const MEMBERSHIP_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "Any membership" },
+  { value: "member", label: "Member" },
+  { value: "direct", label: "Direct assignment" },
+  { value: "inherited", label: "Inherited membership" },
+  { value: "unassigned", label: "Not a member" },
+];
+const PAGE_SIZE_PICKER_OPTIONS: readonly PickerOption[] = PAGE_SIZE_OPTIONS.map(
+  (option) => ({
+    value: String(option),
+    label: `${option} rows`,
+  }),
+);
+
+const collectionOption = (slug: CollectionSlug): PickerOption => ({
+  value: slug,
+  label: formatCollectionLabel(slug),
+});
 
 export type CollectionAssignmentOperations = Pick<
   typeof collectionOperations,
@@ -190,6 +215,26 @@ function NewCollectionDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [memberId, setMemberId] = useState("");
+  const memberItems = useMemo(
+    (): ComboboxItem[] =>
+      rows.map((row) => ({
+        id: row.id,
+        shortcode: row.id,
+        name: row.name,
+        ...(row.secondary && { secondary: row.secondary }),
+        thumb: {
+          imageUrl: row.imageUrl,
+          fallback: (
+            <EntityIcon
+              entity={subject}
+              className="size-3.5 text-muted-foreground"
+            />
+          ),
+        },
+      })),
+    [rows, subject],
+  );
+  const member = memberItems.find((item) => item.id === memberId) ?? null;
   const nameId = useId();
   const memberSelectId = useId();
   const formId = useId();
@@ -256,18 +301,14 @@ function NewCollectionDialog({
             </Stack>
             <Stack gap="xs">
               <Label htmlFor={memberSelectId}>First {subject}</Label>
-              <NativeSelect
-                id={memberSelectId}
-                value={memberId}
-                onChange={(event) => setMemberId(event.target.value)}
-              >
-                {rows.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                    {row.secondary ? ` — ${row.secondary}` : ""}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Picker
+                inputId={memberSelectId}
+                entity={subject}
+                label={`First ${subject}`}
+                items={memberItems}
+                value={member}
+                setValue={(item) => setMemberId(item?.id ?? "")}
+              />
               <p className="text-2xs text-muted-foreground">
                 Choose from the current filtered page.
               </p>
@@ -499,6 +540,26 @@ export function CollectionAssignmentMatrix({
     setMobilePage(nextPage);
     if (nextServerPage !== page) onSearchChange({ page: nextServerPage });
   };
+  const mobileCollectionOptions = useMemo(
+    () => availableCollections.map(collectionOption),
+    [availableCollections],
+  );
+  const collectionFilterOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "Any Collection" },
+      ...mobileCollectionOptions,
+    ],
+    [mobileCollectionOptions],
+  );
+  const sortOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "name-asc", label: "Name A–Z" },
+      { value: "name-desc", label: "Name Z–A" },
+      { value: "secondary-asc", label: `${secondaryLabel} A–Z` },
+      { value: "secondary-desc", label: `${secondaryLabel} Z–A` },
+    ],
+    [secondaryLabel],
+  );
   const changeSubject = (value: string) => {
     const nextSubject = parseAssignmentSubject(value);
     if (nextSubject) onSearchChange({ subject: nextSubject, page: 1 });
@@ -541,32 +602,29 @@ export function CollectionAssignmentMatrix({
             placeholder={`Search ${subjectLabel.toLocaleLowerCase()} or ${secondaryLabel.toLocaleLowerCase()}`}
             aria-label={`Search ${subjectLabel.toLocaleLowerCase()}`}
           />
-          <NativeSelect
-            aria-label="Filter by Collection"
+          <Picker
+            label="Filter by Collection"
+            options={collectionFilterOptions}
             value={collection ?? ""}
-            onChange={(event) => {
-              const selected = collectionSlug.safeParse(event.target.value);
+            onValueChange={(next) => {
+              const selected = collectionSlug.safeParse(next ?? "");
               onSearchChange({
                 collection: selected.success ? selected.data : undefined,
                 membership: selected.success ? "member" : undefined,
                 page: 1,
               });
             }}
-          >
-            <option value="">Any Collection</option>
-            {(matrix.data?.collections ?? []).map((slug) => (
-              <option key={slug} value={slug}>
-                {formatCollectionLabel(slug)}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect
-            aria-label="Filter by membership"
+            className="w-48"
+          />
+          <Picker
+            mode="choose"
+            label="Filter by membership"
+            options={MEMBERSHIP_OPTIONS}
             value={membership ?? ""}
             disabled={!collection}
-            onChange={(event) => {
+            onValueChange={(next) => {
               const nextMembership = collectionMatrixMembership.safeParse(
-                event.target.value,
+                next ?? "",
               );
               onSearchChange({
                 membership: nextMembership.success
@@ -575,52 +633,34 @@ export function CollectionAssignmentMatrix({
                 page: 1,
               });
             }}
-          >
-            <option value="">Any membership</option>
-            <option value="member">Member</option>
-            <option value="direct">Direct assignment</option>
-            <option value="inherited">Inherited membership</option>
-            <option value="unassigned">Not a member</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label={`Sort ${subjectLabel.toLocaleLowerCase()}`}
+            className="w-48"
+          />
+          <Picker
+            mode="choose"
+            label={`Sort ${subjectLabel.toLocaleLowerCase()}`}
+            options={sortOptions}
             value={sort}
-            onChange={(event) => {
-              const nextSort = collectionMatrixSort.safeParse(
-                event.target.value,
-              );
+            onValueChange={(next) => {
+              const nextSort = collectionMatrixSort.safeParse(next);
               if (nextSort.success) {
                 onSearchChange({ sort: nextSort.data, page: 1 });
               }
             }}
-          >
-            <option value="name-asc">Name A–Z</option>
-            <option value="name-desc">Name Z–A</option>
-            <option value="secondary-asc">{secondaryLabel} A–Z</option>
-            <option value="secondary-desc">{secondaryLabel} Z–A</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label="Rows per page"
-            value={pageSize}
-            onChange={(event) =>
-              onSearchChange({
-                // SAFETY: the schema's `.refine` narrows to the literal options below
-                // (TS infers it as a type predicate); the select's own
-                // `<option>`s are generated from the same array, so the parsed
-                // value is always one of them.
-                rows: Number(
-                  event.target.value,
-                ) as (typeof PAGE_SIZE_OPTIONS)[number],
-                page: 1,
-              })
-            }
-          >
-            {PAGE_SIZE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option} rows
-              </option>
-            ))}
-          </NativeSelect>
+            className="w-44"
+          />
+          <Picker
+            mode="choose"
+            label="Rows per page"
+            options={PAGE_SIZE_PICKER_OPTIONS}
+            value={String(pageSize)}
+            onValueChange={(next) => {
+              const rows = PAGE_SIZE_OPTIONS.find(
+                (option) => String(option) === next,
+              );
+              if (rows) onSearchChange({ rows, page: 1 });
+            }}
+            className="w-32"
+          />
           <span className="ml-auto font-mono text-2xs text-muted-foreground tabular-nums">
             {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{" "}
             {formatCount(totalCount)}
@@ -646,21 +686,17 @@ export function CollectionAssignmentMatrix({
           />
         ) : availableCollections.length === 0 ? (
           <div className="grid gap-2 px-2 py-4">
-            <label
-              htmlFor={mobileSubjectId}
-              className="grid gap-1 text-xs font-medium"
-            >
-              Show rows for
-              <NativeSelect
-                id={mobileSubjectId}
-                aria-label="Assignment subject"
+            <div className="grid gap-1 text-xs font-medium">
+              <span>Show rows for</span>
+              <Picker
+                mode="choose"
+                inputId={mobileSubjectId}
+                label="Assignment subject"
+                options={SUBJECT_OPTIONS}
                 value={subject}
-                onChange={(event) => changeSubject(event.target.value)}
-              >
-                <option value="product">Products</option>
-                <option value="location">Locations</option>
-              </NativeSelect>
-            </label>
+                onValueChange={(next) => changeSubject(next ?? "")}
+              />
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">No Collections yet</p>
@@ -678,46 +714,32 @@ export function CollectionAssignmentMatrix({
         ) : (
           <div>
             <div className="grid gap-2 border-b border-border bg-card px-2 py-2">
-              <label
-                htmlFor={mobileSubjectId}
-                className="grid gap-1 text-xs font-medium"
-              >
-                Show rows for
-                <NativeSelect
-                  id={mobileSubjectId}
-                  aria-label="Assignment subject"
+              <div className="grid gap-1 text-xs font-medium">
+                <span>Show rows for</span>
+                <Picker
+                  mode="choose"
+                  inputId={mobileSubjectId}
+                  label="Assignment subject"
+                  options={SUBJECT_OPTIONS}
                   value={subject}
-                  onChange={(event) => changeSubject(event.target.value)}
-                >
-                  <option value="product">Products</option>
-                  <option value="location">Locations</option>
-                </NativeSelect>
-              </label>
-              <label
-                htmlFor={mobileCollectionId}
-                className="grid gap-1 text-xs font-medium"
-              >
-                Assign to Collection
-                <NativeSelect
-                  id={mobileCollectionId}
-                  aria-label="Assign to Collection"
-                  value={selectedMobileCollection ?? ""}
-                  onChange={(event) => {
-                    const nextCollection = collectionSlug.safeParse(
-                      event.target.value,
-                    );
+                  onValueChange={(next) => changeSubject(next ?? "")}
+                />
+              </div>
+              <div className="grid gap-1 text-xs font-medium">
+                <span>Assign to Collection</span>
+                <Picker
+                  inputId={mobileCollectionId}
+                  label="Assign to Collection"
+                  options={mobileCollectionOptions}
+                  value={selectedMobileCollection ?? null}
+                  onValueChange={(next) => {
+                    const nextCollection = collectionSlug.safeParse(next ?? "");
                     setMobileCollection(
                       nextCollection.success ? nextCollection.data : undefined,
                     );
                   }}
-                >
-                  {availableCollections.map((slug) => (
-                    <option key={slug} value={slug}>
-                      {formatCollectionLabel(slug)}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
+                />
+              </div>
               <div className="flex items-center justify-between gap-2 font-mono text-2xs text-muted-foreground tabular-nums">
                 <span>
                   {formatCount(mobileRangeStart)}–{formatCount(mobileRangeEnd)}{" "}

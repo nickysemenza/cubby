@@ -1,22 +1,21 @@
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 
 export interface DeferredFilterOptionSource {
-  options: FilterableComboboxItem[];
+  options: PickerOption[];
   onActivate: (selectedIds?: readonly string[]) => void;
   onSearchChange: (query: string) => void;
   isLoading: boolean;
 }
 
 export type RuntimeFilterOptionSource =
-  | FilterableComboboxItem[]
+  | PickerOption[]
   | DeferredFilterOptionSource;
 
 export type RuntimeFilterOptions = Record<string, RuntimeFilterOptionSource>;
 
 export const filterOptionItems = (
   source: RuntimeFilterOptionSource | undefined,
-): FilterableComboboxItem[] =>
-  Array.isArray(source) ? source : (source?.options ?? []);
+): PickerOption[] => (Array.isArray(source) ? source : (source?.options ?? []));
 
 export const deferredFilterOptionSource = (
   source: RuntimeFilterOptionSource | undefined,

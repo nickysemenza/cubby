@@ -5,11 +5,12 @@ import {
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { capitalize } from "@cubby/shared";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import {
@@ -88,6 +89,20 @@ function DashboardFilterControls({
 }: DashboardFiltersProps) {
   const yearId = useId();
   const completionYearId = useId();
+  const yearOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "Any year" },
+      ...availableYears.map((year) => ({ value: year, label: year })),
+    ],
+    [availableYears],
+  );
+  const completionYearOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "Any completion year" },
+      ...availableCompletionYears.map((year) => ({ value: year, label: year })),
+    ],
+    [availableCompletionYears],
+  );
 
   function toggle(key: "statuses" | "kinds" | "locations", value: string) {
     const next = new Set(filters[key]);
@@ -149,23 +164,19 @@ function DashboardFilterControls({
           >
             Calendar year
           </label>
-          <NativeSelect
-            id={yearId}
+          <Picker
+            mode="choose"
+            inputId={yearId}
+            label="Calendar year"
+            options={yearOptions}
             value={selectedYear}
-            onChange={(event) =>
+            onValueChange={(value) =>
               onFiltersChange({
                 ...filters,
-                dateRange: event.currentTarget.value || null,
+                dateRange: value || null,
               })
             }
-          >
-            <option value="">Any year</option>
-            {availableYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </NativeSelect>
+          />
         </Stack>
         <Stack gap="xs">
           <label
@@ -174,23 +185,19 @@ function DashboardFilterControls({
           >
             Completed
           </label>
-          <NativeSelect
-            id={completionYearId}
+          <Picker
+            mode="choose"
+            inputId={completionYearId}
+            label="Completed"
+            options={completionYearOptions}
             value={filters.completionYear ?? ""}
-            onChange={(event) =>
+            onValueChange={(value) =>
               onFiltersChange({
                 ...filters,
-                completionYear: event.currentTarget.value || null,
+                completionYear: value || null,
               })
             }
-          >
-            <option value="">Any completion year</option>
-            {availableCompletionYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </NativeSelect>
+          />
         </Stack>
       </Stack>
     </Stack>

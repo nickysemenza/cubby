@@ -22,9 +22,9 @@ import {
   getContext,
   Provider,
 } from "~/integrations/tanstack-query/root-provider";
+import { Picker } from "~/ui/combobox/picker";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Toaster } from "~/ui/primitives/sonner";
 import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
@@ -45,6 +45,11 @@ import {
  * rejects any `/__dev/` route that leaks.
  */
 const { queryClient } = getContext();
+const ENTITY_OPTIONS = PREVIEW_ENTITIES.map((option) => ({
+  value: option,
+  label: entities[option].pluralLabel,
+}));
+
 const STATE_LABELS = {
   loading: "Loading",
   error: "Error",
@@ -102,19 +107,16 @@ function PreviewToolbar({
         <Label htmlFor="preview-entity" className="text-muted-foreground">
           Entity
         </Label>
-        <NativeSelect
-          id="preview-entity"
+        <Picker
+          inputId="preview-entity"
+          label="Entity"
+          className="w-48"
+          options={ENTITY_OPTIONS}
           value={entity}
-          onChange={(event) =>
-            openPreview(previewEntitySchema.parse(event.target.value), state)
-          }
-        >
-          {PREVIEW_ENTITIES.map((option) => (
-            <option key={option} value={option}>
-              {entities[option].pluralLabel}
-            </option>
-          ))}
-        </NativeSelect>
+          onValueChange={(next) => {
+            if (next) openPreview(previewEntitySchema.parse(next), state);
+          }}
+        />
       </div>
       <ViewSwitcher
         ariaLabel="Preview state"

@@ -423,7 +423,8 @@
       ],
       "rules": {
         "cubby/no-raw-table": "error",
-        "cubby/no-hand-rolled-record-list": "error"
+        "cubby/no-hand-rolled-record-list": "error",
+        "cubby/no-native-select": "error"
       }
     },
     {

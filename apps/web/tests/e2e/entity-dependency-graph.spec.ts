@@ -3,7 +3,11 @@ import {
   seedTaskPrerequisite,
 } from "./fixtures-catalog";
 import { seedImagePrerequisite } from "./fixtures-photos";
-import { waitForAppHydration, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  chooseOption,
+  gotoAuthenticatedPage,
+  waitForAppHydration,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { createEntityFixture } from "./fixtures-core";
 
@@ -55,9 +59,9 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   );
 
   const types = page.getByRole("combobox", { name: "Record types" });
-  await types.selectOption("project");
+  await chooseOption(page, types, "Projects only");
   await expect(graphLink).toHaveCount(0);
-  await types.selectOption("task");
+  await chooseOption(page, types, "Tasks only");
   await expect(graphLink).toBeVisible();
 
   const find = page.getByRole("textbox", { name: "Find graph record" });
@@ -66,7 +70,7 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   await page.reload();
   await waitForAppHydration(page);
   await expect(find).toHaveValue(name);
-  await expect(types).toHaveValue("task");
+  await expect(types).toHaveText(/Tasks only/);
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
   await graphLink.click();

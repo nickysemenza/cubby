@@ -14,6 +14,14 @@ import {
   type SmokeFormValue,
 } from "./ai-smoke-form";
 
+async function chooseOption(name: string, option: string) {
+  fireEvent.click(screen.getByRole("combobox", { name }));
+  const row = await screen.findByRole("option", { name: option });
+  // Base UI commits a mouse click only after a pointerdown on the same row.
+  fireEvent.pointerDown(row);
+  fireEvent.click(row);
+}
+
 describe("AI smoke form", () => {
   it("has a control for every schema property", () => {
     expect(smokeFieldControl("enabled", { type: "boolean" })).toBe("checkbox");
@@ -30,7 +38,7 @@ describe("AI smoke form", () => {
     }
   });
 
-  it("lets decision targets drive basis controls without a JSON editor", () => {
+  it("lets decision targets drive basis controls without a JSON editor", async () => {
     const scenario: AiSmokeScenario = "fieldSuggestions";
     const schema = smokeCatalog().find(
       (item) => item.id === scenario,
@@ -49,24 +57,21 @@ describe("AI smoke form", () => {
       );
     }
     render(<Form />);
-    expect(screen.getByLabelText("Entity")).toHaveValue("product");
-    expect(screen.getByLabelText("Basis mode")).toHaveValue("provided");
+    expect(screen.getByLabelText("Entity")).toHaveTextContent("product");
+    expect(screen.getByLabelText("Basis mode")).toHaveTextContent("provided");
     expect(screen.getByLabelText("Basis · name")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("categoryId"));
     expect(screen.queryByLabelText("Basis · name")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Basis mode"), {
-      target: { value: "suggested" },
-    });
-    expect(screen.getByLabelText("Basis mode")).toHaveValue("suggested");
-    fireEvent.change(screen.getByLabelText("Entity"), {
-      target: { value: "project" },
-    });
+    await chooseOption("Basis mode", "suggested");
+    expect(screen.getByLabelText("Basis mode")).toHaveTextContent("suggested");
+    await chooseOption("Entity", "project");
     fireEvent.click(screen.getByLabelText("defaultTrade"));
-    expect(screen.getByLabelText("Basis · kind")).toHaveValue("");
-    expect(screen.getByLabelText("Basis · kind").tagName).toBe("SELECT");
+    expect(
+      screen.getByRole("combobox", { name: "Basis · kind" }),
+    ).toHaveTextContent("Unspecified");
   });
 
-  it("switches an audit between synthetic inputs and a public Run picker", () => {
+  it("switches an audit between synthetic inputs and a public Run picker", async () => {
     const scenario = "purchaseAudit" as const;
     const schema = smokeCatalog().find(
       (item) => item.id === scenario,
@@ -90,9 +95,7 @@ describe("AI smoke form", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByLabelText("fixture")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("source"), {
-      target: { value: "run" },
-    });
+    await chooseOption("source", "run");
     expect(screen.queryByLabelText("fixture")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "runId" })).toBeInTheDocument();
   });

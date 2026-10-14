@@ -17,6 +17,7 @@ import {
   ensureMemberParty,
 } from "./fixtures-core";
 import {
+  chooseOption,
   escapeRegExp,
   gotoAuthenticatedPage,
   gotoDetailActions,
@@ -88,9 +89,13 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
         exact: true,
       })
       .check();
-    await page
-      .getByLabel(`Transaction kind for ${descriptions[kind]}`, { exact: true })
-      .selectOption(kind === "charge" ? "purchase" : "refund");
+    await chooseOption(
+      page,
+      page.getByLabel(`Transaction kind for ${descriptions[kind]}`, {
+        exact: true,
+      }),
+      kind === "charge" ? "purchase" : "refund",
+    );
   }
   await expect(
     page.getByRole("checkbox", {
@@ -200,15 +205,19 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       exact: true,
     });
     await expect(approve).toBeDisabled();
-    await page
-      .getByLabel(`Product decision for ${orderNames.productName}`, {
+    await chooseOption(
+      page,
+      page.getByLabel(`Product decision for ${orderNames.productName}`, {
         exact: true,
-      })
-      .selectOption("new");
+      }),
+      "Create a new Product",
+    );
     await expect(approve).toBeDisabled();
-    await page
-      .getByLabel("Trade for imported expenses", { exact: true })
-      .selectOption("other");
+    await chooseOption(
+      page,
+      page.getByLabel("Trade for imported expenses", { exact: true }),
+      "Other",
+    );
     await expect(approve).toBeEnabled();
     await approve.click();
     // Each captured order is a member's own import Run.

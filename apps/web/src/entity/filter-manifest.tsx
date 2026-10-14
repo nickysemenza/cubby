@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   barFieldFromConfig,
   type FilterBarField,
@@ -11,7 +12,6 @@ import {
   filterOptionItems,
   type RuntimeFilterOptions,
 } from "~/ui/hooks/filter-option-types";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 import {
   type FilterKind,
@@ -24,7 +24,7 @@ import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
 export interface FilterSpec extends FilterSpecCore {
   placeholder: string;
-  options?: FilterableComboboxItem[];
+  options?: PickerOption[];
   optionsKey?: string;
   label?: string;
 }
@@ -50,7 +50,7 @@ const filterTypeForKind = (
 const resolveSpecOptions = (
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,
-): FilterableComboboxItem[] => {
+): PickerOption[] => {
   const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
   const resolved = optionsKey
     ? filterOptionItems(runtimeOptions?.[optionsKey])

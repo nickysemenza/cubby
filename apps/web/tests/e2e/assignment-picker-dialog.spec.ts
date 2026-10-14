@@ -2,7 +2,12 @@ import { entityApi } from "./entity-api";
 import { chooseListView } from "./e2e-helpers";
 import { z } from "zod";
 
-import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import {
+  escapeRegExp,
+  gotoAuthenticatedPage,
+  SHORTCODE,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { seedLocationPrerequisite } from "./fixtures-catalog";
 
@@ -11,7 +16,7 @@ const locationParentOut = z.object({
 });
 
 /**
- * The assignment-dialog picker lifecycle (`ui/form-utils/entity-value-field.tsx`),
+ * The assignment-dialog picker lifecycle (`ui/form-utils/picker-field.tsx`),
  * driven through the bulk "Move under..." dialog. Failure modes: a selected
  * label degrades to its bare shortcode once the picker's search results stop
  * listing it (search away, or a just-created record the results never held);
@@ -131,4 +136,32 @@ test("an assignment picker keeps its label through search, clear, and create", a
       })
       .toBe(createdName);
   }
+});
+
+/**
+ * Regression: an edit form opened cold showed a stored reference as its bare
+ * shortcode until the picker opened, because the candidate list loads only on
+ * open. The closed field must resolve the code to the record's name and
+ * picture without being touched.
+ */
+test("a closed reference field shows the record, never its code", async ({
+  page,
+}, testInfo) => {
+  const token = uniqueName(testInfo, "Closed picker");
+  const parent = await seedLocationPrerequisite(page, `${token} parent`);
+  const child = await seedLocationPrerequisite(page, `${token} child`, {
+    parentId: parent.id,
+  });
+
+  await gotoAuthenticatedPage(page, `/locations/${child.id}`);
+  await page
+    .getByRole("button", { name: "Edit Location", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  const picker = dialog.getByRole("combobox", { name: /^Parent/ });
+
+  await expect(picker).toHaveValue(`${token} parent — room`);
+  await expect(picker).not.toHaveValue(new RegExp(`LOC-${SHORTCODE}`));
+  await expect(dialog.locator("[data-picker-visual]").first()).toBeVisible();
+  await expect(dialog).not.toContainText(parent.id);
 });

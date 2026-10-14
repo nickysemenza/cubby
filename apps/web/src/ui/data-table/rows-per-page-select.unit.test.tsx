@@ -23,6 +23,6 @@ describe("RowsPerPageSelect", () => {
     // combobox shows its matching item's label, so a size with no option used
     // to render an empty box.
     render(<RowsPerPageSelect table={tableWithPageSize(20)} />);
-    expect(screen.getByRole("combobox")).toHaveValue("20");
+    expect(screen.getByRole("combobox")).toHaveTextContent("20");
   });
 });

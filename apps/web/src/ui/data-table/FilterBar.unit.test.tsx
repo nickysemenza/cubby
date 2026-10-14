@@ -155,7 +155,7 @@ describe("FilterBar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Status: Open" }));
     fireEvent.click(
-      await screen.findByRole("button", { name: "Open Filter Status" }),
+      await screen.findByRole("button", { name: "Show filter status options" }),
     );
     fireEvent.click(await screen.findByRole("option", { name: /done/i }));
 

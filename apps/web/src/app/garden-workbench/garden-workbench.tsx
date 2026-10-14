@@ -16,13 +16,14 @@ import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/features/schedule/schedule-grid";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import {
   type AllEntityRecords,
   useAllEntityRecords,
 } from "~/ui/hooks/useAllEntityRecords";
 import { Stack } from "~/ui/layout";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Table,
   TableBody,
@@ -52,6 +53,10 @@ const modes = [
 const crops = [...gardenCropKeys].sort((a, b) =>
   cropName(a).localeCompare(cropName(b)),
 );
+const CROP_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All crops" },
+  ...crops.map((key) => ({ value: key, label: cropName(key) })),
+];
 const EMPTY_PLANTINGS = [] as const;
 
 const startLabels = {
@@ -369,22 +374,33 @@ export function GardenWorkbench({
   const plants = useAllEntityRecords("plant", undefined, {
     enabled: planActive,
   });
-  const locations = useMemo(() => {
+  const locationOptions = useMemo((): PickerOption[] => {
+    // Location ids are record codes and never shown; a nameless or unloaded
+    // location reads as a generic label instead.
     const choices = new Map<string, string>();
     for (const planting of plantings.records) {
       if (planting.locationId)
         choices.set(
           planting.locationId,
-          planting.locationName ?? planting.locationId,
+          planting.locationName ?? "Unnamed location",
         );
     }
-    if (location && !choices.has(location)) choices.set(location, location);
-    return [...choices.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    if (location && !choices.has(location))
+      choices.set(location, "Selected location");
+    return [
+      { value: "", label: "All locations" },
+      ...[...choices.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([id, name]) => ({ value: id, label: name })),
+    ];
   }, [location, plantings.records]);
-  const yearChoices = Array.from(
-    { length: 7 },
-    (_, index) => year - 3 + index,
-  ).filter((choice) => choice >= 2000 && choice <= 2100);
+  const yearOptions = useMemo(
+    (): PickerOption[] =>
+      Array.from({ length: 7 }, (_, index) => year - 3 + index)
+        .filter((choice) => choice >= 2000 && choice <= 2100)
+        .map((choice) => ({ value: String(choice), label: String(choice) })),
+    [year],
+  );
 
   return (
     <Stack gap="lg">
@@ -395,53 +411,40 @@ export function GardenWorkbench({
           onValueChange={onModeChange}
           compactOnMobile
         />
-        <label className="grid min-w-24 gap-1 text-xs text-muted-foreground">
-          Year
-          <NativeSelect
-            value={year}
-            onChange={(event) => onYearChange(Number(event.target.value))}
-          >
-            {yearChoices.map((choice) => (
-              <option key={choice} value={choice}>
-                {choice}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
-          Crop
-          <NativeSelect
+        <div className="grid min-w-24 gap-1 text-xs text-muted-foreground">
+          <span>Year</span>
+          <Picker
+            mode="choose"
+            label="Year"
+            options={yearOptions}
+            value={String(year)}
+            onValueChange={(next) => {
+              if (next) onYearChange(Number(next));
+            }}
+          />
+        </div>
+        <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
+          <span>Crop</span>
+          <Picker
+            label="Crop"
+            options={CROP_OPTIONS}
             value={crop ?? ""}
-            onChange={(event) => {
-              const parsed = gardenCropKey.safeParse(event.target.value);
+            onValueChange={(next) => {
+              const parsed = gardenCropKey.safeParse(next);
               onCropChange(parsed.success ? parsed.data : undefined);
             }}
-          >
-            <option value="">All crops</option>
-            {crops.map((key) => (
-              <option key={key} value={key}>
-                {cropName(key)}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
-          Current location
-          <NativeSelect
+          />
+        </div>
+        <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
+          <span>Current location</span>
+          <Picker
+            label="Current location"
+            options={locationOptions}
             value={location ?? ""}
             disabled={!planActive}
-            onChange={(event) =>
-              onLocationChange(event.target.value || undefined)
-            }
-          >
-            <option value="">All locations</option>
-            {locations.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+            onValueChange={(next) => onLocationChange(next || undefined)}
+          />
+        </div>
       </div>
       {mode === "timing" ? (
         <TimingView year={year} crop={crop} />

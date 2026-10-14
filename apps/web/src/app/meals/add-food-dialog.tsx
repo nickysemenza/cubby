@@ -31,8 +31,8 @@ import {
   getIngredientMappings,
 } from "~/lib/unit-mapping-utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
@@ -292,7 +292,7 @@ function FoodSourceFields({
   }
   return (
     <>
-      <EntityPicker<LedgerPartyShortcode>
+      <Picker<LedgerPartyShortcode>
         entity="ledgerParty"
         label="Person"
         items={options ?? []}

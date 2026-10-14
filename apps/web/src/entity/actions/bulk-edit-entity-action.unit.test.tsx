@@ -206,11 +206,18 @@ describe("BulkEditDialogBody", () => {
         { wrapper: harness.wrapper },
       );
 
-      const input = screen.getByRole("combobox", { name: fieldLabel });
-      fireEvent.keyDown(input, { key: "ArrowDown" });
-      fireEvent.click(screen.getByRole("option", { name: optionLabel }));
+      const picker = screen.getByRole("combobox", { name: fieldLabel });
+      picker.focus();
+      fireEvent.keyDown(picker, { key: "ArrowDown" });
+      const option = await screen.findByRole("option", { name: optionLabel });
+      // A choose-mode picker (a button, Base UI Select) commits a click only
+      // on a highlighted row; a search-mode input commits it directly.
+      if (picker.tagName !== "INPUT") fireEvent.mouseMove(option);
+      fireEvent.click(option);
 
-      expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Update" })).toBeEnabled(),
+      );
       fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());

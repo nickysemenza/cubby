@@ -11,6 +11,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
+  chooseOption,
   gotoAuthenticatedPage,
   inlineExplanation,
   uniqueName,
@@ -365,7 +366,7 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
   await explanation.click();
   const inline = await inlineExplanation(page, explanation);
   await inline.getByRole("button", { name: "Accept as…" }).click();
-  await inline.getByLabel("Reason").selectOption({ label: "Not applicable" });
+  await chooseOption(page, inline.getByLabel("Reason"), "Not applicable");
   await inline.getByRole("button", { name: "Accept exception" }).click();
   await expect(strip).not.toContainText("Manufacturer is not recorded.");
   await expect(strip).toContainText(

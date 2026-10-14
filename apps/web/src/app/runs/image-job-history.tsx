@@ -19,6 +19,7 @@ import { RunSubject } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatDuration } from "~/lib/format-duration";
+import { Picker } from "~/ui/combobox/picker";
 import { AiCost } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordDetail, RecordList, RecordRow } from "~/ui/common/record-list";
@@ -34,7 +35,6 @@ import { Row, Stack } from "~/ui/layout";
 import { usePageCount } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
 type ImageJobFilters = Pick<
@@ -416,26 +416,30 @@ export function ImageJobHistory({
         </output>
       ) : null}
       <Row gap="sm" align="center" wrap>
-        <NativeSelect
-          aria-label="Work type"
+        <Picker
+          label="Work type"
+          className="w-48"
+          options={[
+            { value: "", label: "All image work" },
+            ...kinds.map((kind) => ({
+              value: kind,
+              label: ACTIVITY_KIND_LABEL[kind],
+            })),
+          ]}
           value={filters.kind ?? ""}
-          onChange={(event) => selectFilter("kind", event.target.value)}
-        >
-          <option value="">All image work</option>
-          {kinds.map((kind) => (
-            <option key={kind} value={kind}>
-              {ACTIVITY_KIND_LABEL[kind]}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          aria-label="Job order"
+          onValueChange={(value) => selectFilter("kind", value ?? "")}
+        />
+        <Picker
+          mode="choose"
+          label="Job order"
+          className="w-36"
+          options={[
+            { value: "newest", label: "Newest first" },
+            { value: "oldest", label: "Oldest first" },
+          ]}
           value={filters.sort ?? "newest"}
-          onChange={(event) => selectFilter("sort", event.target.value)}
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </NativeSelect>
+          onValueChange={(value) => selectFilter("sort", value ?? "newest")}
+        />
         <Button
           type="button"
           variant="ghost"
@@ -451,30 +455,34 @@ export function ImageJobHistory({
       </Row>
       {more ? (
         <Row gap="sm" wrap>
-          <NativeSelect
-            aria-label="Execution location"
+          <Picker
+            mode="choose"
+            label="Execution location"
+            className="w-36"
+            options={[
+              { value: "all", label: "All executors" },
+              { value: "cloud", label: "Cloud" },
+              { value: "device", label: "Device" },
+              { value: "unknown", label: "Unknown" },
+            ]}
             value={filters.executor ?? "all"}
-            onChange={(event) => selectFilter("executor", event.target.value)}
-          >
-            <option value="all">All executors</option>
-            <option value="cloud">Cloud</option>
-            <option value="device">Device</option>
-            <option value="unknown">Unknown</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label="Execution device"
+            onValueChange={(value) => selectFilter("executor", value ?? "all")}
+          />
+          <Picker
+            label="Execution device"
+            className="w-48"
+            options={[
+              { value: "", label: "All devices" },
+              ...(devices.data?.items ?? []).flatMap((device) =>
+                device.deviceId
+                  ? [{ value: device.deviceId, label: device.name }]
+                  : [],
+              ),
+            ]}
+            isLoading={devices.isLoading}
             value={filters.deviceId ?? ""}
-            onChange={(event) => selectFilter("deviceId", event.target.value)}
-          >
-            <option value="">All devices</option>
-            {devices.data?.items.map((device) =>
-              device.deviceId ? (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.name}
-                </option>
-              ) : null,
-            )}
-          </NativeSelect>
+            onValueChange={(value) => selectFilter("deviceId", value ?? "")}
+          />
           <Input
             aria-label="Filter state"
             placeholder="State"

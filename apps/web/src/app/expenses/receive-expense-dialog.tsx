@@ -38,7 +38,7 @@ import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -245,7 +245,8 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
             a one-of-a-kind item, so receiving it again moves it rather than
             adding a second entry.
           </Description>
-          <EntityValueField
+          <PickerField
+            store="id"
             form={form}
             name="location"
             label="Move to"
@@ -275,7 +276,8 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
 
     return (
       <Stack gap="md">
-        <EntityValueField
+        <PickerField
+          store="id"
           form={form}
           name="location"
           label="Location"

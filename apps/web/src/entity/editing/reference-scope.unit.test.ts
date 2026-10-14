@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  preserveSelectedPickerItems,
-  referenceScopeFields,
-  referenceScopeFor,
-} from "./reference-scope";
+import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 
 describe("referenceScopeFor", () => {
   const reference = {
@@ -32,18 +28,6 @@ describe("referenceScopeFor", () => {
         observedOn: "2026-09-20",
       }),
     ).toEqual({ locationId: "LOC-TEST", activeOn: "2026-09-20" });
-  });
-
-  it("keeps selected ids visible when a narrower scope drops their candidates", () => {
-    expect(
-      preserveSelectedPickerItems(
-        [{ id: "PLT-NEW", name: "New planting" }],
-        ["PLT-OLD", "PLT-NEW"],
-      ),
-    ).toEqual([
-      { id: "PLT-OLD", name: "PLT-OLD" },
-      { id: "PLT-NEW", name: "New planting" },
-    ]);
   });
 });
 

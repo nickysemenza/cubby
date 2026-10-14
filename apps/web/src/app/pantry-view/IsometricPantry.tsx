@@ -8,11 +8,13 @@ import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 import { createActionFor } from "~/entity/actions/action-items";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { useIsometricPantry } from "./use-isometric-pantry";
 
@@ -70,6 +72,15 @@ export function IsometricPantry() {
   // client's first render already has the streamed one. See useHydratedLoading.
   const isLoading = useHydratedLoading(queryLoading);
   const addInventoryTarget = createActionFor("inventory");
+  const roomOptions = useMemo<PickerOption[]>(
+    () =>
+      rooms.map((room) => ({
+        value: room.locationId,
+        label: room.name,
+        hint: String(room.totalItemCount),
+      })),
+    [rooms],
+  );
 
   if (isLoading) {
     return (
@@ -132,24 +143,18 @@ export function IsometricPantry() {
           <ArrowsOutSimpleIcon className="mr-1 size-4" />
           Reset View
         </Button>
-        <NativeSelect
-          aria-label="Open pantry location"
-          className="ml-auto max-w-40 min-w-0 bg-card"
-          defaultValue=""
-          onChange={(event) => {
-            const shortcode = event.currentTarget.value;
+        <Picker
+          mode="choose"
+          compact
+          label="Open pantry location"
+          placeholder="Open room…"
+          className="ml-auto w-40"
+          options={roomOptions}
+          value={null}
+          onValueChange={(shortcode) => {
             if (shortcode) openLocation(shortcode);
           }}
-        >
-          <option value="" disabled>
-            Open room…
-          </option>
-          {rooms.map((room) => (
-            <option key={room.locationId} value={room.locationId}>
-              {room.name} · {room.totalItemCount}
-            </option>
-          ))}
-        </NativeSelect>
+        />
       </div>
       <CategoryLegend inventory={inventory} />
     </div>

@@ -158,9 +158,15 @@ describe("SmartCollectionPage", () => {
     const secondCondition = screen.getByRole("combobox", {
       name: "Condition 2 type",
     });
-    fireEvent.change(secondCondition, {
-      target: { value: "manufacturerEquals" },
+    fireEvent.keyDown(secondCondition, { key: "ArrowDown" });
+    const manufacturer = await screen.findByRole("option", {
+      name: /Manufacturer equals/,
     });
+    fireEvent.pointerDown(manufacturer);
+    fireEvent.click(manufacturer);
+    await waitFor(() =>
+      expect(secondCondition).toHaveTextContent("Manufacturer equals"),
+    );
     expect(screen.getByRole("combobox", { name: "Condition 2 type" })).toBe(
       secondCondition,
     );

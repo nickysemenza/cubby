@@ -334,7 +334,7 @@ export function BulkEditDialogBody({
         });
         return;
       }
-      // `EntityValueField` (used for every reference field here) writes ""
+      // `PickerField` `store="id"` (used for every reference field here) writes ""
       // for "cleared", never `null` — its own convention for "no selection".
       // No bulk-edit field kind is free text, so folding "" into null here is
       // unambiguous: a cleared reference is exactly what should send `null`.

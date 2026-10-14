@@ -6,8 +6,7 @@ import { useMemo, useState } from "react";
 import { entityLabel } from "~/entity/entities";
 import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
-
-import { EntityPicker } from "../../ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 
 /** Uses the canonical lexical search rather than downloading entity lists. */
 export function EntityGraphPicker({
@@ -39,7 +38,7 @@ export function EntityGraphPicker({
     [results.data],
   );
   return (
-    <EntityPicker
+    <Picker
       label={label}
       placeholder={placeholder}
       items={items}

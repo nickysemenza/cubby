@@ -5,7 +5,6 @@ import {
   Suspense,
   useEffect,
   useId,
-  useMemo,
   useRef,
 } from "react";
 import {
@@ -14,7 +13,6 @@ import {
   type FieldPathByValue,
   type FieldPathValue,
   FormProvider,
-  type Path,
   type UseFormReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
@@ -32,7 +30,6 @@ import { useDialogHeaderActionsRegistration } from "~/ui/primitives/responsive-d
 import { Spinner } from "~/ui/primitives/spinner";
 import { Textarea } from "~/ui/primitives/textarea";
 
-import { StaticPicker } from "./combobox/static-picker";
 import { DatePickerInput } from "./date-picker-input";
 
 import "./common/ledger.css";
@@ -755,96 +752,6 @@ export function UnifiedTextField<
           </FormFieldGroup>
         );
       }}
-    />
-  );
-}
-
-/**
- * Select field over a **fixed, in-memory option list** (enums, small static
- * sets). Backed by the shared Base UI picker shell for type-to-filter.
- *
- * Pick the right combobox for the job:
- * - `SelectField` — static options, page-level forms.
- * - `EntityValueField` (stores the shortcode) / `EntityItemField` (stores the
- *   whole item), in `form-utils/entity-value-field.tsx` — async entity search
- *   through the shared Base UI entity picker.
- */
-export function SelectField<TFieldValues extends FieldValues = FieldValues>({
-  form,
-  name,
-  label,
-  hideLabel,
-  options,
-  placeholder,
-  nullable = false,
-  disabled = false,
-  description,
-  suggestField,
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
-  label: string;
-  hideLabel?: boolean;
-  options: readonly {
-    value: string;
-    label: string;
-    icon?: React.ReactNode;
-    color?: string;
-  }[];
-  placeholder?: string;
-  nullable?: boolean;
-  disabled?: boolean;
-  description?: ReactNode;
-  /** The manifest target key this field suggests (e.g. `"trade"`) — mounts an
-   * `AutoSuggestSlot` under the picker. Omit for a field with no
-   * `control.suggest`. */
-  suggestField?: string;
-}) {
-  const controlId = useId();
-  const descriptionId = `${controlId}-description`;
-  // Build items list, prepending "None" option if nullable
-  const items = useMemo(
-    () =>
-      nullable ? [{ value: "__none__", label: "None" }, ...options] : options,
-    [nullable, options],
-  );
-
-  return (
-    <Controller
-      control={form.control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormFieldGroup
-          htmlFor={controlId}
-          label={label}
-          hideLabel={hideLabel}
-          description={description}
-          descriptionId={descriptionId}
-          invalid={fieldState.invalid}
-          error={fieldState.error}
-        >
-          <StaticPicker
-            inputId={controlId}
-            inputRef={field.ref}
-            items={items}
-            value={field.value ?? (nullable ? "__none__" : null)}
-            onOpenChange={(open) => {
-              if (!open) field.onBlur();
-            }}
-            onValueChange={(value) => {
-              field.onBlur();
-              field.onChange(value === "__none__" ? null : value);
-            }}
-            placeholder={placeholder || `Select ${label.toLowerCase()}`}
-            label={label}
-            aria-describedby={description ? descriptionId : undefined}
-            disabled={disabled}
-          />
-          {suggestField && (
-            <AutoSuggestSlot form={form} name={name} field={suggestField} />
-          )}
-        </FormFieldGroup>
-      )}
     />
   );
 }

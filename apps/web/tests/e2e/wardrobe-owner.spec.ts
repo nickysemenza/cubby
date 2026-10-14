@@ -1,5 +1,5 @@
 import { seedWardrobePrerequisites } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 // Wardrobe is the generic Inventory list narrowed to an owner and the apparel
@@ -52,9 +52,11 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await page
     .getByRole("button", { name: "Change ownership", exact: true })
     .click();
-  await page
-    .getByRole("combobox", { name: "Ownership", exact: true })
-    .selectOption("unassigned");
+  await chooseOption(
+    page,
+    page.getByRole("combobox", { name: "Ownership", exact: true }),
+    "No individual owner",
+  );
   // The server owns the quantity bound; the client shows its refusal.
   await page
     .getByRole("spinbutton", {

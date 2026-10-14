@@ -21,9 +21,10 @@ import { toast } from "sonner";
 import type { FieldSuggestionSource } from "~/features/ai/field-suggestion";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { Input } from "~/ui/primitives/input";
 import { Textarea } from "~/ui/primitives/textarea";
 import {
@@ -36,7 +37,6 @@ import {
   showAmountAndPrice,
   tryFormatAmount,
 } from "../../features/inventory/format-amount";
-import { StaticPicker } from "../combobox/static-picker";
 import { DatePickerInput } from "../date-picker-input";
 import type { CellClipboardSpec, CellPastePayload } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
@@ -45,7 +45,7 @@ import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { CellSelectionContext } from "./cell-selection-context";
 import { useRowActive } from "./row-activity";
 
-export type { FilterableComboboxItem };
+export type { PickerOption };
 
 /**
  * The editor owns retry behavior, while the host owns how its failure is
@@ -103,7 +103,7 @@ type EditableCurrencyConfig = {
 
 type EditableSelectConfig = {
   type: "select";
-  options: FilterableComboboxItem[];
+  options: PickerOption[];
   placeholder?: string;
   /**
    * Offer the picker's clear affordance, so a nullable column can be returned
@@ -693,7 +693,7 @@ function EditableSelectCellInternal({
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
-  options: FilterableComboboxItem[];
+  options: PickerOption[];
   placeholder?: string;
   clearable?: boolean;
   suggest?: FieldSuggestionSource;
@@ -756,7 +756,7 @@ function EditableSelectEditor({
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
-  options: FilterableComboboxItem[];
+  options: PickerOption[];
   placeholder: string;
   clearable?: boolean;
   suggest?: FieldSuggestionSource;
@@ -778,8 +778,8 @@ function EditableSelectEditor({
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
     <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
       <div className="inline-flex items-center gap-1">
-        <StaticPicker
-          items={options}
+        <Picker
+          options={options}
           value={value}
           onValueChange={(next) => void handlePick(next)}
           label={placeholder}

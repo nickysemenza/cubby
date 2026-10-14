@@ -9,6 +9,7 @@ import { EditableTagsCell } from "~/features/recipes/editable-tags-cell";
 import { RecipeTag } from "~/features/recipes/recipe-tag";
 import { formatYield } from "~/features/recipes/recipe-yield";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   numberCellData,
   specFromCellData,
@@ -24,7 +25,6 @@ import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
 import { useTagOptions } from "~/ui/hooks/useEntityOptions";
 import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { TruncatedList } from "~/ui/TruncatedList";
 
@@ -33,7 +33,7 @@ import { defineListOverride } from "./types";
 type RecipeFilters = EntityListParamsByEntity["recipe"]["filters"];
 
 const columnHelper = createCubbyColumnHelper<RecipeListItem>();
-const NO_INGREDIENT_OPTIONS: FilterableComboboxItem[] = [];
+const NO_INGREDIENT_OPTIONS: PickerOption[] = [];
 
 export const recipeListOverride = defineListOverride<
   RecipeListItem,
@@ -47,7 +47,7 @@ export const recipeListOverride = defineListOverride<
         limit: 100,
       }),
     );
-    const ingredientOptions = useMemo<FilterableComboboxItem[]>(
+    const ingredientOptions = useMemo<PickerOption[]>(
       () =>
         ingredientOptionsQuery.data?.map(({ id, label, count }) => ({
           value: id,

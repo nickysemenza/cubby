@@ -111,7 +111,7 @@ function VendorSearch<TId extends string>({
  *
  * Unlike the entity pickers, "create new" needs no `create` mutation: a name
  * that matches nothing on the roster IS the new vendor, and the save that
- * follows mints the row via `findOrCreateVendor`. `EntityPicker`
+ * follows mints the row via `findOrCreateVendor`. `Picker`
  * only surfaces the create affordance when the typed term matches **no** roster
  * row, so picking an existing vendor stays the default and minting a duplicate
  * takes a name nothing on the roster matches.

@@ -33,6 +33,23 @@ export interface PickerPresentation {
   facts?: string[];
   /** Known-invalid choices remain explainable but cannot be selected. */
   disabledReason?: string;
+  /** Trailing count in the data voice ("254") — see `PickerOption.hint`. */
+  hint?: string;
+  /** A predicate about the data ("(none)", "Has project") rather than a value
+   * from it: eyebrow register, divided from the roster below. */
+  meta?: boolean;
+}
+
+/**
+ * A record's picture as data, so each surface sizes it: the closed field and
+ * chips render it at 20px, rows at 24px (`PickerVisual`). A node built for a
+ * row (a 52px location tile, a hover preview) cannot be shrunk safely.
+ */
+export interface PickerThumb {
+  imageUrl: string | null;
+  /** Rendered centred in the same box when there is no image or it fails. */
+  fallback: React.ReactNode;
+  shape?: "square" | "round";
 }
 
 // Generic ComboboxItem type that preserves ID branding
@@ -41,11 +58,14 @@ export type ComboboxItem<TId extends string = string> = {
   /** Canonical value written by the assignment adapter. */
   name: string;
   id: TId;
-  /** Public entity identifier displayed in picker result rows. */
+  /** Public entity identifier — searchable, never displayed or announced. */
   shortcode?: string;
+  /** Row glyph. A record also carries `thumb`, which the closed field uses. */
   icon?: React.ReactNode;
-  /** Record cover used in the closed control as well as search results. */
-  imageUrl?: string | null;
+  thumb?: PickerThumb;
+  /** True while a stored id is still resolving to its record; the closed
+   * field shows a quiet loading label instead of the id. */
+  pending?: boolean;
   /** Optional categorical swatch used by enum/status pickers. */
   color?: string;
   /** Alternate searchable names. */

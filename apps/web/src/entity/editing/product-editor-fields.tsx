@@ -31,11 +31,8 @@ import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import {
-  NullableNumericField,
-  SelectField,
-  UnifiedTextField,
-} from "~/ui/form-utils";
+import { NullableNumericField, UnifiedTextField } from "~/ui/form-utils";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
@@ -230,7 +227,8 @@ export function ProductExternalIdsField({
         return (
           <>
             <div className="min-w-[8rem] flex-1">
-              <SelectField
+              <PickerField
+                store="option"
                 form={form}
                 name={kindPath}
                 label="Kind"

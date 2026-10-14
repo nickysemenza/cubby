@@ -25,6 +25,8 @@ import { EntityWorkbenchInspector } from "~/entity/entity-detail/entity-workbenc
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   GroupedFlow,
   type GroupedFlowGroup,
@@ -39,7 +41,6 @@ import {
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   Empty,
   EmptyDescription,
@@ -49,7 +50,6 @@ import {
 } from "~/ui/primitives/empty";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
 
@@ -64,10 +64,9 @@ const productionOperations: ToolGalleryPageOperations = {
   gallery: project.toolGallery,
 };
 
-const GROUP_OPTIONS: ReadonlyArray<{
-  value: ToolGalleryGroupBy;
-  label: string;
-}> = [
+const GROUP_OPTIONS: ReadonlyArray<
+  PickerOption & { value: ToolGalleryGroupBy }
+> = [
   { value: "location", label: "Location" },
   { value: "manufacturer", label: "Manufacturer" },
   { value: "trade", label: "Trade" },
@@ -363,8 +362,8 @@ function GroupJumpBar({
         <span className="shrink-0 eyebrow">Jump to</span>
         {usesPicker ? (
           <div className="min-w-0 flex-1 sm:max-w-sm">
-            <FilterableCombobox
-              items={groups.map((group) => ({
+            <Picker
+              options={groups.map((group) => ({
                 value: group.key,
                 label: group.label,
                 hint: String(group.itemCount),
@@ -375,7 +374,7 @@ function GroupJumpBar({
               }}
               disabled={disabled}
               placeholder={`Choose a ${noun}`}
-              ariaLabel={`Jump to ${noun}`}
+              label={`Jump to ${noun}`}
               className="bg-card"
             />
           </div>
@@ -939,22 +938,20 @@ export function ToolGalleryPage({
             className="pl-8"
           />
         </label>
-        <label htmlFor="tool-gallery-group" className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span className="shrink-0 eyebrow">Group by</span>
-          <NativeSelect
-            id="tool-gallery-group"
+          <Picker
+            mode="choose"
+            className="w-40"
+            inputId="tool-gallery-group"
+            label="Group by"
+            options={GROUP_OPTIONS}
             value={groupBy}
-            onChange={(event) =>
-              onGroupByChange(toolGalleryGroupBy.parse(event.target.value))
+            onValueChange={(value) =>
+              onGroupByChange(toolGalleryGroupBy.parse(value))
             }
-          >
-            {GROUP_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+          />
+        </div>
         {totals ? (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-auto">
             <SquaresFourIcon className="size-3.5 text-[var(--domain-house)]" />

@@ -379,6 +379,37 @@ export async function selectComboboxItem(
   }).toPass({ timeout: 10000 });
 }
 
+/**
+ * Pick `optionLabel` from a choose-mode `Picker` (no search input) — the
+ * replacement for Playwright's native-only `selectOption`. `picker` is the
+ * field's trigger, e.g. `page.getByRole("combobox", { name: "Rows per page" })`.
+ * The picker shows the chosen label, not the stored value, so assert with
+ * `toHaveText(label)` rather than `toHaveValue(value)`.
+ */
+export async function chooseOption(
+  page: Page,
+  picker: Locator,
+  optionLabel: string,
+) {
+  await expect(picker).toBeEnabled({ timeout: 10000 });
+  await expect(async () => {
+    if ((await picker.getAttribute("aria-expanded")) !== "true")
+      await picker.click();
+    await expect(picker).toHaveAttribute("aria-expanded", "true", {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 5000 });
+  const option = page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(optionLabel)}`) })
+    .filter({ has: page.getByText(optionLabel, { exact: true }) });
+  await expect(async () => {
+    await option.click();
+    await expect(picker).toHaveAttribute("aria-expanded", "false", {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 10000 });
+}
+
 export async function fillInput(
   page: Page,
   placeholder: string,

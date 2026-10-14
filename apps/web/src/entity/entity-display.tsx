@@ -55,10 +55,7 @@ import {
   timestampCellData,
 } from "~/ui/data-table/cell-data";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
-import {
-  EditableCell,
-  type FilterableComboboxItem,
-} from "~/ui/data-table/editable-cell";
+import { EditableCell, type PickerOption } from "~/ui/data-table/editable-cell";
 import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
 import {
   createCubbyColumnCollection,
@@ -186,7 +183,7 @@ function widthClassName(
 }
 
 /** The labels `presence` falls back to when the field declares no roster. */
-const PRESENCE_OPTIONS: FilterableComboboxItem[] = [
+const PRESENCE_OPTIONS: PickerOption[] = [
   { value: "yes", label: "Yes", color: "var(--slate)" },
   { value: "no", label: "No", color: "var(--muted-foreground)" },
 ];
@@ -1293,7 +1290,7 @@ function renderEditableField<TRecord extends object>(
       );
     }
     case "select": {
-      const options: FilterableComboboxItem[] = enumFieldOptions(entity, field);
+      const options: PickerOption[] = enumFieldOptions(entity, field);
       const cellData = selectCellData<TRecord>(
         () => asText(value),
         options,

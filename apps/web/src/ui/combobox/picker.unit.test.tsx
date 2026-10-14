@@ -1,15 +1,27 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   fireEvent,
-  render,
+  render as renderUi,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import { useState } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { entityDetailFor } from "~/entity/entity-detail";
+
 import type { ComboboxItem } from "./combobox-types";
-import { EntityPicker, matchesPickerItem } from "./entity-picker";
+import { matchesPickerItem, Picker } from "./picker";
+
+// Record pickers read stored codes' records through React Query.
+function render(ui: ReactElement, client = new QueryClient()) {
+  return renderUi(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 const ITEMS: ComboboxItem[] = [
   {
@@ -30,7 +42,7 @@ const ITEMS: ComboboxItem[] = [
 function Harness({ clearable = false }: { clearable?: boolean }) {
   const [value, setValue] = useState<ComboboxItem | null>(ITEMS[0] ?? null);
   return (
-    <EntityPicker
+    <Picker
       entity="product"
       label="product"
       items={ITEMS}
@@ -53,7 +65,7 @@ function PlantingHarness() {
     name: "Example crop · current",
   });
   return (
-    <EntityPicker
+    <Picker
       entity="planting"
       label="Planting"
       items={[
@@ -79,31 +91,31 @@ describe("matchesPickerItem", () => {
   );
 });
 
-describe("EntityPicker", () => {
+describe("Picker records", () => {
   it("shows the selected record image before opening or searching", () => {
-    render(
-      <EntityPicker
+    const { container } = render(
+      <Picker
         entity="location"
         label="Receive into"
         items={[
           {
             id: "LOC-4K7M",
             name: "Example shelf",
-            imageUrl: "/synthetic-shelf.jpg",
+            thumb: { imageUrl: "/synthetic-shelf.jpg", fallback: null },
           },
         ]}
         value={{ id: "LOC-4K7M", name: "Example shelf" }}
         setValue={vi.fn()}
       />,
     );
-    expect(screen.getByAltText("Selected Receive into")).toHaveAttribute(
+    expect(container.querySelector("[data-picker-visual] img")).toHaveAttribute(
       "src",
       expect.stringContaining("synthetic-shelf"),
     );
   });
   it("keeps entity-search rows' existing icon and swatch marks", () => {
     render(
-      <EntityPicker
+      <Picker
         entity="product"
         label="product"
         items={[
@@ -129,7 +141,7 @@ describe("EntityPicker", () => {
 
   it("sizes an intrinsic picker to its options while retaining the trigger minimum", () => {
     render(
-      <EntityPicker
+      <Picker
         label="cost type"
         items={[
           { id: "short", name: "Materials" },
@@ -177,16 +189,15 @@ describe("EntityPicker", () => {
     expect(popup).toBeInstanceOf(HTMLElement);
     if (!(popup instanceof HTMLElement)) return;
     expect(within(popup).queryByText("PRD-2ABC")).not.toBeInTheDocument();
-    expect(
-      within(popup).getByRole("option", {
-        name: /Cordless Drill Makita PRD-2ABC/,
-      }),
-    ).toHaveAttribute("aria-selected", "true");
+    const selected = within(popup).getByRole("option", {
+      name: "Cordless Drill Makita",
+    });
+    expect(selected).toHaveAttribute("aria-selected", "true");
   });
 
   it("derives the placeholder from the entity noun, not a sentence-length caption", () => {
     render(
-      <EntityPicker
+      <Picker
         entity="location"
         label="Use an existing location (optional)"
         items={[]}
@@ -201,9 +212,7 @@ describe("EntityPicker", () => {
   });
 
   it("falls back to a generic placeholder with no entity key", () => {
-    render(
-      <EntityPicker label="About" items={[]} value={null} setValue={vi.fn()} />,
-    );
+    render(<Picker label="About" items={[]} value={null} setValue={vi.fn()} />);
     expect(screen.getByRole("combobox", { name: "About" })).toHaveAttribute(
       "placeholder",
       "Choose…",
@@ -212,7 +221,7 @@ describe("EntityPicker", () => {
 
   it("lets an explicit placeholder override the entity-derived default", () => {
     render(
-      <EntityPicker
+      <Picker
         entity="location"
         label="Use an existing location (optional)"
         placeholder="Pick a spot…"
@@ -239,7 +248,7 @@ describe("EntityPicker", () => {
   it("offers creation without an exact name match and suppresses it for exact names", () => {
     const create = vi.fn(async (name: string) => ({ id: name, name }));
     render(
-      <EntityPicker
+      <Picker
         entity="product"
         label="product"
         items={ITEMS}
@@ -270,7 +279,7 @@ describe("EntityPicker", () => {
       return { id: "created-product", name };
     });
     render(
-      <EntityPicker
+      <Picker
         entity="product"
         label="product"
         items={ITEMS}
@@ -299,7 +308,7 @@ describe("EntityPicker", () => {
 
   it("shows wrong-prefix shortcodes as not found and never offers creation", () => {
     render(
-      <EntityPicker
+      <Picker
         entity="product"
         label="product"
         items={ITEMS}
@@ -321,7 +330,7 @@ describe("EntityPicker", () => {
     "offers creation for a hyphenated name: %s",
     (name) => {
       render(
-        <EntityPicker
+        <Picker
           entity="vendor"
           label="vendor"
           items={[]}
@@ -344,7 +353,7 @@ describe("EntityPicker", () => {
 
   it("does not offer creation for a malformed code using the entity prefix", () => {
     render(
-      <EntityPicker
+      <Picker
         entity="vendor"
         label="vendor"
         items={[]}
@@ -364,7 +373,7 @@ describe("EntityPicker", () => {
   it("renders ordered evidence groups and leaves invalid choices disabled", () => {
     const setValue = vi.fn();
     render(
-      <EntityPicker
+      <Picker
         entity="product"
         label="product"
         items={[
@@ -420,5 +429,228 @@ describe("EntityPicker", () => {
     expect(invalid).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(invalid);
     expect(setValue).not.toHaveBeenCalled();
+  });
+});
+
+const OPTIONS = [
+  { value: "materials", label: "Materials", color: "rgb(1, 2, 3)" },
+  { value: "services", label: "Services" },
+  {
+    value: "food",
+    label: "Food",
+    color: "rgb(4, 5, 6)",
+    icon: <span data-testid="food-icon">food glyph</span>,
+  },
+];
+
+function OptionHarness({
+  initial,
+  mode,
+}: {
+  initial: string | null;
+  mode?: "search" | "choose";
+}) {
+  const [value, setValue] = useState<string | null>(initial);
+  return (
+    <Picker
+      mode={mode}
+      label="cost type"
+      options={OPTIONS}
+      value={value}
+      onValueChange={setValue}
+    />
+  );
+}
+
+describe("Picker options", () => {
+  it("filters and writes the selected string value", () => {
+    const onValueChange = vi.fn();
+    render(
+      <Picker
+        label="cost type"
+        options={OPTIONS}
+        value={null}
+        onValueChange={onValueChange}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "cost type" });
+    openPicker(input);
+    fireEvent.change(input, { target: { value: "serv" } });
+    expect(screen.queryByRole("option", { name: "Materials" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "Services" }));
+    expect(onValueChange).toHaveBeenCalledWith("services");
+  });
+
+  it("marks a row with its tinted glyph or, without one, a single swatch", () => {
+    render(<OptionHarness initial={null} />);
+    openPicker(screen.getByRole("combobox", { name: "cost type" }));
+    const food = screen.getByRole("option", { name: "Food" });
+    expect(within(food).getAllByTestId("food-icon")).toHaveLength(1);
+    expect(food.querySelectorAll("[data-enum-option-swatch]")).toHaveLength(0);
+    const materials = screen.getByRole("option", { name: "Materials" });
+    expect(
+      materials.querySelectorAll("[data-enum-option-swatch]"),
+    ).toHaveLength(1);
+  });
+
+  // Regression: the closed field showed only the label, dropping the glyph
+  // every row carries.
+  it("shows the selected option's glyph in the closed field", () => {
+    const { container } = render(<OptionHarness initial="food" />);
+    expect(screen.getByRole("combobox", { name: "cost type" })).toHaveValue(
+      "Food",
+    );
+    const lead = container.querySelector("[data-picker-visual]");
+    expect(lead).toBeInstanceOf(HTMLElement);
+    expect(lead?.querySelector("[data-testid=food-icon]")).not.toBeNull();
+  });
+
+  it("chooses without a text input in choose mode", async () => {
+    render(<OptionHarness initial="materials" mode="choose" />);
+    const trigger = screen.getByRole("combobox", { name: "cost type" });
+    expect(trigger.tagName).not.toBe("INPUT");
+    expect(trigger).toHaveTextContent("Materials");
+    // Keyboard, as with a native select: open, letter typeahead, Enter.
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    await screen.findByRole("option", { name: "Food" });
+    fireEvent.keyDown(document.activeElement ?? trigger, { key: "f" });
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Food" })).toHaveAttribute(
+        "data-highlighted",
+      ),
+    );
+    fireEvent.keyDown(document.activeElement ?? trigger, { key: "Enter" });
+    await waitFor(() => expect(trigger).toHaveTextContent("Food"));
+    expect(trigger.querySelector("[data-testid=food-icon]")).not.toBeNull();
+  });
+});
+
+describe("Picker stored codes", () => {
+  const CODE = "PRD-4K7M";
+
+  // Regression: a closed edit form showed the stored shortcode until the
+  // deferred candidate list loaded.
+  it("shows the record's name and picture, never its code", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    // SAFETY: the picker's product builder reads only these detail fields;
+    // the rest of the detail shape is irrelevant to the closed field.
+    const detail = {
+      id: CODE,
+      name: "Rolled Oats",
+      manufacturer: "Harvest Mill",
+      coverImageUrl: "https://images.example.test/oats.jpg",
+    } as never;
+    client.setQueryData(
+      entityDetailFor("product").queryOptions(CODE).queryKey,
+      detail,
+    );
+    const { container } = render(
+      <Picker
+        entity="product"
+        label="product"
+        items={[]}
+        value={{ id: CODE, name: CODE }}
+        setValue={vi.fn()}
+      />,
+      client,
+    );
+    const input = screen.getByRole("combobox", { name: "product" });
+    expect(input).toHaveValue("Rolled Oats — Harvest Mill");
+    expect(container.querySelector("[data-picker-visual] img")).not.toBeNull();
+    expect(container).not.toHaveTextContent(CODE);
+  });
+
+  // Regression: a detail read answers null for a deleted record, and the
+  // builder threw during render.
+  it("names a missing record instead of throwing", () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      entityDetailFor("product").queryOptions(CODE).queryKey,
+      null,
+    );
+    const { container } = render(
+      <Picker
+        entity="product"
+        label="product"
+        items={[]}
+        value={{ id: CODE, name: CODE }}
+        setValue={vi.fn()}
+      />,
+      client,
+    );
+    expect(screen.getByRole("combobox", { name: "product" })).toHaveValue(
+      "Missing product",
+    );
+    expect(container).not.toHaveTextContent(CODE);
+  });
+
+  // Regression: a string option list built from records (cookbooks) showed
+  // the stored code until its roster loaded.
+  it("waits for a loading option roster instead of showing a stored code", () => {
+    const { rerender, container } = render(
+      <Picker
+        mode="choose"
+        label="cookbook"
+        options={[]}
+        isLoading
+        value="CKB-4K7M"
+        onValueChange={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("combobox", { name: "cookbook" });
+    expect(trigger).toHaveTextContent("Loading…");
+    rerender(
+      <Picker
+        mode="choose"
+        label="cookbook"
+        options={[]}
+        value="CKB-4K7M"
+        onValueChange={vi.fn()}
+      />,
+    );
+    expect(trigger).toHaveTextContent("Unavailable record");
+    expect(container).not.toHaveTextContent("CKB-4K7M");
+  });
+
+  it("shows a record's picture in its popup row", () => {
+    render(
+      <Picker
+        label="first product"
+        items={[
+          {
+            id: "PRD-2ABC",
+            name: "Rolled Oats",
+            thumb: {
+              imageUrl: "https://images.example.test/oats.jpg",
+              fallback: null,
+            },
+          },
+        ]}
+        value={null}
+        setValue={vi.fn()}
+      />,
+    );
+    openPicker(screen.getByRole("combobox", { name: "first product" }));
+    const row = screen.getByRole("option", { name: "Rolled Oats" });
+    expect(row.querySelector("[data-picker-visual] img")).not.toBeNull();
+  });
+
+  it("shows a loading state rather than the code while the record loads", () => {
+    const { container } = render(
+      <Picker
+        entity="product"
+        label="product"
+        items={[]}
+        value={{ id: CODE, name: CODE }}
+        setValue={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "product" });
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "Loading…");
+    expect(container).not.toHaveTextContent(CODE);
   });
 });

@@ -17,18 +17,17 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { Picker } from "~/ui/combobox/picker";
 import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
-import { StaticPicker } from "~/ui/combobox/static-picker";
 import {
   NullableNumericField,
   PlainDateField,
-  SelectField,
   UnifiedTextField,
 } from "~/ui/form-utils";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row } from "~/ui/layout";
@@ -172,7 +171,8 @@ function NodeBody(props: NodeProps) {
   if ("boolean" in node) return <BooleanEditor {...props} />;
   if ("enum" in node)
     return (
-      <SelectField
+      <PickerField
+        store="option"
         form={props.form}
         name={asPath(props.path)}
         label={props.label}
@@ -277,7 +277,8 @@ function ReferenceEditor({
       />
     );
   return (
-    <EntityValueField
+    <PickerField
+      store="id"
       form={form}
       name={asPath(path)}
       entity={entity}
@@ -473,8 +474,9 @@ function MapEditor({
           </div>
         ))}
       {absent.length > 0 ? (
-        <StaticPicker
-          items={absent}
+        <Picker
+          mode="choose"
+          options={absent}
           value={null}
           label={`Add ${singular(label || "entry").toLowerCase()}`}
           placeholder={`Add ${singular(label || "entry").toLowerCase()}`}
@@ -524,9 +526,10 @@ function VariantEditor({
         invalid={error !== undefined}
         error={error}
       >
-        <StaticPicker
+        <Picker
+          mode="choose"
           inputId={controlId}
-          items={cases}
+          options={cases}
           disabled={schema.createOnly === true && !creating}
           value={selected?.value ?? null}
           label={title}

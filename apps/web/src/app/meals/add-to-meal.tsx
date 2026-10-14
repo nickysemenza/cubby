@@ -28,7 +28,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -262,8 +262,9 @@ export function AddToMeal({
           </Stack>
           <Stack gap="xs">
             <Label>Meal</Label>
-            <StaticPicker
-              items={mealOptions}
+            <Picker
+              mode="choose"
+              options={mealOptions}
               value={target}
               disabled={existingMeals.isLoading}
               onValueChange={(value) => setTarget(value ?? NEW_MEAL)}
@@ -276,8 +277,9 @@ export function AddToMeal({
               <Row gap="sm" wrap>
                 <Stack gap="xs" className="min-w-40 flex-1">
                   <Label>Meal type</Label>
-                  <StaticPicker
-                    items={fieldEnumOptions("meal", "mealType")}
+                  <Picker
+                    mode="choose"
+                    options={fieldEnumOptions("meal", "mealType")}
                     value={mealType}
                     onValueChange={(value) =>
                       setMealType(mealTypeFromPicker(value))
@@ -306,8 +308,9 @@ export function AddToMeal({
                 </Stack>
                 <Stack gap="xs" className="min-w-40 flex-1">
                   <Label>Kind</Label>
-                  <StaticPicker
-                    items={fieldEnumOptions("meal", "mealKind")}
+                  <Picker
+                    mode="choose"
+                    options={fieldEnumOptions("meal", "mealKind")}
                     value={mealKind}
                     onValueChange={(value) =>
                       setMealKind(mealKindFromPicker(value))

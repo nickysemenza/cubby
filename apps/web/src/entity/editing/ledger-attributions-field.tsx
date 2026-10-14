@@ -12,7 +12,7 @@ import {
 import { z } from "zod";
 
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -42,7 +42,7 @@ function LedgerAttributionRowFields({
   return (
     <div className="flex items-center gap-2">
       {dialog}
-      <EntityPicker
+      <Picker
         entity="ledgerParty"
         label={`${label} party`}
         placeholder="Unattributed share"

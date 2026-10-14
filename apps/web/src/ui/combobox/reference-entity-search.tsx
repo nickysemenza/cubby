@@ -100,10 +100,10 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
           entityKind: "productCategory",
           entityId: item.id,
         })
-      ]?.url;
+      ]?.url ?? null;
     return {
       ...item,
-      imageUrl,
+      thumb: { imageUrl, fallback: item.icon ?? null },
       icon: imageUrl ? (
         <Image
           src={imageUrl}

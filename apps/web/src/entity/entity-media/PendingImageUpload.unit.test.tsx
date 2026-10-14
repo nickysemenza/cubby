@@ -25,6 +25,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+async function chooseOption(name: string, option: string) {
+  fireEvent.click(screen.getByRole("combobox", { name }));
+  const row = await screen.findByRole("option", { name: option });
+  // Base UI commits a mouse click only after a pointerdown on the same row.
+  fireEvent.pointerDown(row);
+  fireEvent.click(row);
+}
+
 function chooseImages(...files: File[]) {
   fireEvent.change(screen.getByLabelText("Choose image"), {
     target: { files },
@@ -150,7 +158,7 @@ describe("PendingImageUpload", () => {
     expect(onExistingImagesRemove).toHaveBeenCalledWith(["IMG-COVER"]);
   });
 
-  it("reports an explicit role correction for an existing Product image", () => {
+  it("reports an explicit role correction for an existing Product image", async () => {
     const onExistingImagesPurposeChange = vi.fn();
     render(
       <PendingImageUpload
@@ -169,10 +177,7 @@ describe("PendingImageUpload", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.change(
-      screen.getByLabelText("Attachment role for Existing photo"),
-      { target: { value: "label" } },
-    );
+    await chooseOption("Attachment role for Existing photo", "Label photo");
     expect(onExistingImagesPurposeChange).toHaveBeenLastCalledWith({
       "IMG-EXISTING": "label",
     });
@@ -232,12 +237,8 @@ describe("PendingImageUpload", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.change(screen.getByLabelText("Photo source"), {
-      target: { value: "catalog" },
-    });
-    fireEvent.change(screen.getByLabelText("Attach as"), {
-      target: { value: "label" },
-    });
+    await chooseOption("Photo source", "Catalog image");
+    await chooseOption("Attach as", "Label photo");
     chooseImages(file);
     expect(await screen.findByAltText("catalog.jpg")).toBeInTheDocument();
     expect(onImagesChange).toHaveBeenLastCalledWith([

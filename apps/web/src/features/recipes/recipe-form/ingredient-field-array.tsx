@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 
 import { cn } from "~/lib/utils";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -20,7 +21,6 @@ import { Input } from "~/ui/primitives/input";
 import { QuantityInput } from "~/ui/primitives/quantity-input";
 
 import { useEntityListSource } from "../../../ui/combobox/with-search-hook";
-import { EntityItemField } from "../../../ui/form-utils/entity-value-field";
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";
 
@@ -149,7 +149,8 @@ const IngredientEntityPicker: FC<{
   return (
     <>
       {dialog}
-      <EntityItemField
+      <PickerField
+        store="item"
         entity="ingredient"
         form={form}
         name={`${path}.ingredient`}
@@ -184,7 +185,8 @@ const RecipeEntityPicker: FC<{
   return (
     <>
       {dialog}
-      <EntityItemField
+      <PickerField
+        store="item"
         entity="recipe"
         form={form}
         name={`${path}.recipe`}

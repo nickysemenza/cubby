@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { NativeSelect } from "~/ui/primitives/native-select";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 
 /** The owning field supplies its allowed states; the control adds no null semantics. */
 export function OverrideControl({
@@ -13,25 +14,24 @@ export function OverrideControl({
 }: {
   label: string;
   value: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly PickerOption[];
   disabled?: boolean;
   onChange: (value: string) => void;
   children?: ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <NativeSelect
-        aria-label={label}
+      <Picker
+        mode="choose"
+        className="w-48"
+        label={label}
+        options={options}
         value={value}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </NativeSelect>
+        onValueChange={(next) => {
+          if (next != null) onChange(next);
+        }}
+      />
       {children}
     </div>
   );

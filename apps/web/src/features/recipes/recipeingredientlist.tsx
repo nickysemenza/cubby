@@ -8,7 +8,7 @@ import {
 } from "@cubby/usda";
 import { Link } from "@tanstack/react-router";
 import { mapValues } from "es-toolkit";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -25,7 +25,8 @@ import type {
 import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -85,6 +86,11 @@ type ScalingRow = IngredientDataItem & {
 };
 
 const getScalingRowId = (row: ScalingRow) => row.id;
+
+const NUTRIENT_OPTIONS: PickerOption[] = TIER1_NUTRIENT_KEYS.map((key) => ({
+  value: key,
+  label: TIER1_NUTRIENTS[key].displayName,
+}));
 
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
@@ -564,7 +570,7 @@ export const RecipeIngredientList: React.FC<{
     onColumnVisibilityChange: setColumnVisibility,
   });
 
-  const nutrientSelectGate = useHydrationGate(undefined);
+  const nutrientPickerId = useId();
   const selectNutrient = (key: (typeof TIER1_NUTRIENT_KEYS)[number]) => {
     setFocusedNutrient(key);
     const id = `nutrient-${TIER1_NUTRIENTS[key].code}`;
@@ -585,24 +591,19 @@ export const RecipeIngredientList: React.FC<{
               contributions.
             </p>
           </div>
-          <label className="text-xs font-medium">
-            Focused nutrient{" "}
-            <select
-              aria-label="Focused nutrient"
+          <div className="flex items-center gap-2 text-xs font-medium">
+            <label htmlFor={nutrientPickerId}>Focused nutrient</label>
+            <Picker
+              inputId={nutrientPickerId}
+              label="Focused nutrient"
+              className="w-44"
+              options={NUTRIENT_OPTIONS}
               value={focusedNutrient}
-              onChange={(event) =>
-                selectNutrient(nutrientKey.parse(event.target.value))
-              }
-              className="ml-2 h-11 border border-border bg-background px-2 md:h-8"
-              {...nutrientSelectGate}
-            >
-              {TIER1_NUTRIENT_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {TIER1_NUTRIENTS[key].displayName}
-                </option>
-              ))}
-            </select>
-          </label>
+              onValueChange={(next) => {
+                if (next) selectNutrient(nutrientKey.parse(next));
+              }}
+            />
+          </div>
         </div>
         <div
           className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"

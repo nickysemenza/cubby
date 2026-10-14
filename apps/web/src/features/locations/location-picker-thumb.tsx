@@ -31,7 +31,7 @@ interface LocationPickerThumbProps {
  * makes the list ragged and shifts it as results stream in.
  *
  * The tile is full-bleed: the row cancels its own vertical padding on this slot
- * (see `entity-picker`), so the image meets the row's top and bottom edges.
+ * (see `picker.tsx`), so the image meets the row's top and bottom edges.
  */
 export function LocationPickerThumb({
   imageUrl,

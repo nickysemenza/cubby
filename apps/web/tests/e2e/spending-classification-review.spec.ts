@@ -2,8 +2,9 @@ import { entityApi } from "./entity-api";
 import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-classification-review";
 import { z } from "zod";
 import {
-  inlineExplanation,
+  chooseOption,
   gotoAuthenticatedPage,
+  inlineExplanation,
   selectComboboxItem,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -82,9 +83,14 @@ test("reviews historical item classification and preserves explicit purpose", as
     `/product-categories/${productCategory}`,
     page.getByRole("button", { name: "Preview historical impact" }),
   );
-  await page
-    .getByRole("combobox", { name: "Product category mapping", exact: true })
-    .selectOption("mapped");
+  await chooseOption(
+    page,
+    page.getByRole("combobox", {
+      name: "Product category mapping",
+      exact: true,
+    }),
+    "Map to spending category",
+  );
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: "Spending category", exact: true }),

@@ -9,9 +9,10 @@ import type { RowData } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import { PickerVisual } from "~/ui/combobox/picker-visual";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import { Input } from "~/ui/primitives/input";
 import { Pill } from "~/ui/primitives/pill";
 import {
@@ -70,7 +71,11 @@ function filterSummary(
   return filter.values.map((value) => labels.get(value) ?? value).join(", ");
 }
 
-/** Multiselect editor: searchable checklist with facet hints, Clear/Apply footer. */
+/**
+ * Multiselect editor: an inline searchable checklist with facet hints and a
+ * Clear/Apply footer, inside the filter popover — a checkbox group rather
+ * than a popup picker, so it shares the picker's option visual, not its shell.
+ */
 function MultiselectEditor({
   field,
   filter,
@@ -133,6 +138,7 @@ function MultiselectEditor({
                 type="button"
                 className="flex min-h-8 w-full items-center gap-2 rounded-sm px-1 text-left text-xs hover:bg-muted"
                 onClick={toggle}
+                aria-pressed={checked}
                 style={{
                   paddingInlineStart: `${4 + (option.depth ?? 0) * 16}px`,
                 }}
@@ -149,6 +155,7 @@ function MultiselectEditor({
                 >
                   {checked && <CheckIcon className="size-3" />}
                 </span>
+                <PickerVisual item={option} size={16} />
                 <span className="min-w-0 flex-1 truncate">
                   {option.rowLabel ?? option.label}
                 </span>
@@ -218,12 +225,12 @@ function FilterValueEditor({
     );
   }
   return (
-    <FilterableCombobox
-      items={options}
+    <Picker
+      options={options}
       value={filter?.values[0] ?? null}
       onValueChange={(value) => setValues(value === null ? [] : [value])}
       placeholder={`Filter ${field.label ?? field.key}`}
-      ariaLabel={`Filter ${field.label ?? field.key}`}
+      label={`Filter ${field.label ?? field.key}`}
       clearable
       className="w-full"
       onOpenChange={(open) => {

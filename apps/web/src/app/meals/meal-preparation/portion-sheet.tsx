@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -471,8 +471,9 @@ function PortionDraftRow({
         </Button>
       </Row>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_minmax(11rem,0.9fr)]">
-        <StaticPicker
-          items={eaters.map((eater) => ({
+        <Picker
+          mode="choose"
+          options={eaters.map((eater) => ({
             value: eater.id,
             label: eater.name,
           }))}
@@ -486,8 +487,9 @@ function PortionDraftRow({
           placeholder="Choose person"
           className="min-w-0"
         />
-        <StaticPicker
-          items={targetMeals.map((meal) => ({
+        <Picker
+          mode="choose"
+          options={targetMeals.map((meal) => ({
             value: meal.id,
             label: mealLabel(meal),
           }))}

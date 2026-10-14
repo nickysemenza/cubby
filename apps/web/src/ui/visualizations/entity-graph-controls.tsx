@@ -1,11 +1,41 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
+import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
+
+/** Above this many locations a typed filter beats scanning the list. */
+const CHOOSE_MODE_MAX = 12;
+
+const WORK_KIND_OPTIONS: PickerOption[] = [
+  { value: "all", label: "Projects & tasks" },
+  { value: "project", label: "Projects only" },
+  { value: "task", label: "Tasks only" },
+];
+
+const GROUP_BY_OPTIONS: PickerOption[] = [
+  { value: "hierarchy", label: "Hierarchy" },
+  { value: "location", label: "Location" },
+  { value: "both", label: "Location & hierarchy" },
+  { value: "none", label: "None" },
+];
+
+const RECIPE_DIRECTION_OPTIONS: PickerOption[] = [
+  { value: "all", label: "Both directions" },
+  { value: "upstream", label: "Recipes using this" },
+  { value: "downstream", label: "Used recipes" },
+];
+
+const WORK_DIRECTION_OPTIONS: PickerOption[] = [
+  { value: "all", label: "Both directions" },
+  { value: "upstream", label: "Blockers" },
+  { value: "downstream", label: "Blocked work" },
+];
 
 export function EntityGraphControls({
   data,
@@ -23,59 +53,106 @@ export function EntityGraphControls({
   onSearch: (value: string) => void;
 }) {
   const id = useId();
+  const locationOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "all", label: "All locations" },
+      { value: "location:", label: "No location" },
+      ...[...new Set(data.nodes.flatMap((node) => node.locations ?? []))]
+        .sort()
+        .map((location) => ({
+          value: `location:${location}`,
+          label: location,
+        })),
+    ],
+    [data.nodes],
+  );
+  const focusOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "All records" },
+      ...data.nodes
+        .filter(
+          (node) =>
+            !filters.workKind ||
+            filters.workKind === "all" ||
+            node.kind === filters.workKind,
+        )
+        .filter(
+          (node) =>
+            filters.location === undefined ||
+            (filters.location === ""
+              ? !node.locations?.length
+              : node.locations?.includes(filters.location)),
+        )
+        .filter(
+          (node) =>
+            node.id === filters.focus ||
+            `${node.name} ${node.id}`
+              .toLowerCase()
+              .includes(search.toLowerCase()),
+        )
+        .map((node) => ({
+          value: node.id,
+          label: node.name,
+          ...(node.kindLabel && { detail: node.kindLabel }),
+          ...(node.imageUrl && {
+            icon: (
+              <Image
+                src={node.imageUrl}
+                alt=""
+                displayWidth={20}
+                className="size-5 rounded-[3px] object-cover"
+              />
+            ),
+          }),
+        })),
+    ],
+    [data.nodes, filters.workKind, filters.location, filters.focus, search],
+  );
   return (
     <Stack gap="sm">
       <Row wrap gap="sm">
         {!recipes && (
-          <NativeSelect
-            aria-label="Record types"
+          <Picker
+            mode="choose"
+            compact
+            widthMode="intrinsic"
+            label="Record types"
+            options={WORK_KIND_OPTIONS}
             value={filters.workKind ?? "all"}
-            onChange={(event) => {
-              const value = event.target.value;
+            onValueChange={(value) => {
               if (value === "all" || value === "project" || value === "task")
                 onChange({ workKind: value, focus: undefined });
             }}
-          >
-            <option value="all">Projects & tasks</option>
-            <option value="project">Projects only</option>
-            <option value="task">Tasks only</option>
-          </NativeSelect>
+          />
         )}
         {!recipes && (
-          <Row
-            as="label"
-            align="center"
-            gap="sm"
-            className="max-w-full min-w-0"
-          >
+          <Row align="center" gap="sm" className="max-w-full min-w-0">
             <span>Location</span>
-            <NativeSelect
+            <Picker
+              mode={
+                locationOptions.length > CHOOSE_MODE_MAX ? "search" : "choose"
+              }
+              compact
+              widthMode="intrinsic"
+              label="Location"
               className="min-w-0"
+              options={locationOptions}
               value={
                 filters.location === undefined
                   ? "all"
                   : `location:${filters.location}`
               }
-              onChange={(event) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 onChange({
                   location:
-                    event.target.value === "all"
+                    value === "all"
                       ? undefined
-                      : event.target.value.slice("location:".length),
+                      : value.slice("location:".length),
                   focus: undefined,
-                })
-              }
-            >
-              <option value="all">All locations</option>
-              <option value="location:">No location</option>
-              {[...new Set(data.nodes.flatMap((node) => node.locations ?? []))]
-                .sort()
-                .map((location) => (
-                  <option key={location} value={`location:${location}`}>
-                    {location}
-                  </option>
-                ))}
-            </NativeSelect>
+                });
+              }}
+            />
           </Row>
         )}
         <Input
@@ -85,48 +162,23 @@ export function EntityGraphControls({
           onChange={(event) => onSearch(event.target.value)}
           className="max-w-sm"
         />
-        <NativeSelect
-          className="max-w-full"
-          aria-label="Focus record"
+        <Picker
+          compact
+          label="Focus record"
+          className="w-56 max-w-full"
+          options={focusOptions}
           value={filters.focus ?? ""}
-          onChange={(event) =>
-            onChange({ focus: event.target.value || undefined })
-          }
-        >
-          <option value="">All records</option>
-          {data.nodes
-            .filter(
-              (node) =>
-                !filters.workKind ||
-                filters.workKind === "all" ||
-                node.kind === filters.workKind,
-            )
-            .filter(
-              (node) =>
-                filters.location === undefined ||
-                (filters.location === ""
-                  ? !node.locations?.length
-                  : node.locations?.includes(filters.location)),
-            )
-            .filter(
-              (node) =>
-                node.id === filters.focus ||
-                `${node.name} ${node.id}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-            )
-            .map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.name} ({node.id})
-              </option>
-            ))}
-        </NativeSelect>
-        <NativeSelect
+          onValueChange={(value) => onChange({ focus: value || undefined })}
+        />
+        <Picker
+          mode="choose"
+          compact
+          widthMode="intrinsic"
+          label="Dependency direction"
           className="max-w-full"
-          aria-label="Dependency direction"
+          options={recipes ? RECIPE_DIRECTION_OPTIONS : WORK_DIRECTION_OPTIONS}
           value={filters.direction}
-          onChange={(event) => {
-            const value = event.target.value;
+          onValueChange={(value) => {
             if (
               value === "all" ||
               value === "upstream" ||
@@ -134,27 +186,19 @@ export function EntityGraphControls({
             )
               onChange({ direction: value });
           }}
-        >
-          <option value="all">Both directions</option>
-          <option value="upstream">
-            {recipes ? "Recipes using this" : "Blockers"}
-          </option>
-          <option value="downstream">
-            {recipes ? "Used recipes" : "Blocked work"}
-          </option>
-        </NativeSelect>
+        />
       </Row>
       <Row wrap gap="md">
         {!recipes && (
-          <Row
-            as="label"
-            align="center"
-            gap="sm"
-            className="max-w-full min-w-0"
-          >
+          <Row align="center" gap="sm" className="max-w-full min-w-0">
             <span>Group by</span>
-            <NativeSelect
+            <Picker
+              mode="choose"
+              compact
+              widthMode="intrinsic"
+              label="Group by"
               className="min-w-0"
+              options={GROUP_BY_OPTIONS}
               value={
                 filters.groupByLocation
                   ? filters.grouped
@@ -164,22 +208,13 @@ export function EntityGraphControls({
                     ? "hierarchy"
                     : "none"
               }
-              onChange={(event) =>
+              onValueChange={(value) =>
                 onChange({
-                  grouped:
-                    event.target.value === "hierarchy" ||
-                    event.target.value === "both",
-                  groupByLocation:
-                    event.target.value === "location" ||
-                    event.target.value === "both",
+                  grouped: value === "hierarchy" || value === "both",
+                  groupByLocation: value === "location" || value === "both",
                 })
               }
-            >
-              <option value="hierarchy">Hierarchy</option>
-              <option value="location">Location</option>
-              <option value="both">Location & hierarchy</option>
-              <option value="none">None</option>
-            </NativeSelect>
+            />
           </Row>
         )}
         {(

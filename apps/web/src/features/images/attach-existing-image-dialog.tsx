@@ -11,11 +11,17 @@ import {
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+
+const PURPOSE_OPTIONS: readonly PickerOption[] = [
+  { value: "item", label: "Item photo" },
+  { value: "label", label: "Label or tag" },
+];
 
 export function AttachExistingImageDialog({
   image,
@@ -87,17 +93,16 @@ export function AttachExistingImageDialog({
         {normalized.startsWith("PRD-") && (
           <>
             <Label htmlFor="existing-image-purpose">Product image use</Label>
-            <NativeSelect
-              className="w-full"
-              id="existing-image-purpose"
+            <Picker
+              mode="choose"
+              label="Product image use"
+              inputId="existing-image-purpose"
+              options={PURPOSE_OPTIONS}
               value={purpose}
-              onChange={(event) =>
-                setPurpose(event.target.value === "label" ? "label" : "item")
+              onValueChange={(value) =>
+                setPurpose(value === "label" ? "label" : "item")
               }
-            >
-              <option value="item">Item photo</option>
-              <option value="label">Label or tag</option>
-            </NativeSelect>
+            />
           </>
         )}
         {targetSearch.data && targetSearch.data.length > 0 && (
@@ -113,7 +118,7 @@ export function AttachExistingImageDialog({
                 >
                   <span className="font-medium">{result.title}</span>
                   <span className="text-2xs text-muted-foreground">
-                    {result.id} · {result.entityKind}
+                    {result.entityKind}
                     {result.subtitle ? ` · ${result.subtitle}` : ""}
                   </span>
                 </button>

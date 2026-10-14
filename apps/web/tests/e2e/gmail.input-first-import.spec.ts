@@ -23,6 +23,7 @@ import {
   ensureMemberParty,
 } from "./fixtures-core";
 import {
+  chooseOption,
   escapeRegExp,
   gotoAuthenticatedPage,
   selectComboboxItem,
@@ -297,11 +298,13 @@ for (const statementFirst of [true, false]) {
           exact: true,
         })
         .check();
-      await page
-        .getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
+      await chooseOption(
+        page,
+        page.getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
           exact: true,
-        })
-        .selectOption("purchase");
+        }),
+        "purchase",
+      );
       await page
         .getByRole("button", {
           name: "Save rows and create 1 reviewed transactions",
@@ -471,9 +474,11 @@ for (const statementFirst of [true, false]) {
         ),
       ).toBeVisible();
       await expect(approve).toBeDisabled();
-      await page
-        .getByLabel("Trade for imported expenses", { exact: true })
-        .selectOption("other");
+      await chooseOption(
+        page,
+        page.getByLabel("Trade for imported expenses", { exact: true }),
+        "Other",
+      );
       await expect(approve).toBeDisabled();
       await page
         .getByRole("button", { name: `Use ${names.productName}`, exact: true })

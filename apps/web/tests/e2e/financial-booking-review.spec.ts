@@ -8,7 +8,11 @@ import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
+import {
+  chooseOption,
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { dispatchesOperation } from "./dispatch-wire";
 
@@ -173,9 +177,11 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     `/financial-transactions/${creditId}`,
     page.getByRole("button", { name: "Review Expense", exact: true }),
   );
-  await page
-    .getByRole("combobox", { name: "Credit purpose", exact: true })
-    .selectOption("reimbursement");
+  await chooseOption(
+    page,
+    page.getByRole("combobox", { name: "Credit purpose", exact: true }),
+    "Friend reimbursement",
+  );
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: "Existing purchase", exact: true }),

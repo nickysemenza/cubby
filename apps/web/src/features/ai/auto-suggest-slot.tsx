@@ -12,13 +12,12 @@ import {
 } from "./use-auto-field-suggestion";
 
 /**
- * The `useAutoFieldSuggestion` + `FieldSuggestionHint` pairing the
- * suggest-enabled primitives (`SelectField`, `VendorField`) render the same
- * way. Mounted only when the primitive's `suggestField` prop is set — no-op
- * without a `FieldSuggestionProvider` above it, same as the hook it wraps.
- * The entity pickers (`ui/form-utils/entity-value-field.tsx`) call the hook
- * themselves, because their candidate list needs its seed items, and render
- * {@link AutoSuggestHint}.
+ * The `useAutoFieldSuggestion` + suggestion controls pairing for a field that
+ * has no candidate roster of its own (a text field). Mounted only when the
+ * field's `suggestField` is set — a no-op without a `FieldSuggestionProvider`
+ * above it, same as the hook it wraps. `PickerField` calls the hook itself,
+ * because its roster needs the seed items, and renders
+ * {@link AutoSuggestControls}.
  */
 export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   form,
@@ -34,7 +33,6 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   valueKind?: "id" | "item";
   disabled?: boolean;
 }) {
-  const context = useFieldSuggestionContext();
   const result = useAutoFieldSuggestion({
     form,
     name,
@@ -42,6 +40,36 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
     valueKind,
     disabled,
   });
+  return (
+    <AutoSuggestControls
+      form={form}
+      field={field}
+      result={result}
+      disabled={disabled}
+    />
+  );
+}
+
+/**
+ * Everything a suggest-enabled field renders under its control: the
+ * review-required "Suggest …" request, the field's resolution line, and the
+ * suggestion hint. `currentLabel` overrides the hook's own label when the
+ * caller knows a better one (a picker's selected record name).
+ */
+export function AutoSuggestControls<TFieldValues extends FieldValues>({
+  form,
+  field,
+  result,
+  currentLabel,
+  disabled,
+}: {
+  form: UseFormReturn<TFieldValues>;
+  field: string;
+  result: UseAutoFieldSuggestionResult;
+  currentLabel?: string;
+  disabled?: boolean;
+}) {
+  const context = useFieldSuggestionContext();
   const definition = context
     ? entityFieldModels[context.entity].fields.find(
         (item) => item.key === field,
@@ -62,7 +90,11 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
           </Button>
         )}
       <FormFieldResolution form={form} field={field} />
-      <AutoSuggestHint field={field} result={result} />
+      <AutoSuggestHint
+        field={field}
+        result={result}
+        currentLabel={currentLabel}
+      />
     </>
   );
 }
@@ -73,7 +105,7 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
  * act on.
  * `currentLabel` overrides the hook's own when the caller knows a better
  * label for the current value (an id-valued picker's selected item name). */
-export function AutoSuggestHint({
+function AutoSuggestHint({
   field,
   result,
   currentLabel,

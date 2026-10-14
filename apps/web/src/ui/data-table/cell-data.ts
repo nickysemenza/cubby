@@ -40,7 +40,7 @@ import type {
   CellPastePayload,
 } from "./cell-clipboard";
 import type { CellKind } from "./cell-clipboard-model";
-import type { FilterableComboboxItem } from "./editable-cell";
+import type { PickerOption } from "./editable-cell";
 
 /**
  * Column-level copy/paste descriptor. `getCopyPayload` / `applyPaste` take the
@@ -212,7 +212,7 @@ export function numberCellData<TData>(
 
 export function selectCellData<TData>(
   getValue: (row: TData) => string | null,
-  selectOptions: FilterableComboboxItem[],
+  selectOptions: PickerOption[],
   save?: (row: TData, value: string) => Promise<void>,
 ): ColumnCellData<TData, string | null> {
   return {

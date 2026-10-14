@@ -49,7 +49,7 @@ import {
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { requiredLocationCode } from "~/ui/form-fields";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -265,7 +265,8 @@ export const ProductBulkAddToInventoryDialog: FC<
               fieldKeys={["locationId"]}
               paths={{ locationId: "location" }}
             >
-              <EntityValueField
+              <PickerField
+                store="id"
                 form={form}
                 name="location"
                 label="Location"
@@ -277,7 +278,8 @@ export const ProductBulkAddToInventoryDialog: FC<
             </FieldSuggestionProvider>
           </FormProvider>
         ) : (
-          <EntityValueField
+          <PickerField
+            store="id"
             form={form}
             name="location"
             label="Location"

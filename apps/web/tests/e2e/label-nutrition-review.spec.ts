@@ -1,9 +1,10 @@
 import { fileURLToPath } from "node:url";
 import {
+  chooseOption,
   gotoAuthenticatedPage,
   openProductFromPalette,
-  waitForFormHydration,
   waitForAppHydration,
+  waitForFormHydration,
 } from "./e2e-helpers";
 import {
   seedDetectedLabelNutrition,
@@ -32,7 +33,7 @@ test("detected label nutrition stays editable and requires Save before replacing
   await dialog
     .getByLabel("Source", { exact: true })
     .fill("Synthetic prior label");
-  await dialog.getByLabel("Attach as").selectOption("label");
+  await chooseOption(page, dialog.getByLabel("Attach as"), "Label photo");
   await dialog.getByLabel("Choose image").setInputFiles(labelPhoto);
   await expect(
     dialog.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),

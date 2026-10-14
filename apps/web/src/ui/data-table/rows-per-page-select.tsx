@@ -1,7 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 
 import { cn } from "~/lib/utils";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
+import { Picker } from "~/ui/combobox/picker";
 
 import type { CubbyTable as Table } from "./table-features";
 
@@ -30,9 +30,10 @@ export function RowsPerPageSelect<TData extends RowData>({
     : [...pageSizes, current].sort((a, b) => a - b);
 
   return (
-    <FilterableCombobox
-      ariaLabel="Rows per page"
-      items={sizes.map((pageSize) => ({
+    <Picker
+      mode="choose"
+      label="Rows per page"
+      options={sizes.map((pageSize) => ({
         value: `${pageSize}`,
         label: `${pageSize}`,
       }))}
@@ -40,7 +41,8 @@ export function RowsPerPageSelect<TData extends RowData>({
       onValueChange={(value) => {
         if (value) table.setPageSize(Number(value));
       }}
-      className={cn("h-7 w-20", className)}
+      compact
+      className={cn("w-20", className)}
     />
   );
 }

@@ -89,7 +89,7 @@ import { ROW_DENSITY } from "./density";
 import {
   EditableAmountCell,
   EditableCell,
-  type FilterableComboboxItem,
+  type PickerOption,
 } from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
 import { nameLabel } from "./name-label";
@@ -1454,7 +1454,7 @@ export function createSingleEntityInlineLinkColumn<
  */
 export function renderOptionCell(
   value: string | null | undefined,
-  options: readonly FilterableComboboxItem[],
+  options: readonly PickerOption[],
   /** A measure that qualifies the status (a score), inside the same pill. */
   detail?: ReactNode,
 ): ReactNode {
@@ -1516,7 +1516,7 @@ export function createBooleanColumn<
      * green. Passing the roster means the column and every other surface that
      * renders the field read from one declaration.
      */
-    trueFalseOptions: FilterableComboboxItem[];
+    trueFalseOptions: PickerOption[];
     /**
      * Present ⇒ `null` is a real state the editor can return to: the picker
      * gains its clear affordance, its empty state reads with this label, and the

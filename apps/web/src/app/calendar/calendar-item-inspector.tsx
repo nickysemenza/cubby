@@ -15,9 +15,9 @@ import {
   FormWrapper,
   NullableNumericField,
   PlainDateField,
-  SelectField,
   UnifiedTextField,
 } from "~/ui/form-utils";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -205,7 +205,8 @@ function EditableCalendarItem({
           mode="edit"
           fieldKeys={["mealType", "mealKind"]}
         >
-          <SelectField
+          <PickerField
+            store="option"
             form={session.form}
             name="mealType"
             label="Meal type"
@@ -213,7 +214,8 @@ function EditableCalendarItem({
             nullable
             suggestField="mealType"
           />
-          <SelectField
+          <PickerField
+            store="option"
             form={session.form}
             name="mealKind"
             label="Kind"
@@ -229,7 +231,8 @@ function EditableCalendarItem({
             name="dueEndDate"
             label="Due through"
           />
-          <SelectField
+          <PickerField
+            store="option"
             form={session.form}
             name="status"
             label="Status"

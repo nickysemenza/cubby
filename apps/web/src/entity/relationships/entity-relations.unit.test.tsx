@@ -493,12 +493,12 @@ describe("shared entity Relations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to start" }));
     expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible();
     expect(screen.getByText("3 explored records")).toBeVisible();
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Filter entity type" }),
-      {
-        target: { value: "expense" },
-      },
-    );
+    const entityFilter = screen.getByRole("combobox", {
+      name: "Filter entity type",
+    });
+    entityFilter.focus();
+    fireEvent.keyDown(entityFilter, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Expense" }));
     expect(
       screen.getByText("No relationships match the current filters."),
     ).toBeVisible();

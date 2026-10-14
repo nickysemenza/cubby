@@ -20,6 +20,7 @@ import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen
 import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/utils";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
@@ -28,7 +29,6 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { ImageThumbnail } from "~/ui/table/ImageThumbnail";
 
@@ -37,7 +37,7 @@ import { defineListOverride, interleaveDeclared } from "./types";
 const columnHelper = createCubbyColumnHelper<WishRow>();
 
 /** Stable empty default — `useFilterOptions` needs a referentially fixed miss. */
-const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+const NO_FILTER_OPTIONS: PickerOption[] = [];
 
 /**
  * The children are Products, not Wishes — a heterogeneous tree: `rowLink`

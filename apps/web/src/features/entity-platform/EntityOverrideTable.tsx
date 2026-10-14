@@ -3,8 +3,9 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Table,
   TableBody,
@@ -31,6 +32,17 @@ const OUTCOME_LABEL = {
   invalid: "Required",
   changed: "Changes default",
 } as const;
+
+const ENTITY_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All entities" },
+  ...allEntities.map((item) => ({ value: item, label: item })),
+];
+
+const OUTCOME_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All outcomes" },
+  { value: "changed", label: OUTCOME_LABEL.changed },
+  { value: "invalid", label: OUTCOME_LABEL.invalid },
+];
 
 /** `model.fields[name].labelOverride` → `model.fields[*].labelOverride`. */
 const familyOf = (path: string) => path.replace(/\[[^\]]*\]/gu, "[*]");
@@ -82,36 +94,29 @@ export function EntityOverrideTable({
           onChange={(event) => setQuery(event.target.value)}
           className="h-8 max-w-sm min-w-48 flex-1"
         />
-        <NativeSelect
-          aria-label="Entity"
+        <Picker
+          compact
+          label="Entity"
+          widthMode="intrinsic"
+          className="w-44"
+          options={ENTITY_OPTIONS}
           value={entity}
-          onChange={(event) =>
-            setEntity(
-              event.target.value === ""
-                ? ""
-                : entitySchema.parse(event.target.value),
-            )
+          onValueChange={(value) =>
+            setEntity(value ? entitySchema.parse(value) : "")
           }
-        >
-          <option value="">All entities</option>
-          {allEntities.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          aria-label="Outcome"
+        />
+        <Picker
+          mode="choose"
+          compact
+          label="Outcome"
+          widthMode="intrinsic"
+          className="w-40"
+          options={OUTCOME_OPTIONS}
           value={outcome}
-          onChange={(event) => {
-            const value = event.target.value;
-            setOutcome(value === "changed" || value === "invalid" ? value : "");
-          }}
-        >
-          <option value="">All outcomes</option>
-          <option value="changed">Changes default</option>
-          <option value="invalid">Required</option>
-        </NativeSelect>
+          onValueChange={(value) =>
+            setOutcome(value === "changed" || value === "invalid" ? value : "")
+          }
+        />
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
           {filtered.length} of {rows.length}
         </span>

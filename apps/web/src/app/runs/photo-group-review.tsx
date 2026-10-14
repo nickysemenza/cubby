@@ -40,8 +40,8 @@ import {
   RUN_TARGET_STATE_VARIANT,
 } from "~/lib/run-target-state";
 import { formatCurrency } from "~/lib/utils";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -694,7 +694,7 @@ function ProductPanel({
             <span className="text-muted-foreground">Category</span>
             <WithProductCategorySearch>
               {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                <EntityPicker
+                <Picker
                   entity="productCategory"
                   label="category"
                   items={items}

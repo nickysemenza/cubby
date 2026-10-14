@@ -43,7 +43,7 @@ test("a new account must choose its identity kind instead of getting a default",
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
 
   const identity = dialog.getByRole("combobox", { name: "Identity" });
-  await expect(identity).toHaveValue("");
+  await expect(identity).toHaveText(/^Choose/);
   await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Create" }).click();
   // The form refuses an account with no identity, and the dialog stays open.

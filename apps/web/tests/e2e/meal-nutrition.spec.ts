@@ -184,7 +184,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await targetDialog.getByRole("button", { name: "New meal or snack" }).click();
   await expect(
     targetDialog.getByRole("combobox", { name: "Occasion" }),
-  ).toHaveValue("Snack");
+  ).toHaveText(/Snack/);
   await targetDialog.getByLabel("Name (optional)").fill(`${name} snack break`);
   await targetDialog.getByRole("button", { name: "Continue to food" }).click();
 

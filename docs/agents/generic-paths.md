@@ -158,12 +158,12 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
-- Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
-  no direct `ui/combobox` use outside picker builders. A form field binds one
-  through `ui/form-utils/entity-value-field.tsx`: `EntityValueField` stores the
-  shortcode (assignment forms and dialogs), `EntityItemField` stores the whole
-  item (recipe rows, quick add). Both share one binding for validation,
-  suggestions, and the selected label.
+- Pickers: `Picker` for every value choice, `EntityReferencePicker`,
+  `referenceEntitySearch`; no direct `ui/combobox` use outside picker builders.
+  A form field binds one through `PickerField`, whose `store` is `option`,
+  `id` (the shortcode, assignment forms), `item` (the whole row, recipe lines),
+  `name` (the expense vendor), or `ids` (multi-reference chips); one binding
+  owns validation, suggestions, and the selected record's name and picture.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for
   matrices, cross-tabs, and debug views. Column-layout changes go through
   `moveColumn` / `applyColumnLayout` (`ui/data-table/column-layout.ts`), never

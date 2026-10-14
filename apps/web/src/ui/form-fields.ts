@@ -16,7 +16,7 @@ export const requiredProductField = ComboboxItem.nullable().refine(
   { message: "Please select a product" },
 );
 
-/** An id-valued location picker (`EntityValueField`) that must be filled;
+/** An id-valued location picker (`PickerField` `store="id"`) that must be filled;
  * the picker writes "" when cleared. */
 export const requiredLocationCode = z
   .string()

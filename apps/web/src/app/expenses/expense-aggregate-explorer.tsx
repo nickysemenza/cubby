@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
 import {
@@ -30,7 +32,6 @@ import {
 import { Row, Stack } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Switch } from "~/ui/primitives/switch";
 
 import {
@@ -941,6 +942,18 @@ export function ExpenseAggregateExplorer({
     config.comparison === resetConfig.comparison &&
     config.projection === resetConfig.projection;
 
+  const columnOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "none", label: "None" },
+      ...COLUMN_DIMENSIONS.map((dimension) => ({
+        ...dimension,
+        ...(dimension.value === rowDimension && {
+          disabledReason: "Already the row axis",
+        }),
+      })),
+    ],
+    [rowDimension],
+  );
   const handleColumnDimension = (value: string) => {
     const next =
       value === "none" ? null : selectedOptionValue(value, COLUMN_DIMENSIONS);
@@ -982,61 +995,47 @@ export function ExpenseAggregateExplorer({
         <label htmlFor={rowsId} className="text-xs">
           Rows
         </label>
-        <NativeSelect
-          id={rowsId}
+        <Picker
+          mode="choose"
+          inputId={rowsId}
+          label="Rows"
+          options={ROW_DIMENSIONS}
           value={rowDimension}
-          onChange={(event) => {
-            const next = selectedOptionValue(
-              event.target.value,
-              ROW_DIMENSIONS,
-            );
+          onValueChange={(value) => {
+            const next = selectedOptionValue(value ?? "", ROW_DIMENSIONS);
             if (next) handleRowDimension(next);
           }}
-        >
-          {ROW_DIMENSIONS.map((dimension) => (
-            <option key={dimension.value} value={dimension.value}>
-              {dimension.label}
-            </option>
-          ))}
-        </NativeSelect>
+          className="w-44"
+        />
         <label htmlFor={columnsId} className="ml-2 text-xs">
           Columns
         </label>
-        <NativeSelect
-          id={columnsId}
+        <Picker
+          mode="choose"
+          inputId={columnsId}
+          label="Columns"
+          options={columnOptions}
           value={columnDimension ?? "none"}
-          onChange={(event) => handleColumnDimension(event.target.value)}
-        >
-          <option value="none">None</option>
-          {COLUMN_DIMENSIONS.map((dimension) => (
-            <option
-              key={dimension.value}
-              value={dimension.value}
-              disabled={dimension.value === rowDimension}
-            >
-              {dimension.label}
-            </option>
-          ))}
-        </NativeSelect>
+          onValueChange={(value) => handleColumnDimension(value ?? "none")}
+          className="w-44"
+        />
         {(columnDimension || comparison !== "none") && (
           <>
             <label htmlFor={metricId} className="ml-2 text-xs">
               Metric
             </label>
-            <NativeSelect
-              id={metricId}
+            <Picker
+              mode="choose"
+              inputId={metricId}
+              label="Metric"
+              options={METRICS}
               value={metric}
-              onChange={(event) => {
-                const next = selectedOptionValue(event.target.value, METRICS);
+              onValueChange={(value) => {
+                const next = selectedOptionValue(value ?? "", METRICS);
                 if (next) onConfigChange({ ...config, metric: next });
               }}
-            >
-              {METRICS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </NativeSelect>
+              className="w-36"
+            />
           </>
         )}
         {columnDimension && comparison !== "none" && (
@@ -1044,23 +1043,18 @@ export function ExpenseAggregateExplorer({
             <label htmlFor={projectionId} className="ml-2 text-xs">
               Show
             </label>
-            <NativeSelect
-              id={projectionId}
+            <Picker
+              mode="choose"
+              inputId={projectionId}
+              label="Show"
+              options={PROJECTIONS}
               value={projection}
-              onChange={(event) => {
-                const next = selectedOptionValue(
-                  event.target.value,
-                  PROJECTIONS,
-                );
+              onValueChange={(value) => {
+                const next = selectedOptionValue(value ?? "", PROJECTIONS);
                 if (next) onConfigChange({ ...config, projection: next });
               }}
-            >
-              {PROJECTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
+              className="w-32"
+            />
           </>
         )}
         <label

@@ -24,7 +24,7 @@ import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -573,8 +573,9 @@ export function EnrichmentEditor({
       {initialConversion && row.product.length > 1 && (
         <Stack gap="xs">
           <p className="text-xs font-medium">Store this conversion on</p>
-          <StaticPicker
-            items={row.product.map((candidate) => ({
+          <Picker
+            mode="choose"
+            options={row.product.map((candidate) => ({
               value: candidate.id,
               label: candidate.name,
             }))}

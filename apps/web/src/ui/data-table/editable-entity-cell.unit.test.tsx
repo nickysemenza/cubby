@@ -1,11 +1,12 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   fireEvent,
-  render,
+  render as renderUi,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -72,6 +73,16 @@ const clickDropdownItem = (name: string) => {
   if (!(popup instanceof HTMLElement)) throw new Error("dropdown not open");
   fireEvent.click(within(popup).getByRole("option", { name }));
 };
+
+// Record pickers read stored codes' records through React Query.
+const render = (ui: ReactElement) =>
+  renderUi(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={new QueryClient()}>
+        {children}
+      </QueryClientProvider>
+    ),
+  });
 
 describe("EditableEntityCell", () => {
   it("keeps a linked value outside the separate pencil edit trigger", () => {

@@ -2,11 +2,13 @@ import {
   type ProductCategoryShortcode,
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
+import { treePickerItems } from "~/ui/combobox/tree-items";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 export interface TriageBoundsValue {
   minSpend: number | undefined;
@@ -24,6 +26,23 @@ export function TriageBounds({
   onChange,
 }: TriageBoundsValue & { onChange: (next: TriageBoundsValue) => void }) {
   const { categories } = useProductCategories();
+  const categoryOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All categories" },
+      ...treePickerItems(categories, {
+        idOf: (category) => category.id,
+        parentIdOf: (category) => category.path.at(-2)?.id ?? null,
+        labelOf: (category) => category.name,
+      }).map((item) => ({
+        value: item.id,
+        label: item.name,
+        group: item.presentation?.group,
+        depth: item.presentation?.depth,
+        rowLabel: item.presentation?.rowLabel,
+      })),
+    ],
+    [categories],
+  );
   const [draft, setDraft] = useState(minSpend?.toString() ?? "");
 
   const commitSpend = () => {
@@ -53,29 +72,22 @@ export function TriageBounds({
           className="w-32"
         />
       </label>
-      <label htmlFor="triage-category" className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <span className="shrink-0 eyebrow">Category</span>
-        <NativeSelect
-          id="triage-category"
+        <Picker
+          inputId="triage-category"
+          label="Category"
+          options={categoryOptions}
           value={categoryId ?? ""}
-          onChange={(event) => {
-            const parsed = productCategoryShortcode.safeParse(
-              event.target.value,
-            );
+          onValueChange={(value) => {
+            const parsed = productCategoryShortcode.safeParse(value);
             onChange({
               minSpend,
               categoryId: parsed.success ? parsed.data : undefined,
             });
           }}
-        >
-          <option value="">All categories</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.path.map((node) => node.name).join(" / ")}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
+        />
+      </div>
     </div>
   );
 }

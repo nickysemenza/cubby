@@ -432,9 +432,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 section="identity"
                 options={{ name: { placeholder: "Enter recipe name" } }}
               />
-              {mode === "edit" && (
-                <RecipeCookbookField control={form.control} />
-              )}
+              {mode === "edit" && <RecipeCookbookField form={form} />}
               <YieldServingsFields form={form} mode={mode} />
               <Controller
                 control={form.control}

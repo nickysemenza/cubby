@@ -18,7 +18,7 @@ import { useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Stack } from "~/ui/layout";
@@ -174,9 +174,10 @@ function DailyAddFood({
           </Button>
         ) : (
           <>
-            <StaticPicker
+            <Picker
+              mode="choose"
               label="Occasion"
-              items={mealTypeSchema.options.map((value) => ({
+              options={mealTypeSchema.options.map((value) => ({
                 value,
                 label: MEAL_TYPE_LABELS[value],
               }))}

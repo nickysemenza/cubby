@@ -1,9 +1,10 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { describe, expect, it } from "vitest";
 
-import { SelectField, UnifiedTextField } from "./form-utils";
-import { EntityValueField } from "./form-utils/entity-value-field";
+import { UnifiedTextField } from "./form-utils";
+import { PickerField } from "./form-utils/picker-field";
 
 interface Values {
   name: string;
@@ -35,13 +36,14 @@ describe("UnifiedTextField focus", () => {
   });
 });
 
-// Regression: SelectField dropped RHF's ref, so validation could not focus it.
-it("focuses the select input through form registration and preserves label casing", () => {
+// Regression: the option picker dropped RHF's ref, so validation could not focus it.
+it("focuses the option picker through form registration and preserves label casing", () => {
   let form: UseFormReturn<Values> | undefined;
   function Harness() {
     form = useForm<Values>({ defaultValues: { name: "" } });
     return (
-      <SelectField
+      <PickerField
+        store="option"
         form={form}
         name="name"
         label="Cost type"
@@ -62,7 +64,7 @@ it("focuses the select input through form registration and preserves label casin
 });
 
 // Regression: a reference picker must retain RHF focus registration. Both
-// value adapters render through the one binding in `entity-value-field.tsx`.
+// record value adapters render through the one binding in `picker-field.tsx`.
 it("focuses an invalid reference picker", () => {
   function Harness() {
     const form = useForm<{ reference: string | null }>({
@@ -70,7 +72,8 @@ it("focuses an invalid reference picker", () => {
     });
     return (
       <>
-        <EntityValueField
+        <PickerField
+          store="id"
           form={form}
           name="reference"
           label="Parent location"
@@ -98,7 +101,11 @@ it("focuses an invalid reference picker", () => {
       </>
     );
   }
-  render(<Harness />);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Harness />
+    </QueryClientProvider>,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Validate" }));
   expect(
     screen.getByRole("combobox", { name: "Parent location" }),

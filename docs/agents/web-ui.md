@@ -51,17 +51,24 @@ Use the guarded spacing scale and `Row`, `Stack`, `Grid`, `Section` when the
 layout repeats or encodes a real decision. `gap` is for flex/grid siblings;
 `space-y` is for plain block stacks. Dense exceptions are rare `/* tight */`.
 
-Selection controls have distinct jobs. Use `NativeSelect` for a short, fixed
-choice list that benefits from the platform picker; it owns the phone touch
-floor. Use `FilterableCombobox` for a string-valued option/filter list with
-type-to-filter, including server-filtered results. `StaticPicker` adapts a
-fixed string-valued form choice to the entity picker's search and focus shell.
-Use `EntityPicker` when a choice is a Cubby record with identity, relationship
-context, server search, or creation. The `cmdk` command menu is for navigation
-and actions, never a form field. Preserve each control's value, focus, and search
-contract when sharing visual chrome; do not introduce a universal picker.
+Every value choice renders through the one `Picker`
+(`ui/combobox/picker.tsx`); `PickerField` (`ui/form-utils/picker-field.tsx`) is
+its only react-hook-form binding. Native `<select>` is banned
+(`cubby/no-native-select`). Choose the mode explicitly: `search` (a text input
+that filters or drives server search, with create) for records and long lists;
+`choose` (a button with arrow keys, Home/End, letter typeahead and no soft
+keyboard, built on Base UI `Select`) for a short fixed list. String choices pass
+`options` (`PickerOption`); records pass `items` with an `entity`. Each mode and
+`PickerField` store keeps its own value, empty value, focus, and search
+contract — `PickerField`'s `store` names it. A closed picker leads with the
+selected option's glyph or the record's picture, and never displays or
+announces a shortcode: a stored code resolves to its record through
+`useSelectedPickerItems`, showing a loading state meanwhile. `DropdownMenu`
+and the `cmdk` command menu are for navigation and actions, never a value. The
+filter bar's multi-value editor is an inline checklist inside its popover
+(Clear/Apply), not a popup, and reuses `PickerVisual` for its option marks.
 
-Entity picker empty results use the mounted Base UI `Combobox.Empty` part,
+Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
 with conditional children for loading and errors. A plain empty-state element
 does not register the popup's empty state and lets Escape close its parent
 dialog. Keep the library's live region mounted and test dismissal through the

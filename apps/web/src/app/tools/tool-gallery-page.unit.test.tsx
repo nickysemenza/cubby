@@ -188,9 +188,14 @@ describe("Tools gallery", () => {
     );
 
     expect(await screen.findByText("No matching tools")).toBeVisible();
-    fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "trade" },
-    });
+    const groupBy = screen.getByRole("combobox", { name: "Group by" });
+    groupBy.focus();
+    fireEvent.keyDown(groupBy, { key: "ArrowDown" });
+    // A real click starts on the option; choose-mode pickers ignore a click
+    // whose pointer went down on the trigger.
+    const trade = screen.getByRole("option", { name: "Trade" });
+    fireEvent.pointerDown(trade);
+    fireEvent.click(trade);
     expect(onGroupByChange).toHaveBeenCalledWith("trade");
 
     const search = screen.getByRole("textbox", {
@@ -377,7 +382,7 @@ describe("Tools gallery", () => {
       name: "Jump to manufacturer",
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Open Choose a manufacturer" }),
+      screen.getByRole("button", { name: "Show jump to manufacturer options" }),
     );
     fireEvent.change(picker, { target: { value: "Maker 10" } });
     fireEvent.click(await screen.findByRole("option", { name: /maker 10/i }));

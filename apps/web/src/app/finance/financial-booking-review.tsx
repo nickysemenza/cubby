@@ -10,13 +10,18 @@ import { useState } from "react";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { WithVendorShortcodeSearch } from "~/ui/combobox/with-vendor-search";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
+
+const CREDIT_PURPOSE_OPTIONS: readonly PickerOption[] = [
+  { value: "vendor", label: "Vendor refund or proceeds" },
+  { value: "reimbursement", label: "Friend reimbursement" },
+];
 
 function expectsBookingReview(transaction: FinancialTransactionOut) {
   return (
@@ -109,7 +114,7 @@ export function FinancialBookingReview({
       {!purchase ? (
         <WithVendorShortcodeSearch>
           {(search) => (
-            <EntityPicker
+            <Picker
               {...search}
               entity="vendor"
               label="Vendor"
@@ -125,22 +130,17 @@ export function FinancialBookingReview({
         </WithVendorShortcodeSearch>
       ) : null}
       {transaction.amount < 0 ? (
-        <NativeSelect
-          aria-label="Credit purpose"
+        <Picker
+          mode="choose"
+          label="Credit purpose"
+          options={CREDIT_PURPOSE_OPTIONS}
           value={role}
-          onChange={(event) => {
-            setRole(
-              event.target.value === "reimbursement"
-                ? "reimbursement"
-                : "vendor",
-            );
+          onValueChange={(next) => {
+            setRole(next === "reimbursement" ? "reimbursement" : "vendor");
             setReview(null);
           }}
           disabled={busy}
-        >
-          <option value="vendor">Vendor refund or proceeds</option>
-          <option value="reimbursement">Friend reimbursement</option>
-        </NativeSelect>
+        />
       ) : null}
       {preview.error || commit.error ? (
         <ErrorDisplay error={preview.error ?? commit.error} />

@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/utils";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -206,8 +206,8 @@ export function RecipeScaleControl({
           </Stack>
 
           {mode === "ingredient" && (
-            <StaticPicker
-              items={ingredientOptions}
+            <Picker
+              options={ingredientOptions}
               value={ingredientRowId}
               onValueChange={(value) => {
                 const nextValue = value ?? "";

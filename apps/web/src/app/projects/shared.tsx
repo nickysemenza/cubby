@@ -15,6 +15,7 @@ import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { persistedVendorId } from "~/lib/vendor-logo";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   type VendorName,
   WithVendorSearch,
@@ -29,7 +30,6 @@ import {
 import { type MobileColumnMeta } from "~/ui/data-table/table-meta";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { badgeVariantColor } from "~/ui/primitives/badge";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
@@ -71,7 +71,7 @@ export function expenseVendorColumn(
   opts?: {
     id?: string;
     mobile?: MobileColumnMeta;
-    vendorOptions?: FilterableComboboxItem[];
+    vendorOptions?: PickerOption[];
     /** Render the charge identity/link while retaining vendor editing/filtering. */
     asPurchase?: boolean;
   },

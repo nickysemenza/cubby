@@ -5,7 +5,7 @@ import { tradeOptions } from "~/app/projects/trade-options";
 import { locationTypeOptionsWithTheme } from "~/features/locations/location-icons";
 import { colorizeSelectOptions } from "~/lib/select-options";
 
-/** One `<select>`/combobox option: a value/label pair plus an optional leading icon or swatch color. */
+/** One picker option: a value/label pair plus an optional leading icon or swatch color. */
 export type EntitySelectOption = Readonly<{
   value: string;
   label: string;

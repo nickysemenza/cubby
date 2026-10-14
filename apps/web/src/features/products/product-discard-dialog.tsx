@@ -31,12 +31,13 @@ import { z } from "zod";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 
-import { NullableNumericField, SelectField } from "../../ui/form-utils";
+import { NullableNumericField } from "../../ui/form-utils";
 
 const formSchema = z.object({
   trade: tradeSchema,
@@ -293,7 +294,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
               </div>
             ) : null}
             {adjustInventory && entries.length > 1 ? (
-              <SelectField
+              <PickerField
+                store="option"
                 form={form}
                 name="inventoryEntryId"
                 label="Take from"

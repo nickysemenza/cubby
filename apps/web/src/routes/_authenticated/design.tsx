@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 
 import { pageTitle } from "~/lib/page-title";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row, Stack } from "~/ui/layout";
 import { Page } from "~/ui/page/Page";
@@ -14,7 +14,6 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +31,6 @@ import {
 } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
@@ -77,6 +75,7 @@ const SAMPLE_FILTERS = [
 function DesignSmokeTest() {
   const projectNameId = useId();
   const stateSelectId = useId();
+  const [sampleState, setSampleState] = useState("current");
   const selectedCheckboxId = useId();
   const unselectedCheckboxId = useId();
   const disabledCheckboxId = useId();
@@ -217,11 +216,17 @@ function DesignSmokeTest() {
                     value="Disabled"
                   />
                   <div>
-                    <Label htmlFor={stateSelectId}>Native select</Label>
-                    <NativeSelect id={stateSelectId} defaultValue="current">
-                      <option value="current">Current</option>
-                      <option value="archived">Archived</option>
-                    </NativeSelect>
+                    <Label htmlFor={stateSelectId}>Choose picker</Label>
+                    <Picker
+                      mode="choose"
+                      inputId={stateSelectId}
+                      label="Choose picker"
+                      options={SAMPLE_FILTERS}
+                      value={sampleState}
+                      onValueChange={(next) =>
+                        setSampleState(next ?? "current")
+                      }
+                    />
                   </div>
                 </div>
                 <FormFieldGroup
@@ -333,18 +338,18 @@ function DesignSmokeTest() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <Label>Filter options</Label>
-                    <FilterableCombobox
-                      items={SAMPLE_FILTERS}
+                    <Picker
+                      options={SAMPLE_FILTERS}
                       value={filter}
                       onValueChange={setFilter}
                       placeholder="Choose a state"
-                      ariaLabel="Filter options"
+                      label="Filter options"
                       clearable
                     />
                   </div>
                   <div>
                     <Label>Record picker</Label>
-                    <EntityPicker
+                    <Picker
                       entity="product"
                       label="Record picker"
                       items={SAMPLE_RECORDS}

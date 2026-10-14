@@ -16,6 +16,8 @@ import {
   recipeStreams,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useBulkStream } from "~/ui/hooks/useBulkStream";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
@@ -25,7 +27,6 @@ import { Card, CardContent, CardHeader } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import type { ImportResult } from "../cookbook-import/types";
@@ -165,6 +166,30 @@ export function NotionImport() {
     // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [items]);
 
+  const filterOptions = useMemo(
+    () =>
+      [
+        { value: "all", label: "All", hint: String(items.length) },
+        { value: "new", label: "New", hint: String(summaryCounts.new) },
+        {
+          value: "will-update",
+          label: "Update",
+          hint: String(summaryCounts.update),
+        },
+        {
+          value: "unchanged",
+          label: "Unchanged",
+          hint: String(summaryCounts.unchanged),
+        },
+        {
+          value: "needs-formatting",
+          label: "Needs formatting",
+          hint: String(summaryCounts.needs),
+        },
+      ] satisfies (PickerOption & { value: NotionPreviewFilter })[],
+    [items.length, summaryCounts],
+  );
+
   const summary = useMemo(() => {
     const parts: string[] = [];
     const c = summaryCounts;
@@ -256,35 +281,19 @@ export function NotionImport() {
                   className="pl-8"
                 />
               </div>
-              <NativeSelect
+              <Picker
+                mode="choose"
+                widthMode="intrinsic"
+                label="Filter Notion recipes by status"
+                options={filterOptions}
                 value={filter}
-                onChange={(event) => {
-                  const nextFilter = [
-                    "all",
-                    "new",
-                    "will-update",
-                    "unchanged",
-                    "needs-formatting",
-                  ].find(
-                    (candidate): candidate is NotionPreviewFilter =>
-                      candidate === event.target.value,
-                  );
+                onValueChange={(next) => {
+                  const nextFilter = filterOptions.find(
+                    (option) => option.value === next,
+                  )?.value;
                   if (nextFilter) setFilter(nextFilter);
                 }}
-                aria-label="Filter Notion recipes by status"
-              >
-                <option value="all">All ({items.length})</option>
-                <option value="new">New ({summaryCounts.new})</option>
-                <option value="will-update">
-                  Update ({summaryCounts.update})
-                </option>
-                <option value="unchanged">
-                  Unchanged ({summaryCounts.unchanged})
-                </option>
-                <option value="needs-formatting">
-                  Needs formatting ({summaryCounts.needs})
-                </option>
-              </NativeSelect>
+              />
             </Row>
           </CardHeader>
           <CardContent>

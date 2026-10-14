@@ -17,10 +17,25 @@ import { spendingClassification } from "~/integrations/tanstack-query/generated/
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { StaticTable } from "~/ui/primitives/static-table";
+
+const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
+  { value: "inherit", label: "Use ancestor mapping" },
+  { value: "mapped", label: "Map to spending category" },
+  { value: "blocked", label: "Keep unresolved" },
+];
+
+const SPENDING_PROFILE_OPTIONS: readonly PickerOption[] = [
+  { value: "unspecified", label: "Unspecified" },
+  { value: "mixed_retail", label: "Mixed retailer" },
+  { value: "food_retail", label: "Grocery / food retail" },
+  { value: "restaurant", label: "Restaurant" },
+  { value: "coffee_shop", label: "Coffee shop" },
+];
 
 function ClassificationReview({
   initial,
@@ -66,16 +81,17 @@ function ClassificationReview({
         Review the change before applying it.
       </p>
       {request.action === "productCategory" && (
-        <label htmlFor={mappingId} className="block space-y-1 text-sm">
-          Product category mapping
-          <NativeSelect
-            id={mappingId}
+        <div className="space-y-1 text-sm">
+          <span>Product category mapping</span>
+          <Picker
+            mode="choose"
+            inputId={mappingId}
+            label="Product category mapping"
+            options={MAPPING_MODE_OPTIONS}
             value={request.spendingCategoryMode}
             disabled={busy}
-            onChange={(event) => {
-              const mode = spendingCategoryMappingMode.parse(
-                event.target.value,
-              );
+            onValueChange={(next) => {
+              const mode = spendingCategoryMappingMode.parse(next);
               setDraft({
                 ...request,
                 spendingCategoryMode: mode,
@@ -85,36 +101,27 @@ function ClassificationReview({
                     : null,
               });
             }}
-          >
-            <option value="inherit">Use ancestor mapping</option>
-            <option value="mapped">Map to spending category</option>
-            <option value="blocked">Keep unresolved</option>
-          </NativeSelect>
-        </label>
+          />
+        </div>
       )}
       {request.action === "vendor" && (
-        <label htmlFor={profileId} className="block space-y-1 text-sm">
-          Merchant context
-          <NativeSelect
-            id={profileId}
+        <div className="space-y-1 text-sm">
+          <span>Merchant context</span>
+          <Picker
+            mode="choose"
+            inputId={profileId}
+            label="Merchant context"
+            options={SPENDING_PROFILE_OPTIONS}
             value={request.spendingProfile}
             disabled={busy}
-            onChange={(event) =>
+            onValueChange={(next) =>
               setDraft({
                 ...request,
-                spendingProfile: vendorSpendingProfile.parse(
-                  event.target.value,
-                ),
+                spendingProfile: vendorSpendingProfile.parse(next),
               })
             }
-          >
-            <option value="unspecified">Unspecified</option>
-            <option value="mixed_retail">Mixed retailer</option>
-            <option value="food_retail">Grocery / food retail</option>
-            <option value="restaurant">Restaurant</option>
-            <option value="coffee_shop">Coffee shop</option>
-          </NativeSelect>
-        </label>
+          />
+        </div>
       )}
       {request.action !== "products" &&
         request.action !== "spendingCategoryMerge" &&

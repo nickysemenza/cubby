@@ -1,10 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { type Control, Controller } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 
-import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { NativeSelect } from "~/ui/primitives/native-select";
+import { PickerField } from "~/ui/form-utils/picker-field";
 
-import { FormFieldGroup } from "../../../ui/forms/form-field-group";
+import { useCookbookOptions } from "../cookbook-select";
 import type { RecipeFormValues } from "./types";
 
 /**
@@ -12,32 +10,21 @@ import type { RecipeFormValues } from "./types";
  * recipe whose book was attached wrong; import is what normally sets it.
  */
 export function RecipeCookbookField({
-  control,
+  form,
 }: {
-  control: Control<RecipeFormValues>;
+  form: UseFormReturn<RecipeFormValues>;
 }) {
-  const { data: cookbooks } = useQuery(cookbook.list.queryOptions(null));
+  const { options, isLoading } = useCookbookOptions();
   return (
-    <Controller
-      control={control}
+    <PickerField
+      store="option"
+      form={form}
       name="cookbookId"
-      render={({ field }) => (
-        <FormFieldGroup htmlFor="recipe-cookbook" label="Cookbook (Optional)">
-          <NativeSelect
-            id="recipe-cookbook"
-            className="w-full"
-            value={field.value ?? ""}
-            onChange={(event) => field.onChange(event.target.value || null)}
-          >
-            <option value="">No cookbook</option>
-            {cookbooks?.map((book) => (
-              <option key={book.id} value={book.id}>
-                {book.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </FormFieldGroup>
-      )}
+      label="Cookbook (Optional)"
+      options={options}
+      isLoading={isLoading}
+      nullable
+      noneLabel="No cookbook"
     />
   );
 }
