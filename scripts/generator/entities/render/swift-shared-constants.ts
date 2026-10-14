@@ -12,10 +12,7 @@ import {
 } from "../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
 import { APPLE_APP_IDENTITIES } from "../../../../packages/shared/src/apple-app-identity.ts";
-import {
-  ACTIVITY_KIND_LABEL,
-  IMPORT_REPORT_RUN_PURPOSES,
-} from "../../../../packages/schemas/src/activity-fields.ts";
+import { IMPORT_REPORT_RUN_PURPOSES } from "../../../../packages/schemas/src/activity-fields.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -34,12 +31,6 @@ const swiftString = (value: string): string => JSON.stringify(value);
  * marketing version is the server's compatibility minimum.
  */
 export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
-  const activityCases = Object.entries(ACTIVITY_KIND_LABEL)
-    .map(
-      ([kind, label]) =>
-        `        case .${kind.replace(/_([a-z])/gu, (_, letter: string) => letter.toUpperCase())}: ${swiftString(label)}`,
-    )
-    .join("\n");
   const domainCases = (property: "label" | "sfSymbol") =>
     WAYFINDING_DOMAINS.map(
       (domain) =>
@@ -119,14 +110,6 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
         "    /// The most photos one photo-inventory Run holds (`PHOTO_RUN_IMAGE_LIMIT`).\n" +
         `    public static let photoRunImageLimit = ${PHOTO_RUN_IMAGE_LIMIT}\n` +
-        "}\n\n" +
-        "extension ActivityKind {\n" +
-        "    /// The shared activity label (`ACTIVITY_KIND_LABEL`).\n" +
-        "    public var title: String {\n" +
-        "        switch self {\n" +
-        `${activityCases}\n` +
-        "        }\n" +
-        "    }\n" +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +
