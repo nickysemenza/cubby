@@ -290,12 +290,10 @@ function EntitySourcesList({
                 ) : null
               }
               detail={
-                group.citations.some((source) => source.quote) ? (
+                // Every citation keeps its variant, observation and recorder, quoted or not.
+                group.citations.length > 0 ? (
                   <RecordDetail
-                    summary={countLabel(
-                      group.citations.filter((source) => source.quote).length,
-                      "quote",
-                    )}
+                    summary={countLabel(group.citations.length, "citation")}
                     defaultOpen={groups.size === 1}
                   >
                     {group.citations.map((source) => (

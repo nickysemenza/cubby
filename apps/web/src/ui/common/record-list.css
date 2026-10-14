@@ -47,6 +47,14 @@
   font-size: 0.75rem;
 }
 
+/* A state mark sits on its row's first line (where a timeline rail's endpoints
+   assume it); a row that wraps grows below its mark instead of centering it. */
+.ledger[data-record-list]
+  > .ledger-row
+  > [data-ledger-slot="leading"]:has(> [data-record-dot]) {
+  align-self: start;
+}
+
 /* Timeline: a continuous rail through each mark, drawn on the row so it spans
    every line a row wraps to (evidence, phone commands, expanded detail). It
    starts at the first mark and ends at the last; a mark's surface halo keeps

@@ -167,19 +167,15 @@ export function ActivityRunDetail({
           <RecordList
             variant="timeline"
             aria-label="Work timeline"
+            // Loaded attempts stay readable while events load or fail; their state shows below.
             state={
-              events.isPending
+              events.isPending && attempts.length === 0
                 ? { status: "pending" }
-                : events.isError
-                  ? {
-                      status: "error",
-                      error: events.error,
-                      title: "Events failed to load",
-                      onRetry: () => void events.refetch(),
-                    }
-                  : { status: "success" }
+                : { status: "success" }
             }
-            empty="No events have been recorded."
+            empty={
+              events.isSuccess ? "No events have been recorded." : undefined
+            }
             footer={
               detail.hasNextPage || events.hasNextPage ? (
                 <Row gap="xs" wrap>
@@ -241,6 +237,23 @@ export function ActivityRunDetail({
               </Fragment>
             ))}
           </RecordList>
+          {events.isPending && attempts.length > 0 ? (
+            <RecordList
+              aria-label="Events"
+              state={{ status: "pending", rows: 1 }}
+            />
+          ) : null}
+          {events.isError ? (
+            <RecordList
+              aria-label="Events"
+              state={{
+                status: "error",
+                error: events.error,
+                title: "Events failed to load",
+                onRetry: () => void events.refetch(),
+              }}
+            />
+          ) : null}
         </section>
       </CardContent>
     </Card>

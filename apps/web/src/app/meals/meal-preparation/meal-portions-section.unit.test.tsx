@@ -52,6 +52,7 @@ describe("MealPortionsSection", () => {
         recipesBlock,
         {
           kind: "records",
+          key: "portions:meal-recipe-1",
           presentation: "ledger",
           title: "Portions · Pasta",
           empty: "No one has a portion of Pasta yet.",
@@ -69,15 +70,20 @@ describe("MealPortionsSection", () => {
         },
       ],
     };
-    render(<MealPortionsSection mealId={mealToday} />, {
-      wrapper: harness.wrapper,
-    });
+    const onEdit = vi.fn();
+    render(
+      <MealPortionsSection mealId={mealToday} onEditPreparation={onEdit} />,
+      { wrapper: harness.wrapper },
+    );
 
     expect(await screen.findByText("Member A")).toBeVisible();
     expect(screen.getByText(/1 serving/)).toBeVisible();
     expect(screen.getByText("Planned")).toBeInTheDocument();
     expect(screen.getByText(/500 g made/)).toBeVisible();
     expect(screen.queryByText("Recipes")).not.toBeInTheDocument();
+    // Leftovers have no recipe row here, so each preparation keeps its own editor.
+    fireEvent.click(screen.getByRole("button", { name: "Edit portions" }));
+    expect(onEdit).toHaveBeenCalledWith("meal-recipe-1");
   });
 
   it("offers leftovers when no recipe has portions yet", async () => {

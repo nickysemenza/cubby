@@ -4,7 +4,10 @@ import type {
   ReportCommandInput,
 } from "@cubby/schemas/entity-report";
 import { mealShortcode } from "@cubby/schemas/identifiers";
-import type { MealRecipePreparationOut } from "@cubby/schemas/meal";
+import {
+  MEAL_PORTIONS_BLOCK_KEY,
+  type MealRecipePreparationOut,
+} from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -258,6 +261,7 @@ function portionBlocks(
   const summary = preparation.sourceSummary;
   const block: Records = {
     kind: "records",
+    key: `${MEAL_PORTIONS_BLOCK_KEY}${mealRecipeId}`,
     presentation: "ledger",
     title: `Portions · ${preparation.recipe.name}`,
     rows: preparation.portions.map((portion): Row => {

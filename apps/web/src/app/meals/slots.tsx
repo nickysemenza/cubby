@@ -103,6 +103,7 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
       <MealPortionsSection
         mealId={mealId}
         onAddPreparedPortion={preparation.beginAddPreparedPortion}
+        onEditPreparation={preparation.openCurrentPreparation}
       />
       <MealPreparationOverlays
         preparation={preparation}

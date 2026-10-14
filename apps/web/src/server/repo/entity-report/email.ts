@@ -50,6 +50,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { hasRetainedEmailImportContent } from "~/server/purchase-import/email-content";
+import { runRowState } from "~/server/repo/collection-items";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { readEmailAssociations } from "~/server/repo/email";
 import { getEmailAccuracyReport } from "~/server/repo/email-accuracy";
@@ -57,7 +58,6 @@ import { readEmailPurchaseLinks } from "~/server/repo/email-purchase-links";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import type { ReportViewer } from "./records";
-import { isLiveRunStatus } from "./run";
 
 type StatsBlock = Extract<ReportBlock, { kind: "stats" }>;
 
@@ -431,14 +431,30 @@ function emailAccuracyReviewBlocks(report: EmailAccuracyReport): ReportBlock[] {
 }
 
 type Observation = typeof emailClassificationObservation.$inferSelect;
-type PipelineState = "Ran" | "Running" | "Skipped" | "Not reached" | "Failed";
+type PipelineState =
+  | "Ran"
+  | "Running"
+  | "Paused"
+  | "Skipped"
+  | "Not reached"
+  | "Failed";
 const stateKind = {
   Ran: "done",
   Running: "running",
+  Paused: "warning",
   Skipped: "skipped",
   "Not reached": "not_reached",
   Failed: "failed",
 } as const satisfies Record<PipelineState, ReportRowState>;
+/** The import Run's own status as the stage's state: a paused Run needs someone, so it warns. */
+const IMPORT_RUN_STATE = {
+  done: "Ran",
+  running: "Running",
+  warning: "Paused",
+  failed: "Failed",
+  skipped: "Skipped",
+  not_reached: "Not reached",
+} as const satisfies Record<ReportRowState, PipelineState>;
 const automatedStages = ["rule", "decision", "model"] as const;
 const stageStep = {
   rule: "Rule",
@@ -764,11 +780,7 @@ function importRow(
       mailResearchRunInput.safeParse(importRun.input).data?.sources.length ?? 1;
     return pipelineRow(
       "Import Run",
-      ["failed", "dispatch_failed"].includes(importRun.status)
-        ? "Failed"
-        : isLiveRunStatus(importRun.status)
-          ? "Running"
-          : "Ran",
+      IMPORT_RUN_STATE[runRowState(importRun.status) ?? "done"],
       {
         entity: "run",
         id: importRun.shortcode,

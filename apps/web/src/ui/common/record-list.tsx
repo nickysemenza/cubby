@@ -353,7 +353,7 @@ export function RecordDetail({
 }) {
   return (
     <details className="group text-xs/5" open={defaultOpen || undefined}>
-      <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-muted-foreground hover:text-foreground max-md:min-h-11 max-md:min-w-11 [&::-webkit-details-marker]:hidden">
         <CaretRightIcon
           aria-hidden
           className="size-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"

@@ -550,6 +550,8 @@ const reportRecords = z.object({
    */
   presentation: z.enum(["filmstrip", "ledger", "timeline"]).optional(),
   kind: z.literal("records"),
+  /** What the block stands for, for a client that picks it out of a report (`portions:<mealRecipeId>`). */
+  key: z.string().optional(),
   title: z.string().optional(),
   rows: z.array(reportRecordRow),
   empty: z.string(),

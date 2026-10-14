@@ -1,5 +1,6 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { MealShortcode } from "@cubby/schemas/identifiers";
+import { MEAL_PORTIONS_BLOCK_KEY } from "@cubby/schemas/meal";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
 
@@ -11,17 +12,25 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
+type PortionsBlock = Extract<ReportBlock, { kind: "records" }> & {
+  key: string;
+};
+
 /** The report's Portions blocks; its Recipes block is drawn by the web recipe rows, which edit scale in place. */
-const isPortions = (block: ReportBlock) =>
-  block.kind === "records" && (block.title?.startsWith("Portions · ") ?? false);
+const isPortions = (block: ReportBlock): block is PortionsBlock =>
+  block.kind === "records" &&
+  (block.key?.startsWith(MEAL_PORTIONS_BLOCK_KEY) ?? false);
 
 /** Each prepared recipe's portions from the server's `meal.composition` report, under the leftovers capture. */
 export function MealPortionsSection({
   mealId,
   onAddPreparedPortion,
+  onEditPreparation,
 }: {
   mealId: MealShortcode;
   onAddPreparedPortion?: () => void;
+  /** Opens a preparation's portion editor (leftovers have no recipe row of their own here). */
+  onEditPreparation?: (mealRecipeId: string) => void;
 }) {
   const query = useQuery(
     entityReport.get.queryOptions({ slot: "meal.composition", id: mealId }),
@@ -66,7 +75,26 @@ export function MealPortionsSection({
           </Stack>
         </div>
       ) : (
-        <ReportBlocks blocks={blocks} />
+        blocks.map((block) => (
+          <Stack key={block.key} gap="xs">
+            <ReportBlocks blocks={[block]} />
+            {onEditPreparation ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-fit"
+                onClick={() =>
+                  onEditPreparation(
+                    block.key.slice(MEAL_PORTIONS_BLOCK_KEY.length),
+                  )
+                }
+              >
+                Edit portions
+              </Button>
+            ) : null}
+          </Stack>
+        ))
       )}
     </Stack>
   );

@@ -136,6 +136,7 @@ describe("meal.composition", () => {
     if (portions?.kind !== "records") throw new Error("no portions block");
 
     expect(portions.presentation).toBe("ledger");
+    expect(portions.key).toMatch(/^portions:/u);
     expect(portions.rows).toHaveLength(1);
     expect(portions.rows[0]).toMatchObject({
       title: "Test eater",

@@ -28,7 +28,7 @@ export const runRowState = (status: string): ReportRowState | undefined => {
   if (["failed", "cancelled", "aborted", "dispatch_failed"].includes(status))
     return "failed";
   if (status.startsWith("paused")) return "warning";
-  if (LIVE_RUN_STATUSES.has(status)) return "running";
+  if (status === "started" || LIVE_RUN_STATUSES.has(status)) return "running";
   return undefined;
 };
 

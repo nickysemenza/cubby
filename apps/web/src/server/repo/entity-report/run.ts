@@ -542,17 +542,20 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
     "Oldest first. System and agent events are retained as structured operation evidence; sensitive content and credentials are excluded.",
   ),
   records(
-    run.operations.map((operation) =>
-      row(operation.operationId, {
+    run.operations.map((operation) => {
+      const state = statusState(operation.state, operation.state);
+      return row(operation.operationId, {
         title: operation.kind,
         at: operation.startedAt,
-        state: statusState(operation.state, operation.state),
+        state,
+        // A state with no mark keeps its own word as a chip.
+        badges: state ? [] : [badge(operation.state)],
         lines: [
           line(operation.operationId, "muted"),
           ...(operation.error ? [line(operation.error, "destructive")] : []),
         ],
-      }),
-    ),
+      });
+    }),
     {
       empty: "No durable operations have been recorded for this run.",
       presentation: "timeline",

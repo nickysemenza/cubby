@@ -8,6 +8,7 @@ import {
   labelImageItems,
   recipeUsageItems,
   runHistoryItems,
+  runRowState,
 } from "./collection-items";
 
 const cookbookId = testShortcode("cookbook", "weeknight");
@@ -229,5 +230,17 @@ describe("runHistoryItems", () => {
       at: "2026-03-04T10:15:00.000Z",
       badges: ["login_expired"],
     });
+  });
+});
+
+describe("runRowState", () => {
+  // An active operation keeps a running mark, and a pause that needs someone never pulses as running.
+  it("marks live, paused, settled and unknown statuses", () => {
+    expect(runRowState("started")).toBe("running");
+    expect(runRowState("running")).toBe("running");
+    expect(runRowState("paused_auth")).toBe("warning");
+    expect(runRowState("dispatch_failed")).toBe("failed");
+    expect(runRowState("completed")).toBe("done");
+    expect(runRowState("researching")).toBeUndefined();
   });
 });

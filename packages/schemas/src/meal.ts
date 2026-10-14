@@ -474,3 +474,6 @@ export const shoppingListOut = z.object({
   ),
 });
 export type ShoppingListOut = z.infer<typeof shoppingListOut>;
+
+/** The report block key prefix of one prepared recipe's portions, followed by its mealRecipeId. */
+export const MEAL_PORTIONS_BLOCK_KEY = "portions:";
