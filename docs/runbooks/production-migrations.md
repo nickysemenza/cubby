@@ -185,18 +185,17 @@ stamp `retiredAt` by hand.
 
 The reviewed cutover has these inclusive journal boundaries:
 
-- Online expansion ends at `0064_shared_assessment_expansion`, which creates
+- Online expansion ends at `0067_shared_assessment_expansion`, which creates
   storage without copying reviews or changing legacy supersession triggers.
-- `0065_derived_ddl`, `0066_shared_assessment_reconciliation`,
-  `0067_derived_ddl`, `0068_derived_ddl` and `0069_derived_ddl` run only inside the enforced
+- `0068_shared_assessment_reconciliation` and `0069_derived_ddl` run only inside the enforced
   quiesced cutover barrier. Final reconciliation locks and transforms legacy
   reviews and retires their storage; final derived DDL establishes current
   supersession, identity-evidence invalidation and retained order-event lifecycle.
 
 Check these exact tags against the final PR journal before execution. Never
-include `0065_derived_ddl` in an online expansion: it redirects field triggers
-before legacy Suggestions have been reconciled, allowing raw field changes to
-leave stale pending legacy rows.
+include reconciliation or derived DDL in online expansion. Reconcile legacy
+Suggestions before replacing their supersession triggers; raw field changes
+between expansion and cutover must still retire the legacy pending rows.
 
 Before pushing or applying the cutover, prove preservation from a populated
 predecessor database and capture a private production baseline. Compare origin
