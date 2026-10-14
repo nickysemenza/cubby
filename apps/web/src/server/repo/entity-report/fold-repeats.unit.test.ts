@@ -36,11 +36,14 @@ describe("foldRepeatedRows", () => {
       trailing: "×3",
       at: "2026-10-13T17:52:01.000Z",
       lines: [],
-      detail: {
-        label: "3 events",
-        text: "photo-group:1\nphoto-group:2\nphoto-group:3",
-      },
+      detail: { label: "3 events" },
     });
+    // Each folded event keeps its own time beside what only it said.
+    expect(rows[0]?.detail?.text.split("\n")).toEqual([
+      expect.stringMatching(/:01 [AP]M · photo-group:1$/u),
+      expect.stringMatching(/:02 [AP]M · photo-group:2$/u),
+      expect.stringMatching(/:03 [AP]M · photo-group:3$/u),
+    ]);
   });
 
   it("keeps lines every folded row shares on the folded row", () => {
@@ -50,7 +53,7 @@ describe("foldRepeatedRows", () => {
       event("2", { lines: [shared] }),
     ]);
     expect(rows[0]?.lines).toEqual([shared]);
-    expect(rows[0]?.detail).toBeUndefined();
+    expect(rows[0]?.detail?.text).not.toContain("server");
   });
 
   // A failure's diagnostic, a record link, a command and an untimed row each stay on their own row.

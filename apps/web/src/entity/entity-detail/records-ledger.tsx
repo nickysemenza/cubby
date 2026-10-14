@@ -8,7 +8,7 @@ import { type ReactNode, Suspense, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
-import { entities, entityDetailParams } from "~/entity/entities";
+import { entities } from "~/entity/entities";
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -76,6 +76,15 @@ const BADGE_VARIANT = {
   muted: "outline",
 } as const;
 
+const STATE_VARIANT = {
+  done: "positive",
+  running: "secondary",
+  warning: "warning",
+  failed: "destructive",
+  skipped: "outline",
+  not_reached: "outline",
+} as const;
+
 /** Stable keys for rows that may repeat (a recipe appears once per section it uses). */
 const rowKeys = (rows: readonly ReportRecordRow[]) => {
   const seen = new Map<string, number>();
@@ -113,64 +122,52 @@ const isLoud = (row: ReportRecordRow) =>
 const isCode = (text: string) => /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text);
 
 /**
- * The row's lines: an untoned line is its result, the rest evidence. A timed row is a log line
- * and clips to one line with the whole text as its tooltip, unless it is loud; any other row
- * wraps, one line under another.
+ * The row's lines, one under another: an untoned line is its result, the rest evidence. On a wide
+ * row each quiet line clips with its whole text as its tooltip; failures and warnings wrap in full.
  */
 function RowText({ row }: { row: ReportRecordRow }) {
-  const lines = row.lines ?? [];
-  const clip = row.at !== undefined && !isLoud(row);
-  const parts = lines.map((line, index) => (
-    <span
-      key={`${line.tone ?? ""}:${line.text}`}
-      className={cn(
-        line.tone ? TONE_TEXT[line.tone] : "text-foreground",
-        !clip && "block whitespace-pre-line",
-      )}
-    >
-      {clip && index > 0 ? (
-        <span className="text-muted-foreground"> · </span>
-      ) : null}
-      {isCode(line.text) ? (
-        <code className="font-mono text-2xs">{line.text}</code>
-      ) : (
-        <ShortcodeProse>{line.text}</ShortcodeProse>
-      )}
-    </span>
-  ));
+  const clip = !isLoud(row);
   return (
-    <span
-      className={cn(
-        "block min-w-0 text-xs/5 break-words",
-        clip && "@min-[32rem]/ledger:truncate",
-      )}
-      title={clip ? lines.map((line) => line.text).join(" · ") : undefined}
-    >
-      {parts}
+    <span className="block min-w-0 text-xs/5 break-words">
+      {(row.lines ?? []).map((line) => (
+        <span
+          key={`${line.tone ?? ""}:${line.text}`}
+          className={cn(
+            "block",
+            line.tone ? TONE_TEXT[line.tone] : "text-foreground",
+            clip ? "@min-[32rem]/ledger:truncate" : "whitespace-pre-line",
+          )}
+          title={clip ? line.text : undefined}
+        >
+          {isCode(line.text) ? (
+            <code className="font-mono text-2xs">{line.text}</code>
+          ) : (
+            <ShortcodeProse>{line.text}</ShortcodeProse>
+          )}
+        </span>
+      ))}
     </span>
   );
 }
 
-/** A row's title is plain text, linked when the row opens a record: rows read as one column. */
+/** A row's title, as the chip of the record it opens when it opens one. */
 function RowTitle({ row }: { row: ReportRecordRow }) {
   const entity = routedEntity(row.entity);
-  if (row.title === "") return null;
-  if (entity === null || row.id === null)
+  if (entity !== null && row.id !== null)
     return (
-      <span className="font-medium whitespace-pre-line">
-        <ShortcodeProse>{row.title}</ShortcodeProse>
-      </span>
+      <EntityRefLink
+        variant="chip"
+        entity={entity}
+        id={row.id}
+        name={row.title}
+        displayImage={null}
+      />
     );
+  if (row.title === "") return null;
   return (
-    <EntityRefLink
-      variant="table"
-      tone="identity"
-      to={entities[entity].routes.detail}
-      params={entityDetailParams(row.id)}
-      title={row.id}
-    >
-      {row.title}
-    </EntityRefLink>
+    <span className="font-medium whitespace-pre-line">
+      <ShortcodeProse>{row.title}</ShortcodeProse>
+    </span>
   );
 }
 
@@ -327,12 +324,22 @@ function LedgerRow({
             />
           </a>
         ) : context.marks ? (
-          <RecordDot state={row.state?.kind} label={row.state?.label} />
+          <RecordDot
+            state={row.state?.kind}
+            label={row.state?.label}
+            spoken={row.state?.kind === "done"}
+          />
         ) : undefined
       }
       primary={
         <span className="flex flex-wrap items-center gap-1">
           <RowTitle row={row} />
+          {/* A done mark needs no word; any other state also says what it is. */}
+          {row.state && row.state.kind !== "done" ? (
+            <Badge variant={STATE_VARIANT[row.state.kind]}>
+              {row.state.label}
+            </Badge>
+          ) : null}
           {(row.badges ?? []).map((badge) => (
             <Badge
               key={badge.label}

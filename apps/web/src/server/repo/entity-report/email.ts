@@ -483,10 +483,12 @@ function pipelineRow(
     entity: input.entity ?? null,
     id: input.id ?? null,
     title: step,
-    // A stage that did not run says so first: its state is the row's result.
-    lines: [...(state === "Ran" ? [] : [state]), ...(input.lines ?? [])]
+    // A stage that ran leads with its result; one that did not shows its state, so its lines are evidence.
+    lines: (input.lines ?? [])
       .filter((line): line is string => Boolean(line))
-      .map((text, index) => (index === 0 ? { text } : { text, tone: "muted" })),
+      .map((text, index) =>
+        index === 0 && state === "Ran" ? { text } : { text, tone: "muted" },
+      ),
     trailing: null,
     state: { kind: stateKind[state], label: state },
     badges: conflict ? [{ label: conflict, tone: "warning" }] : [],

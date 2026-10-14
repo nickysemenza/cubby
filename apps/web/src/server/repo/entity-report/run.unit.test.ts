@@ -1084,8 +1084,8 @@ describe("aiUsageBlocks", () => {
     ]);
     // `cacheStatus` is the caller's cache (an analysis or prompt cache),
     // never a claim that the Gateway carried the call.
-    expect(call?.detail?.text).toBe(
-      "attempt 1 · 100 in / — out · Application hit · no model call · Cache miss · 5 read / — write · 1.5s · Charged unpriced · Standard unpriced · unknown · log-1",
+    expect(call?.detail?.text).toMatch(
+      /^\d+:\d\d:\d\d [AP]M · attempt 1 · 100 in \/ — out · Application hit · no model call · Cache miss · 5 read \/ — write · 1\.5s · Charged unpriced · Standard unpriced · unknown · log-1$/u,
     );
   });
 

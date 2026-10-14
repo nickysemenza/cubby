@@ -157,7 +157,7 @@ describe("reviewed Email financial evidence", () => {
         id: null,
         title: transaction.shortcode,
         at: reviewedAt.toISOString(),
-        statuses: expect.arrayContaining([
+        badges: expect.arrayContaining([
           expect.objectContaining({ tone: "warning" }),
         ]),
       }),
@@ -167,7 +167,7 @@ describe("reviewed Email financial evidence", () => {
         entity: null,
         id: null,
         title: reviewed.shortcode,
-        statuses: expect.arrayContaining([
+        badges: expect.arrayContaining([
           expect.objectContaining({ tone: "warning" }),
         ]),
       }),

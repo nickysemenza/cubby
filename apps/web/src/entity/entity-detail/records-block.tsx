@@ -145,22 +145,17 @@ function RecordsRows({
   );
 }
 
-/** The block's eyebrow with its shared day, and the block's commands. */
+/** The block's eyebrow with the day its timed rows share; an empty block shows only its copy. */
 function RecordsHeader({
-  title: declared,
-  hasRows,
+  title,
   day,
-  commands,
 }: {
   title: string | undefined;
-  /** An empty block shows only its empty copy, untitled. */
-  hasRows: boolean;
   day: string | null;
-  commands: ReactNode | null;
 }) {
-  const title = hasRows ? declared : undefined;
-  const heading = title ? (
-    <Eyebrow className={commands === null ? undefined : "my-0"}>
+  if (!title) return null;
+  return (
+    <Eyebrow>
       {title}
       {day ? (
         <>
@@ -169,15 +164,6 @@ function RecordsHeader({
         </>
       ) : null}
     </Eyebrow>
-  ) : null;
-  if (commands === null) return heading;
-  return (
-    <Row gap="sm" wrap align="center">
-      {heading}
-      <Row gap="sm" wrap className="ml-auto">
-        {commands}
-      </Row>
-    </Row>
   );
 }
 
@@ -230,17 +216,8 @@ export function RecordsBlockView({
   return (
     <Stack as="section" aria-label={block.title} gap="sm" className="w-full">
       <RecordsHeader
-        title={block.title}
-        hasRows={block.rows.length > 0}
+        title={block.rows.length > 0 ? block.title : undefined}
         day={context.day}
-        commands={
-          blockCommands.length > 0 ? (
-            // The detail page's action bar carries them instead, when it has them.
-            <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
-              {blockCommands}
-            </RowActionPlacement>
-          ) : null
-        }
       />
       {list ?? <RecordsRows block={block} context={context} />}
       {block.footer && list === undefined ? (
@@ -265,6 +242,14 @@ export function RecordsBlockView({
             )
           }
         />
+      ) : null}
+      {blockCommands.length > 0 ? (
+        // The detail page's action bar carries them instead, when it has them.
+        <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
+          <Row wrap gap="sm">
+            {blockCommands}
+          </Row>
+        </RowActionPlacement>
       ) : null}
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">

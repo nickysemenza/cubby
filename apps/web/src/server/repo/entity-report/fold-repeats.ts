@@ -4,6 +4,8 @@ import type {
   ReportRecordRow,
 } from "@cubby/schemas/entity-report";
 
+import { formatInstant } from "~/lib/date-format";
+
 type Line = NonNullable<ReportRecordRow["lines"]>[number];
 
 const lineKey = (line: Line) => `${line.tone ?? ""}:${line.text}`;
@@ -46,19 +48,20 @@ const fold = (run: ReportRecordRow[]): ReportRecordRow => {
     ),
   );
   const sharedKeys = new Set(shared.map(lineKey));
+  // Each folded row keeps its own moment beside what only it said.
   const differs = run.map((row) =>
-    (row.lines ?? [])
-      .filter((line) => !sharedKeys.has(lineKey(line)))
-      .map((line) => line.text)
-      .join(" · "),
+    [
+      ...(row.at ? [formatInstant(row.at, "time")] : []),
+      ...(row.lines ?? [])
+        .filter((line) => !sharedKeys.has(lineKey(line)))
+        .map((line) => line.text),
+    ].join(" · "),
   );
   return {
     ...first,
     trailing: `×${run.length}`,
     lines: shared,
-    ...(differs.some(Boolean)
-      ? { detail: { label: `${run.length} events`, text: differs.join("\n") } }
-      : {}),
+    detail: { label: `${run.length} events`, text: differs.join("\n") },
   };
 };
 

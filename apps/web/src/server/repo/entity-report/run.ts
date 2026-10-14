@@ -1031,6 +1031,7 @@ const tokens = (
 /** One call's evidence, a line of a group's detail. */
 const aiCallText = (call: AiCall) =>
   [
+    formatInstant(call.createdAt, "time"),
     `attempt ${call.attempt}`,
     `${call.inputTokens ?? "—"} in / ${call.outputTokens ?? "—"} out`,
     call.applicationCacheStatus === "hit"
@@ -1068,35 +1069,40 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
     text: value,
   });
   return [
-    {
-      kind: "stats",
-      figures: [
-        text(
-          "Charged",
-          formatAiCostSubtotal(
-            usage.chargedCost,
-            usage.chargedUnpricedCount,
-            usage.count,
-            usage.chargedComplete,
-          ),
-        ),
-        text(
-          "Standard",
-          formatAiCostSubtotal(
-            usage.standardCost,
-            usage.standardUnpricedCount,
-            usage.count,
-            usage.standardComplete,
-          ),
-        ),
-        text(
-          "Savings",
-          usage.comparedCalls === 0
-            ? "unavailable"
-            : `${formatAiCost(usage.savings)} · ${usage.comparedCalls}/${usage.count} compared`,
-        ),
-      ],
-    },
+    // A run that made no calls has no totals to state, only its empty copy.
+    ...(usage.count === 0
+      ? []
+      : [
+          {
+            kind: "stats" as const,
+            figures: [
+              text(
+                "Charged",
+                formatAiCostSubtotal(
+                  usage.chargedCost,
+                  usage.chargedUnpricedCount,
+                  usage.count,
+                  usage.chargedComplete,
+                ),
+              ),
+              text(
+                "Standard",
+                formatAiCostSubtotal(
+                  usage.standardCost,
+                  usage.standardUnpricedCount,
+                  usage.count,
+                  usage.standardComplete,
+                ),
+              ),
+              text(
+                "Savings",
+                usage.comparedCalls === 0
+                  ? "unavailable"
+                  : `${formatAiCost(usage.savings)} · ${usage.comparedCalls}/${usage.count} compared`,
+              ),
+            ],
+          },
+        ]),
     records(
       [...groups].map(([key, calls]) => {
         const [first] = calls;

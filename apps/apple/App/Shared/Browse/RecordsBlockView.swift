@@ -34,6 +34,7 @@ struct RecordRowView: View {
         ) {
             ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
                 Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
+                    .textSelection(.enabled)
             }
         } rail: {
             if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
