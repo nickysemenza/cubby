@@ -1,0 +1,39 @@
+apps/web/src/entity/entity-display.tsx
+  s_a7bec1ba59cec5::t_535db3a46ac388 20,329,331-350
+apps/web/src/entity/field-explanation.tsx
+  s_a7bec1ba59cec5::t_b3d370d575c352 22,648-651
+apps/web/src/entity/field-resolution.tsx
+  s_a7bec1ba59cec5::t_b16fac8c4ea963 289-290
+apps/web/src/server/repo/field-resolution-evidence.ts
+  s_a7bec1ba59cec5::t_61b924a33a780f 54-55,177-182,466-472
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_a7bec1ba59cec5::t_1403b5608d50b7 478,480,482-483
+docs/agents/web-ui-reference.md
+  s_a7bec1ba59cec5::t_fcc5affa4cc6a5 140
+docs/entities.md
+  s_a7bec1ba59cec5::t_936a833cb122d7 760-771
+docs/guide/terminology.md
+  s_a7bec1ba59cec5::t_3a001f0fcd3850 528,531-534
+docs/todos.md
+  s_a7bec1ba59cec5::t_d2ba3e360b2664 943-948
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_a7bec1ba59cec5::t_55f77d113b4614 254
+scripts/generator/entities/render/field-explanations-reference.ts
+  s_a7bec1ba59cec5::t_3c4ce3062c08cd 42-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "934c493701f8c6214f7943be16aeea753e69ea79",
+  "prompts": {},
+  "sessions": {
+    "s_a7bec1ba59cec5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10faf483-7285-407e-800f-2dad5a8b10b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
