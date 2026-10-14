@@ -696,11 +696,15 @@ parent stays reachable); `roots`/`children` rows carry `childCount`, their
 directly nested children that match the filters, and `totalCount` counts the
 requested scope. The shared list scaffold (`server/repo/list.ts`) owns it, so a
 scaffold-built tree repository needs no code. The web table pages the roots and
-reads an expanded row's children through the same query, with their own paging;
-expansion resets when filters or sort change. `tree.toggle` adds a
-nested/flat switch beside Grouped, persisted as `nest=on|off` (absent is
-`tree.defaultNested`, default nested); the grouped switch is `grouped=on`.
-Cards and the timeline stay flat. A structured
+reads an expanded row's first children page through the same query; a status
+row after its children shows that read loading, a failed read or deferred
+group with Retry, and Load more while the server counts more children.
+Expansion resets when filters or sort change. `tree.toggle` adds a
+nested/flat switch beside Grouped (rows of the phone Filter sheet), persisted
+as `nest=on|off` (absent is `tree.defaultNested`, default nested); the grouped
+switch is `grouped=on`. Cards and the timeline stay flat. A whole-tree view
+(the category hierarchy chart) reads `useServerTree`: the roots, then each
+counted parent's children, level by level. A structured
 value that every client would otherwise re-word declares where the record
 carries its text instead of a renderer: `display.labelPath` for a list cell,
 `display.detailLabelPath` for a detail row (a server-composed sentence, lines

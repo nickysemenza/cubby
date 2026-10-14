@@ -67,6 +67,7 @@ import type { ListQueryOptionsFn } from "./usePaginatedTableCore";
 import {
   serverTreeRowCanExpand,
   type ServerTreeRow,
+  serverTreeStatusOf,
   useServerTreeChildren,
 } from "./useServerTreeChildren";
 import type { FilterInput } from "./useStandardColumns";
@@ -95,6 +96,7 @@ function fixedPreviewEntity(
 // Router search also carries typed dialog and pagination state, not just filters.
 const routeSearchSchema = z.record(z.string(), z.json().optional());
 const ROOTS_SCOPE: ListNesting = { scope: "roots" };
+const isServerTreeRecord = (row: { id: string }) => !serverTreeStatusOf(row);
 const serverTreeRowOffersExpansion = (row: { original: unknown }) =>
   serverTreeRowCanExpand(row.original);
 // SAFETY: a server tree's table rows are exactly `attach`'s output.
@@ -590,7 +592,9 @@ export function useEntityList<
     [],
   );
 
-  const rowActionsGuard = tree?.rowIsEntity;
+  // A server tree's status row (loading, error, Load more) is no record.
+  const rowActionsGuard =
+    tree?.rowIsEntity ?? (serverTree ? isServerTreeRecord : undefined);
   const worklistColumns = worklistColumnPresentation(worklist);
   const presentation = useEntityListPresentation<TData>({
     entity,

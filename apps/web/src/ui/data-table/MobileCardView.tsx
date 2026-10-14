@@ -29,10 +29,12 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { serverTreeStatusOf } from "../hooks/useServerTreeChildren";
 import { DebugDialog } from "./DebugDialog";
 import { TableEmptyState } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
+import { TreeStatusRow } from "./tree-status-row";
 import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
 import {
@@ -842,6 +844,20 @@ export function MobileCardView<TItem extends RowData>({
     model: (typeof mobileRows)[number],
   ) => {
     const row = model.row;
+    const treeStatus = serverTreeStatusOf(row.original);
+    if (treeStatus)
+      return (
+        <VirtualRow
+          key={row.id}
+          vi={vi}
+          virtualizer={virtualizer}
+          role="presentation"
+        >
+          <div className="border-b border-border bg-muted/20 px-4 py-1">
+            <TreeStatusRow status={treeStatus} />
+          </div>
+        </VirtualRow>
+      );
     const card = (
       <PhoneListRow
         model={model}

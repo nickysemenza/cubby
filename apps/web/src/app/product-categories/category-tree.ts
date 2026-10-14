@@ -1,35 +1,11 @@
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
 
-type TreeRow<T> = T & { subRows?: TreeRow<T>[] };
-
-/**
- * Nests the complete category roster under each row's parent, keeping the
- * input's sibling order. A row whose parent is absent (deleted) or itself
- * becomes a root, so the chart never drops a category.
- */
-export function nestByParent<T extends { id: string }>(
-  rows: readonly T[],
-  parentOf: (row: T) => string | null,
-): TreeRow<T>[] {
-  const nodes = new Map<string, TreeRow<T>>(
-    rows.map((row) => [row.id, { ...row }]),
-  );
-  const roots: TreeRow<T>[] = [];
-  for (const row of rows) {
-    const node = nodes.get(row.id);
-    if (!node) continue;
-    const parentId = parentOf(row);
-    const parent =
-      parentId && parentId !== row.id ? nodes.get(parentId) : undefined;
-    if (parent) (parent.subRows ??= []).push(node);
-    else roots.push(node);
-  }
-  return roots;
-}
-
 interface CategoryTreeInput {
   id: string;
-  parentId: string | null;
+  name: string;
+  feature: ProductCategoryFeature | null;
+  /** The server-nested children (`useServerTree`). */
+  subRows?: CategoryTreeInput[];
 }
 
 export interface CategoryHierarchyNode {
@@ -51,14 +27,11 @@ export const CATEGORY_HIERARCHY_ROOT_ID = "__all__";
  * direct product count rolled up into its ancestors' totals.
  */
 export function buildCategoryHierarchy(
-  categories: readonly (CategoryTreeInput & {
-    name: string;
-    feature: ProductCategoryFeature | null;
-  })[],
+  roots: readonly CategoryTreeInput[],
   directCounts: ReadonlyMap<string, number>,
 ): CategoryHierarchyNode {
   const toNode = (
-    row: TreeRow<(typeof categories)[number]>,
+    row: CategoryTreeInput,
     inherited: ProductCategoryFeature | null,
   ): CategoryHierarchyNode => {
     const feature = row.feature ?? inherited;
@@ -76,9 +49,7 @@ export function buildCategoryHierarchy(
     if (children) node.children = children;
     return node;
   };
-  const children = nestByParent(categories, (row) => row.parentId).map((row) =>
-    toNode(row, null),
-  );
+  const children = roots.map((row) => toNode(row, null));
   return {
     id: CATEGORY_HIERARCHY_ROOT_ID,
     name: "All categories",

@@ -86,10 +86,8 @@ export async function seedPhotoReviewLabelText(
     });
 }
 
-export const seedImagePrerequisite = async (
-  name: string,
-  objectStorageUrl: string,
-) => {
+/** A verified Image record over real, servable synthetic bytes. */
+const uploadSyntheticImage = async (name: string, objectStorageUrl: string) => {
   const bytes = readFileSync(
     new URL("./fixtures/synthetic-wardrobe-shirt.png", import.meta.url),
   );
@@ -113,6 +111,14 @@ export const seedImagePrerequisite = async (
     storageStatus: "available",
     verifiedAt: new Date(),
   });
+  return created;
+};
+
+export const seedImagePrerequisite = async (
+  name: string,
+  objectStorageUrl: string,
+) => {
+  const created = await uploadSyntheticImage(name, objectStorageUrl);
   return { id: parseShortcodeFor("image", created.shortcode) };
 };
 
@@ -201,15 +207,14 @@ export async function setResearchHistoryStatus(
     .where(eq(schema.run.shortcode, parseShortcodeFor("run", code)));
 }
 
-export async function seedActivityHistory(page: Page, name: string) {
+export async function seedActivityHistory(
+  page: Page,
+  name: string,
+  objectStorageUrl: string,
+) {
   const db = getFixtureDb();
   const actorUserId = await fixtureUserId(page);
-  const source = await createUploadedImageRecord(db, {
-    key: `tests/${crypto.randomUUID()}.png`,
-    filename: `${name}.png`,
-    contentType: "image/png",
-    size: 100,
-  });
+  const source = await uploadSyntheticImage(name, objectStorageUrl);
   const database = getDb(db);
   const [parent] = await database
     .insert(schema.run)

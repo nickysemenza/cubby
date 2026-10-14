@@ -8,6 +8,7 @@ import { financialAccountChecks } from "./checks/financial-account";
 import { financialTransactionChecks } from "./checks/financial-transaction";
 import { gardenEntryChecks } from "./checks/garden-entry";
 import { imageChecks } from "./checks/image";
+import { imageJobChecks } from "./checks/image-job";
 import { ingredientChecks } from "./checks/ingredient";
 import { inventoryChecks } from "./checks/inventory";
 import { ledgerPartyChecks } from "./checks/ledger-party";
@@ -68,5 +69,6 @@ export const dataQualityEntries = {
   ledgerParty: ledgerPartyChecks,
   ledgerTransfer: ledgerTransferChecks,
   device: deviceChecks,
+  imageJob: imageJobChecks,
   image: imageChecks,
 } satisfies DataQualityEntries;

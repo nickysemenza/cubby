@@ -75,6 +75,8 @@ export default defineEntity({
       ],
     },
     list: {
+      // The thumbnail borrows the Image the job processes; quality is the job's own checks.
+      read: { media: ["displayImages"], quality: ["dataQuality"] },
       savedViews: [
         {
           id: "attention",
@@ -434,6 +436,28 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     lifecycle: "readOnly",
+    dataQuality: {
+      checks: [
+        {
+          id: "image_job_failed",
+          satisfiedLabel: "Not failed",
+          placement: { field: "state" },
+          facet: "integrity",
+          weight: 3,
+          label: "Processing",
+          message: "The job failed; its last error and attempts are retained.",
+        },
+        {
+          id: "image_job_unexplained_skip",
+          satisfiedLabel: "Skip reason recorded",
+          placement: { field: "lastError" },
+          facet: "provenance",
+          weight: 1,
+          label: "Skip reason",
+          message: "The job was skipped without a recorded reason.",
+        },
+      ],
+    },
   },
   extensions: {
     ports: {

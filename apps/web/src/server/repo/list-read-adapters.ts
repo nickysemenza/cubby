@@ -1,5 +1,9 @@
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { z } from "zod";
+import {
+  listChildCountSchema,
+  type PaginationParams,
+  type SortParams,
+} from "@cubby/schemas/pagination";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
@@ -10,6 +14,23 @@ import type {
   ListReadRow,
 } from "./list-projection";
 
+const childCountRowSchema = z.object({ childCount: listChildCountSchema });
+/**
+ * A tree scope's `childCount` is a list-row fact the entity's output schema
+ * does not declare, so parsing a row strips it; carry it from each source row
+ * onto its parsed row.
+ */
+export const withChildCounts = <Row>(
+  parsed: readonly Row[],
+  source: readonly unknown[],
+): Row[] =>
+  parsed.map((row, index) => {
+    const { childCount } = childCountRowSchema.parse(source[index] ?? {});
+    return childCount === undefined
+      ? row
+      : Object.assign({}, row, { childCount });
+  });
+
 /** Complete readers validate canonical rows while preserving count, totals, and grouping metadata. */
 export async function parseCompleteListRead<
   S extends z.ZodType,
@@ -19,7 +40,13 @@ export async function parseCompleteListRead<
   read: Promise<Page>,
 ): Promise<Omit<Page, "data"> & ListReadPage<z.output<S>>> {
   const { data, ...page } = await read;
-  return { ...page, data: data.map((row) => schema.parse(row)) };
+  return {
+    ...page,
+    data: withChildCounts(
+      data.map((row): z.output<S> => schema.parse(row)),
+      data,
+    ),
+  };
 }
 
 export function completeListReader<

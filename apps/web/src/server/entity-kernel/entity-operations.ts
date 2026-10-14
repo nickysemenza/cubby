@@ -12,7 +12,6 @@ import {
 import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
-  listChildCountSchema,
   listGroupSummarySchema,
   type ListGroupSummary,
   type PaginationParams,
@@ -49,6 +48,7 @@ import {
   recordEntitySources,
 } from "~/server/repo/entity-source";
 import { listTotalLabels } from "~/server/repo/list-display-labels";
+import { withChildCounts } from "~/server/repo/list-read-adapters";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -85,22 +85,6 @@ type EntityListInput<TFilters = unknown> = {
   groupBy?: string;
   nesting?: unknown;
 };
-
-const childCountRowSchema = z.object({ childCount: listChildCountSchema });
-/**
- * A tree scope's `childCount` is a list-row fact the entity's list schema
- * does not declare; carry it from the page onto each parsed row.
- */
-const withChildCounts = (
-  parsed: readonly unknown[],
-  source: readonly unknown[],
-): unknown[] =>
-  parsed.map((row, index) => {
-    const { childCount } = childCountRowSchema.parse(source[index] ?? {});
-    return childCount === undefined
-      ? row
-      : Object.assign({}, row, { childCount });
-  });
 
 const DEFAULT_PAGINATION: PaginationParams = {
   pageIndex: 0,

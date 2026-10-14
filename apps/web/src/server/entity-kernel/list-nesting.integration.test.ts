@@ -189,6 +189,16 @@ describe("list nesting scope", () => {
       nesting: { scope: "roots" },
     });
     expect(outline(roots.data)).toEqual([[pantry.id, 1]]);
+    // The complete list read (MCP, HTTP, the hierarchy chart) re-parses each
+    // row with the entity's output schema; `childCount` must survive it.
+    const listed = await executeEntity(context, {
+      action: "list",
+      entity: "productCategory",
+      filters: { search: "Nesting" },
+      nesting: { scope: "roots" },
+    });
+    if (listed.action !== "list") throw new Error("Wrong list action");
+    expect(outline(listed.items)).toEqual([[pantry.id, 1]]);
     // A search match whose parent does not match stays reachable as a root.
     const orphan = await operation.base(context, {
       filters: { search: "spices" },

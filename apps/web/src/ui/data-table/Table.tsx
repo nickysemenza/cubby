@@ -40,6 +40,7 @@ import {
 } from "../../entity/actions/entity-actions";
 import { EntityDisplayImagesProvider } from "../../entity/entity-media/entity-display-images";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { serverTreeStatusOf } from "../hooks/useServerTreeChildren";
 import type { BulkActionPreview } from "./bulk-actions.types";
 import { CellSelectionContext } from "./cell-selection-context";
 import { columnOffsetValue, columnWidthValue } from "./column-layout";
@@ -56,6 +57,7 @@ import { SectionHeader } from "./SectionHeader";
 import { collectTableEntityMediaRefs } from "./table-entity-media";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import TableHeaderLayout from "./TableHeaderLayout";
+import { TreeStatusRow } from "./tree-status-row";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 
@@ -1209,6 +1211,24 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           // rowIndex is a valid position into the rows array (flat index when
           // ungrouped, or the row's flat index when grouped).
           const row = rows[item.rowIndex]!;
+          const treeStatus = serverTreeStatusOf(row.original);
+          if (treeStatus)
+            return (
+              <TableRow
+                key={row.id}
+                className="border-b border-border"
+                style={{ height: `${virtualRow.size}px` }}
+              >
+                <TableCell
+                  colSpan={colSpan}
+                  className="py-0"
+                  // Indented as a child of its parent, like the name cell.
+                  style={{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }}
+                >
+                  <TreeStatusRow status={treeStatus} />
+                </TableCell>
+              </TableRow>
+            );
           return (
             <VirtualSelectionRow
               key={row.id}
@@ -1302,7 +1322,12 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               refreshControls={refreshControls}
               groupConfig={groupConfig}
               grouped={grouped}
-              onGroupedChange={onGroupedChange}
+              presentationSwitches={presentationSwitches({
+                groupConfig,
+                grouped,
+                onGroupedChange,
+                nestToggle,
+              })}
               isTransitioning={isTransitioning}
               rowContentVersion={rowContentVersion}
               portalWorkbenchUtilities={externalToolbar}
