@@ -1,4 +1,11 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  glob,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 export type EntityArtifacts = Readonly<{
   relativePath: string;
@@ -47,8 +54,9 @@ const carriesGeneratedHeader = async (absolutePath: string) => {
 
 /**
  * Deletes files carrying the generated header in an artifact directory that
- * no artifact claims (a retired route module or entity), so a stale local
- * output never shadows the current ones. Run once over the union of every
+ * no artifact claims, including wholly retired web output directories restored
+ * by Nx's generated-file glob. A stale local output must never shadow the current
+ * ones. Run once over the union of every
  * stage's artifacts: the stages share output directories.
  */
 export const removeExtraArtifacts = async (
@@ -59,6 +67,9 @@ export const removeExtraArtifacts = async (
   const directories = new Set(
     artifacts.map(({ relativePath }) => dirname(relativePath)),
   );
+  for await (const path of glob("apps/web/src/**/*.gen.ts", { cwd: root })) {
+    directories.add(dirname(path));
+  }
   const removed: string[] = [];
   for (const directory of directories) {
     const absoluteDirectory = resolve(root, directory);
