@@ -543,33 +543,40 @@ export function FilterBar({
   );
 }
 
-/** The list's grouped-versus-flat choice, carried into the phone Filter sheet. */
-export interface FilterSheetGrouping {
-  grouped: boolean;
-  onChange: (grouped: boolean) => void;
+/**
+ * A list presentation switch (Grouped, Nested) carried into the phone Filter
+ * sheet: the same choices desktop offers beside the table.
+ */
+export interface FilterSheetSwitch {
+  id: string;
+  label: string;
+  active: boolean;
+  onChange: (active: boolean) => void;
 }
 
 /**
- * The band has no room for a grouped icon button (seg, search and Filter
- * only), so grouping is a row of the sheet, above Sort.
+ * The band has no room for presentation icon buttons (seg, search and Filter
+ * only), so each switch is a row of the sheet, above Sort.
  */
-function GroupedRow({ grouping }: { grouping: FilterSheetGrouping }) {
+function SwitchRow({ toggle }: { toggle: FilterSheetSwitch }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={grouping.grouped}
+      aria-checked={toggle.active}
       className="flex min-h-11 items-center justify-between gap-2 border-b border-border px-1 text-left text-sm"
-      onClick={() => grouping.onChange(!grouping.grouped)}
+      onClick={() => toggle.onChange(!toggle.active)}
     >
-      <span className="font-medium">Grouped</span>
+      <span className="font-medium">{toggle.label}</span>
       {/* The switch's `aria-checked` carries the state for assistive tech. */}
       <span aria-hidden className="text-muted-foreground">
-        {grouping.grouped ? "On" : "Off"}
+        {toggle.active ? "On" : "Off"}
       </span>
     </button>
   );
 }
+
+const NO_SWITCHES: readonly FilterSheetSwitch[] = [];
 
 /**
  * The phone workbench band's query tier: search + a `Filter` button carrying
@@ -585,7 +592,7 @@ export function MobileFilterTier<TData extends RowData>({
   onChange,
   searchKey,
   searchPlaceholder,
-  grouping,
+  switches = NO_SWITCHES,
 }: {
   table: Table<TData>;
   filters: Filter[];
@@ -593,7 +600,7 @@ export function MobileFilterTier<TData extends RowData>({
   onChange: (filters: Filter[]) => void;
   searchKey?: string;
   searchPlaceholder?: string;
-  grouping?: FilterSheetGrouping | undefined;
+  switches?: readonly FilterSheetSwitch[] | undefined;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [view, setView] = useState<"fields" | "columns" | string>("fields");
@@ -614,7 +621,7 @@ export function MobileFilterTier<TData extends RowData>({
   // for a sortable-only table even when it declares no filterable fields.
   const hasSort = sortableColumns(table).length > 0;
   const showFilterTrigger =
-    chipFields.length > 0 || hasSort || grouping !== undefined;
+    chipFields.length > 0 || hasSort || switches.length > 0;
 
   const openSheet = (nextView: typeof view) => {
     setView(nextView);
@@ -727,7 +734,9 @@ export function MobileFilterTier<TData extends RowData>({
                 </button>
               );
             })}
-            {grouping && <GroupedRow grouping={grouping} />}
+            {switches.map((toggle) => (
+              <SwitchRow key={toggle.id} toggle={toggle} />
+            ))}
             <SortSection table={table} />
             <button
               type="button"

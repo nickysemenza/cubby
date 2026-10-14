@@ -10,6 +10,7 @@ import { PullToRefresh } from "~/ui/primitives/pull-to-refresh";
 
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
+import type { FilterSheetSwitch } from "./FilterBar";
 import { MobileCardView } from "./MobileCardView";
 import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
@@ -34,12 +35,12 @@ interface MobileListScreenProps<TItem extends RowData> {
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: MobileRefreshControls;
-  /** Group configuration — when provided, shows a toggle button */
+  /** Group configuration — the cards section by it while `grouped`. */
   groupConfig?: GroupConfig<TItem>;
   /** Whether grouping is currently active (controlled from parent) */
   grouped?: boolean;
-  /** Toggle grouping on/off (controlled from parent) */
-  onGroupedChange?: (value: boolean) => void;
+  /** The list's Grouped/Nested switches, rows of the Filter sheet. */
+  presentationSwitches?: readonly FilterSheetSwitch[];
   isTransitioning?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
@@ -66,7 +67,7 @@ export function MobileListScreen<TItem extends RowData>({
   refreshControls,
   groupConfig,
   grouped = false,
-  onGroupedChange,
+  presentationSwitches,
   isTransitioning = false,
   rowContentVersion,
   portalWorkbenchUtilities = false,
@@ -81,13 +82,6 @@ export function MobileListScreen<TItem extends RowData>({
   // gate below, which is what keeps it off desktop while JS is still catching
   // up. Without it a phone's first paint is a clipped desktop table.
   const hydrated = useHydrated();
-
-  // The band is seg, search and Filter only: grouping is a row of the Filter
-  // sheet (see `MobileFilterTier`), not an icon button beside them.
-  const grouping =
-    groupConfig && onGroupedChange
-      ? { grouped, onChange: onGroupedChange }
-      : undefined;
 
   // The desktop table header doesn't render filter controls; this shared
   // toolbar gives phones the same filter builder.
@@ -110,7 +104,9 @@ export function MobileListScreen<TItem extends RowData>({
           table={table}
           entity={entity}
           additionalContent={toolbarContent}
-          grouping={grouping}
+          // The band is seg, search and Filter only: Grouped and Nested are
+          // rows of the Filter sheet (`MobileFilterTier`), not icon buttons.
+          switches={presentationSwitches}
           actions={actions}
           bulkActionBar={bulkActionBar}
           showViewOptions={showViewOptions}

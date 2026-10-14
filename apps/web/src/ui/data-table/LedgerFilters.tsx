@@ -13,7 +13,7 @@ import {
 } from "./filter-bar-core";
 import {
   FilterBar,
-  type FilterSheetGrouping,
+  type FilterSheetSwitch,
   MobileFilterTier,
 } from "./FilterBar";
 import type { CubbyTable as Table } from "./table-features";
@@ -60,7 +60,7 @@ export function LedgerFilters<TData extends RowData>({
   entity,
   optionHints,
   variant = "desktop",
-  grouping,
+  switches,
   collapsed = false,
 }: {
   table: Table<TData>;
@@ -75,8 +75,8 @@ export function LedgerFilters<TData extends RowData>({
    */
   variant?: "desktop" | "mobile";
   collapsed?: boolean;
-  /** Phone only: the grouped toggle, which lives in the Filter sheet. */
-  grouping?: FilterSheetGrouping | undefined;
+  /** Phone only: the presentation switches, which live in the Filter sheet. */
+  switches?: readonly FilterSheetSwitch[] | undefined;
 }) {
   // TanStack v9 materializes leaf columns after the first table render. The
   // table/options references stay stable across that boundary, so they cannot
@@ -136,7 +136,7 @@ export function LedgerFilters<TData extends RowData>({
         onChange={handleChange}
         searchKey={primarySearch?.key}
         searchPlaceholder={searchPlaceholder}
-        grouping={grouping}
+        switches={switches}
       />
     );
   }

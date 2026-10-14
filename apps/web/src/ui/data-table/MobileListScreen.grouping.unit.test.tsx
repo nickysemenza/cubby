@@ -53,7 +53,18 @@ function Screen({
       table={table}
       groupConfig={withGrouping ? groupConfig : undefined}
       grouped={grouped}
-      onGroupedChange={withGrouping ? onGroupedChange : undefined}
+      presentationSwitches={
+        withGrouping
+          ? [
+              {
+                id: "grouped",
+                label: "Grouped",
+                active: grouped,
+                onChange: onGroupedChange,
+              },
+            ]
+          : undefined
+      }
     />
   );
 }

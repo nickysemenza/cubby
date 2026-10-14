@@ -28,7 +28,7 @@ import { Spinner } from "~/ui/primitives/spinner";
 import { isTableLayoutCustomized } from "./column-layout";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { TableSavedViewsMenuItems } from "./DataTableViews";
-import type { FilterSheetGrouping } from "./FilterBar";
+import type { FilterSheetSwitch } from "./FilterBar";
 import { LedgerFilters } from "./LedgerFilters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
@@ -68,10 +68,11 @@ interface DataTableToolbarProps<TData extends RowData> {
    */
   actionsMenuExtra?: ReactNode;
   /**
-   * The list's grouped toggle for the phone band, whose Filter sheet carries
-   * it as a row. Desktop and embedded tables toggle grouping elsewhere.
+   * The list's presentation switches (Grouped, Nested) for the phone band,
+   * whose Filter sheet carries each as a row. Desktop and embedded tables
+   * toggle them beside the table instead.
    */
-  grouping?: FilterSheetGrouping | undefined;
+  switches?: readonly FilterSheetSwitch[] | undefined;
 }
 
 function SavedViewsSubmenu<TData extends RowData>({
@@ -189,7 +190,7 @@ function QueryTierFieldset<TData extends RowData>({
   actionsMenuExtra,
   bulkActionBar,
   actions,
-  grouping,
+  switches,
 }: {
   table: Table<TData>;
   entity?: Entity;
@@ -204,7 +205,7 @@ function QueryTierFieldset<TData extends RowData>({
   actionsMenuExtra?: ReactNode;
   bulkActionBar?: ReactNode;
   actions?: ReactNode;
-  grouping?: FilterSheetGrouping | undefined;
+  switches?: readonly FilterSheetSwitch[] | undefined;
 }) {
   const actionsTarget = usePageWorkbenchTarget("actions");
   const menu =
@@ -248,7 +249,7 @@ function QueryTierFieldset<TData extends RowData>({
             collapsed={isPage}
             optionHints={filterOptionHints}
             variant={isMobileFilterTier ? "mobile" : "desktop"}
-            grouping={isMobileFilterTier ? grouping : undefined}
+            switches={isMobileFilterTier ? switches : undefined}
           />
         </div>
         {actionsTarget ? createPortal(menu, actionsTarget) : menu}
@@ -272,7 +273,7 @@ export function DataTableToolbar<TData extends RowData>({
   workbenchUtilityViewport = "all",
   variant = "page",
   actionsMenuExtra,
-  grouping,
+  switches,
 }: DataTableToolbarProps<TData>) {
   const workbenchTarget = usePageWorkbenchTarget();
   const isPage = variant === "page";
@@ -321,7 +322,7 @@ export function DataTableToolbar<TData extends RowData>({
       actionsMenuExtra={actionsMenuExtra}
       bulkActionBar={bulkActionBar}
       actions={actions}
-      grouping={grouping}
+      switches={switches}
     />
   );
 

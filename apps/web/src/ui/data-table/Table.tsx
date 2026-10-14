@@ -1302,7 +1302,12 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               refreshControls={refreshControls}
               groupConfig={groupConfig}
               grouped={grouped}
-              onGroupedChange={onGroupedChange}
+              presentationSwitches={presentationSwitches({
+                groupConfig,
+                grouped,
+                onGroupedChange,
+                nestToggle,
+              })}
               isTransitioning={isTransitioning}
               rowContentVersion={rowContentVersion}
               portalWorkbenchUtilities={externalToolbar}
