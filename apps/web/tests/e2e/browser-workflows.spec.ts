@@ -160,7 +160,7 @@ test("create dialog validation and parent picker remain reachable", async ({
   await page
     .getByRole("option", { name: new RegExp(`^${escapeRegExp(parentName)}`) })
     .click();
-  await expect(picker).toHaveValue(`${parentName} — room`);
+  await expect(picker).toHaveValue(parentName);
   await expect(
     dialog.getByRole("button", { name: "Clear Parent", exact: true }),
   ).toBeVisible();

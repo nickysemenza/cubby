@@ -72,7 +72,7 @@ test("an assignment picker keeps its label through search, clear, and create", a
   await page
     .getByRole("option", { name: new RegExp(`^${escapeRegExp(parentName)}`) })
     .click();
-  await expect(picker).toHaveValue(`${parentName} — room`);
+  await expect(picker).toHaveValue(parentName);
   await expect(effectTargets(parentName)).toHaveCount(2);
 
   // Search away: results that no longer list the selection must not erase
@@ -85,7 +85,7 @@ test("an assignment picker keeps its label through search, clear, and create", a
   await picker.press("Escape");
   await expect(dialog).toBeVisible();
   await expect(page.getByText("No location found.")).toHaveCount(0);
-  await expect(picker).toHaveValue(`${parentName} — room`);
+  await expect(picker).toHaveValue(parentName);
   await expect(effectTargets(parentName)).toHaveCount(2);
 
   // Clear: nothing stale remains, and submitting names the missing choice.
@@ -160,7 +160,7 @@ test("a closed reference field shows the record, never its code", async ({
   const dialog = page.getByRole("dialog");
   const picker = dialog.getByRole("combobox", { name: /^Parent/ });
 
-  await expect(picker).toHaveValue(`${token} parent — room`);
+  await expect(picker).toHaveValue(`${token} parent`);
   await expect(picker).not.toHaveValue(new RegExp(`LOC-${SHORTCODE}`));
   await expect(dialog.locator("[data-picker-visual]").first()).toBeVisible();
   await expect(dialog).not.toContainText(parent.id);
