@@ -1,0 +1,265 @@
+scripts/generator/entities/render/swift-catalog.ts
+  s_a7bec1ba59cec5::t_e1505edc7b0a65 219,333-343
+apps/web/src/server/repo/inventory/ownership-migration.integration.test.ts
+  s_a7bec1ba59cec5::t_854dbf075eba13 1-113
+packages/schemas/src/entity-report.ts
+  s_a7bec1ba59cec5::t_fe5b21320481a8 546,593
+apps/web/src/entity/entity-detail/entity-relation-table.unit.test.tsx
+  s_a7bec1ba59cec5::t_e9f6227b949f8c 62
+apps/apple/CubbyKit/Tests/CubbyKitTests/FieldResolutionPresentationTests.swift
+  s_f376b175015bce::t_edbc4b95bccb2a 84,87-88,92-135
+  s_a7bec1ba59cec5::t_adf2adc3593216 136
+apps/web/src/server/photo-import-run/writer.integration.test.ts
+  s_a7bec1ba59cec5::t_997748ad33b311 206,610,626,632,661
+apps/web/src/entity/field-resolution-explanation.tsx
+  s_a7bec1ba59cec5::t_ac7969f17f6435 8,211-212,214-215
+  s_a7bec1ba59cec5::t_9e488cf534ac89 18-22,72-75
+apps/web/src/server/repo/inventory/mappers.unit.test.ts
+  s_a7bec1ba59cec5::t_042c9029f2ca57 214,220-231
+apps/web/tooling/convergence-harness.ts
+  s_a7bec1ba59cec5::t_aee87902fadd7b 498,581
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_f376b175015bce::t_0857ae8690a55b 13-19,25-27,51,56,279
+packages/schemas/src/native-coverage.ts
+  s_a7bec1ba59cec5::t_0ca9db60f929a3 191
+apps/apple/CubbyKit/Tests/CubbyKitTests/GenericEntityEditModelTests.swift
+  s_f376b175015bce::t_1b3e6f488b2dda 240-273
+docs/agents/web-ui-reference.md
+  s_a7bec1ba59cec5::t_fcc5affa4cc6a5 140
+apps/web/src/server/repo/product/crud.ts
+  s_a7bec1ba59cec5::t_d68fff23b431bd 129-132,714-715,717-723,1282,1297,1316,1424,1449,1514
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_a7bec1ba59cec5::t_06617afa66d778 95-114
+apps/web/src/server/operations/field-explanation.server.ts
+  s_a7bec1ba59cec5::t_9a3f08195a5a6c 642,645-650,653-656,822,833
+scripts/generator/entities/data-quality.ts
+  s_a7bec1ba59cec5::t_7e3f405da8cea8 235
+apps/apple/App/Tests/Browse/EntityRowPresentationTests.swift
+  s_f376b175015bce::t_10f0e9a046e5e2 30-80,85
+  s_a7bec1ba59cec5::t_da4e2d862aafcd 81-84
+apps/apple/App/Shared/Browse/DetailSlots.swift
+  s_f376b175015bce::t_0e9bc9f2a08fa2 119
+packages/schemas/src/entity-definitions/definition.ts
+  s_a7bec1ba59cec5::t_bc24b43c908bd0 184-185,199,670-686,2100-2113
+packages/shared/src/index.ts
+  s_a7bec1ba59cec5::t_1b9f9ff3722d9f 10-15
+apps/apple/App/Tests/Browse/EntityFilterSheetTests.swift
+  s_f376b175015bce::t_099dfb74fa9eaa 45-61
+apps/web/src/server/repo/product-match.ts
+  s_a7bec1ba59cec5::t_4f96ff4ed8c414 187,366
+docs/todos.md
+  s_a7bec1ba59cec5::t_d2ba3e360b2664 943-948
+apps/web/src/server/entity-kernel/delete-policy.integration.test.ts
+  s_a7bec1ba59cec5::t_339ee09b51f295 976
+packages/schemas/src/product.ts
+  s_a7bec1ba59cec5::t_608bb04211f16b 1,266,889-890,948-949
+apps/web/src/server/repo/product/detail.ts
+  s_a7bec1ba59cec5::t_105a5a4b3f4a85 15,91,170,181,198
+scripts/generator/entities/declarations.ts
+  s_a7bec1ba59cec5::t_ef900c04ec73c7 104,215-216
+docs/entities.md
+  s_a7bec1ba59cec5::t_936a833cb122d7 763-774
+apps/web/src/server/repo/inventory/ownership-mutations.ts
+  s_a7bec1ba59cec5::t_2932fb78a10449 79,321
+apps/web/src/entity/detail-field-renderers/inventory.tsx
+  s_a7bec1ba59cec5::t_adb4a60f994b78 3,14-16,18-28
+apps/web/src/entity/field-resolution-explanation.unit.test.tsx
+  s_a7bec1ba59cec5::t_3f8c4319da3d69 97,158,178-205,215-217
+apps/web/tooling/scenarios/corpus.ts
+  s_a7bec1ba59cec5::t_2d407bbee9dd14 462
+apps/web/src/server/repo/inventory/slot.ts
+  s_a7bec1ba59cec5::t_d09f8184d622d5 47-48,50
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_a7bec1ba59cec5::t_dc5762e9644d0e 4-8,27-30,77,102,130,567,1533-1563,2259-2266
+apps/web/src/server/photo-import-run/proposals.integration.test.ts
+  s_a7bec1ba59cec5::t_2bd6a0f196bc31 784,787,934
+  s_a7bec1ba59cec5::t_0dfdbefb982ef6 1-2,1117-1178
+packages/schemas/src/inventory.ts
+  s_a7bec1ba59cec5::t_5c39ca58a629a4 284,286,291,306,310
+apps/web/src/server/repo/inventory/repository.ts
+  s_a7bec1ba59cec5::t_13f4797b2fced8 83-84,86-96
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_a7bec1ba59cec5::t_1403b5608d50b7 478,480,482-483
+  s_a7bec1ba59cec5::t_0db3d5fa01e1e5 497
+apps/web/src/app/collections/collection-detail-page.tsx
+  s_a7bec1ba59cec5::t_9970a2a6652398 10,72-78
+apps/apple/App/Shared/Browse/EntityRowPresentation.swift
+  s_f376b175015bce::t_f36f62980e0665 46-51,57,61-71,75,78-85,96-97,105-106,176-184,186,191,193,200,221-222
+apps/apple/App/Shared/Browse/EntityListView.swift
+  s_f376b175015bce::t_3eb2433a49a864 876,890-891,1104,1106,1114,1117,1235-1238
+  s_a7bec1ba59cec5::t_220d240306c0c9 1239-1241
+packages/schemas/src/photo-import-run.ts
+  s_a7bec1ba59cec5::t_352cbd11158fcf 95-100,105,329
+apps/web/src/features/inventory/inventory-placement-suggestion.unit.test.tsx
+  s_a7bec1ba59cec5::t_e1fac405ef49c9 37
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_a7bec1ba59cec5::t_96b777b888418c 2,21,44,46-47,49,52,55,58
+docs/guide/terminology.md
+  s_a7bec1ba59cec5::t_3a001f0fcd3850 533,536-539
+apps/apple/App/Shared/Browse/DetailSectionViews.swift
+  s_f376b175015bce::t_ffb5eb233f069c 198,224,227,279-287,290-294,351-353,361,377,380-399,409-412,563-565,567-572,658,660-662,1298-1329
+  s_a7bec1ba59cec5::t_7e32c56c18e4a0 1330-1336
+apps/web/src/entity/entity-display.unit.test.tsx
+  s_a7bec1ba59cec5::t_fa792acb4c3334 990
+apps/apple/App/Shared/Browse/EntityFilterSheet.swift
+  s_f376b175015bce::t_21d9771ae841cc 18-22,25-27,41-42,45-46,50,213-216,218,221,231,233-235,321-322,324,326-327,330-331
+scripts/generator/entities/render/index.ts
+  s_a7bec1ba59cec5::t_d3cfb865bda325 284-289,1201,1352
+apps/web/src/entity/list-columns/product.tsx
+  s_a7bec1ba59cec5::t_98b32792f0a685 458
+apps/web/src/server/repo/shortcode-labels.ts
+  s_a7bec1ba59cec5::t_1b1c3e5942b553 1-49
+apps/web/src/server/photo-import-run/writer.ts
+  s_a7bec1ba59cec5::t_7c1ec8c123d2bc 311-314,334,336-337,339,342-346
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/GenericEntityEditModel.swift
+  s_f376b175015bce::t_f133da18d18964 171-176,178,180
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_f376b175015bce::t_94621149541fe3 137-138,261-262,295,421-439,442-487
+apps/web/src/entity/filter-manifest.tsx
+  s_a7bec1ba59cec5::t_16d8c033ddf87a 66-69
+apps/web/src/server/repo/field-resolution-evidence.ts
+  s_a7bec1ba59cec5::t_61b924a33a780f 54-55,177-182,466-472
+  s_a7bec1ba59cec5::t_02d3fa3c413298 1-4,10-12,16,18,21-26,33-35,44-53,56-59,64,87-89,119-146,166-176,183-186,191-193,195,197,204-215,217,223,229-258,260,262,264,268-276,280,282,286-293,301,305,307-309,311-313,315,317,319,321-414,416-465,473-579,581-595,597-603
+apps/web/src/server/operations/inventory.server.ts
+  s_a7bec1ba59cec5::t_95f9866e91ca21 123
+apps/web/src/server/repo/search-document.ts
+  s_a7bec1ba59cec5::t_a3ac1122240379 310,319
+apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts
+  s_a7bec1ba59cec5::t_c7be34b1645c96 426
+apps/web/src/server/repo/inventory/ownership-merge.integration.test.ts
+  s_a7bec1ba59cec5::t_f5f0829d3544b3 67,116,167,172,258
+apps/web/src/server/repo/product-category.ts
+  s_a7bec1ba59cec5::t_f6857dff442334 4-7,229-264,368-373
+apps/web/tests/e2e/inheritance-contract.ts
+  s_a7bec1ba59cec5::t_9d9f56d0494798 25
+scripts/generator/entities/render/filters.ts
+  s_a7bec1ba59cec5::t_026acd89f9a5d2 118-120
+apps/web/src/entity/field-explanation.tsx
+  s_a7bec1ba59cec5::t_47c276563a33e5 23,539
+  s_a7bec1ba59cec5::t_b3d370d575c352 22,648-651
+packages/schemas/src/inventory-ownership.ts
+  s_a7bec1ba59cec5::t_037dd4c5bda232 11-13,26,49-50,62-66
+apps/web/src/server/repo/problems/detectors-integrity.integration.test.ts
+  s_a7bec1ba59cec5::t_8a88791e334022 911
+apps/web/src/server/photo-import-run/proposals.ts
+  s_a7bec1ba59cec5::t_e922adf09d4278 107-108,308-310,595-596
+apps/web/src/server/services/product.service.ts
+  s_a7bec1ba59cec5::t_9978df830a47d9 24,72,88,94
+apps/apple/App/Shared/Browse/EntityFieldResolutionLabel.swift
+  s_f376b175015bce::t_56cf00c7ddf0e0 7-16,23,37,55
+apps/web/src/server/repo/inventory/crud.ts
+  s_a7bec1ba59cec5::t_214317dc918da6 812-817
+  s_a7bec1ba59cec5::t_53223cc46ef519 56,105,107,189,213,342,344,511,627-634,638,652,701-741,767-787,843,857-858,865,932,985
+packages/schemas/src/field-resolution.ts
+  s_a7bec1ba59cec5::t_6ecb657e4f1375 12-14,40-53
+apps/web/src/server/repo/product-match.integration.test.ts
+  s_a7bec1ba59cec5::t_2358069fd01a3b 191
+apps/web/src/entity/filters.ts
+  s_a7bec1ba59cec5::t_c7994f2ff44a44 83-85,162-164
+apps/web/src/server/repo/ledger-party.ts
+  s_a7bec1ba59cec5::t_8eac7de14b0071 758
+apps/web/src/server/repo/product/types.ts
+  s_a7bec1ba59cec5::t_505ca74fc7ea28 2,84-85
+scripts/generator/entities/compile.ts
+  s_a7bec1ba59cec5::t_a004a9a5595643 1169,1838,1978,2009
+apps/web/src/server/repo/inventory/mappers.ts
+  s_a7bec1ba59cec5::t_37cfabc9df1697 25-28,44-49,52-53,57-59,62-64,70,77-79,81-83,108,173
+apps/apple/App/Shared/Browse/EntityFieldValue.swift
+  s_f376b175015bce::t_f682d36356aba3 17-47,67-68
+  s_a7bec1ba59cec5::t_a224a5cc0ae938 69
+apps/web/src/server/repo/problems/detectors-financial.ts
+  s_a7bec1ba59cec5::t_5ef3e87ae72e9c 34
+apps/web/drizzle/0067_inventory_ownership_explicit.sql
+  s_a7bec1ba59cec5::t_a916b4d66435f4 1-12
+apps/web/src/entity/field-resolution.tsx
+  s_a7bec1ba59cec5::t_b16fac8c4ea963 291-292
+  s_a7bec1ba59cec5::t_975f1a68336f80 2,15,150-180,199-202,205,213,215-216,218,222,230-233,244,246,256-260,278-286,296,298,303-304,320,322-352,354,361,365,400,402,410,413,415,429,434,437-439,447,464,476
+  s_a7bec1ba59cec5::t_98e4d09a550003 18,26,368-369,376,382-391
+apps/web/src/server/operations/field-explanation.integration.test.ts
+  s_a7bec1ba59cec5::t_d2710644ca7da3 219-223,263-265,268-270,400,416,420-423,425-432
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/FieldResolutionPresentation.swift
+  s_f376b175015bce::t_a6aaa9e2fc7c4c 23,26-29,33-34,36-54,62-88,148-157,159-161,165-167,172,175,179,181,183-184
+apps/web/src/ui/data-table/DesktopDataRow.tsx
+  s_a7bec1ba59cec5::t_c34420d6c9bf64 19,21,118-119,122-125
+apps/web/src/server/repo/product/mappers.ts
+  s_a7bec1ba59cec5::t_e31a6d842bdce8 493
+apps/web/src/server/repo/inventory/ownership.ts
+  s_a7bec1ba59cec5::t_4cae585556a712 1-4,13-14,62-79,82,85,100,348,369,446-447,451,455-471,473-474,476-485,487-488,494-538,540-544,636-646,691,703,707-714,717,721-745,750-755,757-780,784-785,788-793,821-824,831-834,839-848,879-902,904,906,915-921,923-928,932-937,940-1008,1011-1013,1017-1018,1020-1022,1037-1048
+  s_a7bec1ba59cec5::t_51fddf6b33ac62 746-749
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_a7bec1ba59cec5::t_56e6840072b860 15,587
+  s_a7bec1ba59cec5::t_0c57f660abc6e1 18,20-24,114,142,235-236,244,251-252,254,258-290,298,300-303,305-310,534,590,674-679,689-690
+  s_a7bec1ba59cec5::t_55f77d113b4614 255
+apps/web/src/app/collections/collection-assignment-matrix.tsx
+  s_a7bec1ba59cec5::t_d240ad1e79bcda 18,71-72,586,589,781,841,976-978
+apps/web/src/app/products/product-kit-rows.unit.test.ts
+  s_a7bec1ba59cec5::t_bc78165f56c079 31
+apps/web/drizzle/meta/0067_snapshot.json
+  s_a7bec1ba59cec5::t_fea8fd35af64d4 1-20802
+packages/schemas/src/field-explanation.ts
+  s_a7bec1ba59cec5::t_8344404f6bca4b 4,112-118,126
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_f376b175015bce::t_83db692806c3f8 7
+apps/web/src/server/repo/inventory/bulk.ts
+  s_a7bec1ba59cec5::t_5c022ad172b63f 45,409,788,1158
+apps/apple/App/Shared/Browse/RecordsBlockView.swift
+  s_f376b175015bce::t_62512240cd8567 390-395,397-399,458-475,655-693,699-715
+packages/schemas/src/pagination.ts
+  s_a7bec1ba59cec5::t_58c4c0b0c10193 134-137,140,142,145-146,150-154
+apps/web/drizzle/meta/_journal.json
+  s_a7bec1ba59cec5::t_35ba4cb5394131 473-479
+apps/web/src/entity/entity-display.tsx
+  s_a7bec1ba59cec5::t_535db3a46ac388 20,329,331-350
+  s_a7bec1ba59cec5::t_2371be359c5bfe 18,36,89-94,323-328,330,351-354,360-374,639-640,713-714,1392
+scripts/generator/entities/render/field-explanations-reference.ts
+  s_a7bec1ba59cec5::t_3c4ce3062c08cd 42-46
+  s_a7bec1ba59cec5::t_df2363a9d5bfa0 41,47
+apps/web/src/features/locations/calculate-inventory-valuation.unit.test.ts
+  s_a7bec1ba59cec5::t_6bbda27c316281 40
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/inventory-by-location.json
+  s_f376b175015bce::t_f4f1c1e0c82ea9 16,157
+apps/web/src/server/repo/inventory/ownership-mutations.integration.test.ts
+  s_a7bec1ba59cec5::t_5bd6d5fa39e530 9,185,195,221,237,278,293,332,440,584,628,696,708-710,715-717
+apps/web/src/entity/field-resolution.unit.test.tsx
+  s_a7bec1ba59cec5::t_69ad22ddcc41b2 54
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_f376b175015bce::t_20288eafaed461 38-55,63
+  s_a7bec1ba59cec5::t_8c6fc483416218 64-67
+apps/web/tests/e2e/finance-category-display.spec.ts
+  s_a7bec1ba59cec5::t_d71bcea44bc8fd 231
+packages/schemas/src/manifest-wire.ts
+  s_a7bec1ba59cec5::t_232c658a4b097f 82-88,91,149
+apps/web/tests/e2e/fixtures-catalog.ts
+  s_a7bec1ba59cec5::t_487ae99e6ad311 254,261
+packages/shared/src/filter.ts
+  s_a7bec1ba59cec5::t_d7f938a006db8d 21-25
+apps/apple/App/Shared/Browse/InheritedMarker.swift
+  s_a7bec1ba59cec5::t_68f3ebf9060fa4 1-40
+  s_a7bec1ba59cec5::t_cb122e6d18b817 41
+packages/shared/src/apple-client-version.ts
+  s_a7bec1ba59cec5::t_e4fb18bbf33e33 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c236216a5f3c7411600ea2778801a66da55d5953",
+  "prompts": {},
+  "sessions": {
+    "s_a7bec1ba59cec5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10faf483-7285-407e-800f-2dad5a8b10b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f376b175015bce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af1f9a61-c8e1-4a86-9617-b86b8291a625",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
