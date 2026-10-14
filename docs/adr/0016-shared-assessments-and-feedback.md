@@ -185,3 +185,11 @@ free-form selected-variant strings retrieve candidates; they do not alone prove
 complete variant identity. Shared model/style numbers remain ranking evidence.
 Confirmed contradictory variants under a retained exact-variant claim surface
 an identity conflict before any merge recommendation.
+
+Product-pair publication identity is canonical subject plus relevant evidence
+and decision-policy revision, not occurrence Run, evaluation or request IDs.
+Repeated or opposite-order scans under unchanged evidence/policy retain the
+first published producer and resolved review state. Relevant evidence or policy
+changes can publish a fresh Assessment while historical Feedback remains bound
+to the original. Review retry identity separately preserves the application
+receipt and refuses conflicting reuse rather than repeating a domain mutation.
