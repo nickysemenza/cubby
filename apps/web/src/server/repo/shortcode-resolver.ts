@@ -379,11 +379,11 @@ export const resolveTitleFieldColumn = (
  * `entityLabel()` in `apps/web/src/entity/entities.tsx`): those map an
  * entity to what to call its *kind* ("Financial transaction"); this maps an
  * entity to the DB column holding one *row's* own name (e.g.
- * `financialTransaction.merchant`), consumed only by `lookupEntityLabels`
- * below for audit-log display. Different semantics — don't fold it into the
- * type-label consolidation.
+ * `financialTransaction.merchant`). Label lookups may omit a missing name;
+ * reference and filter-option rosters fall back to the shortcode when this
+ * column is absent. Don't fold it into the type-label consolidation.
  *
- * `LABEL_COLUMN_OVERRIDES` wins for its 7 entities; every other entity is
+ * `LABEL_COLUMN_OVERRIDES` wins for its declared entities; every other entity is
  * derived from `titleField`, and a non-override entity whose titleField has
  * no physical storage column is a bug — declare it as an override instead of
  * letting the map silently go null.
@@ -392,7 +392,7 @@ type DisplayNameColumns = Record<ShortcodeEntity, PgColumn | null>;
 
 export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
   (columns, entity) => {
-    // SAFETY: `entity` ranges over every `ShortcodeEntity`, only 4 of which
+    // SAFETY: `entity` ranges over every `ShortcodeEntity`, a subset of which
     // are keys of `LABEL_COLUMN_OVERRIDES`; the `hasOwn` guard is what makes
     // this cast sound — everywhere it's false, `override` is never read.
     const override = Object.hasOwn(LABEL_COLUMN_OVERRIDES, entity)
