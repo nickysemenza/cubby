@@ -856,6 +856,18 @@ async function seedHouseholdPhotos(
         state: "pending",
         targetFingerprint: `synthetic-household-${label}`,
       });
+    // One finished description job, so the Image job list has a household row.
+    if (index === 0)
+      await insertWithShortcode(db, "imageJob", {
+        imageId: parseEntityId("image", image.id),
+        runId: parseEntityId("run", run.id),
+        kind: "describe_image",
+        state: "ready",
+        sourceContentHash: createHash("sha256").update(bytes).digest("hex"),
+        processorRevision: 1,
+        attempts: 1,
+        completedAt: new Date(),
+      });
   }
   // This retained attachment deliberately has no bytes: it exercises the
   // unavailable-photo placeholder alongside Products with no attachment at all.

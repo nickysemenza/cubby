@@ -8,10 +8,10 @@ import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cursorQueryOptions } from "./cursor-query-options";
 import { defineOperationDomain } from "./operation-catalog";
 
-// A reduced `activity.detail`: the registered id, only the paging shape.
-const activity = defineOperationDomain(
-  defineContract("activity", {
-    detail: query({
+// A reduced `imageProcessing.analyses`: the registered id, only the paging shape.
+const imageProcessing = defineOperationDomain(
+  defineContract("imageProcessing", {
+    analyses: query({
       input: z.object({ id: z.string(), cursor: z.string().optional() }),
       output: z.object({
         numbers: z.array(z.int()),
@@ -19,7 +19,7 @@ const activity = defineOperationDomain(
       }),
     }),
   }),
-  { detail: { tags: [["activity", "detail"]], cache: "browse" } },
+  { analyses: { tags: [["image"]], cache: "browse" } },
 );
 
 describe("cursorQueryOptions", () => {
@@ -37,19 +37,21 @@ describe("cursorQueryOptions", () => {
   });
 
   // Failure modes: a repeated first page (the cursor never sent), a lost
-  // custom next cursor (run attempts), paging past a null cursor, and a lost
+  // custom next cursor, paging past a null cursor, and a lost
   // AbortSignal.
   it("sends each next cursor, reads a custom one, and stops at null", async () => {
     const calls: { input: unknown; signal: AbortSignal | undefined }[] = [];
-    const page = activity.detail.withTransport(async ({ input, signal }) => {
-      calls.push({ input, signal });
-      return input.cursor
-        ? { numbers: [1], nextAttemptCursor: null }
-        : { numbers: [2], nextAttemptCursor: "attempt-1" };
-    });
+    const page = imageProcessing.analyses.withTransport(
+      async ({ input, signal }) => {
+        calls.push({ input, signal });
+        return input.cursor
+          ? { numbers: [1], nextAttemptCursor: null }
+          : { numbers: [2], nextAttemptCursor: "attempt-1" };
+      },
+    );
     const options = cursorQueryOptions(
       page,
-      { id: "IPR-4K7M" },
+      { id: "IMG-4K7M" },
       (last) => last.nextAttemptCursor,
     );
     const fetched = await new QueryClient().fetchInfiniteQuery({
@@ -59,8 +61,8 @@ describe("cursorQueryOptions", () => {
 
     expect(fetched.pages.flatMap((entry) => entry.numbers)).toEqual([2, 1]);
     expect(calls.map((call) => call.input)).toEqual([
-      { id: "IPR-4K7M" },
-      { id: "IPR-4K7M", cursor: "attempt-1" },
+      { id: "IMG-4K7M" },
+      { id: "IMG-4K7M", cursor: "attempt-1" },
     ]);
     expect(calls.every((call) => call.signal instanceof AbortSignal)).toBe(
       true,
