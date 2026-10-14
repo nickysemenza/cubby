@@ -7,7 +7,7 @@
 // wall-clock time so a regression in one of them is visible.
 //
 //   pnpm apple cli <args…>   build the CLI incrementally and run it
-//   pnpm apple mac           build, sign, install and relaunch /Applications/Cubby.app
+//   pnpm apple mac           build, sign, install and relaunch /Applications/Cubby Dev.app
 //   pnpm apple ios           build Cubby-iOS, install + launch on the iPhone
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
@@ -24,6 +24,7 @@
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple-client-version.ts";
+import { APPLE_APP_IDENTITIES } from "../packages/shared/src/apple-app-identity.ts";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
@@ -50,10 +51,11 @@ const PROJECT = join(APPLE, "Cubby.xcodeproj");
 // Pinned so product paths are deterministic; `DerivedData/` is already in
 // apps/apple/.gitignore.
 const DERIVED = join(APPLE, "DerivedData");
-const BUNDLE_ID = "com.nickysemenza.cubby";
-const PRODUCT = "Cubby.app";
+const BUNDLE_ID = APPLE_APP_IDENTITIES.production.bundleIdentifier;
+const PRODUCT = `${APPLE_APP_IDENTITIES.production.productName}.app`;
+const MAC_IDENTITY = APPLE_APP_IDENTITIES.development;
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [--replace-signing-identity] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [-- <cli args>]`;
 
 type Options = {
   command: string;
@@ -62,7 +64,6 @@ type Options = {
   server?: string;
   verbose: boolean;
   timing: boolean;
-  replaceSigningIdentity?: boolean;
   rest: string[];
 };
 
@@ -98,11 +99,6 @@ const parseArguments = (argv: readonly string[]): Options => {
         index += 1;
         break;
       }
-      case "--replace-signing-identity":
-        if (command !== "mac")
-          throw new Error(`--replace-signing-identity requires mac\n${usage}`);
-        options.replaceSigningIdentity = true;
-        break;
       case "--timing":
         if (!["mac", "ios", "sim"].includes(command)) {
           throw new Error(`--timing requires mac, ios, or sim\n${usage}`);
@@ -181,8 +177,8 @@ const xcodebuild = (
 
 const openSimulatorInterface = () => run("open", ["-a", "Device Hub"]);
 
-const productPath = (platformDirectory: string) =>
-  join(DERIVED, "Build/Products", platformDirectory, PRODUCT);
+const productPath = (platformDirectory: string, product = PRODUCT) =>
+  join(DERIVED, "Build/Products", platformDirectory, product);
 
 // ---------------------------------------------------------------------------
 
@@ -210,29 +206,18 @@ const cli = (options: Options) => {
 // a CODE_SIGNING_ALLOWED=NO command into this DerivedData) has a per-build
 // cdhash requirement, so launching it replaces every grant and the next signed
 // build prompts again.
-const assertTeamSigned = (app: string, allowTestFlight = false) => {
+const assertTeamSigned = (app: string) => {
   const team = readFileSync(join(APPLE, "project.yml"), "utf8").match(
     /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
   )?.[1];
   if (!team) throw new Error("apps/apple/project.yml has no DEVELOPMENT_TEAM");
-  // TestFlight's leaf belongs to Apple, not the project team. Only an explicit
-  // transition may accept its protected bundle team metadata instead.
-  let signer = `certificate leaf[subject.OU] = "${team}"`;
-  if (allowTestFlight) {
-    const displayed = spawnSync("codesign", ["-dvv", app], {
-      encoding: "utf8",
-    });
-    if (displayed.error || displayed.status !== 0)
-      throw displayed.error ?? new Error(displayed.stderr.trim());
-    if (displayed.stderr.split("\n").includes(`TeamIdentifier=${team}`))
-      signer = `(${signer} or certificate leaf[field.1.2.840.113635.100.6.1.25.1])`;
-  }
+  const signer = `certificate leaf[subject.OU] = "${team}"`;
   const verified = spawnSync(
     "codesign",
     [
       "--verify",
       "--strict",
-      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and ${signer}`,
+      `-R=anchor apple generic and identifier "${MAC_IDENTITY.bundleIdentifier}" and ${signer}`,
       app,
     ],
     { encoding: "utf8" },
@@ -240,7 +225,7 @@ const assertTeamSigned = (app: string, allowTestFlight = false) => {
   if (verified.status !== 0)
     throw new Error(
       `${app} is not signed by team ${team}; launching it would reset macOS privacy approvals. ` +
-        `Remove apps/apple/DerivedData/Build/Products/Debug/${PRODUCT} and rerun.\n${verified.stderr.trim()}`,
+        `Remove apps/apple/DerivedData/Build/Products/Debug/${MAC_IDENTITY.productName}.app and rerun.\n${verified.stderr.trim()}`,
     );
 };
 
@@ -249,7 +234,7 @@ const mac = async (options: Options) => {
   run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureProject();
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
-  const app = productPath("Debug");
+  const app = productPath("Debug", `${MAC_IDENTITY.productName}.app`);
   const version = capture("/usr/libexec/PlistBuddy", [
     "-c",
     "Print :CFBundleShortVersionString",
@@ -259,23 +244,23 @@ const mac = async (options: Options) => {
     throw new Error(
       `Built app version ${version} differs from compatibility version ${APPLE_CLIENT_COMPATIBILITY_VERSION}`,
     );
-  const installed = "/Applications/Cubby.app";
-  const verifyApproval =
-    existsSync(installed) && !options.replaceSigningIdentity
-      ? installedApprovalVerifier(installed)
-      : undefined;
+  const installed = join("/Applications", `${MAC_IDENTITY.productName}.app`);
+  const verifyApproval = existsSync(installed)
+    ? installedApprovalVerifier(installed)
+    : undefined;
   const retainedBackup = await installMacApp(
     app,
     installed,
     (candidate) => {
-      assertTeamSigned(
-        candidate,
-        candidate === installed && !!options.replaceSigningIdentity,
-      );
+      assertTeamSigned(candidate);
       verifyApproval?.(candidate);
     },
     async () => {
-      const executable = join(installed, "Contents/MacOS/Cubby");
+      const executable = join(
+        installed,
+        "Contents/MacOS",
+        MAC_IDENTITY.productName,
+      );
       const pids = capture("ps", ["-axo", "pid=,comm="])
         .split("\n")
         .flatMap((line) => {

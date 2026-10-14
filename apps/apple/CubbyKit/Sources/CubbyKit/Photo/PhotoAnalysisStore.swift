@@ -180,7 +180,7 @@ public actor PhotoAnalysisStore {
     public static func databaseURL() throws -> URL {
         let support = try FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = support.appendingPathComponent("Cubby", isDirectory: true)
+        let directory = support.appendingPathComponent(AppleAppIdentity.current.productName, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("PhotoAnalysis.sqlite")
     }

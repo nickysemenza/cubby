@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./apple-client-version": "./src/apple-client-version.ts",
+    "./apple-app-identity": "./src/apple-app-identity.ts",
     "./base64": "./src/base64.ts",
     "./client-constants": "./src/client-constants.ts",
     "./collection-tag": "./src/collection-tag.ts",

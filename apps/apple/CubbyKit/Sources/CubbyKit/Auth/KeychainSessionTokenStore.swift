@@ -4,17 +4,19 @@ import Security
 /// A `SessionTokenStore` backed by the platform Keychain. Not unit-tested (Keychain access needs
 /// an entitled, code-signed host); `InMemorySessionTokenStore` covers the store's contract.
 ///
-/// Stored as a generic password: service is fixed, `account` is the host (so dev/prod tokens
+/// Stored as a generic password: service is scoped to the app identity, `account` is the host (so dev/prod server tokens
 /// coexist), and the credential is JSON-encoded into `kSecValueData`.
 /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` keeps the item off backups/migrations and
 /// unreadable before first unlock, while still allowing background refresh after that.
 public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
-    private static let service = "com.nickysemenza.cubby.session"
+    private let service: String
 
-    public init() {}
+    public init(appIdentity: AppleAppIdentity = .current) {
+        service = appIdentity.sessionService
+    }
 
     public func loadState(for host: String) throws -> CubbyAuthState? {
-        var query = Self.baseQuery(for: host)
+        var query = baseQuery(for: host)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -41,7 +43,7 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
 
     public func saveState(_ state: CubbyAuthState, for host: String) throws {
         let data = try JSONEncoder().encode(state)
-        let query = Self.baseQuery(for: host)
+        let query = baseQuery(for: host)
         let update: [String: Any] = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if updateStatus == errSecSuccess { return }
@@ -49,7 +51,7 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
             throw KeychainError(status: updateStatus)
         }
 
-        var attributes = Self.baseQuery(for: host)
+        var attributes = baseQuery(for: host)
         attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let status = SecItemAdd(attributes as CFDictionary, nil)
@@ -57,14 +59,14 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
     }
 
     public func clear(for host: String) throws {
-        let query = Self.baseQuery(for: host)
+        let query = baseQuery(for: host)
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError(status: status)
         }
     }
 
-    private static func baseQuery(for host: String) -> [String: Any] {
+    private func baseQuery(for host: String) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

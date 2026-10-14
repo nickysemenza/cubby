@@ -62,7 +62,7 @@ struct CubbyApp: App {
         // covers warm across launches without growing the app's iCloud/backup footprint (Caches is
         // excluded from both). `ImageCaches.reset()` wipes both tiers on sign-out and base-URL
         // change, mirroring `SpotlightIndexer.wipe()`.
-        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "cubby-images"))
+        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: AppleAppIdentity.current.imageCacheName))
     }
 
     var body: some Scene {

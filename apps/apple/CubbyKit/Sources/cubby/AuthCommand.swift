@@ -46,7 +46,7 @@ extension Auth {
 
         #if os(macOS)
             /// The default `cubby auth login`: listens on loopback, opens the Mac app's
-            /// `cubby://cli-auth` confirmation, and stores the approved bearer token — checked
+            /// selected app's `cli-auth` confirmation, and stores the approved bearer token — checked
             /// for this CLI's server — in the file store. The token is a copy of the app's
             /// session: logging out here revokes the shared server session, so the app signs
             /// out there too.
@@ -54,12 +54,17 @@ extension Auth {
                 guard global.apiKey == nil else {
                     throw CLIError.message("App-approved sign-in cannot be combined with --api-key.")
                 }
+                #if DEBUG
+                    let appIdentity = AppleAppIdentity.development
+                #else
+                    let appIdentity = AppleAppIdentity.production
+                #endif
                 guard
                     NSWorkspace.shared.urlForApplication(
-                        withBundleIdentifier: "com.nickysemenza.cubby") != nil
+                        withBundleIdentifier: appIdentity.bundleIdentifier) != nil
                 else {
                     throw CLIError.message(
-                        "The Cubby Mac app isn't installed. Install it first, or sign in with `cubby auth login --email <address>`."
+                        "The \(appIdentity.productName) Mac app isn't installed. Install it first, or sign in with `cubby auth login --email <address>`."
                     )
                 }
                 let context = try CLIContext.make(from: global)
@@ -68,10 +73,10 @@ extension Auth {
                 do {
                     let port = try await handoff.start()
                     let link = CubbyLink.cliAuth(port: port, nonce: handoff.nonce)
-                    guard NSWorkspace.shared.open(link.url) else {
+                    guard NSWorkspace.shared.open(link.url(appIdentity: appIdentity)) else {
                         throw CLIError.message("Could not open the Cubby app to approve sign-in.")
                     }
-                    print("Opened Cubby — approve the sign-in there to finish logging in this CLI.")
+                    print("Opened \(appIdentity.productName) — approve the sign-in there to finish logging in this CLI.")
                     let token = try await handoff.receive(for: context.baseURL)
                     try await context.credentials.set(.bearer(token))
                 } catch {

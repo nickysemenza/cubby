@@ -63,10 +63,6 @@ time, and then:
 - `pnpm apple cli companion [--once] [--verbose]` — run the app's image-processing companion
   worker headless (see below)
 - `pnpm apple mac` — build `Cubby-macOS` into `apps/apple/DerivedData` and `open` the `.app`
-- `pnpm apple mac --replace-signing-identity` — explicitly switch an installed
-  TestFlight app to the development build when the privacy requirement guard
-  refuses it. macOS privacy permissions may need approval again. Subsequent
-  development launches use plain `pnpm apple mac` and preserve that identity.
 - `pnpm apple ios [--device <name>]` — build `Cubby-iOS`, install and launch on the paired
   iPhone via `devicectl` (phone must be unlocked)
 - `pnpm apple sim [--sim <name>]` — same on the booted (or first iPhone) simulator
@@ -85,6 +81,20 @@ indexing stays enabled. Regenerating the project applies the location setting
 while preserving other workspace preferences.
 
 None of these attach a debugger; for breakpoints use the Xcode schemes below.
+
+macOS Debug installs `/Applications/Cubby Dev.app` alongside the Release/TestFlight
+`Cubby.app`. Its bundle ID, `cubby-dev` callback scheme, Keychain services,
+installation identity, defaults, and local caches are separate. Dev requests
+an ephemeral Google browser session to keep its transfer cookies separate
+from a production sign-in. Both variants
+use the configured Cubby server. iOS keeps its existing identity in Debug and
+Release. `packages/shared/src/apple-app-identity.ts` owns the identities;
+generation emits the Xcode settings and Swift values from that declaration.
+The development launcher verifies the installed Dev app's signing requirement
+before replacement, preserving its macOS privacy approvals across rebuilds.
+The Debug CLI's app-approved sign-in opens Dev; a Release CLI opens production.
+Site universal links and password autofill remain associated with production;
+Dev navigation uses `cubby-dev` links.
 
 ### Headless companion (`cubby companion`)
 

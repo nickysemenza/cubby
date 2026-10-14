@@ -23,7 +23,7 @@ final class SystemWebAuthenticationSession {
         return try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(
                 url: url,
-                callbackURLScheme: "cubby"
+                callbackURLScheme: AppleAppIdentity.current.callbackScheme
             ) { [weak self] callbackURL, error in
                 let result: Result<URL, AuthError>
                 if let callbackURL {
@@ -42,7 +42,8 @@ final class SystemWebAuthenticationSession {
                 }
             }
             session.presentationContextProvider = presentationContext
-            session.prefersEphemeralWebBrowserSession = false
+            // Dev must not consume the production browser's OAuth transfer cookies.
+            session.prefersEphemeralWebBrowserSession = AppleAppIdentity.current == .development
             self.presentationContext = presentationContext
             self.session = session
             guard session.start() else {
