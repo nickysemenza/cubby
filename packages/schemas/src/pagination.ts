@@ -128,9 +128,20 @@ export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
 /**
  * A Ledger Party filter: canonical shortcodes plus `@me`, the signed-in
  * member, which the entity kernel resolves before any repository reads it.
+ * Unlike the internal match-nothing value, `@me` is public, so the published
+ * pattern advertises it beside the shortcode pattern.
  */
-export const partyFilterList = <T extends z.ZodTypeAny>(schema: T) =>
-  oneOrMany(z.union([entityFilter(schema), z.literal(CURRENT_MEMBER_FILTER)]));
+export const partyFilterList = <T extends z.ZodTypeAny>(schema: T) => {
+  const jsonSchema = z.toJSONSchema(schema);
+  const shortcode = String(jsonSchema.pattern).replace(/^\^|\$$/gu, "");
+  return oneOrMany(
+    z.union([entityFilter(schema), z.literal(CURRENT_MEMBER_FILTER)]).meta({
+      type: jsonSchema.type,
+      pattern: `^(?:${CURRENT_MEMBER_FILTER}|${shortcode})$`,
+      description: `${String(jsonSchema.description)}, or ${CURRENT_MEMBER_FILTER} for the signed-in member`,
+    }),
+  );
+};
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),

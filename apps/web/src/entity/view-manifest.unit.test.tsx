@@ -314,7 +314,7 @@ describe("views reveal the columns they select on", () => {
 
     // A filter with no list column (derived ownership) is explained by its
     // filter chip; every column-backed filter must be visible.
-    const listColumns = new Set(
+    const listColumns = new Set<string>(
       entityFieldModels.product.fields
         .filter((field) => field.display.list)
         .map((field) => field.display.columnId ?? field.key),
