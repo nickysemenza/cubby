@@ -175,3 +175,13 @@ duplicates and distinct variants; rule-backed evidence can surface a Problem
 without AI availability, while embedding-only pairs remain recommendations.
 A failed evaluation stays retryable and cannot erase a previously valid result
 or claim catalog coverage completed.
+
+Registered external identifiers have one live owner for each source/kind/value.
+A two-owner JOIN is therefore not the useful duplicate evidence path. Detection
+can use retained exact-variant claims only when original evidence and real
+Product bindings establish both claims. A prepared candidate or a number in
+free text does not establish ownership. Matching source URLs and nonempty
+free-form selected-variant strings retrieve candidates; they do not alone prove
+complete variant identity. Shared model/style numbers remain ranking evidence.
+Confirmed contradictory variants under a retained exact-variant claim surface
+an identity conflict before any merge recommendation.
