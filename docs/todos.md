@@ -604,6 +604,16 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
+- 🤔 🐛 **Profile the first Library tab transition on a physical iPhone.** A
+  first visit briefly stalls the tab animation; repeated switches are responsive.
+  Capture the cold transition before changing code. This is separate from the
+  sustained Today row-width feedback loop.
+- 🤔 ✨ **Make Notifications & Live Activities discoverable in Settings.** Show
+  separate import-alert and live-progress preferences, effective system permission
+  status, and an Open System Settings action. The import sheet inherits the saved
+  alert preference and offers “Notify me for this import”; request notification
+  permission when the preference is enabled, rather than at launch.
+
 - 🤔 ✨ **One native picker with names and pictures, never codes.** Web
   now has one value picker (`apps/web/src/ui/combobox/picker.tsx`): a closed
   field leads with the option glyph or the record's picture, a stored
