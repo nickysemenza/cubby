@@ -653,7 +653,6 @@ function EntityRelationsContent(
         />
         <Picker
           label="Filter entity type"
-          widthMode="intrinsic"
           className="w-44"
           options={ENTITY_KIND_OPTIONS}
           value={current.entityKind ?? ""}
@@ -665,7 +664,6 @@ function EntityRelationsContent(
         />
         <Picker
           label="Filter relationship"
-          widthMode="intrinsic"
           className="w-44"
           options={relationshipOptions}
           value={current.relationship ?? ""}

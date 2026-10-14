@@ -115,7 +115,6 @@ export function EntityGraphControls({
           <Picker
             mode="choose"
             compact
-            widthMode="intrinsic"
             label="Record types"
             options={WORK_KIND_OPTIONS}
             value={filters.workKind ?? "all"}
@@ -133,7 +132,6 @@ export function EntityGraphControls({
                 locationOptions.length > CHOOSE_MODE_MAX ? "search" : "choose"
               }
               compact
-              widthMode="intrinsic"
               label="Location"
               className="min-w-0"
               options={locationOptions}
@@ -173,7 +171,6 @@ export function EntityGraphControls({
         <Picker
           mode="choose"
           compact
-          widthMode="intrinsic"
           label="Dependency direction"
           className="max-w-full"
           options={recipes ? RECIPE_DIRECTION_OPTIONS : WORK_DIRECTION_OPTIONS}
@@ -195,7 +192,6 @@ export function EntityGraphControls({
             <Picker
               mode="choose"
               compact
-              widthMode="intrinsic"
               label="Group by"
               className="min-w-0"
               options={GROUP_BY_OPTIONS}

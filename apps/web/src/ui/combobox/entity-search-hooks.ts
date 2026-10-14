@@ -8,7 +8,7 @@ import { getEntityFilters } from "~/entity/filter-manifest";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 
-import type { ComboboxItem } from "./combobox-types";
+import type { ComboboxItem, PickerEntity } from "./combobox-types";
 
 /**
  * Filter values supplied by a manifest reference's dependent-field scope.
@@ -24,23 +24,10 @@ export const pagination = {
   pageSize: 20,
 };
 
-/** The entities `useEntityListSource` drives end-to-end (list + typed + exact-code + optional create). */
-export type PickerSearchEntity =
-  | "ledgerTransfer"
-  | "spendingCategory"
-  | "financialAccount"
-  | "purchase"
-  | "ingredient"
-  | "ledgerParty"
-  | "location"
-  | "product"
-  | "recipe"
-  | "project"
-  | "task"
-  | "plant"
-  | "planting"
-  | "vendorAccount"
-  | "vendor";
+/** The entities `useEntityListSource` drives end-to-end (list + typed +
+ * exact-code + optional create): every pickable entity but the category
+ * taxonomy, whose provider reads the whole tree. */
+export type PickerSearchEntity = Exclude<PickerEntity, "productCategory">;
 
 /**
  * Row source for the blank- or typed-query branch. Hook-shaped (its own
@@ -186,37 +173,17 @@ function useEntitySearchWithDialog<TId extends string = string>() {
 }
 
 /**
- * Fallback only: the manifest-declared `name` column normally carries the
- * blank-query filter field itself (`nameFilter` for product/recipe/ingredient/
- * location, `search` for project/task). Used only if an entity's filter
- * descriptors have no `name` column — not expected to trigger for any current
- * `PickerSearchEntity`.
+ * The filter field a blank-query list request keys a typed name on: the
+ * manifest-declared `name` column's filter (`nameFilter`, `search`, …), or
+ * none for an entity without one (its candidates come from scope alone).
  */
-const FALLBACK_BLANK_FILTER_KEY = {
-  ingredient: "nameFilter",
-  ledgerParty: "nameFilter",
-  location: "nameFilter",
-  product: "nameFilter",
-  recipe: "nameFilter",
-  project: "search",
-  task: "search",
-  plant: "search",
-  planting: "searchQuery",
-  financialAccount: "search",
-  ledgerTransfer: "search",
-  spendingCategory: "search",
-  purchase: "search",
-  vendorAccount: "search",
-} satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
-
-/** Resolves the filter field a blank-query list request should key on. */
 export function resolveBlankFilterKey(
   entity: Exclude<PickerSearchEntity, "vendor">,
-): string {
-  const nameFilter = getEntityFilters(entity).find(
-    (spec) => spec.columnId === "name",
+): string | null {
+  return (
+    getEntityFilters(entity).find((spec) => spec.columnId === "name")?.field ??
+    null
   );
-  return nameFilter?.field ?? FALLBACK_BLANK_FILTER_KEY[entity];
 }
 
 const resolveSearchPath = (

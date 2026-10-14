@@ -97,7 +97,6 @@ export function EntityOverrideTable({
         <Picker
           compact
           label="Entity"
-          widthMode="intrinsic"
           className="w-44"
           options={ENTITY_OPTIONS}
           value={entity}
@@ -109,7 +108,6 @@ export function EntityOverrideTable({
           mode="choose"
           compact
           label="Outcome"
-          widthMode="intrinsic"
           className="w-40"
           options={OUTCOME_OPTIONS}
           value={outcome}

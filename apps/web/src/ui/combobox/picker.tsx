@@ -2,6 +2,7 @@ import {
   Combobox as ComboboxPrimitive,
   Select as SelectPrimitive,
 } from "@base-ui/react";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -10,41 +11,20 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import * as React from "react";
 
 import { entityLabel } from "~/entity/entities";
-import { badgeToneTextClass } from "~/lib/status-tone";
 import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/useHydrated";
 import { Spinner } from "~/ui/primitives/spinner";
+import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 
-import type { ComboboxItem, PickerEntity } from "./combobox-types";
+import type {
+  ComboboxItem,
+  PickerChip,
+  PickerEntity,
+  PickerTone,
+} from "./combobox-types";
 import { type PickerOption, pickerOptionItem } from "./picker-option";
 import { PickerVisual } from "./picker-visual";
 import { useSelectedPickerItems } from "./selected-items";
-
-const statusToneClass = {
-  neutral: badgeToneTextClass.secondary,
-  positive: badgeToneTextClass.positive,
-  warning: badgeToneTextClass.warning,
-  destructive: badgeToneTextClass.destructive,
-} as const;
-
-const ENTITY_CODE = {
-  ledgerTransfer: "LTR",
-  spendingCategory: "SPC",
-  ingredient: "ING",
-  location: "LOC",
-  product: "PRD",
-  productCategory: "CAT",
-  recipe: "RCP",
-  project: "PRJ",
-  task: "TSK",
-  plant: "PLANT",
-  planting: "PLT",
-  vendor: "VEN",
-  financialAccount: "FAC",
-  purchase: "PUR",
-  ledgerParty: "LPY",
-  vendorAccount: "VACCT",
-} satisfies Record<PickerEntity, string>;
 
 export function matchesPickerItem(
   item: ComboboxItem,
@@ -57,8 +37,7 @@ export function matchesPickerItem(
     item.shortcode,
     item.secondary,
     item.detail,
-    item.presentation?.status?.label,
-    ...(item.presentation?.facts ?? []),
+    ...(item.presentation?.trailing ?? []).map((chip) => chip.text),
     ...(item.aliases ?? []),
   ]
     .filter((part): part is string => !!part)
@@ -67,8 +46,8 @@ export function matchesPickerItem(
 
 interface PickerCommonProps<TId extends string> {
   inputId?: string;
-  /** Receives the focusable control (the search input, or the choose-mode
-   * trigger) so a form can focus the field on a validation error. */
+  /** Receives the focusable control (the search input, the choose-mode
+   * trigger, or the first segment) so a form can focus it on an error. */
   inputRef?: (element: HTMLElement | null) => void;
   "aria-describedby"?: string;
   entity?: PickerEntity;
@@ -79,63 +58,111 @@ interface PickerCommonProps<TId extends string> {
    */
   label?: string;
   /**
-   * `search` (default): the field is a text input that filters the roster or
-   * drives `onSearchChange`, for records and long lists. `choose`: the field
-   * is a button that opens the list with arrow keys and letter typeahead and
-   * no text entry, for a short fixed list. Choose mode ignores search, create,
-   * and `openOnMount`.
+   * - `search` (default): a text input that filters the roster or drives
+   *   `onSearchChange`, with create — records and long lists.
+   * - `choose`: a button opening the list with arrows, Home/End and letter
+   *   typeahead, no text entry — a short fixed list.
+   * - `segmented`: every option inline as a button group — two to five view
+   *   modes or formats where seeing all choices is the point. Single value.
    */
-  mode?: "search" | "choose";
+  mode?: "search" | "choose" | "segmented";
   onSearchChange?: (query: string) => void;
   onOpenChange?: (open: boolean) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
   isLoading?: boolean;
   error?: string | null;
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
-  wide?: boolean;
-  widthMode?: "default" | "intrinsic";
   compact?: boolean;
   openOnMount?: boolean;
   placeholder?: string;
   clearable?: boolean;
   disabled?: boolean;
   className?: string;
+  /** Pinned under the list — a multi-value filter's Clear/Apply. */
+  footer?: React.ReactNode;
+  /** Segmented mode: icon-only segments on phones, labels kept accessible. */
+  iconOnlyOnPhone?: boolean;
 }
 
 /** A record-valued picker: the value is the whole selected row. */
 interface PickerRecordProps<TId extends string> {
+  multiple?: false;
   items: ComboboxItem<TId>[];
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
   options?: never;
   onValueChange?: never;
+  values?: never;
+  setValues?: never;
+  onValuesChange?: never;
 }
 
 /** A string-valued picker over fixed `PickerOption`s. */
 interface PickerOptionProps {
+  multiple?: false;
   options: readonly PickerOption[];
   value: string | null;
   onValueChange: (value: string | null) => void;
   items?: never;
   setValue?: never;
+  values?: never;
+  setValues?: never;
+  onValuesChange?: never;
+}
+
+/** Several records; selected rows show as chips in the field. */
+interface PickerRecordsProps<TId extends string> {
+  multiple: true;
+  items: ComboboxItem<TId>[];
+  values: ComboboxItem<TId>[];
+  setValues: (items: ComboboxItem<TId>[]) => void;
+  options?: never;
+  value?: never;
+  setValue?: never;
+  onValueChange?: never;
+  onValuesChange?: never;
+}
+
+/** Several string options. */
+interface PickerOptionsProps {
+  multiple: true;
+  options: readonly PickerOption[];
+  values: readonly string[];
+  onValuesChange: (values: string[]) => void;
+  items?: never;
+  value?: never;
+  setValue?: never;
+  onValueChange?: never;
+  setValues?: never;
 }
 
 export type PickerProps<TId extends string = string> = PickerCommonProps<TId> &
-  (PickerRecordProps<TId> | PickerOptionProps);
+  (
+    | PickerRecordProps<TId>
+    | PickerOptionProps
+    | PickerRecordsProps<TId>
+    | PickerOptionsProps
+  );
 
-/** A record-valued picker's props — what wrappers that own the roster
- * (search providers, reference pickers) extend. */
+/** A record-valued single picker's props — what wrappers that own the
+ * roster (search providers, reference pickers) extend. */
 export type RecordPickerProps<TId extends string = string> =
   PickerCommonProps<TId> & PickerRecordProps<TId>;
 
-/** The props both modes render from, after options are mapped to rows. */
-type ResolvedPickerProps<TId extends string> = RecordPickerProps<TId>;
+/** Every variant normalized: rows plus the selected rows. */
+type ResolvedPickerProps<TId extends string> = PickerCommonProps<TId> & {
+  multiple: boolean;
+  items: ComboboxItem<TId>[];
+  values: ComboboxItem<TId>[];
+  setValues: (items: ComboboxItem<TId>[]) => void;
+};
 
 /**
- * The one value picker. Records (search, create, relationship context) and
- * fixed string options (enums, filters, settings) share its rows, closed
- * display, and popup; `mode` chooses the input contract. Entity shortcodes
- * stay searchable without ever being displayed or announced.
+ * The one value picker. Records (search, create, relationship context, a
+ * picture) and fixed string options (enums, filters, settings, view modes)
+ * share its rows, closed display, and popup; `mode` chooses the input
+ * contract and `multiple` the value shape. Entity shortcodes stay searchable
+ * without ever being displayed or announced.
  */
 export function Picker<TId extends string = string>(props: PickerProps<TId>) {
   const resolved = useResolvedPickerProps(props);
@@ -151,44 +178,57 @@ export function Picker<TId extends string = string>(props: PickerProps<TId>) {
 function RecordValuePicker<TId extends string>(
   props: ResolvedPickerProps<TId>,
 ) {
-  return <PickerBody {...props} value={useSelectedValue(props)} />;
+  return <PickerBody {...props} values={useSelectedValues(props)} />;
 }
 
 function PickerBody<TId extends string>(props: ResolvedPickerProps<TId>) {
-  return props.mode === "choose" ? (
-    <ChoosePicker {...props} />
-  ) : (
-    <SearchPicker {...props} />
-  );
+  if (props.mode === "segmented") return <SegmentedPicker {...props} />;
+  if (props.mode === "choose" && !props.multiple)
+    return <ChoosePicker {...props} />;
+  return <SearchPicker {...props} />;
 }
 
 /**
- * A record value the caller could only name by its code (`{ id, name: id }`,
- * an AI seed without a picture) resolves to the record's own row, so the
- * closed field always shows a name and picture.
+ * Selected records the caller could only name by code (`{ id, name: id }`,
+ * an AI seed without a picture) resolve to the record's own row, so the
+ * field always shows names and pictures.
  */
-function useSelectedValue<TId extends string>({
+function useSelectedValues<TId extends string>({
   entity,
-  value,
+  values,
   items,
-}: ResolvedPickerProps<TId>): ComboboxItem<TId> | null {
-  const held = React.useMemo(
-    () => (value ? [value, ...items] : items),
-    [value, items],
-  );
-  const [selected] = useSelectedPickerItems(
+}: ResolvedPickerProps<TId>): ComboboxItem<TId>[] {
+  const held = React.useMemo(() => [...values, ...items], [values, items]);
+  // SAFETY: each resolved row is built for the same id the caller selected.
+  return useSelectedPickerItems(
     entity,
-    value ? [value.id] : [],
+    values.map((value) => value.id),
     held,
-  );
-  // SAFETY: the resolved row is built for the same id the caller selected.
-  return (selected as ComboboxItem<TId> | undefined) ?? null;
+  ) as ComboboxItem<TId>[];
 }
 
 const isOptionProps = <TId extends string>(
   props: PickerProps<TId>,
-): props is PickerCommonProps<TId> & PickerOptionProps =>
+): props is PickerCommonProps<TId> & (PickerOptionProps | PickerOptionsProps) =>
   props.options !== undefined;
+
+/** A stored option value the roster doesn't offer: an enum value reads as
+ * itself; a record code waits for a loading roster and is never displayed. */
+function missingOption<TId extends string>(
+  value: string,
+  isLoading: boolean | undefined,
+): ComboboxItem<TId> {
+  const code = parseShortcode(value) != null;
+  // SAFETY: option rows are keyed by `PickerOption.value` strings, and a
+  // string-valued picker is never instantiated with a branded id.
+  return (
+    !code
+      ? { id: value, name: value }
+      : isLoading
+        ? { id: value, name: "", pending: true }
+        : { id: value, name: "Unavailable record" }
+  ) as ComboboxItem<TId>;
+}
 
 function useResolvedPickerProps<TId extends string>(
   props: PickerProps<TId>,
@@ -198,29 +238,64 @@ function useResolvedPickerProps<TId extends string>(
     () => (options ? options.map(pickerOptionItem) : null),
     [options],
   );
-  if (!isOptionProps(props)) return props;
-  const { options: _options, value, onValueChange, ...common } = props;
+  if (!isOptionProps(props)) {
+    const {
+      items,
+      value: _value,
+      setValue: _setValue,
+      values: _values,
+      setValues: _setValues,
+      ...common
+    } = props;
+    if (props.multiple) {
+      return {
+        ...common,
+        multiple: true,
+        items,
+        values: props.values,
+        setValues: props.setValues,
+      };
+    }
+    const setValue = props.setValue;
+    return {
+      ...common,
+      multiple: false,
+      items,
+      values: props.value ? [props.value] : [],
+      setValues: (next) => setValue(next.at(-1) ?? null),
+    };
+  }
+  const {
+    options: _options,
+    value: _value,
+    onValueChange: _onValueChange,
+    values: _values,
+    onValuesChange: _onValuesChange,
+    ...common
+  } = props;
   // SAFETY: option rows are keyed by `PickerOption.value` strings, and a
   // string-valued picker is never instantiated with a branded id.
   const rows = (optionItems ?? []) as ComboboxItem<TId>[];
-  // A stored value the roster doesn't offer reads as itself when it is an enum
-  // value; a record code waits for a loading roster and is never displayed.
-  const code = value != null && parseShortcode(value) != null;
-  // SAFETY: same string-keyed rows as above.
-  const missing = (
-    !code
-      ? { id: value, name: value }
-      : common.isLoading
-        ? { id: value, name: "", pending: true }
-        : { id: value, name: "Unavailable record" }
-  ) as ComboboxItem<TId>;
-  const selected =
-    value == null ? null : (rows.find((item) => item.id === value) ?? missing);
+  const rowFor = (value: string) =>
+    rows.find((item) => item.id === value) ??
+    missingOption<TId>(value, common.isLoading);
+  if (props.multiple) {
+    const onValuesChange = props.onValuesChange;
+    return {
+      ...common,
+      multiple: true,
+      items: rows,
+      values: props.values.map(rowFor),
+      setValues: (next) => onValuesChange(next.map((item) => item.id)),
+    };
+  }
+  const onValueChange = props.onValueChange;
   return {
     ...common,
+    multiple: false,
     items: rows,
-    value: selected,
-    setValue: (item) => onValueChange(item?.id ?? null),
+    values: props.value == null ? [] : [rowFor(props.value)],
+    setValues: (next) => onValueChange(next.at(-1)?.id ?? null),
   };
 }
 
@@ -248,82 +323,66 @@ function pickerNaming(
   };
 }
 
-function selectedLabelOf(value: ComboboxItem | null) {
+function selectedLabelOf(value: ComboboxItem | undefined) {
   if (!value || value.pending) return "";
-  return value.secondary ? `${value.name} — ${value.secondary}` : value.name;
+  return value.name;
 }
+
+// ---------------------------------------------------------------------------
+// Shared rendering
+// ---------------------------------------------------------------------------
 
 const fieldFrameClass = (compact: boolean | undefined) =>
   cn(
-    "flex w-full min-w-0 items-center gap-2 rounded-sm border border-border bg-card pl-2 transition-colors",
+    "@container/picker flex w-full min-w-0 items-center gap-1.5 rounded-sm border border-border bg-card pl-2 transition-colors",
     "focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
     "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 data-[hydrating]:has-[:disabled]:opacity-100",
     compact
-      ? "h-7 text-xs/relaxed max-sm:h-11 max-sm:text-base"
-      : "h-8 text-sm max-sm:h-11 max-sm:text-base",
+      ? "min-h-7 text-xs/relaxed max-sm:min-h-11 max-sm:text-base"
+      : "min-h-8 text-sm max-sm:min-h-11 max-sm:text-base",
   );
 
-const popupClass = (
-  wide: boolean | undefined,
-  widthMode: "default" | "intrinsic" | undefined,
-) =>
-  cn(
-    "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),34rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-popover text-popover-foreground shadow-[var(--shadow-overlay)] outline-none",
-    "transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0",
-    wide
-      ? widthMode === "intrinsic"
-        ? "w-max max-w-[min(44rem,var(--available-width),calc(100vw-16px))]"
-        : "w-[min(44rem,calc(100vw-16px))] max-w-(--available-width)"
-      : widthMode === "intrinsic"
-        ? "w-max max-w-[min(24rem,var(--available-width),calc(100vw-16px))]"
-        : "w-[min(24rem,calc(100vw-16px))] max-w-(--available-width)",
-    widthMode === "intrinsic"
-      ? "min-w-[var(--anchor-width)]"
-      : "min-w-[min(var(--anchor-width),calc(100vw-16px))]",
-  );
+/**
+ * One width rule: the popup is the field's width; a field narrower than
+ * 16rem lets its popup grow to its rows, up to 16rem. Never wider than the
+ * viewport allows.
+ */
+const popupClass = cn(
+  "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),28rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-md border border-[var(--border)] bg-popover text-popover-foreground shadow-[var(--shadow-overlay)] outline-none",
+  "w-max max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)",
+  "transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0",
+);
+
+const listClass =
+  "min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none";
 
 const rowClass = (meta: boolean, custom: boolean) =>
   cn(
-    "relative flex min-h-9 cursor-default items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none select-none max-sm:min-h-11",
-    "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/50",
-    "data-disabled:cursor-not-allowed data-disabled:bg-muted/20 data-disabled:text-muted-foreground",
+    "relative flex min-h-7 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
+    "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/60",
+    "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground",
     meta &&
-      "min-h-8 font-mono text-2xs tracking-wider text-slate uppercase max-sm:min-h-11",
-    custom && "items-start whitespace-normal",
+      "min-h-6 font-mono text-2xs tracking-wider text-slate uppercase max-sm:min-h-11",
+    custom && "items-start py-1 whitespace-normal",
   );
 
-/** The row's leading marks: a categorical swatch and/or the row's glyph or
- * record picture, built at row size by its builder. */
-function PickerRowVisual({
-  item,
-  custom,
-}: {
-  item: ComboboxItem;
-  custom: boolean;
-}) {
+const chipToneClass = {
+  neutral: "bg-muted text-foreground",
+  positive: "bg-positive/10 text-positive",
+  warning: "bg-warning/15 text-warning-ink",
+  destructive: "bg-destructive/10 text-destructive",
+} satisfies Record<PickerTone, string>;
+
+function PickerChipView({ chip }: { chip: PickerChip }) {
   return (
-    <>
-      {item.color ? (
-        <span
-          aria-hidden
-          data-enum-option-swatch=""
-          className="size-2 shrink-0"
-          style={{ backgroundColor: item.color }}
-        />
-      ) : null}
-      {item.icon ? (
-        <span
-          className={cn(
-            "flex shrink-0",
-            !custom && "-my-2 items-center self-stretch",
-          )}
-        >
-          {item.icon}
-        </span>
-      ) : item.thumb ? (
-        <PickerVisual item={item} size={24} />
-      ) : null}
-    </>
+    <span
+      className={cn(
+        "inline-flex h-5 shrink-0 items-center rounded-[3px] px-1.5 font-mono text-xs tabular-nums",
+        chipToneClass[chip.tone ?? "neutral"],
+      )}
+    >
+      {chip.node ?? chip.text}
+    </span>
   );
 }
 
@@ -335,53 +394,40 @@ function PickerRowContent<TId extends string>({
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
 }) {
   const presentation = item.presentation;
-  const status = presentation?.status;
-  const facts = presentation?.facts ?? [];
   if (renderItem)
     return <span className="min-w-0 flex-1">{renderItem(item)}</span>;
   return (
-    <span className="flex min-w-0 flex-1 flex-col">
-      <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-wrap max-sm:gap-x-2">
-        <span className="min-w-0 flex-1 truncate max-sm:basis-full">
-          {presentation?.rowLabel ?? item.name}
+    <>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="min-w-0 shrink truncate">
+            {presentation?.rowLabel ?? item.name}
+          </span>
+          {item.secondary ? (
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {item.secondary}
+            </span>
+          ) : null}
         </span>
-        {item.secondary ? (
-          <span className="max-w-40 truncate text-xs text-muted-foreground max-sm:max-w-full">
-            {item.secondary}
+        {item.detail ? (
+          <span className="truncate text-xs text-muted-foreground">
+            {item.detail}
           </span>
         ) : null}
-        {status ? (
-          <span
-            className={cn(
-              "shrink-0 font-mono text-xs tabular-nums",
-              statusToneClass[status.tone ?? "neutral"],
-            )}
-          >
-            {status.label}
-          </span>
-        ) : null}
-        {presentation?.hint ? (
-          <span className="shrink-0 font-mono text-2xs text-slate tabular-nums">
-            {presentation.hint}
+        {presentation?.disabledReason ? (
+          <span className="truncate text-xs text-muted-foreground">
+            {presentation.disabledReason}
           </span>
         ) : null}
       </span>
-      {item.detail ? (
-        <span className="truncate text-xs text-muted-foreground">
-          {item.detail}
+      {presentation?.trailing?.length ? (
+        <span className="flex shrink-0 items-center gap-1">
+          {presentation.trailing.map((chip) => (
+            <PickerChipView key={chip.text} chip={chip} />
+          ))}
         </span>
       ) : null}
-      {facts.length > 0 ? (
-        <span className="truncate font-mono text-xs text-muted-foreground tabular-nums">
-          {facts.join(" · ")}
-        </span>
-      ) : null}
-      {presentation?.disabledReason ? (
-        <span className="truncate text-xs text-muted-foreground">
-          {presentation.disabledReason}
-        </span>
-      ) : null}
-    </span>
+    </>
   );
 }
 
@@ -392,19 +438,15 @@ function rowAriaLabel(item: ComboboxItem) {
     item.name,
     item.secondary,
     item.detail,
-    presentation?.status?.label,
-    presentation?.hint,
-    ...(presentation?.facts ?? []),
+    ...(presentation?.trailing ?? []).map((chip) => chip.text),
     presentation?.disabledReason,
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-/**
- * Group headers and the meta/roster divider for row `index` — shared by both
- * modes. Callers own ordering; a header renders whenever the group changes.
- */
+/** Group headers and the meta/roster divider before a row — shared by both
+ * list modes. Callers own ordering; a header renders when the group changes. */
 function PickerRowPreamble({
   item,
   previous,
@@ -418,13 +460,16 @@ function PickerRowPreamble({
     previous?.presentation?.meta === true && !item.presentation?.meta;
   return (
     <>
-      {firstAfterMeta ? (
-        <div role="presentation" className="my-1 border-t border-border" />
+      {firstAfterMeta || (showGroup && previous) ? (
+        <div
+          role="presentation"
+          className="mx-1.5 my-1 border-t border-border"
+        />
       ) : null}
       {showGroup ? (
         <div
           role="presentation"
-          className="border-b border-[var(--border)] bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground first:border-t-0"
+          className="px-1.5 pt-1 pb-0.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase"
         >
           {group.label}
         </div>
@@ -435,7 +480,7 @@ function PickerRowPreamble({
 
 function rowStyle(item: ComboboxItem) {
   const depth = item.presentation?.depth ?? 0;
-  return depth > 0 ? { paddingLeft: 8 + depth * 12 } : undefined;
+  return depth > 0 ? { paddingLeft: 6 + depth * 12 } : undefined;
 }
 
 function CaretGlyph({ open }: { open: boolean }) {
@@ -452,14 +497,36 @@ function CaretGlyph({ open }: { open: boolean }) {
 
 /** The closed field's leading visual, or a spinner while the stored value is
  * still resolving to its record. */
-function SelectedLead({ value }: { value: ComboboxItem | null }) {
+function SelectedLead({ value }: { value: ComboboxItem | undefined }) {
   if (!value) return null;
   if (value.pending) return <Spinner className="size-3.5 shrink-0" />;
   return <PickerVisual item={value} size={20} />;
 }
 
+/** The closed field's first data chip, when the field has room for it. */
+function SelectedTrailing({ value }: { value: ComboboxItem | undefined }) {
+  const chip = value?.pending ? undefined : value?.presentation?.trailing?.[0];
+  if (!chip) return null;
+  return (
+    <span className="hidden shrink-0 font-mono text-xs text-muted-foreground tabular-nums @min-[16rem]/picker:inline">
+      {chip.node ?? chip.text}
+    </span>
+  );
+}
+
+function sortByGroup<TId extends string>(items: ComboboxItem<TId>[]) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const groupOrderA = a.item.presentation?.group?.order ?? 0;
+      const groupOrderB = b.item.presentation?.group?.order ?? 0;
+      return groupOrderA - groupOrderB || a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
 // ---------------------------------------------------------------------------
-// Search mode
+// Search mode (single or multiple)
 // ---------------------------------------------------------------------------
 
 type CreatePickerItem<TId extends string> = {
@@ -473,35 +540,35 @@ function SearchPickerPopup<TId extends string>({
   orderedItems,
   renderItem,
   clearable,
-  value,
+  hasValue,
   noun,
   clearLabel,
-  setValue,
+  clear,
+  addCreated,
   setQuery,
   changeOpen,
   isLoading,
   error,
   emptyMessage,
-  wide,
-  widthMode,
   create,
+  footer,
 }: {
   anchorRef: React.RefObject<HTMLDivElement | null>;
   orderedItems: ComboboxItem<TId>[];
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   clearable?: boolean;
-  value: ComboboxItem<TId> | null;
+  hasValue: boolean;
   noun: string;
   clearLabel: string;
-  setValue: (value: ComboboxItem<TId> | null) => void;
+  clear: () => void;
+  addCreated: (item: ComboboxItem<TId>) => void;
   setQuery: (query: string) => void;
   changeOpen: (open: boolean) => void;
   isLoading?: boolean;
   error?: string | null;
   emptyMessage: string;
-  wide?: boolean;
-  widthMode?: "default" | "intrinsic";
   create: CreatePickerItem<TId> | null;
+  footer?: React.ReactNode;
 }) {
   const [isCreating, setIsCreating] = React.useState(false);
   const handleCreate = async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -514,7 +581,7 @@ function SearchPickerPopup<TId extends string>({
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       );
-      setValue(await create.onCreate(create.name));
+      addCreated(await create.onCreate(create.name));
       setQuery("");
     } catch {
       // SILENT: every `onCreate` implementation (useEntityCommands.create's
@@ -542,16 +609,16 @@ function SearchPickerPopup<TId extends string>({
         // z-[200]: paints above CellEditorOverlay (z-100).
         className="isolate z-[200]"
       >
-        <ComboboxPrimitive.Popup className={popupClass(wide, widthMode)}>
-          {clearable && value ? (
+        <ComboboxPrimitive.Popup className={popupClass}>
+          {clearable && hasValue ? (
             <button
               type="button"
               aria-label={clearLabel}
-              className="flex min-h-9 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
+              className="flex min-h-7 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setValue(null);
+                clear();
                 setQuery("");
                 changeOpen(false);
               }}
@@ -560,7 +627,7 @@ function SearchPickerPopup<TId extends string>({
               {clearLabel}
             </button>
           ) : null}
-          <ComboboxPrimitive.List className="max-h-112 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none">
+          <ComboboxPrimitive.List className={listClass}>
             {orderedItems.map((item, index) => (
               <React.Fragment key={item.id}>
                 <PickerRowPreamble
@@ -577,7 +644,7 @@ function SearchPickerPopup<TId extends string>({
                   )}
                   style={rowStyle(item)}
                 >
-                  <PickerRowVisual item={item} custom={renderItem != null} />
+                  <PickerVisual item={item} size={20} />
                   <PickerRowContent item={item} renderItem={renderItem} />
                   <ComboboxPrimitive.ItemIndicator className="shrink-0">
                     <CheckIcon className="size-3.5" />
@@ -587,7 +654,7 @@ function SearchPickerPopup<TId extends string>({
             ))}
           </ComboboxPrimitive.List>
           {showStatus ? (
-            <div className="shrink-0 border-t border-[var(--border)] px-2 py-4 text-sm">
+            <div className="shrink-0 border-t border-[var(--border)] px-2.5 py-2 text-sm">
               {isLoading ? (
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Spinner /> Searching…
@@ -601,7 +668,7 @@ function SearchPickerPopup<TId extends string>({
               state; a plain element lets Escape close the parent dialog. */}
           <ComboboxPrimitive.Empty>
             {!isLoading && !error ? (
-              <div className="shrink-0 border-t border-[var(--border)] px-2 py-4 text-sm text-muted-foreground">
+              <div className="shrink-0 border-t border-[var(--border)] px-2.5 py-2 text-sm text-muted-foreground">
                 {emptyMessage}
               </div>
             ) : null}
@@ -610,13 +677,18 @@ function SearchPickerPopup<TId extends string>({
             <button
               type="button"
               disabled={isCreating}
-              className="flex min-h-9 w-full shrink-0 items-center border-t border-[var(--border)] px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50 max-sm:min-h-11"
+              className="flex min-h-7 w-full shrink-0 items-center border-t border-[var(--border)] px-2.5 text-left text-sm hover:bg-accent disabled:opacity-50 max-sm:min-h-11"
               onClick={handleCreate}
             >
               {isCreating
                 ? `Creating ${noun}…`
                 : `Create ${noun}: ${create.name}`}
             </button>
+          ) : null}
+          {footer ? (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border)] px-1.5 py-1">
+              {footer}
+            </div>
           ) : null}
         </ComboboxPrimitive.Popup>
       </ComboboxPrimitive.Positioner>
@@ -631,9 +703,42 @@ const pickerItemValue = (item: ComboboxItem) => item.id;
 const pickerItemsEqual = (item: ComboboxItem, selected: ComboboxItem) =>
   item.id === selected.id;
 
+/** A selected record or option inside a multiple field. */
+function SelectionChip({
+  item,
+  onRemove,
+  disabled,
+}: {
+  item: ComboboxItem;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  const name = item.pending ? "Loading…" : item.name;
+  return (
+    <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-[3px] bg-muted pr-0.5 pl-1 text-xs">
+      <PickerVisual item={item} size={16} />
+      <span className="min-w-0 truncate">{name}</span>
+      <button
+        type="button"
+        aria-label={`Remove ${item.pending ? "selection" : item.name}`}
+        disabled={disabled}
+        className="flex size-4 items-center justify-center rounded-[2px] text-muted-foreground hover:bg-background hover:text-foreground"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+      >
+        <XIcon className="size-3" />
+      </button>
+    </span>
+  );
+}
+
 /**
  * The input is both the closed display and the open search field, so opening
- * an editor never introduces a second focus target.
+ * an editor never introduces a second focus target. In `multiple` the input
+ * only ever holds the query; selected rows are chips before it.
  */
 function SearchPicker<TId extends string>({
   inputId,
@@ -641,23 +746,23 @@ function SearchPicker<TId extends string>({
   "aria-describedby": ariaDescribedBy,
   entity,
   label,
+  multiple,
   items,
-  value,
-  setValue,
+  values,
+  setValues,
   onSearchChange,
   onOpenChange,
   onCreateNew,
   isLoading,
   error,
   renderItem,
-  wide,
-  widthMode,
   compact,
   openOnMount,
   placeholder,
   clearable,
   disabled,
   className,
+  footer,
 }: ResolvedPickerProps<TId>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -672,39 +777,28 @@ function SearchPicker<TId extends string>({
     },
     [fieldRef],
   );
+  const single = multiple ? undefined : values[0];
 
   const { ariaLabel, noun, clearLabel, placeholderDefault } = pickerNaming(
     entity,
     label,
   );
 
-  const inputValue = open ? query : selectedLabelOf(value);
+  const inputValue = open || multiple ? query : selectedLabelOf(single);
 
   const visibleItems = React.useMemo(() => {
     const roster = onSearchChange
       ? items
       : items.filter((item) => matchesPickerItem(item, query));
-    if (
-      !value ||
-      value.pending ||
-      query.trim() !== "" ||
-      roster.some((item) => item.id === value.id)
-    ) {
-      return roster;
-    }
-    return [value, ...roster];
-  }, [items, onSearchChange, query, value]);
+    if (query.trim() !== "") return roster;
+    const missing = values.filter(
+      (value) => !value.pending && !roster.some((item) => item.id === value.id),
+    );
+    return missing.length > 0 ? [...missing, ...roster] : roster;
+  }, [items, onSearchChange, query, values]);
 
   const orderedItems = React.useMemo(
-    () =>
-      visibleItems
-        .map((item, index) => ({ item, index }))
-        .sort((a, b) => {
-          const groupOrderA = a.item.presentation?.group?.order ?? 0;
-          const groupOrderB = b.item.presentation?.group?.order ?? 0;
-          return groupOrderA - groupOrderB || a.index - b.index;
-        })
-        .map(({ item }) => item),
+    () => sortByGroup(visibleItems),
     [visibleItems],
   );
 
@@ -719,13 +813,14 @@ function SearchPicker<TId extends string>({
       normalizedQuery.toLocaleLowerCase(),
   );
   const parsedCode = parseShortcode(normalizedQuery);
+  const entityPrefix = entity ? entityManifest[entity].shortcodePrefix : null;
   const wrongPrefix =
     entity != null && parsedCode != null && parsedCode.type !== entity;
   const searchingForCode =
     normalizedQuery !== "" &&
     (parsedCode != null ||
-      (entity != null &&
-        normalizedQuery.toUpperCase().startsWith(`${ENTITY_CODE[entity]}-`)));
+      (entityPrefix != null &&
+        normalizedQuery.toUpperCase().startsWith(`${entityPrefix}-`)));
   const searchSettled =
     onSearchChange == null ||
     normalizedQuery.toLocaleLowerCase() ===
@@ -756,99 +851,150 @@ function SearchPicker<TId extends string>({
   }, [openOnMount, changeOpen]);
 
   const emptyMessage = wrongPrefix
-    ? `${normalizedQuery.toUpperCase()} is not a ${ENTITY_CODE[entity]} code.`
+    ? `${normalizedQuery.toUpperCase()} is not a ${entityPrefix} code.`
     : `No ${noun} found.`;
+
+  const clear = () => setValues([]);
+  const addCreated = (item: ComboboxItem<TId>) =>
+    setValues(multiple ? [...values, item] : [item]);
+
+  const field = (
+    <ComboboxPrimitive.InputGroup
+      ref={anchorRef}
+      data-hydrating={gate["data-hydrating"]}
+      className={cn(fieldFrameClass(compact), multiple && "flex-wrap py-0.5")}
+    >
+      {multiple ? (
+        values.map((value) => (
+          <SelectionChip
+            key={value.id}
+            item={value}
+            disabled={gate.disabled}
+            onRemove={() =>
+              setValues(values.filter((item) => item.id !== value.id))
+            }
+          />
+        ))
+      ) : open ? null : (
+        <SelectedLead value={single} />
+      )}
+      <ComboboxPrimitive.Input
+        id={inputId}
+        ref={setInputRef}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        placeholder={
+          single?.pending
+            ? "Loading…"
+            : multiple && values.length > 0
+              ? undefined
+              : (placeholder ?? placeholderDefault)
+        }
+        className={cn(
+          "h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+          multiple && "min-w-16",
+        )}
+      />
+      {open || multiple ? null : <SelectedTrailing value={single} />}
+      {clearable && values.length > 0 ? (
+        <ComboboxPrimitive.Clear
+          aria-label={clearLabel}
+          // Hidden in a field squeezed narrower than 9rem (a recipe ingredient
+          // row) so the text keeps the width; the popup keeps its Clear row.
+          className="hidden h-full shrink-0 items-center justify-center px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11 @min-[9rem]/picker:flex"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            event.stopPropagation();
+            clear();
+            setQuery("");
+          }}
+        >
+          <XIcon className="size-3.5" />
+        </ComboboxPrimitive.Clear>
+      ) : null}
+      <ComboboxPrimitive.Trigger
+        aria-label={`Show ${noun} options`}
+        className="hidden h-full min-w-6 shrink-0 items-center justify-center max-sm:min-w-11 @min-[9rem]/picker:flex"
+      >
+        <CaretGlyph open={open} />
+      </ComboboxPrimitive.Trigger>
+    </ComboboxPrimitive.InputGroup>
+  );
+
+  const popup = (
+    <SearchPickerPopup
+      anchorRef={anchorRef}
+      orderedItems={orderedItems}
+      renderItem={renderItem}
+      clearable={clearable}
+      hasValue={values.length > 0}
+      noun={noun}
+      clearLabel={clearLabel}
+      clear={clear}
+      addCreated={addCreated}
+      setQuery={setQuery}
+      changeOpen={changeOpen}
+      isLoading={isLoading}
+      error={error}
+      emptyMessage={emptyMessage}
+      create={
+        canCreate && onCreateNew
+          ? { name: normalizedQuery, onCreate: onCreateNew }
+          : null
+      }
+      footer={footer}
+    />
+  );
+
+  const shared = {
+    items: orderedItems,
+    filteredItems: orderedItems,
+    filter: null,
+    inputValue,
+    onInputValueChange: (nextQuery: string) => {
+      if (!open && !multiple) return;
+      setQuery(nextQuery);
+    },
+    itemToStringLabel: pickerItemLabel,
+    itemToStringValue: pickerItemValue,
+    isItemEqualToValue: pickerItemsEqual,
+    open,
+    onOpenChange: changeOpen,
+    openOnInputClick: true,
+    modal: false,
+    autoHighlight: true,
+    disabled: gate.disabled,
+  } as const;
 
   return (
     <div className={cn("w-full min-w-0", className)}>
-      <ComboboxPrimitive.Root<ComboboxItem<TId>>
-        items={orderedItems}
-        filteredItems={orderedItems}
-        filter={null}
-        value={value}
-        onValueChange={(nextValue) => {
-          setValue(nextValue);
-          setQuery("");
-          changeOpen(false);
-        }}
-        inputValue={inputValue}
-        onInputValueChange={(nextQuery) => {
-          if (!open) return;
-          setQuery(nextQuery);
-        }}
-        itemToStringLabel={pickerItemLabel}
-        itemToStringValue={pickerItemValue}
-        isItemEqualToValue={pickerItemsEqual}
-        open={open}
-        onOpenChange={changeOpen}
-        openOnInputClick
-        modal={false}
-        autoHighlight
-        disabled={gate.disabled}
-      >
-        {/* A container so a field squeezed into a narrow cell (a recipe
-            ingredient row) gives its width to the text, not the chrome. */}
-        <ComboboxPrimitive.InputGroup
-          ref={anchorRef}
-          data-hydrating={gate["data-hydrating"]}
-          className={cn(fieldFrameClass(compact), "@container/picker")}
+      {multiple ? (
+        <ComboboxPrimitive.Root<ComboboxItem<TId>, true>
+          {...shared}
+          multiple
+          value={values}
+          onValueChange={(next) => {
+            setValues(next);
+            setQuery("");
+          }}
         >
-          {open ? null : <SelectedLead value={value} />}
-          <ComboboxPrimitive.Input
-            id={inputId}
-            ref={setInputRef}
-            aria-label={ariaLabel}
-            aria-describedby={ariaDescribedBy}
-            placeholder={
-              value?.pending ? "Loading…" : (placeholder ?? placeholderDefault)
-            }
-            className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-          />
-          {clearable && value ? (
-            <ComboboxPrimitive.Clear
-              aria-label={clearLabel}
-              className="hidden h-full shrink-0 items-center justify-center px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11 @min-[9rem]/picker:flex"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setValue(null);
-                setQuery("");
-              }}
-            >
-              <XIcon className="size-3.5" />
-            </ComboboxPrimitive.Clear>
-          ) : null}
-          <ComboboxPrimitive.Trigger
-            aria-label={`Show ${noun} options`}
-            className="hidden h-full min-w-7 shrink-0 items-center justify-center max-sm:min-w-11 @min-[9rem]/picker:flex"
-          >
-            <CaretGlyph open={open} />
-          </ComboboxPrimitive.Trigger>
-        </ComboboxPrimitive.InputGroup>
-
-        <SearchPickerPopup
-          anchorRef={anchorRef}
-          orderedItems={orderedItems}
-          renderItem={renderItem}
-          clearable={clearable}
-          value={value}
-          noun={noun}
-          clearLabel={clearLabel}
-          setValue={setValue}
-          setQuery={setQuery}
-          changeOpen={changeOpen}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage={emptyMessage}
-          wide={wide}
-          widthMode={widthMode}
-          create={
-            canCreate && onCreateNew
-              ? { name: normalizedQuery, onCreate: onCreateNew }
-              : null
-          }
-        />
-      </ComboboxPrimitive.Root>
+          {field}
+          {popup}
+        </ComboboxPrimitive.Root>
+      ) : (
+        <ComboboxPrimitive.Root<ComboboxItem<TId>>
+          {...shared}
+          value={single ?? null}
+          onValueChange={(next) => {
+            setValues(next ? [next] : []);
+            setQuery("");
+            changeOpen(false);
+          }}
+        >
+          {field}
+          {popup}
+        </ComboboxPrimitive.Root>
+      )}
     </div>
   );
 }
@@ -870,21 +1016,22 @@ function ChoosePicker<TId extends string>({
   entity,
   label,
   items,
-  value,
-  setValue,
+  values,
+  setValues,
   onOpenChange,
+  openOnMount,
   renderItem,
-  wide,
-  widthMode,
   compact,
   placeholder,
   clearable,
   disabled,
   className,
+  footer,
 }: ResolvedPickerProps<TId>) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(openOnMount ?? false);
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const gate = useHydrationGate(disabled);
+  const value = values[0];
   const { ariaLabel, clearLabel, placeholderDefault } = pickerNaming(
     entity,
     label,
@@ -893,15 +1040,17 @@ function ChoosePicker<TId extends string>({
     () => items.map((item) => ({ value: item.id, label: item.name })),
     [items],
   );
+  const orderedItems = React.useMemo(() => sortByGroup(items), [items]);
 
   return (
     <div className={cn("w-full min-w-0", className)}>
       <SelectPrimitive.Root<string>
         items={labels}
         value={value?.id ?? null}
-        onValueChange={(id) =>
-          setValue(items.find((item) => item.id === id) ?? null)
-        }
+        onValueChange={(id) => {
+          const next = items.find((item) => item.id === id);
+          setValues(next ? [next] : []);
+        }}
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
@@ -920,7 +1069,7 @@ function ChoosePicker<TId extends string>({
             ref={inputRef}
             aria-label={ariaLabel}
             aria-describedby={ariaDescribedBy}
-            className="flex h-full min-w-0 flex-1 items-center gap-2 text-left outline-none"
+            className="flex h-full min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none"
           >
             <SelectedLead value={value} />
             <span
@@ -935,7 +1084,8 @@ function ChoosePicker<TId extends string>({
                   ? selectedLabelOf(value)
                   : (placeholder ?? placeholderDefault)}
             </span>
-            <span className="flex h-full min-w-7 shrink-0 items-center justify-center max-sm:min-w-11">
+            <SelectedTrailing value={value} />
+            <span className="flex h-full min-w-6 shrink-0 items-center justify-center max-sm:min-w-11">
               <CaretGlyph open={open} />
             </span>
           </SelectPrimitive.Trigger>
@@ -944,8 +1094,8 @@ function ChoosePicker<TId extends string>({
               type="button"
               aria-label={clearLabel}
               disabled={gate.disabled}
-              className="flex h-full shrink-0 items-center justify-center px-2 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
-              onClick={() => setValue(null)}
+              className="flex h-full shrink-0 items-center justify-center px-1.5 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
+              onClick={() => setValues([])}
             >
               <XIcon className="size-3.5" />
             </button>
@@ -962,13 +1112,13 @@ function ChoosePicker<TId extends string>({
             data-combobox-popup=""
             className="isolate z-[200]"
           >
-            <SelectPrimitive.Popup className={popupClass(wide, widthMode)}>
-              <SelectPrimitive.List className="max-h-112 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none">
-                {items.map((item, index) => (
+            <SelectPrimitive.Popup className={popupClass}>
+              <SelectPrimitive.List className={listClass}>
+                {orderedItems.map((item, index) => (
                   <React.Fragment key={item.id}>
                     <PickerRowPreamble
                       item={item}
-                      previous={items[index - 1]}
+                      previous={orderedItems[index - 1]}
                     />
                     <SelectPrimitive.Item
                       value={item.id}
@@ -981,10 +1131,7 @@ function ChoosePicker<TId extends string>({
                       )}
                       style={rowStyle(item)}
                     >
-                      <PickerRowVisual
-                        item={item}
-                        custom={renderItem != null}
-                      />
+                      <PickerVisual item={item} size={20} />
                       <PickerRowContent item={item} renderItem={renderItem} />
                       <SelectPrimitive.ItemIndicator className="shrink-0">
                         <CheckIcon className="size-3.5" />
@@ -993,10 +1140,75 @@ function ChoosePicker<TId extends string>({
                   </React.Fragment>
                 ))}
               </SelectPrimitive.List>
+              {footer ? (
+                <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border)] px-1.5 py-1">
+                  {footer}
+                </div>
+              ) : null}
             </SelectPrimitive.Popup>
           </SelectPrimitive.Positioner>
         </SelectPrimitive.Portal>
       </SelectPrimitive.Root>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Segmented mode
+// ---------------------------------------------------------------------------
+
+/**
+ * Every option inline as one bordered button group — for a handful of view
+ * modes or formats where seeing all choices is the point. Arrow keys move
+ * between segments; a segment is never deselected.
+ */
+function SegmentedPicker<TId extends string>({
+  inputRef,
+  entity,
+  label,
+  items,
+  values,
+  setValues,
+  iconOnlyOnPhone,
+  disabled,
+  className,
+}: ResolvedPickerProps<TId>) {
+  const gate = useHydrationGate(disabled);
+  const { ariaLabel } = pickerNaming(entity, label);
+  const value = values[0];
+  return (
+    <ToggleGroup
+      aria-label={ariaLabel}
+      className={cn("w-fit", className)}
+      variant="outline"
+      size="sm"
+      value={value ? [value.id] : []}
+      disabled={gate.disabled}
+      data-hydrating={gate["data-hydrating"]}
+      onValueChange={(ids: string[]) => {
+        const next = items.find((item) => item.id === ids[0]);
+        if (next) setValues([next]);
+      }}
+    >
+      {items.map((item, index) => (
+        <ToggleGroupItem
+          key={item.id}
+          ref={index === 0 ? inputRef : undefined}
+          value={item.id}
+          aria-label={rowAriaLabel(item)}
+          // Phone touch floor; desktop segments stay compact (DESIGN.md).
+          className="min-h-11 min-w-11 gap-1.5 md:min-h-0 md:min-w-0"
+        >
+          <PickerVisual item={item} size={16} />
+          <span
+            className={cn(
+              iconOnlyOnPhone && (item.icon || item.thumb) && "max-md:sr-only",
+            )}
+          >
+            {item.presentation?.rowLabel ?? item.name}
+          </span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }

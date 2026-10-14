@@ -55,7 +55,7 @@ export function pickerOptionItem(option: PickerOption): ComboboxItem {
     ...(option.group && { group: option.group }),
     ...(option.depth != null && { depth: option.depth }),
     ...(option.rowLabel && { rowLabel: option.rowLabel }),
-    ...(option.hint && { hint: option.hint }),
+    ...(option.hint && { trailing: [{ text: option.hint }] }),
     ...(option.meta && { meta: true }),
     ...(option.disabledReason && {
       disabledReason: option.disabledReason,

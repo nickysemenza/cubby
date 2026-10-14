@@ -416,7 +416,6 @@ export function DependencyGraphCanvas({
             <Picker
               compact
               mode={groupOptions.length > 12 ? "search" : "choose"}
-              widthMode="intrinsic"
               label="Jump to group"
               placeholder="Choose a group…"
               className="max-w-full"

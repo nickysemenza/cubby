@@ -223,6 +223,58 @@ export const noRawTableRule = defineRule({
   },
 });
 
+const VALUE_CONTROL_PARTS = new Set([
+  "Combobox",
+  "Select",
+  "Autocomplete",
+  "ToggleGroup",
+]);
+const VALUE_CONTROL_MODULES =
+  /^@base-ui\/react\/(combobox|select|autocomplete|toggle-group)$|^~\/ui\/primitives\/toggle-group$/u;
+
+/** A value control built outside `Picker`: Base UI's combobox, select,
+ * autocomplete, or toggle group, or the toggle-group primitive. */
+export const noRawValueControlRule = defineRule({
+  meta: {
+    type: "suggestion",
+    docs: {
+      description: "Choose values through Picker, not a raw value primitive.",
+    },
+    messages: {
+      rawValueControl: `Use Picker (mode "search", "choose", or "segmented"; \`multiple\` for several) instead of {{name}}; it owns rows, pictures, and keyboard behavior. ${CATALOG}`,
+    },
+  },
+  createOnce(context) {
+    return {
+      ImportDeclaration(node) {
+        const source = node.source.value;
+        if (typeof source !== "string") return;
+        if (VALUE_CONTROL_MODULES.test(source)) {
+          context.report({
+            node,
+            messageId: "rawValueControl",
+            data: { name: source },
+          });
+          return;
+        }
+        if (source !== "@base-ui/react") return;
+        for (const specifier of node.specifiers) {
+          if (
+            specifier.type === "ImportSpecifier" &&
+            specifier.imported.type === "Identifier" &&
+            VALUE_CONTROL_PARTS.has(specifier.imported.name)
+          )
+            context.report({
+              node: specifier,
+              messageId: "rawValueControl",
+              data: { name: `Base UI ${specifier.imported.name}` },
+            });
+        }
+      },
+    };
+  },
+});
+
 /** Native `<select>`: every value choice renders through the one `Picker`. */
 export const noNativeSelectRule = defineRule({
   meta: {

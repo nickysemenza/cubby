@@ -545,7 +545,6 @@ export function PendingImageUpload({
         <Picker
           mode="choose"
           label="Photo source"
-          widthMode="intrinsic"
           className="w-auto"
           options={SOURCE_OPTIONS}
           value={source}
@@ -559,7 +558,6 @@ export function PendingImageUpload({
           <Picker
             mode="choose"
             label="Attach as"
-            widthMode="intrinsic"
             className="w-auto"
             options={PURPOSE_OPTIONS}
             value={purpose}

@@ -37,7 +37,7 @@ export interface UseAutoFieldSuggestionResult {
   seedItem: ComboboxItem | null;
   /** The winner plus every alternative, each carrying a pinned "Suggested"
    * `presentation.group` (order -1, ahead of every other group) and a
-   * rounded-percent `status` — a picker merges these ahead of its own
+   * rounded-percent trailing chip — a picker merges these ahead of its own
    * roster so a `suggestField` reference picker always shows the decision model's ranking,
    * not just the single value it silently wrote. Empty with no suggestion. */
   seedItems: readonly ComboboxItem[];
@@ -69,10 +69,9 @@ const SUGGESTED_GROUP = { id: "suggested", label: "Suggested", order: -1 };
  * what keeps a confident winner from dragging three noise rows with it. */
 const MIN_SEED_PROBABILITY = 0.05;
 
-const suggestedStatus = (probability: number | null) =>
-  probability == null
-    ? undefined
-    : { label: `${Math.round(probability * 100)}%` };
+/** The decision model's confidence as the row's trailing chip. */
+const suggestedConfidence = (probability: number | null) =>
+  probability == null ? [] : [{ text: `${Math.round(probability * 100)}%` }];
 
 /** What a suggestion writes into a form field: a raw id for `valueKind:"id"`,
  * a full picker item for `"item"`. */
@@ -119,7 +118,7 @@ function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
       ...winner,
       presentation: {
         group: SUGGESTED_GROUP,
-        status: suggestedStatus(suggestion.probability),
+        trailing: suggestedConfidence(suggestion.probability),
       },
     },
     ...suggestion.alternatives
@@ -131,7 +130,7 @@ function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
         detail: alternative.detail ?? undefined,
         presentation: {
           group: SUGGESTED_GROUP,
-          status: suggestedStatus(alternative.probability),
+          trailing: suggestedConfidence(alternative.probability),
         },
       })),
   ];

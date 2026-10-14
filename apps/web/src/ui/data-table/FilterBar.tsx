@@ -1,6 +1,5 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -10,7 +9,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
-import { PickerVisual } from "~/ui/combobox/picker-visual";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -72,9 +70,8 @@ function filterSummary(
 }
 
 /**
- * Multiselect editor: an inline searchable checklist with facet hints and a
- * Clear/Apply footer, inside the filter popover — a checkbox group rather
- * than a popup picker, so it shares the picker's option visual, not its shell.
+ * Multiselect editor: the one Picker in `multiple` mode, editing a draft so
+ * the table re-queries once, on Apply — Clear and Apply sit in its footer.
  */
 function MultiselectEditor({
   field,
@@ -87,103 +84,38 @@ function MultiselectEditor({
   onApply: (values: string[]) => void;
   onClear: () => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState<Set<string>>(
-    () => new Set(filter?.values ?? []),
-  );
+  const [draft, setDraft] = useState<string[]>(() => filter?.values ?? []);
   const options = visibleOptions(field, filter);
   useEffect(() => {
     field.onActivate?.(filter?.values ?? []);
   }, [field, filter?.values]);
-  useEffect(() => {
-    field.onSearchChange?.(query);
-  }, [field, query]);
-  const filtered = query
-    ? options.filter((option) =>
-        option.label.toLowerCase().includes(query.toLowerCase()),
-      )
-    : options;
-
   return (
-    <div className="flex flex-col gap-1">
-      <Input
-        ref={focusOnMount}
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={`Filter ${field.label ?? field.key}`}
-        aria-label={`Filter ${field.label ?? field.key}`}
-        className="h-8"
-      />
-      <div className="max-h-64 overflow-y-auto">
-        {filtered.map((option, index) => {
-          const checked = draft.has(option.value);
-          const toggle = () =>
-            setDraft((previous) => {
-              const nextSet = new Set(previous);
-              if (nextSet.has(option.value)) nextSet.delete(option.value);
-              else nextSet.add(option.value);
-              return nextSet;
-            });
-          return (
-            <div key={option.value}>
-              {option.group &&
-                (index === 0 ||
-                  filtered[index - 1]?.group?.id !== option.group.id) && (
-                  <div className="px-2 pt-2 pb-1 text-2xs font-semibold text-muted-foreground">
-                    {option.group.label}
-                  </div>
-                )}
-              {/* The button has a full-path accessible name while the row displays its leaf label. */}
-              <button
-                type="button"
-                className="flex min-h-8 w-full items-center gap-2 rounded-sm px-1 text-left text-xs hover:bg-muted"
-                onClick={toggle}
-                aria-pressed={checked}
-                style={{
-                  paddingInlineStart: `${4 + (option.depth ?? 0) * 16}px`,
-                }}
-                aria-label={option.label}
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors duration-150",
-                    checked
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-checkbox-border bg-card",
-                  )}
-                >
-                  {checked && <CheckIcon className="size-3" />}
-                </span>
-                <PickerVisual item={option} size={16} />
-                <span className="min-w-0 flex-1 truncate">
-                  {option.rowLabel ?? option.label}
-                </span>
-                {option.hint && (
-                  <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
-                    {option.hint}
-                  </span>
-                )}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex items-center justify-between border-t border-border pt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={onClear}
-        >
-          Clear
-        </Button>
-        <Button type="button" size="sm" onClick={() => onApply([...draft])}>
-          Apply
-        </Button>
-      </div>
-    </div>
+    <Picker
+      multiple
+      openOnMount
+      label={`Filter ${field.label ?? field.key}`}
+      options={options}
+      values={draft}
+      onValuesChange={setDraft}
+      onSearchChange={field.onSearchChange}
+      isLoading={field.isLoading}
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+          <Button type="button" size="sm" onClick={() => onApply(draft)}>
+            Apply
+          </Button>
+        </>
+      }
+    />
   );
 }
 

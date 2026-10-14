@@ -604,6 +604,30 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
+- 🤔 ✨ **One native picker with names and pictures, never codes.** Web
+  now has one value picker (`apps/web/src/ui/combobox/picker.tsx`): a closed
+  field leads with the option glyph or the record's picture, a stored
+  shortcode resolves to its record (`useSelectedPickerItems`), and rows are
+  dense with trailing data. Native still has several pickers — the
+  `EntityPickerSheet`, `LocationPickerSheet` and `ScopePickerSheet` sheets,
+  `RelationshipDepthPicker`, and ~38 files with raw SwiftUI `Picker`/`Menu`
+  value choices — and shows codes in picker and row chrome
+  (`EntityPickerSheet.swift` renders `pick.id`; `EntityListView`,
+  `DetailSectionViews` and `NeedsPhotoView` print a record id as a line).
+  1. 🧪 Inventory every native value choice (sheet, `Picker`, `Menu`,
+     segmented control) and every place a shortcode is rendered as text.
+  2. 🤔 Decide the native shape with `axiom-design`: one `EntityPicker`
+     view for records (search, thumbnail from the manifest's
+     `displayImages[0]`, entity glyph fallback, create) and the platform
+     menu/`Picker` only for short fixed enums, mirroring web's `search` and
+     `choose` modes.
+  3. 🟢 Resolve a stored code to its record (name and thumbnail) through
+     the existing detail read before showing a selection; while loading show
+     a placeholder, and name a missing record instead of its code.
+  4. 🟢 Keep codes searchable and copyable only where they are the subject
+     (a code field, Technical details), never as picker or row chrome.
+  5. 🧪 Verify on iPhone and Mac with `axiom-swiftui`: closed field, open
+     list density, Dynamic Type, VoiceOver names without codes.
 - 🤔 🛠️ **Untype the largest native RPC outputs.** After the entity kernel
   went untyped, the generated client's biggest remaining schema closures are
   typed RPC outputs (bytes of the 200 response's component closure in the

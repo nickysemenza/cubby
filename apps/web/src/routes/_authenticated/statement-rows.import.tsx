@@ -578,7 +578,6 @@ function StatementImportPage() {
                         <Picker
                           mode="choose"
                           compact
-                          widthMode="intrinsic"
                           label={`Transaction kind for ${row.proposed.rawDescription ?? row.key}`}
                           placeholder="Choose transaction kind"
                           className="mt-1 min-w-40"

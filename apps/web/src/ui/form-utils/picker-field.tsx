@@ -1,5 +1,4 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import {
   Controller,
@@ -17,15 +16,11 @@ import {
   type UseAutoFieldSuggestionResult,
   useAutoFieldSuggestion,
 } from "~/features/ai/use-auto-field-suggestion";
-import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import type { EntitySearchScope } from "../combobox/entity-search-hooks";
 import { Picker } from "../combobox/picker";
 import type { PickerOption } from "../combobox/picker-option";
-import { PickerVisual } from "../combobox/picker-visual";
 import { useSelectedPickerItems } from "../combobox/selected-items";
 import type {
   EntitySearchResult,
@@ -515,9 +510,9 @@ const idList = z.array(z.string()).catch([]);
 
 /**
  * A multi-reference field whose stored value is the full id set
- * (`blockedByIds`, `candidateProductIds`): removable chips for the current
- * set plus the picker to add one. Chips resolve every id to its record —
- * including ids outside the current candidate scope.
+ * (`blockedByIds`, `candidateProductIds`): one multiple picker whose chips
+ * resolve every id to its record — including ids outside the current
+ * candidate scope.
  */
 function MultiPickerField<TFieldValues extends FieldValues>({
   form,
@@ -530,66 +525,45 @@ function MultiPickerField<TFieldValues extends FieldValues>({
   entity: PickerEntity;
   search: EntitySearchResult<string>;
 }) {
-  const ids = idList.parse(useWatch({ control: form.control, name }));
-  const selected = useSelectedPickerItems(entity, ids, search.items);
   return (
     <Controller
       control={form.control}
       name={name}
-      render={({ field, fieldState }) => {
-        const commit = (next: string[]) =>
-          field.onChange(
-            // SAFETY: `name` is a caller-owned Path whose value is the
-            // selected id list.
-            next as PathValue<TFieldValues, Path<TFieldValues>>,
-          );
-        return (
-          <FormFieldGroup
-            htmlFor={String(name)}
+      render={({ field, fieldState }) => (
+        <FormFieldGroup
+          htmlFor={String(name)}
+          label={label}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
+          <Picker
+            multiple
+            inputId={String(name)}
+            inputRef={field.ref}
+            entity={entity}
             label={label}
-            invalid={fieldState.invalid}
-            error={fieldState.error}
-          >
-            {selected.length > 0 && (
-              <Row wrap gap="xs" className="mb-1">
-                {selected.map((item) => (
-                  <Badge key={item.id} variant="outline" className="gap-1.5">
-                    <PickerVisual item={item} size={16} />
-                    {item.pending ? "Loading…" : item.name}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${item.pending ? "selection" : item.name}`}
-                      disabled={disabled}
-                      onClick={() =>
-                        commit(ids.filter((candidate) => candidate !== item.id))
-                      }
-                    >
-                      <XIcon />
-                    </Button>
-                  </Badge>
-                ))}
-              </Row>
-            )}
-            <Picker
-              inputId={String(name)}
-              inputRef={field.ref}
-              entity={entity}
-              label={label}
-              items={search.items.filter((item) => !ids.includes(item.id))}
-              value={null}
-              setValue={(item) => {
-                if (item && !ids.includes(item.id)) commit([...ids, item.id]);
-              }}
-              onSearchChange={search.onSearchChange}
-              isLoading={search.isLoading}
-              onOpenChange={search.onOpenChange}
-              disabled={disabled}
-            />
-          </FormFieldGroup>
-        );
-      }}
+            items={search.items}
+            values={idList.parse(field.value).map((id) => ({ id, name: id }))}
+            setValues={(items) =>
+              field.onChange(
+                // SAFETY: `name` is a caller-owned Path whose value is the
+                // selected id list.
+                items.map((item) => item.id) as PathValue<
+                  TFieldValues,
+                  Path<TFieldValues>
+                >,
+              )
+            }
+            onSearchChange={search.onSearchChange}
+            isLoading={search.isLoading}
+            onOpenChange={(open) => {
+              if (!open) field.onBlur();
+              search.onOpenChange(open);
+            }}
+            disabled={disabled}
+          />
+        </FormFieldGroup>
+      )}
     />
   );
 }

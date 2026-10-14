@@ -406,7 +406,6 @@ function ReviewFilters({
     <Row gap="sm" wrap align="center">
       <Picker
         label="Entity"
-        widthMode="intrinsic"
         className="w-40"
         options={entityOptions}
         value={filters.entity ?? ""}
@@ -431,7 +430,6 @@ function ReviewFilters({
       <Picker
         mode="choose"
         label="Status"
-        widthMode="intrinsic"
         className="w-36"
         options={STATUS_PICKER_OPTIONS}
         value={filters.status ?? "pending"}
@@ -443,7 +441,6 @@ function ReviewFilters({
       <Picker
         mode="choose"
         label="Kind"
-        widthMode="intrinsic"
         className="w-36"
         options={KIND_PICKER_OPTIONS}
         value={filters.kind ?? ""}

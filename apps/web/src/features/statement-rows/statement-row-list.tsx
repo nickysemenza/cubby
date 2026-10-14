@@ -249,7 +249,6 @@ function StatementRowFilterBar({
       <Picker
         mode="choose"
         label="Match state"
-        widthMode="intrinsic"
         options={MATCH_STATE_FILTER_OPTIONS}
         value={search.matchState ?? "unmatched"}
         onValueChange={(next) =>
@@ -259,7 +258,6 @@ function StatementRowFilterBar({
       <Picker
         mode="choose"
         label="Disposition"
-        widthMode="intrinsic"
         options={DISPOSITION_FILTER_OPTIONS}
         value={search.disposition ?? ""}
         onValueChange={(next) =>
