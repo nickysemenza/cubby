@@ -129,7 +129,9 @@ Prefix inference applies the union fallback to each input member before
 combining results, so whitespace-wrapped members cannot borrow another
 member's entity brand.
 
-Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
+Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
+instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise
+infers `text` and fails the update. An interpolated column renders **unqualified** on a
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
 use explicit table aliases and literal qualified names for that correlation.

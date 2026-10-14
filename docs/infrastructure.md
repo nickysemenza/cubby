@@ -67,6 +67,7 @@ One-time creation commands that cannot be inferred or safely rerun by deploy:
 
 ```bash
 pnpm --dir apps/web exec wrangler queues create cubby-background
+pnpm --dir apps/web exec wrangler queues create cubby-image-cloud
 pnpm --dir apps/web exec wrangler queues create cubby-telemetry
 pnpm --dir apps/web exec wrangler queues create cubby-purchase-agent
 pnpm --dir apps/web exec wrangler vectorize create \
@@ -437,6 +438,41 @@ when it connects. The queue's no-device cooldown does not delay that claim;
 pending retries still honor backoff. Device participation and advertised image
 capabilities both gate execution. The claim policy belongs to
 `server/repo/image-processing.ts`.
+
+Cloud image execution uses `cubby-image-cloud`, separate from
+`cubby-background`. Shared image wakeups await durable queue acceptance before
+acknowledging and leave the existing job pending; only the destination claims
+the source-matching attempt. A failed publication is retried by the shared
+consumer, and existing image dispatch repair republishes pending or expired
+jobs. The image job and its attempt history remain the only execution ledger.
+Queue redelivery cannot create a second active attempt, and a caught provider
+failure persists the job retry/backoff before acknowledging its delivery;
+transport retries do not independently multiply paid calls.
+Companion normalization results that require cloud description use the same
+cloud lane; Apple execution and its capability/participation policy remain
+owned by the companion transport.
+
+The cloud lane accepts one image per invocation and bounds concurrency at four,
+before download or claim. The shared consumer remains bounded at two, so those
+two lanes can hold at most six Worker-side database clients; interactive work,
+other queues and Workflows also share the Hyperdrive origin pool. Gateway
+admission separately bounds paid model starts. These limits do not increase the
+old shared batch size: ten tasks in one invocation previously exhausted Worker
+memory. JPEG analysis reads are bounded before buffering: description and
+companion normalization at 4 MiB, identification at 2 MiB. Four overlapping
+description invocations hold at most 16 MiB of retained rendition bytes, with
+additional bounded streaming, inspection and upload copies; this is a payload
+bound, not a measurement of total isolate memory. Originals remain unchanged
+when an oversized rendition fails with its raw size diagnostic.
+
+Both shared and cloud consumers log `queue_wait_ms` from Cloudflare's transport
+enqueue timestamp at consumer entry, with the queue name. Local delivery
+adapters preserve that metadata; older fixture messages without it report an
+unavailable wait rather than inventing one. Cloud logs separately retain
+`intent_age_ms` from the job's persisted creation time, which includes shared
+queue, device, normalization and retry/backoff delays. `execution_ms` measures
+destination claim, preparation, provider work and adoption. Retried jobs retain
+their original intent age.
 
 Apple subject lift is independent of cloud cutout eligibility and attachment
 purpose. Supported images reach Apple, which reports a cutout, no foreground

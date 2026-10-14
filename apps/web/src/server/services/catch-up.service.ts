@@ -62,6 +62,7 @@ export async function recoverMissedWork(
     import("~/server/purchase-import/gmail/attachment-storage"),
   ]);
   await (await import("~/server/runs/ai-refresh")).recoverAiRefresh(db);
+  await (await import("~/server/runs/ai-work")).recoverManualAiWork(db);
   const coordinators = getPurchaseImportRunAgentNamespace();
   const [
     image,

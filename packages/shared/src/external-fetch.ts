@@ -150,40 +150,43 @@ function responseWithDeadline(
   };
   signal.addEventListener("abort", abortBody, { once: true });
 
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      streamController = controller;
-      if (signal.aborted) abortBody();
-    },
-    async pull(controller) {
-      reading = true;
-      try {
-        const { done, value } = await reader.read();
-        if (closed) return;
-        if (done) {
+  const body = new ReadableStream<Uint8Array>(
+    {
+      start(controller) {
+        streamController = controller;
+        if (signal.aborted) abortBody();
+      },
+      async pull(controller) {
+        reading = true;
+        try {
+          const { done, value } = await reader.read();
+          if (closed) return;
+          if (done) {
+            finish();
+            controller.close();
+          } else if (value) {
+            controller.enqueue(value);
+          }
+        } catch (error) {
+          if (closed) return;
           finish();
-          controller.close();
-        } else if (value) {
-          controller.enqueue(value);
+          controller.error(error);
+        } finally {
+          reading = false;
+          if (closed) release();
         }
-      } catch (error) {
-        if (closed) return;
-        finish();
-        controller.error(error);
-      } finally {
-        reading = false;
-        if (closed) release();
-      }
+      },
+      async cancel(reason) {
+        try {
+          await reader.cancel(reason);
+        } finally {
+          finish();
+          release();
+        }
+      },
     },
-    async cancel(reason) {
-      try {
-        await reader.cancel(reason);
-      } finally {
-        finish();
-        release();
-      }
-    },
-  });
+    { highWaterMark: 0 },
+  );
 
   return new Response(body, {
     headers: response.headers,
@@ -291,7 +294,13 @@ export async function readResponseWithLimit(
   response: Response,
   maxBytes: number,
 ): Promise<Uint8Array> {
-  assertAdvertisedSize(response, maxBytes);
+  try {
+    assertAdvertisedSize(response, maxBytes);
+  } catch (error) {
+    // SILENT: cancellation must release the deadline without replacing the original size diagnostic.
+    await response.body?.cancel(error).catch(() => undefined);
+    throw error;
+  }
   if (!response.body) return new Uint8Array();
 
   const reader = response.body.getReader();

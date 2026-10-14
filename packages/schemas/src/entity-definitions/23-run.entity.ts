@@ -252,6 +252,7 @@ export default defineEntity({
           kind: "select",
           options: [
             { value: "running", label: "Running" },
+            { value: "paused", label: "Paused" },
             { value: "paused_auth", label: "Agent authorization needed" },
             { value: "paused_offline", label: "Paused offline (historical)" },
             { value: "paused_approval", label: "Awaiting approval" },
@@ -860,6 +861,7 @@ export default defineEntity({
         schemaFromRead: true,
         options: [
           { value: "running", label: "Running", color: "var(--info)" },
+          { value: "paused", label: "Paused", color: "var(--warning)" },
           {
             value: "paused_auth",
             label: "Agent authorization needed",

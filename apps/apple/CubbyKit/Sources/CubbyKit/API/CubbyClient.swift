@@ -596,6 +596,7 @@ public actor CubbyClient {
         case .fileImport: .fileImport
         case .mailSearch: .mailSearch
         case .mailDiscovery: .mailDiscovery
+        case .mailReclassify: .mailReclassify
         }
     }
 

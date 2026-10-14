@@ -16,7 +16,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import { run as runTable } from "~/server/db/schema";
+import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
 import {
@@ -24,6 +24,7 @@ import {
   withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { recordDiscoveryEmailReceipt } from "~/server/repo/discovery-email-audit";
 import { recordRunProgress } from "~/server/repo/run-progress";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { assertExecutionAuthorization } from "~/server/runs/execution-authorization";
@@ -45,13 +46,13 @@ import {
 } from "~/server/workflow-runs/lifecycle";
 
 import type { startMailImport } from "../mail-import-run";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
 import { ingestGmailMessages } from "./ingest";
 import {
   checkpointMailboxCoverage,
   loadGmailCursor,
   persistGmailEvents,
-  markEmailRemoved,
 } from "./persistence";
 import { gmailProviderForUser } from "./provider";
 import type { MailRelevance } from "./relevance";
@@ -64,6 +65,51 @@ import { listGmailSyncTargets, type GmailSyncTarget } from "./targets";
 import { GmailAuthorizationError } from "./tokens";
 import type { MailTriage } from "./triage";
 import { GmailApiError, type GmailProvider } from "./types";
+
+/** A history deletion only handles an identity Cubby already knows. */
+export async function recordDeletedHistoryEvent(
+  db: Database,
+  input: {
+    runId: string;
+    ledgerPartyId: string;
+    mailboxId: string;
+    messageId: string;
+  },
+) {
+  return withTransactionDatabase(db, async (tx) => {
+    const [existing] = await getDb(tx)
+      .select()
+      .from(emailTable)
+      .where(
+        and(
+          eq(
+            emailTable.ledgerPartyId,
+            parseEntityId("ledgerParty", input.ledgerPartyId),
+          ),
+          eq(emailTable.provider, "gmail"),
+          eq(emailTable.mailboxId, input.mailboxId),
+          eq(emailTable.messageId, input.messageId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!existing) return false;
+    const frozen =
+      existing.classificationVersion ===
+      HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION;
+    if (!frozen && existing.status !== "deleted")
+      await getDb(tx)
+        .update(emailTable)
+        .set({ status: "deleted" })
+        .where(eq(emailTable.id, existing.id));
+    await recordDiscoveryEmailReceipt(tx, {
+      ...input,
+      expected: existing,
+      outcome: frozen ? "frozen" : "removed",
+    });
+    return true;
+  });
+}
 
 const ROUTINE_RETENTION_MS = 30 * 86_400_000;
 const MAIL_DISCOVERY_CONSTRAINT = "Run_one_active_mail_discovery";
@@ -244,6 +290,7 @@ export async function startMailDiscovery(
           status: "running",
           notes: "Scheduled Gmail discovery",
           input: {
+            emailAuditVersion: 1,
             mailboxId: target.mailboxId,
             scopedQueries: target.scopedQueries,
             executionPolicy: "classification_only",
@@ -392,12 +439,12 @@ export async function saveMailDiscoveryBatch(
         .filter((event) => event.kind === "message_deleted")
         .map((event) => [event.messageId, "deleted" as const]),
     );
-    for (const [messageId, status] of removed)
-      await markEmailRemoved(db, {
+    for (const messageId of removed.keys())
+      await recordDeletedHistoryEvent(db, {
+        runId: claimed.row.id,
         ledgerPartyId: claimed.ledgerPartyId,
         mailboxId: claimed.input.mailboxId,
         messageId,
-        status,
       });
     const ingested = await ingestGmailMessages(db, provider, {
       ledgerPartyId: claimed.ledgerPartyId,
@@ -589,6 +636,7 @@ export async function continueMailDiscovery(
           notes: "Continue Gmail history coverage",
           input: {
             ...input,
+            emailAuditVersion: 1,
             ...allowance,
             executionPolicy: input.executionPolicy,
           },
@@ -672,6 +720,9 @@ export async function pruneRoutineRuns(
     ),
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e."runId" = "Run"."id")`,
+    ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId" = "Run"."id")`,
     ),
   );
   return withTransaction(db, async (tx) => {

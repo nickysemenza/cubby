@@ -45,10 +45,18 @@ export function writeLocalDevConfig(profile: DevProfile): string {
     queues: {
       producers: [
         { binding: "BACKGROUND_QUEUE", queue: `${name}-background` },
+        { binding: "IMAGE_CLOUD_QUEUE", queue: `${name}-image-cloud` },
         { binding: "TELEMETRY_QUEUE", queue: `${name}-telemetry` },
         { binding: "PURCHASE_AGENT_QUEUE", queue: `${name}-purchase` },
       ],
       consumers: [
+        {
+          queue: `${name}-image-cloud`,
+          max_batch_size: 1,
+          max_batch_timeout: 0,
+          max_concurrency: 4,
+          max_retries: 3,
+        },
         {
           queue: `${name}-background`,
           max_batch_size: 1,

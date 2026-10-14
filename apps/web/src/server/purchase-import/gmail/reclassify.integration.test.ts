@@ -9,32 +9,53 @@
  */
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
+import * as models from "@cubby/shared/ai/models";
 import { desc, eq } from "drizzle-orm";
+import {
+  driveAiWork,
+  TEST_AI_WORK_LAUNCHER,
+  reclassifyForTest as reclassifyEmails,
+} from "tooling/ai-work";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
+  aiEvaluation,
+  aiEvaluationRequest,
   email as emailTable,
   emailClassificationLabel,
   emailClassificationObservation,
   orderMail,
   run,
 } from "~/server/db/schema";
+import { requestedAiEvaluations } from "~/server/repo/ai-evaluation-requests";
 import { getDb } from "~/server/repo/database-helpers";
 import { listEmailsRead } from "~/server/repo/email";
+import { loadMailReclassificationRead } from "~/server/repo/run-reclassification-read";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { recoverManualAiWork } from "~/server/runs/ai-work";
 import {
   issueExecutionAuthorization,
   revokeExecutionAuthorization,
+  reserveExecutionAuthorization,
+  ExecutionBudgetError,
 } from "~/server/runs/execution-authorization";
+import { pauseExecutionRun } from "~/server/runs/execution-context";
+import { recoverHistoricalReclassification } from "~/server/runs/reclassification-recovery";
+import { controlWorkflowRun } from "~/server/workflow-runs/control";
+import { productionWorkflowLauncher } from "~/server/workflow-runs/launcher";
 
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
 import * as providers from "./provider";
-import { previewMailTriage, reclassifyEmails } from "./reclassify";
+import {
+  previewMailTriage,
+  reclassifyEmails as startReclassification,
+} from "./reclassify";
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
 import type { GmailMessage, GmailProvider } from "./types";
@@ -196,6 +217,38 @@ describe("member Reclassify", () => {
     };
   }
 
+  it("queues the complete roster without starting Gmail or model work in the request", async () => {
+    const f = await fixture();
+    const first = await f.seed("synthetic-queued-first", "Synthetic body.", {});
+    const second = await f.seed(
+      "synthetic-queued-second",
+      "Synthetic body.",
+      {},
+    );
+    const launch = vi
+      .spyOn(productionWorkflowLauncher, "create")
+      .mockResolvedValue();
+    const result = await startReclassification(
+      ctx.db,
+      { ids: [first.shortcode, second.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance },
+    );
+    expect(result.runIds).toHaveLength(1);
+    expect(f.getMessage).not.toHaveBeenCalled();
+    expect(f.triage).not.toHaveBeenCalled();
+    expect(f.relevance).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalledTimes(1);
+    const [recorded] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, result.runIds[0]!));
+    expect(recorded?.status).toBe("running");
+    expect(mailReclassifyRunInput.parse(recorded?.input).emails).toHaveLength(
+      2,
+    );
+  });
+
   it("refetches an unretained original, runs the relevance model under classification-only policy, and records one Run", async () => {
     const f = await fixture();
     const email = await f.seed(
@@ -240,7 +293,7 @@ describe("member Reclassify", () => {
       .from(run)
       .where(eq(run.shortcode, result.runIds[0]!));
     expect(recorded).toMatchObject({
-      purpose: "background",
+      purpose: "mail_reclassify",
       status: "completed",
     });
     expect(mailReclassifyRunInput.parse(recorded!.input)).toMatchObject({
@@ -634,7 +687,7 @@ describe("member Reclassify", () => {
     expect(f.getMessage).not.toHaveBeenCalled();
   });
 
-  it("defers Emails past the request's time budget and finishes the Run", async () => {
+  it("durably finishes every requested Email without a request time-budget deferral", async () => {
     const f = await fixture();
     const first = await f.seed("synthetic-first", "Synthetic order 3003.", {});
     const second = await f.seed(
@@ -646,19 +699,680 @@ describe("member Reclassify", () => {
       ctx.db,
       { ids: [first.shortcode, second.shortcode] },
       ctx.actor,
-      { triage: f.triage, relevance: f.relevance, timeBudgetMs: 0 },
+      { triage: f.triage, relevance: f.relevance },
     );
     expect(result.results.map((item) => item.outcome)).toEqual([
       "replaced",
-      "deferred",
+      "replaced",
     ]);
-    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.getMessage).toHaveBeenCalledTimes(2);
     const [recorded] = await getDb(ctx.db)
       .select({ status: run.status })
       .from(run)
       .where(eq(run.shortcode, result.runIds[0]!));
     expect(recorded?.status).toBe("completed");
   });
+
+  // Shared demand must survive one cancellation, without giving the cancelled request another Run's receipt.
+  it("shares pending inference and preserves independent cancellation and receipts", async () => {
+    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+      models.DECISION_MODEL,
+    );
+    const f = await fixture();
+    const selected = await f.seed("synthetic-shared", "Synthetic order", {});
+    const submit = () =>
+      startReclassification(ctx.db, { ids: [selected.shortcode] }, ctx.actor, {
+        launcher: TEST_AI_WORK_LAUNCHER,
+      });
+    const first = await submit();
+    const second = await submit();
+    const owners = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.purpose, "mail_reclassify"));
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: first.runIds[0]!, action: "cancel" },
+      "mail_reclassify",
+      TEST_AI_WORK_LAUNCHER,
+    );
+    const survivor = owners.find(
+      (item) => item.shortcode === second.runIds[0],
+    )!;
+    await driveAiWork(ctx.db, survivor.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.relevance).toHaveBeenCalledTimes(1);
+    const cancelled = await loadMailReclassificationRead(
+      ctx.db,
+      first.runIds[0]!,
+      { userId: ctx.actor.userId, ledgerPartyId: f.party.id },
+    );
+    expect(cancelled?.receipts?.results).toMatchObject([
+      { outcome: "cancelled" },
+    ]);
+    expect(
+      (await requestedAiEvaluations(ctx.db, survivor.id))[0]?.receipt,
+    ).toMatchObject({ result: { outcome: "replaced" } });
+    const later = await submit();
+    expect(later.runIds[0]).not.toBe(second.runIds[0]);
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(2);
+  });
+
+  // Cancellation during a paid call cannot revoke another request's publication fence.
+  it("finishes shared execution when its driver is cancelled during inference", async () => {
+    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+      models.DECISION_MODEL,
+    );
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-inflight-shared",
+      "Synthetic order",
+      {},
+    );
+    const first = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const second = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [driver] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, first.runIds[0]!));
+    const relevance: MailRelevance = async () => {
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: first.runIds[0]!, action: "cancel" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      );
+      return { classification: "related", reason: "Synthetic shared order" };
+    };
+    await driveAiWork(ctx.db, driver!.id, {
+      reclassification: { triage: f.triage, relevance },
+    });
+    const [survivor] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, second.runIds[0]!));
+    await driveAiWork(ctx.db, survivor!.id);
+    expect(
+      (await requestedAiEvaluations(ctx.db, survivor!.id))[0]?.receipt,
+    ).toMatchObject({ result: { outcome: "replaced" } });
+    expect((await f.current(selected.id)).classification).toBe("related");
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // A new Workflow attempt must retry an old in-flight token, never mark its target terminal.
+  it("finishes an Email whose inference crossed a pause and resume fence", async () => {
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-resume-fence",
+      "Synthetic order",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    const relevance: MailRelevance = async () => {
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: owner!.shortcode, action: "pause" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      );
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: owner!.shortcode, action: "resume" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      );
+      return { classification: "related", reason: "Synthetic order" };
+    };
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance },
+    });
+    expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]?.state).toBe(
+      "retry_wait",
+    );
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect(
+      (await requestedAiEvaluations(ctx.db, owner!.id))[0]?.receipt,
+    ).toMatchObject({ result: { outcome: "replaced" } });
+    expect((await f.current(selected.id)).classification).toBe("related");
+  });
+
+  // Infrastructure errors outside a target cannot create an unlimited paid-independent restart loop.
+  it("bounds automatic Workflow recovery and permits an explicit member retry", async () => {
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-recovery-limit",
+      "Synthetic order",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "ai_work_workflow_failed" })
+      .where(eq(run.id, owner!.id));
+    const create = vi.fn(async () => {
+      throw new Error("Synthetic deterministic infrastructure failure");
+    });
+    const launcher = { ...TEST_AI_WORK_LAUNCHER, create };
+    for (let retry = 0; retry < 3; retry++)
+      await expect(
+        recoverManualAiWork(ctx.db, launcher, [owner!.id]),
+      ).rejects.toThrow("Synthetic deterministic infrastructure failure");
+    await recoverManualAiWork(ctx.db, launcher, [owner!.id]);
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.status,
+    ).toBe("failed");
+    expect(f.getMessage).not.toHaveBeenCalled();
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: owner!.shortcode, action: "retry" },
+      "mail_reclassify",
+      TEST_AI_WORK_LAUNCHER,
+    );
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.progress,
+    ).toMatchObject({ automaticRecoveryFailures: 0 });
+    expect((await f.current(selected.id)).classification).toBe("related");
+  });
+
+  // A paused request must retain future demand even if the other requester cancels its continuation.
+  it("retains a paused request across evidence continuation and another request cancellation", async () => {
+    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+      models.DECISION_MODEL,
+    );
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-paused-evidence",
+      "Synthetic order",
+      {},
+    );
+    const submit = () =>
+      startReclassification(ctx.db, { ids: [selected.shortcode] }, ctx.actor, {
+        launcher: TEST_AI_WORK_LAUNCHER,
+      });
+    const first = await submit();
+    const second = await submit();
+    const [paused] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, first.runIds[0]!));
+    const [active] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, second.runIds[0]!));
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: paused!.shortcode, action: "pause" },
+      "mail_reclassify",
+      TEST_AI_WORK_LAUNCHER,
+    );
+    let changes = 0;
+    const relevance: MailRelevance = async () => {
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ checksum: `synthetic-changing-evidence-${++changes}` })
+        .where(eq(emailTable.id, selected.id));
+      return { classification: "related", reason: "Synthetic changing order" };
+    };
+    await driveAiWork(ctx.db, active!.id, {
+      reclassification: { triage: f.triage, relevance },
+    });
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, active!.id));
+    expect(child).toBeDefined();
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: child!.shortcode, action: "cancel" },
+      "mail_reclassify",
+      TEST_AI_WORK_LAUNCHER,
+    );
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: paused!.shortcode, action: "resume" },
+      "mail_reclassify",
+      TEST_AI_WORK_LAUNCHER,
+    );
+    await driveAiWork(ctx.db, paused!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect((await f.current(selected.id)).classification).toBe("related");
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, paused!.id)))[0]
+        ?.status,
+    ).toBe("completed");
+  });
+
+  // Expiring authority after queueing cannot strand work when another current approval exists.
+  it("rebinds queued work after revocation and retains the approval audit", async () => {
+    const f = await fixture(["backfill", "continuous"]);
+    const selected = await f.seed("synthetic-rebind", "Synthetic order", {});
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    await revokeExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      f.refs.get("backfill")!,
+    );
+    const [oldBackfill] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, f.refs.get("backfill")!.runId));
+    await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse(oldBackfill!.input),
+    );
+    const [oldContinuous] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, f.refs.get("continuous")!.runId));
+    const newest = await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse(oldContinuous!.input),
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    const [item] = await requestedAiEvaluations(ctx.db, owner!.id);
+    expect(item?.state).toBe("completed");
+    expect(item?.snapshot).toMatchObject({
+      executionAuthorization: newest,
+      authorizationHistory: [f.refs.get("backfill")],
+    });
+  });
+
+  it("retains legacy failed receipts when member retry has no durable roster", async () => {
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-legacy-failed",
+      "Synthetic order",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    await getDb(ctx.db)
+      .delete(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, owner!.id));
+    await getDb(ctx.db)
+      .delete(aiEvaluation)
+      .where(eq(aiEvaluation.runId, owner!.id));
+    const progress = {
+      kind: "mail_reclassification" as const,
+      version: 1 as const,
+      complete: true,
+      results: [
+        {
+          id: selected.shortcode,
+          outcome: "deferred" as const,
+          classification: null,
+          stage: null,
+          conflict: false,
+          error: "Synthetic old timeout",
+        },
+      ],
+    };
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", progress })
+      .where(eq(run.id, owner!.id));
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: owner!.shortcode, action: "retry" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      ),
+    ).rejects.toThrow("historical recovery");
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0],
+    ).toMatchObject({ status: "failed", progress });
+  });
+
+  it("reconciles an ended running Workflow during the full nightly recovery scan", async () => {
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-ended-workflow",
+      "Synthetic order",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    const create = vi.fn(async () => {});
+    await recoverManualAiWork(ctx.db, {
+      ...TEST_AI_WORK_LAUNCHER,
+      create,
+      status: async () => ({
+        state: "errored",
+        error: "Synthetic platform termination",
+      }),
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0],
+    ).toMatchObject({
+      status: "running",
+      progress: { attempt: 2, automaticRecoveryFailures: 1 },
+    });
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect((await f.current(selected.id)).classification).toBe("related");
+  });
+
+  // Retry predecessors remain history; only unresolved current demand may execute or block completion.
+  it("retries only unresolved replacements and reconciles a lost final checkpoint", async () => {
+    const f = await fixture();
+    const first = await f.seed(
+      "synthetic-retry-first",
+      "Synthetic settled A",
+      {},
+    );
+    const second = await f.seed(
+      "synthetic-retry-second",
+      "Synthetic unresolved B",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [first.shortcode, second.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    for (const item of await requestedAiEvaluations(ctx.db, owner!.id))
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({
+          state: "failed",
+          attempts: 3,
+          error: "Synthetic prior transient failures",
+        })
+        .where(eq(aiEvaluation.id, item.id));
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed" })
+      .where(eq(run.id, owner!.id));
+    const retry = () =>
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: owner!.shortcode, action: "retry" },
+        "mail_reclassify",
+        TEST_AI_WORK_LAUNCHER,
+      );
+    await retry();
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: {
+        triage: f.triage,
+        relevance: async (request) => {
+          if (JSON.stringify(request).includes("Synthetic unresolved B"))
+            throw new Error("Synthetic transient provider failure");
+          return {
+            classification: "related",
+            reason: "Synthetic first target success",
+          };
+        },
+      },
+    });
+    await retry();
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect(
+      f.getMessage.mock.calls.filter(([id]) => id === first.messageId),
+    ).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "ai_work_workflow_failed" })
+      .where(eq(run.id, owner!.id));
+    await recoverManualAiWork(ctx.db, TEST_AI_WORK_LAUNCHER, [owner!.id]);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.status,
+    ).toBe("completed");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "running", failureCode: null })
+      .where(eq(run.id, owner!.id));
+    await recoverManualAiWork(
+      ctx.db,
+      {
+        ...TEST_AI_WORK_LAUNCHER,
+        status: async () => ({
+          state: "errored",
+          error: "Synthetic ended before checkpoint",
+        }),
+      },
+      [owner!.id],
+    );
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.status,
+    ).toBe("completed");
+    expect(
+      f.getMessage.mock.calls.filter(([id]) => id === first.messageId),
+    ).toHaveLength(1);
+  });
+
+  it("waits for replacement metered authority without consuming target retries", async () => {
+    const f = await fixture();
+    const selected = await f.seed(
+      "synthetic-budget-wait",
+      "Synthetic order",
+      {},
+    );
+    const submitted = await startReclassification(
+      ctx.db,
+      { ids: [selected.shortcode] },
+      ctx.actor,
+      { launcher: TEST_AI_WORK_LAUNCHER },
+    );
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, submitted.runIds[0]!));
+    const bound = f.refs.get("backfill")!;
+    await reserveExecutionAuthorization(ctx.db, {
+      ref: bound,
+      owner: { userId: ctx.actor.userId, ledgerPartyId: owner!.ledgerPartyId! },
+      requestedScope: { mailboxId, discovery: "all_history" },
+      physicalAttemptId: crypto.randomUUID(),
+      reservationMicroUSD: 1_000_000,
+    });
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: {
+        triage: f.triage,
+        relevance: async () => {
+          await pauseExecutionRun(
+            ctx.db,
+            owner!.id,
+            "Paid research allowance refused: budget_exhausted.",
+          );
+          throw wrapAiGatewayError(
+            new Error("Synthetic provider wrapper", {
+              cause: new ExecutionBudgetError(100),
+            }),
+            {
+              model: "gpt-6-luna",
+              provider: "openai",
+              route: "openai",
+              feature: "mailbox-relevance",
+              operation: "mailbox-relevance",
+            },
+          );
+        },
+      },
+    });
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.status,
+    ).toBe("paused_auth");
+    expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]).toMatchObject({
+      state: "retry_wait",
+      attempts: 0,
+    });
+    await recoverManualAiWork(ctx.db, TEST_AI_WORK_LAUNCHER, [owner!.id]);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
+        ?.status,
+    ).toBe("paused_auth");
+    const [approval] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, bound.runId));
+    const replacement = await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse(approval!.input),
+    );
+    await recoverManualAiWork(ctx.db, TEST_AI_WORK_LAUNCHER, [owner!.id]);
+    await driveAiWork(ctx.db, owner!.id, {
+      reclassification: { triage: f.triage, relevance: f.relevance },
+    });
+    expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]).toMatchObject({
+      state: "completed",
+      snapshot: {
+        executionAuthorization: replacement,
+        authorizationHistory: [bound],
+      },
+    });
+  });
+
+  // Missing old receipts permit bounded replay only after reconciliation; recovery cannot rewrite old history.
+  it.each(["completed", "needs_review"])(
+    "reconciles missing historical outcomes from %s into one linked continuation",
+    async (status) => {
+      const f = await fixture();
+      const selected = await f.seed(
+        "synthetic-historical-missing",
+        "Synthetic order",
+        {},
+      );
+      const submitted = await startReclassification(
+        ctx.db,
+        { ids: [selected.shortcode] },
+        ctx.actor,
+        { launcher: TEST_AI_WORK_LAUNCHER },
+      );
+      const [owner] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.shortcode, submitted.runIds[0]!));
+      await getDb(ctx.db)
+        .delete(aiEvaluationRequest)
+        .where(eq(aiEvaluationRequest.runId, owner!.id));
+      await getDb(ctx.db)
+        .delete(aiEvaluation)
+        .where(eq(aiEvaluation.runId, owner!.id));
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status,
+          purpose: status === "needs_review" ? "background" : "mail_reclassify",
+          failureCode: status === "needs_review" ? "execution_limit" : null,
+          progress: null,
+        })
+        .where(eq(run.id, owner!.id));
+      const [historical] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, owner!.id));
+      await recoverHistoricalReclassification(ctx.db);
+      await recoverHistoricalReclassification(ctx.db);
+      const children = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.parentRunId, owner!.id));
+      expect(children).toHaveLength(1);
+      await driveAiWork(ctx.db, children[0]!.id, {
+        reclassification: { triage: f.triage, relevance: f.relevance },
+      });
+      expect((await f.current(selected.id)).classification).toBe("related");
+      expect(
+        (
+          await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id))
+        )[0],
+      ).toEqual(historical);
+      expect(f.getMessage).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("refuses more than 200 Emails before any Run or Gmail read", async () => {
     const f = await fixture();

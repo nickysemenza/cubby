@@ -13,11 +13,13 @@ export interface BackgroundQueueDeliveredMessage {
    * it forces the consumer through `safeParse`.
    */
   readonly body: unknown;
+  /** Transport enqueue time. Absent on legacy fixtures, never inferred from intent age. */
+  readonly timestamp?: Date;
   ack(): void;
   retry(options?: { delaySeconds: number }): void;
 }
 
 export interface BackgroundQueueBatch {
-  readonly queue: "cubby-background";
+  readonly queue: "cubby-background" | "cubby-image-cloud";
   readonly messages: readonly BackgroundQueueDeliveredMessage[];
 }

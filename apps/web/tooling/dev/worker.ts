@@ -157,6 +157,12 @@ export default {
         env,
         ctx,
       );
+    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-image-cloud`)
+      return worker.queue(
+        { queue: "cubby-image-cloud", messages: batch.messages },
+        env,
+        ctx,
+      );
     if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-purchase`)
       return worker.queue(
         { queue: "cubby-purchase-agent", messages: batch.messages },

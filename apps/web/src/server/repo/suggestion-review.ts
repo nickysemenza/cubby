@@ -37,6 +37,15 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 
+/** Shared executions publish one suggestion history; every live requester can inspect it. */
+const requestedSuggestionRun = (code: string) => sql`(
+  ${runTable.shortcode} = ${code} OR EXISTS (
+    SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
+    WHERE demand."evaluationId" = ${suggestionTable.evaluationId} AND demand."cancelledAt" IS NULL
+      AND requester.shortcode = ${code} AND requester."deletedAt" IS NULL
+  )
+)`;
+
 const rowIdInput = z.object({ id: z.string().uuid() });
 const jsonSchema = z.json();
 const suggestionRowSchema = z.object({
@@ -116,7 +125,7 @@ export async function listSuggestions(
   if (input.entity) conditions.push(eq(suggestionTable.entity, input.entity));
   if (input.field) conditions.push(eq(suggestionTable.field, input.field));
   if (input.kind) conditions.push(eq(suggestionTable.kind, input.kind));
-  if (input.runId) conditions.push(eq(runTable.shortcode, input.runId));
+  if (input.runId) conditions.push(requestedSuggestionRun(input.runId));
   if (recordUuids)
     conditions.push(inArray(suggestionTable.recordId, recordUuids));
   if (input.fields)
@@ -209,7 +218,7 @@ export async function suggestionCounts(
     .where(
       and(
         reviewableSuggestionSql,
-        runId ? eq(runTable.shortcode, runId) : undefined,
+        runId ? requestedSuggestionRun(runId) : undefined,
       ),
     )
     .groupBy(suggestionTable.entity, suggestionTable.field)
@@ -532,7 +541,7 @@ export async function latestSuggestionSweepStatus(db: Database) {
     taxonomyChanged:
       stored.taxonomyRevision !== (await spendingClassificationRevision(db)),
     status: latest.status,
-    paused: stored.paused ?? false,
+    paused: latest.status === "paused",
     progress: latest.progress,
   };
 }

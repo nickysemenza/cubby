@@ -30,12 +30,9 @@ import { readRetainedMail } from "~/server/repo/retained-mail";
 import {
   assertExecutionAuthorization,
   reserveExecutionAuthorization,
+  ExecutionBudgetError,
 } from "./execution-authorization";
-import {
-  executionAuthorizationFromInput,
-  executionRequestForRun,
-  pauseExecutionRun,
-} from "./execution-context";
+import { executionRequestForRun, pauseExecutionRun } from "./execution-context";
 
 const decisionQuestions = z.object({
   questions: z.record(z.string(), z.unknown()),
@@ -196,9 +193,13 @@ export function paidResearchPreflight(
         .from(run)
         .where(and(eq(run.id, runId), notDeleted(run)))
         .limit(1);
-      if (!current || current.retiredAt || current.status !== "running")
+      const binding = await executionRequestForRun(db, runId, {
+        requireRunning: true,
+      });
+      if (!current || current.retiredAt || !binding)
         throw new Error("Execution authorization Run is no longer executable.");
-      const ref = executionAuthorizationFromInput(current.input);
+      await assertExecutionAuthorization(db, binding);
+      const ref = binding.ref;
       if (
         ref?.runId !== authority.ref.runId ||
         ref.approvalFingerprint !== authority.ref.approvalFingerprint ||
@@ -260,7 +261,11 @@ export function paidResearchPreflight(
     if (decision.status === "refused") {
       const message = `Paid research allowance refused: ${decision.reason}.`;
       if (decision.reason === "budget_exhausted")
-        await pauseExecutionRun(db, runId, message);
+        await pauseExecutionRun(db, runId, message, {
+          reason: "budget_exhausted",
+        });
+      if (decision.reason === "budget_exhausted")
+        throw new ExecutionBudgetError(reservationMicroUSD);
       throw new Error(message);
     }
     // The final admission read is the cancellation boundary. Keep a committed

@@ -139,12 +139,18 @@ export async function handleBackgroundTask(
       return "succeeded";
     }
     case "image-processing.wakeup": {
+      const { handoffCloudImageTask } =
+        await import("~/server/image-processing/cloud-queue");
+      if (await handoffCloudImageTask(db, task)) return "succeeded";
       const { dispatchImageProcessingWakeup } =
         await import("~/server/image-processing/dispatch");
       const outcome = await dispatchImageProcessingWakeup(db, task.jobId);
       return outcome === "skipped" ? "skipped" : "succeeded";
     }
     case "image-processing.result": {
+      const { handoffCloudImageTask } =
+        await import("~/server/image-processing/cloud-queue");
+      if (await handoffCloudImageTask(db, task)) return "succeeded";
       const { completeCompanionImageProcessingResult } =
         await import("~/server/services/image-processing.service");
       const completion = await completeCompanionImageProcessingResult(

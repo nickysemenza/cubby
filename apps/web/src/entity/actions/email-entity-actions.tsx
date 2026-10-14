@@ -30,19 +30,9 @@ import type {
   EntityActionRow,
 } from "./entity-actions";
 
-/** "Reclassified: 2 replaced, 1 confirmed (RUN-…)": the outcome counts and the Run(s) holding the history. */
-export function reclassifySummary({ runIds, results }: ReclassifyEmailsOut) {
-  const counts = new Map<string, number>();
-  for (const { outcome } of results)
-    counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
-  const outcomes = [...counts]
-    .map(([outcome, count]) => `${count} ${outcome.replaceAll("_", " ")}`)
-    .join(", ");
-  // Failures keep their raw diagnostics (README tenets: errors are never masked).
-  const errors = results.flatMap(({ id, error }) =>
-    error ? [`${id}: ${error}`] : [],
-  );
-  return `Reclassified: ${outcomes || "nothing"}${runIds.length > 0 ? ` (${runIds.join(", ")})` : ""}${errors.length > 0 ? `. ${errors.join("; ")}` : ""}`;
+/** Submission only queues work; Run receipts establish outcomes. */
+export function reclassifySummary({ runIds }: ReclassifyEmailsOut) {
+  return `Reclassification queued (${runIds.join(", ")}). Results will appear on the Runs.`;
 }
 
 /**

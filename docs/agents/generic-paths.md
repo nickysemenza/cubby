@@ -3,6 +3,8 @@
 Search here before writing a helper, a per-entity branch, or a copy of an
 existing block. Extend the generic path when it almost fits. See
 [Generic by default](../../AGENTS.md#generic-by-default).
+Before removing or privatizing a shared export, search every workspace consumer
+and retain their behavior checks; passing the helper's own tests proves only that scope.
 
 ## Entity spine
 

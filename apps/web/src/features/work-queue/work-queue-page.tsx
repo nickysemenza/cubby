@@ -14,6 +14,7 @@ import {
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { humanize } from "@cubby/shared";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
@@ -205,6 +206,7 @@ const KIND_ICONS = {
   research: <MagnifyingGlassIcon />,
   review: <EyeIcon />,
   repair: <WrenchIcon />,
+  awaiting_posting: <ClockIcon />,
 } satisfies Record<WorkQueueKind, ReactNode>;
 const KIND_OPTIONS = workQueueKindSchema.options.map((value) => ({
   value,

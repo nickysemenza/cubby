@@ -1412,6 +1412,13 @@ panel. The Work queue shows one row per (entity, field) with pending
 Suggestions, and a sweep Run's detail links to its pending review.
 Entity lists expose a generic pending-suggestion filter (any, Addition, or
 Correction) and can start a sweep across every declared target using the list's active filters.
+A Sweep freezes matching record/field membership and its selected model at launch,
+then returns a Run immediately. Background Workflows resume from durable target
+receipts, rechecking current values and member field writes before publication.
+Pause and resume use Run status; transient failures retry within a bound and
+terminal failures remain visible. Paired trials and finance acceptance rules
+remain part of the workload. Identical pending targets can share execution while
+each requesting Run can inspect the published Suggestions and keeps its own receipt.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

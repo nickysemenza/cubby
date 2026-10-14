@@ -1,5 +1,5 @@
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -8,6 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  aiEvaluation,
+  aiEvaluationRequest,
   auditLog,
   expense as expenseTable,
   run as runTable,
@@ -145,12 +147,12 @@ describe("persisted Suggestion sweeps", () => {
     );
     const paused = await savedRun(ctx.db, started.id);
     expect(paused.purpose).toBe("suggestion_sweep");
+    expect(paused.status).toBe("paused");
     expect(paused.input).toMatchObject({
       entity: "product",
       fields: ["categoryId"],
       filters: { categoryPresenceFilter: "none" },
       decisionModel: PRIMARY_MODEL,
-      paused: true,
     });
     expect(paused.progress).toMatchObject({ done: 2, applied: 2 });
 
@@ -181,6 +183,67 @@ describe("persisted Suggestion sweeps", () => {
       expect(await productCategoryId(ctx.db, product.id)).toBe(
         taxonomyId(SUGGESTED_CATEGORY),
       );
+  });
+
+  // A migrated paused Sweep has counts and processed IDs but no target ledger yet.
+  it("prepares a legacy paused roster on resume without losing completed counts", async () => {
+    const context = kernelCtx(ctx);
+    const products = await Promise.all(
+      ["Legacy first", "Legacy next"].map((name) =>
+        productFixture(ctx, `Synthetic ${name}`),
+      ),
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { categoryPresenceFilter: "none" },
+      },
+      { context, pauseAfter: 1, ...categoryPorts() },
+    );
+    const processed = (
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(
+          and(
+            eq(aiEvaluation.runId, started.id),
+            eq(aiEvaluation.state, "completed"),
+          ),
+        )
+    )[0]!;
+    await getDb(ctx.db)
+      .delete(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, started.id));
+    // Existing Suggestion history retains its evaluation; make only the unprocessed target legacy.
+    await getDb(ctx.db)
+      .delete(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.runId, started.id),
+          eq(aiEvaluation.state, "queued"),
+        ),
+      );
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        status: "paused",
+        progress: sql`${JSON.stringify({ total: 2, done: 1, applied: 1, queued: 0, failed: 0, processedTargetIds: [`${processed.target.recordId}:categoryId`] })}::jsonb`,
+      })
+      .where(eq(runTable.id, started.id));
+    await resumeSuggestionSweep(ctx.db, started.id, {
+      context,
+      ...categoryPorts(),
+    });
+    const finished = await savedRun(ctx.db, started.id);
+    expect(finished.status).toBe("completed");
+    expect(finished.progress).toMatchObject({ total: 2, done: 2, applied: 2 });
+    for (const product of products)
+      expect(await productCategoryId(ctx.db, product.id)).toBe(
+        taxonomyId(SUGGESTED_CATEGORY),
+      );
+    expect(await runSuggestions(ctx.db, started.id)).toHaveLength(2);
   });
 
   it("keeps a high-confidence Correction and a low-confidence Addition pending", async () => {

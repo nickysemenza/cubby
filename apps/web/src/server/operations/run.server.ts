@@ -182,6 +182,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       context.db,
       input.runId,
       party ? { userId: context.auth.userId, ledgerPartyId: party.id } : null,
+      { cursor: input.emailCursor, limit: input.emailLimit },
     );
     const mailReclassification = await loadMailReclassificationRead(
       context.db,

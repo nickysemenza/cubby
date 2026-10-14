@@ -123,7 +123,7 @@ export const workQueueCandidate = (
     name: SQL;
     owners: SQL;
     where: SQL | undefined;
-    details: Candidate;
+    details: { [K in keyof Candidate]: Candidate[K] | SQL };
     key: string;
     shared?: boolean | SQL;
     /** The branch's WHERE already narrows to the scope's checks. */

@@ -119,7 +119,7 @@ prediction becomes a reconciliation conflict rather than silently clearing
 linked content.
 
 A member may Reclassify up to 200 owned Emails at once. One Run per mailbox
-(a `background` Run with a `mail_reclassify` input, bound to that mailbox's
+(a `mail_reclassify` Run with a frozen Email roster, bound to that mailbox's
 backfill or continuous execution approval) reruns rule, Jev and the relevance
 model even under classification-only policy, refetching each original from
 Gmail. The rerun is always recorded as a prediction, but it never becomes the
@@ -130,12 +130,38 @@ refetches cannot discard an earlier retained original. Accepted associations,
 member resolutions and independent reviews of the same checksum are never
 discarded by a negative rerun. A rule, Jev or model prediction that
 disagrees with the member's resolution or latest review of the same checksum
-records a `member_review` conflict. One request stops starting Emails after a
-time budget and reports the rest `deferred` for the member to rerun. One shared
-predicate drives the list's
+records a `member_review` conflict. The request always returns Run references;
+Cloudflare Workflows finishes the roster with bounded retries and exact publication
+receipts. Each target follows current evidence, with bounded restarts before a
+linked delayed continuation, so a changing Email cannot starve its roster. A
+usable bound approval stays bound; otherwise execution selects the newest
+applicable approval and retains the switch audit. Missing authority pauses work
+until an approval wake or reconciliation can resume it.
+Metered fallback refusal also pauses the roster without consuming a target retry.
+Recovery checks the denied request's quoted allowance against current-period
+reservations before selecting authority; a replacement approval or a renewed
+continuous budget can resume it, with the binding switch retained in the audit.
+
+Run reads expose per-Email receipts and linked continuation Run references.
+Discovery Run reads also page through handling receipts, including reused
+classifications, with ownership and outcomes at handling time alongside current
+Email state. These receipts share the Run request ledger. Historical coverage
+uses only stored receipts and immutable observations and is explicitly incomplete
+when handling membership was not recorded; an Email's current processing Run
+does not establish historical membership. Audit reads never replay classification
+to fill missing history.
+
+Historical `deferred` and missing outcomes are reconciled into linked continuation
+Runs without rewriting original Runs or receipts. Recovery has no age cutoff; it
+checks current eligibility, ownership and authority, skips cancelled, already
+fulfilled and known permanently failed targets, and permits bounded reinference
+when publication remains unknown. Observations alone do not prove publication.
+The shared durable execution decision is [ADR 0015](0015-unified-durable-work-coordination.md).
+
+One shared predicate drives the list's
 review-conflict filter and saved view, and the Accuracy view counts conflicts
 by stage and model. Email quality scores these pipeline gaps per Relevance:
-undecided, unreviewed, missing original, missing preview and not imported; an
+undecided, unreviewed, missing original, missing preview and not imported;
 settled unrelated Emails need no member review and leave the operational queue.
 Their prediction history remains eligible for independent accuracy sampling.
 One association resolver serves hydration, linked filters, counts and related

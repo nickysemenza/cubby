@@ -1,8 +1,9 @@
 import { storedImportFix } from "@cubby/schemas/purchase-import";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { entityIdentity, runFinding } from "~/server/db/schema";
+import { obsoleteExecutionFindingSql } from "~/server/purchase-import/run-retirement";
 import { getDb } from "~/server/repo/database-helpers";
 
 export async function findOpenRunFindings(db: Database) {
@@ -24,7 +25,12 @@ export async function findOpenRunFindings(db: Database) {
     })
     .from(runFinding)
     .leftJoin(entityIdentity, eq(runFinding.entityId, entityIdentity.id))
-    .where(eq(runFinding.status, "open"))
+    .where(
+      and(
+        eq(runFinding.status, "open"),
+        sql`NOT ${obsoleteExecutionFindingSql('"RunFinding"')}`,
+      ),
+    )
     .orderBy(runFinding.createdAt);
   return rows.map((row) => ({
     id: row.id,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { fetchAnalysisRendition } from "./image-description.service";
 
@@ -8,6 +8,45 @@ const RENDITION_URL =
 const respondWith = (response: Response) => async () => response;
 
 describe("fetchAnalysisRendition", () => {
+  it("rejects oversized advertised renditions before buffering, preserving the original source", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const response = new Response(
+      new ReadableStream({ pull, cancel }, { highWaterMark: 0 }),
+      { headers: { "content-length": String(4 * 1024 * 1024 + 1) } },
+    );
+    await expect(
+      fetchAnalysisRendition(RENDITION_URL, respondWith(response)),
+    ).rejects.toThrow("exceeds 4194304 bytes");
+    expect(pull).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("bounds streamed renditions without a content-length header", async () => {
+    const response = new Response(new Uint8Array(4 * 1024 * 1024 + 1));
+    await expect(
+      fetchAnalysisRendition(RENDITION_URL, respondWith(response)),
+    ).rejects.toThrow("exceeds 4194304 bytes");
+  });
+
+  it("applies identification's smaller budget before buffering", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const response = new Response(
+      new ReadableStream({ pull, cancel }, { highWaterMark: 0 }),
+      { headers: { "content-length": String(2 * 1024 * 1024 + 1) } },
+    );
+    await expect(
+      fetchAnalysisRendition(
+        RENDITION_URL,
+        respondWith(response),
+        2 * 1024 * 1024,
+      ),
+    ).rejects.toThrow("exceeds 2097152 bytes");
+    expect(pull).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("reports the raw status and body snippet of a failed rendition", async () => {
     const body = `Error 9401: rendition unavailable ${"x".repeat(2_000)}`;
     const failure = () =>

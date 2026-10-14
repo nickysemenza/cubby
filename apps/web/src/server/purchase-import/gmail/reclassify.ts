@@ -1,21 +1,15 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailAtChecksum,
-  mailReclassificationCheckpoint,
   reclassifyEmailsInput,
   reclassifyEmailsOut,
   rerunEmailPreviewOut,
   type EmailAtChecksum,
-  type EmailReclassifyOutcome,
   type ReclassifyEmailsInput,
   type ReclassifyEmailsOut,
   type RerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
-import {
-  parseEntityId,
-  parseShortcodeFor,
-  type RunId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   mailTriagePreviewInput,
   mailTriagePreviewOut,
@@ -30,26 +24,20 @@ import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
-import {
-  describeErrorCauses,
-  scrubErrorMessage,
-} from "~/lib/error-diagnostics";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
+import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import {
-  email as emailTable,
-  emailClassificationObservation,
-  ledgerParty,
-  run,
-} from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { latestExecutionAuthorization } from "~/server/runs/execution-context";
+import { type WorkflowLauncher } from "~/server/workflow-runs/launcher";
+import { launchWorkflowRun } from "~/server/workflow-runs/lifecycle";
 
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
-import {
-  deferClassificationRefresh,
-  publishGmailEvidence,
-} from "./admitted-source";
+import { publishGmailEvidence } from "./admitted-source";
 import {
   extractEmailCandidatePreview,
   type EmailCandidateChoice,
@@ -58,6 +46,7 @@ import { ingestGmailMessages } from "./ingest";
 import { normalizeMessage } from "./normalize";
 import { recordEmailCandidateObservation } from "./observations";
 import { gmailProviderForUser } from "./provider";
+import { prepareReclassification } from "./reclassification-work";
 import { routeGmailMessage, type MailTriage } from "./triage";
 
 type IngestPorts = Pick<
@@ -108,20 +97,16 @@ async function ownedEmails(
   return codes.map((code) => found.get(code)!);
 }
 
-/**
- * A request's Reclassify stops starting Emails after this long and defers the
- * rest: MCP writes have a 230 s budget, and one Email (Gmail, the decision model, relevance
- * model) can take most of a minute.
- */
-const RECLASSIFY_TIME_BUDGET_MS = 150_000;
-
 /** Backfill, else continuous; an expired or revoked approval is unusable, not fatal. */
 export async function mailboxApproval(
   db: Database,
   owner: { userId: ActorContext["userId"]; ledgerPartyId: string },
   mailboxId: string,
+  options: { minimumBudgetMicroUSD?: number; newest?: boolean } = {},
 ) {
   const refused: string[] = [];
+  const candidates: Awaited<ReturnType<typeof latestExecutionAuthorization>>[] =
+    [];
   for (const kind of ["backfill", "continuous"] as const) {
     try {
       const ref = await latestExecutionAuthorization(
@@ -132,13 +117,30 @@ export async function mailboxApproval(
         },
         mailboxId,
         kind,
+        options.minimumBudgetMicroUSD,
       );
-      if (ref) return ref;
+      if (ref && !options.newest) return ref;
+      if (ref) candidates.push(ref);
     } catch (error) {
       refused.push(
         `${kind}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+  if (candidates.length) {
+    const [latest] = await getDb(db)
+      .select({ id: run.id })
+      .from(run)
+      .where(
+        inArray(
+          run.id,
+          candidates.flatMap((ref) => (ref ? [ref.runId] : [])),
+        ),
+      )
+      .orderBy(desc(run.createdAt), desc(run.id))
+      .limit(1);
+    const selected = candidates.find((ref) => ref?.runId === latest?.id);
+    if (selected) return selected;
   }
   throw new Error(
     `Reclassify needs a usable Gmail execution approval for mailbox ${mailboxId}${refused.length ? ` (${refused.join("; ")})` : ""}.`,
@@ -181,9 +183,19 @@ async function startReclassifyRun(
     db,
     { ...actor, runId: null },
     {
-      purpose: "background",
+      purpose: mode === "relevance" ? "mail_reclassify" : "background",
       trigger: "manual",
       status: "running",
+      progress:
+        mode === "relevance"
+          ? {
+              kind: "mail_reclassification",
+              version: 1,
+              complete: false,
+              results: [],
+              attempt: 0,
+            }
+          : undefined,
       input: mailReclassifyRunInput.parse({
         kind: "mail_reclassify",
         mode,
@@ -210,86 +222,13 @@ async function startReclassifyRun(
   return { id: runId, shortcode: created.shortcode };
 }
 
-/** What a rerun did to the Email, or null when publication declined it. */
-function reclassifyOutcome(
-  outcome: Awaited<ReturnType<typeof ingestGmailMessages>>,
-  before: OwnedEmail,
-  after: OwnedEmail | undefined,
-): EmailReclassifyOutcome | null {
-  if (outcome.deleted.length || outcome.excluded.length) return "removed";
-  const kept = outcome.kept[0];
-  if (kept) return kept.reason;
-  if (
-    outcome.confirmed.length ||
-    outcome.saved.length ||
-    outcome.unrelated.length ||
-    outcome.blocked.length
-  )
-    return after?.classification === before.classification
-      ? "confirmed"
-      : "replaced";
-  return null;
-}
-
-async function reclassifyOne(
-  db: Database,
-  provider: Awaited<ReturnType<typeof gmailProviderForUser>>,
-  email: OwnedEmail,
-  runId: RunId,
-  ports: IngestPorts,
-) {
-  const outcome = await ingestGmailMessages(db, provider, {
-    ...ports,
-    ledgerPartyId: email.ledgerPartyId,
-    mailboxId: email.mailboxId,
-    messageIds: [email.messageId],
-    runId,
-    reclassify: true,
-  });
-  const [[observed], [after]] = await Promise.all([
-    getDb(db)
-      .select()
-      .from(emailClassificationObservation)
-      .where(
-        and(
-          eq(emailClassificationObservation.emailId, email.id),
-          eq(emailClassificationObservation.runId, runId),
-        ),
-      )
-      .orderBy(desc(emailClassificationObservation.createdAt))
-      .limit(1),
-    getDb(db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.id, email.id))
-      .limit(1),
-  ]);
-  const declined = (await deferClassificationRefresh(
-    db,
-    "classification_only",
-    after ?? null,
-  ))
-    ? "frozen"
-    : "changed";
-  return {
-    outcome: reclassifyOutcome(outcome, email, after) ?? declined,
-    classification: observed?.classification ?? null,
-    stage: observed?.stage ?? null,
-    conflict: observed?.conflict?.kind === "member_review",
-  };
-}
-
-/** Rerun Relevance for selected Emails from their Gmail originals. */
+/** Freeze member-requested work; Gmail and model IO belong to the Workflow. */
 export async function reclassifyEmails(
   db: Database,
   rawInput: ReclassifyEmailsInput,
   actor: ActorContext,
-  {
-    timeBudgetMs = RECLASSIFY_TIME_BUDGET_MS,
-    ...ports
-  }: IngestPorts & { timeBudgetMs?: number } = {},
+  ports: IngestPorts & { launcher?: WorkflowLauncher } = {},
 ): Promise<ReclassifyEmailsOut> {
-  const started = Date.now();
   const input = reclassifyEmailsInput.parse(rawInput);
   const emails = await ownedEmails(db, [...new Set(input.ids)], actor);
   const groups = Object.values(
@@ -298,7 +237,7 @@ export async function reclassifyEmails(
       (email) => `${email.ledgerPartyId}\u0000${email.mailboxId}`,
     ),
   );
-  // Every mailbox's approval is settled before any Run or Gmail read.
+  // Settle every mailbox's authority before creating any requested work.
   const batches = await Promise.all(
     groups.map(async (group) => ({
       group,
@@ -309,112 +248,33 @@ export async function reclassifyEmails(
       ),
     })),
   );
-  const results: ReclassifyEmailsOut["results"] = [];
-  const runIds: string[] = [];
-  let reached = 0;
-  for (const { group, approval } of batches) {
-    const created = await startReclassifyRun(
-      db,
-      actor,
-      "relevance",
-      group,
-      approval,
-    );
-    runIds.push(created.shortcode);
-    const notes: string[] = [];
-    const batchResults: ReclassifyEmailsOut["results"] = [];
-    let receiptFailure = false;
-    async function checkpoint(complete: boolean) {
-      await getDb(db)
-        .update(run)
-        .set({
-          progress: mailReclassificationCheckpoint.parse({
-            kind: "mail_reclassification",
-            version: 1,
-            complete,
-            results: batchResults,
-          }),
-          updatedAt: new Date(),
-        })
-        .where(eq(run.id, created.id));
-    }
-    let provider: Awaited<ReturnType<typeof gmailProviderForUser>> | null =
-      null;
-    try {
-      await checkpoint(false);
-      for (const email of group) {
-        const receiptStart = results.length;
-        try {
-          const result = {
-            id: parseShortcodeFor("email", email.shortcode),
-            classification: null,
-            stage: null,
-            conflict: false,
-            error: null,
-          };
-          // Always make progress; past the budget, defer the rest to a rerun.
-          if (reached > 0 && Date.now() - started > timeBudgetMs) {
-            results.push({ ...result, outcome: "deferred" });
-            notes.push(`${email.shortcode}: deferred past the time budget`);
-            continue;
-          }
-          reached += 1;
-          try {
-            // Ingest blocks both before classifying; neither changes Relevance.
-            if (
-              email.classificationVersion ===
-                HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION ||
-              (await deferClassificationRefresh(
-                db,
-                "classification_only",
-                email,
-              ))
-            ) {
-              results.push({ ...result, outcome: "frozen" });
-              continue;
-            }
-            provider ??= await gmailProviderForUser(
-              db,
-              actor.userId,
-              email.mailboxId,
-            );
-            results.push({
-              ...result,
-              ...(await reclassifyOne(db, provider, email, created.id, ports)),
-            });
-          } catch (error) {
-            const message = scrubErrorMessage(
-              error instanceof Error ? error.message : String(error),
-            );
-            notes.push(`${email.shortcode}: ${message}`);
-            results.push({ ...result, outcome: "failed", error: message });
-          }
-        } finally {
-          batchResults.push(...results.slice(receiptStart));
-          if (batchResults.at(-1)?.outcome !== "deferred")
-            await checkpoint(false);
-        }
-      }
-      await checkpoint(true);
-    } catch (error) {
-      receiptFailure = true;
-      const diagnostic = describeErrorCauses(error)
-        .causes.map(
-          (cause) => `${cause.code ? `${cause.code}: ` : ""}${cause.message}`,
-        )
-        .reverse()
-        .join("\n");
-      notes.push(
-        `Receipt persistence interrupted; unrecorded publication outcomes are unknown: ${diagnostic}`,
+  const created = await withTransactionDatabase(db, async (tx) => {
+    const runs = [];
+    for (const { group, approval } of batches) {
+      const started = await startReclassifyRun(
+        tx,
+        actor,
+        "relevance",
+        group,
+        approval,
       );
-      throw error;
-    } finally {
-      await finishReclassifyRun(db, created.id, notes, receiptFailure);
+      await prepareReclassification(tx, started.id, group, approval);
+      runs.push(started);
     }
-  }
-  const order = new Map(input.ids.map((code, index) => [code, index]));
-  results.sort((left, right) => order.get(left.id)! - order.get(right.id)!);
-  return reclassifyEmailsOut.parse({ runIds, results });
+    return runs;
+  });
+  for (const item of created)
+    await launchWorkflowRun(
+      db,
+      {
+        runId: item.id,
+        purpose: "mail_reclassify",
+      },
+      ports.launcher,
+    );
+  return reclassifyEmailsOut.parse({
+    runIds: created.map((item) => item.shortcode),
+  });
 }
 
 /** Rerun the cheap extraction preview for one related, retained Email. */

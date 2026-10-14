@@ -472,22 +472,9 @@ public final class ReportSlotModel {
         return value
     }
 
-    /// Each outcome with its count in the server's order, then any raw per-Email error.
+    /// Reclassification continues independently of this request.
     static func reclassifySummary(_ result: ReclassifyEmailsOut) -> String {
-        var order: [String] = []
-        var counts: [String: Int] = [:]
-        for item in result.results {
-            let outcome = item.outcome.rawValue
-            if counts[outcome] == nil { order.append(outcome) }
-            counts[outcome, default: 0] += 1
-        }
-        let outcomes =
-            result.results.count == 1 ? order : order.map { "\(counts[$0, default: 0]) \($0)" }
-        var text = "Reclassified: " + (outcomes.isEmpty ? "nothing" : outcomes.joined(separator: ", "))
-        let errors = result.results.compactMap { item in item.error.map { "\(item.id): \($0)" } }
-        if !errors.isEmpty { text += ". " + errors.joined(separator: "; ") }
-        if !result.runIds.isEmpty { text += ". Runs: " + result.runIds.joined(separator: ", ") }
-        return text
+        "Reclassification queued. Results will appear on the Runs: " + result.runIds.joined(separator: ", ")
     }
 
     static func perform(

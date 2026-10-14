@@ -1,4 +1,8 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
+import {
+  executionAuthorizationInput,
+  executionAuthorizationRef,
+} from "@cubby/schemas/execution-authorization";
+import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import * as decisionModels from "@cubby/shared/ai/models";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -18,7 +22,11 @@ import { controlWorkflowRun } from "~/server/workflow-runs/control";
 import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
 
 import { ensureRun } from "./ensure-run";
-import { issueExecutionAuthorization } from "./execution-authorization";
+import {
+  issueExecutionAuthorization,
+  revokeExecutionAuthorization,
+} from "./execution-authorization";
+import { withRunExecutionAuthorization } from "./execution-context";
 import { paidResearchPreflight } from "./execution-transport";
 
 // A catalog cached by another integration file must not bypass this file's
@@ -234,6 +242,36 @@ describe("mail routing at the paid transport boundary", () => {
       expect(transmit).toHaveBeenCalledTimes(1);
     },
   );
+  // A worker may stop after the transport pause and before the driver catches its error.
+  it("persists a recoverable manual budget pause before driver error handling", async () => {
+    const { transmit, runId } = await routing("exhausted");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ purpose: "mail_reclassify" })
+      .where(eq(run.id, runId));
+    const paid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+      gateway: transmit,
+    });
+    await expect(
+      paid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+    ).rejects.toThrow(/allowance/iu);
+    expect(transmit).not.toHaveBeenCalled();
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(stored).toMatchObject({
+      status: "paused_auth",
+      endedAt: null,
+      failureCode: "execution_limit",
+    });
+  });
+
   it("pauses bulk Luna mail import when its dollar allowance is exhausted", async () => {
     const { transmit, runId } = await routing(
       "exhausted",
@@ -345,4 +383,59 @@ describe("mail routing at the paid transport boundary", () => {
       expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
     },
   );
+  // The actual paid transport must honor a validated item binding rather than a frozen old Run input.
+  it("admits replacement authority at the real model boundary and in linked manual continuation", async () => {
+    const f = await routing("active");
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, f.runId));
+    const input = z
+      .object({
+        mailboxId: z.string(),
+        executionAuthorization: executionAuthorizationRef,
+      })
+      .parse(owner!.input);
+    const [approval] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, input.executionAuthorization.runId));
+    const replacement = await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse(approval!.input),
+    );
+    const manual = mailReclassifyRunInput.parse({
+      kind: "mail_reclassify",
+      mode: "relevance",
+      mailboxId: input.mailboxId,
+      executionAuthorization: input.executionAuthorization,
+      emails: [
+        { emailId: crypto.randomUUID(), checksum: "synthetic-evidence" },
+      ],
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ purpose: "mail_reclassify", input: manual })
+      .where(eq(run.id, f.runId));
+    await revokeExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      manual.executionAuthorization!,
+    );
+    await expect(
+      withRunExecutionAuthorization(f.runId, replacement, f.classify),
+    ).resolves.toBe("related");
+    expect(f.transmit).toHaveBeenCalledTimes(1);
+    const child = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_reclassify",
+      trigger: "manual",
+      parentRunId: f.runId,
+      input: { ...manual, executionAuthorization: replacement },
+    });
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, child)))[0]
+        ?.input,
+    ).toMatchObject({ executionAuthorization: replacement });
+  });
 });

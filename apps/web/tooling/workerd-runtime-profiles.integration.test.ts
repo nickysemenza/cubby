@@ -22,7 +22,12 @@ import { expectWriteLands } from "./workerd-runtime-fixtures";
 const queues = {
   "cubby-background": {
     producer: "BACKGROUND_QUEUE",
-    consumerLog: "[background-tasks] unreadable message",
+    consumerLog: "[background-tasks] unreadable message queue=cubby-background",
+  },
+  "cubby-image-cloud": {
+    producer: "IMAGE_CLOUD_QUEUE",
+    consumerLog:
+      "[background-tasks] unreadable message queue=cubby-image-cloud",
   },
   "cubby-telemetry": {
     producer: "TELEMETRY_QUEUE",
@@ -94,8 +99,11 @@ describe("workerd test runtime profiles", () => {
         .getEnv();
       expect(env.E2E_GOOGLE_PROVIDER_URL).toBe(started.googleProvider?.url);
       expect(
-        await realConsumers(started.harness, ["cubby-background"]),
-      ).toEqual(["cubby-background"]);
+        await realConsumers(started.harness, [
+          "cubby-background",
+          "cubby-image-cloud",
+        ]),
+      ).toEqual(["cubby-background", "cubby-image-cloud"]);
     } finally {
       await started.close();
     }
@@ -126,11 +134,13 @@ describe("workerd test runtime profiles", () => {
       expect(
         await realConsumers(started.harness, [
           "cubby-background",
+          "cubby-image-cloud",
           "cubby-telemetry",
           "cubby-purchase-agent",
         ]),
       ).toEqual([
         "cubby-background",
+        "cubby-image-cloud",
         "cubby-telemetry",
         "cubby-purchase-agent",
       ]);

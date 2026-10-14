@@ -99,18 +99,11 @@ private final class FakeReports: ReportServing {
         calls.withLock { $0.prepared.append(input) }
     }
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {}
-    /// One Run per selected Email, each replaced except a failing `EML-9X2B`.
+    /// Submission returns references; outcomes are read from the Run afterward.
     func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
         calls.withLock { $0.reclassified.append(input) }
-        let results = input.ids.map { id in
-            id == "EML-9X2B"
-                ? #"{"id": "\#(id)", "outcome": "failed", "conflict": false, "error": "upstream 503"}"#
-                : #"{"id": "\#(id)", "outcome": "replaced", "conflict": false, "error": null}"#
-        }
         let runs = input.ids.indices.map { #""RUN-\#($0 + 2)K7M""# }
-        return try decode(
-            #"{"runIds": [\#(runs.joined(separator: ","))], "results": [\#(results.joined(separator: ","))]}"#
-        )
+        return try decode(#"{"runIds": [\#(runs.joined(separator: ","))]}"#)
     }
     func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
         -> CorrectEmailRelevanceOut
@@ -475,7 +468,7 @@ struct ReportSlotModelTests {
         #expect(sent.reason == "Synthetic shipping notice")
     }
 
-    @Test("Reclassifying one Email opens its Run; several are summarized with raw errors")
+    @Test("Reclassification submission opens one Run or returns queued Run references")
     func reclassifyOpensOrSummarizes() async throws {
         let service = FakeReports([try report(live: false, status: "completed")])
         let model = model(service)
@@ -488,7 +481,7 @@ struct ReportSlotModelTests {
         #expect(
             await model.run(several, confirmed: false)
                 == .done(
-                    "Reclassified: 2 replaced, 1 failed. EML-9X2B: upstream 503. Runs: RUN-2K7M, RUN-3K7M, RUN-4K7M"
+                    "Reclassification queued. Results will appear on the Runs: RUN-2K7M, RUN-3K7M, RUN-4K7M"
                 ))
     }
 
