@@ -421,6 +421,13 @@
       "when": 1791945959250,
       "tag": "0059_discovery-handling-receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791952573146,
+      "tag": "0060_photo-import-lifecycle",
+      "breakpoints": true
     }
   ]
 }

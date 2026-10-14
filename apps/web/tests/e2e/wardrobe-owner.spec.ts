@@ -11,7 +11,21 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   page,
 }) => {
   const name = `Wardrobe ${Date.now()}`;
-  const { owner, entry } = await seedWardrobePrerequisites(page, name);
+  const { owner, entry, location } = await seedWardrobePrerequisites(
+    page,
+    name,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/locations/${location.id}`,
+    page.getByRole("columnheader", { name: /effectiveOwnership column Owner/ }),
+  );
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: `${name} shirt` })
+      .getByText(`${name} owner`, { exact: true }),
+  ).toBeVisible();
   const ownCard = page.getByRole("link", {
     name: `${name} shirt · ${name} drawer`,
     exact: true,
@@ -27,10 +41,17 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await gotoAuthenticatedPage(
     page,
     `/inventory/${entry.id}`,
-    page.getByRole("button", { name: "Save ownership", exact: true }),
+    page.getByLabel("Current ownership", { exact: true }),
   );
   const current = page.getByLabel("Current ownership", { exact: true });
   await expect(current).toHaveText(`Confirmed: ${name} owner`);
+  // Ownership is a readable fact until the member chooses to edit it.
+  await expect(
+    page.getByRole("button", { name: "Save ownership", exact: true }),
+  ).not.toBeVisible();
+  await page
+    .getByRole("button", { name: "Change ownership", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "Ownership", exact: true })
     .selectOption("unassigned");

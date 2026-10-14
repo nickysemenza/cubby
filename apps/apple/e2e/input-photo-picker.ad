@@ -1,0 +1,20 @@
+context platform=ios timeout=600000
+
+# The preceding selection phase verifies exactly 25 chosen fixtures.
+wait "role=Button label=Done" 30000
+click "role=Button label=Done"
+wait "id=photos.review.continue" 30000
+click "id=photos.review.continue"
+wait "label=\"Add to import run…\"" 30000
+click "label=\"Add to import run…\""
+wait "id=photos.run.startNew" 30000
+wait text "You (signed-in member)" 30000
+click "id=photos.run.processor"
+wait "label=\"Claude / Codex\"" 30000
+click "label=\"Claude / Codex\""
+click "id=photos.run.startNew"
+wait text "Transferred" 60000
+click "id=photos.run.done"
+wait text "View import" 30000
+click "label=\"View import\""
+wait text "Imported 25 of 25" 240000

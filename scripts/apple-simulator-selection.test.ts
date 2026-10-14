@@ -82,3 +82,24 @@ test("ignores booted and explicitly preferred phones below the app OS floor", ()
     undefined,
   );
 });
+
+test("a shared driver can pin another current iPhone without changing the default device", () => {
+  assert.equal(
+    selectIOSSimulator(inventory, "Synthetic iPhone 16", {
+      allowAnyPreferredPhone: true,
+    })?.name,
+    "Synthetic iPhone 16",
+  );
+  assert.equal(selectIOSSimulator(inventory)?.name, "Synthetic iPhone 17 B");
+  const old = {
+    devices: {
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-0": [
+        phone("Synthetic old phone", "old"),
+      ],
+    },
+  };
+  assert.equal(
+    selectIOSSimulator(old, "old", { allowAnyPreferredPhone: true }),
+    undefined,
+  );
+});

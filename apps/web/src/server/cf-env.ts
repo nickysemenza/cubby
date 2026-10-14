@@ -106,6 +106,27 @@ export const getGmailOAuthCredentials = () => {
   };
 };
 
+/**
+ * APNs token-auth credentials for photo-run Live Activity pushes: the key id,
+ * team id, and the `.p8` PKCS8 PEM. Absent outside a configured Worker.
+ */
+export const getApnsCredentials = () => {
+  if (!cfEnv) return undefined;
+  // SAFETY: Wrangler secrets are runtime Env fields absent from generated binding types.
+  const apns = cfEnv as Env & {
+    APNS_KEY_ID?: string;
+    APNS_TEAM_ID?: string;
+    APNS_PRIVATE_KEY?: string;
+  };
+  if (!apns.APNS_KEY_ID || !apns.APNS_TEAM_ID || !apns.APNS_PRIVATE_KEY)
+    return undefined;
+  return {
+    keyId: apns.APNS_KEY_ID,
+    teamId: apns.APNS_TEAM_ID,
+    privateKey: apns.APNS_PRIVATE_KEY,
+  };
+};
+
 /** Origin-keyed durable calendar publishing state from the Worker environment. */
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;

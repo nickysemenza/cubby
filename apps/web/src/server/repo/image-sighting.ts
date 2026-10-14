@@ -8,6 +8,7 @@ import type {
 import type {
   ImageRecordSightingsOut,
   ImageSightingRecordItem,
+  ImageSightingReportFields,
 } from "@cubby/schemas/image-sighting";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -79,6 +80,45 @@ export async function resolveImportSightingContext(
   ]);
   if (!deviceRow || !partyRow) return null;
   return { deviceId: deviceRow.id, ledgerPartyId: partyRow.id };
+}
+
+/**
+ * The finalize twin of {@link resolveImportSightingContext}: the request
+ * already resolved its install from `X-Cubby-Device`. Null (no sighting) when
+ * either the install or the login's member party is missing.
+ */
+export async function resolveDeviceSightingContext(
+  db: Database | DrizzleTransaction,
+  deviceId: DeviceId | null,
+  actorUserId: UserId,
+): Promise<{ deviceId: DeviceId; ledgerPartyId: LedgerPartyId } | null> {
+  if (!deviceId) return null;
+  const party = await currentMemberLedgerParty(db, { userId: actorUserId });
+  return party ? { deviceId, ledgerPartyId: party.id } : null;
+}
+
+/**
+ * Record every import-time `library` block (photo commit and run finalize)
+ * as an `import` sighting, which re-derives each Image's capture fields.
+ */
+export async function recordImportSightings(
+  tx: Database | DrizzleTransaction,
+  context: { deviceId: DeviceId; ledgerPartyId: LedgerPartyId },
+  entries: readonly { imageId: ImageId; sighting: ImageSightingReportFields }[],
+  actor: ActorContext,
+): Promise<void> {
+  for (const { imageId, sighting } of entries)
+    await upsertImageSightingInTransaction(
+      tx,
+      {
+        ...sighting,
+        imageId,
+        ledgerPartyId: context.ledgerPartyId,
+        deviceId: context.deviceId,
+        matchKind: "import",
+      },
+      actor,
+    );
 }
 
 /**

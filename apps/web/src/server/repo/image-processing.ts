@@ -1107,10 +1107,12 @@ export async function completeImageProcessingJob(
   db: Database,
   input: CompletionInput,
 ): Promise<{ adopted: boolean; orphanKey: string | null }> {
-  return await withTransaction(db, async (tx) => {
+  let settledPhotoRunId: string | null = null;
+  const completion = await withTransaction(db, async (tx) => {
     const [job] = await tx
       .select({
         id: imageProcessingJob.id,
+        runId: imageProcessingJob.runId,
         imageId: imageProcessingJob.imageId,
         derivativeId: imageProcessingJob.derivativeId,
         kind: imageProcessingJob.kind,
@@ -1192,8 +1194,17 @@ export async function completeImageProcessingJob(
       level: outcome.status === "failed" ? "error" : "info",
       details: outcome,
     });
+    if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };
   });
+  // A settled description can make a photo Run ready to group (or need
+  // attention); the advance runs after commit and never fails this write.
+  if (settledPhotoRunId) {
+    const { advancePhotoRunQuietly } =
+      await import("~/server/photo-import-run/lifecycle");
+    await advancePhotoRunQuietly(db, settledPhotoRunId);
+  }
+  return completion;
 }
 
 /** Claim orphan keys in a transaction before best-effort post-commit deletion. */

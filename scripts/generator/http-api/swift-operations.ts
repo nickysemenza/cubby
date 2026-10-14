@@ -196,6 +196,30 @@ const CLIENT_PASSTHROUGH_METHODS = {
   },
   "photoImport.commit": { method: "commitPhotoImport", doc: null },
   "photoImport.discardGroup": { method: "discardPhotoGroup", doc: null },
+  "photoImport.admitBatch": { method: "admitPhotoImportBatch", doc: null },
+  "photoImport.sealBatch": { method: "sealPhotoImportBatch", doc: null },
+  "photoImport.registerLiveActivity": {
+    method: "registerPhotoRunLiveActivity",
+    doc: null,
+  },
+  "photoImport.endLiveActivity": {
+    method: "endPhotoRunLiveActivity",
+    doc: null,
+  },
+  "photoImport.registerNotification": {
+    method: "registerPhotoRunNotification",
+    doc: null,
+  },
+  "photoImport.endNotification": {
+    method: "endPhotoRunNotification",
+    doc: null,
+  },
+  "photoImport.excludeFailed": {
+    method: "excludeFailedPhotoDescriptions",
+    doc: null,
+  },
+  "photoImport.setProcessor": { method: "setPhotoRunProcessor", doc: null },
+  "imageProcessing.retry": { method: "retryImageProcessing", doc: null },
   "photoImport.createRun": {
     method: "createPhotoRun",
     doc: "Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry point). Distinct from the manifest-based `stage`/`commit` pair: a run has no per-photo destination, only ordered positions finalized in chunks.",

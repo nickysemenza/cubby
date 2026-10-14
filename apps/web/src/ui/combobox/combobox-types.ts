@@ -44,6 +44,8 @@ export type ComboboxItem<TId extends string = string> = {
   /** Public entity identifier displayed in picker result rows. */
   shortcode?: string;
   icon?: React.ReactNode;
+  /** Record cover used in the closed control as well as search results. */
+  imageUrl?: string | null;
   /** Optional categorical swatch used by enum/status pickers. */
   color?: string;
   /** Alternate searchable names. */

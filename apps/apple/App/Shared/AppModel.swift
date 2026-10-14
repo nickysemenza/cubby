@@ -54,6 +54,7 @@ final class AppModel {
     /// accessory, the macOS sidebar, and Activity's "This device" section (replaces the old
     /// `localExecutionLabel`).
     let backgroundActivity = BackgroundActivityCenter()
+    var photoImportFlows: [PhotoImportRunFlow] = []
     @ObservationIgnored private var companionImageWorker: CompanionImageWorker?
     @ObservationIgnored private var companionImageWorkerGeneration = UUID()
     private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
@@ -114,7 +115,7 @@ final class AppModel {
         let pending = photoLibrary.hasPendingMatching
         UserDefaults.standard.set(pending, forKey: Self.photoMatchingPendingKey)
         #if os(iOS)
-            if !pending { PhotoBackgroundProcessing.cancel() }
+            if !pending && !hasPendingPhotoImports { PhotoBackgroundProcessing.cancel() }
         #endif
     }
 
@@ -313,6 +314,7 @@ final class AppModel {
         phase = current == nil ? .signedOut : .signedIn
         if current != nil {
             warmBrowseCounts()
+            recoverPhotoImports()
             await companionImageWorker?.start()
             await syncDeviceParticipation()
             storedLibraryMetadataSync?.setSignedIn(true)
@@ -433,6 +435,7 @@ final class AppModel {
         self.credential = credential
         phase = .signedIn
         warmBrowseCounts()
+        recoverPhotoImports()
         await companionImageWorker?.start()
         await syncDeviceParticipation()
         storedLibraryMetadataSync?.setSignedIn(true)
@@ -442,6 +445,9 @@ final class AppModel {
     }
 
     func signOut() async {
+        await PhotoImportNotificationCoordinator.shared.stop(client: client)
+        for flow in photoImportFlows { flow.interrupt() }
+        photoImportFlows.removeAll()
         nativeRunEvidence.reset()
         stopAutomaticPhotoMatching()
         UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
@@ -544,7 +550,7 @@ final class AppModel {
             stopAutomaticPhotoMatching()
             UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
             #if os(iOS)
-                PhotoBackgroundProcessing.cancel()
+                if !hasPendingPhotoImports { PhotoBackgroundProcessing.cancel() }
             #endif
         }
         Task { await syncDeviceParticipation() }

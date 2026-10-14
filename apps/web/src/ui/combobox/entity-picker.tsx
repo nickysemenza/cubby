@@ -8,6 +8,7 @@ import * as React from "react";
 import { entityLabel } from "~/entity/entities";
 import { badgeToneTextClass } from "~/lib/status-tone";
 import { cn } from "~/lib/utils";
+import { Image } from "~/ui/primitives/image";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import type {
@@ -424,6 +425,7 @@ function EntityPickerInput<TId extends string>({
   compact,
   clearable,
   value,
+  selectedImageUrl,
   setValue,
   setQuery,
 }: {
@@ -444,6 +446,7 @@ function EntityPickerInput<TId extends string>({
   compact?: boolean;
   clearable?: boolean;
   value: ComboboxItem<TId> | null;
+  selectedImageUrl?: string | null;
   setValue: (value: ComboboxItem<TId> | null) => void;
   setQuery: (query: string) => void;
 }) {
@@ -459,6 +462,14 @@ function EntityPickerInput<TId extends string>({
           compact ? "h-7 max-sm:h-11" : "h-8 max-sm:h-11",
         )}
       >
+        {selectedImageUrl ? (
+          <Image
+            src={selectedImageUrl}
+            alt={`Selected ${ariaLabel}`}
+            displayWidth={24}
+            className="ml-1 size-6 shrink-0 rounded-sm border border-border object-cover"
+          />
+        ) : null}
         <ComboboxPrimitive.Input
           id={inputId}
           ref={inputRef}
@@ -669,6 +680,10 @@ export function EntityPicker<TId extends string>({
         compact={compact}
         clearable={clearable}
         value={value}
+        selectedImageUrl={
+          items.find((item) => item.id === value?.id)?.imageUrl ??
+          value?.imageUrl
+        }
         setValue={setValue}
         setQuery={setQuery}
       />

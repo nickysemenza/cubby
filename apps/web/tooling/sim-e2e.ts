@@ -74,7 +74,8 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
-  --input-journey [--video]  PhotosPicker/Files input acceptance
+  --input-journey [--photo-only] [--video]
+                             PhotosPicker/Files input acceptance
   --emoji-review [--video]   category emoji review replay
   --qa [--hold] [--video] [--journey qa-a,qa-b]
                              seeded synthetic household QA pass; --hold keeps it
@@ -113,6 +114,9 @@ const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
 const statementCsv = flags.includes("--statement-csv");
 const inputJourney = flags.includes("--input-journey");
+const photoOnly = flags.includes("--photo-only");
+if (photoOnly && !inputJourney)
+  throw new Error("--photo-only requires --input-journey");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
@@ -120,9 +124,9 @@ const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
-if (process.env.CUBBY_E2E_AGENT_DEVICE && (inputJourney || testerArmy || watch))
+if (process.env.CUBBY_E2E_AGENT_DEVICE && (testerArmy || watch))
   throw new Error(
-    "Shared device launcher supports finite simulator journeys; input, watch and AI lanes own their driver lifecycle",
+    "Shared device launcher supports finite simulator journeys; watch and AI lanes own their driver lifecycle",
   );
 if (process.env.CUBBY_E2E_AGENT_DEVICE) {
   const driver = sharedDeviceCommand("pnpm", [
@@ -201,6 +205,7 @@ if (
         "--extended-journey",
         "--emoji-review",
         "--input-journey",
+        "--photo-only",
         "--headless",
         "--watch",
         "--video",
@@ -220,7 +225,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -648,7 +653,9 @@ async function simulator(): Promise<
   });
   const parsed = simulatorInventorySchema.parse(JSON.parse(raw));
   const preferred = process.env.CUBBY_SIM_DEVICE;
-  const selected = selectIOSSimulator(parsed, preferred);
+  const selected = selectIOSSimulator(parsed, preferred, {
+    allowAnyPreferredPhone: Boolean(process.env.CUBBY_E2E_AGENT_DEVICE),
+  });
   if (!selected && !preferred) {
     await run("xcrun", [
       "simctl",
@@ -660,7 +667,7 @@ async function simulator(): Promise<
   }
   if (!selected)
     throw new Error(
-      `No iPhone 17 simulator found${preferred ? ` matching ${preferred}` : ""}`,
+      `No supported iPhone simulator found${preferred ? ` matching ${preferred}` : ""}`,
     );
   return selected;
 }
@@ -2046,7 +2053,7 @@ async function main(): Promise<void> {
       // above still run concurrently.
       releaseDevice = await holdLock(NATIVE_DEVICE_LOCK);
       let device = await simulator();
-      if (inputJourney) {
+      if (inputJourney && !process.env.CUBBY_E2E_AGENT_DEVICE) {
         const creation = path.join(artifacts, "disposable-simulator.txt");
         const name = `Synthetic Input ${simName}`;
         await run(
@@ -2089,7 +2096,15 @@ async function main(): Promise<void> {
         device.udid,
         ...(process.env.GITHUB_ACTIONS === "true" ? ["--debug"] : []),
       ];
-      const session = `cubby-sim-${simName}`;
+      const sharedInputDriver =
+        inputJourney && process.env.CUBBY_E2E_AGENT_DEVICE
+          ? sharedDeviceCommand("pnpm", ["exec", "agent-device", "snapshot"])
+          : undefined;
+      const session = sharedInputDriver
+        ? sharedInputDriver.args[
+            sharedInputDriver.args.indexOf("--session") + 1
+          ]!
+        : `cubby-sim-${simName}`;
       let simulatorReady = false;
       let driverPrepared = false;
       const install = async () => {
@@ -2179,13 +2194,15 @@ async function main(): Promise<void> {
         await install();
         const driverStarted = performance.now();
         if (inputJourney)
-          inputDriverSessionArgs = [
-            ...common,
-            "--session",
-            session,
-            "--state-dir",
-            path.join(artifacts, "agent-device-state"),
-          ];
+          inputDriverSessionArgs = sharedInputDriver
+            ? sharedInputDriver.args.slice(1)
+            : [
+                ...common,
+                "--session",
+                session,
+                "--state-dir",
+                path.join(artifacts, "agent-device-state"),
+              ];
         try {
           await run("pnpm", [
             "exec",
@@ -2225,6 +2242,8 @@ async function main(): Promise<void> {
               deviceID: device.udid,
               session,
               common: inputDriverSessionArgs ?? common,
+              agentDeviceCommand: sharedInputDriver?.command,
+              photoOnly,
               run: (command, args, stdoutFile) =>
                 run(command, args, repoRoot, stdoutFile),
             });

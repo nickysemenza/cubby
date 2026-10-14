@@ -42,12 +42,16 @@ public struct PhotoFile: Sendable, Hashable {
         size: Int,
         width: Int,
         height: Int,
-        capturedAt: Date? = nil
+        capturedAt: Date? = nil,
+        captureTimeZoneOffsetMinutes: Int? = nil,
+        camera: LibraryAssetMetadata.Camera? = nil,
+        gpsLocation: LibraryAssetMetadata.Location? = nil
     ) throws {
         try self.init(
             url: url, filename: filename, contentType: contentType, size: size,
-            width: width, height: height, capturedAt: capturedAt, captureTimeZoneOffsetMinutes: nil,
-            camera: nil, gpsLocation: nil, temporaryFileLease: nil)
+            width: width, height: height, capturedAt: capturedAt,
+            captureTimeZoneOffsetMinutes: captureTimeZoneOffsetMinutes,
+            camera: camera, gpsLocation: gpsLocation, temporaryFileLease: nil)
     }
 
     private init(

@@ -279,6 +279,10 @@ export default defineEntity({
           actions: ["confirmOwner", "inheritOwner", "editSource"],
         },
         display: {
+          columnLabel: "Owner",
+          list: true,
+          readPath: "effectiveOwnership.effectiveOwner.name",
+          width: "md",
           detail: true,
           renderer: { detail: "effectiveOwnership" },
         },

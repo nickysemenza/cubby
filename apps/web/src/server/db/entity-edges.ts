@@ -137,6 +137,7 @@ import {
   orderMailAttachment,
   photoGroupProposal,
   photoRunImage,
+  runPushRegistration,
   product,
   productCategory,
   spendingCategory,
@@ -1534,6 +1535,14 @@ export const ENTITY_EDGES = {
           "Append-only provenance: a job keeps naming the run that scheduled it.",
       },
     },
+    "RunPushRegistration.runId": {
+      column: runPushRegistration.runId,
+      role: "owned-child",
+      label: "push registrations",
+      description:
+        "A device's Live Activity or notification push registration for this Run; deleting the Run removes it.",
+      liveness: { kind: "must-target-live" },
+    },
     "Suggestion.runId": {
       column: suggestion.runId,
       role: "owned-child",
@@ -1625,6 +1634,14 @@ export const ENTITY_EDGES = {
   }),
   "usda-food": edges({}),
   device: edges({
+    "RunPushRegistration.deviceId": {
+      column: runPushRegistration.deviceId,
+      role: "owned-child",
+      label: "push registrations",
+      description:
+        "A Live Activity or notification push registration this install made for a Run it started.",
+      liveness: { kind: "must-target-live" },
+    },
     "PhotoRunImage.deviceWorkDeviceId": {
       column: photoRunImage.deviceWorkDeviceId,
       role: "history",

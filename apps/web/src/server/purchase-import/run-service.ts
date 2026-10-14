@@ -10,16 +10,26 @@ import {
   parseEntityRef,
   runEntityId,
   vendorAccountId,
+  type DeviceId,
   type LedgerPartyId,
   type RunId,
   type UserId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
+  imageProcessingJobKind,
+  imageProcessingJobState,
+} from "@cubby/schemas/image-processing";
+import {
   agentImportRunPurpose,
   coordinatorModelFor,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
+import {
+  storedPhotoRunInput,
+  type PhotoInventoryRunInput,
+  type PhotoRunProcessor,
+} from "@cubby/schemas/photo-import-run";
 import {
   type AgentProgressEvent,
   agentProgressEvent,
@@ -73,6 +83,7 @@ import {
   notInArray,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -108,8 +119,13 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/repo/image-processing";
 import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
 import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
+import {
+  recordImportSightings,
+  resolveDeviceSightingContext,
+} from "~/server/repo/image-sighting";
 import {
   photoRunImageOrder,
   withPhotoImportTransaction,
@@ -281,7 +297,22 @@ export type StartPhotoInventoryRunInput = {
   ledgerPartyId?: LedgerPartyId;
   actorUserId: UserId;
   notes?: string;
+  /**
+   * The per-Run grouping choice and first upload batch. Omitted only by
+   * fixtures of the legacy manual flow, which keeps a null `Run.input`.
+   */
+  grouping?: {
+    processor: PhotoRunProcessor;
+    clientBatchId: string;
+    imageCount: number;
+  };
+  /** The initiating install (`X-Cubby-Device`); never an executor. */
+  deviceId?: DeviceId | null;
 };
+
+/** `Run.clientKey` of a photo Run: its first batch id makes createRun replay-safe. */
+const photoRunClientKey = (clientBatchId: string) =>
+  `photo-run:${clientBatchId}`;
 
 /**
  * A photo-inventory run has no vendor and no upfront targets: the native app
@@ -296,6 +327,30 @@ export async function startPhotoInventoryRun(
   input: StartPhotoInventoryRunInput,
 ) {
   return withTransaction(db, async (tx) => {
+    if (input.grouping) {
+      const [existing] = await tx
+        .select({
+          id: runTable.id,
+          shortcode: runTable.shortcode,
+          actorUserId: runTable.actorUserId,
+        })
+        .from(runTable)
+        .where(
+          eq(
+            runTable.clientKey,
+            photoRunClientKey(input.grouping.clientBatchId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        if (existing.actorUserId !== input.actorUserId)
+          throw new Error("This upload batch id belongs to another member");
+        return {
+          id: existing.id,
+          publicId: runShortcode.parse(existing.shortcode),
+        };
+      }
+    }
     const [actor] = await tx
       .select({
         actorUserId: ledgerParty.userId,
@@ -354,6 +409,24 @@ export async function startPhotoInventoryRun(
       trigger: runTrigger.enum.manual,
       notes: input.notes ?? null,
       agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
+      deviceId: input.deviceId ?? null,
+      clientKey: input.grouping
+        ? photoRunClientKey(input.grouping.clientBatchId)
+        : null,
+      input: input.grouping
+        ? {
+            kind: "photo_inventory",
+            processor: input.grouping.processor,
+            batches: [
+              {
+                clientBatchId: input.grouping.clientBatchId,
+                imageCount: input.grouping.imageCount,
+                positionOffset: 0,
+                state: "open",
+              },
+            ],
+          }
+        : null,
     });
     return { id: run.id, publicId: run.shortcode };
   });
@@ -366,26 +439,8 @@ export async function startPhotoInventoryCoordinator(
 ) {
   const publicId = runShortcode.parse(input.publicId);
   const actorUserId = userId.parse(input.actorUserId);
-  const eventId = crypto.randomUUID();
-  const [started] = await getDb(db)
-    .update(runTable)
-    .set({
-      dispatchEventId: eventId,
-      dispatchError: null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runTable.shortcode, publicId),
-        eq(runTable.actorUserId, actorUserId),
-        eq(runTable.purpose, "photo_inventory"),
-        eq(runTable.status, "running"),
-        isNull(runTable.dispatchEventId),
-        sql`EXISTS (SELECT 1 FROM ${photoRunImage} WHERE ${photoRunImage.runId} = ${runTable.id} AND ${photoRunImage.state} = ${runTargetState.enum.pending})`,
-      ),
-    )
-    .returning({ id: runTable.id, publicId: runTable.shortcode });
-  if (started) return { ...started, eventId, created: true as const };
+  const started = await armPhotoCoordinator(db, publicId, actorUserId, []);
+  if (started) return started;
   const scope = await loadRunScopeByShortcode(db, publicId);
   if (scope.public.purpose !== "photo_inventory")
     throw new Error("Import run is not a photo-inventory run");
@@ -403,6 +458,83 @@ export async function startPhotoInventoryCoordinator(
   throw new Error(
     "Upload and finalize photos before asking the agent to group them",
   );
+}
+
+/**
+ * Arm a chosen-processor photo Run's coordinator only if what was judged
+ * ready still holds at the write: `Run.input` is unchanged (no new batch,
+ * seal or switch to `external`), no batch is open, and every pending photo
+ * has a ready or skipped current description. Null when any of that moved;
+ * the change that moved it runs its own advance.
+ */
+export async function startGuardedPhotoCoordinator(
+  db: Database,
+  input: {
+    publicId: string;
+    actorUserId: string;
+    expectedInput: PhotoInventoryRunInput;
+  },
+) {
+  return armPhotoCoordinator(
+    db,
+    runShortcode.parse(input.publicId),
+    userId.parse(input.actorUserId),
+    [
+      sql`${runTable.input} = ${JSON.stringify(input.expectedInput)}::jsonb`,
+      sql`NOT (${runTable.input} @> ${JSON.stringify({ batches: [{ state: "open" }] })}::jsonb)`,
+      // Literal qualified names: the correlation must name the outer Run.
+      sql`NOT EXISTS (
+        SELECT 1 FROM "PhotoRunImage" target
+        JOIN "Image" source ON source."id" = target."imageId" AND source."deletedAt" IS NULL
+        WHERE target."runId" = "Run"."id"
+          AND target."state" = ${runTargetState.enum.pending}
+          AND NOT EXISTS (
+            SELECT 1 FROM "ImageProcessingJob" job
+            WHERE job."imageId" = target."imageId"
+              AND job."kind" = ${imageProcessingJobKind.enum.describe_image}
+              AND job."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION}
+              AND job."sourceContentHash" = source."sha256"
+              AND job."state" IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})
+          )
+      )`,
+    ],
+  );
+}
+
+async function armPhotoCoordinator(
+  db: Database,
+  publicId: ReturnType<typeof runShortcode.parse>,
+  actorUserId: UserId,
+  guards: readonly SQL[],
+) {
+  const eventId = crypto.randomUUID();
+  const [started] = await getDb(db)
+    .update(runTable)
+    .set({
+      dispatchEventId: eventId,
+      dispatchError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(runTable.shortcode, publicId),
+        eq(runTable.actorUserId, actorUserId),
+        eq(runTable.purpose, "photo_inventory"),
+        eq(runTable.status, "running"),
+        isNull(runTable.dispatchEventId),
+        sql`EXISTS (SELECT 1 FROM ${photoRunImage} WHERE ${photoRunImage.runId} = ${runTable.id} AND ${photoRunImage.state} = ${runTargetState.enum.pending})`,
+        ...guards,
+      ),
+    )
+    .returning({ id: runTable.id, publicId: runTable.shortcode });
+  return started
+    ? {
+        id: started.id,
+        publicId: runShortcode.parse(started.publicId),
+        eventId,
+        created: true as const,
+      }
+    : null;
 }
 
 /**
@@ -557,7 +689,7 @@ export async function loadRunScopeByShortcode(db: Database, publicId: string) {
 export async function finalizePhotoRun(
   db: Database,
   input: PhotoImportFinalizeInput,
-  _actor: ActorContext,
+  actor: ActorContext,
   // Testability seam only: production always uses the default (R2 + real
   // image inspection), the same ports `commitPhotoImport` accepts.
   ports: PhotoImportCommitPorts = productionPhotoImportCommitPorts,
@@ -569,6 +701,28 @@ export async function finalizePhotoRun(
   if (scope.public.status !== "running") {
     throw new Error(`Import run is fenced in status ${scope.public.status}`);
   }
+  // The upload barrier: a chosen-processor Run takes new photos only inside
+  // the named, still-open batch. Checked here for a clear early error, and
+  // again atomically where the targets are inserted.
+  const [runInput] = await getDb(db)
+    .select({ input: runTable.input })
+    .from(runTable)
+    .where(eq(runTable.id, scope.public.runId))
+    .limit(1);
+  const photoInput = storedPhotoRunInput.parse(runInput?.input ?? null);
+  if (photoInput && !input.clientBatchId)
+    throw new Error(
+      `Photo run ${input.runId} needs the clientBatchId these photos were admitted under`,
+    );
+  if (
+    photoInput &&
+    !photoInput.batches.some(
+      (batch) => batch.clientBatchId === input.clientBatchId,
+    )
+  )
+    throw new Error(
+      `Upload batch ${input.clientBatchId} was never admitted to ${input.runId}`,
+    );
 
   const detailByShortcode = new Map(
     input.images.map((item) => [
@@ -635,6 +789,30 @@ export async function finalizePhotoRun(
       const adding = lockedStaged.filter(
         (entry) => !targeted.has(imageId.parse(entry.row.id)),
       ).length;
+      // A replay of already-targeted photos is harmless after the seal; new
+      // photos need their batch still open at this instant. The guarded
+      // write holds the Run row until commit, so a seal or dispatch that
+      // races it waits and then sees these targets.
+      if (photoInput && adding > 0) {
+        const [open] = await getDb(transactionDb)
+          .update(runTable)
+          .set({ updatedAt: new Date() })
+          .where(
+            and(
+              eq(runTable.id, scope.public.runId),
+              sql`${runTable.input} @> ${JSON.stringify({
+                batches: [
+                  { clientBatchId: input.clientBatchId, state: "open" },
+                ],
+              })}::jsonb`,
+            ),
+          )
+          .returning({ id: runTable.id });
+        if (!open)
+          throw new Error(
+            `Upload batch ${input.clientBatchId} is sealed; admit a new batch for more photos`,
+          );
+      }
       if (targeted.size + adding > PHOTO_RUN_IMAGE_LIMIT) {
         throw new Error(
           `Photo run ${input.runId} holds at most ${PHOTO_RUN_IMAGE_LIMIT} photos: ` +
@@ -679,6 +857,27 @@ export async function finalizePhotoRun(
         .set({ source: "own" })
         .where(and(inArray(image.id, allIds), eq(image.source, "unknown")));
 
+      const library = input.images.flatMap((item) => {
+        const locked = lockedByCode.get(item.imageId);
+        return item.library && locked
+          ? [{ imageId: imageId.parse(locked.id), sighting: item.library }]
+          : [];
+      });
+      const sightingContext = library.length
+        ? await resolveDeviceSightingContext(
+            transactionDb,
+            actor.deviceId,
+            actor.userId,
+          )
+        : null;
+      if (sightingContext)
+        await recordImportSightings(
+          transactionDb,
+          sightingContext,
+          library,
+          actor,
+        );
+
       return {
         finalizedIds: lockedStaged
           .filter((entry) => insertedIds.has(imageId.parse(entry.row.id)))
@@ -689,18 +888,16 @@ export async function finalizePhotoRun(
       };
     });
 
-  const submission = await createImageProcessingSubmission(db);
-  const jobIds: string[] = [];
-  for (const shortcode of finalizedIds) {
-    const scheduled = await persistImageProcessingSubmission(db, {
-      id: shortcode,
-      kinds: ["describe_image", "subject_lift", "identify_image"],
-      submission: { id: submission.id, publicId: submission.publicId },
-      runId: scope.public.runId,
-    });
-    jobIds.push(...scheduled.jobIds);
-  }
-  await publishImageProcessingWakeups(db, jobIds);
+  // Replayed photos too: job identity makes this a no-op for scheduled work
+  // and repairs a finalize whose scheduling never ran.
+  const submission = await schedulePhotoRunImageProcessing(
+    db,
+    scope.public.runId,
+    [...finalizedIds, ...alreadyFinalizedIds],
+  );
+  const { advancePhotoRunQuietly } =
+    await import("~/server/photo-import-run/lifecycle");
+  await advancePhotoRunQuietly(db, scope.public.runId);
 
   return {
     finalized: finalizedIds.map((code) => imageShortcode.parse(code)),
@@ -709,6 +906,31 @@ export async function finalizePhotoRun(
     ),
     submissionId: submission.publicId,
   };
+}
+
+/**
+ * Schedule a photo Run's per-image work (description, subject lift,
+ * identification). Idempotent per job identity; the lifecycle's repair and
+ * finalize share it.
+ */
+export async function schedulePhotoRunImageProcessing(
+  db: Database,
+  runId: RunId,
+  imageCodes: readonly string[],
+) {
+  const submission = await createImageProcessingSubmission(db);
+  const jobIds: string[] = [];
+  for (const shortcode of imageCodes) {
+    const scheduled = await persistImageProcessingSubmission(db, {
+      id: shortcode,
+      kinds: ["describe_image", "subject_lift", "identify_image"],
+      submission: { id: submission.id, publicId: submission.publicId },
+      runId,
+    });
+    jobIds.push(...scheduled.jobIds);
+  }
+  await publishImageProcessingWakeups(db, jobIds);
+  return submission;
 }
 
 export async function updateAgentProgress(
@@ -863,7 +1085,7 @@ async function unreceivedWake(
  * A pending approval never reaches here: it moves the run to
  * `paused_approval` first.
  */
-export async function reconcileSettledRun(
+async function reconcileSettledRunOnce(
   db: Database,
   input: {
     runId: string;
@@ -1281,7 +1503,7 @@ export async function auditAllImportBatches(
   }
 }
 
-export async function stopRunForReview(
+async function stopRunForReviewOnce(
   db: Database,
   input: {
     runId: string;
@@ -2771,4 +2993,32 @@ export async function controlRun(
       };
     },
   );
+}
+
+/**
+ * Settle a coordinator submission. A photo Run's lifecycle moves with it (review ready or stopped), so
+ * its Live Activity is pushed after the commit.
+ */
+export async function reconcileSettledRun(
+  ...args: Parameters<typeof reconcileSettledRunOnce>
+): ReturnType<typeof reconcileSettledRunOnce> {
+  const outcome = await reconcileSettledRunOnce(...args);
+  const { advancePhotoRunQuietly } =
+    await import("~/server/photo-import-run/lifecycle");
+  await advancePhotoRunQuietly(args[0], args[1].runId);
+  return outcome;
+}
+
+/**
+ * Stop a Run for member review. A photo Run's lifecycle moves with it (review ready or stopped), so
+ * its Live Activity is pushed after the commit.
+ */
+export async function stopRunForReview(
+  ...args: Parameters<typeof stopRunForReviewOnce>
+): ReturnType<typeof stopRunForReviewOnce> {
+  const outcome = await stopRunForReviewOnce(...args);
+  const { advancePhotoRunQuietly } =
+    await import("~/server/photo-import-run/lifecycle");
+  await advancePhotoRunQuietly(args[0], args[1].runId);
+  return outcome;
 }

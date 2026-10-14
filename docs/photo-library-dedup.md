@@ -148,8 +148,11 @@ Photos is a permanent iPhone tab and Mac sidebar destination. Identify remains
 available inside Capture and through navigation links and shortcuts. Existing
 Add Photo, Garden, camera, Files, and system-picker entry points remain available.
 The permanent browser supports ordered selections backed by asset references;
-full-quality files are retrieved and uploaded sequentially. Photos edits use the
-current rendition, Live Photos contribute their still image, and unsupported or
+full-quality files are materialized in order. Bulk import runs use bounded concurrent
+file uploads, with progress for each completed transfer before chunk finalization. Photos edits use the
+current rendition; unedited assets export their original encoded bytes rather
+than PhotoKit's rendered JPEG, preserving PNG alpha and source metadata. Live
+Photos contribute their still image, and unsupported or
 over-50-MiB files fail explicitly. Subject lifting is an intentional full-resolution
 edit. Temporary encoded files remain alive through retries and are removed when
 their last owning reference is released.
@@ -159,7 +162,79 @@ creation and capture-date prefills follow [Garden](garden.md#native-photo-import
 Saved entry/upload IDs survive retries; a destination stays fixed once a batch
 starts so recovery cannot split writes across locations.
 
+## Native import-run lifecycle
+
+An explicit photo import continues independently of the Automatic work setting.
+Done closes its sheet without cancelling. Cancel remaining work records durable
+cancellation, stops unfinished device transfers, finalizes already transferred
+photos, and seals that upload batch; imported Images remain. Preparation and
+upload failures retain the selection, offer individual Retry controls, and require
+an explicit Continue without failed photos before omitting them. Done clears only
+confirmed imported photos from selection. View import reopens local progress;
+Review item groups is shown only after proposals actually exist.
+
+The native app owns a journal in Application Support, excluded from backup, and
+copies selected files before starting uploads. A selection journal records Photos
+asset identifiers before iCloud downloads begin. The upload journal replaces it
+only after all ready files are owned, retaining the run request, durable batch UUID,
+admission offset, presigned upload targets, completed PUTs, finalizations, analysis
+results, and cancellation. Run creation and admission replay that UUID; append
+positions use the server's reserved offset. A batch seals after its last chunk,
+before optional local Vision analysis, so device analysis never delays grouping.
+Confirmed, successfully analyzed work removes its journal and duplicate files.
+Cancelled batches awaiting server sealing settle on reopening without restarting
+uploads.
+
+New device work waits for unmetered, unconstrained Wi-Fi or wired Ethernet,
+Low Power Mode to turn off, and thermal state
+below serious. Its current waiting reason is visible; elapsed time never overrides
+these gates, and explicit imports do not require charging. On iOS, file PUTs use a
+background URLSession with journal-owned files readable after the first unlock.
+Background-processing expiry interrupts preparation or analysis and detaches the
+Swift upload waiter while the OS-owned file transfer continues; reopening reattaches
+to it. On Mac, closing the last window leaves the process and imports running;
+Quit ends the process, and reopening recovers its journal.
+
+Each new Run stores the Cubby / Pi or Claude / Codex choice. Cubby groups once all
+upload batches are sealed and required descriptions settle; an external Run offers
+a copyable agent prompt when ready. Adding photos warns that Cubby replaces all
+unapproved groups and edits while retaining approved items. Failed descriptions
+offer per-photo retry or explicit exclusion, preserving the Image and its bytes.
+The finalize request carries the same library provenance block as manifest imports,
+so capture date, offset, location, camera, and the import sighting survive without
+optional Vision analysis.
+
+A run-specific Live Activity starts with a push token, shows local upload progress,
+and registers that token for server updates through describing, grouping, handoff,
+attention, review, and completion. Debug uses development APNs; Release uses
+production. Signed delivery requires a Push Notifications-enabled App ID/profile
+and configured Worker APNs credentials. Unsigned builds and simulator checks do
+not establish locked-device transfer or APNs delivery.
+
+Optional **Notify me when ready** is a per-import opt-in. It requests the existing system alert permission and registers the standard APNs device token independently of Live Activities; readiness, handoff, and attention alerts open the import Run. Both token registrations derive their app identity from the generated bundle identity, so Mac development tokens use the development bundle's APNs topic. APNs environment remains a separate Debug/Release choice. Foreground reconciliation also updates and ends the Run Live Activity from server lifecycle state, so a foreground app does not depend on APNs delivery. Signed provisioning with Push Notifications enabled for both bundle identities, Worker APNs credentials, and real-device delivery remain deployment acceptance checks.
+
+A failed transfer can be retried individually or explicitly excluded. Both paths continue all untouched later chunks before sealing the batch; exclusion never deletes an uploaded Image. Optional device-analysis failures can be explicitly skipped. Settled or cancelled batches delete their journal-owned original copies; preparation copies are removed when the upload journal owns them or preparation is cancelled. Recovery isolates each journal and each unavailable selection entry, so one corrupt journal or missing asset cannot hide other imports.
+
+Recovery first consumes any already completed background PUT result. If that result is HTTP 403 and the URL's signed `X-Amz-Date` plus `X-Amz-Expires` proves it expired, the importer restages only that photo and retries once automatically with a fresh URL. It preserves finalized photos and the batch UUID. Other 403 responses, malformed expiry metadata, and a failed renewed attempt remain explicit attention; they do not trigger unconditional retries.
+
+An admission attempt is persisted before `createRun` or `admitBatch` HTTP. Cancellation with an uncertain response replays that same idempotent intent to recover the batch identity, then seals it; the journal and originals remain until the seal is acknowledged. Sheet retirement waits for cancellation settlement before clearing confirmed selection IDs, and retains the remaining selections for an explicit later import.
+
 ## Device validation
+
+The synthetic native input journey selects the newest 25 distinct pixel fixtures
+from the authorized Library grid using fresh accessibility refs, then verifies
+original digests, capture dates, import Sightings, sheet-close continuation, and
+explicit group approval without automatic financial or inventory writes. The
+separate system-picker scripts retain the denied-library entry path. Fixture
+setup grants library access to the simulator app without resetting its library;
+each fixture batch has distinct original bytes so older batches cannot satisfy
+the digest readback.
+
+PhotoKit parity keeps exact source-byte, edited-rendition, alpha, and orientation
+checks. Thumbnail and full-file perceptual hashes use the shared production
+`PhotoMatchVerdict` strong-match decision: PhotoKit and ImageIO resampling can
+produce a small hash difference without changing the duplicate decision. Export
+refreshes a retained asset snapshot before checking whether it has edits.
 
 Physical iPhone first-run throughput, memory and thermal behavior, Photos
 limited-access fallback, progressive-filter interaction, and PhotoKit

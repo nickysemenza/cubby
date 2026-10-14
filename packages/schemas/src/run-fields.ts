@@ -16,6 +16,7 @@ export {
 } from "./activity-fields";
 export type { RunPurpose } from "./activity-fields";
 import type { ExecutionAuthorizationInput } from "./execution-authorization.js";
+import type { PhotoInventoryRunInput } from "./photo-run-input.js";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 import { plainDate } from "./base-entity.js";
 import { financialTransactionNonZeroAmount } from "./financial-transaction-fields.js";
@@ -377,7 +378,8 @@ export type RunInput =
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>
   | SuggestionSweepRunInput
-  | AiRefreshRunInput;
+  | AiRefreshRunInput
+  | PhotoInventoryRunInput;
 export type RunProgress =
   | MailDiscoveryRunProgress
   | SuggestionSweepRunProgress

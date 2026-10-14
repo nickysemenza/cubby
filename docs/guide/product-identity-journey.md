@@ -71,6 +71,42 @@ and [purchase skill](../../.claude/skills/purchase-import/SKILL.md) apply to
 the import-run agent, Codex, and Claude. They encode source boundaries and review rules, not
 one model's private prompt.
 
+### Photo inventory review
+
+Choose **Cubby / Pi** or **Claude / Codex** for each photo Run. Cubby starts
+grouping after all admitted upload batches finish and required descriptions
+settle. The external path provides a copyable prompt once the photos are ready;
+it does not start Pi. Neither path creates Products or receives inventory until
+the member approves proposals.
+
+Review groups in one continuous scroll. The item index jumps to a group;
+**Select all ready items** selects eligible proposals, and **Approve selected
+items** remains a separate action. Blocked groups stay in review. Descriptions
+and recognized label text are available under disclosure rather than filling
+the main review surface.
+Cards load as they approach the viewport and retain unfinished edits after
+scrolling away. Approved and discarded details stay collapsed until opened.
+
+Proposal values name their last recorded writer. They are not Jev/Clef field
+suggestions; catalogue match rankings are deterministic. Older proposals whose
+writer was not recorded say so. Manufacturer is text on a Product, not a
+separate record; existing-name counts help reuse the catalogue's spelling.
+Category and destination pickers show the selected record's representative
+image before another search is needed.
+
+Adding a new batch to a Cubby Run replaces all unapproved proposals and member
+edits when regrouping. Approved and discarded groups remain fixed. State this
+next to the add-photos action. Claude/Codex Runs wait for that session to regroup.
+Completed Runs can accept new batches. If a Cubby grouping session has been
+archived, start a new import instead; its approved Products remain available
+for matching.
+Skipped photos retain their original Image and Run evidence, with a visible
+reason; approval does not attach them to the Product or count them as inventory. A failed
+description can be retried, or explicitly skipped to continue with other photos.
+
+**Import results** lists distinct created and matched Products and their
+inventory outcomes. The Changes section keeps the separate chronological audit.
+
 ```mermaid
 flowchart LR
     A[Own-item photo] --> M[Find or create exact Product]

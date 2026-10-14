@@ -19,7 +19,9 @@ struct RunPhotoReviewSections: View {
         if let review = session.review {
             Section {
                 photoProcessing(review.images)
-                if proposed.isEmpty, review.review.proposals.isEmpty {
+                if review.lifecycle.processor != nil {
+                    lifecycleStatus(review)
+                } else if proposed.isEmpty, review.review.proposals.isEmpty {
                     let readiness = PhotoReviewPolicy.groupingReadiness(
                         images: review.images, runStatus: session.snapshot?.status,
                         processingPaused: review.imageProcessingPaused)
@@ -97,6 +99,70 @@ struct RunPhotoReviewSections: View {
             if proposed.isEmpty, !review.images.isEmpty {
                 Section("Photos") { evidenceRegion(review.images) }
             }
+        }
+    }
+
+    @ViewBuilder private func lifecycleStatus(_ review: PhotoRunReviewResponse) -> some View {
+        switch review.lifecycle.phase.rawValue {
+        case "waiting_for_upload":
+            Text("Waiting for the remaining photos to upload.").foregroundStyle(.secondary)
+        case "describing":
+            Text(
+                "Describing photos · \(review.lifecycle.describedImageCount)/\(review.lifecycle.finalizedImageCount)"
+            )
+            .foregroundStyle(.secondary)
+        case "grouping":
+            Label("Grouping photos", systemImage: "sparkles")
+        case "ready_for_handoff":
+            Text("Photo descriptions are ready for Claude or Codex.")
+            Button("Copy agent prompt", systemImage: "doc.on.doc") {
+                Clipboard.copy(
+                    "Use Cubby MCP to inspect photo import \(runID). Read its photos and descriptions, propose item groups, and leave the groups for member review. Do not create or approve products. Optional device analysis must not delay grouping."
+                )
+            }
+        case "needs_attention":
+            Label("Some photos need attention", systemImage: "exclamationmark.triangle")
+            if let error = review.lifecycle.dispatchError {
+                Text(error).textSelection(.enabled)
+            }
+            if !review.lifecycle.failedImageIds.isEmpty {
+                ForEach(review.images.filter { review.lifecycle.failedImageIds.contains($0.id) }, id: \.id) {
+                    image in
+                    HStack(alignment: .top) {
+                        Thumb(url: URL(string: image.originalUrl), size: 58)
+                        VStack(alignment: .leading) {
+                            Text(image.describeReason ?? "Photo description failed").textSelection(.enabled)
+                            Button("Retry this photo") {
+                                Task {
+                                    do {
+                                        _ = try await appModel.client.retryImageProcessing(
+                                            .init(id: image.id))
+                                        await refresh()
+                                    } catch { appModel.handle(error) }
+                                }
+                            }
+                            .disabled(session.busy)
+                        }
+                    }
+                }
+                Button("Continue without failed photos") {
+                    Task {
+                        do {
+                            _ = try await appModel.client.excludeFailedPhotoDescriptions(
+                                .init(
+                                    runId: runID, imageIds: review.lifecycle.failedImageIds))
+                            await refresh()
+                        } catch { appModel.handle(error) }
+                    }
+                }
+                .disabled(session.busy)
+            }
+        case "ready_for_review":
+            Text("Item groups are ready for review.")
+        case "completed":
+            Label("Import completed", systemImage: "checkmark.circle")
+        default:
+            EmptyView()
         }
     }
 

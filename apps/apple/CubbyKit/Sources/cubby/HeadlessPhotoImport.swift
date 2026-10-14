@@ -36,7 +36,8 @@ struct HeadlessPhotoImport: AsyncParsableCommand {
             let runID = try await uploader.upload(
                 photos,
                 createRun: PhotoImportCreateRunInput(
-                    ledgerPartyId: nil, notes: "Synthetic photo import rehearsal"),
+                    ledgerPartyId: nil, notes: "Synthetic photo import rehearsal",
+                    processor: .cubby, clientBatchId: UUID().uuidString, imageCount: photos.count),
                 performLocalAnalysis: false,
                 progress: { progress in
                     print(

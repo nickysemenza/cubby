@@ -1,10 +1,10 @@
 import ActivityKit
+import CubbyKit
 import Foundation
 import Observation
 
-/// The Lock Screen shows one sustained task from the device-local activity register. Server
-/// runs and companion jobs are deliberately absent: this install cannot update them while it
-/// is suspended without a server ActivityKit push channel.
+/// Generic sustained device work uses the local activity register. Photo imports with their
+/// own per-run push activity are filtered out; companion jobs remain outside this selection.
 struct DeviceWorkLiveSelection: Equatable {
     let id: String
     let title: String
@@ -128,7 +128,9 @@ final class DeviceWorkLiveActivityCoordinator {
                 await reconcile()
                 guard !Task.isCancelled else { break }
                 let hasWork = !(model?.backgroundActivity.visibleActivities.isEmpty ?? true)
-                let hasLiveActivity = !Activity<DeviceWorkAttributes>.activities.isEmpty
+                let hasLiveActivity =
+                    !Activity<DeviceWorkAttributes>.activities.isEmpty
+                    || !Activity<PhotoRunActivityAttributes>.activities.isEmpty
                 if !hasWork && !hasLiveActivity { break }
                 try? await Task.sleep(for: .seconds(5))
             } while !Task.isCancelled
@@ -138,7 +140,15 @@ final class DeviceWorkLiveActivityCoordinator {
 
     private func reconcile() async {
         guard let model, model.phase != .restoring else { return }
-        let snapshot = DeviceWorkLiveSelection.select(model.backgroundActivity.visibleActivities, at: .now)
+        await PhotoRunLiveActivityCoordinator.shared.reconcile(model: model, foreground: foreground)
+        let uploadsWithRunActivity = Set(
+            Activity<PhotoRunActivityAttributes>.activities.map { $0.attributes.runId })
+        let handledLocally = Set(
+            model.photoImportFlows.filter {
+                $0.session.runID.map(uploadsWithRunActivity.contains) ?? false
+            }.flatMap { $0.currentActivities.map(\.id) })
+        let snapshot = DeviceWorkLiveSelection.select(
+            model.backgroundActivity.visibleActivities.filter { !handledLocally.contains($0.id) }, at: .now)
         progressETA.record(snapshot, at: .now)
         let activities = Activity<DeviceWorkAttributes>.activities
         for extra in activities.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }

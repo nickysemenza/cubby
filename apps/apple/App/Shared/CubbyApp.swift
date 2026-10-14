@@ -13,6 +13,8 @@ struct CubbyApp: App {
         // before `UIApplicationMain` starts the scene lifecycle, so `AppModel.active` is already
         // set by the time `SceneDelegate.scene(_:willConnectTo:options:)` can run.
         @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #elseif os(macOS)
+        @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
     #endif
 
     init() {
@@ -58,6 +60,7 @@ struct CubbyApp: App {
         // to go stale across.
         _model = State(initialValue: model)  // state-init-ok: single instance for process lifetime
         AppModel.active = model
+        PhotoImportNotificationCoordinator.shared.start(model: model)
         // Thumbnails go through Nuke (`Thumb.swift`); a shared on-disk cache under Caches keeps
         // covers warm across launches without growing the app's iCloud/backup footprint (Caches is
         // excluded from both). `ImageCaches.reset()` wipes both tiers on sign-out and base-URL
@@ -106,6 +109,7 @@ struct CubbyApp: App {
             }
             .onChange(of: scenePhase) { _, phase in
                 model.setCompanionSceneActive(phase == .active)
+                if phase == .active { model.continuePhotoImports() }
                 #if os(iOS)
                     DeviceWorkLiveActivityCoordinator.shared.setForeground(phase == .active)
                     if phase == .background {

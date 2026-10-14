@@ -26,7 +26,6 @@
   "apps/web/src/server/repo/financial-transfer-pairing.ts": 1,
   "apps/web/src/server/repo/household-contribution/allocation.ts": 11,
   "apps/web/src/server/repo/image-displayability.ts": 4,
-  "apps/web/src/server/repo/image-processing-issues.ts": 9,
   "apps/web/src/server/repo/image-processing-maintenance.ts": 9,
   "apps/web/src/server/repo/image-processing.ts": 3,
   "apps/web/src/server/repo/inheritance-validation.ts": 4,

@@ -7,6 +7,7 @@ export const iosSimulatorDeviceType =
 export function selectIOSSimulator(
   inventory: SimulatorInventory,
   preferred?: string,
+  options: { allowAnyPreferredPhone?: boolean } = {},
 ) {
   const phones = Object.entries(inventory.devices)
     .filter(([runtime]) => {
@@ -19,7 +20,8 @@ export function selectIOSSimulator(
     .filter(
       (device) =>
         device.name.includes("iPhone") &&
-        device.deviceTypeIdentifier === iosSimulatorDeviceType,
+        ((preferred && options.allowAnyPreferredPhone) ||
+          device.deviceTypeIdentifier === iosSimulatorDeviceType),
     );
   return preferred
     ? phones.find(

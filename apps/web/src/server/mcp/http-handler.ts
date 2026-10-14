@@ -261,6 +261,7 @@ async function serveAuthenticatedMcp(
           ? {
               runId: actor.purchaseAgentRunId,
               grantId: actor.purchaseAgentGrantId,
+              generation: actor.purchaseAgentGeneration,
             }
           : undefined,
       telemetry: {
