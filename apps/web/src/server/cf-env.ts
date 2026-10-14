@@ -156,7 +156,7 @@ export const getAiGateway = (gatewayId: string = CUBBY_AI_GATEWAY_ID) =>
 
 /**
  * The deterministic gateway peer that exists only in the workerd harness's
- * purchase-agent profiles (`tooling/workerd-harness.ts`). It is deliberately
+ * offline and purchase-agent profiles (`tooling/workerd-harness.ts`). It is deliberately
  * absent from wrangler.jsonc, so a deployed Worker can never resolve it and
  * keeps the mandatory `env.AI` transport above.
  */

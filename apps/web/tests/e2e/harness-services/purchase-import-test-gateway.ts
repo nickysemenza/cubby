@@ -103,12 +103,7 @@ function jevChoice(feature: string, body: unknown) {
   const configured = fixture.decisions?.find(
     (entry) => entry.feature === feature && input.state.includes(entry.match),
   );
-  const label =
-    configured?.label ??
-    (feature === "expense-line-role"
-      ? (JSON.parse(input.state) as { extractedLineKind: string })
-          .extractedLineKind
-      : JEV_DEFAULT_LABEL.get(feature));
+  const label = configured?.label ?? JEV_DEFAULT_LABEL.get(feature);
   if (configured && !Object.values(criteria).includes(configured.label))
     throw new Error(
       "Configured decision label is absent from the actual request choices.",
@@ -188,6 +183,7 @@ export default {
         .object({ decisions: z.array(decisionFixture).max(20).optional() })
         .parse(input).decisions;
       fixture = {
+        extractions: [],
         audit: { findings: [] },
         ...(input as Partial<Fixture>),
         decisions,

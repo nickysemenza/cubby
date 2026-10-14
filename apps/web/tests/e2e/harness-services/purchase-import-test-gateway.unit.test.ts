@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import gateway from "./purchase-import-test-gateway";
+import gateway, { type Fixture } from "./purchase-import-test-gateway";
 
 const choices = {
   same: "color same; size same",
@@ -25,7 +25,7 @@ function jevRequest(state: string, feature = "product-variant-relation") {
   });
 }
 
-async function configure(decisions: unknown[] = []) {
+async function configure(decisions: NonNullable<Fixture["decisions"]> = []) {
   const response = await gateway.fetch(
     new Request("https://gateway.test/configure", {
       method: "POST",
@@ -49,30 +49,44 @@ describe("test AI gateway semantic decisions", () => {
     const response = await gateway.fetch(
       jevRequest("Synthetic boot title", "product-variant-relation"),
     );
-    const body = (await response.json()) as {
+    expect(await response.json()).toMatchObject({
       result: {
         answers: {
-          selection: { choice: string; probabilities: Record<string, number> };
-        };
-      };
-    };
-
-    expect(body.result.answers.selection).toMatchObject({
-      choice: "different",
-      probabilities: { same: 0, different: 1, unknown: 0 },
+          selection: {
+            choice: "different",
+            probabilities: { same: 0, different: 1, unknown: 0 },
+          },
+        },
+      },
     });
   });
 
   it("abstains by default and fails closed for unconfigured features", async () => {
     await configure();
     const response = await gateway.fetch(jevRequest("Synthetic jacket"));
-    const body = (await response.json()) as {
-      result: { answers: { selection: { choice: string } } };
-    };
-    expect(body.result.answers.selection.choice).toBe("unknown");
+    expect(await response.json()).toMatchObject({
+      result: { answers: { selection: { choice: "unknown" } } },
+    });
 
     await expect(
       gateway.fetch(jevRequest("Synthetic input", "unconfigured-feature")),
     ).rejects.toThrow("No configured deterministic answer");
+  });
+
+  it("keeps unscripted extractions unavailable after a decision-only reset", async () => {
+    await configure();
+    const response = await gateway.fetch(
+      new Request("https://gateway.test/openai/responses", {
+        method: "POST",
+        headers: {
+          "cf-aig-metadata": JSON.stringify({
+            feature: "purchase-import-extraction",
+          }),
+        },
+        body: JSON.stringify({ input: "Synthetic receipt" }),
+      }),
+    );
+    expect(response.status).toBe(501);
+    expect(await response.text()).toContain("Unscripted gateway feature");
   });
 });
