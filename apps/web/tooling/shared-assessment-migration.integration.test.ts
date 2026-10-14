@@ -11,7 +11,7 @@ import { testServiceConfig } from "./test-service-config";
 // Failure modes: expansion mistaken for preservation; intervening old writes
 // lost; ambiguous labels invented; corrected null erased; frozen roster,
 // suppression scope or application receipts changed; retired work refs survive.
-// The latest predecessor's unclassified Expense role and Image Decision evidence
+// The latest predecessor's explicit/inherited ownership, Expense role and Image evidence
 // must survive both online expansion and the quiesced copy/trigger cutover.
 it("reconciles every legacy review family after an intervening writer without losing immutable history", async () => {
   const service = testServiceConfig();
@@ -62,6 +62,25 @@ it("reconciles every legacy review family after an intervening writer without lo
           `INSERT INTO "Product" (shortcode,name,manufacturer) VALUES ('PRD-4K7N','Synthetic lamp alias','Example maker') RETURNING id`,
         )
       ).rows[0].id;
+      const location = (
+        await client.query(
+          `INSERT INTO "Location" (shortcode,name,type) VALUES ('${SHORTCODE_PREFIX.location}-4K7M','Synthetic preservation shelf','room') RETURNING id`,
+        )
+      ).rows[0].id;
+      await client.query(
+        `INSERT INTO "InventoryEntry" (shortcode,"productId","locationId","amountValue","amountUnit","ownershipMode","ownerLedgerPartyId") VALUES ('${SHORTCODE_PREFIX.inventory}-4K7M',$1,$2,2,'each','explicit',$3),('${SHORTCODE_PREFIX.inventory}-4K7N',$1,$2,3,'each','explicit',NULL),('${SHORTCODE_PREFIX.inventory}-4K7P',$1,$2,5,'each','inherit',NULL)`,
+        [product, location, party],
+      );
+      const stockBefore = (
+        await client.query(
+          `SELECT id,"productId","locationId","amountValue","amountUnit","ownershipMode","ownerLedgerPartyId" FROM "InventoryEntry" ORDER BY shortcode`,
+        )
+      ).rows;
+      expect(stockBefore.map((row) => row.ownershipMode)).toEqual([
+        "explicit",
+        "explicit",
+        "inherit",
+      ]);
       const picture = (
         await client.query(
           `INSERT INTO "Image" (shortcode,key,filename,size,"contentType") VALUES ('${SHORTCODE_PREFIX.image}-4K7M','synthetic/image.jpg','synthetic.jpg',1,'image/jpeg') RETURNING id`,
@@ -236,7 +255,7 @@ it("reconciles every legacy review family after an intervening writer without lo
         )
       ).rows[0].id;
       expect(journal.entries[index].tag).toBe(
-        "0067_shared_assessment_expansion",
+        "0068_shared_assessment_expansion",
       );
       await migrateDatabase(drizzle(client), {
         through: journal.entries[index].tag,
@@ -262,6 +281,13 @@ it("reconciles every legacy review family after an intervening writer without lo
         [suggestion],
       );
       await migrateDatabase(drizzle(client));
+      expect(
+        (
+          await client.query(
+            `SELECT id,"productId","locationId","amountValue","amountUnit","ownershipMode","ownerLedgerPartyId" FROM "InventoryEntry" ORDER BY shortcode`,
+          )
+        ).rows,
+      ).toEqual(stockBefore);
       expect(
         (
           await client.query(

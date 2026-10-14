@@ -1,9 +1,1060 @@
 {
-  "id": "8bf0afe4-2a4f-4440-bb33-38330f97f3c0",
-  "prevId": "a9b3c0ce-0dcb-40ae-a126-efcd019f13c9",
+  "id": "f1d48a28-c587-4d91-8f47-8465503f736c",
+  "prevId": "3d83babc-79d3-4580-89be-55382303a1f1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.EmailAccuracyGrade": {
+      "name": "EmailAccuracyGrade",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "evaluationId": {
+          "name": "evaluationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predictionId": {
+          "name": "predictionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grade": {
+          "name": "grade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewedChecksum": {
+          "name": "reviewedChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewedLabelId": {
+          "name": "reviewedLabelId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "EmailAccuracyGrade_evaluation_prediction_key": {
+          "name": "EmailAccuracyGrade_evaluation_prediction_key",
+          "columns": [
+            {
+              "expression": "evaluationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "predictionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "EmailAccuracyGrade_evaluationId_EmailAccuracyEvaluation_id_fk": {
+          "name": "EmailAccuracyGrade_evaluationId_EmailAccuracyEvaluation_id_fk",
+          "tableFrom": "EmailAccuracyGrade",
+          "tableTo": "EmailAccuracyEvaluation",
+          "columnsFrom": [
+            "evaluationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EmailAccuracyGrade_predictionId_EmailClassificationObservation_id_fk": {
+          "name": "EmailAccuracyGrade_predictionId_EmailClassificationObservation_id_fk",
+          "tableFrom": "EmailAccuracyGrade",
+          "tableTo": "EmailClassificationObservation",
+          "columnsFrom": [
+            "predictionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EmailAccuracyGrade_reviewedLabelId_EmailClassificationLabel_id_fk": {
+          "name": "EmailAccuracyGrade_reviewedLabelId_EmailClassificationLabel_id_fk",
+          "tableFrom": "EmailAccuracyGrade",
+          "tableTo": "EmailClassificationLabel",
+          "columnsFrom": [
+            "reviewedLabelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "EmailAccuracyGrade_value_check": {
+          "name": "EmailAccuracyGrade_value_check",
+          "value": "\"EmailAccuracyGrade\".\"grade\" IN ('related', 'unrelated', 'uncertain', 'unavailable')"
+        },
+        "EmailAccuracyGrade_reason_check": {
+          "name": "EmailAccuracyGrade_reason_check",
+          "value": "length(btrim(\"EmailAccuracyGrade\".\"reason\")) > 0"
+        },
+        "EmailAccuracyGrade_review_check": {
+          "name": "EmailAccuracyGrade_review_check",
+          "value": "(\"EmailAccuracyGrade\".\"grade\" = 'unavailable' AND \"EmailAccuracyGrade\".\"reviewedChecksum\" IS NULL AND \"EmailAccuracyGrade\".\"reviewedLabelId\" IS NULL) OR (\"EmailAccuracyGrade\".\"grade\" <> 'unavailable' AND length(\"EmailAccuracyGrade\".\"reviewedChecksum\") > 0 AND \"EmailAccuracyGrade\".\"reviewedChecksum\" IS NOT NULL AND \"EmailAccuracyGrade\".\"reviewedLabelId\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.EmailClassificationLabel": {
+      "name": "EmailClassificationLabel",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "predictionId": {
+          "name": "predictionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorUserId": {
+          "name": "actorUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "EmailClassificationLabel_prediction_idx": {
+          "name": "EmailClassificationLabel_prediction_idx",
+          "columns": [
+            {
+              "expression": "predictionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "EmailClassificationLabel_predictionId_EmailClassificationObservation_id_fk": {
+          "name": "EmailClassificationLabel_predictionId_EmailClassificationObservation_id_fk",
+          "tableFrom": "EmailClassificationLabel",
+          "tableTo": "EmailClassificationObservation",
+          "columnsFrom": [
+            "predictionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EmailClassificationLabel_actorUserId_user_id_fk": {
+          "name": "EmailClassificationLabel_actorUserId_user_id_fk",
+          "tableFrom": "EmailClassificationLabel",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actorUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "EmailClassificationLabel_classification_check": {
+          "name": "EmailClassificationLabel_classification_check",
+          "value": "\"EmailClassificationLabel\".\"classification\" IN ('related', 'unrelated', 'uncertain')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImageDescriptionCorrection": {
+      "name": "ImageDescriptionCorrection",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmedAt": {
+          "name": "confirmedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImageDescriptionCorrection_image_idx": {
+          "name": "ImageDescriptionCorrection_image_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageDescriptionCorrection_active_image_key": {
+          "name": "ImageDescriptionCorrection_active_image_key",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImageDescriptionCorrection\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageDescriptionCorrection_imageId_Image_id_fk": {
+          "name": "ImageDescriptionCorrection_imageId_Image_id_fk",
+          "tableFrom": "ImageDescriptionCorrection",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.OrderMailCandidateDecision": {
+      "name": "OrderMailCandidateDecision",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "eventId": {
+          "name": "eventId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchaseId": {
+          "name": "purchaseId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceChecksum": {
+          "name": "evidenceChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decidedByUserId": {
+          "name": "decidedByUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proposedBy": {
+          "name": "proposedBy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "OrderMailCandidateDecision_event_purchase_key": {
+          "name": "OrderMailCandidateDecision_event_purchase_key",
+          "columns": [
+            {
+              "expression": "eventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "OrderMailCandidateDecision_one_link_key": {
+          "name": "OrderMailCandidateDecision_one_link_key",
+          "columns": [
+            {
+              "expression": "eventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"OrderMailCandidateDecision\".\"decision\" = 'linked'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "OrderMailCandidateDecision_purchase_idx": {
+          "name": "OrderMailCandidateDecision_purchase_idx",
+          "columns": [
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "OrderMailCandidateDecision_eventId_OrderMailEvent_id_fk": {
+          "name": "OrderMailCandidateDecision_eventId_OrderMailEvent_id_fk",
+          "tableFrom": "OrderMailCandidateDecision",
+          "tableTo": "OrderMailEvent",
+          "columnsFrom": [
+            "eventId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "OrderMailCandidateDecision_purchaseId_Purchase_id_fk": {
+          "name": "OrderMailCandidateDecision_purchaseId_Purchase_id_fk",
+          "tableFrom": "OrderMailCandidateDecision",
+          "tableTo": "Purchase",
+          "columnsFrom": [
+            "purchaseId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "OrderMailCandidateDecision_decision_check": {
+          "name": "OrderMailCandidateDecision_decision_check",
+          "value": "\"OrderMailCandidateDecision\".\"decision\" IN ('linked', 'dismissed')"
+        },
+        "OrderMailCandidateDecision_proposedBy_check": {
+          "name": "OrderMailCandidateDecision_proposedBy_check",
+          "value": "\"OrderMailCandidateDecision\".\"proposedBy\" IS NULL OR \"OrderMailCandidateDecision\".\"proposedBy\" IN ('member', 'agent', 'import', 'heuristic')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ProductMatchCandidate": {
+      "name": "ProductMatchCandidate",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "productAId": {
+          "name": "productAId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "productBId": {
+          "name": "productBId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceUrls": {
+          "name": "sourceUrls",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "ARRAY[]::text[]"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ProductMatchCandidate_pair_key": {
+          "name": "ProductMatchCandidate_pair_key",
+          "columns": [
+            {
+              "expression": "productAId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "productBId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductMatchCandidate_productB_idx": {
+          "name": "ProductMatchCandidate_productB_idx",
+          "columns": [
+            {
+              "expression": "productBId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ProductMatchCandidate_productAId_Product_id_fk": {
+          "name": "ProductMatchCandidate_productAId_Product_id_fk",
+          "tableFrom": "ProductMatchCandidate",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productAId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ProductMatchCandidate_productBId_Product_id_fk": {
+          "name": "ProductMatchCandidate_productBId_Product_id_fk",
+          "tableFrom": "ProductMatchCandidate",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productBId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ProductMatchCandidate_canonical_pair_check": {
+          "name": "ProductMatchCandidate_canonical_pair_check",
+          "value": "\"ProductMatchCandidate\".\"productAId\" < \"ProductMatchCandidate\".\"productBId\""
+        },
+        "ProductMatchCandidate_source_check": {
+          "name": "ProductMatchCandidate_source_check",
+          "value": "\"ProductMatchCandidate\".\"source\" IN ('agent', 'detector')"
+        },
+        "ProductMatchCandidate_state_check": {
+          "name": "ProductMatchCandidate_state_check",
+          "value": "\"ProductMatchCandidate\".\"state\" IN ('open', 'dismissed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity": {
+          "name": "entity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recordId": {
+          "name": "recordId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field": {
+          "name": "field",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "financeReviewFingerprint": {
+          "name": "financeReviewFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evaluationId": {
+          "name": "evaluationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provenance": {
+          "name": "provenance",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acceptanceReceipt": {
+          "name": "acceptanceReceipt",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supersessionReceipt": {
+          "name": "supersessionReceipt",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currentValue": {
+          "name": "currentValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggestedValue": {
+          "name": "suggestedValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runnerUpValue": {
+          "name": "runnerUpValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runnerUpConfidence": {
+          "name": "runnerUpConfidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pairKey": {
+          "name": "pairKey",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "correctValue": {
+          "name": "correctValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "Suggestion_run_status_idx": {
+          "name": "Suggestion_run_status_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_evaluation_idx": {
+          "name": "Suggestion_evaluation_idx",
+          "columns": [
+            {
+              "expression": "evaluationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_entity_field_status_idx": {
+          "name": "Suggestion_entity_field_status_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "field",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_entity_record_status_idx": {
+          "name": "Suggestion_entity_record_status_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recordId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Suggestion_runId_Run_id_fk": {
+          "name": "Suggestion_runId_Run_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "Suggestion_evaluationId_AiEvaluation_id_fk": {
+          "name": "Suggestion_evaluationId_AiEvaluation_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "AiEvaluation",
+          "columnsFrom": [
+            "evaluationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "Suggestion_kind_check": {
+          "name": "Suggestion_kind_check",
+          "value": "\"Suggestion\".\"kind\" IN ('correction', 'addition')"
+        },
+        "Suggestion_status_check": {
+          "name": "Suggestion_status_check",
+          "value": "\"Suggestion\".\"status\" IN ('pending', 'applied', 'rejected', 'superseded')"
+        },
+        "Suggestion_confidence_check": {
+          "name": "Suggestion_confidence_check",
+          "value": "\"Suggestion\".\"confidence\" BETWEEN 0 AND 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.SuggestionDismissal": {
+      "name": "SuggestionDismissal",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suggestionKind": {
+          "name": "suggestionKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "candidateKey": {
+          "name": "candidateKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "SuggestionDismissal_active_key": {
+          "name": "SuggestionDismissal_active_key",
+          "columns": [
+            {
+              "expression": "entityKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "suggestionKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "candidateKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"SuggestionDismissal\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SuggestionDismissal_source_idx": {
+          "name": "SuggestionDismissal_source_idx",
+          "columns": [
+            {
+              "expression": "entityKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "SuggestionDismissal_entity_fk": {
+          "name": "SuggestionDismissal_entity_fk",
+          "tableFrom": "SuggestionDismissal",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.account": {
       "name": "account",
       "schema": "",
@@ -11710,9 +12761,13 @@
           "name": "InventoryEntry_placement_check",
           "value": "\"InventoryEntry\".\"placement\" IN ('stock', 'installed')"
         },
+        "InventoryEntry_ownershipMode_check": {
+          "name": "InventoryEntry_ownershipMode_check",
+          "value": "\"InventoryEntry\".\"ownershipMode\" IN ('inherit', 'explicit')"
+        },
         "InventoryEntry_ownership_valid": {
           "name": "InventoryEntry_ownership_valid",
-          "value": "(\"InventoryEntry\".\"ownershipMode\" = 'person' AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NOT NULL) OR (\"InventoryEntry\".\"ownershipMode\" IN ('inherit', 'unassigned') AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NULL)"
+          "value": "\"InventoryEntry\".\"ownershipMode\" = 'explicit' OR \"InventoryEntry\".\"ownerLedgerPartyId\" IS NULL"
         }
       },
       "isRLSEnabled": false

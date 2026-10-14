@@ -217,8 +217,24 @@ describe("product match queue", () => {
   });
 
   it("merges a match and leads the survivor's covers with the household's own photo", async () => {
-    const photo = await photoProduct("Denim jacket");
-    const bought = await purchasedProduct("Denim jacket, washed");
+    const owner = await member("Synthetic merge stock owner");
+    const photo = await photoProduct("Denim jacket", { owner });
+    const bought = await purchasedProduct("Denim jacket, washed", { owner });
+    const [photoStock] = await getDb(ctx.db)
+      .select()
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.productId, photo.entityId));
+    if (!photoStock) throw new Error("Synthetic photo stock missing");
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: bought.entityId,
+        locationId: photoStock.locationId,
+        amount: { value: 3, unit: "each" },
+        ownershipMode: "inherit",
+      },
+      ctx.actor,
+    );
     const [catalog, label, own] = await Promise.all([
       createImageFixture(ctx.db, "catalog", { source: "catalog" }),
       createImageFixture(ctx.db, "label", { source: "own" }),
@@ -307,11 +323,25 @@ describe("product match queue", () => {
       )?.receipt,
     ).toEqual(applied);
     const stock = await getDb(ctx.db)
-      .select({ quantity: inventoryEntry.amountValue })
+      .select({
+        quantity: inventoryEntry.amountValue,
+        mode: inventoryEntry.ownershipMode,
+        ownerId: inventoryEntry.ownerLedgerPartyId,
+      })
       .from(inventoryEntry)
       .where(eq(inventoryEntry.productId, bought.entityId));
     expect(stock.reduce((total, row) => total + (row.quantity ?? 0), 0)).toBe(
-      1,
+      4,
+    );
+    expect(stock).toEqual(
+      expect.arrayContaining([
+        {
+          quantity: 1,
+          mode: "explicit",
+          ownerId: await resolveOrThrow(ctx.db, "ledgerParty", owner),
+        },
+        { quantity: 3, mode: "inherit", ownerId: null },
+      ]),
     );
     const order = await getDb(ctx.db)
       .select({ imageId: entityAttachment.imageId })

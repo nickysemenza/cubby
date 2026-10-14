@@ -16,6 +16,7 @@ export const variantDimension = z.enum(["color", "size", "pack"]);
 export const variantSourceSide = z.object({
   id: productId,
   name: z.string(),
+  verifiedModel: z.string().nullable().default(null),
   sources: z.array(
     z.object({
       id: z.uuid(),
@@ -307,16 +308,36 @@ export async function readVariantVerification(
     .sort();
   const oldDimensions = new Set<z.infer<typeof variantDimension>>();
   let unknownPriorConflict = false;
+  let priorModelConflict = false;
   for (const row of previous) {
     const grounded = groundedVariantEvidence.safeParse(
       row.signals?.variantEvidence,
     );
+    let knownVariantConflict = false;
     if (grounded.success)
       for (const dimension of grounded.data.dimensions) {
-        if (dimension.relation === "different")
+        if (dimension.relation === "different") {
           oldDimensions.add(dimension.dimension);
+          knownVariantConflict = true;
+        }
       }
-    else if (row.conflict) unknownPriorConflict = true;
+    const models = z
+      .object({
+        snapshots: z.tuple([
+          z.object({ verifiedModel: z.string().nullable() }),
+          z.object({ verifiedModel: z.string().nullable() }),
+        ]),
+      })
+      .safeParse(row.signals);
+    const knownModelConflict =
+      models.success &&
+      models.data.snapshots[0].verifiedModel !== null &&
+      models.data.snapshots[1].verifiedModel !== null &&
+      models.data.snapshots[0].verifiedModel !==
+        models.data.snapshots[1].verifiedModel;
+    if (row.conflict && knownModelConflict) priorModelConflict = true;
+    if (row.conflict && !knownVariantConflict && !knownModelConflict)
+      unknownPriorConflict = true;
   }
   let current = await currentEvidence(proposed);
   if (!current)
@@ -324,19 +345,29 @@ export async function readVariantVerification(
       current = await currentEvidence(row.signals?.variantEvidence);
       if (current) break;
     }
+  const modelValuesAgree =
+    sides[0].verifiedModel !== null &&
+    sides[1].verifiedModel !== null &&
+    sides[0].verifiedModel === sides[1].verifiedModel;
+  const modelConflict =
+    sides[0].verifiedModel !== null &&
+    sides[1].verifiedModel !== null &&
+    sides[0].verifiedModel !== sides[1].verifiedModel;
   const conflict =
-    current?.dimensions.some((row) => row.relation === "different") ?? false;
+    modelConflict ||
+    (current?.dimensions.some((row) => row.relation === "different") ?? false);
   const required = unknownPriorConflict
     ? variantDimension.options
     : [...oldDimensions];
   const pending =
     !conflict &&
-    required.some(
-      (dimension) =>
-        !current?.dimensions.some(
-          (row) => row.dimension === dimension && row.relation === "same",
-        ),
-    );
+    ((priorModelConflict && !modelValuesAgree) ||
+      required.some(
+        (dimension) =>
+          !current?.dimensions.some(
+            (row) => row.dimension === dimension && row.relation === "same",
+          ),
+      ));
   return {
     conflict,
     priorConflictIds,

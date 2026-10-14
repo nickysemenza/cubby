@@ -670,6 +670,88 @@ describe("stored Product identity pairs", () => {
       )[0]?.subject,
     ).toEqual(historical!.subject);
   });
+  it("keeps model conflict history pending until current Source-bound model values agree", async () => {
+    const { products, ids, runId, decisionPort } = await boundVariantPair([
+      "Synthetic model item A",
+      "Synthetic model item B",
+    ]);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(entitySource)
+      .where(eq(entitySource.entityId, ids[1]!));
+    const source = rows.find((row) => row.fieldPath === "model")!;
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "SYNTH-OTHER" })
+      .where(eq(product.id, ids[1]!));
+    await getDb(ctx.db)
+      .update(entitySource)
+      .set({
+        quote: "SYNTH-OTHER",
+        valueFingerprint: await sha256Hex(canonicalJson("SYNTH-OTHER")),
+      })
+      .where(eq(entitySource.id, source.id));
+    const conflict = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
+      decisionPort,
+    });
+    expect(conflict.pairs[0]).toMatchObject({ conflict: true });
+    await publishProductIdentity(ctx.db, conflict);
+    await getDb(ctx.db)
+      .delete(entitySource)
+      .where(eq(entitySource.id, source.id));
+    const outagePort = async () => {
+      throw new Error("Synthetic model outage");
+    };
+    const missing = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
+      decisionPort: outagePort,
+    });
+    expect(missing.pairs[0]).toMatchObject({
+      conflict: false,
+      signals: { verification: "pending_verification" },
+    });
+    await publishProductIdentity(ctx.db, missing);
+    const blocked = (await getProductMatchQueue(ctx.db, {})).items[0]!;
+    await expect(
+      mergeReviewedProductPair(kernelCtx(ctx), {
+        keepId: products[0]!.id,
+        mergeId: products[1]!.id,
+        assessmentId: blocked.assessmentId,
+        expectedFingerprint: blocked.fingerprint!,
+      }),
+    ).rejects.toThrow(/verification/);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "SYNTH-STYLE" })
+      .where(eq(product.id, ids[1]!));
+    await getDb(ctx.db)
+      .insert(entitySource)
+      .values({
+        entityId: ids[1]!,
+        entityKind: "product",
+        fieldPath: "model",
+        quote: "SYNTH-STYLE",
+        valueFingerprint: await sha256Hex(canonicalJson("SYNTH-STYLE")),
+        url: "https://catalog.example.test/current-model",
+        userId: ctx.actor.userId,
+        channel: "web",
+      });
+    const cleared = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
+      decisionPort: outagePort,
+    });
+    expect(cleared.pairs[0]).toMatchObject({ conflict: false });
+    expect(
+      z.object({ verification: z.string() }).parse(cleared.pairs[0]!.signals)
+        .verification,
+    ).not.toBe("pending_verification");
+    await publishProductIdentity(ctx.db, cleared);
+    const ready = (await getProductMatchQueue(ctx.db, {})).items[0]!;
+    await mergeReviewedProductPair(kernelCtx(ctx), {
+      keepId: products[0]!.id,
+      mergeId: products[1]!.id,
+      assessmentId: ready.assessmentId,
+      expectedFingerprint: ready.fingerprint!,
+    });
+  });
   it("refuses a completed prior-rule admission with unchanged evidence", async () => {
     const { products, ids, runId, decisionPort } = await boundVariantPair(
       [
