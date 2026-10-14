@@ -39,6 +39,13 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 export const EXECUTION_AUTHORIZATION_RECEIPT_KIND = "execution_authorization";
 
 type Clock = { now?: Date };
+
+export class ExecutionBudgetError extends Error {
+  constructor(readonly minimumBudgetMicroUSD: number) {
+    super("Paid research allowance refused: budget_exhausted.");
+    this.name = "ExecutionBudgetError";
+  }
+}
 type ReservationDecision =
   | { status: "reserved" }
   | {
@@ -327,6 +334,29 @@ export async function issueExecutionAuthorization(
       input,
       endedAt: now,
     });
+    await (
+      await import("~/server/repo/database-helpers/core")
+    ).runAfterCommit(
+      (await import("~/server/repo/database-helpers")).databaseForTransaction(
+        tx,
+      ),
+      async () => {
+        const { getAiGatewayEgress } = await import("~/server/cf-env");
+        const { CUBBY_AI_GATEWAY_ID } =
+          await import("@cubby/shared/ai/gateway-metadata");
+        try {
+          await getAiGatewayEgress(
+            CUBBY_AI_GATEWAY_ID,
+          )?.scheduleAiWorkRecovery();
+        } catch (error) {
+          (await import("@cubby/worker-tracing"))
+            .createLogger("ai-work")
+            .warn("Execution approval saved; recovery wake deferred", {
+              error,
+            });
+        }
+      },
+    );
     return executionAuthorizationRef.parse({
       runId: root.id,
       approvalFingerprint: await snapshotFingerprint(input),
@@ -337,14 +367,37 @@ export async function issueExecutionAuthorization(
 export async function assertExecutionAuthorization(
   db: Database,
   rawInput: ExecutionAuthorizationRequest,
-  clock: Clock = {},
+  clock: Clock & { minimumBudgetMicroUSD?: number } = {},
 ): Promise<ExecutionAuthorizationInput> {
   const input = executionAuthorizationRequest.parse(rawInput);
   return authorized(
     db,
     input,
     instant(clock),
-    async (_tx, approval) => approval,
+    async (_tx, approval, receipts) => {
+      if (clock.minimumBudgetMicroUSD !== undefined) {
+        const bucket = periodKey(approval, instant(clock));
+        const reserved = receipts.reduce(
+          (total, receipt) =>
+            total +
+            (receipt.kind === "metered_reservation" &&
+            receipt.periodKey === bucket
+              ? receipt.reservedMicroUSD
+              : 0),
+          0,
+        );
+        if (!Number.isSafeInteger(reserved))
+          throw new Error(
+            "Execution authorization receipt total exceeds safe integer accounting.",
+          );
+        if (
+          clock.minimumBudgetMicroUSD >
+          approval.meteredBudget.limitMicroUSD - reserved
+        )
+          throw new ExecutionBudgetError(clock.minimumBudgetMicroUSD);
+      }
+      return approval;
+    },
   );
 }
 

@@ -11,7 +11,11 @@ import {
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionStatus,
+  financialTransactionKind,
+  financialTransactionFiltersSchema,
+} from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { normalizeSorts } from "@cubby/schemas/pagination";
@@ -50,6 +54,7 @@ import {
   run as runTable,
   suggestion as suggestionTable,
 } from "~/server/db/schema";
+import { obsoleteExecutionFindingSql } from "~/server/purchase-import/run-retirement";
 import { activityAttentionStatePredicate } from "~/server/repo/activity";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
@@ -60,6 +65,11 @@ import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
 import { buildProductWhere } from "~/server/repo/product/crud";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
+import {
+  awaitingPostingSql,
+  purchasePostingStartSql,
+  transactionPostingStartSql,
+} from "~/server/repo/settlement-grace";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
@@ -223,6 +233,34 @@ async function workQueueProjection(
     WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${reviewableSuggestionSql}
     GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
 
+  // The declared unsettled view owns missing payment evidence. Receipt
+  // research remains independent; settlement authority includes every tender.
+  if (
+    admits("purchase", true) &&
+    (!scope.check || scope.check.includes("settlement_reference"))
+  ) {
+    const deferred = awaitingPostingSql(purchasePostingStartSql('"Purchase"'));
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "purchase",
+        table: sql`${purchase}`,
+        id: sql`"Purchase".shortcode`,
+        name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
+        owners: workPurchaseOwners(sql`"Purchase".id`),
+        where: sql`(${await buildPurchaseWhereClause(db, purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
+        AND NOT (${gapCondition("purchase", "settlement_mismatch")})`,
+        details: {
+          source: "reconciliation",
+          kind: sql`CASE WHEN ${deferred} THEN ${workQueueKindSchema.enum.awaiting_posting} ELSE ${workQueueKindSchema.enum.repair} END`,
+          reason: "No settlement evidence",
+          nextAction: sql`CASE WHEN ${deferred} THEN 'Wait through two complete business days for settlement evidence.' ELSE 'Investigate missing settlement against source coverage; do not infer a missing charge.' END`,
+        },
+        key: "reconciliation:purchase-unsettled",
+        carriesGaps: true,
+      }),
+    );
+  }
+
   for (const definition of problemQueryDeclarations()) {
     const source = definition.source;
     if (
@@ -240,6 +278,18 @@ async function workQueueProjection(
       nextAction: definition.description,
     } satisfies Candidate;
     const filters = compileProblemFilters(source.entity, source.filters);
+    const deferred =
+      definition.key === "purchaseFinancialSettlementMismatches"
+        ? awaitingPostingSql(purchasePostingStartSql('"Purchase"'))
+        : null;
+    const settlementDetails = deferred
+      ? {
+          ...details,
+          kind: sql`CASE WHEN ${deferred} THEN ${workQueueKindSchema.enum.awaiting_posting} ELSE ${details.kind} END`,
+          reason: sql`CASE WHEN ${deferred} THEN 'Awaiting posting; recorded settlement amounts differ.' ELSE ${details.reason} END`,
+          nextAction: sql`CASE WHEN ${deferred} THEN 'Wait two business days for remaining posting evidence.' ELSE ${details.nextAction} END`,
+        }
+      : details;
     if (source.entity === "purchase")
       selections.push(
         ...workQueueCandidate(scope, {
@@ -252,7 +302,7 @@ async function workQueueProjection(
             db,
             purchaseFiltersSchema.parse(filters),
           ),
-          details,
+          details: settlementDetails,
           key: definition.key,
         }),
       );
@@ -268,7 +318,7 @@ async function workQueueProjection(
             db,
             expenseFiltersSchema.parse(filters),
           ),
-          details,
+          details: settlementDetails,
           key: definition.key,
         }),
       );
@@ -284,7 +334,7 @@ async function workQueueProjection(
             db,
             financialTransactionFiltersSchema.parse(filters),
           ),
-          details,
+          details: settlementDetails,
           key: definition.key,
         }),
       );
@@ -306,6 +356,31 @@ async function workQueueProjection(
       key: "account:provisional",
     }),
   );
+
+  if (admits("financialTransaction")) {
+    const deferred = awaitingPostingSql(
+      transactionPostingStartSql('"FinancialTransaction"'),
+    );
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "financialTransaction",
+        table: sql`${financialTransaction}`,
+        id: sql`"FinancialTransaction".shortcode`,
+        name: sql`coalesce("FinancialTransaction".merchant, "FinancialTransaction"."rawDescription", 'Account transfer')`,
+        owners: sql`ARRAY(SELECT account."ledgerPartyId" FROM "FinancialAccount" account WHERE account.id = "FinancialTransaction"."accountId" AND account."deletedAt" IS NULL)`,
+        where: sql`"FinancialTransaction"."deletedAt" IS NULL AND "FinancialTransaction".status <> ${financialTransactionStatus.enum.void}
+        AND "FinancialTransaction".kind = ${financialTransactionKind.enum.account_transfer} AND "FinancialTransaction"."ledgerTransferId" IS NULL
+        AND NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation WHERE allocation."transactionId" = "FinancialTransaction".id AND allocation."deletedAt" IS NULL)`,
+        details: {
+          source: "reconciliation",
+          kind: sql`CASE WHEN ${deferred} THEN ${workQueueKindSchema.enum.awaiting_posting} ELSE ${workQueueKindSchema.enum.repair} END`,
+          reason: sql`CASE WHEN ${deferred} THEN 'Awaiting posting of transfer evidence.' ELSE 'Account transfer has no confirmed transfer evidence.' END`,
+          nextAction: sql`CASE WHEN ${deferred} THEN 'Wait two business days for the counterpart to post.' ELSE 'Review transfer pairing candidates and confirm the transfer from evidence.' END`,
+        },
+        key: "reconciliation:transfer",
+      }),
+    );
+  }
 
   // Findings retain their owning member fence. Expired findings are omitted without dismissing them on a read.
   // The typed product-relink intent needs original item evidence; financial corrections retain combined authority.
@@ -343,7 +418,7 @@ async function workQueueProjection(
     FROM "RunFinding" finding
     JOIN "Entity" identity ON identity.id = finding."entityId" AND identity.kind = finding."entityKind" AND identity."deletedAt" IS NULL
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
-    WHERE finding.status = ${openFindingStatus} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())${findingRecord}
+    WHERE finding.status = ${openFindingStatus} AND NOT ${obsoleteExecutionFindingSql("finding")} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())${findingRecord}
   `);
   selections.push(
     ...workQueueCandidate(scope, {

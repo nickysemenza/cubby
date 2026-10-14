@@ -13,7 +13,6 @@ import { providerFor } from "@cubby/shared/ai/models";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
-  MAX_EXTERNAL_IMAGE_BYTES,
 } from "@cubby/shared/external-fetch";
 import { TIER1_NUTRIENTS } from "@cubby/usda";
 
@@ -21,6 +20,7 @@ import { transformedImageUrl } from "~/lib/image-url";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/image-processing/cloud-limits";
 import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/image-processing/description-policy";
 import {
   recordImageDescriptionInput,
@@ -57,6 +57,7 @@ const RENDITION_ERROR_BODY_CHARS = 500;
 export async function fetchAnalysisRendition(
   url: string,
   fetcher?: typeof fetch,
+  maxBytes = MAX_DESCRIPTION_RENDITION_BYTES,
 ): Promise<Uint8Array> {
   const response = await fetchExternalResponse(url, { fetcher });
   if (!response.ok) {
@@ -66,7 +67,7 @@ export async function fetchAnalysisRendition(
         (body ? `: ${body.slice(0, RENDITION_ERROR_BODY_CHARS)}` : ""),
     );
   }
-  return await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+  return await readResponseWithLimit(response, maxBytes);
 }
 
 /**

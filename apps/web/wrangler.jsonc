@@ -215,13 +215,13 @@
   // page's "Awaiting work" card, where "Settle now" republishes it.
   // Create once before first deploy:
   //   wrangler queues create cubby-background
+  //   wrangler queues create cubby-image-cloud
   //   wrangler queues create cubby-telemetry
   //
-  // Two queues, not one: consumer settings below are per-queue and the two
-  // workloads want opposite values (background trades batching for latency,
-  // telemetry the reverse). `max_batch_timeout` is applied before the consumer
-  // runs, so a merged queue could not recover it in-handler, and one FIFO
-  // backlog would let a telemetry burst delay user-visible work.
+  // Separate queues own separate concurrency budgets. Background and cloud
+  // photos favor immediate delivery; telemetry batches inserts. The cloud
+  // handoff releases shared slots before download/model work, so photos cannot
+  // occupy both shared consumers while other freshness work waits.
   //
   // No dead-letter queues, deliberately: a message that exhausted its retries
   // carries no information the source rows do not already hold, and every
@@ -229,6 +229,7 @@
   "queues": {
     "producers": [
       { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
+      { "binding": "IMAGE_CLOUD_QUEUE", "queue": "cubby-image-cloud" },
       { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" },
       {
         "binding": "PURCHASE_AGENT_QUEUE",
@@ -236,6 +237,16 @@
       }
     ],
     "consumers": [
+      {
+        "queue": "cubby-image-cloud",
+        // The shared consumer only awaits publication. Claim/download/model work
+        // starts here: one image per invocation and at most four DB clients,
+        // alongside the shared queue's two. The Gateway bounds paid starts too.
+        "max_batch_size": 1,
+        "max_batch_timeout": 0,
+        "max_concurrency": 4,
+        "max_retries": 3
+      },
       {
         "queue": "cubby-background",
         // One task per invocation bounds isolate memory. A ten-task batch

@@ -85,6 +85,30 @@ function readErrorNode<TError>(error: TError) {
   }
 }
 
+const childErrors = (node: z.infer<typeof errorNodeSchema>): unknown[] => [
+  ...(node.cause === undefined ? [] : [node.cause]),
+  ...(node.originalError === undefined ? [] : [node.originalError]),
+  ...(node.errors?.slice(0, 8) ?? []),
+];
+
+/** Preserve typed control errors through provider wrappers and bounded aggregate causes. */
+export function findErrorCause<TError, T>(
+  error: TError,
+  matches: (value: unknown) => value is T,
+): T | undefined {
+  const seen = new Set<unknown>();
+  const pending: unknown[] = [error];
+  while (pending.length && seen.size < 24) {
+    const current = pending.shift();
+    if (seen.has(current)) continue;
+    seen.add(current);
+    if (matches(current)) return current;
+    const parsed = readErrorNode(current);
+    if (parsed.success) pending.push(...childErrors(parsed.data));
+  }
+  return undefined;
+}
+
 export function describeErrorCauses<TError>(
   error: TError,
   options: { includeStacks?: boolean } = {},
@@ -116,12 +140,8 @@ export function describeErrorCauses<TError>(
     if (node.message || node.code)
       result.causes.push(errorCause(node, options.includeStacks ?? false));
     if ((node.message?.length ?? 0) > 2000) result.truncated = true;
-    if (node.cause !== undefined) pending.push(node.cause);
-    if (node.originalError !== undefined) pending.push(node.originalError);
-    if (node.errors) {
-      pending.push(...node.errors.slice(0, 8));
-      if (node.errors.length > 8) result.truncated = true;
-    }
+    pending.push(...childErrors(node));
+    if ((node.errors?.length ?? 0) > 8) result.truncated = true;
   }
   if (pending.length) result.truncated = true;
   return result;

@@ -1,11 +1,14 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import type { MailDiscoveryRunProgress } from "@cubby/schemas/run-fields";
-import { and, eq, inArray, lt, ne, sql } from "drizzle-orm";
+import { runStatus } from "@cubby/schemas/run-fields";
+import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
+import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -23,9 +26,6 @@ import {
   productionWorkflowLauncher,
   type WorkflowLauncher,
 } from "./launcher";
-
-/** Progress a new attempt resets, in its purpose's own shape. */
-export type RunProgressPatch = Partial<MailDiscoveryRunProgress>;
 
 /**
  * A failure as the Run keeps it: a one-line headline (HTTP status, error
@@ -92,15 +92,14 @@ export async function launchWorkflowRun(
   input: {
     runId: RunId;
     purpose: WorkflowRunPurpose;
-    /** Purpose-specific progress to reset for the new attempt. */
-    progressPatch?: RunProgressPatch;
     /** Recovery cannot undo cancellation or reopen a completed Run. */
     automatic?: boolean;
+    /** A bounded instance hands off only while it still owns this attempt. */
+    expectedAttempt?: number;
   },
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<{ attempt: number; instanceId: string }> {
   const database = getDb(db);
-  const patch = JSON.stringify(input.progressPatch ?? {});
   const [reopened] = await database
     .update(runTable)
     .set({
@@ -109,15 +108,26 @@ export async function launchWorkflowRun(
       failureCode: null,
       dispatchError: null,
       routine: false,
-      progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${patch}::jsonb || jsonb_build_object('attempt', ${attemptOf} + 1)`,
+      progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${attemptOf} + 1, 'automaticRecoveryFailures', ${input.automatic || input.expectedAttempt !== undefined ? sql`CASE WHEN ${runTable.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) + 1 ELSE coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) END` : 0}::int)`,
     })
     .where(
       and(
         eq(runTable.id, input.runId),
-        sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`,
+        input.expectedAttempt === undefined
+          ? sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`
+          : and(
+              eq(runTable.status, "running"),
+              attemptIs(input.expectedAttempt),
+            ),
         input.automatic
           ? and(
-              ne(runTable.status, "completed"),
+              inArray(runTable.status, [
+                "running",
+                "failed",
+                "dispatch_failed",
+                "paused_auth",
+              ]),
+              sql`(${runTable.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
               sql`${runTable.failureCode} IS DISTINCT FROM 'user_cancelled'`,
             )
           : undefined,
@@ -139,6 +149,13 @@ export async function launchWorkflowRun(
     { attempt: reopened.attempt, sequence: 0 },
   );
   try {
+    if (
+      input.purpose === "mail_reclassify" ||
+      input.purpose === "suggestion_sweep"
+    )
+      await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
+        input.runId,
+      );
     await launcher.create(input.purpose, instanceId, {
       runId: input.runId,
       attempt: reopened.attempt,

@@ -89,10 +89,13 @@ export function SuggestionSweepAction({
       className="flex min-w-0 items-center gap-2"
       aria-label="Suggestion sweep"
     >
-      {start.isPending || current?.status === "running" ? (
+      {start.isPending ||
+      current?.status === "running" ||
+      current?.status === "paused" ? (
         <>
           <output className="text-xs text-muted-foreground">
-            Suggesting {progress?.done ?? 0}/{progress?.total ?? 0}
+            {current?.paused ? "Paused" : "Suggesting"} {progress?.done ?? 0}/
+            {progress?.total ?? 0}
           </output>
           {current?.latestRunId && (
             <Button

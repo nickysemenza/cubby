@@ -1,4 +1,8 @@
-import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
+import {
+  TEST_HOME_ID,
+  TEST_HOME_SHORTCODE,
+  withTestDb,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,11 +10,31 @@ import {
   makeLocationInput,
 } from "~/server/repo/repo.fixtures";
 import { refreshSearchDocument } from "~/server/repo/search-document";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { findSearchHits } from "./search.service";
 
-describe("location search paths", () => {
+describe("search labels and location paths", () => {
   const ctx = withTestDb();
+
+  // Current garden notes must not fall through a retired observation/move label.
+  it("indexes a garden note with its declared kind label", async () => {
+    const entry = await insertWithShortcode(ctx.db, "gardenEntry", {
+      kind: "note",
+      observedOn: "2026-10-06",
+      locationId: TEST_HOME_ID,
+      notes: "Synthetic garden journal",
+    });
+    await refreshSearchDocument(ctx.db, "gardenEntry", entry.id);
+    const hits = await findSearchHits(ctx.db, {
+      query: "Synthetic garden journal",
+      entityKinds: ["gardenEntry"],
+      limit: 10,
+    });
+    expect(hits.find((item) => item.id === entry.shortcode)?.title).toBe(
+      "Note · 2026-10-06 · Home",
+    );
+  });
 
   it("returns root-first structured ancestors for a typed location hit", async () => {
     const parent = await createLocationFixture(

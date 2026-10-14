@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   executionAuthorizationRef,
   executionAuthorizationInput,
@@ -8,10 +10,34 @@ import {
   type ExecutionAuthorizationInput,
 } from "@cubby/schemas/execution-authorization";
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { RunInput } from "@cubby/schemas/run-fields";
+import {
+  runPurpose,
+  runStatus,
+  mailReclassifyRunInput,
+  type RunInput,
+} from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
+
+const boundAuthorization = new AsyncLocalStorage<{
+  runId: RunId;
+  ref: ExecutionAuthorizationRef;
+  evaluation?: { id: string; token: string };
+}>();
+/** One evaluation may rebind authority without mutating its frozen Run input. */
+export const withRunExecutionAuthorization = <T>(
+  runId: RunId,
+  ref: ExecutionAuthorizationRef,
+  work: () => Promise<T>,
+  evaluation?: { id: string; token: string },
+) => boundAuthorization.run({ runId, ref, evaluation }, work);
+
+/** The workload boundary receives the same scoped attempt fence as the metered transport. */
+export const currentRunEvaluation = (runId: RunId) => {
+  const bound = boundAuthorization.getStore();
+  return bound?.runId === runId ? bound.evaluation : undefined;
+};
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
@@ -23,6 +49,7 @@ import {
 } from "~/server/db/schema";
 import {
   unwrapDb,
+  isTransaction,
   notDeleted,
   databaseForTransaction,
 } from "~/server/repo/database-helpers";
@@ -48,12 +75,18 @@ export async function pauseExecutionRun(
   db: Database,
   runId: RunId,
   message: string,
+  options: { reason?: "budget_exhausted" } = {},
 ): Promise<void> {
+  const recoverable =
+    options.reason === "budget_exhausted"
+      ? sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep})`
+      : sql`false`;
   await unwrapDb(db)
     .update(run)
     .set({
-      status: "needs_review",
-      endedAt: new Date(),
+      // Budget refusal must survive a stop before the driver catches its typed error.
+      status: sql`CASE WHEN ${recoverable} THEN ${runStatus.enum.paused_auth} ELSE ${runStatus.enum.needs_review} END`,
+      endedAt: sql`CASE WHEN ${recoverable} THEN NULL ELSE ${new Date().toISOString()}::timestamp END`,
       failureCode: "execution_limit",
       dispatchError: message,
     })
@@ -183,6 +216,7 @@ export async function latestExecutionAuthorization(
   owner: ExecutionAuthorizationOwner,
   mailboxId: string,
   scopeKind: ExecutionAuthorizationInput["scope"]["kind"],
+  minimumBudgetMicroUSD?: number,
 ): Promise<ExecutionAuthorizationRef | undefined> {
   const [root] = await unwrapDb(db)
     .select()
@@ -193,9 +227,9 @@ export async function latestExecutionAuthorization(
         eq(run.ledgerPartyId, owner.ledgerPartyId),
         // includes-deleted: the newest revoked, deleted or invalid approval
         // must block its own scope instead of reviving an older allowance.
-        sql`${run.input}->>'kind' = 'execution_authorization'`,
+        sql`${run.input}->>${"kind"} = 'execution_authorization'`,
         sql`${run.input}->'scope'->>'mailboxId' = ${mailboxId}`,
-        sql`${run.input}->'scope'->>'kind' = ${scopeKind}`,
+        sql`${run.input}->'scope'->>${"kind"} = ${scopeKind}`,
       ),
     )
     .orderBy(desc(run.createdAt), desc(run.id))
@@ -210,11 +244,15 @@ export async function latestExecutionAuthorization(
     runId: root.id,
     approvalFingerprint: await sha256Hex(JSON.stringify(parsed.data)),
   };
-  await assertExecutionAuthorization(db, {
-    ref,
-    owner,
-    requestedScope: { mailboxId, discovery: parsed.data.scope.discovery },
-  });
+  await assertExecutionAuthorization(
+    db,
+    {
+      ref,
+      owner,
+      requestedScope: { mailboxId, discovery: parsed.data.scope.discovery },
+    },
+    { minimumBudgetMicroUSD },
+  );
   return ref;
 }
 
@@ -231,9 +269,19 @@ export async function executionRequestForRun(
     .limit(1);
   if (!scope || scope.retiredAt)
     throw new Error("Execution authorization Run is no longer available.");
-  if (options.requireRunning && scope.status !== "running")
+  const bound = boundAuthorization.getStore();
+  const sharedExecutable =
+    bound?.runId === runId &&
+    bound.evaluation &&
+    (await (
+      await import("~/server/repo/ai-evaluation-requests")
+    ).evaluationIsExecutable(db, bound.evaluation, runId));
+  if (options.requireRunning && scope.status !== "running" && !sharedExecutable)
     throw new Error("Execution authorization Run is no longer executable.");
-  const ref = executionAuthorizationFromInput(scope.input);
+  const ref =
+    bound?.runId === runId
+      ? bound.ref
+      : executionAuthorizationFromInput(scope.input);
   if (!ref) return undefined;
   if (!scope.ledgerPartyId)
     throw new Error("Execution authorization Run has no member owner.");
@@ -301,7 +349,11 @@ export async function inheritExecutionAuthorization(
   for (const id of [lineage.predecessorRunId, lineage.parentRunId]) {
     if (!id) continue;
     const [source] = await unwrapDb(db)
-      .select({ input: run.input })
+      .select({
+        input: run.input,
+        actorUserId: run.actorUserId,
+        ledgerPartyId: run.ledgerPartyId,
+      })
       .from(run)
       .where(and(eq(run.id, id), notDeleted(run)))
       .limit(1);
@@ -311,10 +363,38 @@ export async function inheritExecutionAuthorization(
       authorization &&
       (authorization.runId !== inherited.runId ||
         authorization.approvalFingerprint !== inherited.approvalFingerprint)
-    )
-      throw new Error(
-        "Research lineage cannot change its execution authorization.",
+    ) {
+      // Manual continuation follows current authority; import lineage cannot mint a replacement allowance.
+      const manual = mailReclassifyRunInput.safeParse(input);
+      if (
+        !manual.success ||
+        manual.data.mode !== "relevance" ||
+        !source?.ledgerPartyId
+      )
+        throw new Error(
+          "Research lineage cannot change its execution authorization.",
+        );
+      const [root] = await unwrapDb(db)
+        .select({ input: run.input })
+        .from(run)
+        .where(eq(run.id, authorization.runId));
+      const approval = executionAuthorizationInput.parse(root?.input);
+      await assertExecutionAuthorization(
+        isTransaction(db) ? databaseForTransaction(db) : db,
+        {
+          ref: authorization,
+          owner: {
+            userId: source.actorUserId,
+            ledgerPartyId: source.ledgerPartyId,
+          },
+          requestedScope: {
+            mailboxId: manual.data.mailboxId,
+            discovery: approval.scope.discovery,
+          },
+        },
       );
+      continue;
+    }
     authorization = inherited;
   }
   if (!authorization) return input;

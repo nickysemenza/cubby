@@ -15,12 +15,17 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { currentRunEvaluation } from "~/server/runs/execution-context";
 
 /** Caller options cannot elevate a missing or classification-only persisted Run. */
 export async function gmailExecutionPolicy(
   db: Database,
   runId?: string,
-  expected?: { ledgerPartyId: string; mailboxId: string },
+  expected?: {
+    ledgerPartyId: string;
+    mailboxId: string;
+    evaluation?: { id: string; token: string };
+  },
 ): Promise<EmailExecutionPolicy> {
   if (!runId) return "classification_only";
   const [current] = await getDb(db)
@@ -28,7 +33,19 @@ export async function gmailExecutionPolicy(
     .from(run)
     .where(and(eq(run.id, runEntityId.parse(runId)), notDeleted(run)))
     .limit(1);
-  if (!current || current.retiredAt || current.status !== "running")
+  const evaluation =
+    expected?.evaluation ?? (current && currentRunEvaluation(current.id));
+  const sharedExecutable =
+    current &&
+    evaluation &&
+    (await (
+      await import("~/server/repo/ai-evaluation-requests")
+    ).evaluationIsExecutable(db, evaluation, current.id));
+  if (
+    !current ||
+    current.retiredAt ||
+    (current.status !== "running" && !sharedExecutable)
+  )
     throw new Error("Gmail classification Run is no longer executable.");
   if (expected && current.ledgerPartyId !== expected.ledgerPartyId)
     throw new Error("Gmail classification Run belongs to a different member.");
@@ -48,7 +65,7 @@ export async function gmailExecutionPolicy(
     return "classification_only";
   }
   const reclassify = mailReclassifyRunInput.safeParse(current.input);
-  if (current.purpose === "background" && reclassify.success) {
+  if (isMailReclassifyRun(current) && reclassify.success) {
     if (expected && reclassify.data.mailboxId !== expected.mailboxId)
       throw new Error(
         "Gmail classification mailbox is outside its persisted Run.",

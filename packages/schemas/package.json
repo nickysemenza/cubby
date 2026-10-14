@@ -139,6 +139,7 @@
     "./run-fields": "./src/run-fields.ts",
     "./run": "./src/run.ts",
     "./work-queue": "./src/work-queue.ts",
+    "./workflow-runs": "./src/workflow-runs.ts",
     "./email": "./src/email.ts",
     "./email-fields": "./src/email-fields.ts",
     "./email-observations": "./src/email-observations.ts",

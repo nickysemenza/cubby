@@ -253,6 +253,7 @@ export async function handleBackgroundQueueBatch(
   batch: BackgroundQueueBatch,
   ports: BackgroundQueueConsumerPorts,
 ): Promise<BackgroundQueueMessageOutcome[]> {
+  const receivedAt = Date.now();
   const outcomes: (BackgroundQueueMessageOutcome | undefined)[] = Array.from({
     length: batch.messages.length,
   });
@@ -263,13 +264,23 @@ export async function handleBackgroundQueueBatch(
   for (const [index, message] of batch.messages.entries()) {
     const parsed = parseBackgroundQueueMessage(message.body);
     if ("error" in parsed) {
-      log.error("unreadable message", { error: parsed.error });
+      log.error(`unreadable message queue=${batch.queue}`, {
+        error: parsed.error,
+      });
       ports.captureException(parsed.error);
       message.retry();
       outcomes[index] = "unreadable";
       continue;
     }
     const { task } = parsed;
+    const timestamp = message.timestamp?.getTime();
+    const queueWaitMs =
+      timestamp !== undefined && Number.isFinite(timestamp)
+        ? Math.max(0, receivedAt - timestamp)
+        : "unavailable";
+    log.info(
+      `delivery queue=${batch.queue} kind=${task.kind} queue_wait_ms=${queueWaitMs}`,
+    );
     if (task.kind === "entity-embedding.refresh") {
       embeddingIndices.push(index);
       embeddingRefs.push({

@@ -12,15 +12,13 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
   ImageProcessingResult as CompanionImageProcessingResult,
 } from "@cubby/schemas/image-processing";
-import {
-  readResponseWithLimit,
-  MAX_EXTERNAL_IMAGE_BYTES,
-} from "@cubby/shared/external-fetch";
+import { readResponseWithLimit } from "@cubby/shared/external-fetch";
 import { z } from "zod";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
 import { completeCloudImageDescription } from "~/server/image-processing/cloud-description";
+import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/image-processing/cloud-limits";
 import {
   prepareCompanionImageCommand,
   reserveCompanionAnalysisOutput,
@@ -218,7 +216,10 @@ async function readVerifiedAnalysisJPEG(
     ?.split(";", 1)[0]
     ?.trim()
     .toLowerCase();
-  const bytes = await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+  const bytes = await readResponseWithLimit(
+    response,
+    MAX_DESCRIPTION_RENDITION_BYTES,
+  );
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (
     storedType !== "image/jpeg" ||

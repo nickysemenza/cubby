@@ -17,6 +17,7 @@ import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
   mailboxCoverage,
+  discoveryEmailAuditPage,
 } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
@@ -294,7 +295,11 @@ export const runContract = defineContract("run", {
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
-    input: z.object({ runId: runShortcode }),
+    input: z.object({
+      runId: runShortcode,
+      emailCursor: z.number().int().nonnegative().default(0),
+      emailLimit: z.number().int().min(1).max(200).default(50),
+    }),
     output: z.object({
       runId: runShortcode,
       purpose: runPurpose,
@@ -341,7 +346,14 @@ export const runContract = defineContract("run", {
       /** Persisted Workflow evidence; mailbox coverage may advance after this Run. */
       mailDiscovery: z
         .object({
-          scope: mailboxDiscoveryInput.omit({ executionAuthorization: true }),
+          scope: z.object({
+            mailboxId: z.string(),
+            scopedQueries: mailboxDiscoveryInput.shape.scopedQueries.nullable(),
+            executionPolicy: z
+              .enum(["classification_only", "import"])
+              .nullable(),
+          }),
+          emails: discoveryEmailAuditPage,
           checkpoint: mailboxDiscoveryProgress.nullable(),
           mailbox: z.object({
             historyId: z.string().nullable(),

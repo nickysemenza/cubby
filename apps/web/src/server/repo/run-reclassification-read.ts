@@ -2,14 +2,20 @@ import {
   mailReclassificationCheckpoint,
   mailReclassificationRead,
 } from "@cubby/schemas/email-actions";
+import { emailReclassifyResult } from "@cubby/schemas/email-actions";
 import type { ExecutionAuthorizationOwner } from "@cubby/schemas/execution-authorization";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { email, emailClassificationObservation, run } from "~/server/db/schema";
 
+import {
+  requestedAiEvaluations,
+  PENDING_AI_STATES,
+} from "./ai-evaluation-requests";
 import { getDb, notDeleted } from "./database-helpers";
 
 /** Recovery reads only retained Run evidence and identity columns, never entity quality hydration. */
@@ -34,7 +40,8 @@ export async function loadMailReclassificationRead(
       and(eq(run.shortcode, runShortcode.parse(publicId)), notDeleted(run)),
     )
     .limit(1);
-  if (row?.purpose !== "background") return null;
+  if (row?.purpose !== "background" && row?.purpose !== "mail_reclassify")
+    return null;
   const parsed = mailReclassifyRunInput.safeParse(row.input);
   if (!parsed.success || parsed.data.mode !== "relevance") return null;
   if (
@@ -83,12 +90,68 @@ export async function loadMailReclassificationRead(
   ]);
   const codes = new Map(identities.map((item) => [item.id, item.shortcode]));
   const checkpoint = mailReclassificationCheckpoint.safeParse(row.progress);
+  const items = (
+    row.purpose === "mail_reclassify"
+      ? await requestedAiEvaluations(db, row.id)
+      : []
+  ).filter(
+    (item) =>
+      !z.object({ retryEvaluationId: z.uuid() }).safeParse(item.receipt)
+        .success,
+  );
+  const continuations = await getDb(db)
+    .select({ shortcode: run.shortcode })
+    .from(run)
+    .where(
+      and(
+        eq(run.parentRunId, row.id),
+        eq(run.purpose, "mail_reclassify"),
+        eq(run.actorUserId, owner.userId),
+        eq(run.ledgerPartyId, owner.ledgerPartyId),
+        notDeleted(run),
+      ),
+    )
+    .orderBy(asc(run.createdAt), asc(run.id));
+  const durableReceipts = items.length
+    ? {
+        kind: "mail_reclassification" as const,
+        version: 1 as const,
+        complete: items.every(
+          (item) => !PENDING_AI_STATES.includes(item.state),
+        ),
+        results: items.flatMap((item) => {
+          const receipt = z
+            .object({ result: emailReclassifyResult })
+            .safeParse(item.receipt);
+          if (receipt.success) return [receipt.data.result];
+          const id = codes.get(item.target.recordId);
+          if (!id || !["failed", "obsolete", "cancelled"].includes(item.state))
+            return [];
+          return [
+            emailReclassifyResult.parse({
+              id,
+              outcome:
+                item.state === "failed"
+                  ? "failed"
+                  : item.state === "cancelled"
+                    ? "cancelled"
+                    : "changed",
+              classification: null,
+              stage: null,
+              conflict: false,
+              error: item.error,
+            }),
+          ];
+        }),
+      }
+    : null;
   return mailReclassificationRead.parse({
     selectedEmails: input.emails.map((item) => ({
       id: codes.get(item.emailId) ?? null,
       checksum: item.checksum,
     })),
-    receipts: checkpoint.success ? checkpoint.data : null,
+    receipts: durableReceipts ?? (checkpoint.success ? checkpoint.data : null),
+    continuationRuns: continuations.map((item) => item.shortcode),
     notes: row.notes,
     classificationObservations: observations.map(
       ({ emailId, createdAt, ...observation }) => ({

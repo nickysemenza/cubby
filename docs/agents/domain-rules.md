@@ -94,6 +94,12 @@ subqueries unless an `includes-deleted: <reason>` comment makes the exception
 intentional. Removal paths clean `SearchDocument` and `EntityEmbedding` in the
 same transaction and propagate dependent staleness. Declare exhaustive,
 operation-specific incoming-edge policy from `entity-incoming-edges.ts`.
+Every new entity-targeting FK needs a stable `ENTITY_EDGES` declaration and
+graph coverage or an explicit non-graph metadata classification. A non-entity
+source table also needs `ENTITY_EDGE_OWNERS`, even when excluded from the graph.
+Run both `entity-manifest-fk.unit.test.ts` and `entity-edge-owners.unit.test.ts`
+after adding an FK, including ledger child tables; the owner guard loads the
+actual graph projection and catches module-initialization failures.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
@@ -129,7 +135,9 @@ Prefix inference applies the union fallback to each input member before
 combining results, so whitespace-wrapped members cannot borrow another
 member's entity brand.
 
-Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
+Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
+instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise
+infers `text` and fails the update. An interpolated column renders **unqualified** on a
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
 use explicit table aliases and literal qualified names for that correlation.

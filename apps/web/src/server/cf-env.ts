@@ -78,6 +78,11 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
+export const getImageCloudQueue = (): BackgroundQueueProducer | undefined => {
+  // SAFETY: Wrangler generates this binding; the port narrows its sendBatch surface.
+  return cfEnv?.IMAGE_CLOUD_QUEUE as BackgroundQueueProducer | undefined;
+};
+
 /** Queue producer for the per-run purchase-import agent's events. */
 export const getPurchaseAgentQueue = ():
   | PurchaseAgentQueueProducer

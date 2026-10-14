@@ -12,6 +12,7 @@ import {
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
 import { eq } from "drizzle-orm";
+import { driveAiWork, TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -67,16 +68,33 @@ const sweepDefaults = {
   samplePair: () => false,
   wait: async () => {},
 };
-export const startSuggestionSweep = (
+export const startSuggestionSweep = async (
   db: Database,
   input: Parameters<typeof startSweep>[1],
   ports: SweepPorts,
-) => startSweep(db, input, { ...sweepDefaults, ...ports });
-export const resumeSuggestionSweep = (
+) => {
+  const options = {
+    ...sweepDefaults,
+    ...ports,
+    launcher: TEST_AI_WORK_LAUNCHER,
+  };
+  const started = await startSweep(db, input, options);
+  await driveAiWork(db, started.id, { sweep: options });
+  return started;
+};
+export const resumeSuggestionSweep = async (
   db: Database,
   runId: Parameters<typeof resumeSweep>[1],
   ports: SweepPorts,
-) => resumeSweep(db, runId, { ...sweepDefaults, ...ports });
+) => {
+  const options = {
+    ...sweepDefaults,
+    ...ports,
+    launcher: TEST_AI_WORK_LAUNCHER,
+  };
+  await resumeSweep(db, runId, options);
+  await driveAiWork(db, runId, { sweep: options });
+};
 
 export async function recordId<E extends ShortcodeEntity>(
   db: Database,

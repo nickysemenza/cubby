@@ -44,7 +44,7 @@
   "apps/web/src/server/repo/purchase.ts": 1,
   "apps/web/src/server/repo/recipe/crud.ts": 2,
   "apps/web/src/server/repo/related-view.ts": 25,
-  "apps/web/src/server/repo/search-document.ts": 41,
+  "apps/web/src/server/repo/search-document.ts": 40,
   "apps/web/src/server/repo/spending-classification-review.ts": 3,
   "apps/web/src/server/repo/task/blocking-sql.ts": 4,
   "apps/web/src/server/repo/task/summary.ts": 4,
@@ -84,6 +84,5 @@
   "apps/web/src/server/repo/product/orphan-condition.ts": 1,
   "apps/web/src/server/runs/ensure-run.ts": 2,
   "apps/web/src/server/repo/product/classification-evidence.ts": 2,
-  "apps/web/src/server/runs/execution-context.ts": 2,
   "apps/web/src/server/repo/entity-embedding-refresh.ts": 2
 }

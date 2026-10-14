@@ -99,16 +99,79 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     await this.ctx.blockConcurrencyWhile(async () => {
       await this.ctx.storage.put("aiRefreshObservedVersion", version);
       await this.ctx.storage.delete("aiRefreshPendingObservation");
-      await this.ctx.storage.deleteAlarm();
+      if (
+        Object.keys(
+          (await this.ctx.storage.get<Record<string, string>>(
+            "manualAiWorkWakes",
+          )) ?? {},
+        ).length
+      )
+        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+      else await this.ctx.storage.deleteAlarm();
     });
   }
 
   async alarm() {
+    (await import("../cf-env")).setCfEnv(this.env);
     if (isMaintenanceMode(this.env)) {
       await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
       return;
     }
-    await this.observeAiRefresh();
+    const results = await Promise.allSettled([
+      this.observeAiRefresh(),
+      this.recoverAiWorkWakes(),
+    ]);
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+  }
+
+  async scheduleAiWorkRecovery(runId?: string) {
+    if (runId)
+      (await import("@cubby/schemas/identifiers")).runEntityId.parse(runId);
+    await this.ctx.blockConcurrencyWhile(async () => {
+      const pending =
+        (await this.ctx.storage.get<Record<string, string>>(
+          "manualAiWorkWakes",
+        )) ?? {};
+      pending[runId ?? "authorization"] = crypto.randomUUID();
+      await this.ctx.storage.put("manualAiWorkWakes", pending);
+      const next = Date.now() + 60_000;
+      await this.ctx.storage.setAlarm(
+        Math.min((await this.ctx.storage.getAlarm()) ?? next, next),
+      );
+    });
+  }
+
+  private async recoverAiWorkWakes() {
+    const pending =
+      (await this.ctx.storage.get<Record<string, string>>(
+        "manualAiWorkWakes",
+      )) ?? {};
+    const keys = Object.keys(pending);
+    if (!keys.length) return;
+    const { withRequestDbClient, db } = await import("../db");
+    await withRequestDbClient(
+      this.env.HYPERDRIVE.connectionString,
+      async () => {
+        const { recoverManualAiWork } = await import("../runs/ai-work");
+        await recoverManualAiWork(
+          db,
+          undefined,
+          keys.includes("authorization") ? undefined : keys,
+        );
+      },
+    );
+    await this.ctx.blockConcurrencyWhile(async () => {
+      const current =
+        (await this.ctx.storage.get<Record<string, string>>(
+          "manualAiWorkWakes",
+        )) ?? {};
+      for (const key of keys)
+        if (current[key] === pending[key]) delete current[key];
+      await this.ctx.storage.put("manualAiWorkWakes", current);
+      if (Object.keys(current).length)
+        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+    });
   }
 
   async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {

@@ -25,8 +25,11 @@ member need not supply transaction or account candidates.
    mutations retain exact typed approval and stable run-operation identities.
 4. Report each order's settlement outcome: already matched, awaiting posting,
    awaiting approval, ambiguous, or source evidence absent. For recent charges,
-   refunds and transfer counterparts, allow at least two business days for
-   posting before investigating absent settlement. A provider's pending status
+   refunds and transfer counterparts, allow two complete Monday–Friday days after the effective transaction
+   date (America/Los_Angeles, no holidays) before investigating absent
+   settlement. Friday evidence is still waiting Tuesday and actionable
+   Wednesday. Use Purchase date without a transaction, and createdAt only
+   for undated evidence; reimports never reset dated age. A provider's pending status
    or the member's confirmation that a leg has not settled keeps it awaiting
    posting beyond that window; age alone never establishes a defect. Recheck
    after posting or when the member requests it, rather than repeatedly asking
@@ -60,6 +63,16 @@ each proposed row back and confirm `kind` is `purchase` for charges and `refund`
 for credits, and that the sign matches. Rows pasted into chat frequently arrive
 already flipped relative to a raw Monarch export — trust the receipt for what
 actually happened, not the sign in the row.
+
+## Free rewards and purchased credit
+
+Free rewards and coupons are signed negative Expenses with `lineKind=discount`,
+the receipt description, and retained receipt evidence. Gross $201.57 less a
+free $5 reward means $196.57 incurred spend and payment. Purchased store credit
+or gift cards are tender, not a discount. Check whether line amounts or the
+net receipt total already include the reward before adding a negative line;
+never count it twice. Retain literal stated totals. Correct a total only when
+the receipt establishes the correction; leave ambiguous evidence unresolved.
 
 ## One card line, several Purchases
 

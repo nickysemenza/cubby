@@ -8,7 +8,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { user } from "~/server/db/auth.schema";
 import {
@@ -54,6 +54,265 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 // missing ownership fails closed, and filtering precedes counts and paging. Assert through the production MCP transport.
 describe("member actionable Work queue", () => {
   const ctx = withTestDb("mcp");
+
+  // Recent amounts remain evidence, but investigation waits through two full business days.
+  it("separates awaiting posting from actionable settlement and transfer work", async () => {
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic grace owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const account = (
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic grace account",
+        identity: { kind: "cash" },
+        ledgerPartyId: member.shortcode,
+      })
+    ).output;
+    const accountId = await resolveOrThrow(
+      ctx.db,
+      "financialAccount",
+      account.id,
+    );
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId,
+        kind: "account_transfer",
+        status: "posted",
+        amount: 25,
+        transactionDate: "2026-10-09",
+        postedDate: "2026-10-09",
+      },
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic settlement grace vendor",
+    });
+    const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: vendor.id,
+      ledgerPartyId: member.id,
+      label: "Synthetic settlement source",
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: sourceAccount.id,
+      date: "2026-09-01",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: order.id,
+      name: "Synthetic gross line",
+      costType: "materials",
+      cost: 30,
+      date: "2026-09-01",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId,
+      kind: "purchase",
+      status: "posted",
+      amount: 25,
+      transactionDate: "2026-10-09",
+      postedDate: "2026-10-09",
+    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({ transactionId: charge.id, purchaseId: order.id, amount: 25 });
+    const readPurchase = (kind: "awaiting_posting" | "repair") =>
+      readWorkQueue(
+        ctx.db,
+        member.id,
+        workQueueHouseholdInput.parse({
+          source: "reconciliation",
+          query: order.shortcode,
+          kind,
+        }),
+        false,
+      );
+    const read = (kind?: "awaiting_posting" | "repair") =>
+      readWorkQueue(
+        ctx.db,
+        member.id,
+        workQueueHouseholdInput.parse({
+          source: "reconciliation",
+          query: transaction.shortcode,
+          kind,
+        }),
+        false,
+      );
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-13T19:00:00Z"));
+      expect((await read("awaiting_posting")).items).toEqual([
+        expect.objectContaining({
+          id: transaction.shortcode,
+          kind: "awaiting_posting",
+          amount: 25,
+        }),
+      ]);
+      expect((await read("repair")).meta.totalCount).toBe(0);
+      expect((await readPurchase("awaiting_posting")).items).toEqual([
+        expect.objectContaining({
+          id: order.shortcode,
+          kind: "awaiting_posting",
+          amount: 30,
+        }),
+      ]);
+      expect((await readPurchase("repair")).meta.totalCount).toBe(0);
+      vi.setSystemTime(new Date("2026-10-14T19:00:00Z"));
+      expect((await read("repair")).items).toEqual([
+        expect.objectContaining({ id: transaction.shortcode, kind: "repair" }),
+      ]);
+      expect((await read("awaiting_posting")).meta.totalCount).toBe(0);
+      expect((await readPurchase("repair")).items).toEqual([
+        expect.objectContaining({ id: order.shortcode, amount: 30 }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A present undated transaction uses its first observation, not an old
+  // Purchase date; the observation's LA day can precede its UTC calendar day.
+  it("ages undated settlement transactions from their household observation day", async () => {
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic undated settlement owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic undated settlement vendor",
+    });
+    const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: vendor.id,
+      ledgerPartyId: member.id,
+      label: "Synthetic undated source",
+    });
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic undated tender",
+      identity: { kind: "cash" },
+      ledgerPartyId: member.id,
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: sourceAccount.id,
+      date: "2026-09-01",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: order.id,
+      name: "Synthetic undated gross line",
+      costType: "materials",
+      cost: 30,
+      date: "2026-09-01",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 25,
+        transactionDate: null,
+        postedDate: null,
+        createdAt: new Date("2026-10-09T01:00:00Z"),
+      },
+    );
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: transaction.id,
+      purchaseId: order.id,
+      amount: 25,
+    });
+    const read = (kind: "awaiting_posting" | "repair") =>
+      readWorkQueue(
+        ctx.db,
+        member.id,
+        workQueueHouseholdInput.parse({
+          source: "reconciliation",
+          query: order.shortcode,
+          kind,
+        }),
+        false,
+      );
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-12T19:00:00Z"));
+      expect((await read("awaiting_posting")).items).toEqual([
+        expect.objectContaining({ id: order.shortcode, amount: 30 }),
+      ]);
+      expect((await read("repair")).meta.totalCount).toBe(0);
+      vi.setSystemTime(new Date("2026-10-13T19:00:00Z"));
+      expect((await read("repair")).items).toEqual([
+        expect.objectContaining({ id: order.shortcode, amount: 30 }),
+      ]);
+      expect((await read("awaiting_posting")).meta.totalCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Import time must not renew dated grace; without a transaction the
+  // Purchase date drives missing-settlement investigation, before count and paging.
+  it("defers missing Purchase settlement using its date and keeps old imports actionable", async () => {
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic purchase grace owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic grace vendor",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: vendor.id,
+      ledgerPartyId: member.id,
+      label: "Synthetic source",
+    });
+    const recent = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: account.id,
+      date: "2026-10-09",
+    });
+    const old = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: account.id,
+      date: "2026-09-01",
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-13T19:00:00Z"));
+      const read = (kind: "awaiting_posting" | "repair", id: string) =>
+        readWorkQueue(
+          ctx.db,
+          member.id,
+          workQueueHouseholdInput.parse({
+            source: "reconciliation",
+            kind,
+            query: id,
+            check: "settlement_reference",
+          }),
+          false,
+        );
+      expect((await read("awaiting_posting", recent.shortcode)).items).toEqual([
+        expect.objectContaining({
+          id: recent.shortcode,
+          kind: "awaiting_posting",
+        }),
+      ]);
+      expect((await read("repair", recent.shortcode)).meta.totalCount).toBe(0);
+      expect((await read("repair", old.shortcode)).items).toEqual([
+        expect.objectContaining({ id: old.shortcode, kind: "repair" }),
+      ]);
+      vi.setSystemTime(new Date("2026-10-14T19:00:00Z"));
+      expect((await read("repair", recent.shortcode)).meta.totalCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   // Settlement evidence proves a tender account's authority, not access to itemization or a private receipt source.
   it("routes source research separately from the payment account while fencing financial work", async () => {
@@ -1229,7 +1488,9 @@ describe("member actionable Work queue", () => {
       }),
     ]);
     const receipt = queue.items.find(
-      (row) => row.name === "Synthetic receipt policy order",
+      (row) =>
+        row.name === "Synthetic receipt policy order" &&
+        row.source === "research",
     );
     // No document is expected, so the row names only the missing item lines.
     expect(receipt?.reason).toBe(

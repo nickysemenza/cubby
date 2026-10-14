@@ -1,3 +1,4 @@
+import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 import { executionAuthorizationRef } from "./execution-authorization";
 
@@ -56,6 +57,13 @@ export const aiEvaluationState = z.enum([
   "obsolete",
   "cancelled",
 ]);
+export const aiExecutionKind = z.enum([
+  "ai_refresh",
+  "mail_reclassify",
+  "suggestion_sweep",
+  "mail_discovery",
+]);
+export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
 export const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("field"),
@@ -104,6 +112,7 @@ export const aiRefreshRunInput = z.object({
 });
 export type AiRefreshRunInput = z.infer<typeof aiRefreshRunInput>;
 export const aiRefreshProgress = z.object({
+  ...workflowRecoveryProgress.shape,
   attempt: z.number().int().nonnegative().default(0),
   selected: z.number().int().nonnegative().default(0),
   completed: z.number().int().nonnegative().default(0),

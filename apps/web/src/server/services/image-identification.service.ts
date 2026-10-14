@@ -16,6 +16,7 @@ import {
 } from "~/server/ai/decision-model";
 import { IMAGE_IDENTIFICATION_FEATURE } from "~/server/ai/features";
 import type { Database } from "~/server/db";
+import { MAX_IDENTIFICATION_RENDITION_BYTES } from "~/server/image-processing/cloud-limits";
 import {
   recordImageDescriptionInput,
   reserveImageAnalysisInput,
@@ -43,12 +44,12 @@ import { evaluateVisualProductCandidates } from "./image-identification-ranking"
 export async function readImageIdentificationRendition(url: string) {
   const bytes = await fetchAnalysisRendition(
     transformedImageUrl(url, 1024, { format: "jpeg", anyOrigin: true }),
+    undefined,
+    MAX_IDENTIFICATION_RENDITION_BYTES,
   );
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (inspected.detectedContentType !== "image/jpeg")
     throw new Error("Visual identification requires a JPEG rendition");
-  if (bytes.byteLength > 2 * 1024 * 1024)
-    throw new Error("Visual identification rendition exceeds 2 MiB");
   const media: DecisionImage = {
     content_type: "image/jpeg",
     base64: encodeBase64(bytes),

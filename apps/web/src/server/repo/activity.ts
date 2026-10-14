@@ -216,7 +216,7 @@ function runProjection(memberIds?: SQL): SQL {
         ELSE initcap(replace(r.purpose, '_', ' '))
       END AS "subjectName",
       r.status AS state,
-      r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active,
+      r.status IN ('running', ${runStatus.enum.paused}, 'paused_auth', 'paused_offline', 'paused_approval') AS active,
       r."startedAt" AS "createdAt",
       r."endedAt" AS "completedAt",
       CASE WHEN r."endedAt" IS NOT NULL
@@ -267,7 +267,7 @@ function groupedRunProjection(rootId?: string): SQL {
   return sql`
     WITH RECURSIVE edges AS (
       SELECT r.shortcode AS id, parent.shortcode AS "parentRunId",
-        r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active
+        r.status IN ('running', ${runStatus.enum.paused}, 'paused_auth', 'paused_offline', 'paused_approval') AS active
       FROM "Run" r
       LEFT JOIN "Run" parent ON parent.id = r."parentRunId" AND parent."deletedAt" IS NULL
       WHERE r."deletedAt" IS NULL
@@ -524,7 +524,7 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
 }
 
 const waitingAttemptFor = (state: SQL) =>
-  sql`${state} IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
+  sql`${state} IN (${runStatus.enum.paused}, 'paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
 const reviewAttemptFor = (state: SQL) => sql`${state} = 'needs_review'`;
 const failedAttemptFor = (state: SQL) =>
   sql`${state} IN ('failed', 'dispatch_failed')`;
