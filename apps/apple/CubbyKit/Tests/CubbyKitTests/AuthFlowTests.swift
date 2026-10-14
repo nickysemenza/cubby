@@ -48,14 +48,16 @@ private final class AuthStubURLProtocol: URLProtocol, @unchecked Sendable {
 
 @Suite("AuthFlow", .serialized)
 struct AuthFlowTests {
-    private func makeFlow(credential: CubbyCredential? = nil) throws -> (AuthFlow, CredentialProvider) {
+    private func makeFlow(
+        credential: CubbyCredential? = nil, appIdentity: AppleAppIdentity = .production
+    ) throws -> (AuthFlow, CredentialProvider) {
         let store = InMemorySessionTokenStore()
         if let credential { try store.save(credential, for: "localhost:3000") }
         let credentials = CredentialProvider(host: "localhost:3000", store: store)
         let flow = AuthFlow(
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: credentials,
-            session: AuthStubURLProtocol.session()
+            session: AuthStubURLProtocol.session(), appIdentity: appIdentity
         )
         return (flow, credentials)
     }
@@ -133,7 +135,7 @@ struct AuthFlowTests {
         }
     #endif
 
-    private func googleCallback(identifier: String, state: String) throws -> URL {
+    private func googleCallback(identifier: String, state: String, scheme: String = "cubby") throws -> URL {
         let payload = try JSONSerialization.data(withJSONObject: [
             "identifier": identifier,
             "state": state,
@@ -142,7 +144,7 @@ struct AuthFlowTests {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
-        return try #require(URL(string: "cubby://auth/callback#token=\(token)"))
+        return try #require(URL(string: "\(scheme)://auth/callback#token=\(token)"))
     }
 
     private static func requestBody(_ request: URLRequest) throws -> Data {
@@ -259,7 +261,8 @@ struct AuthFlowTests {
         }
     }
 
-    @Test func googleSignInExchangesPKCETransferForSignedBearer() async throws {
+    @Test(arguments: [AppleAppIdentity.production, .development])
+    func googleSignInExchangesPKCETransferForSignedBearer(appIdentity: AppleAppIdentity) async throws {
         defer { resetHandlerAfterTest() }
         let authorizationQuery = Mutex<[String: String]?>(nil)
         AuthStubURLProtocol.handler.withLock { handler in
@@ -292,7 +295,7 @@ struct AuthFlowTests {
                 )
             }
         }
-        let (flow, credentials) = try makeFlow()
+        let (flow, credentials) = try makeFlow(appIdentity: appIdentity)
 
         let credential = try await flow.signInWithGoogle { url in
             let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
@@ -303,8 +306,10 @@ struct AuthFlowTests {
                 })
             authorizationQuery.withLock { $0 = query }
             #expect(query["code_challenge_method"] == "S256")
+            #expect(query["callback_scheme"] == appIdentity.callbackScheme)
             return try googleCallback(
-                identifier: "transfer-identifier", state: try #require(query["state"])
+                identifier: "transfer-identifier", state: try #require(query["state"]),
+                scheme: appIdentity.callbackScheme
             )
         }
 
@@ -315,6 +320,18 @@ struct AuthFlowTests {
                 "better-auth.session_data": "signed-cache"
             ]
         )
+    }
+
+    @Test func developmentGoogleSignInRejectsProductionCallbackBeforeExchange() async throws {
+        let (flow, credentials) = try makeFlow(appIdentity: .development)
+        await #expect(throws: AuthError.invalidCallback) {
+            _ = try await flow.signInWithGoogle { url in
+                let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let state = try #require(query.first(where: { $0.name == "state" })?.value)
+                return try googleCallback(identifier: "transfer-identifier", state: state)
+            }
+        }
+        #expect(await credentials.current() == nil)
     }
 
     @Test func googleSignInRejectsMismatchedStateBeforeExchange() async throws {

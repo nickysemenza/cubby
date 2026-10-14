@@ -49,7 +49,7 @@ public actor FeaturePrintIndex {
 
     public static var defaultCacheDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appending(path: "com.nickysemenza.cubby", directoryHint: .isDirectory)
+            .appending(path: AppleAppIdentity.current.bundleIdentifier, directoryHint: .isDirectory)
     }
 
     public var count: Int { entries.count }

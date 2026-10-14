@@ -5,16 +5,17 @@ import {
   SHORTCODE_PREFIX,
   SHORTCODE_TYPES,
 } from "@cubby/shared";
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 
 import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 
 /**
  * Apple's team/bundle pair for universal links and shared web credentials. Kept as one named
  * constant so the two AASA services cannot drift — see
- * `apps/apple/project.yml` (`DEVELOPMENT_TEAM: Y9A97FXT63`,
- * `PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby`) for the source of truth.
+ * `apps/apple/project.yml` for the signing team and `apple-app-identity.ts`
+ * for the production bundle identity. Dev uses its own custom URL scheme.
  */
-const APPLE_APP_ID = "Y9A97FXT63.com.nickysemenza.cubby";
+const APPLE_APP_ID = `Y9A97FXT63.${APPLE_APP_IDENTITIES.production.bundleIdentifier}`;
 
 const BODY_PLACEHOLDERS = [
   "?".repeat(LEGACY_SHORTCODE_BODY_LENGTH),

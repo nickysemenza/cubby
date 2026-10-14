@@ -11,7 +11,7 @@ protocol InstallationIDStore {
 /// Keychain item. Device-only accessibility prevents a restored backup from cloning that identity
 /// onto another phone or Mac.
 private struct KeychainInstallationIDStore: InstallationIDStore {
-    private let service = "com.nickysemenza.cubby.installation"
+    private let service = AppleAppIdentity.current.installationService
     private let account = "device-id"
 
     func load() throws -> UUID? {

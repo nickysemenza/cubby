@@ -73,12 +73,12 @@ targetTemplates:
     info:
       path: App/${plat}/Info.plist
       properties:
-        CFBundleDisplayName: Cubby
+        CFBundleDisplayName: "$(PRODUCT_NAME)"
         # Deep links (`cubby://entity/PRD-…`, capture, audit, today). `cubby-mobile://` is the auth
         # Origin, not a scheme. Info.plist is generated from here; do not hand-edit it.
         CFBundleURLTypes:
-          - CFBundleURLName: com.nickysemenza.cubby
-            CFBundleURLSchemes: [cubby]
+          - CFBundleURLName: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+            CFBundleURLSchemes: ["$(CUBBY_CALLBACK_SCHEME)"]
         NSCameraUsageDescription: Cubby scans barcodes to add items to a location.
         NSPhotoLibraryUsageDescription: Cubby uses selected photos for garden journals and product images.
         NSAppTransportSecurity:
@@ -118,8 +118,9 @@ targetTemplates:
         product: NukeUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby
-        PRODUCT_NAME: Cubby
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CUBBY_APP_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: "$(CUBBY_APP_PRODUCT_NAME)"
+        PRODUCT_MODULE_NAME: Cubby
         # Hand-written per platform; see the header comment.
         CODE_SIGN_ENTITLEMENTS: App/${plat}/Cubby.entitlements
         # App code is MainActor by default (Swift 6.2); CubbyKit deliberately is not.
@@ -204,8 +205,7 @@ targets:
     settings:
       configs:
         # Lets `Cubby-iOS-Tests` `@testable import Cubby` to reach internal preview/content
-        # sub-views (e.g. `SearchContent`, `PreviewFixtures`). iOS-only: the
-        # macOS target has no test bundle, so its Debug config is untouched.
+        # sub-views (e.g. `SearchContent`, `PreviewFixtures`).
         Debug:
           ENABLE_TESTABILITY: YES
     dependencies:
@@ -243,6 +243,8 @@ targets:
     templateAttributes:
       plat: macOS
     platform: macOS
+    configFiles:
+      Debug: Generated/MacDebugAppIdentity.xcconfig
     info:
       properties:
         LSApplicationCategoryType: public.app-category.productivity
@@ -278,6 +280,8 @@ targets:
   Cubby-macOS-Tests:
     type: bundle.unit-test
     platform: macOS
+    configFiles:
+      Debug: Generated/MacDebugAppIdentity.xcconfig
     sources:
       - path: App/Tests/Navigation
       - path: App/Tests/CliAuth
@@ -295,7 +299,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.mac-tests
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cubby.app/Contents/MacOS/Cubby"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/$(CUBBY_APP_PRODUCT_NAME).app/Contents/MacOS/$(CUBBY_APP_PRODUCT_NAME)"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:

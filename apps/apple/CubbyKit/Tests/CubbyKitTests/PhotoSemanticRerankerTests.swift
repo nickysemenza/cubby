@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 import Testing
 
 @testable import CubbyKit
@@ -18,6 +19,44 @@ private struct StubPhotoSemanticModel: PhotoSemanticModel {
 
 @Suite("Photo semantic reranking")
 struct PhotoSemanticRerankerTests {
+    @Test("OS 27 model errors retain reranking failure categories across error types")
+    func modelErrorCategories() {
+        let cases: [(any Error, PhotoSemanticModelFailure)] = [
+            (
+                SystemLanguageModel.Error.assetsUnavailable(.init(debugDescription: "synthetic")),
+                .assetsUnavailable
+            ),
+            (LanguageModelSession.Error.concurrentRequests, .concurrentRequest),
+            (GeneratedContent.ParsingError(rawContent: "invalid", debugDescription: "synthetic"), .decoding),
+            (
+                LanguageModelError.unsupportedGenerationGuide(
+                    .init(schemaName: nil, debugDescription: "synthetic")), .decoding
+            ),
+            (
+                LanguageModelError.contextSizeExceeded(
+                    .init(contextSize: 10, tokenCount: 20, debugDescription: "synthetic")), .contextLimit
+            ),
+            (LanguageModelError.guardrailViolation(.init(debugDescription: "synthetic")), .guardrail),
+            (
+                LanguageModelError.rateLimited(.init(resetDate: nil, debugDescription: "synthetic")),
+                .rateLimited
+            ),
+            (
+                LanguageModelError.refusal(.init(explanation: "synthetic", debugDescription: "synthetic")),
+                .refusal
+            ),
+            (
+                LanguageModelError.unsupportedLanguageOrLocale(
+                    .init(languageCode: .init("en"), debugDescription: "synthetic")), .unsupportedLocale
+            ),
+            (LanguageModelError.timeout(.init(debugDescription: "synthetic")), .transient),
+        ]
+        for (error, expected) in cases {
+            #expect(FoundationModelsPhotoSemanticModel.failure(for: error) == expected)
+        }
+        #expect(FoundationModelsPhotoSemanticModel.failure(for: CancellationError()) == nil)
+    }
+
     private let candidates = [
         PhotoRoutingCandidate(id: "MEA-ABCD", routeID: "meal-self", description: "Dinner"),
         PhotoRoutingCandidate(id: "PRJ-ABCD", routeID: "project-self", description: "Patio"),

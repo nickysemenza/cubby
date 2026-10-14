@@ -6,7 +6,7 @@ import Testing
 @Suite("CubbyLink")
 struct CubbyLinkTests {
     private func link(_ string: String) -> CubbyLink? {
-        URL(string: string).flatMap(CubbyLink.init(url:))
+        URL(string: string).flatMap { CubbyLink(url: $0) }
     }
 
     @Test(
@@ -43,6 +43,13 @@ struct CubbyLinkTests {
         #expect(link("cubby://activity/nope") == nil)
         #expect(link("cubby://activity/local/photo-library-scan") == .localActivity("photo-library-scan"))
         #expect(link("cubby://activity/local/../photos") == nil)
+    }
+
+    @Test func cliHandoffTargetsOnlyItsSelectedAppIdentity() {
+        let request = CubbyLink.cliAuth(port: 51234, nonce: String(repeating: "a", count: 43))
+        let url = request.url(appIdentity: .development)
+        #expect(CubbyLink(url: url, appIdentity: .development) == request)
+        #expect(CubbyLink(url: url, appIdentity: .production) == nil)
     }
 
     @Test func cliAuthCarriesPortAndNonce() {
