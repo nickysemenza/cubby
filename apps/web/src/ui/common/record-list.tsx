@@ -1,3 +1,4 @@
+import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -241,30 +242,64 @@ export function RecordFold({ children }: { children: ReactNode }) {
   );
 }
 
-const DOT = {
+const TONE_DOT = {
   positive: "bg-positive",
   warning: "bg-warning",
   destructive: "bg-destructive",
-  muted: "border border-dashed border-muted-foreground/60",
+  muted: "border-[1.5px] border-muted-foreground/60 bg-card",
 } as const satisfies Record<RecordTone, string>;
 
-/** A toned state dot whose label stays readable to assistive tech. */
+/**
+ * Each state's mark. Skipped is a hollow ring and not-reached a faint point, so neither reads as a
+ * loading spinner; running pulses (record-list.css) and holds a still halo under reduced motion.
+ */
+const STATE_DOT = {
+  done: "bg-positive",
+  running: "bg-primary",
+  warning: "bg-warning",
+  failed: "bg-destructive",
+  skipped: "border-[1.5px] border-muted-foreground/60 bg-card",
+  not_reached: "size-1.5 bg-muted-foreground/35",
+} as const satisfies Record<ReportRowState, string>;
+
+/**
+ * A row's mark with a label that stays readable to assistive tech: a `state` for stage and log
+ * rows, a `tone` for a condition, or a `color` for a category (an event kind).
+ */
 export function RecordDot({
   tone,
+  state,
+  color,
   label,
 }: {
   tone?: RecordTone | undefined;
+  state?: ReportRowState | undefined;
+  color?: string | undefined;
   label?: string | undefined;
 }) {
   if (!label) return <span aria-hidden data-record-dot="none" />;
   return (
-    <span className="flex h-5 items-center" title={label} data-record-dot>
+    <span
+      className="flex h-5 items-center justify-center"
+      title={label}
+      data-record-dot={state ?? "tone"}
+    >
       <span
         aria-hidden
+        data-record-mark
         className={cn(
-          "size-2 rounded-full",
-          tone ? DOT[tone] : "bg-foreground/50",
+          "size-2 shrink-0 rounded-full",
+          state
+            ? STATE_DOT[state]
+            : tone
+              ? TONE_DOT[tone]
+              : color
+                ? undefined
+                : "bg-foreground/50",
         )}
+        style={
+          color && !state && !tone ? { backgroundColor: color } : undefined
+        }
       />
       <span className="sr-only">{label}</span>
     </span>
@@ -309,13 +344,15 @@ export function RecordHops({ count }: { count: number }) {
 /** A collapsible evidence block beneath a row. */
 export function RecordDetail({
   summary,
+  defaultOpen = false,
   children,
 }: {
   summary: ReactNode;
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
   return (
-    <details className="group text-xs/5">
+    <details className="group text-xs/5" open={defaultOpen || undefined}>
       <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
         <CaretRightIcon
           aria-hidden

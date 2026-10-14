@@ -1,6 +1,8 @@
+import type { activityAttempt, activityEvent } from "@cubby/schemas/activity";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { Fragment, useEffect, useMemo } from "react";
+import type { z } from "zod";
 
 import { RunWorkFacts } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -8,7 +10,15 @@ import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { AiCost } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
-import { Row, Stack } from "~/ui/layout";
+import {
+  RecordDetail,
+  RecordDot,
+  RecordHeading,
+  RecordList,
+  RecordRow,
+  type RecordTone,
+} from "~/ui/common/record-list";
+import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   Card,
@@ -19,7 +29,7 @@ import {
 } from "~/ui/primitives/card";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { workIssueText, workStateLabel } from "./work-state";
+import { WorkStateDot, workIssueText, workStateLabel } from "./work-state";
 
 export function ActivityRunDetail({
   id,
@@ -146,139 +156,224 @@ export function ActivityRunDetail({
             />
           </div>
         ) : null}
-        <Stack gap="sm">
-          {run?.recordType === "image_job" ? (
-            <section>
-              <h3 className="font-medium">Attempts</h3>
-              {attempts.map((attempt) => (
-                <div
-                  key={`${attempt.number}-${attempt.startedAt}`}
-                  className="border-b border-border py-2 text-sm"
-                >
-                  <Row justify="between" gap="sm" wrap>
-                    <span>
-                      #{attempt.number} · {workStateLabel(attempt.state)} ·{" "}
-                      <DateDisplay timestamp={attempt.startedAt} />
-                    </span>
-                    <Row gap="xs">
-                      {attempt.diagnosticsJson ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            void copyText(attempt.diagnosticsJson ?? "")
-                          }
-                        >
-                          <CopyIcon />
-                          Copy diagnostics
-                        </Button>
-                      ) : null}
-                      {attempt.resultJson ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            void copyText(attempt.resultJson ?? "")
-                          }
-                        >
-                          <CopyIcon />
-                          Copy result
-                        </Button>
-                      ) : null}
-                    </Row>
-                  </Row>
-                  {attempt.diagnosticsJson || attempt.resultJson ? (
-                    <details className="mt-2">
-                      <summary>Diagnostics and result</summary>
-                      {attempt.diagnosticsJson ? (
-                        <>
-                          <h4 className="mt-2 font-medium">Diagnostics</h4>
-                          <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-                            {attempt.diagnosticsJson}
-                          </pre>
-                        </>
-                      ) : null}
-                      {attempt.resultJson ? (
-                        <>
-                          <h4 className="mt-2 font-medium">Result</h4>
-                          <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-                            {attempt.resultJson}
-                          </pre>
-                        </>
-                      ) : null}
-                    </details>
-                  ) : (
-                    <StatusText>
-                      No historical diagnostics were recorded for this attempt.
-                    </StatusText>
-                  )}
-                </div>
-              ))}
-              {detail.hasNextPage ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void detail.fetchNextPage()}
-                  disabled={detail.isFetchingNextPage}
-                >
-                  Load more attempts
-                </Button>
-              ) : null}
-            </section>
-          ) : null}
-          <section>
-            <h3 className="font-medium">
-              {run?.recordType === "run" ? "Operations and events" : "Events"}
-            </h3>
-            {eventRows.map((event) => (
-              <div
-                key={event.id}
-                className="border-b border-border py-2 text-sm"
-              >
-                <Row justify="between" gap="sm" wrap>
-                  <span>
-                    <DateDisplay timestamp={event.occurredAt} /> ·{" "}
-                    {event.source} · {event.event}
-                  </span>
-                  {event.detailsJson ? (
+        <section className="mt-3 flex flex-col gap-1">
+          <h3 className="font-medium">
+            {run?.recordType === "image_job"
+              ? "Attempts and events"
+              : run?.recordType === "run"
+                ? "Operations and events"
+                : "Events"}
+          </h3>
+          <RecordList
+            variant="timeline"
+            aria-label="Work timeline"
+            state={
+              events.isPending
+                ? { status: "pending" }
+                : events.isError
+                  ? {
+                      status: "error",
+                      error: events.error,
+                      title: "Events failed to load",
+                      onRetry: () => void events.refetch(),
+                    }
+                  : { status: "success" }
+            }
+            empty="No events have been recorded."
+            footer={
+              detail.hasNextPage || events.hasNextPage ? (
+                <Row gap="xs" wrap>
+                  {detail.hasNextPage ? (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      onClick={() => void copyText(event.detailsJson ?? "")}
+                      onClick={() => void detail.fetchNextPage()}
+                      disabled={detail.isFetchingNextPage}
                     >
-                      <CopyIcon />
-                      Copy diagnostics
+                      Load more attempts
+                    </Button>
+                  ) : null}
+                  {events.hasNextPage ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void events.fetchNextPage()}
+                      disabled={events.isFetchingNextPage}
+                    >
+                      Load more events
                     </Button>
                   ) : null}
                 </Row>
-                {event.detailsJson ? (
-                  <details className="mt-2">
-                    <summary>Diagnostics</summary>
-                    <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-                      {event.detailsJson}
-                    </pre>
-                  </details>
-                ) : null}
-              </div>
+              ) : null
+            }
+          >
+            {timelineGroups(attempts, eventRows).map((group) => (
+              <Fragment key={group.number ?? "job"}>
+                {group.number === null ? (
+                  attempts.length > 0 ? (
+                    <RecordHeading label="Job events" />
+                  ) : null
+                ) : (
+                  <RecordHeading
+                    label={
+                      <>
+                        Attempt #{group.number}
+                        {group.attempt ? (
+                          <>
+                            {" "}
+                            · {workStateLabel(group.attempt.state)} ·{" "}
+                            <DateDisplay
+                              timestamp={group.attempt.startedAt}
+                              clock="day"
+                            />
+                          </>
+                        ) : null}
+                      </>
+                    }
+                  />
+                )}
+                {group.attempt ? <AttemptRow attempt={group.attempt} /> : null}
+                {group.events.map((event) => (
+                  <EventRow key={event.id} event={event} />
+                ))}
+              </Fragment>
             ))}
-            {events.hasNextPage ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void events.fetchNextPage()}
-                disabled={events.isFetchingNextPage}
-              >
-                Load more events
-              </Button>
-            ) : null}
-          </section>
-        </Stack>
+          </RecordList>
+        </section>
       </CardContent>
     </Card>
+  );
+}
+
+type ActivityAttempt = z.infer<typeof activityAttempt>;
+type ActivityEvent = z.infer<typeof activityEvent>;
+
+/**
+ * Events grouped under the attempt that wrote them, newest attempt first; events without an
+ * attempt (Run operations, job-level events) form one trailing group. Attempts and events page
+ * independently, so a group may hold events whose attempt has not loaded yet.
+ */
+function timelineGroups(
+  attempts: readonly ActivityAttempt[],
+  events: readonly ActivityEvent[],
+) {
+  const numbers = new Set<number | null>([
+    ...attempts.map((attempt) => attempt.number),
+    ...events.map((event) => event.attempt),
+  ]);
+  return [...numbers]
+    .sort((a, b) => (b ?? 0) - (a ?? 0))
+    .map((number) => ({
+      number,
+      attempt:
+        number === null
+          ? undefined
+          : attempts.find((attempt) => attempt.number === number),
+      events: events.filter((event) => event.attempt === number),
+    }));
+}
+
+function AttemptRow({ attempt }: { attempt: ActivityAttempt }) {
+  const label = workStateLabel(attempt.state);
+  return (
+    <RecordRow
+      leading={<WorkStateDot state={attempt.state} />}
+      primary={<span className="font-medium">{label}</span>}
+      secondary={
+        attempt.error ??
+        (attempt.diagnosticsJson || attempt.resultJson
+          ? null
+          : "No historical diagnostics were recorded for this attempt.")
+      }
+      clip={false}
+      trailing={
+        attempt.completedAt ? (
+          <DateDisplay timestamp={attempt.completedAt} clock="day" />
+        ) : null
+      }
+      actions={
+        attempt.diagnosticsJson || attempt.resultJson ? (
+          <span className="-ml-2 flex flex-wrap gap-0.5 @min-[32rem]/ledger:ml-0">
+            {attempt.diagnosticsJson ? (
+              <CopyButton text={attempt.diagnosticsJson}>
+                Copy diagnostics
+              </CopyButton>
+            ) : null}
+            {attempt.resultJson ? (
+              <CopyButton text={attempt.resultJson}>Copy result</CopyButton>
+            ) : null}
+          </span>
+        ) : null
+      }
+      detail={
+        attempt.diagnosticsJson || attempt.resultJson ? (
+          <RecordDetail summary="Diagnostics and result">
+            {attempt.diagnosticsJson ? (
+              <JsonBlock label="Diagnostics" json={attempt.diagnosticsJson} />
+            ) : null}
+            {attempt.resultJson ? (
+              <JsonBlock label="Result" json={attempt.resultJson} />
+            ) : null}
+          </RecordDetail>
+        ) : null
+      }
+    />
+  );
+}
+
+const EVENT_TONE = {
+  info: undefined,
+  debug: "muted",
+  error: "destructive",
+} as const satisfies Record<ActivityEvent["level"], RecordTone | undefined>;
+
+function EventRow({ event }: { event: ActivityEvent }) {
+  return (
+    <RecordRow
+      leading={<RecordDot tone={EVENT_TONE[event.level]} label={event.level} />}
+      primary={<code className="font-mono text-xs">{event.event}</code>}
+      secondary={event.source}
+      trailing={<DateDisplay timestamp={event.occurredAt} clock="day" />}
+      actions={
+        event.detailsJson ? (
+          <CopyButton text={event.detailsJson}>Copy diagnostics</CopyButton>
+        ) : null
+      }
+      detail={
+        event.detailsJson ? (
+          <RecordDetail summary="Diagnostics">
+            <JsonBlock json={event.detailsJson} />
+          </RecordDetail>
+        ) : null
+      }
+    />
+  );
+}
+
+function CopyButton({ text, children }: { text: string; children: string }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-6"
+      onClick={() => void copyText(text)}
+    >
+      <CopyIcon />
+      {children}
+    </Button>
+  );
+}
+
+function JsonBlock({ label, json }: { label?: string; json: string }) {
+  return (
+    <>
+      {label ? <h4 className="mt-1 font-medium">{label}</h4> : null}
+      <pre className="max-h-80 overflow-auto bg-muted/30 p-2 font-mono break-words whitespace-pre-wrap">
+        {json}
+      </pre>
+    </>
   );
 }

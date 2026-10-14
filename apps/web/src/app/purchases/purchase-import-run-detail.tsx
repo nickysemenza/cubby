@@ -5,17 +5,15 @@ import {
   type AgentConversationPart,
   type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
+import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { RunOut } from "@cubby/schemas/run";
 import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
-import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
-import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Fragment,
   type ReactNode,
   useEffect,
   useState,
@@ -42,19 +40,17 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { AiCost } from "~/ui/common/ai-cost";
+import {
+  RecordDetail,
+  RecordDot,
+  RecordList,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { AgentContextPerCall } from "./agent-context-breakdown";
@@ -353,198 +349,98 @@ function AgentWorkOverview({
         </div>
       ) : null}
       <AgentContextPerCall messages={messages} />
-      {work.length || plannedSteps.length || run.agentModelMs > 0 ? (
-        <section
-          className="mt-3 border-t border-border pt-2"
-          aria-label="Run step timing table"
+      <div className="mt-3 border-t border-border pt-2">
+        <RecordList
+          variant="timeline"
+          aria-label="Run steps"
+          empty="No completed work steps have been recorded yet."
         >
-          <Table className="min-w-[760px] tabular-nums">
-            <colgroup>
-              <col className="w-[26%]" />
-              <col className="w-[14%]" />
-              <col className="w-[15%]" />
-              <col className="w-[14%]" />
-              <col className="w-[13%]" />
-              <col className="w-[18%]" />
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="h-auto py-2 pr-3 pl-0">Step</TableHead>
-                <TableHead className="h-auto py-2 text-right">
-                  Lookups / items
-                </TableHead>
-                <TableHead className="h-auto py-2 text-right">
-                  Tool / attempt
-                </TableHead>
-                <TableHead className="h-auto py-2 text-right">
-                  Agent model
-                </TableHead>
-                <TableHead className="h-auto py-2 text-right">
-                  Waiting
-                </TableHead>
-                <TableHead className="h-auto py-2 pr-0 text-right">
-                  Total wall
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {work.map((item) => {
-                const Icon = item.completed
-                  ? CheckCircleIcon
-                  : item.failed && !item.running
-                    ? WarningCircleIcon
-                    : CircleNotchIcon;
-                const toolMs =
-                  item.timing === "tool" ? item.durationMs : item.attemptMs;
-                const elapsedMs =
-                  item.timing === "elapsed" ? item.durationMs : null;
-                return (
-                  <TableRow key={item.kind}>
-                    <TableHead
-                      scope="row"
-                      className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Icon
-                          className={`size-3.5 shrink-0 ${item.failed && !item.completed ? "text-destructive" : item.completed ? "text-positive" : "text-muted-foreground"}`}
-                          aria-hidden="true"
-                        />
-                        {item.label}
-                      </span>
-                    </TableHead>
-                    <TableCell className="text-right text-muted-foreground">
-                      {workCount(item) ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {toolMs === null || toolMs === undefined
-                        ? "—"
-                        : formatWorkDuration(toolMs)}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      —
-                    </TableCell>
-                    <TableCell
-                      className="text-right"
-                      title={
-                        item.waitingMs === undefined
-                          ? "No waiting interval recorded"
-                          : "Photo batch wall time outside summed completed attempts; a lower bound"
-                      }
-                    >
-                      {item.waitingMs === null || item.waitingMs === undefined
-                        ? "—"
-                        : `≥${formatWorkDuration(item.waitingMs)}`}
-                    </TableCell>
-                    <TableCell
-                      className="pr-0 text-right"
-                      title={
-                        item.timing === "tool"
-                          ? "Lower bound: summed tool calls; agent time is unmeasured"
-                          : undefined
-                      }
-                    >
-                      {elapsedMs !== null
-                        ? formatWorkDuration(elapsedMs)
-                        : toolMs !== null && toolMs !== undefined
-                          ? `≥${formatWorkDuration(toolMs)}`
-                          : "—"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {plannedSteps.map((step) => (
-                <TableRow
-                  key={`planned-${step.kind}`}
-                  className="text-muted-foreground"
-                >
-                  <TableHead
-                    scope="row"
-                    className="h-auto py-2 pr-3 pl-0 whitespace-normal"
-                  >
-                    <span className="flex items-center gap-2">
-                      <CircleIcon
-                        className="size-3.5 shrink-0"
-                        aria-hidden="true"
+          {work.map((item) => {
+            const state = workItemState(item);
+            const toolMs =
+              item.timing === "tool" ? item.durationMs : item.attemptMs;
+            const elapsedMs =
+              item.timing === "elapsed" ? item.durationMs : null;
+            const total =
+              elapsedMs !== null
+                ? formatWorkDuration(elapsedMs)
+                : toolMs !== null && toolMs !== undefined
+                  ? `≥${formatWorkDuration(toolMs)}`
+                  : null;
+            const evidence = [
+              workCount(item),
+              item.failed ? `${item.failed} failed` : null,
+              item.running ? `${item.running} running` : null,
+            ].filter((part) => part !== null);
+            return (
+              <RecordRow
+                key={item.kind}
+                leading={<RecordDot state={state} label={STEP_LABEL[state]} />}
+                primary={item.label}
+                secondary={evidence.length ? evidence.join(" · ") : null}
+                trailing={total}
+                detail={
+                  toolMs !== null && toolMs !== undefined ? (
+                    <RecordDetail summary="Timing">
+                      <StepTiming
+                        rows={[
+                          ["Tool / attempt", formatWorkDuration(toolMs)],
+                          [
+                            "Waiting",
+                            item.waitingMs === null ||
+                            item.waitingMs === undefined
+                              ? "—"
+                              : `≥${formatWorkDuration(item.waitingMs)}`,
+                            item.waitingMs === undefined
+                              ? "No waiting interval recorded"
+                              : "Photo batch wall time outside summed completed attempts; a lower bound",
+                          ],
+                          [
+                            "Total wall",
+                            total ?? "—",
+                            item.timing === "tool"
+                              ? "Lower bound: summed tool calls; agent time is unmeasured"
+                              : undefined,
+                          ],
+                        ]}
                       />
-                      <span>{step.label}</span>
-                    </span>
-                  </TableHead>
-                  <TableCell colSpan={5}>
-                    {step.status === "waiting_for_you"
-                      ? "Waiting for your review"
-                      : "Upcoming"}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {run.agentModelMs > 0 ? (
-                <TableRow>
-                  <TableHead
-                    scope="row"
-                    className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
-                  >
-                    <span className="flex items-center gap-2">
-                      <CheckCircleIcon
-                        className="size-3.5 shrink-0 text-positive"
-                        aria-hidden="true"
-                      />
-                      Agent model turns
-                    </span>
-                  </TableHead>
-                  <TableCell className="text-right text-muted-foreground">
-                    —
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    —
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatWorkDuration(run.agentModelMs)}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    —
-                  </TableCell>
-                  <TableCell
-                    className="pr-0 text-right"
-                    title="Lower bound: measured model calls only"
-                  >
-                    ≥{formatWorkDuration(run.agentModelMs)}
-                  </TableCell>
-                </TableRow>
-              ) : messages.length && run.endedAt ? (
-                <TableRow>
-                  <TableHead
-                    scope="row"
-                    className="h-auto py-2 pr-3 pl-0 whitespace-normal text-foreground"
-                  >
-                    Agent model turns
-                  </TableHead>
-                  <TableCell
-                    colSpan={2}
-                    className="p-0 text-right text-muted-foreground"
-                  >
-                    —
-                  </TableCell>
-                  <TableCell
-                    className="text-right text-muted-foreground"
-                    title="No model-turn duration was stored for this run"
-                  >
-                    Not recorded
-                  </TableCell>
-                  <TableCell
-                    colSpan={2}
-                    className="p-0 text-right text-muted-foreground"
-                  >
-                    —
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </section>
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          No completed work steps have been recorded yet.
-        </p>
-      )}
+                    </RecordDetail>
+                  ) : null
+                }
+              />
+            );
+          })}
+          {plannedSteps.map((step) => (
+            <RecordRow
+              key={`planned-${step.kind}`}
+              leading={<RecordDot state="not_reached" label="Not reached" />}
+              primary={
+                <span className="text-muted-foreground">{step.label}</span>
+              }
+              secondary={
+                step.status === "waiting_for_you"
+                  ? "Waiting for your review"
+                  : "Upcoming"
+              }
+            />
+          ))}
+          {run.agentModelMs > 0 ? (
+            <RecordRow
+              leading={<RecordDot state="done" label={STEP_LABEL.done} />}
+              primary="Agent model turns"
+              secondary="Lower bound: measured model calls only"
+              trailing={`≥${formatWorkDuration(run.agentModelMs)}`}
+            />
+          ) : messages.length && run.endedAt ? (
+            <RecordRow
+              leading={<RecordDot state="skipped" label="Not recorded" />}
+              primary="Agent model turns"
+              secondary="No model-turn duration was stored for this run"
+              trailing="Not recorded"
+            />
+          ) : null}
+        </RecordList>
+      </div>
       <p className="mt-2 text-2xs text-muted-foreground">
         — means no timestamped interval was recorded. Agent model time includes
         reasoning and generation; it is measured per turn, then summed for the
@@ -552,6 +448,50 @@ function AgentWorkOverview({
         lower bound; attempt time includes executor and network latency.
       </p>
     </div>
+  );
+}
+
+const STEP_LABEL = {
+  done: "Done",
+  running: "Running",
+  warning: "Some attempts failed",
+  failed: "Failed",
+} as const satisfies Partial<Record<ReportRowState, string>>;
+
+function workItemState(item: AgentWorkItem): keyof typeof STEP_LABEL {
+  if (item.running) return "running";
+  if (item.failed) return item.completed ? "warning" : "failed";
+  return item.completed ? "done" : "running";
+}
+
+const SETTLEMENT_STATE = {
+  done: "done",
+  unanswered: "warning",
+} as const satisfies Record<
+  AgentConversationSettlement["outcome"],
+  ReportRowState
+>;
+
+/** A step's timing breakdown, each figure with its caveat in text rather than a tooltip. */
+function StepTiming({
+  rows,
+}: {
+  rows: readonly (readonly [string, string, string?])[];
+}) {
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 tabular-nums">
+      {rows.map(([label, value, note]) => (
+        <Fragment key={label}>
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd>
+            {value}
+            {note ? (
+              <span className="text-muted-foreground"> · {note}</span>
+            ) : null}
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
   );
 }
 
@@ -816,14 +756,28 @@ function AgentTranscript({
       {messages.map((message) => (
         <AgentMessage key={message.id} message={message} />
       ))}
-      {settlements.map((settlement) => (
-        <p
-          key={settlement.operationId}
-          className="border-t border-border py-2 font-mono text-xs text-muted-foreground"
-        >
-          {settlement.operationId} · {settlement.outcome}
-        </p>
-      ))}
+      {settlements.length ? (
+        <RecordList aria-label="Operation settlements" className="pt-2">
+          {settlements.map((settlement) => (
+            <RecordRow
+              key={settlement.operationId}
+              leading={
+                <RecordDot
+                  state={SETTLEMENT_STATE[settlement.outcome]}
+                  label={humanize(settlement.outcome)}
+                />
+              }
+              primary={
+                <code className="font-mono text-xs">
+                  {settlement.operationId}
+                </code>
+              }
+              secondary={settlement.reason ?? humanize(settlement.outcome)}
+              clip={false}
+            />
+          ))}
+        </RecordList>
+      ) : null}
     </div>
   );
 }

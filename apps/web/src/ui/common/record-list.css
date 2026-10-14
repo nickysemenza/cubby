@@ -47,47 +47,64 @@
   font-size: 0.75rem;
 }
 
-/* Timeline: the leading column carries a continuous rail through each dot. */
-.ledger[data-record-list="timeline"]
-  > .ledger-row:not(
-    [data-record-heading],
-    [data-record-more],
-    [data-record-fold]
-  )
-  > [data-ledger-slot="leading"] {
+/* Timeline: a continuous rail through each mark, drawn on the row so it spans
+   every line a row wraps to (evidence, phone commands, expanded detail). It
+   starts at the first mark and ends at the last; a mark's surface halo keeps
+   the rail out of hollow and faint states. */
+.ledger[data-record-list="timeline"] {
+  --record-mark-center: calc(0.1875rem + 0.625rem);
+}
+.ledger[data-record-list="timeline"] > .ledger-row {
   position: relative;
-  align-self: stretch;
+  border-top: 0;
+}
+.ledger[data-record-list="timeline"]
+  > .ledger-row
+  > [data-ledger-slot="leading"] {
   display: flex;
   justify-content: center;
   width: 0.75rem;
 }
 .ledger[data-record-list="timeline"]
-  > .ledger-row:not(
-    [data-record-heading],
-    [data-record-more],
-    [data-record-fold]
-  )
-  > [data-ledger-slot="leading"]::before {
+  > .ledger-row:has(> [data-ledger-slot="leading"])::before {
   content: "";
   position: absolute;
-  inset-block: calc(-1 * var(--brand-space-1) - 1px);
-  left: 50%;
+  top: 0;
+  bottom: 0;
+  left: calc(0.375rem - 0.5px);
   width: 1px;
   background: var(--border);
 }
 .ledger[data-record-list="timeline"]
-  > .ledger-row:not(
-    [data-record-heading],
-    [data-record-more],
-    [data-record-fold]
-  )
-  > [data-ledger-slot="leading"]
-  > * {
-  position: relative;
-  background: var(--card);
+  > .ledger-row:has(> [data-ledger-slot="leading"]):is(
+    :first-child,
+    [data-record-heading] + *
+  )::before {
+  top: var(--record-mark-center);
 }
-.ledger[data-record-list="timeline"] > .ledger-row {
-  border-top: 0;
+.ledger[data-record-list="timeline"]
+  > .ledger-row:has(> [data-ledger-slot="leading"]):is(
+    :last-child,
+    :has(+ :is([data-record-heading], [data-record-more], [data-record-fold]))
+  )::before {
+  bottom: auto;
+  height: var(--record-mark-center);
+}
+/* A lone mark has nothing to connect; first-and-last rows draw no rail. */
+.ledger[data-record-list="timeline"]
+  > .ledger-row:is(:first-child, [data-record-heading] + *):is(
+    :last-child,
+    :has(+ :is([data-record-heading], [data-record-more], [data-record-fold]))
+  )::before {
+  display: none;
+}
+.ledger[data-record-list="timeline"]
+  > .ledger-row
+  > [data-ledger-slot="leading"]
+  > *
+  > [data-record-mark] {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--card);
 }
 
 @media (max-width: 767px) {
@@ -113,4 +130,40 @@
     > [data-ledger-slot="secondary"] {
     grid-column: 1 / -1;
   }
+}
+
+/* Running: one ring grows out of the mark and fades; transform and opacity
+   only. Reduced motion keeps a still halo so the state still reads. */
+[data-record-dot="running"] > [data-record-mark] {
+  position: relative;
+}
+[data-record-dot="running"] > [data-record-mark]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: record-running 1.6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+@keyframes record-running {
+  from {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-record-dot="running"] > [data-record-mark]::after {
+    animation: none;
+    transform: scale(1.9);
+    opacity: 0.2;
+  }
+}
+
+/* Row commands sit inside the row's line height instead of growing it. */
+.ledger[data-record-list] > .ledger-row > [data-ledger-slot="actions"] {
+  margin-block: -0.1875rem;
 }

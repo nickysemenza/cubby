@@ -227,6 +227,12 @@ public struct ReportPresentation: Hashable, Sendable {
         public let tone: Tone?
     }
 
+    /// A row state's chip tone, keyed by the wire value; running reads untoned.
+    static let stateTone: [String: Tone] = [
+        "done": .positive, "warning": .warning, "failed": .destructive,
+        "skipped": .muted, "not_reached": .muted,
+    ]
+
     public struct Line: Hashable, Sendable {
         public let text: String
         public let tone: Tone?
@@ -429,9 +435,11 @@ public struct ReportPresentation: Hashable, Sendable {
                                 CollectionActionID(rawValue: $0.rawValue)
                             },
                             key: row.key, disabledReason: row.disabledReason,
-                            statuses: (row.statuses ?? []).map {
-                                Status(label: $0.label, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
-                            },
+                            // The row's state leads its chips; web draws it as the row's mark.
+                            statuses: (row.state.map { [Status(label: $0.label, tone: ReportPresentation.stateTone[$0.kind.rawValue])] } ?? [])
+                                + (row.statuses ?? []).map {
+                                    Status(label: $0.label, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                                },
                             lines: (row.lines ?? []).map {
                                 Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                             },

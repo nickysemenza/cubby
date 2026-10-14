@@ -23,7 +23,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import { runHasCapability } from "~/server/purchase-import/capabilities";
-import { phaseLabel } from "~/server/repo/collection-items";
+import { phaseLabel, runRowState } from "~/server/repo/collection-items";
 import type { getRunLiveProgress } from "~/server/repo/run-progress";
 import type { suggestionCounts } from "~/server/repo/suggestion-review";
 
@@ -48,6 +48,7 @@ type Line = NonNullable<Row["lines"]>[number];
 
 /** What a run builder says about one record row; `row` lays it out as the shared row shape. */
 interface RowFields {
+  state?: Row["state"];
   title?: string | undefined;
   body?: string | undefined;
   at?: string | undefined;
@@ -74,12 +75,12 @@ const toneForState = (state: string): Tone | undefined => {
 };
 
 /**
- * A progress phase with a known tone is the row's state, so a failed phase reads as one and its
+ * A status with a settled meaning is the row's state, so a failed phase reads as one and its
  * detail wraps in full instead of clipping (a ledger clips only quiet rows).
  */
-const phaseBadges = (phase: string) => {
-  const tone = toneForState(phase);
-  return tone ? [{ label: phaseLabel(phase), tone }] : [];
+const statusState = (status: string, label = phaseLabel(status)) => {
+  const kind = runRowState(status);
+  return kind ? { kind, label } : undefined;
 };
 
 const line = (text: string, tone?: Tone): Line =>
@@ -97,6 +98,7 @@ const row = (id: string, fields: RowFields = {}): Row => ({
   trailing: null,
   key: id,
   at: fields.at,
+  ...(fields.state ? { state: fields.state } : {}),
   statuses: fields.badges ?? [],
   lines: fields.lines ?? [],
   detail: fields.detail,
@@ -289,10 +291,10 @@ function importProgress(run: RunDetail): ReportBlock[] {
           row(progress.eventId, {
             title: `${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`,
             at: progress.createdAt,
-            badges: phaseBadges(progress.phase),
+            state: statusState(progress.phase),
           }),
         ),
-        { title: "Run progress history", presentation: "ledger" },
+        { title: "Run progress history", presentation: "timeline" },
       ),
     );
   return blocks;
@@ -544,7 +546,7 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
       row(operation.operationId, {
         title: operation.kind,
         at: operation.startedAt,
-        badges: [badge(operation.state, toneForState(operation.state))],
+        state: statusState(operation.state, operation.state),
         lines: [
           line(operation.operationId, "muted"),
           ...(operation.error ? [line(operation.error, "destructive")] : []),
@@ -553,7 +555,7 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
     ),
     {
       empty: "No durable operations have been recorded for this run.",
-      presentation: "ledger",
+      presentation: "timeline",
     },
   ),
 ];
@@ -945,14 +947,14 @@ export function liveProgressBlocks(
           title: phaseLabel(event.phase),
           body: event.detail ?? undefined,
           at: event.createdAt,
-          badges: phaseBadges(event.phase),
+          state: statusState(event.phase),
         }),
       ),
       {
         empty: active
           ? "Waiting for the first progress update…"
           : "No progress updates were recorded for this Run.",
-        presentation: "ledger",
+        presentation: "timeline",
       },
     ),
   ];
@@ -1026,13 +1028,11 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
         row(call.id, {
           title: `${call.operation} · ${call.feature} · ${call.provider}`,
           at: call.createdAt.toISOString(),
-          badges: [
-            badge(
-              call.status,
-              call.status === "succeeded" ? "positive" : "destructive",
-            ),
-            badge(AI_USAGE_TRANSPORT_LABELS[call.transport]),
-          ],
+          state: {
+            kind: call.status === "succeeded" ? "done" : "failed",
+            label: call.status,
+          },
+          badges: [badge(AI_USAGE_TRANSPORT_LABELS[call.transport])],
           lines: [
             line(`${call.model} · attempt ${call.attempt}`, "muted"),
             line(

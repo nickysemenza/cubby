@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import {
-  WorkState,
+  WorkStateDot,
   workIssueText,
   workStateLabel,
 } from "~/app/activity/work-state";
@@ -30,6 +30,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -225,7 +226,8 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
                 actions={
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
+                    className="h-6"
                     disabled={
                       attach.isPending ||
                       image.associations.some(
@@ -343,6 +345,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               {(recentRuns.data?.items ?? []).map((run) => (
                 <RecordRow
                   key={run.id}
+                  leading={<WorkStateDot state={run.state} />}
                   primary={
                     <a
                       className="hover:underline"
@@ -351,7 +354,8 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
                       {run.workLabel}
                     </a>
                   }
-                  secondary={
+                  secondary={[
+                    workStateLabel(run.state),
                     run.executors.length
                       ? [
                           ...new Set(
@@ -360,15 +364,10 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
                             ),
                           ),
                         ].join(" · ")
-                      : "Executor not assigned"
-                  }
+                      : "Executor not assigned",
+                  ].join(" · ")}
                   trailing={
-                    <span className="flex flex-wrap items-center justify-end gap-2">
-                      <span>
-                        {formatInstant(run.createdAt, "dateShortTime")}
-                      </span>
-                      <WorkState state={run.state} />
-                    </span>
+                    <DateDisplay timestamp={run.createdAt} clock="day" />
                   }
                   detail={
                     workIssueText(run) ? (

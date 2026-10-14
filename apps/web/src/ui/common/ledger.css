@@ -47,7 +47,7 @@
   overflow-wrap: anywhere;
 }
 [data-ledger-slot="trailing"] {
-  grid-column: 3;
+  grid-column: 3 / -1;
   grid-row: 1;
   text-align: end;
   font-variant-numeric: tabular-nums;
@@ -138,6 +138,15 @@
     > .ledger-row:not(:has(> [data-ledger-slot="actions"]))
     > [data-ledger-slot="trailing"] {
     grid-column: 4 / -1;
+  }
+  /* Once any row has commands, every row keeps the commands column, so
+     times share one right edge instead of jumping on rows without them. */
+  .ledger[data-ledger="records"]:has(
+      > .ledger-row > [data-ledger-slot="actions"]
+    )
+    > .ledger-row:not(:has(> [data-ledger-slot="actions"]))
+    > [data-ledger-slot="trailing"] {
+    grid-column: 4;
   }
   .ledger[data-ledger="records"]
     > .ledger-row:not(

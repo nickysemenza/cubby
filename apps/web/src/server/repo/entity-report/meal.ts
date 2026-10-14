@@ -6,9 +6,11 @@ import type {
 import { mealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipePreparationOut } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { countLabel } from "@cubby/shared/pluralize";
 import { and, asc, inArray } from "drizzle-orm";
 
+import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { Database } from "~/server/db";
 import { ledgerParty } from "~/server/db/schema";
@@ -39,8 +41,57 @@ const amountText = (amount: { value: number; unit: string }) =>
 const targetLabel = (target: { name: string | null; date: string }) =>
   target.name ?? target.date;
 
+type Preparation = MealRecipePreparationOut;
+type Portion = Preparation["portions"][number];
+
+/** "200 g · 40% of batch": what a portion weighs and how much of the batch it takes, when known. */
+const portionEstimate = (portion: Portion) => {
+  const parts = [
+    ...(portion.grams !== null
+      ? [`${formatCount(portion.grams, 2)} g`]
+      : hasKnownEstimate(portion.weight)
+        ? [formatEstimate(portion.weight, "macro", "g")]
+        : []),
+    ...(hasKnownEstimate(portion.batchShare)
+      ? [`${formatEstimate(portion.batchShare, "share")} of batch`]
+      : []),
+  ];
+  return parts.length > 0 ? parts.join(" · ") : "weight unknown";
+};
+
+const yieldText = (basis: Preparation["yieldBasis"]) => {
+  switch (basis.kind) {
+    case "actual":
+      return `${basis.lowerGrams} g made`;
+    case "estimated":
+      return `${basis.lowerGrams} g estimated`;
+    case "recipe":
+      return `${basis.lowerGrams} g recipe yield`;
+    case "missing":
+      return "Yield needed";
+  }
+};
+
+/** How much of a batch made here its portions account for, and what is left. */
+const assignedText = (summary: NonNullable<Preparation["sourceSummary"]>) => {
+  const assigned =
+    summary.assignedGrams !== null
+      ? `${formatCount(summary.assignedGrams, 1)} g assigned`
+      : summary.assignedShare.status === "complete" ||
+          summary.assignedShare.status === "partial"
+        ? `${formatEstimate(summary.assignedShare, "share")} of batch assigned`
+        : "assigned weight unknown";
+  const left =
+    summary.unassignedGrams === null
+      ? "remainder unknown"
+      : summary.unassignedGrams < 0
+        ? `over-assigned by ${Math.round(-summary.unassignedGrams)} g`
+        : `${Math.round(summary.unassignedGrams)} g unassigned`;
+  return `${assigned} · ${left}`;
+};
+
 /** The units a portion of this recipe can be entered in: its yield's, servings, and grams. */
-const portionUnits = (preparation: MealRecipePreparationOut) => {
+const portionUnits = (preparation: Preparation) => {
   const units = [
     ...(preparation.recipeServings !== null ? ["serving"] : []),
     ...(preparation.recipeYield ? [preparation.recipeYield.unit] : []),
@@ -199,15 +250,15 @@ export async function mealCompositionReport(
 
 /** One prepared recipe's portions, how much of the batch they account for, and what to add. */
 function portionBlocks(
-  preparation: MealRecipePreparationOut,
+  preparation: Preparation,
   mealId: ReturnType<typeof mealShortcode.parse>,
   freeEaters: readonly { value: string; label: string }[],
 ): ReportBlock[] {
   const { mealRecipeId } = preparation;
   const summary = preparation.sourceSummary;
-  const overAssigned = (summary?.unassignedGrams ?? 0) < 0;
   const block: Records = {
     kind: "records",
+    presentation: "ledger",
     title: `Portions · ${preparation.recipe.name}`,
     rows: preparation.portions.map((portion): Row => {
       const eaten = portion.confirmedAt !== null;
@@ -221,15 +272,16 @@ function portionBlocks(
         title: portion.eater.name,
         subtitle: [
           amountText(portion.amount),
-          portion.servedHere ? "this meal" : targetLabel(portion.targetMeal),
+          portionEstimate(portion),
+          ...(portion.servedHere
+            ? []
+            : [`for ${targetLabel(portion.targetMeal)}`]),
         ].join(" · "),
         trailing: null,
         key: `${portion.targetMeal.id}:${portion.eater.id}`,
-        statuses: [
-          eaten
-            ? { label: "Eaten", tone: "positive" }
-            : { label: "Planned", tone: "muted" },
-        ],
+        state: eaten
+          ? { kind: "done", label: "Eaten" }
+          : { kind: "not_reached", label: "Planned" },
         commands: [
           {
             id: `portion-status:${portion.targetMeal.id}:${portion.eater.id}`,
@@ -259,7 +311,15 @@ function portionBlocks(
         ],
       };
     }),
-    empty: "No portions yet.",
+    // An empty ledger drops its title, so the empty copy names the recipe.
+    empty: `No one has a portion of ${preparation.recipe.name} yet.`,
+    // A batch made here has a source summary; leftovers name the meal that made them.
+    footer: [
+      yieldText(preparation.yieldBasis),
+      summary
+        ? assignedText(summary)
+        : `From ${targetLabel(preparation.sourceMeal)}`,
+    ].join(" · "),
     commands: [
       ...(preparation.preparedHere && freeEaters.length > 0
         ? [
@@ -326,9 +386,5 @@ function portionBlocks(
       },
     ],
   };
-  if (summary?.unassignedGrams != null)
-    block.footer = overAssigned
-      ? `Over-assigned by ${Math.round(-summary.unassignedGrams)} g of the batch.`
-      : `${Math.round(summary.unassignedGrams)} g of the batch unassigned.`;
   return [block];
 }
