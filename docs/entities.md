@@ -1020,8 +1020,8 @@ checks assess recorded actor attribution, a consistent timeline, and terminal
 target outcomes for completed Mail import and photo inventory runs (and
 historical validation and enrichment runs). A skipped or unavailable target
 needs a recorded reason. Running or paused work does not need finished targets. Execution status remains separate from
-quality of the recorded facts. The generic Runs list and native activity rows
-hydrate the same Run quality. Image jobs are their own unscored entity
+quality of the recorded facts. The generic Runs list on web and native
+hydrates the same Run quality. Image jobs are their own unscored entity
 (`imageJob`) and are not assessed. Scored and unscored web renderer
 coverage is type-checked against the generated list shape. Browser captures are required by the specific
 commit contract, so their absence is not a universal Run quality defect.

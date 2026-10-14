@@ -14,9 +14,6 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
 
 ## Wire rules (non-negotiable)
 
-- Adding a Run purpose also changes `ActivityKind`: update
-  `CubbyClient.activityListKind` and validate with the simulator build.
-
 - `/api/v1` has no `{ok,data}` envelope: a 2xx body _is_ the payload. Every error status carries
   one bare `ApiError` body (`{code, message, reason?, requestId?, validationIssues?}`), decoded by
   `CubbyAPIError` — never a per-operation error type.

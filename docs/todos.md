@@ -431,7 +431,8 @@ unattended Mail import / interactive Burn-down boundary.
   updates; follow the MCP reader's cold-start regression in `agent-host.ts`.
 
 Run is the one unit of unattended work (Mail import, photo inventory, a member's
-import) and the attempt history the shared activity projection presents.
+import), listed through the generic Run list; image processing work is its own
+Image job entity.
 Burn-down writes are not Runs: they are audited member writes with Sources.
 
 - 🤔 🐛 **Preserve chronological timestamps for completed approval Runs.** A

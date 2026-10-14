@@ -7,22 +7,17 @@ struct WorkRootView: View {
 
 @MainActor @Observable
 final class WorkHighlightsModel {
-    private(set) var runs: [ActivityRun] = []
     private(set) var entries: [AuditLogEntryOut] = []
     private(set) var error: String?
 
-    init(runs: [ActivityRun] = [], entries: [AuditLogEntryOut] = [], error: String? = nil) {
-        self.runs = runs
+    init(entries: [AuditLogEntryOut] = [], error: String? = nil) {
         self.entries = entries
         self.error = error
     }
 
     func refresh(client: CubbyClient) async {
         do {
-            async let runPage = client.activityRuns(limit: 4)
-            async let auditPage = client.auditHistory(limit: 6)
-            runs = try await runPage.items
-            entries = try await auditPage.entries
+            entries = try await client.auditHistory(limit: 6).entries
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -329,20 +324,11 @@ struct TodayContent: View {
                     NavigationLink(value: Route.activityList) {
                         Label("All activity", systemImage: "clock.arrow.circlepath")
                     }
-                    ForEach(highlights?.runs ?? [], id: \.id) { run in
-                        Button {
-                            model.navigator.openActivity(.serverRun(run.id))
-                        } label: {
-                            ActivityRunRow(run: run)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: 0, leading: FieldGuideTokens.Space.md,
-                                bottom: 0, trailing: FieldGuideTokens.Space.md))
+                    NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
+                        Label("Runs needing attention", systemImage: "exclamationmark.circle")
                     }
-                    if highlights?.runs.isEmpty == true {
-                        emptyStateText("No recent runs")
+                    NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
+                        Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
                     }
                 }
                 .accessibilityIdentifier("work.activityInbox")
@@ -534,15 +520,12 @@ struct TodayContent: View {
         private func workActivityPanel(_ highlights: WorkHighlightsModel) -> some View {
             dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") {
                 Button("All activity") { model.navigator.section = .activity }
-                ForEach(highlights.runs, id: \.id) { run in
-                    Button {
-                        model.navigator.openActivity(.serverRun(run.id))
-                    } label: {
-                        ActivityRunRow(run: run)
-                    }
-                    .buttonStyle(.plain)
+                NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
+                    Label("Runs needing attention", systemImage: "exclamationmark.circle")
                 }
-                if highlights.runs.isEmpty { emptyStateText("No recent runs") }
+                NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
+                    Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
+                }
             }
         }
 
@@ -796,16 +779,6 @@ private func formattedDueDate(_ raw: String) -> String {
             nutritionDay: "2026-09-14",
             onRefresh: {},
             highlights: WorkHighlightsModel(
-                runs: [
-                    ActivityRun(
-                        id: "RUN-4K7M", recordType: .run, kind: .photoInventory, subjectName: "Photo import",
-                        iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
-                        changedCount: 0,
-                        state: "running", active: true, createdAt: .now,
-                        attempts: 1, executors: [], standardCost: 0, chargedCost: 0, standardUnpricedCount: 0,
-                        chargedUnpricedCount: 0, savings: 0, comparedCalls: 0, count: 0,
-                        hasDiagnostics: false, canRetry: false)
-                ],
                 entries: [
                     AuditLogEntryOut(
                         entryKey: "synthetic-change", entityKind: .product,
@@ -903,18 +876,7 @@ private func formattedDueDate(_ raw: String) -> String {
                 problems: .loaded(PreviewFixtures.sampleTodayProblems),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
                 onRefresh: {},
-                highlights: WorkHighlightsModel(
-                    runs: [
-                        ActivityRun(
-                            id: "RUN-4K7M", recordType: .run, kind: .photoInventory,
-                            subjectName: "Photo import",
-                            iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
-                            changedCount: 0,
-                            state: "running", active: true, createdAt: .now,
-                            attempts: 1, executors: [], standardCost: 0, chargedCost: 0,
-                            standardUnpricedCount: 0, chargedUnpricedCount: 0, savings: 0, comparedCalls: 0,
-                            count: 0, hasDiagnostics: false, canRetry: false)
-                    ]))
+                highlights: WorkHighlightsModel())
         }
         .frame(width: 1240, height: 900)
         .environment(PreviewFixtures.signedInModel())

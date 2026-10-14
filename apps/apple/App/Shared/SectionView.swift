@@ -62,7 +62,6 @@ struct RouteDestinationView: View {
         case .statementCsvImport: StatementCsvImportView()
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
-        case .activityDetail(let id): ActivityDetailView(id: id)
         case .localActivity(let id): LocalActivityDetailView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
         case .entityDetail(.run, let id): RunConsoleView(runID: id).id(id)

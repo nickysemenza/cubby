@@ -12,10 +12,9 @@ import Foundation
 /// - `cubby://today` opens Today.
 /// - `cubby://search` opens the Search tab (home-screen quick action).
 /// - `cubby://dev` opens the Dev screen.
-/// - `cubby://activity` opens the Activity list; `cubby://activity/<IPR-…|RUN-…>` opens one run
+/// - `cubby://activity` opens Activity; `cubby://activity/<IPR-…|RUN-…>` opens that Image job or
+///   Run beside it (both are catalog entities; the prefix chooses the detail).
 /// - `cubby://activity/local/<id>` opens one running device-local activity.
-///   (the server `ActivityRun` id shape — `packages/schemas/src/activity.ts`'s `activityRunId` —
-///   is not a catalog entity shortcode, so it is validated here rather than through `CubbyLabel`).
 /// - `cubby://cli-auth?port=<port>&nonce=<nonce>` asks the app to hand its session to a waiting
 ///   `cubby auth login` loopback listener. The nonce authenticates that listener; the app
 ///   confirms with the user before sending anything.
@@ -94,9 +93,8 @@ public enum CubbyLink: Sendable, Hashable {
         }
     }
 
-    /// The server `ActivityRun` id shape (`IPR-…` a purchase-import run, `RUN-…` any other run),
-    /// uppercased. Not a `CubbyLabel`/`EntityCatalog` shortcode — activity runs are not a catalog
-    /// entity — so this validates the prefix and body directly instead.
+    /// An Image job (`IPR-…`) or Run (`RUN-…`) shortcode, uppercased; the Activity link accepts
+    /// only these two entities, so it validates their prefixes directly.
     private static func activityRunID(_ raw: String) -> String? {
         let value = raw.trimmingCharacters(in: .whitespaces).uppercased()
         for prefix in ["IPR-", "RUN-"] {
