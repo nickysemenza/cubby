@@ -244,6 +244,7 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
       });
       const data: z.infer<ReturnType<typeof z.json>> = {
         name: "Synthetic evidence purchase line",
+        lineKind: "principal",
         cost: 12,
         date: "2026-09-01",
         costType: "materials",

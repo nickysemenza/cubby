@@ -38,9 +38,10 @@ export const expenseChecks = defineEntityChecks({
     FROM (${expenseDerivedReadSql("categoryEvidence", { expenseIds: ids })}) evidence`,
   checks: {
     expense_receipt_role: {
+      expected: (t: Expense) => sql`${t.future} = false`,
       missing: (t: Expense) =>
         sql`${t.lineKind} = ${expenseLineKindSchema.enum.unclassified}`,
-      fingerprint: (t: Expense) => [sql`${t.lineKind}`],
+      fingerprint: (t: Expense) => [sql`${t.future}`, sql`${t.lineKind}`],
     },
     expense_cost: {
       // A future (planned, not yet spent) line may be unpriced; once it is

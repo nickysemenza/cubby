@@ -34,6 +34,7 @@ are all priced at $0 (an award ticket) splits adjustments evenly across them;
 one unpriced principal leaves the shares unknown.
 
 An Expense with an unresolved receipt role uses `lineKind = unclassified`.
+Receipt-role quality is assessed only for incurred lines; planned lines are not expected to have receipt evidence.
 Its signed amount appears once in unresolved allocations and remains in ledger,
 Purchase, and vendor totals. It is not distributed using principal weights and
 cannot inherit Product, Project, or spending-category assignments. A Purchase
@@ -85,5 +86,5 @@ in which case PostgreSQL aborts one and the person retries.
 
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
-Web and native split editors let each part retain an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
+Web and native split editors let each part set an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.

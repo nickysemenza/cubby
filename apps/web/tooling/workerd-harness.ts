@@ -53,6 +53,8 @@ interface WorkerdProfileDefinition {
    * caller supplies live peers.
    */
   purchaseAgentPeers: boolean;
+  /** The Worker's deterministic AI Gateway service peer without agent peers. */
+  testGatewayPeer: boolean;
   /**
    * Take this worktree's harness lock and rebuild a stale Worker before
    * starting. A Playwright run already holds the lock from global setup, and
@@ -72,6 +74,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: false,
     purchaseAgentPeers: false,
+    testGatewayPeer: true,
     harnessLock: false,
   },
   /** Gmail import journeys: the real background consumer runs mail search. */
@@ -84,6 +87,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: true,
     purchaseAgentPeers: false,
+    testGatewayPeer: false,
     harnessLock: false,
   },
   /** Provider acquisition and research use the deployed Workflow/queue handoffs. */
@@ -96,6 +100,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: true,
     purchaseAgentPeers: true,
+    testGatewayPeer: false,
     harnessLock: true,
   },
   /** Actual Mac captures; the production coordinator uses scripted judgment. */
@@ -108,6 +113,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: false,
     purchaseAgentPeers: true,
+    testGatewayPeer: false,
     harnessLock: true,
   },
   /**
@@ -124,6 +130,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: false,
     purchaseAgentPeers: true,
+    testGatewayPeer: false,
     harnessLock: true,
   },
   /**
@@ -139,6 +146,7 @@ export const WORKERD_PROFILES = {
     },
     googleProvider: false,
     purchaseAgentPeers: true,
+    testGatewayPeer: false,
     harnessLock: true,
   },
 } as const satisfies Record<string, WorkerdProfileDefinition>;
@@ -242,14 +250,14 @@ function compiledWebWorkerConfig(
     ...(config.services ?? []),
     ...(profile.purchaseAgentPeers
       ? [
-          // Harness-only bindings: the agent's model provider and the
-          // Worker's own structured AI features answer from peers.
           {
             binding: "CUBBY_PURCHASE_AGENT_TEST_MODEL",
             service: "cubby-test-model",
           },
-          { binding: "CUBBY_TEST_AI_GATEWAY", service: "cubby-test-gateway" },
         ]
+      : []),
+    ...(profile.testGatewayPeer || profile.purchaseAgentPeers
+      ? [{ binding: "CUBBY_TEST_AI_GATEWAY", service: "cubby-test-gateway" }]
       : []),
   ];
 
@@ -316,6 +324,10 @@ function peerWorkers(
             vars: model.vars,
             secrets: model.secrets,
           },
+        ]
+      : []),
+    ...(profile.testGatewayPeer || profile.purchaseAgentPeers
+      ? [
           {
             config: {
               name: "cubby-test-gateway",
