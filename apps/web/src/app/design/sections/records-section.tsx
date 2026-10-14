@@ -176,7 +176,6 @@ export function RecordsSection() {
           description="Photo captures page through large thumbnails."
           schema={reportBlock}
           defaultData={demoFilmstripBlock}
-          className="xl:col-span-2"
         >
           {renderBlock}
         </EditableComponentDemo>

@@ -40,6 +40,11 @@ test("design showcase renders every section and its live demos", async ({
   await expect(
     records.getByRole("region", { name: "Import pipeline" }),
   ).toContainText("Not reached");
+  // Captures carry no `key`; choosing one must still select it.
+  await records.getByRole("button", { name: "View Nutrition" }).click();
+  await expect(
+    records.getByRole("region", { name: "Selected record" }),
+  ).toContainText("Nutrition");
 
   // Oat milk starts with 2 on hand; the bulk action writes page state only.
   const table = page.locator("#rtable");

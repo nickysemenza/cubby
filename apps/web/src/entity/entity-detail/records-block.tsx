@@ -43,10 +43,10 @@ function RecordFilmstrip({
   block: RecordsBlock;
   context: LedgerContext;
 }) {
-  const [selectedKey, setSelectedKey] = useState<string>();
+  // By position: `key` is optional, and keyless captures must stay selectable.
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [offset, setOffset] = useState(0);
-  const selected =
-    block.rows.find((row) => row.key === selectedKey) ?? block.rows[0];
+  const selected = block.rows[selectedIndex] ?? block.rows[0];
   const start = Math.min(
     offset,
     Math.max(0, Math.floor((block.rows.length - 1) / 8) * 8),
@@ -55,13 +55,13 @@ function RecordFilmstrip({
   return (
     <Stack gap="sm" className="min-w-0">
       <Row gap="sm" className="flex-wrap">
-        {block.rows.slice(start, start + 8).map((row) => (
+        {block.rows.slice(start, start + 8).map((row, index) => (
           <Button
-            key={row.key ?? row.title}
+            key={row.key ?? start + index}
             variant={row === selected ? "secondary" : "outline"}
             aria-label={`View ${row.title}`}
             aria-pressed={row === selected}
-            onClick={() => setSelectedKey(row.key)}
+            onClick={() => setSelectedIndex(start + index)}
           >
             {row.imageUrl ? (
               <Image
