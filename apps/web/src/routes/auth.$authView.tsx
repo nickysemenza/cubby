@@ -40,29 +40,36 @@ function AuthPage() {
 
   return (
     <AuthEntryFrame>
-      {googleError ? (
-        <p
-          role="alert"
-          className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-        >
-          Google sign-in requires read-only Gmail access. Try again and approve
-          the Gmail permission.
-        </p>
-      ) : null}
-      <AuthUIProvider>
-        <AuthView pathname={authView} />
-      </AuthUIProvider>
-      {/* Statically false in every build, so the link never reaches a
+      {/* AuthView's card is a fixed max-w-sm without centering; share its
+          column so the alert and dev link align with the card's edges. */}
+      <div className="mx-auto w-full max-w-sm">
+        {googleError ? (
+          <p
+            role="alert"
+            className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          >
+            Google sign-in requires read-only Gmail access. Try again and
+            approve the Gmail permission.
+          </p>
+        ) : null}
+        <AuthUIProvider>
+          <AuthView pathname={authView} />
+        </AuthUIProvider>
+        {/* Statically false in every build, so the link never reaches a
           production bundle (enforced by scripts/check-client-bundle.ts). The
           route itself exists only in tooling/dev/worker.ts. */}
-      {import.meta.env.DEV && authView === "sign-in" ? (
-        <a
-          href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}
-          className={cn(buttonVariants({ variant: "outline" }), "mt-3 w-full")}
-        >
-          Continue as local dev user
-        </a>
-      ) : null}
+        {import.meta.env.DEV && authView === "sign-in" ? (
+          <a
+            href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "mt-3 w-full",
+            )}
+          >
+            Continue as local dev user
+          </a>
+        ) : null}
+      </div>
     </AuthEntryFrame>
   );
 }
