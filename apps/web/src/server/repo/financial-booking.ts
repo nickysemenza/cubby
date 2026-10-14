@@ -136,6 +136,13 @@ async function bookingAction(
     return fail(
       "Finish pricing the existing Expense lines before linking settlement.",
     );
+  if (
+    input.economicRole === "vendor" &&
+    vendorLines.some((line) => line.lineKind === "unclassified")
+  )
+    return fail(
+      "Classify the unresolved receipt roles before linking settlement; their amounts may already cover this transaction.",
+    );
   const negative = row.amount < 0;
   const matchingLines = vendorLines.filter((line) =>
     negative

@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   inventoryReceivingContextInput,
@@ -27,12 +28,18 @@ import { deriveReceivingGuidance } from "./receiving-guidance";
 export async function getReceivingContext(
   db: Database,
   input: z.output<typeof inventoryReceivingContextInput>,
+  actorContext: ActorContext,
   deps?: ProductMatchDependencies,
 ): Promise<InventoryReceivingContextOut> {
   const productId = await resolveOrThrow(db, "product", input.productId);
   const [stockRows, queue, expectedQuantity] = await Promise.all([
     listProductStock(db, productId),
-    getProductMatchQueue(db, { productId: input.productId }, deps),
+    getProductMatchQueue(
+      db,
+      { productId: input.productId },
+      deps,
+      actorContext,
+    ),
     getProductExpectedQuantity(db, productId),
   ]);
   const stock = stockRows.map((row) => ({

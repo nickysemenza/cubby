@@ -461,6 +461,7 @@ type ExpenseCaptureTestValues = {
   future: boolean;
   projectId: string | null;
   productId: string | null;
+  spendingCategoryId: string | null;
   productQuantity: number | null;
   vendor: string;
   orderId: string;
@@ -468,7 +469,13 @@ type ExpenseCaptureTestValues = {
   costType: string;
 };
 
-function ExpenseCaptureFields() {
+function ExpenseCaptureFields({
+  intent = "capture",
+  operations,
+}: {
+  intent?: "capture" | "full";
+  operations?: EntitySuggestionsOperations;
+}) {
   const form = useForm<ExpenseCaptureTestValues>({
     defaultValues: {
       name: "",
@@ -478,6 +485,7 @@ function ExpenseCaptureFields() {
       future: false,
       projectId: null,
       productId: null,
+      spendingCategoryId: null,
       productQuantity: null,
       vendor: "",
       orderId: "",
@@ -485,8 +493,8 @@ function ExpenseCaptureFields() {
       costType: "materials",
     },
   });
-  return (
-    <FormProvider {...form}>
+  const fields = (
+    <>
       <button
         type="button"
         onClick={() =>
@@ -505,12 +513,51 @@ function ExpenseCaptureFields() {
       </button>
       <button
         type="button"
+        onClick={() =>
+          form.setValue("spendingCategoryId", "SPC-4K7M", {
+            shouldDirty: true,
+          })
+        }
+      >
+        Set category
+      </button>
+      <button
+        type="button"
         onClick={() => form.setValue("lineKind", "tax", { shouldDirty: true })}
       >
         Set tax
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          form.setValue("lineKind", "unclassified", { shouldDirty: true })
+        }
+      >
+        Set unclassified
+      </button>
       <output data-testid="project-value">{form.watch("projectId")}</output>
-      <EntityIntentFields entity="expense" intent="capture" />
+      <output data-testid="line-kind-value">{form.watch("lineKind")}</output>
+      <output data-testid="product-value">{form.watch("productId")}</output>
+      <output data-testid="category-value">
+        {form.watch("spendingCategoryId")}
+      </output>
+      <EntityIntentFields entity="expense" intent={intent} />
+    </>
+  );
+  return (
+    <FormProvider {...form}>
+      {operations ? (
+        <FieldSuggestionProvider
+          entity="expense"
+          mode="create"
+          fieldKeys={["lineKind"]}
+          operations={operations}
+        >
+          {fields}
+        </FieldSuggestionProvider>
+      ) : (
+        fields
+      )}
     </FormProvider>
   );
 }
@@ -648,6 +695,58 @@ describe("EntityIntentFields", () => {
 
     expect(screen.queryByLabelText("Line kind")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Product quantity")).toBeInTheDocument();
+    expect(screen.getByLabelText("Project")).toBeInTheDocument();
+  });
+
+  it("keeps Product, Project, and category available while create role is pending", () => {
+    render(<ExpenseCaptureFields intent="full" />, {
+      wrapper: harness.wrapper,
+    });
+
+    expect(screen.getByLabelText("Product")).toBeInTheDocument();
+    expect(screen.getByLabelText("Project")).toBeInTheDocument();
+    expect(screen.getByLabelText("Spending category")).toBeInTheDocument();
+  });
+
+  it("holds a high-confidence tax role suggestion for review without clearing explicit fields", async () => {
+    let suggestionRequests = 0;
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => {
+        suggestionRequests += 1;
+        return {
+          suggestions: {
+            lineKind: {
+              value: "tax",
+              label: "Tax",
+              detail: null,
+              confidence: "high",
+              probability: 0.98,
+              reasoning: "The receipt labels this amount as sales tax.",
+              alternatives: [],
+              operation: "set",
+              removals: [],
+            },
+          },
+        };
+      }),
+    };
+
+    render(<ExpenseCaptureFields intent="full" operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Set project" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set category" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+      target: { value: "Sales tax" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Suggest line kind" }));
+
+    await waitFor(() => expect(suggestionRequests).toBeGreaterThan(0));
+    expect(screen.getByTestId("line-kind-value")).toHaveTextContent("auto");
+    expect(screen.getByLabelText("Project")).toBeInTheDocument();
+    expect(screen.getByLabelText("Spending category")).toBeInTheDocument();
+    expect(screen.getByTestId("project-value")).toHaveTextContent("PRJ-4K7M");
+    expect(screen.getByTestId("category-value")).toHaveTextContent("SPC-4K7M");
   });
 
   it('offers lineKind\'s create-only "auto" sentinel on create but not on edit', () => {
@@ -673,6 +772,38 @@ describe("EntityIntentFields", () => {
     expect(screen.queryByLabelText("Project")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("project-value")).toBeEmptyDOMElement(),
+    );
+  });
+
+  it("clears policy-blocked fields when the user explicitly chooses unclassified", async () => {
+    render(<ExpenseCaptureFields intent="full" />, {
+      wrapper: harness.wrapper,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Set product" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set project" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set category" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set unclassified" }));
+
+    expect(screen.queryByLabelText("Product")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Project")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Spending category"),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("product-value")).toBeEmptyDOMElement();
+      expect(screen.getByTestId("project-value")).toBeEmptyDOMElement();
+      expect(screen.getByTestId("category-value")).toBeEmptyDOMElement();
+    });
+  });
+
+  it("renders a transient incompatible role and clears its blocked Product", async () => {
+    render(<ExpenseCaptureFields />, { wrapper: harness.wrapper });
+    fireEvent.click(screen.getByRole("button", { name: "Set product" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set tax" }));
+
+    expect(screen.getByLabelText("Line kind")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("product-value")).toBeEmptyDOMElement(),
     );
   });
 

@@ -34,6 +34,9 @@ struct SplitExpenseSheet: View {
     @State private var pickingProjectFor: UUID?
 
     private var expense: EntityDescriptor { EntityCatalog[.expense] }
+    private var lineKinds: [LabeledOption] {
+        expense.field("lineKind")?.controlOptions ?? []
+    }
     private var costTypes: [LabeledOption] { expense.field("costType")?.valueOptions ?? [] }
     private var trades: [LabeledOption] { expense.field("trade")?.valueOptions ?? [] }
 
@@ -97,10 +100,14 @@ struct SplitExpenseSheet: View {
 
     /// Changes whenever any typed part or the attribution choice changes.
     private var recheckKey: String {
-        (session.parts.map {
-            "\($0.name)|\($0.cost)|\($0.costType)|\($0.trade ?? "")|\($0.projectID)|\($0.keepProduct)|\($0.productQuantity)"
+        let partKeys = session.parts.map { part in
+            [
+                part.name, part.cost, part.costType, part.trade ?? "",
+                part.lineKind ?? "", part.projectID, String(part.keepProduct),
+                part.productQuantity,
+            ].joined(separator: "|")
         }
-            + [session.attributionPolicy ?? ""]).joined(separator: ";")
+        return (partKeys + [session.attributionPolicy ?? ""]).joined(separator: ";")
     }
 
     @ViewBuilder
@@ -125,6 +132,18 @@ struct SplitExpenseSheet: View {
             #endif
             .accessibilityLabel("Part \(number) cost")
             .accessibilityIdentifier("split.part.\(number).cost")
+            Picker(
+                "Receipt role",
+                selection: Binding(
+                    get: { part.lineKind },
+                    set: { value in session.update(part.id) { $0.lineKind = value } })
+            ) {
+                Text("Automatic").tag(String?.none)
+                ForEach(lineKinds, id: \.value) { option in
+                    Text(option.label).tag(String?.some(option.value))
+                }
+            }
+            .accessibilityIdentifier("split.part.\(number).lineKind")
             Picker(
                 "Cost type",
                 selection: Binding(

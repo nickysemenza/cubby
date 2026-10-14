@@ -54,12 +54,14 @@ describe("atomic split classification intent", () => {
           {
             name: "Kept override",
             cost: 10,
+            lineKind: "principal",
             costType: "materials",
             trade: "other",
           },
           {
             name: "Inherited classification",
             cost: 20,
+            lineKind: "principal",
             costType: "materials",
             trade: "other",
             spendingCategoryId: null,
@@ -67,6 +69,7 @@ describe("atomic split classification intent", () => {
           {
             name: "Reviewed override",
             cost: 30,
+            lineKind: "principal",
             costType: "services",
             trade: "other",
             spendingCategoryId: reviewedCategory.shortcode,
@@ -129,6 +132,7 @@ describe("atomic split classification intent", () => {
             {
               name: "Unsupported allocation Product",
               cost: 30,
+              lineKind: "principal",
               costType: "materials",
               trade: "other",
               productId: product.shortcode,
@@ -136,6 +140,7 @@ describe("atomic split classification intent", () => {
             {
               name: "Other allocation",
               cost: 30,
+              lineKind: "principal",
               costType: "services",
               trade: "other",
             },

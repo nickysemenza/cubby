@@ -33,6 +33,22 @@ basket remain unknown unless explicitly classified. A basket whose principals
 are all priced at $0 (an award ticket) splits adjustments evenly across them;
 one unpriced principal leaves the shares unknown.
 
+An Expense with an unresolved receipt role uses `lineKind = unclassified`.
+Receipt-role quality is assessed only for incurred lines; planned lines are not expected to have receipt evidence.
+Its signed amount appears once in unresolved allocations and remains in ledger,
+Purchase, and vendor totals. It is not distributed using principal weights and
+cannot inherit Product, Project, or spending-category assignments. A Purchase
+with unresolved roles has incomplete allocation classification until those
+roles are resolved. Explicit receipt roles remain authoritative; automatic
+classification accepts only a confident Decision result. Uncertainty remains
+unclassified, while a model failure fails the operation. Settlement booking waits
+until existing vendor receipt roles are resolved, preventing an unresolved
+amount from being booked again. An abstention with explicit role-dependent
+assignments refuses the write instead of dropping that intent. An inferred
+positive discount on a forward receipt stays unresolved; explicit source roles
+can represent signed reversals and corrections. Detaching a Purchase preserves unresolved
+Expenses and their signed amounts without inventing inherited attribution.
+
 Category completeness is independent of pricing and Project completeness. A
 known category on an unpriced Expense is still classified. An automatic
 adjustment with unknown principal weights can remain partially classified.
@@ -70,4 +86,5 @@ in which case PostgreSQL aborts one and the person retries.
 
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
+Web and native split editors let each part set an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.

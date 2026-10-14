@@ -162,6 +162,7 @@ export const traceAllBounded = async <
 >(
   tasks: T,
   concurrency: number,
+  options?: { spanName: string },
 ): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     throw new Error("traceAllBounded concurrency must be a positive integer");
@@ -181,7 +182,14 @@ export const traceAllBounded = async <
       const entry = entries[index];
       if (!entry) return;
       const [name, run] = entry;
-      results[index] = [name, await withTrace(name, run)] as const;
+      results[index] = [
+        name,
+        await withTrace(
+          options?.spanName ?? name,
+          run,
+          options ? { batchItem: name } : undefined,
+        ),
+      ] as const;
     }
   };
 

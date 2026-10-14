@@ -212,7 +212,8 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   split: (context, input) => splitExpenseWorkflow(context, input),
   splitStart: async (context, input) =>
     startSplitDraft(await loadSplitOriginal(context.db, input.expenseId)),
-  checkSplit: (context, input) => checkSplitFor(context.db, input),
+  checkSplit: (context, input) =>
+    checkSplitFor(context.db, input, context.actorContext),
   linkExpenseCandidates: (context, input) =>
     listLinkExpenseCandidates(context.db, input),
   checkLinkExpenses: (context, input) =>

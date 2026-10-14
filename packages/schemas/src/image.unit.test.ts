@@ -92,6 +92,7 @@ describe("native image metadata", () => {
       capturedByName: null,
       captureAttribution: "none",
       provenanceEvidence: null,
+      sourceEvidence: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       perceptualHash: "0123456789abcdef",

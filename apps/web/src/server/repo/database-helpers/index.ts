@@ -44,6 +44,7 @@ export {
   buildOrderBy,
   buildSearchConditions,
   correlated,
+  sqlEnumConstant,
   countWhere,
   eqAny,
   eqAnyOrPresence,

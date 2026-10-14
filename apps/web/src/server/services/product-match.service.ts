@@ -1,9 +1,11 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
   parseShortcodeFor,
   type ProductId,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import type {
   dismissProductMatchInput,
   mergeProductMatchInput,
@@ -17,6 +19,8 @@ import { createLogger } from "@cubby/worker-tracing";
 import { chunk } from "es-toolkit";
 import type { z } from "zod";
 
+import type { AiRunContext } from "~/server/ai/run-feature";
+import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,
@@ -37,13 +41,15 @@ import {
   productPairKey,
   upsertAgentProductMatch,
 } from "~/server/repo/product-match-candidate";
-import { compareProductTitles } from "~/server/repo/product-variant-comparison";
+import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { ensureRun, aiCallRunInput } from "~/server/runs/ensure-run";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/semantic/vector-store";
+import { traceAllBounded } from "~/server/tracing";
 
 import {
   describeSignals,
@@ -66,6 +72,7 @@ const SEMANTIC_CONCURRENCY = 6;
 const PRELIMINARY_PER_PHOTO = 5;
 const FINAL_PER_PHOTO = 3;
 const QUEUE_LIMIT = 100;
+const VARIANT_DECISION_LIMIT = 100;
 
 const BOTH_STOCKED_WARNING =
   "Both products have stock. Merging sums their quantities, so delete the duplicate stock entry first.";
@@ -73,6 +80,7 @@ const BOTH_STOCKED_WARNING =
 export interface ProductMatchDependencies {
   vectorStore: VectorStorePort;
   semanticConfigured: () => boolean;
+  decideVariant?: typeof decideProductVariantComparison;
 }
 
 const productionProductMatchDependencies: ProductMatchDependencies = {
@@ -161,14 +169,14 @@ function candidate(
   a: LoadedMatchSide,
   b: LoadedMatchSide,
   details: Pick<ProductMatchCandidate, "evidence" | "sourceUrls" | "signals">,
+  variant: ProductVariantComparison,
 ): ProductMatchCandidate {
   const [keeper, other] = orient(a, b);
-  const variant = compareProductTitles(keeper.name, other.name);
   const variantWarnings = [variant.color, variant.size].flatMap(
     (fact, index) =>
       fact.relation === "different"
         ? [
-            `Different ${index === 0 ? "colors" : "sizes"} in Product titles: ${fact.first} and ${fact.second}. Check the photos and label before merging.`,
+            `Product titles conflict on ${index === 0 ? "color" : "size"}; check the photos and label before merging.`,
           ]
         : [],
   );
@@ -187,9 +195,69 @@ function candidate(
   };
 }
 
+function variantComparisonKey(a: LoadedMatchSide, b: LoadedMatchSide): string {
+  return productPairKey(a.entityId, b.entityId);
+}
+
+async function inferVariantComparisons(
+  db: Database,
+  actorContext: ActorContext,
+  pairs: readonly (readonly [LoadedMatchSide, LoadedMatchSide])[],
+  decideVariant: typeof decideProductVariantComparison = decideProductVariantComparison,
+): Promise<Map<string, ProductVariantComparison>> {
+  const unique = new Map<string, readonly [LoadedMatchSide, LoadedMatchSide]>();
+  for (const [a, b] of pairs.slice(0, VARIANT_DECISION_LIMIT)) {
+    const key = variantComparisonKey(a, b);
+    if (!unique.has(key)) unique.set(key, [a, b]);
+  }
+  if (unique.size === 0) return new Map();
+  const runId = await ensureRun(db, actorContext, aiCallRunInput(actorContext));
+  const usage: AiRunContext = {
+    db,
+    runId,
+    operation: "product-match.variant-comparison",
+  };
+  const tasks: Record<string, () => Promise<ProductVariantComparison>> =
+    Object.fromEntries(
+      [...unique].map(([key, [a, b]]) => {
+        const [first, second] = orient(a, b);
+        return [
+          key,
+          () =>
+            decideVariant({
+              firstTitle: first.name,
+              secondTitle: second.name,
+              usage,
+            }),
+        ];
+      }),
+    );
+  return new Map(
+    Object.entries(
+      await traceAllBounded(tasks, 3, {
+        spanName: "product-match.variant-comparison",
+      }),
+    ),
+  );
+}
+
+function variantFor(
+  comparisons: ReadonlyMap<string, ProductVariantComparison>,
+  a: LoadedMatchSide,
+  b: LoadedMatchSide,
+): ProductVariantComparison {
+  const [first, second] = orient(a, b);
+  return (
+    comparisons.get(variantComparisonKey(a, b)) ??
+    unknownProductVariantComparison(first.name, second.name)
+  );
+}
+
 async function getDirectedProductMatchQueue(
   db: Database,
   input: { productId: ProductShortcode; candidateId: ProductShortcode },
+  actorContext: ActorContext,
+  deps: ProductMatchDependencies,
 ): Promise<ProductMatchQueueOut> {
   const [sourceId, candidateId] = await resolvePair(db, [
     input.productId,
@@ -206,16 +274,31 @@ async function getDirectedProductMatchQueue(
   );
   const source = sides.get(sourceId);
   const match = sides.get(candidateId);
+  const comparisons =
+    source && match && existing?.state !== "dismissed"
+      ? await inferVariantComparisons(
+          db,
+          actorContext,
+          [[source, match]],
+          deps.decideVariant,
+        )
+      : new Map<string, ProductVariantComparison>();
   return {
     semanticRanking: false,
     items:
       source && match && existing?.state !== "dismissed"
         ? [
-            candidate(existing?.source ?? "detector", source, match, {
-              evidence: existing?.evidence ?? null,
-              sourceUrls: existing?.sourceUrls ?? [],
-              signals: existing ? [] : ["Suggested from photo review"],
-            }),
+            candidate(
+              existing?.source ?? "detector",
+              source,
+              match,
+              {
+                evidence: existing?.evidence ?? null,
+                sourceUrls: existing?.sourceUrls ?? [],
+                signals: existing ? [] : ["Suggested from photo review"],
+              },
+              variantFor(comparisons, source, match),
+            ),
           ]
         : [],
   };
@@ -226,12 +309,18 @@ export async function getProductMatchQueue(
   db: Database,
   input: { productId?: ProductShortcode; candidateId?: ProductShortcode },
   deps: ProductMatchDependencies = productionProductMatchDependencies,
+  actorContext: ActorContext,
 ): Promise<ProductMatchQueueOut> {
   if (input.productId && input.candidateId)
-    return getDirectedProductMatchQueue(db, {
-      productId: input.productId,
-      candidateId: input.candidateId,
-    });
+    return getDirectedProductMatchQueue(
+      db,
+      {
+        productId: input.productId,
+        candidateId: input.candidateId,
+      },
+      actorContext,
+      deps,
+    );
   const startedAt = Date.now();
   const focus = input.productId
     ? await resolveOrThrow(db, "product", input.productId)
@@ -327,25 +416,13 @@ export async function getProductMatchQueue(
         row.source === "agent" &&
         involves(row.productAId, row.productBId),
     )
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, QUEUE_LIMIT);
   const sides = await loadProductMatchSides(db, [
     ...preliminary.flatMap((item) => [item.photoId, item.purchaseId]),
     ...openAgent.flatMap((row) => [row.productAId, row.productBId]),
   ]);
 
-  const agentItems = openAgent.flatMap((row) => {
-    const a = sides.get(row.productAId);
-    const b = sides.get(row.productBId);
-    return a && b
-      ? [
-          candidate("agent", a, b, {
-            evidence: row.evidence,
-            sourceUrls: row.sourceUrls,
-            signals: [],
-          }),
-        ]
-      : [];
-  });
   const withOwners = preliminary.map((item) => {
     const photoOwner = sides.get(item.photoId)?.ownerPartyId;
     const purchaseOwner = sides.get(item.purchaseId)?.ownerPartyId;
@@ -355,22 +432,63 @@ export async function getProductMatchQueue(
         photoOwner && purchaseOwner ? photoOwner === purchaseOwner : null,
     };
   });
-  const detectorItems = rankMatches(withOwners, FINAL_PER_PHOTO).flatMap(
-    (item) => {
+  const finalDetector = rankMatches(withOwners, FINAL_PER_PHOTO);
+  const comparisonPairs = [
+    ...openAgent.flatMap((row) => {
+      const a = sides.get(row.productAId);
+      const b = sides.get(row.productBId);
+      return a && b ? [[a, b] as const] : [];
+    }),
+    ...finalDetector.flatMap((item) => {
       const photo = sides.get(item.photoId);
       const purchase = sides.get(item.purchaseId);
-      return photo && purchase
-        ? [
-            candidate("detector", purchase, photo, {
+      return photo && purchase ? [[purchase, photo] as const] : [];
+    }),
+  ];
+  const comparisons = await inferVariantComparisons(
+    db,
+    actorContext,
+    comparisonPairs,
+    deps.decideVariant,
+  );
+  const agentItemsWithVariants = openAgent.flatMap((row) => {
+    const a = sides.get(row.productAId);
+    const b = sides.get(row.productBId);
+    return a && b
+      ? [
+          candidate(
+            "agent",
+            a,
+            b,
+            { evidence: row.evidence, sourceUrls: row.sourceUrls, signals: [] },
+            variantFor(comparisons, a, b),
+          ),
+        ]
+      : [];
+  });
+  const detectorItems = finalDetector.flatMap((item) => {
+    const photo = sides.get(item.photoId);
+    const purchase = sides.get(item.purchaseId);
+    return photo && purchase
+      ? [
+          candidate(
+            "detector",
+            purchase,
+            photo,
+            {
               evidence: null,
               sourceUrls: [],
               signals: describeSignals(item),
-            }),
-          ]
-        : [];
-    },
+            },
+            variantFor(comparisons, purchase, photo),
+          ),
+        ]
+      : [];
+  });
+  const items = [...agentItemsWithVariants, ...detectorItems].slice(
+    0,
+    QUEUE_LIMIT,
   );
-  const items = [...agentItems, ...detectorItems].slice(0, QUEUE_LIMIT);
   if (!focus)
     log.info("queue read coverage", {
       ...matchReadCoverage({

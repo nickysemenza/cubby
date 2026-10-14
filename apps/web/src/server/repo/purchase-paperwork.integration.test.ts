@@ -25,6 +25,7 @@ describe("vendor paperwork and household reimbursements", () => {
       ["Friend share returned", -40, "reimbursement"],
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         purchaseId: purchase.id,
         name,
         cost,
@@ -66,6 +67,7 @@ describe("vendor paperwork and household reimbursements", () => {
       defaultTrade: "other",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Original bill",
       purchaseId: purchase.id,
       cost: 120,
@@ -78,6 +80,7 @@ describe("vendor paperwork and household reimbursements", () => {
       "split-reimbursement",
     );
     const credit = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Friend reimbursement",
       purchaseId: purchase.id,
       cost: -40,
@@ -95,12 +98,14 @@ describe("vendor paperwork and household reimbursements", () => {
         expenseId: credit.shortcode,
         parts: [
           {
+            lineKind: "principal",
             name: "First share",
             cost: -25,
             costType: "services",
             trade: "other",
           },
           {
+            lineKind: "principal",
             name: "Second share",
             cost: -15,
             costType: "services",

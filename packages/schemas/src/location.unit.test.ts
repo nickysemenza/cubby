@@ -33,6 +33,7 @@ const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
     capturedByName: null,
     captureAttribution: "none",
     provenanceEvidence: null,
+    sourceEvidence: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

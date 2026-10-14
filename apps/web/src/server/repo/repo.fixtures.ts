@@ -346,7 +346,14 @@ export const makeExpenseInput = (
 ): ExpenseCreateInput =>
   // Overrides are applied after the parse on purpose: write-boundary tests feed
   // this builder inputs the schema refuses (an unknown date with a cost).
-  ({ ...buildEntity("expense", { cost: 100, trade: "other" }), ...overrides });
+  ({
+    ...buildEntity("expense", {
+      cost: 100,
+      trade: "other",
+      lineKind: "principal",
+    }),
+    ...overrides,
+  });
 
 /** A location create input; the factory fills the scaffolding so a call site
  * need only spell out the name (and type, when it matters). */

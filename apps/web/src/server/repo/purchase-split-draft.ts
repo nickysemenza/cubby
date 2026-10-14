@@ -212,6 +212,7 @@ export function checkSplitDraft(
       }
     }
     body.push({
+      ...(part.lineKind !== undefined ? { lineKind: part.lineKind } : {}),
       name,
       cost: round2(cost),
       costType: part.costType,

@@ -85,7 +85,7 @@ describe("deriveImageCapture", () => {
       image: baseCurrent({ source: "own", captureAttribution: "derived" }),
       sightings: [
         baseSighting({
-          mediaSubtypes: ["photoScreenshot"],
+          mediaSubtypes: ["screenshot"],
           matchKind: "import",
         }),
       ],
@@ -102,6 +102,25 @@ describe("deriveImageCapture", () => {
       capturedByPartyId: null,
       provenanceEvidence: null,
     });
+  });
+
+  it("does not treat arbitrary subtype text containing screenshot as authoritative", () => {
+    const current = baseCurrent({
+      source: "own",
+      captureAttribution: "derived",
+    });
+    expect(
+      deriveImageCapture({
+        image: current,
+        sightings: [
+          baseSighting({
+            sourceType: "cloudShared",
+            mediaSubtypes: ["not-screenshot"],
+          }),
+        ],
+        exif: null,
+      }),
+    ).toEqual(current);
   });
 
   it("Ana's phone and Mac both report her photo → one sighting, capturedBy=Ana", () => {
@@ -202,13 +221,13 @@ describe("deriveImageCapture", () => {
     });
   });
 
-  it("no sightings, no EXIF, no prior evidence → source flips to own", () => {
+  it("no sightings, no EXIF, no prior evidence leaves source unresolved", () => {
     const result = deriveImageCapture({
       image: baseCurrent({ source: "unknown" }),
       sightings: [],
       exif: null,
     });
-    expect(result.source).toBe("own");
+    expect(result.source).toBe("unknown");
     expect(result.captureAttribution).toBe("none");
     expect(result.capturedByPartyId).toBeNull();
   });
@@ -266,6 +285,6 @@ describe("deriveImageCapture", () => {
     expect(result.capturedByPartyId).toBeNull();
     // Falls through to the terminal branch: no sightings counted as strong,
     // no EXIF, no prior evidence.
-    expect(result.source).toBe("own");
+    expect(result.source).toBe("unknown");
   });
 });

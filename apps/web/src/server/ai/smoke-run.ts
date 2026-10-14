@@ -40,6 +40,11 @@ import {
   type StructuredRunPorts,
 } from "~/server/ai/run-feature";
 import { runAiSelection } from "~/server/ai/selection";
+import {
+  decideUpcOfferComparability,
+  decideImageProvenance,
+  decideProductVariantComparison,
+} from "~/server/ai/semantic-decisions";
 import { getAiClient } from "~/server/clients/ai";
 import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
@@ -48,6 +53,7 @@ import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance
 import { shouldPromoteMailAttachment } from "~/server/purchase-import/mail-attachment-purpose";
 import { chooseLineStage } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { decideExpenseLineRole } from "~/server/repo/expense-line-role";
 import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
 import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
 import { getLocationById } from "~/server/repo/location/crud";
@@ -409,6 +415,48 @@ async function runCase(
         ),
       };
     }
+    case "upcOfferComparability": {
+      const input = aiSmokeInputs.upcOfferComparability.parse(raw);
+      return {
+        result: await decideUpcOfferComparability({
+          ...input,
+          usage: { db, runId, operation: "smoke.upcOfferComparability" },
+        }),
+      };
+    }
+    case "imageProvenance": {
+      const { fixture } = aiSmokeInputs.imageProvenance.parse(raw);
+      return {
+        result: await decideImageProvenance({
+          input: {
+            filename: "image.jpg",
+            width: 1200,
+            height: 1200,
+            sourceAssetUrl:
+              fixture === "standard"
+                ? "https://catalog.example/image.jpg"
+                : null,
+            sourcePageUrl:
+              fixture === "standard" ? "https://catalog.example/item" : null,
+            sourceName: fixture === "standard" ? "Example catalog" : null,
+            sightingSourceTypes: [],
+            hasExifCamera: false,
+            hasExifCaptureTime: false,
+            analysisSummary: null,
+          },
+          usage: { db, runId, operation: "smoke.imageProvenance" },
+        }),
+      };
+    }
+    case "productVariantRelation": {
+      const input = aiSmokeInputs.productVariantRelation.parse(raw);
+      return {
+        result: await decideProductVariantComparison({
+          ...input,
+          usage: { db, runId, operation: "smoke.productVariantRelation" },
+        }),
+      };
+    }
     case "mailAttachmentPurpose": {
       const { fixture } = aiSmokeInputs.mailAttachmentPurpose.parse(raw);
       const bodyText =
@@ -491,13 +539,21 @@ async function runCase(
         ),
       };
     }
-    case "purchaseExpenseLineRole":
+    case "purchaseExpenseLineRole": {
+      const { fixture } = aiSmokeInputs.purchaseExpenseLineRole.parse(raw);
+      const line = purchaseLine(fixture);
+      return {
+        result: await decideExpenseLineRole(
+          { name: line.title, cost: line.amount, notes: null },
+          { db, runId, operation: "smoke.expenseLineRole" },
+        ),
+      };
+    }
     case "purchaseKitDetection":
     case "purchaseProductPromotion":
     case "purchaseReversalKind": {
       const { fixture } = aiSmokeInputs[scenario].parse(raw);
       const stage = {
-        purchaseExpenseLineRole: "role",
         purchaseKitDetection: "kit",
         purchaseProductPromotion: "promotion",
         purchaseReversalKind: "reversal",

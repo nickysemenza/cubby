@@ -1,12 +1,17 @@
 import { userId } from "@cubby/schemas/identifiers";
-import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
+import {
+  commitPurchaseImportInput,
+  type ExtractedOrderCandidate,
+} from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   expense,
   importPreparedOrder,
+  importPreparedLine,
   importSourceClaim,
   importSourceOrder,
   email as emailTable,
@@ -21,7 +26,7 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { commitPurchaseImport } from "./import-orders";
+import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { admitMailImport } from "./mail-import-run";
 import {
   mailSource,
@@ -256,6 +261,193 @@ describe("retained mail source associations", () => {
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       2,
     );
+  });
+
+  it.each([
+    { uncertainRole: "none", total: 14 },
+    { uncertainRole: "c3", total: 14 },
+    { uncertainRole: "c3", total: null },
+  ])(
+    "prepares pending receipt roles once, retains source extraction, and publishes the product roster (%s)",
+    async ({ uncertainRole, total }) => {
+      const { vendor } = await member();
+      const source = {
+        kind: "receipt_photo" as const,
+        externalKey: "synthetic:receipt-role-prepare",
+        checksum: "b".repeat(64),
+      };
+      const rolePort: DecisionPort = vi.fn<DecisionPort>(async (input) => {
+        const evidence = JSON.parse(input.state) as { name: string };
+        const selected =
+          evidence.name === "Workshop item" ? "c0" : uncertainRole;
+        const criteria = Object.keys(input.questions.selection.criteria);
+        const confidence = 0.99;
+        const residual = (1 - confidence) / (criteria.length - 1);
+        return {
+          answers: {
+            selection: {
+              type: "choice" as const,
+              choice: selected,
+              confidence,
+              probabilities: Object.fromEntries(
+                criteria.map((choice) => [
+                  choice,
+                  choice === selected ? confidence : residual,
+                ]),
+              ),
+            },
+          },
+        };
+      });
+      const sourceExtraction = {
+        status: "ready" as const,
+        candidate: {
+          orderId: "EXAMPLE-ROLE-1",
+          orderedAt: "2026-09-01T18:00:00Z",
+          merchant: "Source association vendor",
+          currency: "USD",
+          printedGrandTotal: total,
+          lines: [
+            {
+              title: "Workshop item",
+              amount: 10,
+              lineKind: "unclassified" as const,
+            },
+            {
+              title: "Unclear row",
+              amount: 3,
+              lineKind: "unclassified" as const,
+            },
+            { title: "Delivery", amount: 1, lineKind: "shipping" as const },
+          ],
+          payments: [],
+          allShipmentsDelivered: false,
+        },
+      };
+      const prepared = await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { operationId: "prepare:role-classification" },
+          orders: [
+            {
+              stableOrderId: "role-classification-order",
+              itemOperationId: "role-classification-item",
+              vendorId: vendor.shortcode,
+              source,
+              evidenceChecksum: source.checksum,
+              extractionRevision: "synthetic-v1",
+              extraction: sourceExtraction,
+              lineIds: ["line-principal", "line-uncertain", "line-source"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+        rolePort,
+      );
+      expect(
+        prepared.orders[0]?.lines.map((line) => line.requiresProductResolution),
+      ).toEqual([true, false, false]);
+      expect(rolePort).toHaveBeenCalledTimes(2);
+      const storedOrder = await getDb(ctx.db)
+        .select({
+          id: importPreparedOrder.id,
+          extraction: importPreparedOrder.extraction,
+        })
+        .from(importPreparedOrder)
+        .where(
+          eq(importPreparedOrder.stableOrderId, "role-classification-order"),
+        );
+      expect(storedOrder[0]?.extraction).toEqual(sourceExtraction);
+      const storedLines = await getDb(ctx.db)
+        .select({
+          position: importPreparedLine.position,
+          line: importPreparedLine.line,
+        })
+        .from(importPreparedLine)
+        .where(eq(importPreparedLine.preparedOrderId, storedOrder[0]!.id))
+        .orderBy(importPreparedLine.position);
+      expect(
+        storedLines.map(({ line }) => (line as { lineKind: string }).lineKind),
+      ).toEqual(["principal", "unclassified", "shipping"]);
+
+      const committed = await commitPurchaseImport(
+        ctx.db,
+        commitPurchaseImportInput.parse({
+          _runExecution: {
+            run: prepared.runId,
+            operationId: "commit:role-classification",
+          },
+          prepareOperationId: "prepare:role-classification",
+          resolutions: [
+            {
+              stableOrderId: "role-classification-order",
+              stableLineId: "line-principal",
+              resolution: { kind: "expense_only" },
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      expect(committed.items).toHaveLength(1);
+      expect(rolePort).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("does not publish a prepared order when the role Decision fails", async () => {
+    const { vendor } = await member();
+    const source = {
+      kind: "receipt_photo" as const,
+      externalKey: "synthetic:receipt-role-outage",
+      checksum: "a".repeat(64),
+    };
+    const decisionPort: DecisionPort = vi.fn<DecisionPort>(async () => {
+      throw new Error("Synthetic role Decision outage");
+    });
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { operationId: "prepare:role-outage" },
+          orders: [
+            {
+              stableOrderId: "role-outage-order",
+              itemOperationId: "role-outage-item",
+              vendorId: vendor.shortcode,
+              source,
+              evidenceChecksum: source.checksum,
+              extractionRevision: "synthetic-v1",
+              extraction: {
+                status: "ready",
+                candidate: {
+                  ...workshop("EXAMPLE-ROLE-2", 8),
+                  lines: [
+                    {
+                      title: "Pending role",
+                      amount: 8,
+                      lineKind: "unclassified",
+                    },
+                  ],
+                },
+              },
+              lineIds: ["line-1"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+        decisionPort,
+      ),
+    ).rejects.toThrow("Synthetic role Decision outage");
+    expect(decisionPort).toHaveBeenCalledOnce();
+    expect(
+      await getDb(ctx.db)
+        .select({ id: importPreparedOrder.id })
+        .from(importPreparedOrder)
+        .where(eq(importPreparedOrder.stableOrderId, "role-outage-order")),
+    ).toEqual([]);
   });
 
   it("excludes another member's prepared extraction sharing a source key and checksum", async () => {

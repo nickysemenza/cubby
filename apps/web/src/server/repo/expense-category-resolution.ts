@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type {
@@ -18,7 +19,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
-import { unwrapDb } from "./database-helpers";
+import { unwrapDb, sqlEnumConstant } from "./database-helpers";
 
 const column = (alias: string, key: string) =>
   sql`${sql.identifier(alias.replace(/^"|"$/gu, ""))}.${sql.identifier(key)}`;
@@ -142,6 +143,7 @@ export function expenseSpendingCategoryResolutionSql(
     draft,
   );
   const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
+  const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
   return sql`(
     WITH RECURSIVE ancestors AS (
@@ -173,9 +175,11 @@ export function expenseSpendingCategoryResolutionSql(
         CASE WHEN ${principal} AND COALESCE(mapping_mode<>'blocked',TRUE) AND ${productId} IS NULL AND profile IN ('food_retail','restaurant','coffee_shop') THEN vendor_category_id END AS merchant_id
       FROM facts f
     ), chosen AS (
-      SELECT f.*,COALESCE(override_id,context_id,product_mapping_id,
-        CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) AS category_id,
-        COALESCE(context_id,product_mapping_id,CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) AS fallback_id
+      SELECT f.*,
+        CASE WHEN ${unclassified} THEN NULL::uuid ELSE COALESCE(override_id,context_id,product_mapping_id,
+          CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) END AS category_id,
+        CASE WHEN ${unclassified} THEN NULL::uuid ELSE COALESCE(context_id,product_mapping_id,
+          CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) END AS fallback_id
       FROM candidates f
     )
     SELECT jsonb_build_object(

@@ -82,8 +82,8 @@ describe("evidence-bound closed-set Email orders", () => {
           printedGrandTotal: 9,
           lines: [
             { amount: 8, quantity: 2 },
-            { amount: 2, lineKind: "shipping" },
-            { amount: -1, lineKind: "discount" },
+            { amount: 2, lineKind: "unclassified" },
+            { amount: -1, lineKind: "unclassified" },
           ],
         },
       },

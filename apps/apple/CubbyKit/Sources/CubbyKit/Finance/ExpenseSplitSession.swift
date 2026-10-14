@@ -29,19 +29,22 @@ public final class ExpenseSplitSession {
         public var cost: String
         public var costType: String
         public var trade: String?
+        /// Nil leaves the role to the server's decision; `unclassified` is an explicit choice.
+        public var lineKind: String?
         public var projectID: String
         public var keepProduct: Bool
         public var productQuantity: String
 
         public init(
             id: UUID = UUID(), name: String, cost: String, costType: String, trade: String?,
-            projectID: String, keepProduct: Bool, productQuantity: String
+            projectID: String, keepProduct: Bool, productQuantity: String, lineKind: String? = nil
         ) {
             self.id = id
             self.name = name
             self.cost = cost
             self.costType = costType
             self.trade = trade
+            self.lineKind = lineKind
             self.projectID = projectID
             self.keepProduct = keepProduct
             self.productQuantity = productQuantity
@@ -49,7 +52,7 @@ public final class ExpenseSplitSession {
 
         /// The wire object the check takes; also how a part is read back from the server's seed.
         var json: JSONValue {
-            .object([
+            var fields: [String: JSONValue] = [
                 "name": .string(name),
                 "cost": .string(cost),
                 "costType": .string(costType),
@@ -57,7 +60,9 @@ public final class ExpenseSplitSession {
                 "projectId": .string(projectID),
                 "keepProduct": .bool(keepProduct),
                 "productQuantity": .string(productQuantity),
-            ])
+            ]
+            if let lineKind { fields["lineKind"] = .string(lineKind) }
+            return .object(fields)
         }
 
         init(seed: SplitPartDraft) throws {
@@ -67,7 +72,8 @@ public final class ExpenseSplitSession {
                 costType: json["costType"]?.stringValue ?? "", trade: json["trade"]?.stringValue,
                 projectID: json["projectId"]?.stringValue ?? "",
                 keepProduct: json["keepProduct"]?.boolValue ?? false,
-                productQuantity: json["productQuantity"]?.stringValue ?? "")
+                productQuantity: json["productQuantity"]?.stringValue ?? "",
+                lineKind: json["lineKind"]?.stringValue)
         }
     }
 

@@ -185,6 +185,9 @@ denominator. Scope filters apply to rounded shares, unknown costs stay null,
 and unscoped totals sum original Expense costs. Quality hydration declares a
 bounded derived relation for its selected ID batch, sharing category gaps and
 exception evidence; single-record search refreshes restrict that relation too.
+Unclassified receipt roles keep one unresolved allocation with the original
+signed amount; they never enter adjustment weighting. Role completeness is
+reported separately from amount completeness.
 
 Entity reports declare lazy dependencies in `server/repo/entity-report/`.
 Each batch memoizes dependency promises by declaration identity, preserving
@@ -1480,6 +1483,20 @@ with bulk Accept and Reject; its Decisions tab catalogs every decision's basis,
 options, rules and rendered request (`ai.decisionCatalog`) with a Jev/Clef Try
 panel. The Work queue shows one row per (entity, field) with pending
 Suggestions, and a sweep Run's detail links to its pending review.
+Automatic semantic classification uses the same declared Decision features:
+receipt roles, UPC offer comparability, weak image provenance, and Product
+title variants. Authoritative assignments bypass inference. Valid uncertainty
+abstains without inventing a value; provider and malformed-response failures
+fail the operation. Classification is prepared before business publication,
+which rechecks the evidence and stronger assignments. These changes apply when
+workflows next run; existing classifications and cached lookups are not
+reclassified automatically. New features also register their production adapter
+in the AI smoke catalog so the generic `/ai` form can exercise them.
+Image source Decisions record `sourceEvidence` separately from capture evidence;
+they establish neither a photographer nor a capture time or location. Existing
+manual, strong sighting, import, and meaningful EXIF evidence retains precedence
+over weak metadata. Processed metadata without capture facts and weak library
+membership remain eligible source evidence; neither establishes ownership alone.
 Entity lists expose a generic pending-suggestion filter (any, Addition, or
 Correction) and can start a sweep across every declared target using the list's active filters.
 A Sweep freezes matching record/field membership and its selected model at launch,

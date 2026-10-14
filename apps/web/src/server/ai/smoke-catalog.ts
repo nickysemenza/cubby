@@ -16,6 +16,9 @@ import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
+  UPC_OFFER_COMPARABILITY_FEATURE,
+  IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+  PRODUCT_VARIANT_RELATION_FEATURE,
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -41,6 +44,25 @@ type SmokeCase = {
 
 /** A scenario is one real caller shape, so a feature can have several. */
 export const AI_SMOKE_CASES = {
+  upcOfferComparability: {
+    feature: UPC_OFFER_COMPARABILITY_FEATURE,
+    label: "UPC offer comparability",
+    description: "Compare the sellable package with a retailer offer",
+    group: "Product research",
+  },
+  imageProvenance: {
+    feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+    label: "Image provenance",
+    description:
+      "Classify weak origin evidence without replacing authoritative facts",
+    group: "Product research",
+  },
+  productVariantRelation: {
+    feature: PRODUCT_VARIANT_RELATION_FEATURE,
+    label: "Product variants",
+    description: "Compare color and size evidence from two titles",
+    group: "Product research",
+  },
   fieldSuggestions: {
     feature: FIELD_SUGGESTION_FEATURE,
     label: "Field suggestions",

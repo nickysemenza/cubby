@@ -99,16 +99,12 @@ export type BackfillImageSearchOut = z.infer<
   typeof backfillImageSearchOutSchema
 >;
 
-/**
- * Filename/dimension heuristics + on-device analysis `capturedAt` seeding for
- * images still `source = unknown` or last classified by a filename rule
- * (`image-provenance-heuristics.ts`). `dryRun` runs the same selection and
- * classification and reports what WOULD change, writing nothing.
- */
+/** Classify weak image-source provenance. Manual and capture evidence is protected. */
 export const classifyImageProvenanceInputSchema = z.object({
   dryRun: z.boolean().default(false),
   batchSize: z.number().int().positive().max(100).default(25),
   maxBatches: z.number().int().positive().max(100).default(20),
+  afterId: z.string().uuid().optional(),
 });
 export const classifyImageProvenanceOutSchema = z.object({
   dryRun: z.boolean(),
@@ -116,10 +112,9 @@ export const classifyImageProvenanceOutSchema = z.object({
   scanned: z.number().int().nonnegative(),
   classified: z.number().int().nonnegative(),
   capturedAtSeeded: z.number().int().nonnegative(),
-  // Per filename-rule-id match counts (`filenameProvenanceRuleIds`), e.g.
-  // `{ "legacy-uploader-photo-jpeg": 3, "catalog-source-asset-url": 12 }`.
-  byRule: z.record(z.string(), z.number().int().nonnegative()),
+  unresolved: z.number().int().nonnegative(),
   remaining: z.number().int().nonnegative(),
+  nextCursor: z.string().uuid().nullable(),
   stopped: z.enum(["complete", "limit", "no_progress"]),
 });
 export type ClassifyImageProvenanceInput = z.infer<

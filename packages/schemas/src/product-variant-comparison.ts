@@ -1,14 +1,16 @@
 import { z } from "zod";
 
-const fact = z.object({
-  first: z.string().nullable(),
-  second: z.string().nullable(),
+const relation = z.object({
   relation: z.enum(["same", "different", "unknown"]),
 });
 
-/** Explicit words in two Product titles; neither side is a reading of the photo. */
+/** Closed model judgments plus the original source titles used as evidence. */
 export const productVariantComparison = z.object({
-  color: fact,
-  size: fact,
+  color: relation,
+  size: relation,
+  evidence: z.object({
+    firstTitle: z.string(),
+    secondTitle: z.string(),
+  }),
 });
 export type ProductVariantComparison = z.infer<typeof productVariantComparison>;

@@ -358,6 +358,7 @@ describe("consolidated household ledger", () => {
     const lose = await party("Lose placeholder", "guest");
     const other = await party("Other placeholder", "member");
     const expense = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Placeholder expense",
       cost: 10,
       date: "2026-08-20",
@@ -381,6 +382,7 @@ describe("consolidated household ledger", () => {
         },
       ]);
     const largeExpense = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Large-weight placeholder expense",
       cost: 10,
       date: "2026-08-20",

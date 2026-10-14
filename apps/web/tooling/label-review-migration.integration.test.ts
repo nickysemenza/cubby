@@ -98,7 +98,11 @@ it("retires label review without losing Product evidence, stock or identity exce
     for (const table of tables)
       snapshots.set(
         table,
-        (await client.query(`SELECT * FROM "${table}" ORDER BY id`)).rows,
+        (
+          await client.query(
+            `SELECT to_jsonb(record) - 'sourceEvidence' AS data FROM "${table}" record ORDER BY id`,
+          )
+        ).rows,
       );
     const before = (
       await client.query(
@@ -117,7 +121,11 @@ it("retires label review without losing Product evidence, stock or identity exce
     ).toEqual(before);
     for (const table of tables)
       expect(
-        (await client.query(`SELECT * FROM "${table}" ORDER BY id`)).rows,
+        (
+          await client.query(
+            `SELECT to_jsonb(record) - 'sourceEvidence' AS data FROM "${table}" record ORDER BY id`,
+          )
+        ).rows,
       ).toEqual(snapshots.get(table));
     expect(
       (

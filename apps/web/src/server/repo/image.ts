@@ -28,11 +28,24 @@ import type {
 import {
   attachableImageEntityId,
   IMAGE_METADATA_REVISION,
+  storedImageEmbeddedMetadataSchema,
 } from "@cubby/schemas/image";
+import {
+  imageProvenanceEvidence,
+  imageSourceEvidence,
+  type ImageProvenanceEvidence,
+} from "@cubby/schemas/image-capture-fields";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
+import {
+  imageSightingSourceType,
+  imageSightingMatchKind,
+} from "@cubby/schemas/image-sighting-fields";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import type { SearchableEntityRef } from "@cubby/schemas/search";
+import {
+  searchableEntitySchema,
+  type SearchableEntityRef,
+} from "@cubby/schemas/search";
 import {
   and,
   asc,
@@ -95,6 +108,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { correlated } from "~/server/repo/database-helpers";
 import {
   associatePendingImages,
   countWhere,
@@ -702,7 +716,15 @@ export async function setImageCaptureState(
   imageId: ImageId,
   result: ImageCaptureStateRow,
 ): Promise<void> {
-  await unwrapDb(db).update(image).set(result).where(eq(image.id, imageId));
+  await unwrapDb(db)
+    .update(image)
+    .set({
+      ...result,
+      sourceEvidence: sql`CASE WHEN ${image.source} IS DISTINCT FROM ${result.source}
+      OR ${result.provenanceEvidence?.basis ?? null} IN (${imageProvenanceEvidence.shape.basis.enum.sighting}, ${imageProvenanceEvidence.shape.basis.enum.exif})
+      THEN NULL ELSE ${image.sourceEvidence} END`,
+    })
+    .where(eq(image.id, imageId));
 }
 
 /** The stored EXIF, for `deriveAndStoreImageCapture`'s fallback read —
@@ -816,47 +838,123 @@ export interface ImageProvenanceCandidateRow {
   id: ImageId;
   filename: string;
   sourceAssetUrl: string | null;
+  sourcePageUrl: string | null;
+  sourceName: string | null;
+  embeddedMetadata: StoredImageEmbeddedMetadata | null;
   width: number | null;
   height: number | null;
+  updatedAt: Date;
+  /** Exact DB text token; `Date` loses PostgreSQL sub-millisecond precision. */
+  updatedAtToken: string;
+  capturedAt: Date | null;
+  provenanceEvidence: ImageProvenanceEvidence | null;
+  sightingSourceTypes: string[];
 }
 
-/**
- * `classifyImageProvenance`'s candidate rows: only `source = unknown` (never
- * classified) or a `provenanceEvidence.basis` of `filename` (this same
- * maintenance op's own prior output, safe to re-evaluate against a changed
- * rule table). Every other basis — `manual`/`sighting`/`import-url`/`exif` —
- * outranks a filename heuristic in `image-capture-derivation.ts`'s
- * precedence and is never selected here, so the classify service never has
- * to re-check precedence itself.
- */
+/** Model-derived source classification never overrides authoritative capture evidence. */
 const provenanceClassificationCandidateWhere = and(
   notDeleted(image),
-  or(
-    eq(image.source, "unknown"),
-    sql`${image.provenanceEvidence}->>'basis' = 'filename'`,
-  ),
+  eq(image.source, "unknown"),
+  isNull(image.sourceEvidence),
+  not(eq(image.captureAttribution, "confirmed")),
+  sql`${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.capturedAt} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.camera} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.location} IS NULL`,
+  sql`COALESCE(${image.provenanceEvidence}->>'basis', '') NOT IN (${imageProvenanceEvidence.shape.basis.enum.manual}, ${imageProvenanceEvidence.shape.basis.enum.sighting}, ${imageProvenanceEvidence.shape.basis.enum["import-url"]}, ${imageProvenanceEvidence.shape.basis.enum.exif})`,
+  // Keep this authority boundary aligned with isStrongSighting in image-capture-derivation.ts.
+  sql`NOT EXISTS (SELECT 1 FROM "ImageSighting" s WHERE s."imageId" = ${image.id} AND s."deletedAt" IS NULL
+    AND (${imageSourceEvidence.shape.value.enum.screenshot} = ANY(s."mediaSubtypes")
+      OR (s."sourceType" = ${imageSightingSourceType.enum.userLibrary}
+        AND (s."matchKind" = ${imageSightingMatchKind.enum.import}
+          OR (s."hashDistance" >= 0 AND s."hashDistance" <= 2)
+          OR (s."hashDistance" > 2 AND s."hashDistance" <= 6 AND s."aspectGate" IS TRUE)))))`,
 );
 
 export async function selectImagesForProvenanceClassification(
   db: Database,
   limit: number,
+  afterId?: string,
 ): Promise<ImageProvenanceCandidateRow[]> {
   const rows = await getDb(db)
     .select({
       id: image.id,
       filename: image.filename,
       sourceAssetUrl: image.sourceAssetUrl,
+      sourcePageUrl: image.sourcePageUrl,
+      sourceName: image.sourceName,
+      embeddedMetadata: image.embeddedMetadata,
       width: image.width,
       height: image.height,
+      updatedAt: image.updatedAt,
+      updatedAtToken: sql<string>`${image.updatedAt}::text`,
+      capturedAt: image.capturedAt,
+      provenanceEvidence: image.provenanceEvidence,
+      sightingSourceTypes: correlated<
+        string[]
+      >(`ARRAY(SELECT DISTINCT s."sourceType" FROM "ImageSighting" s
+        WHERE s."imageId" = "Image"."id" AND s."deletedAt" IS NULL ORDER BY s."sourceType")`),
     })
     .from(image)
-    .where(provenanceClassificationCandidateWhere)
-    .orderBy(asc(image.createdAt), asc(image.id))
+    .where(
+      and(
+        provenanceClassificationCandidateWhere,
+        afterId ? gt(image.id, afterId) : undefined,
+      ),
+    )
+    .orderBy(asc(image.id))
     .limit(limit);
   return rows.map((row) => ({
     ...row,
     id: parseEntityId("image", row.id),
   }));
+}
+
+export interface ImageSourceClassificationPublication {
+  id: ImageId;
+  expectedUpdatedAt: string;
+  source?: "own" | "catalog" | "screenshot";
+  sourceEvidence?: import("@cubby/schemas/image-capture-fields").ImageSourceEvidence;
+  analysisCapturedAt?: Date;
+}
+
+/** Publish a fully prepared invocation atomically, rechecking each source snapshot. */
+export async function publishImageSourceClassifications(
+  db: Database,
+  rows: readonly ImageSourceClassificationPublication[],
+): Promise<{ classified: number; capturedAtSeeded: number }> {
+  if (rows.length === 0) return { classified: 0, capturedAtSeeded: 0 };
+  return withTransaction(db, async (tx) => {
+    let classified = 0;
+    let capturedAtSeeded = 0;
+    for (const row of rows) {
+      const values = {
+        ...(row.source && row.sourceEvidence
+          ? { source: row.source, sourceEvidence: row.sourceEvidence }
+          : {}),
+        ...(row.analysisCapturedAt
+          ? {
+              capturedAt: row.analysisCapturedAt,
+              provenanceEvidence: { basis: "analysis" as const },
+            }
+          : {}),
+      };
+      if (Object.keys(values).length === 0) continue;
+      const [updated] = await tx
+        .update(image)
+        .set(values)
+        .where(
+          and(
+            eq(image.id, row.id),
+            sql`${image.updatedAt} = ${row.expectedUpdatedAt}::timestamp`,
+            provenanceClassificationCandidateWhere,
+          ),
+        )
+        .returning({ id: image.id });
+      if (updated) {
+        if (row.source) classified += 1;
+        if (row.analysisCapturedAt) capturedAtSeeded += 1;
+      }
+    }
+    return { classified, capturedAtSeeded };
+  });
 }
 
 export async function countImagesForProvenanceClassification(
@@ -1017,7 +1115,12 @@ const imageWithRelationsToAPI = (
       : null,
     capturedByName: capturedByParty?.name ?? null,
     captureAttribution: imageData.captureAttribution,
-    provenanceEvidence: imageData.provenanceEvidence,
+    provenanceEvidence: imageProvenanceEvidence
+      .nullable()
+      .parse(imageData.provenanceEvidence),
+    sourceEvidence: imageSourceEvidence
+      .nullable()
+      .parse(imageData.sourceEvidence),
     provenanceEvidenceLabel: provenanceEvidenceLabel(
       imageData.provenanceEvidence,
     ),
@@ -1529,6 +1632,7 @@ export const updateImage = async (
       filename: data.filename,
       useOriginal: data.useOriginal,
       source: data.source,
+      ...(data.source !== undefined ? { sourceEvidence: null } : {}),
       sourcePageUrl: data.sourcePageUrl,
       sourceAssetUrl: data.sourceAssetUrl,
       sourceName: data.sourceName,
@@ -2571,7 +2675,7 @@ const missingSearchDocumentWhere = and(
   notDeleted(image),
   sql`NOT EXISTS (
     SELECT 1 FROM "SearchDocument" sd
-    WHERE sd."entityKind" = 'image' AND sd."entityId" = ${sql.raw('"Image"."id"')}
+    WHERE sd."entityKind" = ${searchableEntitySchema.enum.image} AND sd."entityId" = ${sql.raw('"Image"."id"')}
       AND sd."deletedAt" IS NULL
   )`,
 );

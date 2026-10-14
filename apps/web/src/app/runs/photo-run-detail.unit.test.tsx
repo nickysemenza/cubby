@@ -506,8 +506,12 @@ describe("PhotoImportRunView", () => {
             sharedNameTerms: ["pocket", "tee", "black", "small"],
             brandMatches: true,
             variant: {
-              color: { first: null, second: "black", relation: "unknown" },
-              size: { first: null, second: "small", relation: "unknown" },
+              color: { relation: "unknown" },
+              size: { relation: "unknown" },
+              evidence: {
+                firstTitle: "Fixture sweater",
+                secondTitle: "ForgeWear pocket tee black small",
+              },
             },
           },
           hasOwnPhoto: false,

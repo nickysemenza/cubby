@@ -42,6 +42,7 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       if (!first || !second)
         throw new Error("Expected two beneficiary fixtures");
       const row = await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: "Large weighted allocation fixture",
         cost,
         date: "2026-08-20",
@@ -101,6 +102,7 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       }),
     ]);
     const expense = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Shortcode tie fixture",
       cost: 0.01,
       date: "2026-08-20",
@@ -153,6 +155,7 @@ describe("loadExpenseAllocations derived funders", () => {
       date: "2026-08-10",
     });
     const expense = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: `Derived funder fixture ${cost}`,
       cost,
       date: "2026-08-10",
@@ -323,6 +326,7 @@ describe("loadExpenseAllocations derived funders", () => {
     const lines = await Promise.all(
       [10, 20].map((cost) =>
         insertWithShortcode(ctx.db, "expense", {
+          lineKind: "principal",
           name: `Shared line ${cost}`,
           cost,
           date: "2026-08-10",
@@ -356,6 +360,7 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
 
   const mkExpense = (name: string) =>
     insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name,
       cost: 25,
       date: "2026-08-10",

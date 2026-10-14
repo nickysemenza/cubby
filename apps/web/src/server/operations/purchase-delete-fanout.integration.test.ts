@@ -54,6 +54,7 @@ describe("purchase deletion embedding fanout", () => {
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
+          lineKind: "principal",
           name: "Detached line",
           purchaseId: purchase.id,
           cost: 25,

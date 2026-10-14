@@ -152,24 +152,28 @@ struct PhotoCandidateSelectionView: View {
     private func variantFacts(_ candidate: PhotoProductCandidate) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             variantLine(
-                "Color", first: candidate.match.variant.color.first,
-                second: candidate.match.variant.color.second,
+                "Color",
                 relation: candidate.match.variant.color.relation.rawValue)
             variantLine(
-                "Size", first: candidate.match.variant.size.first,
-                second: candidate.match.variant.size.second,
+                "Size",
                 relation: candidate.match.variant.size.relation.rawValue)
+            Text("Proposal evidence: \(candidate.match.variant.evidence.firstTitle)")
+                .foregroundStyle(.secondary)
+            Text("Product evidence: \(candidate.match.variant.evidence.secondTitle)")
+                .foregroundStyle(.secondary)
         }
         .font(.caption)
     }
 
     private func variantLine(
-        _ title: String, first: String?, second: String?, relation: String
+        _ title: String, relation: String
     ) -> some View {
         let detail =
-            relation == "same"
-            ? "\(first ?? "Unknown") in both titles"
-            : "Proposal: \(first ?? "unknown") · Product: \(second ?? "unknown")"
+            switch relation {
+            case "same": "Same"
+            case "different": "Different"
+            default: "Unresolved"
+            }
         return HStack(alignment: .firstTextBaseline) {
             Text("\(title): \(detail)")
                 .foregroundStyle(relation == "different" ? FieldGuideTokens.warning : .secondary)

@@ -81,11 +81,18 @@ struct FinanceActionSessionTests {
 
     // MARK: - Split fixtures
 
-    private static let part = """
-        {"name":"%@","cost":"%@","costType":"materials","trade":"other","projectId":"","keepProduct":false,"productQuantity":""}
-        """
+    nonisolated private static func part(
+        name: String, cost: String, lineKind: String? = nil
+    ) -> String {
+        let role = lineKind.map { "\"lineKind\":\"\($0)\"," } ?? ""
+        return """
+            {\(role)"name":"\(name)","cost":"\(cost)","costType":"materials","trade":"other","projectId":"","keepProduct":false,"productQuantity":""}
+            """
+    }
 
-    nonisolated private static func splitStart(productNote: String? = nil) -> String {
+    nonisolated private static func splitStart(
+        productNote: String? = nil, firstLineKind: String? = nil
+    ) -> String {
         let note = productNote.map { "\"\($0)\"" } ?? "null"
         let name = productNote == nil ? "null" : "\"Sample saw\""
         return """
@@ -93,8 +100,8 @@ struct FinanceActionSessionTests {
              "confirm":"Splitting replaces this expense with its parts. The original is deleted.",
              "originalCost":0.3,"productName":\(name),"productNote":\(note),"maxParts":100,
              "parts":[
-               \(String(format: part, "Sample kit", "0.3")),
-               \(String(format: part, "", ""))]}
+               \(part(name: "Sample kit", cost: "0.3", lineKind: firstLineKind)),
+               \(part(name: "", cost: ""))]}
             """
     }
 
@@ -129,6 +136,34 @@ struct FinanceActionSessionTests {
         #expect(session.parts.map(\.cost) == ["0.3", ""])
         #expect(recorder.requests.map(\.path) == ["/api/v1/purchase/splitStart"])
         #expect(recorder.requests[0].query.contains("expenseId=EXP-4K7M"))
+    }
+
+    @Test @MainActor func splitPartRoleKeepsAutomaticAndUnclassifiedDistinctOnTheWire() async throws {
+        let recorder = serve([
+            "/api/v1/purchase/splitStart": { _ in
+                Self.splitStart(firstLineKind: "unclassified")
+            },
+            "/api/v1/purchase/checkSplit": { _ in Self.acceptedSplit },
+        ])
+        let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
+        await session.load()
+
+        #expect(session.parts.map(\.lineKind) == ["unclassified", nil])
+        await session.recheck()
+
+        var checkedParts = try #require(
+            recorder.posts(to: "/api/v1/purchase/checkSplit").last?.body["parts"]?.arrayValue
+        )
+        #expect(checkedParts[0]["lineKind"]?.stringValue == "unclassified")
+        #expect(checkedParts[1]["lineKind"] == nil)
+
+        let second = session.parts[1].id
+        session.update(second) { $0.lineKind = "tax" }
+        await session.recheck()
+        checkedParts = try #require(
+            recorder.posts(to: "/api/v1/purchase/checkSplit").last?.body["parts"]?.arrayValue
+        )
+        #expect(checkedParts[1]["lineKind"]?.stringValue == "tax")
     }
 
     @Test @MainActor func neverWritesWithoutAnExplicitConfirmation() async throws {

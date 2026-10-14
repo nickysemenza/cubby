@@ -38,6 +38,73 @@ describe("AI smoke form", () => {
     }
   });
 
+  it("edits plain string inputs and structured JSON inputs", () => {
+    const titleSchema = smokeCatalog().find(
+      (item) => item.id === "upcOfferComparability",
+    )!.inputSchema;
+    function TitleForm() {
+      const [value, setValue] = useState<SmokeFormValue>({
+        itemTitle: "Synthetic item",
+        offerTitle: "Synthetic offer",
+      });
+      return (
+        <AiSmokeForm
+          scenario="upcOfferComparability"
+          schema={titleSchema}
+          value={value}
+          onChange={setValue}
+        />
+      );
+    }
+    render(<TitleForm />);
+    expect(screen.getByLabelText("item Title")).toHaveValue("Synthetic item");
+    fireEvent.change(screen.getByLabelText("item Title"), {
+      target: { value: "Updated synthetic item" },
+    });
+    expect(screen.getByLabelText("item Title")).toHaveValue(
+      "Updated synthetic item",
+    );
+
+    const structuredSchema = {
+      properties: { image: { type: "object" } },
+      required: ["image"],
+    };
+    function StructuredForm() {
+      const [value, setValue] = useState<SmokeFormValue>({
+        image: { url: "https://example.test/photo.jpg" },
+      });
+      return (
+        <>
+          <output data-testid="structured-value">
+            {JSON.stringify(value.image)}
+          </output>
+          <AiSmokeForm
+            scenario="imageIdentification"
+            schema={structuredSchema}
+            value={value}
+            onChange={setValue}
+          />
+        </>
+      );
+    }
+    render(<StructuredForm />);
+    const imageInput = screen.getByLabelText("image");
+    expect(imageInput).toHaveValue(
+      JSON.stringify({ url: "https://example.test/photo.jpg" }, null, 2),
+    );
+    fireEvent.change(imageInput, {
+      target: { value: '{"url":"https://example.test/updated.jpg"}' },
+    });
+    expect(screen.getByLabelText("image")).toHaveValue(
+      '{"url":"https://example.test/updated.jpg"}',
+    );
+    fireEvent.change(imageInput, { target: { value: "{invalid" } });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByTestId("structured-value")).toHaveTextContent(
+      JSON.stringify("{invalid"),
+    );
+  });
+
   it("lets decision targets drive basis controls without a JSON editor", async () => {
     const scenario: AiSmokeScenario = "fieldSuggestions";
     const schema = smokeCatalog().find(

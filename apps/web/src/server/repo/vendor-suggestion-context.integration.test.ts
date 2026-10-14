@@ -26,6 +26,7 @@ describe("vendor suggestion evidence", () => {
       date: "2026-09-01",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture goods",
       cost: 12,
       date: "2026-09-01",

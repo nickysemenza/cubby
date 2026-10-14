@@ -854,7 +854,7 @@ export async function finalizePhotoRun(
       const allIds = lockedStaged.map((entry) => entry.row.id);
       await getDb(transactionDb)
         .update(image)
-        .set({ source: "own" })
+        .set({ source: "own", sourceEvidence: null })
         .where(and(inArray(image.id, allIds), eq(image.source, "unknown")));
 
       const library = input.images.flatMap((item) => {

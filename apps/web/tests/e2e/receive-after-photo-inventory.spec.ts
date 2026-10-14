@@ -52,6 +52,7 @@ test("receiving after a photo import writes nothing until additional units are c
     date: "2026-09-01",
   });
   const line = await insertWithShortcode(db, "expense", {
+    lineKind: "principal",
     name: uniqueName(testInfo, "Synthetic jacket line"),
     cost: 80,
     date: "2026-09-01",

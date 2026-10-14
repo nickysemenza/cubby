@@ -105,6 +105,7 @@ describe("spending category merge", () => {
       defaultTrade: "other",
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       purchaseId: order.id,
       name: "Synthetic kibble",
       cost: 18,
@@ -326,6 +327,7 @@ describe("spending category merge", () => {
       manufacturer: "",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       purchaseId: order.id,
       name: "Synthetic chili crisp",
       cost: 9,

@@ -173,6 +173,7 @@ describe("live Expense category summaries", () => {
       date: "2026-09-20",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Known line",
       cost: 20,
       spendingCategoryId: category.id,
@@ -182,6 +183,7 @@ describe("live Expense category summaries", () => {
       trade: "other",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Unclassified unknown cost",
       cost: null,
       purchaseId: purchase.id,

@@ -1,7 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import {
+  resolveExpenseLineKind,
+  type ExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
   type ProductId,
@@ -50,6 +53,7 @@ import {
 import { uniq } from "es-toolkit";
 
 import { purchaseLabel } from "~/lib/purchase-label";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -92,6 +96,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/repo/database-helpers";
+import { classifyExpenseLineRole } from "~/server/repo/expense-line-role";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -1388,12 +1393,55 @@ export const splitExpense = async (
   db: Database,
   input: SplitExpenseInput,
   actor: ActorContext,
+  decisionPort?: DecisionPort,
 ): Promise<{
   items: ExpenseOut[];
   priceAffectedProductIds: ProductId[];
 }> => {
-  const { attributionPolicy, parts } = input;
+  const { attributionPolicy, parts: requestedParts } = input;
   const expenseId = await resolveOrThrow(db, "expense", input.expenseId);
+  const [originalPreflight] = await getDb(db)
+    .select({ purchaseId: expense.purchaseId })
+    .from(expense)
+    .where(and(eq(expense.id, expenseId), notDeleted(expense)))
+    .limit(1);
+  if (!originalPreflight)
+    throw createAppError(
+      "EXPENSE_NOT_FOUND",
+      `Expense not found: ${expenseId}`,
+    );
+  if (!originalPreflight.purchaseId)
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Cannot split an expense with no purchase attached (${expenseId}) — record its vendor first.`,
+    );
+  const preflightProductIds = await Promise.all(
+    requestedParts.map((part) =>
+      part.productId ? resolveOrThrow(db, "product", part.productId) : null,
+    ),
+  );
+  const parts: Array<
+    Omit<(typeof requestedParts)[number], "lineKind"> & {
+      lineKind: ExpenseLineKind;
+    }
+  > = [];
+  for (const [index, part] of requestedParts.entries()) {
+    const productId = preflightProductIds[index] ?? null;
+    const lineKind =
+      part.lineKind !== undefined || productId !== null
+        ? resolveExpenseLineKind({ lineKind: part.lineKind, productId })
+        : await classifyExpenseLineRole(
+            db,
+            actor,
+            {
+              name: part.name,
+              cost: part.cost,
+              notes: part.notes ?? null,
+            },
+            decisionPort,
+          );
+    parts.push({ ...part, lineKind });
+  }
 
   const { createdIds, priceAffectedProductIds } = await withTransaction(
     db,
@@ -1528,6 +1576,17 @@ export const splitExpense = async (
         }
         return productId;
       });
+      if (
+        partProductIds.some(
+          (productId, index) =>
+            productId !== (preflightProductIds[index] ?? null),
+        )
+      ) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A split Product changed while receipt roles were being resolved.",
+        );
+      }
       const projectIds = parts.map((part) => {
         const projectId = part.projectId
           ? explicitProjectIds.get(part.projectId)
@@ -1542,13 +1601,10 @@ export const splitExpense = async (
       if (projectIds.length !== parts.length) {
         throw new Error("Default project resolution lost its correlation");
       }
-      const classifications = parts.map((part, index) => {
-        const productId = partProductIds[index] ?? null;
-        const lineKind =
-          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
+      const classifications = parts.map((part) => {
         return resolveSplitPartClassification({
           originalSpendingCategoryId: original.spendingCategoryId,
-          lineKind,
+          lineKind: part.lineKind,
           partSpendingCategoryId: part.spendingCategoryId,
         });
       });
@@ -1809,6 +1865,10 @@ const preservePurchaseItemAttribution = async (
     .from(expense)
     .where(and(inArray(expense.purchaseId, from), notDeleted(expense)));
   for (const row of rows) {
+    if (row.lineKind === "unclassified") {
+      await validateExpenseInheritance(tx, { ...row, purchaseId: to });
+      continue;
+    }
     if (row.lineKind !== "principal") {
       if (to === null)
         throw createAppError(

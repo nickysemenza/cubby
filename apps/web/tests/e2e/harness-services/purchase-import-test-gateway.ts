@@ -85,17 +85,13 @@ function respondWithToolCall(output: unknown) {
   );
 }
 
-/**
- * The writer's closed-set decision decisions, answered as a careful reader would:
- * a row keeps its extracted role, is one sellable item worth a Product, a
- * negative item row is a return, and no fuzzy catalog candidate is claimed
- * (exact identifiers resolve before the decision model is asked).
- */
+/** Known synthetic defaults for the closed-set features exercised by the harness. */
 const JEV_DEFAULT_LABEL = new Map([
   ["kit-detection", "single"],
   ["product-promotion", "promote"],
   ["reversal-kind", "return"],
   ["product-line-identity", "No listed choice is a suitable match."],
+  ["product-variant-relation", "color unknown; size unknown"],
 ]);
 
 function jevChoice(feature: string, body: unknown) {
@@ -107,20 +103,18 @@ function jevChoice(feature: string, body: unknown) {
   const configured = fixture.decisions?.find(
     (entry) => entry.feature === feature && input.state.includes(entry.match),
   );
-  const label =
-    configured?.label ??
-    (feature === "expense-line-role"
-      ? (JSON.parse(input.state) as { extractedLineKind: string })
-          .extractedLineKind
-      : JEV_DEFAULT_LABEL.get(feature));
+  const label = configured?.label ?? JEV_DEFAULT_LABEL.get(feature);
   if (configured && !Object.values(criteria).includes(configured.label))
     throw new Error(
       "Configured decision label is absent from the actual request choices.",
     );
-  const key =
-    Object.entries(criteria).find(([, value]) => value === label)?.[0] ??
-    Object.keys(criteria)[0] ??
-    "none";
+  const key = Object.entries(criteria).find(
+    ([, value]) => value === label,
+  )?.[0];
+  if (!key)
+    throw new Error(
+      `No configured deterministic answer for gateway feature ${feature}.`,
+    );
   return {
     label: label ?? null,
     response: {
@@ -189,6 +183,7 @@ export default {
         .object({ decisions: z.array(decisionFixture).max(20).optional() })
         .parse(input).decisions;
       fixture = {
+        extractions: [],
         audit: { findings: [] },
         ...(input as Partial<Fixture>),
         decisions,

@@ -4,9 +4,12 @@ import { lookupUPCitemdb, type UPCitemdbRuntime } from "./upcitemdb";
 
 const runtimeFor = (
   request: () => Promise<Response> | Response,
+  decideOfferComparability: UPCitemdbRuntime["decideOfferComparability"] = async () =>
+    "comparable",
 ): UPCitemdbRuntime => ({
   fetch: async () => request(),
   timeoutSignal: () => new AbortController().signal,
+  decideOfferComparability,
 });
 
 function jsonResponse<TBody>(body: TBody, status = 200): Response {
@@ -75,6 +78,57 @@ describe("lookupUPCitemdb status mapping", () => {
     if (result.status !== "found") return;
     expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
     expect(result.data.priceDollars).toBeGreaterThan(0);
+  });
+
+  it("keeps identity but omits price when no offer is comparable, ignoring recorded low", async () => {
+    const runtime = runtimeFor(
+      () =>
+        jsonResponse({
+          code: "OK",
+          total: 1,
+          offset: 0,
+          items: [
+            {
+              title: "Sample item, one bottle",
+              lowest_recorded_price: 2,
+              offers: [
+                { title: "Sample item case of 12", price: 24 },
+                { title: "Sample item two pack", price: 8 },
+              ],
+            },
+          ],
+        }),
+      async () => "incomparable",
+    );
+    const result = await lookupUPCitemdb("012345678905", runtime);
+    expect(result).toMatchObject({
+      status: "found",
+      data: { name: "Sample item, one bottle", priceDollars: null },
+    });
+  });
+
+  it("surfaces model failure as an upstream error instead of returning identity", async () => {
+    const runtime = runtimeFor(
+      () =>
+        jsonResponse({
+          code: "OK",
+          total: 1,
+          offset: 0,
+          items: [
+            {
+              title: "Sample item",
+              offers: [{ title: "Sample item", price: 8 }],
+            },
+          ],
+        }),
+      async () => {
+        throw new Error("synthetic decision failure");
+      },
+    );
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
+      status: "error",
+      error: { message: "synthetic decision failure" },
+    });
   });
 
   it("returns error (not a miss) on a malformed 200 payload", async () => {

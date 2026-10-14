@@ -80,3 +80,7 @@ When changing compiled entity declaration shapes, run the affected compiler
 contracts in `apps/web/tooling/entity-generator.unit.test.ts` as well as the
 consumer regression. Successful generation does not check existing exact-shape
 expectations.
+
+In browser tests, use `chooseOption` for enum Pickers rendered as button
+comboboxes. `selectComboboxItem` fills a searchable entity Picker input; it
+cannot select an enum button. Match the rendered control before choosing a helper.

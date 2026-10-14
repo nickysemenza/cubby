@@ -19,6 +19,7 @@ resolves concepts whose names differ across layers.
 - An Expense's **line kind** is its receipt role. `principal` means merchandise
   or a service; tax, shipping, discount, fee, tip, and `other_adjustment` remain
   real productless spend lines rather than categories of merchandise.
+  `unclassified` means the amount is recorded but its receipt role is unresolved.
 - **Logistics** is delivery, pickup, transport, hauling, storage, and job-site
   coordination, regardless of the trade served. Appliance delivery is logistics;
   appliance installation is appliances.
@@ -315,12 +316,16 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor
   recorded", since `purchase.vendorId` is NOT NULL.
   - `lineKind` is `principal | tax | shipping | discount | fee | tip |
-    other_adjustment`. Every kind participates in total, monthly, project,
+    other_adjustment | unclassified`. Every kind participates in total, monthly, project,
     Purchase-reconciliation, and vendor spend. Cost-type and trade analytics
     read the joint allocation, so an adjustment's money follows the trade and
     cost type of the principals it was charged on (see
     [spending classification](../spending-classification.md)). Tool and affinity
     analytics use only `principal`.
+  - An unclassified amount remains visible as unresolved money. It is neither
+    a principal nor an adjustment, cannot identify a Product, and does not
+    inherit a Project or spending category. Resolving its receipt role does
+    not change its amount.
   - Non-principal rows cannot link `productId` or `productQuantity`. A trade
     typed onto one claims the whole adjustment at its own `costType`;
     otherwise its stored `costType` applies only to shares with no principal.

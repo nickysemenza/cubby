@@ -1142,21 +1142,25 @@ export function EntityIntentFields({
     control: form.control,
     name: sameRecordPolicies.map(([, policy]) => policy.classifier),
   });
-  const [expenseName, expenseProduct]: unknown[] = useWatch({
+  const [expenseProduct]: unknown[] = useWatch({
     control: form.control,
-    name: ["name", "productId"],
+    name: ["productId"],
   });
   const policyHiddenFields = useMemo(() => {
     const hidden = new Set<string>();
     sameRecordPolicies.forEach(([, policy], index) => {
+      const rawClassifier = basisValueOf(policyClassifierValues[index]);
+      const productId = basisValueOf(expenseProduct);
       const classifier =
         entity === "expense" && policy.classifier === "lineKind"
-          ? resolveExpenseLineKind({
-              lineKind: basisValueOf(policyClassifierValues[index]),
-              name: basisValueOf(expenseName),
-              productId: basisValueOf(expenseProduct),
-            })
-          : basisValueOf(policyClassifierValues[index]);
+          ? (rawClassifier === null || rawClassifier === "auto") &&
+            productId === null
+            ? null
+            : resolveExpenseLineKind({
+                lineKind: rawClassifier,
+                productId,
+              })
+          : rawClassifier;
       for (const declaration of policy.fields) {
         if (classifier === null) continue;
         const value =
@@ -1167,13 +1171,7 @@ export function EntityIntentFields({
       }
     });
     return hidden;
-  }, [
-    entity,
-    expenseName,
-    expenseProduct,
-    policyClassifierValues,
-    sameRecordPolicies,
-  ]);
+  }, [entity, expenseProduct, policyClassifierValues, sameRecordPolicies]);
   const policyHiddenFieldValues: unknown[] = useWatch({
     control: form.control,
     name: [...policyHiddenFields],

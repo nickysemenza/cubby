@@ -136,12 +136,14 @@ describe("purchase application workflows", () => {
         expenseId: original.id,
         parts: [
           {
+            lineKind: "principal",
             name: "First supply",
             cost: 5,
             costType: "materials",
             trade: "other",
           },
           {
+            lineKind: "principal",
             name: "Second supply",
             cost: 7,
             costType: "materials",
@@ -321,6 +323,7 @@ describe("purchase repository — splitExpense", () => {
         expenseId: combo.id,
         parts: [
           {
+            lineKind: "principal",
             name: "saw portion",
             cost: 70,
             costType: "tools",
@@ -329,6 +332,7 @@ describe("purchase repository — splitExpense", () => {
             productId: product.id,
           },
           {
+            lineKind: "principal",
             name: "blade portion",
             cost: 30,
             costType: "materials",
@@ -399,12 +403,14 @@ describe("purchase repository — splitExpense", () => {
           expenseId: combo.id,
           parts: [
             {
+              lineKind: "principal",
               name: "kept portion",
               cost: 60,
               costType: "materials",
               trade: "other",
             },
             {
+              lineKind: "principal",
               name: "refunded portion",
               cost: 25,
               costType: "materials",

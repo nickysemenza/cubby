@@ -12,9 +12,13 @@ import type {
   PhotoRunImage,
   PhotoAcceptedSourceLine,
 } from "@cubby/schemas/photo-import-run";
+import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
+import type { AiRunContext } from "~/server/ai/run-feature";
+import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import {
   entityExternalId,
@@ -32,19 +36,19 @@ import {
   ilikeContains,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import {
-  compareProductTitles,
-  extractVariantFacts,
-} from "~/server/repo/product-variant-comparison";
+import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
 import {
   getProductCoverImageUrlsByProductIds,
   getProductImagesByProductIds,
 } from "~/server/repo/product/crud";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
+import { ensureRun, aiCallRunInput } from "~/server/runs/ensure-run";
+import { traceAllBounded } from "~/server/tracing";
 
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 5;
+const VARIANT_DECISION_LIMIT = 20;
 
 type AssociationExpense = Pick<
   typeof expense.$inferSelect,
@@ -186,7 +190,7 @@ type CandidateFact = {
 type RankedCandidate = CandidateFact & {
   sharedNameTerms: string[];
   brandMatches: boolean;
-  variant: ReturnType<typeof compareProductTitles>;
+  variant: ProductVariantComparison;
   score: number;
   factors: { label: string; points: number }[];
 };
@@ -210,6 +214,8 @@ export function rankPhotoProductCandidates(
   manufacturer: string | null,
   candidates: readonly CandidateFact[],
   evidenceTexts: readonly string[] = [],
+  comparisons: ReadonlyMap<ProductId, ProductVariantComparison> = new Map(),
+  limit = SUGGESTION_LIMIT,
 ): RankedCandidate[] {
   const wanted = productIdentityWords(name);
   const brand = manufacturer?.toLowerCase().trim() || null;
@@ -233,12 +239,17 @@ export function rankPhotoProductCandidates(
       sharedIdentity.length < (brandMatch ? 1 : 2)
     )
       return [];
-    const variant = compareProductTitles(
-      [name, ...evidenceTexts].join(" "),
-      [candidate.name, candidate.model, ...(candidate.aliases ?? [])]
-        .filter(Boolean)
-        .join(" "),
-    );
+    const firstTitle = [name, ...evidenceTexts].join("\n");
+    const secondTitle = [
+      candidate.name,
+      candidate.model,
+      ...(candidate.aliases ?? []),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const variant =
+      comparisons.get(candidate.id) ??
+      unknownProductVariantComparison(firstTitle, secondTitle);
     // One additional identity word (often the exact color or size) must outrank
     // every provenance preference combined. Provenance breaks ties between
     // plausible variants; it cannot turn a different variant into the match.
@@ -275,7 +286,7 @@ export function rankPhotoProductCandidates(
         b.score - a.score ||
         a.candidate.shortcode.localeCompare(b.candidate.shortcode),
     )
-    .slice(0, SUGGESTION_LIMIT)
+    .slice(0, limit)
     .map(
       ({ candidate, score, factors, sharedIdentity, brandMatch, variant }) => ({
         ...candidate,
@@ -293,7 +304,7 @@ export async function photoProductCandidates(
   db: Database,
   proposal: PhotoGroupProposal,
   images: readonly PhotoRunImage[] = [],
-  actor: Pick<ActorContext, "userId">,
+  actor: ActorContext,
 ): Promise<PhotoProductCandidate[]> {
   const name =
     proposal.product.kind === "create"
@@ -338,7 +349,8 @@ export async function findPhotoProductCandidates(
       text: string;
     }[];
   },
-  actor: Pick<ActorContext, "userId">,
+  actor: ActorContext,
+  decisionPort?: DecisionPort,
 ): Promise<PhotoProductCandidate[]> {
   const { name, manufacturer } = input;
   const words = [...productIdentityWords(name)];
@@ -423,19 +435,66 @@ export async function findPhotoProductCandidates(
       desc(sql<number>`similarity(${product.name}, ${name})`),
     )
     .limit(CANDIDATE_POOL_LIMIT);
+  const candidateFacts = rows
+    .filter((row) => row.shortcode !== input.excludeId)
+    .map((row) => ({
+      ...row,
+      exactIdentifier: exactIds.includes(row.id),
+      matchedIdentifiers: exactRows
+        .filter((entry) => entry.productId === row.id)
+        .map((entry) => entry.externalId),
+    }));
+  const sourceTitle = [
+    name,
+    ...(input.evidenceTexts ?? []).map((item) => item.text),
+  ].join("\n");
+  const preliminary = rankPhotoProductCandidates(
+    name,
+    manufacturer ?? null,
+    candidateFacts,
+    (input.evidenceTexts ?? []).map((evidence) => evidence.text),
+    new Map(),
+    VARIANT_DECISION_LIMIT,
+  );
+  const variantComparisons = new Map<ProductId, ProductVariantComparison>();
+  if (preliminary.length > 0) {
+    const runId = await ensureRun(db, actor, aiCallRunInput(actor));
+    const usage: AiRunContext = {
+      db,
+      runId,
+      operation: "photo-import.product-variant-comparison",
+    };
+    const tasks: Record<string, () => Promise<ProductVariantComparison>> =
+      Object.fromEntries(
+        preliminary.map((candidate) => [
+          candidate.id,
+          () =>
+            decideProductVariantComparison({
+              firstTitle: sourceTitle,
+              secondTitle: [
+                candidate.name,
+                candidate.model,
+                ...(candidate.aliases ?? []),
+              ]
+                .filter(Boolean)
+                .join("\n"),
+              usage,
+              port: decisionPort,
+            }),
+        ]),
+      );
+    const comparisons = await traceAllBounded(tasks, 3, {
+      spanName: "photo-import.product-variant-comparison",
+    });
+    for (const candidate of preliminary)
+      variantComparisons.set(candidate.id, comparisons[candidate.id]!);
+  }
   const ranked = rankPhotoProductCandidates(
     name,
     manufacturer ?? null,
-    rows
-      .filter((row) => row.shortcode !== input.excludeId)
-      .map((row) => ({
-        ...row,
-        exactIdentifier: exactIds.includes(row.id),
-        matchedIdentifiers: exactRows
-          .filter((entry) => entry.productId === row.id)
-          .map((entry) => entry.externalId),
-      })),
+    candidateFacts,
     (input.evidenceTexts ?? []).map((evidence) => evidence.text),
+    variantComparisons,
   );
   const ids = ranked.map((candidate) => candidate.id);
   const covers = await getProductCoverImageUrlsByProductIds(db, ids);
@@ -522,15 +581,7 @@ export async function findPhotoProductCandidates(
       ...expenseRows
         .filter((row) => row.productId === candidate.id)
         .map((row) => ({ source: "purchase_line" as const, text: row.name })),
-    ].flatMap(({ source, text }) => {
-      const facts = extractVariantFacts(text);
-      return (["color", "size"] as const).flatMap((dimension) => {
-        const fact = facts[dimension];
-        return fact
-          ? [{ dimension, value: fact.value, raw: fact.raw, source }]
-          : [];
-      });
-    }),
+    ],
     purchaseLines: expenseRows
       .filter((row) => row.productId === candidate.id)
       .map((row) => ({

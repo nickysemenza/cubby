@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import {
   parseShortcodeFor,
   type PurchaseShortcode,
@@ -152,6 +153,21 @@ function SplitPartCard({
       <Row align="center" gap="sm" wrap>
         <Picker
           mode="choose"
+          options={fieldEnumOptions("expense", "lineKind")}
+          value={part.lineKind ?? null}
+          onValueChange={(next) => {
+            const parsed = expenseLineKindSchema.nullable().safeParse(next);
+            if (parsed.success)
+              onChange({ lineKind: parsed.data ?? undefined });
+          }}
+          className="w-40"
+          label={`Part ${index + 1} receipt role`}
+          placeholder="Decide from receipt evidence"
+          clearable
+          compact
+        />
+        <Picker
+          mode="choose"
           options={fieldEnumOptions("expense", "costType")}
           value={part.costType}
           onValueChange={(next) => {
@@ -245,6 +261,7 @@ function SplitPartCard({
 }
 
 const bare = (part: PartDraft): SplitPartDraft => ({
+  ...(part.lineKind !== undefined ? { lineKind: part.lineKind } : {}),
   name: part.name,
   cost: part.cost,
   costType: part.costType,

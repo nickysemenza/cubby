@@ -1,10 +1,12 @@
 import { startOperation } from "./start-operation";
+import type { Fixture as TestGatewayFixture } from "./harness-services/purchase-import-test-gateway";
 import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
 } from "./fixtures-catalog";
 import { and, eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { TestHarness } from "wrangler";
 import { memberImport } from "~/server/purchase-import/order-import.fixtures";
 import {
   prepareSourceOrderReconciliation,
@@ -24,6 +26,28 @@ import {
 } from "./fixtures-photos";
 import { openDetailActions, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, recordingVideo, test } from "./e2e-test";
+
+async function configureVariantDecisions(
+  harness: TestHarness,
+  decisions: NonNullable<TestGatewayFixture["decisions"]>,
+) {
+  const response = await harness
+    .getWorker("cubby-test-gateway")
+    .fetch("https://gateway.test/configure", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decisions }),
+    });
+  expect(response.status).toBe(204);
+}
+
+test.beforeEach(async ({ e2eRuntime }) => {
+  await configureVariantDecisions(e2eRuntime.harness, []);
+});
+
+test.afterEach(async ({ e2eRuntime }) => {
+  await configureVariantDecisions(e2eRuntime.harness, []);
+});
 
 test("approves two selected photo groups with one reviewed batch action", async ({
   page,
@@ -275,6 +299,13 @@ test("suggests an existing variant and previews every merge decision for a creat
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
+  await configureVariantDecisions(e2eRuntime.harness, [
+    {
+      feature: "product-variant-relation",
+      match: createdName,
+      label: "color same; size same",
+    },
+  ]);
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -289,13 +320,15 @@ test("suggests an existing variant and previews every merge decision for a creat
     has: page.getByRole("heading", { name: createdName }),
   });
   await expect(group.getByText("Product comparison")).toBeVisible();
-  await expect(group.getByText(candidateName)).toBeVisible();
+  await expect(
+    group.getByRole("link", { name: candidateName, exact: true }),
+  ).toBeVisible();
   await expect(
     group
       .getByRole("region", { name: "Product comparison" })
       .getByRole("article")
       .filter({ has: page.getByRole("link", { name: candidateName }) })
-      .getByText("Gray in both sources")
+      .getByText(/Titles agree:/)
       .first(),
   ).toBeVisible();
   await group.getByRole("button", { name: "Approve item" }).click();
@@ -442,6 +475,13 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
+  await configureVariantDecisions(e2eRuntime.harness, [
+    {
+      feature: "product-variant-relation",
+      match: existingName,
+      label: "color same; size same",
+    },
+  ]);
   const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
@@ -451,6 +491,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     .locator("#photo-group-g1")
     .getByRole("region", { name: "Product comparison" });
   await expect(comparison.getByText(existingName).first()).toBeVisible();
+  await expect(comparison.getByText(/Titles agree:/).first()).toBeVisible();
   await expect(comparison.getByText("Counted now").first()).toBeVisible();
   await expect(comparison.getByText("Ledger expected").first()).toBeVisible();
   await expect(
@@ -661,6 +702,13 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
+  await configureVariantDecisions(e2eRuntime.harness, [
+    {
+      feature: "product-variant-relation",
+      match: "ForgeWear work boots tan size 9",
+      label: "color same; size different",
+    },
+  ]);
   const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
@@ -686,9 +734,11 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
   const wrongRow = comparison
     .getByRole("article")
     .filter({ hasText: "ForgeWear work boots tan size 9" });
-  await expect(
-    wrongRow.getByText(/Proposal: US 7; Product: US 9 — check evidence/),
-  ).toBeVisible();
+  const conflict = wrongRow.getByText(/Titles conflict:/);
+  await expect(conflict).toBeVisible();
+  await expect(conflict).toContainText("size 7");
+  await expect(conflict).toContainText("size 9");
+  await expect(conflict).toContainText("check evidence");
   await expect(
     wrongRow.getByRole("button", { name: "Use product" }),
   ).toBeVisible();

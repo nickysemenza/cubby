@@ -5,6 +5,7 @@ import { amount, amountFromColumns } from "@cubby/schemas/codec";
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -57,6 +58,7 @@ export type MappableImageRecord = {
     ruleId?: string;
     detail?: string;
   } | null;
+  sourceEvidence?: unknown;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -121,6 +123,9 @@ export const mapImages = (
       capturedByName: null,
       captureAttribution: dbImage.captureAttribution ?? "none",
       provenanceEvidence: dbImage.provenanceEvidence ?? null,
+      sourceEvidence: imageSourceEvidence
+        .nullable()
+        .parse(dbImage.sourceEvidence ?? null),
       createdAt: dbImage.createdAt,
       updatedAt: dbImage.updatedAt,
     }));

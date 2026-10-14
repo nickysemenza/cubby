@@ -30,7 +30,7 @@ export const maintenanceHandlers = implementOperationDomain(
     repairImageDimensions: (context, input) =>
       repairImageDimensions(context.db, input),
     classifyImageProvenance: (context, input) =>
-      classifyImageProvenance(context.db, input),
+      classifyImageProvenance(context.db, input, context.actorContext),
     backfillImageMetadata: (context, input) =>
       backfillImageMetadata(context.db, input),
     backfillImageSearch: (context, input) =>

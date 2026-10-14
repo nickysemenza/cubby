@@ -15,6 +15,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { listProductMatchRows } from "~/server/repo/product-match-candidate";
+import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
 import { mergeProducts } from "~/server/repo/product/merge";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import {
@@ -35,6 +36,7 @@ import {
   mergeProductMatch,
   proposeProductMatch,
 } from "~/server/services/product-match.service";
+import type { ProductMatchDependencies } from "~/server/services/product-match.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
@@ -49,6 +51,11 @@ const namesOnly = {
     queryById: async () => [],
   },
   semanticConfigured: () => false,
+  decideVariant: async ({
+    firstTitle,
+    secondTitle,
+  }: Parameters<NonNullable<ProductMatchDependencies["decideVariant"]>>[0]) =>
+    unknownProductVariantComparison(firstTitle, secondTitle),
 };
 
 type Category = Parameters<typeof taxonomyShortcode>[0];
@@ -83,6 +90,7 @@ describe("product match queue", () => {
       ctx.db,
       { productId: source.id, candidateId: candidate.id },
       namesOnly,
+      ctx.actor,
     );
     expect(queue.items).toHaveLength(1);
     expect([queue.items[0]?.keeper.id, queue.items[0]?.other.id]).toEqual([
@@ -90,6 +98,63 @@ describe("product match queue", () => {
       candidate.id,
     ]);
     expect(queue.items[0]?.signals).toContain("Suggested from photo review");
+  });
+
+  it("surfaces an explicit model-reported conflict using the original titles", async () => {
+    const source = await product("ForgeWear dark pocket tee");
+    const other = await product("ForgeWear black small pocket tee");
+    const deps = {
+      ...namesOnly,
+      decideVariant: async ({
+        firstTitle,
+        secondTitle,
+      }: Parameters<
+        NonNullable<ProductMatchDependencies["decideVariant"]>
+      >[0]) => ({
+        color: { relation: "different" as const },
+        size: { relation: "unknown" as const },
+        evidence: { firstTitle, secondTitle },
+      }),
+    };
+
+    const queue = await getProductMatchQueue(
+      ctx.db,
+      { productId: source.id, candidateId: other.id },
+      deps,
+      ctx.actor,
+    );
+
+    expect(queue.items[0]).toMatchObject({
+      variant: {
+        color: { relation: "different" },
+        size: { relation: "unknown" },
+        evidence: {
+          firstTitle: source.name,
+          secondTitle: other.name,
+        },
+      },
+      warnings: [expect.stringContaining("conflict on color")],
+    });
+  });
+
+  it("propagates variant decision failures instead of returning a partial queue", async () => {
+    const source = await product("ForgeWear navy pocket tee");
+    const other = await product("ForgeWear black pocket tee");
+    const deps = {
+      ...namesOnly,
+      decideVariant: async () => {
+        throw new Error("variant decision gateway failed");
+      },
+    };
+
+    await expect(
+      getProductMatchQueue(
+        ctx.db,
+        { productId: source.id, candidateId: other.id },
+        deps,
+        ctx.actor,
+      ),
+    ).rejects.toThrow("variant decision gateway failed");
   });
 
   /** Stocked, never bought: what a wardrobe photo import creates. */
@@ -177,7 +242,14 @@ describe("product match queue", () => {
   };
 
   const queueFor = async (id: ProductShortcode) =>
-    (await getProductMatchQueue(ctx.db, { productId: id }, namesOnly)).items;
+    (
+      await getProductMatchQueue(
+        ctx.db,
+        { productId: id },
+        namesOnly,
+        ctx.actor,
+      )
+    ).items;
 
   const pairOf = (item: { keeper: { id: string }; other: { id: string } }) => [
     item.keeper.id,

@@ -1,8 +1,10 @@
 import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
+import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/features";
 import { expense, expenseAttribution } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { createLedgerParty } from "~/server/repo/ledger-party";
@@ -164,6 +166,52 @@ describe("split and attach checks against the ledger", () => {
   });
 
   describe("a split the form accepts is a split the write accepts", () => {
+    const roleDecision =
+      (selectedRole: string, calls?: { count: number }): DecisionPort =>
+      async (request) => {
+        if (calls) calls.count += 1;
+        const selectedIndex =
+          PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE.choices.findIndex(
+            (role) => role === selectedRole,
+          );
+        if (selectedIndex < 0)
+          throw new Error(`Missing role choice: ${selectedRole}`);
+        const choices = Object.keys(request.questions.selection.criteria);
+        return {
+          answers: {
+            selection: {
+              type: "choice",
+              choice: `c${selectedIndex}`,
+              confidence: 0.99,
+              probabilities: Object.fromEntries(
+                choices.map((key) => [
+                  key,
+                  key === `c${selectedIndex}`
+                    ? 0.99
+                    : 0.01 / (choices.length - 1),
+                ]),
+              ),
+            },
+          },
+        };
+      };
+    const checkSplit = (
+      input: Parameters<typeof checkSplitFor>[1],
+      decisionPort?: DecisionPort,
+    ) =>
+      checkSplitFor(
+        ctx.db,
+        input,
+        ctx.actor,
+        decisionPort ??
+          (async (request) => {
+            const evidence = JSON.parse(request.state) as { name: string };
+            const role = /shipping/i.test(evidence.name)
+              ? "shipping"
+              : "principal";
+            return roleDecision(role)(request);
+          }),
+      );
     async function original(cost: number) {
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
         name: "Synthetic split vendor",
@@ -188,6 +236,10 @@ describe("split and attach checks against the ledger", () => {
       keepProduct: false,
       productQuantity: "",
     });
+    const principalDraft = (name: string, cost: string) => ({
+      ...draft(name, cost),
+      lineKind: "principal" as const,
+    });
 
     it("conserves cents where floating point would not (0.1 + 0.2)", async () => {
       const source = await original(0.3);
@@ -198,7 +250,7 @@ describe("split and attach checks against the ledger", () => {
         ),
         {
           expenseId: parseShortcodeFor("expense", source.shortcode),
-          parts: [draft("A", "0.1"), draft("B", "0.2")],
+          parts: [principalDraft("A", "0.1"), principalDraft("B", "0.2")],
         },
       );
       expect(check.reason).toBeNull();
@@ -217,7 +269,7 @@ describe("split and attach checks against the ledger", () => {
       const code = parseShortcodeFor("expense", source.shortcode);
       const check = checkSplitDraft(await loadSplitOriginal(ctx.db, code), {
         expenseId: code,
-        parts: [draft("A", "0.1"), draft("B", "0.21")],
+        parts: [principalDraft("A", "0.1"), principalDraft("B", "0.21")],
       });
       expect(check.split).toBeNull();
       expect(check.delta).toBe(0.01);
@@ -228,14 +280,14 @@ describe("split and attach checks against the ledger", () => {
             expenseId: code,
             parts: [
               {
-                ...draft("A", "0.1"),
+                ...principalDraft("A", "0.1"),
                 cost: 0.1,
                 projectId: null,
                 productId: null,
                 productQuantity: null,
               },
               {
-                ...draft("B", "0.21"),
+                ...principalDraft("B", "0.21"),
                 cost: 0.21,
                 projectId: null,
                 productId: null,
@@ -258,9 +310,12 @@ describe("split and attach checks against the ledger", () => {
     it("refuses a project that does not exist, as the write would", async () => {
       const source = await original(10);
       const code = parseShortcodeFor("expense", source.shortcode);
-      const check = await checkSplitFor(ctx.db, {
+      const check = await checkSplit({
         expenseId: code,
-        parts: [{ ...draft("A", "4"), projectId: "PRJ-ZZZZ" }, draft("B", "6")],
+        parts: [
+          { ...principalDraft("A", "4"), projectId: "PRJ-ZZZZ" },
+          principalDraft("B", "6"),
+        ],
       });
       expect(check.split).toBeNull();
       expect(check.reason).toMatch(/^Part 1:/);
@@ -270,10 +325,10 @@ describe("split and attach checks against the ledger", () => {
       const source = await original(10);
       const code = parseShortcodeFor("expense", source.shortcode);
       const parts = [
-        { ...draft("A", "4"), trade: null },
-        { ...draft("B", "6"), trade: null },
+        { ...principalDraft("A", "4"), trade: null },
+        { ...principalDraft("B", "6"), trade: null },
       ];
-      const check = await checkSplitFor(ctx.db, { expenseId: code, parts });
+      const check = await checkSplit({ expenseId: code, parts });
       expect(check.split).toBeNull();
       expect(check.reason).toMatch(/requires a trade/);
       await expect(
@@ -297,12 +352,74 @@ describe("split and attach checks against the ledger", () => {
     it("accepts parts the write accepts", async () => {
       const source = await original(10);
       const code = parseShortcodeFor("expense", source.shortcode);
-      const check = await checkSplitFor(ctx.db, {
+      const check = await checkSplit({
         expenseId: code,
-        parts: [draft("A", "4"), draft("B", "6")],
+        parts: [principalDraft("A", "4"), principalDraft("B", "6")],
       });
       expect(check.reason).toBeNull();
       expect(check.split).not.toBeNull();
+    });
+
+    it("writes the roles decided by the check exactly once", async () => {
+      const source = await original(10);
+      const code = parseShortcodeFor("expense", source.shortcode);
+      let calls = 0;
+      const decisionPort: DecisionPort = async (request) => {
+        calls += 1;
+        const evidence = JSON.parse(request.state) as { name: string };
+        const role = /shipping/i.test(evidence.name) ? "shipping" : "principal";
+        return roleDecision(role)(request);
+      };
+      const check = await checkSplit(
+        {
+          expenseId: code,
+          parts: [draft("Goods", "8"), draft("Shipping", "2")],
+        },
+        decisionPort,
+      );
+      expect(check.split?.parts.map(({ lineKind }) => lineKind)).toEqual([
+        "principal",
+        "shipping",
+      ]);
+      expect(calls).toBe(2);
+      if (!check.split) throw new Error("expected a valid split");
+      await splitExpense(ctx.db, check.split, ctx.actor);
+      expect(calls).toBe(2);
+    });
+
+    it("refuses splitting without a Purchase before asking for a role", async () => {
+      const source = await insertWithShortcode(ctx.db, "expense", {
+        ...line,
+        name: "Unattached expense",
+        cost: 10,
+        purchaseId: null,
+      });
+      const code = parseShortcodeFor("expense", source.shortcode);
+      const parts = [draft("Goods", "4"), draft("Delivery", "6")];
+      const decisionPort: DecisionPort = vi.fn(async () => {
+        throw new Error("Decision should not run for an invalid split");
+      });
+      const check = await checkSplit({ expenseId: code, parts }, decisionPort);
+      expect(check.split).toBeNull();
+      expect(check.reason).not.toBeNull();
+      await expect(
+        splitExpense(
+          ctx.db,
+          {
+            expenseId: code,
+            parts: parts.map((part) => ({
+              ...part,
+              cost: Number(part.cost),
+              projectId: null,
+              productId: null,
+              productQuantity: null,
+            })),
+          },
+          ctx.actor,
+          decisionPort,
+        ),
+      ).rejects.toThrow("no purchase attached");
+      expect(decisionPort).not.toHaveBeenCalled();
     });
 
     it("allows a categorized principal to split into an uncategorized shipping part", async () => {
@@ -327,7 +444,7 @@ describe("split and attach checks against the ledger", () => {
       });
       const code = parseShortcodeFor("expense", source.shortcode);
       const parts = [draft("Item", "8"), draft("Shipping", "2")];
-      const check = await checkSplitFor(ctx.db, { expenseId: code, parts });
+      const check = await checkSplit({ expenseId: code, parts });
       expect(check.reason).toBeNull();
       expect(check.split).not.toBeNull();
       if (!check.split) throw new Error("expected a valid split");
@@ -359,7 +476,7 @@ describe("split and attach checks against the ledger", () => {
       });
       const loaded = await loadSplitOriginal(ctx.db, code);
       expect(loaded.hasAttribution).toBe(true);
-      const parts = [draft("A", "4"), draft("B", "6")];
+      const parts = [principalDraft("A", "4"), principalDraft("B", "6")];
       const undecided = checkSplitDraft(loaded, { expenseId: code, parts });
       expect(undecided.needsAttributionPolicy).toBe(true);
       expect(undecided.split).toBeNull();

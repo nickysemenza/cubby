@@ -4,7 +4,6 @@ import {
   type EmailCandidateSource,
   type EmailEvidenceCandidate,
 } from "@cubby/schemas/email-candidates";
-import { inspectExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { wholeCentAmount } from "@cubby/schemas/money";
 import {
   importExtractionOutcome,
@@ -78,18 +77,10 @@ function orderLines(
   for (const entry of order.priceSpecification) {
     if (entry.priceCurrency && entry.priceCurrency !== order.priceCurrency)
       throw new Error("Adjustment currency does not match order currency");
-    const role = inspectExpenseLineKind({ name: entry.name });
-    if (
-      role.confidence !== "high" ||
-      ["principal", "other_adjustment"].includes(role.lineKind)
-    )
-      throw new Error("Adjustment role is ambiguous");
-    if (role.lineKind === "discount" ? entry.price > 0 : entry.price < 0)
-      throw new Error("Adjustment sign contradicts its financial role");
     lines.push({
       title: entry.name,
       amount: entry.price,
-      lineKind: role.lineKind,
+      lineKind: "unclassified",
     });
   }
   return lines;

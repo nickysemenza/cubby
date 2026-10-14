@@ -1,6 +1,6 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 
-/** Explicit text evidence; the reviewer decides identity from the photos and records. */
+/** Closed-choice relations plus the original source text, for human review. */
 export function ProductVariantEvidence({
   comparison,
   firstLabel,
@@ -13,22 +13,22 @@ export function ProductVariantEvidence({
   return (
     <dl className="grid min-w-0 gap-y-1 text-xs">
       {(["color", "size"] as const).map((field) => {
-        const fact = comparison[field];
+        const relation = comparison[field].relation;
         return (
           <div key={field} className="flex min-w-0 flex-wrap gap-x-1.5">
             <dt className="font-medium capitalize">{field}</dt>
             <dd
               className={
-                fact.relation === "different"
+                relation === "different"
                   ? "text-warning"
                   : "text-muted-foreground"
               }
             >
-              {fact.relation === "same"
-                ? `${fact.first} in both sources`
-                : fact.relation === "different"
-                  ? `${firstLabel}: ${fact.first}; ${secondLabel}: ${fact.second} — check evidence`
-                  : `${firstLabel}: ${fact.first ?? "unknown"}; ${secondLabel}: ${fact.second ?? "unknown"}`}
+              {relation === "same"
+                ? `Titles agree: “${comparison.evidence.firstTitle}” / “${comparison.evidence.secondTitle}”`
+                : relation === "different"
+                  ? `Titles conflict: “${comparison.evidence.firstTitle}” / “${comparison.evidence.secondTitle}” — check evidence`
+                  : `${firstLabel} / ${secondLabel}: relation unknown`}
             </dd>
           </div>
         );

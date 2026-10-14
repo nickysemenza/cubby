@@ -4,7 +4,7 @@ import { expense, entityLink } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { gotoDetailActions } from "./e2e-helpers";
+import { gotoDetailActions, chooseOption } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { getFixtureDb } from "./fixtures-core";
 
@@ -44,6 +44,16 @@ test.describe("split and attach, with the server's rules", () => {
     );
     await page.getByRole("button", { name: "Split..." }).click();
     const dialog = page.getByRole("dialog", { name: /^Split / });
+    for (const index of [1, 2]) {
+      await chooseOption(
+        page,
+        dialog.getByRole("combobox", {
+          name: `Part ${index} receipt role`,
+          exact: true,
+        }),
+        "Item or service",
+      );
+    }
     await dialog.getByRole("spinbutton", { name: "Part 1 cost" }).fill("10");
     await dialog
       .getByRole("textbox", { name: "Part 2 name" })
