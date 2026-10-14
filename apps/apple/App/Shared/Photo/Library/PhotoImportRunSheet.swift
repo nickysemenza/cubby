@@ -619,6 +619,13 @@ private struct RunningView: View {
             ? "Review item groups" : "View import"
     }
 
+    private func runDestination(_ runID: String) -> RunConsoleView {
+        RunConsoleView(
+            runID: runID,
+            initialSection: review.review?.review.proposals.contains { $0.state == .proposed } == true
+                ? .photoReview : nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             Text(stageTitle)
@@ -634,7 +641,7 @@ private struct RunningView: View {
                 Label(reason, systemImage: "hourglass")
             }
             if let runID = session.runID, session.phase != .complete {
-                NavigationLink(runLinkTitle) { RunConsoleView(runID: runID) }
+                NavigationLink(runLinkTitle) { runDestination(runID) }
             }
             ProgressView(
                 value: Double(session.progress.analyzed), total: Double(max(session.progress.total, 1))
@@ -717,7 +724,7 @@ private struct RunningView: View {
                 Text("The agent will propose item groups for your review before products are created.")
                     .font(.fieldGuideBody)
                 NavigationLink {
-                    RunConsoleView(runID: runID)
+                    runDestination(runID)
                 } label: {
                     Label(runLinkTitle, systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity)

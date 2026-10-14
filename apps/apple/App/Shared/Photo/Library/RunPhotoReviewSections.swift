@@ -73,6 +73,8 @@ struct RunPhotoReviewSections: View {
                                     approvalBlocker($0, images: review.images) != nil
                                 })
                     }
+                    .detailContentsHeader().detailContentsAnchor(
+                        RunConsoleView.InitialSection.photoReview.rawValue)
                 } footer: {
                     Text("Products are created or linked only after approval.")
                 }
