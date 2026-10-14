@@ -28,6 +28,7 @@ import {
   workStateLabel,
 } from "~/app/activity/work-state";
 import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
+import { EntityWorkbenchInspector } from "~/entity/entity-detail/entity-workbench-inspector";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -564,7 +565,13 @@ export function RunHistory({
     });
   const selectFilter = (key: keyof RunHistoryFilters, value: string) =>
     onFilterChange({ [key]: value || undefined });
-  const inspector = filters.selected ? (
+  const inspector = filters.selected?.startsWith("RUN-") ? (
+    <EntityWorkbenchInspector
+      entity="run"
+      id={filters.selected}
+      onClose={() => onSelect(undefined)}
+    />
+  ) : filters.selected ? (
     <ActivityRunDetail
       id={filters.selected}
       onClose={() => onSelect(undefined)}

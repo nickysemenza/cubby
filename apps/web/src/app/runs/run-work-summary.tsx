@@ -72,7 +72,7 @@ export function RunTargetChips({
 export function RunWorkFacts({ run }: { run: ActivityRun }) {
   const outcome = run.targetSummary;
   return (
-    <Ledger as="dl" variant="facts" className="mb-3">
+    <Ledger as="dl" variant="facts">
       <LedgerRow as="div">
         <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
           Subject
@@ -99,18 +99,6 @@ export function RunWorkFacts({ run }: { run: ActivityRun }) {
           <LedgerCell as="dd" slot="secondary" className="grid gap-1">
             <span className="tabular-nums">{outcome}</span>
             <RunTargetChips run={run} wrap />
-          </LedgerCell>
-        </LedgerRow>
-      ) : null}
-      {run.recordType === "run" ? (
-        <LedgerRow as="div">
-          <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
-            Changed
-          </LedgerCell>
-          <LedgerCell as="dd" slot="secondary" className="tabular-nums">
-            {run.changedCount === 1
-              ? "1 record"
-              : `${run.changedCount} records`}
           </LedgerCell>
         </LedgerRow>
       ) : null}

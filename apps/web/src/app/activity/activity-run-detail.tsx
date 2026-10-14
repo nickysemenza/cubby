@@ -1,10 +1,15 @@
 import type { activityAttempt, activityEvent } from "@cubby/schemas/activity";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo } from "react";
 import type { z } from "zod";
 
 import { RunWorkFacts } from "~/app/runs/run-work-summary";
+import { EntityIcon } from "~/entity/entities";
+import { InspectorChrome } from "~/entity/entity-detail/inspector-frame";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
@@ -18,19 +23,13 @@ import {
   RecordRow,
   type RecordTone,
 } from "~/ui/common/record-list";
-import { Row } from "~/ui/layout";
+import { Row, SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { StatusText } from "~/ui/primitives/status-text";
 
 import { WorkStateDot, workIssueText, workStateLabel } from "./work-state";
 
+/** Image jobs are not entities, so their inspector is the one Activity row without a manifest record. */
 export function ActivityRunDetail({
   id,
   onClose,
@@ -40,6 +39,95 @@ export function ActivityRunDetail({
   onClose: () => void;
   variant?: "page" | "inspector";
 }) {
+  const detail = useInfiniteQuery(
+    cursorQueryOptions(
+      activity.detail,
+      { id, limit: 20 },
+      (page) => page.nextAttemptCursor,
+    ),
+  );
+  const run = detail.data?.pages[0]?.run;
+  return (
+    <InspectorChrome
+      label="Image job inspector"
+      id={id}
+      name={run?.workLabel ?? "Image job"}
+      className={
+        variant === "page" ? "mt-4 h-auto max-w-4xl rounded-md border" : ""
+      }
+      leading={
+        run ? (
+          <EntityIcon
+            entity={run.iconEntity}
+            colored
+            className="mt-0.5 size-4"
+          />
+        ) : null
+      }
+      eyebrow={
+        run ? (
+          <span className="flex flex-wrap items-center gap-x-1.5 text-2xs font-medium text-muted-foreground">
+            Image job
+            <span aria-hidden="true">·</span>
+            <WorkStateDot state={run.state} />
+            {workStateLabel(run.state)}
+            <span aria-hidden="true">·</span>
+            <DateDisplay timestamp={run.createdAt} />
+          </span>
+        ) : null
+      }
+      actions={
+        variant === "inspector" ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            mobileSize="compact"
+            nativeButton={false}
+            render={<Link to="/runs/jobs/$id" params={{ id }} />}
+          >
+            Open record <ArrowSquareOutIcon />
+          </Button>
+        ) : null
+      }
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-3 p-3">
+        {run ? <RunWorkFacts run={run} /> : null}
+        {run?.parentRunId ? (
+          <Link
+            className="text-primary hover:underline"
+            to="/runs/$shortcode"
+            params={{ shortcode: run.parentRunId }}
+          >
+            Parent {run.parentRunId}
+          </Link>
+        ) : null}
+        {detail.isError ? (
+          <StatusText tone="destructive">{detail.error.message}</StatusText>
+        ) : null}
+        {run && workIssueText(run) ? (
+          <StatusText tone={run.state === "skipped" ? "muted" : "destructive"}>
+            {workIssueText(run)}
+          </StatusText>
+        ) : null}
+        {run ? (
+          <AiCost
+            cost={run}
+            note={
+              run.parentRunId
+                ? "This job’s cost may already be included in its parent Run total."
+                : undefined
+            }
+          />
+        ) : null}
+        <ActivityTimeline id={id} />
+      </div>
+    </InspectorChrome>
+  );
+}
+
+/** An image job's attempts and events, polled while the job is active. */
+function ActivityTimeline({ id }: { id: string }) {
   const detail = useInfiniteQuery(
     cursorQueryOptions(
       activity.detail,
@@ -70,193 +158,115 @@ export function ActivityRunDetail({
   }, [detail, events, run?.active]);
 
   return (
-    <Card
-      className={
-        variant === "inspector"
-          ? "h-full rounded-none border-0 shadow-none"
-          : "mt-4 max-w-4xl"
-      }
-    >
-      <CardHeader>
-        <Row justify="between" align="start" gap="sm" wrap>
-          <div>
-            <CardTitle>{run?.workLabel ?? "Work detail"}</CardTitle>
-            <CardDescription>
-              {run ? (
-                <>
-                  {run.id} · {run.recordType === "run" ? "Run" : "Image job"} ·{" "}
-                  {workStateLabel(run.state)} ·{" "}
-                  <DateDisplay timestamp={run.createdAt} />
-                </>
-              ) : (
-                id
-              )}
-            </CardDescription>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </Row>
-      </CardHeader>
-      <CardContent>
-        {run ? <RunWorkFacts run={run} /> : null}
-        <Row gap="sm" wrap>
-          {id.startsWith("RUN-") ? (
-            <a className="text-primary hover:underline" href={`/runs/${id}`}>
-              Full details
-            </a>
-          ) : (
-            <a
-              className="text-primary hover:underline"
-              href={`/runs/jobs/${id}`}
-            >
-              Full details
-            </a>
-          )}
-          {run?.parentRunId ? (
-            <a
-              className="text-primary hover:underline"
-              href={`/runs/${run.parentRunId}`}
-            >
-              Parent {run.parentRunId}
-            </a>
-          ) : null}
-          <Button variant="ghost" size="sm" onClick={() => void copyText(id)}>
-            <CopyIcon />
-            Copy ID
-          </Button>
+    <section className="flex flex-col gap-1">
+      <SectionHeading
+        as="h3"
+        actions={
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon-xs"
+            mobileSize="compact"
+            aria-label="Refresh timeline"
+            title="Refresh timeline"
             onClick={() => {
               void detail.refetch();
               void events.refetch();
             }}
           >
-            Refresh details
+            <ArrowClockwiseIcon />
           </Button>
-        </Row>
-        {detail.isError ? (
-          <StatusText tone="destructive">{detail.error.message}</StatusText>
-        ) : null}
-        {run && workIssueText(run) ? (
-          <StatusText tone={run.state === "skipped" ? "muted" : "destructive"}>
-            {workIssueText(run)}
-          </StatusText>
-        ) : null}
-        {run ? (
-          <div className="mt-3">
-            <AiCost
-              cost={run}
-              note={
-                run.recordType === "image_job" && run.parentRunId
-                  ? "This job’s cost may already be included in its parent Run total."
-                  : undefined
-              }
-            />
-          </div>
-        ) : null}
-        <section className="mt-3 flex flex-col gap-1">
-          <h3 className="font-medium">
-            {run?.recordType === "image_job"
-              ? "Attempts and events"
-              : run?.recordType === "run"
-                ? "Operations and events"
-                : "Events"}
-          </h3>
-          <RecordList
-            variant="timeline"
-            aria-label="Work timeline"
-            // Loaded attempts stay readable while events load or fail; their state shows below.
-            state={
-              events.isPending && attempts.length === 0
-                ? { status: "pending" }
-                : { status: "success" }
-            }
-            empty={
-              events.isSuccess ? "No events have been recorded." : undefined
-            }
-            footer={
-              detail.hasNextPage || events.hasNextPage ? (
-                <Row gap="xs" wrap>
-                  {detail.hasNextPage ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void detail.fetchNextPage()}
-                      disabled={detail.isFetchingNextPage}
-                    >
-                      Load more attempts
-                    </Button>
-                  ) : null}
-                  {events.hasNextPage ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void events.fetchNextPage()}
-                      disabled={events.isFetchingNextPage}
-                    >
-                      Load more events
-                    </Button>
-                  ) : null}
-                </Row>
+        }
+        title="Attempts and events"
+      />
+      <RecordList
+        variant="timeline"
+        aria-label="Work timeline"
+        // Loaded attempts stay readable while events load or fail; their state shows below.
+        state={
+          events.isPending && attempts.length === 0
+            ? { status: "pending" }
+            : { status: "success" }
+        }
+        empty={events.isSuccess ? "No events have been recorded." : undefined}
+        footer={
+          detail.hasNextPage || events.hasNextPage ? (
+            <Row gap="xs" wrap>
+              {detail.hasNextPage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void detail.fetchNextPage()}
+                  disabled={detail.isFetchingNextPage}
+                >
+                  Load more attempts
+                </Button>
+              ) : null}
+              {events.hasNextPage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void events.fetchNextPage()}
+                  disabled={events.isFetchingNextPage}
+                >
+                  Load more events
+                </Button>
+              ) : null}
+            </Row>
+          ) : null
+        }
+      >
+        {timelineGroups(attempts, eventRows).map((group) => (
+          <Fragment key={group.number ?? "job"}>
+            {group.number === null ? (
+              attempts.length > 0 ? (
+                <RecordHeading label="Job events" />
               ) : null
-            }
-          >
-            {timelineGroups(attempts, eventRows).map((group) => (
-              <Fragment key={group.number ?? "job"}>
-                {group.number === null ? (
-                  attempts.length > 0 ? (
-                    <RecordHeading label="Job events" />
-                  ) : null
-                ) : (
-                  <RecordHeading
-                    label={
+            ) : (
+              <RecordHeading
+                label={
+                  <>
+                    Attempt #{group.number}
+                    {group.attempt ? (
                       <>
-                        Attempt #{group.number}
-                        {group.attempt ? (
-                          <>
-                            {" "}
-                            · {workStateLabel(group.attempt.state)} ·{" "}
-                            <DateDisplay
-                              timestamp={group.attempt.startedAt}
-                              clock="day"
-                            />
-                          </>
-                        ) : null}
+                        {" "}
+                        · {workStateLabel(group.attempt.state)} ·{" "}
+                        <DateDisplay
+                          timestamp={group.attempt.startedAt}
+                          clock="day"
+                        />
                       </>
-                    }
-                  />
-                )}
-                {group.attempt ? <AttemptRow attempt={group.attempt} /> : null}
-                {group.events.map((event) => (
-                  <EventRow key={event.id} event={event} />
-                ))}
-              </Fragment>
+                    ) : null}
+                  </>
+                }
+              />
+            )}
+            {group.attempt ? <AttemptRow attempt={group.attempt} /> : null}
+            {group.events.map((event) => (
+              <EventRow key={event.id} event={event} />
             ))}
-          </RecordList>
-          {events.isPending && attempts.length > 0 ? (
-            <RecordList
-              aria-label="Events"
-              state={{ status: "pending", rows: 1 }}
-            />
-          ) : null}
-          {events.isError ? (
-            <RecordList
-              aria-label="Events"
-              state={{
-                status: "error",
-                error: events.error,
-                title: "Events failed to load",
-                onRetry: () => void events.refetch(),
-              }}
-            />
-          ) : null}
-        </section>
-      </CardContent>
-    </Card>
+          </Fragment>
+        ))}
+      </RecordList>
+      {events.isPending && attempts.length > 0 ? (
+        <RecordList
+          aria-label="Events"
+          state={{ status: "pending", rows: 1 }}
+        />
+      ) : null}
+      {events.isError ? (
+        <RecordList
+          aria-label="Events"
+          state={{
+            status: "error",
+            error: events.error,
+            title: "Events failed to load",
+            onRetry: () => void events.refetch(),
+          }}
+        />
+      ) : null}
+    </section>
   );
 }
 
