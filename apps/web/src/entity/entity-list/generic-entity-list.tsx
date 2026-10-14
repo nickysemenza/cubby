@@ -75,6 +75,7 @@ import { usePageCount } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
+import { listNested, nestSearchValue } from "./list-nesting";
 import { ListScopeChips } from "./list-scope-chips";
 import {
   type ListNavigate,
@@ -83,7 +84,6 @@ import {
   type ListSlotProps,
 } from "./list-slot-types";
 import { listSlotFor } from "./list-slots";
-import { manifestTree } from "./manifest-tree";
 import { resolveListView } from "./resolve-list-view";
 
 const EntityTimeline = lazy(() =>
@@ -174,6 +174,7 @@ const isStandardEntity = (
 function useListColumns(
   entity: BrowserRoutedEntity,
   parts: EntityListOverrideResult<BaseListRow, object>,
+  nested: boolean,
 ) {
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
@@ -183,9 +184,9 @@ function useListColumns(
     () =>
       identityListConfig(entity, {
         generatedCrud: isStandardEntity(entity),
-        flatRows: !parts.tree,
+        flatRows: !parts.tree && !nested,
       }),
-    [entity, parts.tree],
+    [entity, parts.tree, nested],
   );
   const identityEditable = useMemo(() => {
     if (!identity.canAutoEdit || parts.list?.nameEditable || !onSaveField)
@@ -299,12 +300,27 @@ function ServerListBody({
   operations: GenericEntityListProps["operations"];
 }) {
   const { density } = useEntityListCardDensity();
-  const overrideParts = override.use(context);
+  const parts = override.use(context);
   // A module's hand-written tree (heterogeneous rows, like wish candidates)
-  // wins; otherwise the manifest's declared `list.tree` nests the rows.
-  const parts = overrideParts.tree
-    ? overrideParts
-    : { ...overrideParts, tree: manifestTree(entity) ?? undefined };
+  // wins; otherwise the table nests under the declared `list.tree`, read
+  // from the server root by root. Cards and the timeline stay flat.
+  const nested =
+    !parts.tree && view === "table" && listNested(entity, context.search);
+  const { navigate } = context;
+  const nestToggle = useMemo(
+    () =>
+      parts.tree || !entitySummary[entity].list.tree?.toggle
+        ? undefined
+        : {
+            nested,
+            onNestedChange: (value: boolean) =>
+              navigate(
+                { nest: nestSearchValue(entity, value) },
+                { replace: true },
+              ),
+          },
+    [entity, navigate, nested, parts.tree],
+  );
   const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
   const filterOptions = useFilterOptions({
     ...referenceFilterOptions,
@@ -313,7 +329,7 @@ function ServerListBody({
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
   const renderedView = view;
-  const { columns, identityEditable } = useListColumns(entity, parts);
+  const { columns, identityEditable } = useListColumns(entity, parts, nested);
   const listOptions = useMemo(() => {
     if (parts.list?.nameEditable || !identityEditable) return parts.list;
     return { ...parts.list, nameEditable: identityEditable };
@@ -330,14 +346,8 @@ function ServerListBody({
     entity,
     listOptions?.initialColumnVisibility,
   );
-  const additionalReadFields = useMemo(() => {
-    const parentField = entitySummary[entity].list.tree?.parentField;
-    const parentReadKey = parentField
-      ? entityFieldModels[entity].fields.find(
-          (field) => field.key === parentField,
-        )?.readKey
-      : undefined;
-    return [
+  const additionalReadFields = useMemo(
+    () => [
       ...(parts.wrapReadFields ?? []),
       ...(listOptions?.additionalReadFields ?? []),
       ...(renderedView === "shelf"
@@ -346,22 +356,14 @@ function ServerListBody({
             ...(entitySummary[entity].list.shelf?.subtitle ?? []),
           ]
         : []),
-      ...(parts.tree
-        ? [
-            "componentCount",
-            "categoryId",
-            "candidates",
-            ...(parentReadKey ? [parentReadKey] : []),
-          ]
-        : []),
-    ];
-  }, [
-    entity,
-    parts.tree,
-    parts.wrapReadFields,
-    listOptions?.additionalReadFields,
-    renderedView,
-  ]);
+    ],
+    [
+      entity,
+      parts.wrapReadFields,
+      listOptions?.additionalReadFields,
+      renderedView,
+    ],
+  );
   const list = useEntityList<BaseListRow, object, BaseListRow>({
     entity,
     queryOptions,
@@ -375,6 +377,8 @@ function ServerListBody({
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
     // present; the hook branches on it at runtime.
     tree: parts.tree as EntityListTreeConfig<BaseListRow, BaseListRow>,
+    serverTree: nested,
+    nestToggle,
   });
   usePageCount(list.totalCount);
   // The module's hook or a no-op: one call per render either way.

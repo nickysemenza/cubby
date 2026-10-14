@@ -22,7 +22,12 @@ import type {
   EntityKernelContext,
 } from "./adapter";
 import { resolveCurrentMemberFilters } from "./current-member-filter";
-import { parseGroupBy, parseSorts, parseSchema } from "./list-input";
+import {
+  parseGroupBy,
+  parseNesting,
+  parseSorts,
+  parseSchema,
+} from "./list-input";
 
 type ListReadFailure = Parameters<typeof normalizeStartOperationError>[0];
 const inputSchema = z.object({
@@ -36,6 +41,7 @@ const inputSchema = z.object({
     )
     .optional(),
   groupBy: z.string().optional(),
+  nesting: z.unknown().optional(),
 });
 
 export function defineProgressiveListOperations<
@@ -63,6 +69,14 @@ export function defineProgressiveListOperations<
       binding.schemas.filters,
       parseFilters(input),
     );
+  /** The page's filters plus its nesting scope; totals stay over the filters. */
+  const scopedFilters = async (
+    context: EntityKernelContext,
+    input: z.output<typeof inputSchema>,
+  ) =>
+    Object.assign(await filtersFor(context, input.filters), {
+      nesting: parseNesting(binding, input.nesting),
+    });
   const reader = () => {
     if (!binding.repository.listRead)
       throw new Error(`Missing progressive list reader: ${binding.entity}`);
@@ -148,7 +162,7 @@ export function defineProgressiveListOperations<
       const { pagination, result } = await readBase(
         context,
         input,
-        await filtersFor(context, input.filters),
+        await scopedFilters(context, input),
       );
       const fields = listReadFields(binding.entity);
       return {
@@ -180,7 +194,7 @@ export function defineProgressiveListOperations<
       const input = inputSchema.parse(value);
       const filters = await filtersFor(context, input.filters);
       const [{ pagination, result }, sums] = await Promise.all([
-        readBase(context, input, filters),
+        readBase(context, input, await scopedFilters(context, input)),
         binding.repository.listSummary?.(context, filters),
       ]);
       const ids = result.data.map((row) => row.id);

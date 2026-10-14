@@ -12,6 +12,7 @@ import {
 import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
+  listChildCountSchema,
   listGroupSummarySchema,
   type ListGroupSummary,
   type PaginationParams,
@@ -70,14 +71,36 @@ import {
   entityQueryResultSchema,
 } from "./contracts";
 import { resolveCurrentMemberFilters } from "./current-member-filter";
-import { parseSchema, parseSorts, parseGroupBy } from "./list-input";
+import {
+  parseGroupBy,
+  parseNesting,
+  parseSchema,
+  parseSorts,
+} from "./list-input";
 
 type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
   sort?: { orderBy: string; direction: "asc" | "desc" }[];
   pagination?: PaginationParams;
   groupBy?: string;
+  nesting?: unknown;
 };
+
+const childCountRowSchema = z.object({ childCount: listChildCountSchema });
+/**
+ * A tree scope's `childCount` is a list-row fact the entity's list schema
+ * does not declare; carry it from the page onto each parsed row.
+ */
+const withChildCounts = (
+  parsed: readonly unknown[],
+  source: readonly unknown[],
+): unknown[] =>
+  parsed.map((row, index) => {
+    const { childCount } = childCountRowSchema.parse(source[index] ?? {});
+    return childCount === undefined
+      ? row
+      : Object.assign({}, row, { childCount });
+  });
 
 const DEFAULT_PAGINATION: PaginationParams = {
   pageIndex: 0,
@@ -345,6 +368,7 @@ export const defineEntityOperations = <
           pagination: input.pagination ?? DEFAULT_PAGINATION,
           sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
           groupBy: parseGroupBy(binding, input.groupBy),
+          nesting: parseNesting(binding, input.nesting),
         };
       })
       .call("page", async ({ context }, { validated }) => {
@@ -354,6 +378,7 @@ export const defineEntityOperations = <
             {},
             validated.filters,
             validated.ids === undefined ? {} : { ids: validated.ids },
+            { nesting: validated.nesting },
           ),
           validated.sorts,
           validated.pagination,
@@ -370,7 +395,10 @@ export const defineEntityOperations = <
           entity: binding.entity,
           ...buildPaginatedResponse(
             validated.pagination,
-            z.array(binding.schemas.list).parse(mediaPage.data),
+            withChildCounts(
+              z.array(binding.schemas.list).parse(mediaPage.data),
+              mediaPage.data,
+            ),
             mediaPage.count,
             aggregates(
               binding.entity,

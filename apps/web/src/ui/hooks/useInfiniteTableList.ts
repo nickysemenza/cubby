@@ -1,4 +1,4 @@
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
@@ -36,6 +36,8 @@ interface UseInfiniteTableListOptions<
   tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
+  /** A declared tree's scope for the paged rows (`roots` when nested). */
+  nesting?: ListNesting;
   visibleFields?: readonly string[];
 }
 
@@ -79,6 +81,16 @@ interface UseInfiniteTableListReturn<
   isLoading: boolean;
   error: Error | null;
   tableState: TableStateReturn;
+  /** The query's filters, sort and page size: changes when the roster does. */
+  scope: string;
+  /**
+   * The same filters and sort under another nesting scope — a parent's
+   * children page — so a tree's lazy reads share the list's query.
+   */
+  scopedPlan: (
+    nesting: ListNesting,
+    pageIndex: number,
+  ) => ReturnType<ListQueryOptionsFn<unknown, TData, TPage>>;
   timing: QueryTiming;
   infiniteScroll: InfiniteScrollControls<TData>;
   refreshControls: {
@@ -102,6 +114,7 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
+  nesting,
   visibleFields,
 }: UseInfiniteTableListOptions<
   TFilters,
@@ -127,9 +140,22 @@ export function useInfiniteTableList<
         };
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
+      if (nesting) params.nesting = nesting;
       return params;
     },
-    [filters, groupBy, pagination.pageSize, queryParams.sort, sortParams],
+    [
+      filters,
+      groupBy,
+      nesting,
+      pagination.pageSize,
+      queryParams.sort,
+      sortParams,
+    ],
+  );
+  const scopedPlan = useCallback(
+    (scope: ListNesting, pageIndex: number) =>
+      queryOptions({ ...pageInputFor(pageIndex), nesting: scope }),
+    [pageInputFor, queryOptions],
   );
 
   const firstPageOptions = useMemo(
@@ -332,6 +358,8 @@ export function useInfiniteTableList<
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,
+    scope: queryScope,
+    scopedPlan,
     // Infinite scroll doesn't track per-query timing
     timing: { durationMs: null, isFresh: false },
     infiniteScroll,

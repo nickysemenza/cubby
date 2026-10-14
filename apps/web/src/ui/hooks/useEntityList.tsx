@@ -2,8 +2,9 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { ListNesting } from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -63,6 +64,11 @@ import {
 import { useInfiniteTableList } from "./useInfiniteTableList";
 import { ListBulkActionBar } from "./useListBulkActions";
 import type { ListQueryOptionsFn } from "./usePaginatedTableCore";
+import {
+  serverTreeRowCanExpand,
+  type ServerTreeRow,
+  useServerTreeChildren,
+} from "./useServerTreeChildren";
 import type { FilterInput } from "./useStandardColumns";
 
 export interface BaseListRow {
@@ -88,6 +94,12 @@ function fixedPreviewEntity(
 
 // Router search also carries typed dialog and pagination state, not just filters.
 const routeSearchSchema = z.record(z.string(), z.json().optional());
+const ROOTS_SCOPE: ListNesting = { scope: "roots" };
+const serverTreeRowOffersExpansion = (row: { original: unknown }) =>
+  serverTreeRowCanExpand(row.original);
+// SAFETY: a server tree's table rows are exactly `attach`'s output.
+const serverTreeSubRows = <T,>(row: T): T[] | undefined =>
+  (row as ServerTreeRow<T>).subRows;
 
 /**
  * Server-backed tree presentation. Filtering and pagination remain manual, so
@@ -190,6 +202,13 @@ export interface UseEntityListOptions<
   hiddenFilterColumns?: string[];
   groupConfig?: GroupConfig<TData>;
   tree?: EntityListTreeConfig<TData, TRow>;
+  /**
+   * Nest under the entity's declared `list.tree` on the server: page the
+   * roots and read each expanded row's children. Exclusive with `tree`.
+   */
+  serverTree?: boolean;
+  /** The nested/flat switch a `list.tree.toggle` entity offers. */
+  nestToggle?: ServerListWorkbenchModel<TData>["nestToggle"];
   /**
    * Delete affordances (row menu, bulk action, confirm dialog).
    *
@@ -354,13 +373,18 @@ export function useEntityList<
   hiddenFilterColumns,
   groupConfig,
   tree,
+  serverTree = false,
+  nestToggle,
   subject,
 }: UseEntityListOptions<TData, TFilters, TRow>): UseEntityListReturn<
   TData,
   TFilters,
   TRow
 > {
-  const [grouped, setGrouped] = useState(false);
+  const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
+  const navigate = useNavigate();
+  // `grouped=on` is URL state, so a reload or shared link keeps the grouping.
+  const grouped = Boolean(groupConfig) && routeSearch.grouped === "on";
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
     previewOptions,
@@ -368,9 +392,20 @@ export function useEntityList<
   const effectiveOnInspectRow =
     onInspectRow ?? (previewOptions ? inspection.inspectRow : undefined);
 
-  const onGroupedChange = useCallback((value: boolean) => {
-    setGrouped(value);
-  }, []);
+  const onGroupedChange = useCallback(
+    (value: boolean) => {
+      // SAFETY: every route that passes a `groupConfig` validates `grouped`
+      // through its generated search schema.
+      void navigate({
+        search: (previous: z.infer<typeof routeSearchSchema>) => ({
+          ...previous,
+          grouped: value ? "on" : undefined,
+        }),
+        replace: true,
+      } as never);
+    },
+    [navigate],
+  );
 
   const effectiveDeletable = useContractDeletable(entity, deletable);
 
@@ -434,7 +469,6 @@ export function useEntityList<
   // contract is TFilters, and returns that same selection scope.
   const currentFilters = presentationState.currentSelectionScope as TFilters;
 
-  const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
   const worklistKey = z
     .string()
     .optional()
@@ -479,6 +513,7 @@ export function useEntityList<
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,
+    nesting: serverTree ? ROOTS_SCOPE : undefined,
     visibleFields: requestedReadFields,
   });
 
@@ -574,7 +609,7 @@ export function useEntityList<
     nameSuffix,
     namePrefix,
     hiddenFilterColumns,
-    expandable: tree?.expandable,
+    expandable: tree?.expandable ?? serverTree,
     rowLink: tree?.rowLink,
     subject: subject ? stableSubject : undefined,
     rowActionGuard: rowActionsGuard,
@@ -667,32 +702,38 @@ export function useEntityList<
     [treeRowKey],
   );
 
-  // Tree mode nests the accumulated rows; every other consumer above — the
-  // related-preview `sourceIds`, `mappingsMap`, the select-all-matching count —
-  // deliberately keeps reading the FLAT `data`, which already contains every
-  // row including nested ones.
-  //
-  // The cast covers only the NO-tree branch, where the table renders the
-  // server rows as-is: `TRow` defaults to `TData`, so the two are the same
-  // type there and nothing is being reinterpreted. Only `nest` may return a
-  // different row shape, and it is typed to do so.
+  // A server tree's children arrive per expanded parent under the list's
+  // own filters and sort; the loaded root pages are never nested locally.
+  const treeChildren = useServerTreeChildren<TRow>({
+    enabled: serverTree,
+    scope: infiniteResult.scope,
+    planFor: infiniteResult.scopedPlan,
+  });
+  // A module tree maps the accumulated rows (a wish's embedded candidates);
+  // every other consumer above — the related-preview `sourceIds`,
+  // `mappingsMap`, the select-all-matching count — keeps reading the root
+  // `data`. Only `nest` may return a different row shape, and it is typed to.
+  const attachChildren = treeChildren.attach;
   const tableData = useMemo(
-    () => (tree ? tree.nest(data) : data),
-    [data, tree],
+    (): TData[] =>
+      tree ? tree.nest(data) : serverTree ? attachChildren(data) : data,
+    [data, tree, serverTree, attachChildren],
   );
+  const getSubRows =
+    tree?.getSubRows ?? (serverTree ? serverTreeSubRows<TData> : undefined);
 
   const availableRowIds = useMemo(() => {
     const ids = new Set<string>();
     const visit = (rows: readonly TData[]) => {
       for (const row of rows) {
         if (!rowActionsGuard || rowActionsGuard(row)) ids.add(getRowId(row));
-        const children = tree?.getSubRows(row);
+        const children = getSubRows?.(row);
         if (children) visit(children);
       }
     };
     visit(tableData);
     return ids;
-  }, [getRowId, rowActionsGuard, tableData, tree]);
+  }, [getRowId, getSubRows, rowActionsGuard, tableData]);
   useEffect(() => {
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
@@ -707,7 +748,18 @@ export function useEntityList<
         // refetch; TanStack's default would collapse the user's expanded rows.
         autoResetExpanded: false,
       }
-    : undefined;
+    : serverTree
+      ? {
+          getSubRows: serverTreeSubRows<TData>,
+          // Children load after expansion, so `childCount` offers the toggle.
+          getRowCanExpand: serverTreeRowOffersExpansion,
+          // Children arrive after expansion and pages churn; the hook owns
+          // the reset (filters or sort changed), not TanStack's data reset.
+          autoResetExpanded: false,
+          expanded: treeChildren.expanded,
+          onExpandedChange: treeChildren.onExpandedChange,
+        }
+      : undefined;
   const table = useTableConfig({
     data: tableData,
     columns: progressiveColumns,
@@ -796,6 +848,7 @@ export function useEntityList<
       grouped,
       onGroupedChange,
       groupConfig: effectiveGroupConfig,
+      nestToggle,
     },
     currentFilters,
     mappingsMap,

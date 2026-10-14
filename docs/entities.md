@@ -686,8 +686,21 @@ unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing tree is declared:
 `presentation.list.tree.parentField` names a readable single reference to the
-entity itself, and the generic list nests rows under it, keeping a row whose
-parent is not loaded at the top level. A structured
+entity itself. Nesting is a server scope, never client stitching: every list
+read of a tree entity (`entity.listBase`, `entity_read.list`, HTTP) accepts
+`nesting` — `{scope:"flat"}` (the default for every caller), `{scope:"roots"}`,
+or `{scope:"children",parentId}` — applied after the same filters and sort. A
+root is a row whose parent is null or does not itself match the filters (judged
+over the whole filtered set, so a matching child of a filtered-out or deleted
+parent stays reachable); `roots`/`children` rows carry `childCount`, their
+directly nested children that match the filters, and `totalCount` counts the
+requested scope. The shared list scaffold (`server/repo/list.ts`) owns it, so a
+scaffold-built tree repository needs no code. The web table pages the roots and
+reads an expanded row's children through the same query, with their own paging;
+expansion resets when filters or sort change. `tree.toggle` adds a
+nested/flat switch beside Grouped, persisted as `nest=on|off` (absent is
+`tree.defaultNested`, default nested); the grouped switch is `grouped=on`.
+Cards and the timeline stay flat. A structured
 value that every client would otherwise re-word declares where the record
 carries its text instead of a renderer: `display.labelPath` for a list cell,
 `display.detailLabelPath` for a detail row (a server-composed sentence, lines

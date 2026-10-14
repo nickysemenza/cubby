@@ -182,6 +182,8 @@ export interface RTableProps<TItem extends RowData> {
   grouped?: boolean;
   /** Toggle grouping on/off */
   onGroupedChange?: (value: boolean) => void;
+  /** A server tree's nested/flat switch, beside the grouping switch. */
+  nestToggle?: NestToggle;
   /**
    * Extra per-row classes (desktop). Must be a pure function of `row.original`
    * so memoized rows stay stable — e.g. tint estimated rows. Returns undefined
@@ -278,6 +280,7 @@ function DesktopTableToolbar<TItem extends RowData>({
   groupConfig,
   grouped,
   onGroupedChange,
+  nestToggle,
   actions,
   bulkActionBar,
   bulkActionPreview,
@@ -295,6 +298,7 @@ function DesktopTableToolbar<TItem extends RowData>({
   | "groupConfig"
   | "grouped"
   | "onGroupedChange"
+  | "nestToggle"
   | "actions"
   | "bulkActionBar"
   | "bulkActionPreview"
@@ -309,13 +313,17 @@ function DesktopTableToolbar<TItem extends RowData>({
   // at both densities, never folded into a menu a caller would have to open
   // to read it. Only the interactive `inspectorToggle`/grouped-list toggle
   // move into the page-mode `Actions ▾` menu; embedded keeps them inline too.
-  const groupToggle = embedded ? (
-    <GroupToggle
-      groupConfig={groupConfig}
-      grouped={grouped}
-      onGroupedChange={onGroupedChange}
-    />
-  ) : null;
+  const switches = presentationSwitches({
+    groupConfig,
+    grouped,
+    onGroupedChange,
+    nestToggle,
+  });
+  const groupToggle = embedded
+    ? switches.map((toggle) => (
+        <PresentationToggle key={toggle.id} toggle={toggle} />
+      ))
+    : null;
   const inlineExtras = (
     <div className="flex flex-wrap items-center gap-2">
       {embedded && inspectorToggle}
@@ -330,11 +338,9 @@ function DesktopTableToolbar<TItem extends RowData>({
           {inspectorToggle}
         </div>
       )}
-      <GroupToggleMenuItem
-        groupConfig={groupConfig}
-        grouped={grouped}
-        onGroupedChange={onGroupedChange}
-      />
+      {switches.map((toggle) => (
+        <PresentationToggleMenuItem key={toggle.id} toggle={toggle} />
+      ))}
       {bulkActionPreview && bulkActionPreview.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel>Select rows to</DropdownMenuLabel>
@@ -368,21 +374,68 @@ function DesktopTableToolbar<TItem extends RowData>({
   );
 }
 
-function GroupToggle<TItem extends RowData>({
+/** A server tree's nested/flat switch (`list.tree.toggle`). */
+export interface NestToggle {
+  nested: boolean;
+  onNestedChange: (nested: boolean) => void;
+}
+
+/** A list presentation that is either on (grouped, nested) or flat. */
+interface PresentationSwitch {
+  id: "grouped" | "nested";
+  /** The Actions-menu label. */
+  label: string;
+  /** The inline button's label while flat. */
+  showLabel: string;
+  active: boolean;
+  onChange: (active: boolean) => void;
+}
+
+function presentationSwitches<TItem extends RowData>({
   groupConfig,
   grouped,
   onGroupedChange,
-}: Pick<RTableProps<TItem>, "groupConfig" | "grouped" | "onGroupedChange">) {
-  if (!groupConfig || !onGroupedChange) return null;
+  nestToggle,
+}: Pick<
+  RTableProps<TItem>,
+  "groupConfig" | "grouped" | "onGroupedChange" | "nestToggle"
+>): PresentationSwitch[] {
+  return [
+    ...(groupConfig && onGroupedChange
+      ? [
+          {
+            id: "grouped" as const,
+            label: "Grouped",
+            showLabel: "Show grouped list",
+            active: Boolean(grouped),
+            onChange: onGroupedChange,
+          },
+        ]
+      : []),
+    ...(nestToggle
+      ? [
+          {
+            id: "nested" as const,
+            label: "Nested",
+            showLabel: "Show nested list",
+            active: nestToggle.nested,
+            onChange: nestToggle.onNestedChange,
+          },
+        ]
+      : []),
+  ];
+}
+
+function PresentationToggle({ toggle }: { toggle: PresentationSwitch }) {
   return (
     <Button
       variant="ghost"
       size="icon-lg"
       className="shrink-0"
-      onClick={() => onGroupedChange(!grouped)}
-      aria-label={grouped ? "Show flat list" : "Show grouped list"}
+      onClick={() => toggle.onChange(!toggle.active)}
+      aria-label={toggle.active ? "Show flat list" : toggle.showLabel}
     >
-      {grouped ? (
+      {toggle.active ? (
         <ListIcon className="size-4" />
       ) : (
         <ListDashesIcon className="size-4" />
@@ -391,17 +444,19 @@ function GroupToggle<TItem extends RowData>({
   );
 }
 
-/** The page-mode `Actions ▾` menu's equivalent of {@link GroupToggle}. */
-function GroupToggleMenuItem<TItem extends RowData>({
-  groupConfig,
-  grouped,
-  onGroupedChange,
-}: Pick<RTableProps<TItem>, "groupConfig" | "grouped" | "onGroupedChange">) {
-  if (!groupConfig || !onGroupedChange) return null;
+/** The page-mode `Actions ▾` menu's equivalent of {@link PresentationToggle}. */
+function PresentationToggleMenuItem({
+  toggle,
+}: {
+  toggle: PresentationSwitch;
+}) {
   return (
-    <DropdownMenuItem onClick={() => onGroupedChange(!grouped)}>
-      <CheckIcon className={grouped ? "opacity-100" : "opacity-0"} />
-      Grouped
+    <DropdownMenuItem
+      onClick={() => toggle.onChange(!toggle.active)}
+      aria-label={toggle.active ? "Show flat list" : toggle.showLabel}
+    >
+      <CheckIcon className={toggle.active ? "opacity-100" : "opacity-0"} />
+      {toggle.label}
     </DropdownMenuItem>
   );
 }
@@ -950,6 +1005,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     groupConfig,
     grouped = false,
     onGroupedChange,
+    nestToggle,
     getRowClassName,
     verticalAlign = "middle",
     embedded = false,
@@ -1066,6 +1122,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       groupConfig={groupConfig}
       grouped={grouped}
       onGroupedChange={onGroupedChange}
+      nestToggle={nestToggle}
       actions={actions}
       bulkActionBar={bulkActionsWithSuggestions}
       bulkActionPreview={bulkActionPreview}

@@ -1,3 +1,4 @@
+import type { ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -32,6 +33,8 @@ interface CompileEntityListOptions {
   pageSize?: number;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
   groupBy?: string;
+  /** A nested table's root scope (`listNested`). */
+  nesting?: ListNesting;
 }
 
 /**
@@ -71,6 +74,7 @@ export function compileEntityListInput<E extends ListEntity>(
     ];
   }
   if (options.groupBy) input.groupBy = options.groupBy;
+  if (options.nesting) input.nesting = options.nesting;
   return entityListParamsFromParsed(
     entity,
     parseEntityListInput(entity, input),

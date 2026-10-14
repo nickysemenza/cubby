@@ -251,6 +251,23 @@ export const listGroupSummarySchema = z
   .meta({ id: "ListGroupSummary" });
 export type ListGroupSummary = z.infer<typeof listGroupSummarySchema>;
 
+/**
+ * A tree list's scope (`list.tree`), applied after the filters: every
+ * matching row (`flat`, the default), the roots — rows whose parent is null
+ * or does not itself match — or one parent's matching children. Rows in the
+ * `roots`/`children` scopes carry `childCount`; `totalCount` counts the scope.
+ */
+export const listNestingSchema = z
+  .discriminatedUnion("scope", [
+    z.object({ scope: z.literal("flat") }),
+    z.object({ scope: z.literal("roots") }),
+    z.object({ scope: z.literal("children"), parentId: z.string().min(1) }),
+  ])
+  .meta({ id: "ListNesting" });
+export type ListNesting = z.infer<typeof listNestingSchema>;
+/** A tree row's directly nested children that match the list's filters. */
+export const listChildCountSchema = z.number().int().nonnegative().optional();
+
 export function buildPaginatedResponse<T>(
   pagination: PaginationParams,
   data: T[],

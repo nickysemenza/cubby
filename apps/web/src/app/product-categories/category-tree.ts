@@ -1,6 +1,31 @@
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
 
-import { nestByParent, type TreeRow } from "~/entity/entity-list/manifest-tree";
+type TreeRow<T> = T & { subRows?: TreeRow<T>[] };
+
+/**
+ * Nests the complete category roster under each row's parent, keeping the
+ * input's sibling order. A row whose parent is absent (deleted) or itself
+ * becomes a root, so the chart never drops a category.
+ */
+export function nestByParent<T extends { id: string }>(
+  rows: readonly T[],
+  parentOf: (row: T) => string | null,
+): TreeRow<T>[] {
+  const nodes = new Map<string, TreeRow<T>>(
+    rows.map((row) => [row.id, { ...row }]),
+  );
+  const roots: TreeRow<T>[] = [];
+  for (const row of rows) {
+    const node = nodes.get(row.id);
+    if (!node) continue;
+    const parentId = parentOf(row);
+    const parent =
+      parentId && parentId !== row.id ? nodes.get(parentId) : undefined;
+    if (parent) (parent.subRows ??= []).push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
 
 interface CategoryTreeInput {
   id: string;

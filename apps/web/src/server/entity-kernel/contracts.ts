@@ -7,6 +7,7 @@ import {
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import {
   DEFAULT_PAGE_SIZE,
+  listNestingSchema,
   MAX_PAGE_SIZE,
   MAX_SORTS,
   mcpPaginationFields,
@@ -78,6 +79,11 @@ const listFields = {
     })
     .optional(),
   groupBy: z.string().min(1).optional(),
+  nesting: listNestingSchema
+    .optional()
+    .describe(
+      "Entities with a list tree only: flat (default), roots, or the children of parentId; nested rows carry childCount",
+    ),
 };
 
 const resultDetail = mcpResultDetail;
@@ -110,6 +116,7 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       sort: listFields.sort,
       pagination: mcpListPagination,
       groupBy: listFields.groupBy,
+      nesting: listFields.nesting,
       resultDetail,
     });
   },

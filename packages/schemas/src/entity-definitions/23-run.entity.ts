@@ -170,6 +170,7 @@ export default defineEntity({
     list: {
       // Display images borrow from the vendor; they load as list media.
       read: { media: ["displayImages"], quality: ["dataQuality"] },
+      tree: { parentField: "parentRunId", toggle: true, defaultNested: false },
       savedViews: [
         {
           id: "imports",

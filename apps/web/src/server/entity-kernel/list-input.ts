@@ -1,4 +1,10 @@
-import { normalizeSorts, type SortParams } from "@cubby/schemas/pagination";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  type ListNesting,
+  listNestingSchema,
+  normalizeSorts,
+  type SortParams,
+} from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { createAppError } from "~/server/errors/app-error";
@@ -56,4 +62,32 @@ export const parseGroupBy = <
       `Unsupported groupBy field "${groupBy}" for ${binding.entity}; expected one of ${groupable.join(", ")}`,
     );
   return result.data;
+};
+
+/**
+ * A list's nesting scope, `flat` when omitted. Only an entity that declares
+ * `list.tree` accepts `roots`/`children`; a child scope's parent is the
+ * entity's own public id.
+ */
+export const parseNesting = <
+  E extends EntityKernelEntity,
+  S extends EntityBindingSchemas,
+>(
+  binding: EntityKernelCoreBinding<E, S>,
+  value: unknown,
+): ListNesting => {
+  const nesting = listNestingSchema.optional().parse(value) ?? {
+    scope: "flat",
+  };
+  if (nesting.scope === "flat") return nesting;
+  const tree = Object.entries(entitySummary).find(
+    ([entity]) => entity === binding.entity,
+  )?.[1].list.tree;
+  if (!tree)
+    throw createAppError(
+      "LIST_NESTING_UNSUPPORTED",
+      `${binding.entity} declares no list.tree; its list nesting is flat only`,
+    );
+  if (nesting.scope === "children") binding.schemas.id.parse(nesting.parentId);
+  return nesting;
 };
