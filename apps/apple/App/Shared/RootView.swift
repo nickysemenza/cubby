@@ -63,11 +63,7 @@ struct RootView: View {
     private var phaseContent: some View {
         switch model.phase {
         case .restoring:
-            VStack(spacing: FieldGuideTokens.Space.md) {
-                LoadingIndicator(label: "Checking sign-in")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(FieldGuideTokens.canvas)
+            StartupView()
         case .signedOut:
             #if os(macOS)
                 if model.navigator.section == .settings {

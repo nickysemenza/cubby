@@ -359,12 +359,8 @@ struct StatementCsvImportView: View {
         error = nil
         session.replaceInput(nil)
         usesMapping = false
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            let input = try StatementCsvReviewSession.fileInput(
-                fileName: url.lastPathComponent, contents: data)
+            let input = try await Self.readInput(url)
             session.replaceInput(input)
             let value = try await session.prepare(using: appModel.client)
             if value.needsMapping {
@@ -375,6 +371,17 @@ struct StatementCsvImportView: View {
             Diagnostics.report(error, context: "Preview statement CSV")
             self.error = error.localizedDescription
         }
+    }
+
+    @concurrent private static func readInput(_ url: URL) async throws -> StatementCsvFileInput {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        try Task.checkCancellation()
+        let data = try Data(contentsOf: url)
+        let input = try StatementCsvReviewSession.fileInput(
+            fileName: url.lastPathComponent, contents: data)
+        try Task.checkCancellation()
+        return input
     }
 
     /// The server owns the column guess for an unfamiliar file.

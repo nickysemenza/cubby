@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="launch-controller">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="launch-scene">
+            <objects>
+                <viewController id="launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Cubby" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="launch-title">
+                                <rect key="frame" x="147" y="405" width="99" height="41"/>
+                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="34"/>
+                                <color key="textColor" systemColor="labelColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="launch-safe-area"/>
+                        <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="launch-title" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="launch-center-x"/>
+                            <constraint firstItem="launch-title" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" id="launch-center-y"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="launch-responder" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+        </scene>
+    </scenes>
+    <resources>
+        <systemColor name="labelColor"><color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/></systemColor>
+        <systemColor name="systemGroupedBackgroundColor"><color red="0.949" green="0.949" blue="0.969" alpha="1" colorSpace="custom" customColorSpace="sRGB"/></systemColor>
+    </resources>
+</document>

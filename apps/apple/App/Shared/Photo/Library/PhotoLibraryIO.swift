@@ -66,6 +66,21 @@ actor PhotoLibraryIO {
     /// pre-warmed cache entry actually matches what the grid later requests.
     private static let targetSize = CGSize(width: 256, height: 256)
 
+    /// Nil means Photos access is unavailable; an empty array means an accessible empty library.
+    func recentImages(limit: Int) -> [PHAsset]? {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard status == .authorized || status == .limited else { return nil }
+        let options = PHFetchOptions()
+        options.fetchLimit = limit
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let result = PHAsset.fetchAssets(with: .image, options: options)
+        return (0..<result.count).map { result.object(at: $0) }
+    }
+
+    func asset(identifier: String) -> PHAsset? {
+        PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject
+    }
+
     func thumbnail(for asset: PHAsset, network: Bool = false, progress: (@Sendable (Double) -> Void)? = nil)
         async throws -> CGImage
     {

@@ -6,6 +6,7 @@ struct LibraryHomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var recentAssets: [PHAsset] = []
     @State private var canReadPhotos = false
+    @State private var loadingRecentAssets = true
 
     var body: some View {
         ScrollView {
@@ -34,13 +35,16 @@ struct LibraryHomeView: View {
             .padding(FieldGuideTokens.Space.lg)
         }
         .navigationTitle("Library")
-        .task { loadRecentAssets() }
+        .task { await loadRecentAssets() }
     }
 
     private var photosPanel: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                if canReadPhotos && !recentAssets.isEmpty {
+                if loadingRecentAssets {
+                    LoadingIndicator(label: "Loading recent photos")
+                        .frame(height: 112)
+                } else if canReadPhotos && !recentAssets.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) {
                             ForEach(recentAssets, id: \.localIdentifier) { asset in
@@ -82,15 +86,13 @@ struct LibraryHomeView: View {
         .accessibilityIdentifier("library.catalog")
     }
 
-    private func loadRecentAssets() {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        canReadPhotos = status == .authorized || status == .limited
-        guard canReadPhotos else { recentAssets = []; return }
-        let options = PHFetchOptions()
-        options.fetchLimit = 4
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        let result = PHAsset.fetchAssets(with: .image, options: options)
-        recentAssets = (0..<result.count).map { result.object(at: $0) }
+    private func loadRecentAssets() async {
+        loadingRecentAssets = true
+        let assets = await PhotoLibraryIO.shared.recentImages(limit: 4)
+        guard !Task.isCancelled else { return }
+        canReadPhotos = assets != nil
+        recentAssets = assets ?? []
+        loadingRecentAssets = false
     }
 }
 

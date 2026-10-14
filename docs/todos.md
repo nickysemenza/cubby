@@ -584,20 +584,19 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
-- 🤔 🐛 **Profile the first Library tab transition on a physical iPhone.** A
-  first visit briefly stalls the tab animation; repeated switches are responsive.
-  Capture the cold transition before changing code. This is separate from the
-  sustained Today row-width feedback loop.
-- 🤔 ✨ **Make Notifications & Live Activities discoverable in Settings.** Show
-  separate import-alert and live-progress preferences, effective system permission
-  status, and an Open System Settings action. The import sheet inherits the saved
-  alert preference and offers “Notify me for this import”; request notification
-  permission when the preference is enabled, rather than at launch.
 - 🟢 ✨ **Nest manifest trees in native lists.** Web lists every `tree`
   entity (Runs by `parentRunId`, Product and Spending categories) through the
   server's `roots`/`children` nesting scope with a nested/flat toggle; native
   lists stay flat. Request the same scope from the native generic list, expand
   a row by its `childCount`, and honour the declared default and toggle.
+
+- 🤔 🐛 **Profile durable photo-import disk work on a physical device.** Selection
+  checkpoint preparation copies files and writes JSON before the flow task starts;
+  startup recovery also scans and decodes journals on the main actor. Capture a
+  file-based batch and a reopen with interrupted imports. Move any blocking work
+  through an I/O owner while preserving the ordering of saved selection intent,
+  cancellation, and automatic recovery; an awaited preparation must not resurrect
+  cancelled work after termination.
 
 - 🤔 ✨ **One native picker with names and pictures, never codes.** Web
   now has one value picker (`apps/web/src/ui/combobox/picker.tsx`): a closed

@@ -101,6 +101,8 @@ struct SettingsView: View {
                 DeviceParticipationSection(showPauseAnalysis: photosReady)
             }
 
+            NotificationSettingsSection()
+
             if model.phase == .signedIn {
                 Section("Utilities") {
                     Button("Developer tools", systemImage: "wrench.and.screwdriver") {

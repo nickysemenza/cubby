@@ -85,7 +85,6 @@ targetTemplates:
           NSExceptionDomains:
             localhost:
               NSExceptionAllowsInsecureHTTPLoads: true
-        UILaunchScreen: {}
         # iOS 26's resize model requires all four orientations, upside-down included (Xcode
         # warning: "All interface orientations must be supported unless the app requires full
         # screen"). Do not add UIRequiresFullScreen as a way around this.
@@ -186,6 +185,7 @@ targets:
     # link. iOS-only: merged (deep-merge, not replaced) with the shared template's `info.properties`.
     info:
       properties:
+        UILaunchStoryboardName: LaunchScreen
         BGTaskSchedulerPermittedIdentifiers:
           - com.nickysemenza.cubby.photo-matching
           - com.nickysemenza.cubby.library-sync

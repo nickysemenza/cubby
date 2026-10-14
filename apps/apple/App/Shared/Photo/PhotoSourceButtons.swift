@@ -271,7 +271,7 @@ struct PhotoSourceButtons: View {
             for item: PhotosPickerItem, progress: @escaping @Sendable (Double) -> Void
         ) async throws -> PhotoSelectionItem {
             if let identifier = item.itemIdentifier,
-                let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject
+                let asset = await PhotoLibraryIO.shared.asset(identifier: identifier)
             {
                 let preview = try await PhotoLibraryIO.shared.thumbnail(
                     for: asset, network: true, progress: progress)
