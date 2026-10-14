@@ -115,8 +115,19 @@ test("an expanded category retries a failed read and loads more children", async
       "entity.listBase",
       (item) => JSON.stringify(item.input).includes('"children"'),
     );
-    if (!failChildren || !childrenRead) {
+    if (!childrenRead) {
       await route.continue();
+      return;
+    }
+    if (!failChildren) {
+      // A list page holds 100 rows; one-row children pages let two children
+      // span two pages without seeding a hundred.
+      await route.continue({
+        postData: (route.request().postData() ?? "").replace(
+          /"pageSize":\d+/,
+          '"pageSize":1',
+        ),
+      });
       return;
     }
     await route.fulfill({
@@ -127,7 +138,7 @@ test("an expanded category retries a failed read and loads more children", async
   });
   await gotoAuthenticatedPage(
     page,
-    `/product-categories?q=${encodeURIComponent(prefix)}&pageSize=1`,
+    `/product-categories?q=${encodeURIComponent(prefix)}`,
   );
   const table = page.getByRole("table");
   const rows = table.getByRole("row").filter({ hasText: prefix });
@@ -171,19 +182,27 @@ test("the category hierarchy chart nests categories as the server does", async (
   const parent = await createFixture(page, "productCategory", {
     name: `${prefix} pantry`,
   });
-  await createFixture(page, "productCategory", {
+  const spices = await createFixture(page, "productCategory", {
     name: `${prefix} spices`,
     parentId: parent.id,
   });
-  await createFixture(page, "productCategory", { name: `${prefix} garage` });
+  const garage = await createFixture(page, "productCategory", {
+    name: `${prefix} garage`,
+  });
+  // The chart draws categories that hold products.
+  for (const category of [spices, garage])
+    await createFixture(page, "product", {
+      name: `${prefix} item ${category.id}`,
+      categoryId: category.id,
+    });
   await gotoAuthenticatedPage(page, "/product-categories?view=hierarchy");
 
   const node = (name: string) =>
     page.getByRole("link", { name: `${prefix} ${name}`, exact: true }).first();
   await expect(node("spices")).toBeAttached();
-  const [pantry, spices, garage] = await Promise.all(
+  const [pantryDepth, spicesDepth, garageDepth] = await Promise.all(
     ["pantry", "spices", "garage"].map((name) => treeDepthOffset(node(name))),
   );
-  expect(pantry).toBe(garage);
-  expect(spices).toBeGreaterThan(pantry ?? Number.POSITIVE_INFINITY);
+  expect(pantryDepth).toBe(garageDepth);
+  expect(spicesDepth).toBeGreaterThan(pantryDepth ?? Number.POSITIVE_INFINITY);
 });
