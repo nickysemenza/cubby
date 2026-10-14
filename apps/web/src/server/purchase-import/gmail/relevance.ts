@@ -18,6 +18,17 @@ export type MailRelevance = (
 const MAX_TRANSIENT_BYTES = 256 * 1024;
 const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
 
+function inlineImageContentId(source: string) {
+  const match = /^cid:(.+)$/iu.exec(source);
+  if (!match) return null;
+  try {
+    const id = decodeURIComponent(match[1]!);
+    return /^[^<>\s]+$/u.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 function readableMailView({
   bodyHtml,
   ...mail
@@ -33,19 +44,29 @@ function readableMailView({
       links:
         html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
       images: html?.images.map(({ src, alt }) => ({ url: src, alt })) ?? [],
+      unresolvedImages: html?.unresolved_image_sources ?? [],
       preheader: html?.preheader ?? null,
       structuredData: html?.structured_data ?? [],
     }),
     // Omitted purchase cues and unreadable images require review; decorative
     // images and discarded layout bytes do not make a negative incomplete.
-    complete:
+    complete: (availableContentIds: ReadonlySet<string>) =>
       !html ||
       (!html.truncated &&
         html.cue_links_omitted === 0 &&
         html.cue_images_omitted === 0 &&
         html.structured_data_omitted === 0 &&
         html.cues_omitted === 0 &&
-        !unreadableMailImages(html, mail.bodyText ?? "")),
+        !unreadableMailImages(
+          html.unresolved_images === html.unresolved_image_sources.length &&
+            html.unresolved_image_sources.every((source) => {
+              const id = inlineImageContentId(source);
+              return id !== null && availableContentIds.has(id);
+            })
+            ? { ...html, unresolved_images: 0 }
+            : html,
+          mail.bodyText ?? "",
+        )),
   };
 }
 
@@ -117,7 +138,6 @@ export async function interpretMailRelevance(
   );
   let complete =
     originalComplete &&
-    viewComplete &&
     Boolean(
       normalized.mail.bodyText?.trim() ||
       normalized.mail.bodyHtml?.trim() ||
@@ -130,6 +150,7 @@ export async function interpretMailRelevance(
         content: original,
       },
     ];
+  const availableContentIds = new Set<string>();
   let totalBytes = new TextEncoder().encode(JSON.stringify(content)).byteLength;
   let acquiredBytes = new TextEncoder().encode(
     JSON.stringify(normalized.mail),
@@ -147,18 +168,33 @@ export async function interpretMailRelevance(
     }
     acquiredBytes += context.byteLength;
     onAttachment?.(attachment.sourceKey, context.encoded);
+    const parts: MailContentPart[] =
+      attachment.contentId && context.part.type === "image"
+        ? [
+            {
+              type: "text",
+              content: `Inline Email image cid:${attachment.contentId}`,
+            },
+            context.part,
+          ]
+        : [context.part];
     const modelBytes =
-      new TextEncoder().encode(JSON.stringify(context.part)).byteLength + 1;
+      new TextEncoder().encode(JSON.stringify(parts)).byteLength -
+      2 +
+      parts.length;
     if (modelBytes > MAX_TRANSIENT_BYTES - totalBytes) {
       complete = false;
       continue;
     }
     totalBytes += modelBytes;
-    content.push(context.part);
+    content.push(...parts);
+    if (attachment.contentId && context.part.type === "image")
+      availableContentIds.add(attachment.contentId);
   }
   if (totalBytes > MAX_TRANSIENT_BYTES) return { classification: "uncertain" };
   const decision = await interpret(MAILBOX_RELEVANCE_FEATURE.request(content));
-  return decision.classification === "unrelated" && !complete
+  return decision.classification === "unrelated" &&
+    (!complete || !viewComplete(availableContentIds))
     ? { classification: "uncertain" }
     : decision;
 }

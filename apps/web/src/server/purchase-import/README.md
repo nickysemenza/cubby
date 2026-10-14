@@ -47,6 +47,9 @@ pending: nothing here starts Product research.
    omitted cue-bearing links and cues lost during URL normalization still mark
    evidence incomplete. Hidden receipt text
    and image evidence keep their completeness checks.
+   Referenced `cid:` pictures count as available only when their exact MIME
+   Content-ID image bytes fit and reach the relevance interpreter. Missing,
+   unsupported or oversized parts remain incomplete.
    Confident positives proceed to extraction/matching; only uncertain relevance
    reaches the relevance fallback. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a

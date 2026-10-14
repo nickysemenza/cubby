@@ -64,7 +64,14 @@ const walkParts = (
 
   const mimeType = (part.mimeType ?? "").toLowerCase();
   const data = part.body?.data;
-  const isAttachment = Boolean(part.filename || part.body?.attachmentId);
+  const contentId = headerRecord(part.headers)["content-id"]?.match(
+    /^<([^<>\s]+)>$/u,
+  )?.[1];
+  const isAttachment = Boolean(
+    part.filename ||
+    part.body?.attachmentId ||
+    (contentId && mimeType.startsWith("image/") && data),
+  );
 
   if (
     !isAttachment &&
@@ -90,6 +97,7 @@ const walkParts = (
     mimeType: mimeType || "application/octet-stream",
     size,
   };
+  if (contentId) attachment.contentId = contentId;
   if (data) attachment.dataBase64Url = data;
   attachments.push(attachment);
 };

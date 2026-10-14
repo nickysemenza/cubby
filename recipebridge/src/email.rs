@@ -74,6 +74,8 @@ pub struct WCompactEmail {
     pub cue_images_omitted: u32,
     /// Non-tracking images whose source could not be represented.
     pub unresolved_images: u32,
+    /// Bounded unresolved sources for exact MIME Content-ID matching; missing entries stay incomplete.
+    pub unresolved_image_sources: Vec<String>,
     /// All content pictures past the image bound, including unlabeled pictures.
     pub images_omitted: u32,
     /// JSON-LD blocks verbatim, then each top-level microdata item as JSON.
@@ -900,12 +902,19 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         .collect();
 
     let mut unresolved_images = 0u32;
+    let mut unresolved_image_sources = Vec::new();
     let images: Vec<WEmailImage> = select(&document, "img")
         .into_iter()
         .filter(|image| !is_tracking_pixel(image) && !has_hidden_ancestor(image))
         .filter_map(|image| {
             let Some(src) = image_source(&image).and_then(|source| resolve(None, source)) else {
                 unresolved_images = unresolved_images.saturating_add(1);
+                if let Some(source) = image_source(&image)
+                    && source.len() <= 512
+                    && unresolved_image_sources.len() < MAX_IMAGES
+                {
+                    unresolved_image_sources.push(source.to_string());
+                }
                 return None;
             };
             let alt = clean(image.value().attr("alt").unwrap_or_default());
@@ -951,6 +960,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         images,
         cue_images_omitted: u32::try_from(cue_images_omitted).unwrap_or(u32::MAX),
         unresolved_images,
+        unresolved_image_sources,
         images_omitted,
         structured_data,
         structured_data_omitted,
