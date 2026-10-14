@@ -357,10 +357,10 @@ test("purchase detail renders an attached HEIC instead of the empty image state"
   ).toHaveCount(1);
 });
 
-// `presentation.list.initialFilter` on the Run declaration: the history opens
+// `presentation.list.initialFilter` on the Run declaration: the list opens
 // without ephemeral AI-grouping runs, and clearing the filter (which the URL
 // remembers, so a reload keeps it) brings them back.
-test("run history hides ephemeral runs by default and shows them once cleared", async ({
+test("the Run list hides ephemeral runs by default and shows them once cleared", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -369,11 +369,11 @@ test("run history hides ephemeral runs by default and shows them once cleared", 
     `Run defaults ${Date.now()}`,
   );
   await gotoAuthenticatedPage(page, "/runs");
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  const table = page.getByRole("table");
   await expect(table).toContainText(fixture.visibleName);
   await expect(table).not.toContainText(fixture.hiddenName);
 
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByRole("button", { name: /^Clear/ }).click();
   await expect(table).toContainText(fixture.hiddenName);
   await expect(table).toContainText(fixture.visibleName);
 

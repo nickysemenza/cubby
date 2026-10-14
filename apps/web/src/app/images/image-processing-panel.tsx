@@ -349,7 +349,11 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
                   primary={
                     <a
                       className="hover:underline"
-                      href={`/runs?selected=${encodeURIComponent(run.id)}`}
+                      href={
+                        run.recordType === "run"
+                          ? `/runs/${encodeURIComponent(run.id)}`
+                          : `/runs?view=image-jobs&selected=${encodeURIComponent(run.id)}`
+                      }
                     >
                       {run.workLabel}
                     </a>
@@ -439,7 +443,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       result.submissionId ? (
         <a
           className="underline"
-          href={`/runs?submissionId=${encodeURIComponent(result.submissionId)}`}
+          href={`/runs?view=image-jobs&submissionId=${encodeURIComponent(result.submissionId)}`}
         >
           Image processing queued — view submission
         </a>
@@ -525,7 +529,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       ) : null}
       <a
         className={buttonVariants({ variant: "outline" })}
-        href={`/runs?subjectId=${encodeURIComponent(id)}`}
+        href={`/runs?view=image-jobs&subjectId=${encodeURIComponent(id)}`}
       >
         View processing jobs
       </a>

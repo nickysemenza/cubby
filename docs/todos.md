@@ -446,6 +446,20 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   kinds, and verify the list and attention summaries render. Individual Run
   detail pages still load; preserve their retained history.
 
+- 🧱 🛠️ **Declare image jobs as an entity.** Runs list and inspect through the
+  generic Run table, but image-processing jobs still need the hand-written
+  Image jobs view (`apps/web/src/app/runs/image-job-history.tsx`), their own
+  inspector (`ActivityRunDetail`, `RunWorkFacts`) and the `/runs/jobs/$id`
+  page. Declaring them in the manifest (shortcode, state, kind, subject,
+  attempts, cost) lets the generic list, inspector and detail page replace all
+  three; plan the identifier and attempts storage first.
+
+- 🤔 🛠️ **Trim the activity projection to what clients still read.** The web
+  reads `activity.list`/`detail`/`events` only for image jobs now, and no
+  longer reads `activity.groups`/`groupChildren` at all. Check the native
+  Activity screen and the MCP `activity` tool before narrowing these
+  operations to image jobs or deleting the Run grouping reads.
+
 - ⏳ ✨ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
   so Burn-down happens; no notifications or scheduling.

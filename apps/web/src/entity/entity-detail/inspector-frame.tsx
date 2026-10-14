@@ -11,6 +11,8 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { cn } from "~/lib/utils";
+import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { Button } from "~/ui/primitives/button";
 
 export type InspectorTab = "overview" | "relations" | "activity";
@@ -85,51 +87,25 @@ export function EntityInspectorFrame({
   }, [activeTab, prefix]);
 
   return (
-    <aside
-      aria-label={`${label} inspector`}
-      className="h-full w-full max-w-full overflow-y-auto bg-card text-xs text-foreground"
+    <InspectorChrome
+      label={`${label} inspector`}
+      id={id}
+      name={name ?? label}
+      eyebrow={
+        eyebrow ?? (
+          <span className="text-2xs font-medium text-muted-foreground">
+            {label}
+          </span>
+        )
+      }
+      leading={
+        leading ?? (
+          <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
+        )
+      }
+      actions={<OpenEntityLink entity={entity} id={id} />}
+      onClose={onClose}
     >
-      <header className="sticky top-0 z-20 border-b border-border bg-card p-3">
-        <div className="flex items-start gap-2">
-          {leading ?? (
-            <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
-          )}
-          <div className="min-w-0 flex-1">
-            {eyebrow ?? (
-              <span className="text-2xs font-medium text-muted-foreground">
-                {label}
-              </span>
-            )}
-            <h2
-              className="text-sm leading-snug font-semibold break-words text-foreground"
-              title={name ?? label}
-            >
-              {name ?? label}
-            </h2>
-            <p
-              className="truncate font-mono text-2xs text-muted-foreground"
-              title={id}
-            >
-              {id}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <OpenEntityLink entity={entity} id={id} />
-            {onClose ? (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                mobileSize="compact"
-                aria-label="Close inspector"
-                onClick={onClose}
-              >
-                <XIcon />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
       <div id={`${prefix}-overview`}>{overview}</div>
       {hasRelations ? (
         <details
@@ -167,6 +143,69 @@ export function EntityInspectorFrame({
             : null}
         </details>
       ) : null}
+    </InspectorChrome>
+  );
+}
+
+/** The sticky identity header and scroll surface every side inspector shares. */
+export function InspectorChrome({
+  label,
+  id,
+  name,
+  eyebrow,
+  leading,
+  actions,
+  onClose,
+  className,
+  children,
+}: {
+  label: string;
+  id: string;
+  name: ReactNode;
+  eyebrow?: ReactNode;
+  leading?: ReactNode;
+  actions?: ReactNode;
+  onClose?: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <aside
+      aria-label={label}
+      className={cn(
+        "h-full w-full max-w-full overflow-y-auto bg-card text-xs text-foreground",
+        className,
+      )}
+    >
+      <header className="sticky top-0 z-20 border-b border-border bg-card p-3">
+        <div className="flex items-start gap-2">
+          {leading}
+          <div className="min-w-0 flex-1">
+            {eyebrow}
+            <h2 className="text-sm leading-snug font-semibold break-words text-foreground">
+              {name}
+            </h2>
+            <p className="truncate font-mono text-2xs text-muted-foreground">
+              <CopyableShortcode code={id} />
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            {actions}
+            {onClose ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                mobileSize="compact"
+                aria-label="Close inspector"
+                onClick={onClose}
+              >
+                <XIcon />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </header>
+      {children}
     </aside>
   );
 }

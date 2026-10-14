@@ -361,7 +361,7 @@ export const nativeCoverage = {
       "project.overview",
       "project.schedule",
       "planting.schedule",
-      "run.history",
+      "run.image-jobs",
       "task.agenda",
     ]),
     // Member-wide accuracy measurement is a desk workflow: sampling and blind
