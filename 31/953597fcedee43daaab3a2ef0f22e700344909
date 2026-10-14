@@ -1,0 +1,29 @@
+apps/web/src/entity/field-resolution-explanation.tsx
+  s_a7bec1ba59cec5::t_9e488cf534ac89 18-22,72-75
+apps/web/src/entity/field-resolution.tsx
+  s_a7bec1ba59cec5::t_98e4d09a550003 18,26,368-369,376,382-391
+apps/web/src/server/repo/inventory/crud.ts
+  s_a7bec1ba59cec5::t_214317dc918da6 812-817
+apps/web/src/server/repo/inventory/ownership.ts
+  s_a7bec1ba59cec5::t_51fddf6b33ac62 746-749
+apps/web/src/server/repo/inventory/repository.ts
+  s_a7bec1ba59cec5::t_13f4797b2fced8 83-84,86-96
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_a7bec1ba59cec5::t_56e6840072b860 15,587
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "31953597fcedee43daaab3a2ef0f22e700344909",
+  "prompts": {},
+  "sessions": {
+    "s_a7bec1ba59cec5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10faf483-7285-407e-800f-2dad5a8b10b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
