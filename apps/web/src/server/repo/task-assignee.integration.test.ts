@@ -1,4 +1,4 @@
-import type { TaskFilters } from "@cubby/schemas/project";
+import { type TaskFilters, taskFiltersSchema } from "@cubby/schemas/project";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -215,6 +215,7 @@ describe("member assignee inheritance", () => {
     const me = (filters: TaskFilters) =>
       resolveCurrentMemberFilters(
         { db: ctx.db, actorContext: ctx.actor },
+        taskFiltersSchema,
         filters,
       );
     const beforeLink = await taskList(
@@ -235,6 +236,13 @@ describe("member assignee inheritance", () => {
       { pageIndex: 0, pageSize: 20 },
     );
     expect(mine.data.map((row) => row.id)).toContain(task.output.id);
+    // Only Ledger Party filters resolve; a text search for "@me" stays text.
+    const searched = await me({
+      search: CURRENT_MEMBER_FILTER,
+      assigneeId: [CURRENT_MEMBER_FILTER],
+    });
+    expect(searched.search).toBe(CURRENT_MEMBER_FILTER);
+    expect(searched.assigneeId).toEqual([member.output.id]);
     expect(mine.data.map((row) => row.id)).not.toContain(explicit.output.id);
     const mineOrEarlier = await taskList(
       ctx.db,

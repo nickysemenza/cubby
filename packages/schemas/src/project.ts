@@ -484,7 +484,7 @@ export const expenseFilterFields = {
   spendingCategoryPresenceFilter: presenceFilter,
   ...expenseBaseFilterFields,
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
-  ledgerPartyId: oneOrMany(ledgerPartyShortcode).optional(),
+  ledgerPartyId: partyFilterList(ledgerPartyShortcode).optional(),
   projectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).

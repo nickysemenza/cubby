@@ -6,6 +6,7 @@ import {
 import {
   type createProjectFromTasksInput,
   LIVE_PROJECT_STATUSES,
+  projectFiltersSchema,
   type projectToolUsageSetInput,
   type repointProjectUsesInput,
 } from "@cubby/schemas/project";
@@ -14,6 +15,7 @@ import type { z } from "zod";
 
 import { projectContract } from "~/contracts/project.contract";
 import type { Database } from "~/server/db";
+import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
@@ -130,7 +132,12 @@ export const projectHandlers = implementOperationDomain(projectContract, {
   tree: async (context, input) => {
     const page = await projectTreePage(
       context.db,
-      input.filters,
+      // Schedule reads outside the entity kernel, so it resolves `@me` here.
+      await resolveCurrentMemberFilters(
+        context,
+        projectFiltersSchema,
+        input.filters,
+      ),
       normalizeSorts(input.sort),
       input.pagination,
     );

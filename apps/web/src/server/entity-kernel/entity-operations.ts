@@ -332,6 +332,7 @@ export const defineEntityOperations = <
         for (const id of ids ?? []) binding.schemas.id.parse(id);
         const filters = await resolveCurrentMemberFilters(
           context,
+          binding.schemas.filters,
           parseSchema<S["filters"], unknown>(
             binding.schemas.filters,
             repositoryFilters,

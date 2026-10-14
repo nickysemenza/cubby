@@ -609,6 +609,9 @@ describe("MCP catalog schemas", () => {
       "installationId",
     ]);
     const violations: string[] = [];
+    // Every published Ledger Party filter must accept `@me` (ADR 0015): the
+    // clients offer "Me" on each one, so a shortcode-only schema rejects it.
+    const partyFiltersWithoutMe: string[] = [];
     const stillExceptional = new Set<string>();
     for (const tool of (await listMcpToolCatalog()).tools) {
       const schema = parseJsonObject(tool.inputSchema);
@@ -635,6 +638,18 @@ describe("MCP catalog schemas", () => {
             );
           },
         );
+        // `ids` selects the listed kind's own records, not a person filter.
+        if (
+          path.startsWith("filters.") &&
+          leaf !== "ids" &&
+          stringSchemas(node, definitions).some(
+            ({ pattern }) =>
+              isString(pattern) &&
+              pattern.includes("LPY-") &&
+              !pattern.includes("@me"),
+          )
+        )
+          partyFiltersWithoutMe.push(key);
         if (uuidExceptions.has(key)) {
           if (missingPattern) stillExceptional.add(key);
         } else if (missingPattern) {
@@ -643,6 +658,7 @@ describe("MCP catalog schemas", () => {
       }
     }
     expect(violations).toEqual([]);
+    expect(partyFiltersWithoutMe).toEqual([]);
     expect(
       [...uuidExceptions].filter((key) => !stillExceptional.has(key)).sort(),
     ).toEqual([]);

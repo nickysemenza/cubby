@@ -57,7 +57,12 @@ export function defineProgressiveListOperations<
   const filtersFor = (
     context: EntityKernelContext,
     input: z.output<typeof inputSchema>["filters"],
-  ) => resolveCurrentMemberFilters(context, parseFilters(input));
+  ) =>
+    resolveCurrentMemberFilters(
+      context,
+      binding.schemas.filters,
+      parseFilters(input),
+    );
   const reader = () => {
     if (!binding.repository.listRead)
       throw new Error(`Missing progressive list reader: ${binding.entity}`);

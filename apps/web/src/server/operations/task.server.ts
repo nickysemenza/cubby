@@ -1,6 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import { taskBulkReorderInput } from "@cubby/schemas/project";
+import {
+  taskBulkReorderInput,
+  taskFiltersSchema,
+} from "@cubby/schemas/project";
 import type { z } from "zod";
 
 import { taskContract } from "~/contracts/task.contract";
@@ -69,10 +72,18 @@ export const taskHandlers = implementOperationDomain(taskContract, {
   listActionable: async (context, input) =>
     listActionableTasks(
       context.db,
-      await resolveCurrentMemberFilters(context, input ?? {}),
+      await resolveCurrentMemberFilters(
+        context,
+        taskFiltersSchema,
+        input ?? {},
+      ),
     ),
   chartData: async (context, input) => {
-    const filters = await resolveCurrentMemberFilters(context, input);
+    const filters = await resolveCurrentMemberFilters(
+      context,
+      taskFiltersSchema,
+      input,
+    );
     return (
       await listAll((pagination) =>
         taskList(
@@ -90,11 +101,14 @@ export const taskHandlers = implementOperationDomain(taskContract, {
   // Board and timeline read outside the entity kernel, so they resolve `@me`
   // themselves.
   board: async (context, input) =>
-    getTaskBoard(context.db, await resolveCurrentMemberFilters(context, input)),
+    getTaskBoard(
+      context.db,
+      await resolveCurrentMemberFilters(context, taskFiltersSchema, input),
+    ),
   timeline: async (context, input) =>
     getTaskTimeline(
       context.db,
-      await resolveCurrentMemberFilters(context, input),
+      await resolveCurrentMemberFilters(context, taskFiltersSchema, input),
     ),
   bulkReorder: (context, input) =>
     taskBulkReorderWorkflow(context.db, input, context.actorContext),

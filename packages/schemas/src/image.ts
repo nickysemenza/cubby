@@ -12,7 +12,12 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { entityRecordSourceInputs } from "./entity-source";
-import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
+import {
+  entityFilterList,
+  oneOrMany,
+  partyFilterList,
+  presenceFilter,
+} from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { imageCaptureLocation } from "./image-capture-fields";
 import { imageSightingCamera } from "./image-sighting-fields";
@@ -280,7 +285,7 @@ export const imageFilterFields = {
   // `capturedByPartyId` is declared `idMulti`/`urlOnly` in the manifest (no
   // `stored` descriptor — it needs shortcode resolution, same as
   // `runId` above), so it is hand-added here rather than generated.
-  capturedByPartyId: entityFilterList(ledgerPartyShortcode)
+  capturedByPartyId: partyFilterList(ledgerPartyShortcode)
     .optional()
     .describe(
       "Only images derived-captured by one of these household members.",
