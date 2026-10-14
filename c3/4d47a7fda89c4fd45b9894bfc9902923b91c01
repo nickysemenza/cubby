@@ -1,0 +1,43 @@
+apps/web/src/app/design/_components/EditableComponentDemo.tsx
+  s_2e1f8b0138b102::t_c53df43fe9e83e 3-4,11-16,80,83,112,117-125,136-137
+apps/web/src/app/design/_components/design-section.tsx
+  s_2e1f8b0138b102::t_0b683622d5731b 1-90
+apps/web/src/app/design/_data/samples.tsx
+  s_2e1f8b0138b102::t_7ab2cc7db77b3f 1,5,9-12,109-583
+apps/web/src/app/design/sections/basics-section.tsx
+  s_2e1f8b0138b102::t_fb84fe858711fe 1-364
+apps/web/src/app/design/sections/picker-section.tsx
+  s_2e1f8b0138b102::t_c8afcef1b2c5b4 1-234
+apps/web/src/app/design/sections/records-section.tsx
+  s_2e1f8b0138b102::t_1ce1689f4312da 1-245
+apps/web/src/app/design/sections/rtable-section.tsx
+  s_2e1f8b0138b102::t_1252c982f505b1 1-272
+apps/web/src/app/design/sections/values-section.tsx
+  s_2e1f8b0138b102::t_21e811fb784b2b 1-177
+apps/web/src/features/inventory/location-tree-view.unit.test.tsx
+  s_2e1f8b0138b102::t_02d20100a3579b 8
+apps/web/src/routes/_authenticated/design.tsx
+  s_2e1f8b0138b102::t_39b58f9bbc9830 4-16,18,23-24,33-43,46,66-88
+apps/web/tests/e2e/design-showcase.spec.ts
+  s_2e1f8b0138b102::t_2aa9a4b60367d5 1-54
+apps/web/DESIGN.md
+  s_2e1f8b0138b102::t_44d97f0fce2bc9 56-64
+apps/web/src/app/design/sections/household-section.tsx
+  s_2e1f8b0138b102::t_9c2b13a6e2c801 9,18-19,24,26-31,33-34,39,44-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c34d47a7fda89c4fd45b9894bfc9902923b91c01",
+  "prompts": {},
+  "sessions": {
+    "s_2e1f8b0138b102": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "675d6354-faa3-465f-a8f1-8d6c775cda12",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
