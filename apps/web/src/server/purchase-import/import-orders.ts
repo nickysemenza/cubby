@@ -27,6 +27,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -75,6 +76,10 @@ import { executeAtomicOperation } from "~/server/runs/operation";
 import { assertRunCapability } from "./capabilities";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
+import {
+  prepareMailAttachmentDecisions,
+  type PreparedMailAttachmentDecisions,
+} from "./mail-attachment-purpose";
 import { assertMailRunMembership } from "./mail-run-membership";
 import { assertMailSourceIdentityReady } from "./mail-source-identity";
 import { linkImportedMail } from "./mail-tool";
@@ -895,6 +900,7 @@ export async function commitPurchaseImport(
   db: Database,
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
+  decisionPort?: DecisionPort,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await importRunScope(db, actor, input._runExecution, false);
@@ -909,8 +915,45 @@ export async function commitPurchaseImport(
       subject: "Commit",
       recordFailure: true,
     },
-    (ledger) =>
-      withTransactionDatabase(db, async (transactionDb) => {
+    async (ledger) => {
+      const replayed = await ledger.replay(getDb(db), recordedCommit);
+      if (replayed) {
+        const { requiresReview, ...result } = replayed;
+        return { result, requiresReview };
+      }
+      if (scope.status !== "running")
+        throw new Error(`Purchase import run is fenced in ${scope.status}`);
+      const preparedAttachments = new Map<
+        string,
+        PreparedMailAttachmentDecisions
+      >();
+      for (const { order } of await loadPreparation(
+        db,
+        scope.runId,
+        input.prepareOperationId,
+      )) {
+        const mail = await retainedMailSource(
+          db,
+          scope,
+          {
+            kind: importSourceKind.parse(order.sourceKind),
+            externalKey: order.sourceExternalKey,
+            checksum: order.sourceChecksum,
+          },
+          order.evidenceChecksum,
+        );
+        if (mail && !preparedAttachments.has(mail.id))
+          preparedAttachments.set(
+            mail.id,
+            await prepareMailAttachmentDecisions(
+              db,
+              mail,
+              { ...actor, runId: scope.runId },
+              decisionPort,
+            ),
+          );
+      }
+      return withTransactionDatabase(db, async (transactionDb) => {
         const database = getDb(transactionDb);
         const replayed = await ledger.replay(database, recordedCommit, {
           forUpdate: true,
@@ -1154,12 +1197,16 @@ export async function commitPurchaseImport(
               );
           }
           if (result.purchaseId && mailSource && linksMail) {
+            const attachmentDecisions = preparedAttachments.get(mailSource.id);
+            if (!attachmentDecisions)
+              throw new Error("Email attachment purposes were not reviewed.");
             await linkImportedMail(transactionDb, {
               mail: mailSource,
               event: extraction.candidate?.sourceEvent ?? "confirmation",
               purchaseId: result.purchaseId,
               actorUserId: actor.userId,
               runId: scope.runId,
+              attachmentDecisions,
             });
             if (result.outcome === "created" || result.outcome === "updated")
               thumbnailWork.push({
@@ -1200,7 +1247,8 @@ export async function commitPurchaseImport(
           })
           .where(eq(runTable.id, scope.runId));
         return { result: publicResult, requiresReview, thumbnailWork };
-      }),
+      });
+    },
   );
   // Network work stays outside the import transaction; each is best-effort.
   for (const work of transactionResult.thumbnailWork ?? [])

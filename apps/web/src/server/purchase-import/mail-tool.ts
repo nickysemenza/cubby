@@ -30,6 +30,7 @@ import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -78,6 +79,11 @@ import { gmailProviderForUser } from "./gmail/provider";
 import { GMAIL_PAGE_SIZE } from "./gmail/sync";
 import { GmailAuthorizationError } from "./gmail/tokens";
 import { GmailApiError } from "./gmail/types";
+import {
+  attachmentEvidenceFingerprint,
+  prepareMailAttachmentDecisions,
+  type PreparedMailAttachmentDecisions,
+} from "./mail-attachment-purpose";
 import { recordMailFinancialReview } from "./mail-financial-review";
 import {
   assertMailRunMembership,
@@ -299,20 +305,6 @@ export async function readMail(
   });
 }
 
-function isPrintableShippingLabel(
-  filename: string,
-  subject: RetainedMail["subject"],
-) {
-  const name = filename.replace(/[._-]+/g, " ");
-  // Accounting evidence in a label Email still belongs on the Purchase.
-  if (/\b(?:receipt|invoice)\b/i.test(name)) return false;
-  const labelPurpose = /\b(?:shipping|postage|return)\s*labels?\b/i;
-  return (
-    labelPurpose.test(name) ||
-    (/\blabels?\b/i.test(name) && labelPurpose.test(subject ?? ""))
-  );
-}
-
 /** Retained evidence files become Purchase documents; printable labels stay with the Email. */
 async function attachRetainedSource(
   db: Database,
@@ -320,15 +312,29 @@ async function attachRetainedSource(
     orderMailId: string;
     purchaseId: string;
     purchaseShortcode: string;
-    subject: RetainedMail["subject"];
+    prepared: PreparedMailAttachmentDecisions;
   },
 ) {
   const rows = await getDb(db)
     .select()
     .from(orderMailAttachment)
     .where(eq(orderMailAttachment.orderMailId, input.orderMailId));
+  if (rows.length !== input.prepared.decisions.size)
+    throw new Error(
+      "Email attachments changed after their purpose was reviewed; retry the link.",
+    );
   for (const attachment of rows) {
-    if (isPrintableShippingLabel(attachment.filename, input.subject)) continue;
+    const decision = input.prepared.decisions.get(attachment.id);
+    if (
+      !decision ||
+      decision.fingerprint !== attachmentEvidenceFingerprint(attachment)
+    )
+      throw new Error(
+        "Email attachment evidence changed after its purpose was reviewed; retry the link.",
+      );
+  }
+  for (const attachment of rows) {
+    if (!input.prepared.decisions.get(attachment.id)?.promote) continue;
     let imageId = attachment.imageId;
     if (!imageId && attachment.pendingObjectKey) {
       const bytes = await productionOrderMailAttachmentStorage.get(
@@ -376,8 +382,13 @@ export async function linkOrderMail(
     actorUserId: string;
     /** `agent` for a `mail.resolve` session or Pi, `import` for a commit. */
     proposedBy: "agent" | "import";
+    attachmentDecisions: PreparedMailAttachmentDecisions;
   },
 ) {
+  if (input.mail.rawChecksum !== input.attachmentDecisions.mailChecksum)
+    throw new Error(
+      "Email evidence changed after its attachment purposes were reviewed; retry the link.",
+    );
   const tx = getDb(db);
   const [chosen] = await tx
     .select({
@@ -493,7 +504,7 @@ export async function linkOrderMail(
     orderMailId: input.mail.id,
     purchaseId: chosen.id,
     purchaseShortcode: chosen.shortcode,
-    subject: input.mail.subject,
+    prepared: input.attachmentDecisions,
   });
   return chosen;
 }
@@ -697,9 +708,24 @@ export async function resolveMail(
   rawInput: MailResolveInput,
   actor: ActorContext,
   storage: OrderMailAttachmentStorage = productionOrderMailAttachmentStorage,
+  decisionPort?: DecisionPort,
 ) {
   const input = mailResolveInput.parse(rawInput);
   const { disposition } = input;
+  let attachmentDecisions: PreparedMailAttachmentDecisions | undefined;
+  if (disposition.kind === "linked") {
+    const { mail } = await ownedMail(db, input, actor, "share");
+    if (mail.rawChecksum !== input.checksum)
+      throw new Error(
+        "This Email changed since it was read; read it again before resolving.",
+      );
+    attachmentDecisions = await prepareMailAttachmentDecisions(
+      db,
+      mail,
+      actor,
+      decisionPort,
+    );
+  }
   const settled = await withTransactionDatabase(db, async (tdb) => {
     if (disposition.kind === "unrelated") {
       const disposed = await disposedUnrelatedMail(tdb, input, actor);
@@ -726,6 +752,8 @@ export async function resolveMail(
         "This Email changed since it was read; read it again before resolving.",
       );
     if (disposition.kind === "linked") {
+      if (!attachmentDecisions)
+        throw new Error("Email attachment purposes were not reviewed.");
       if (disposition.settlement && disposition.event !== "refunded")
         throw new Error(
           "Settlement evidence requires a refunded lifecycle event.",
@@ -792,6 +820,7 @@ export async function resolveMail(
             event: disposition.event,
             actorUserId: actor.userId,
             proposedBy: "agent",
+            attachmentDecisions,
           }),
         );
       if (disposition.settlement) {
@@ -874,6 +903,7 @@ export async function linkImportedMail(
     purchaseId: string;
     actorUserId: string;
     runId: RunId;
+    attachmentDecisions: PreparedMailAttachmentDecisions;
   },
 ) {
   const [mail] = await getDb(db)
@@ -897,6 +927,7 @@ export async function linkImportedMail(
     event: input.event,
     actorUserId: input.actorUserId,
     proposedBy: "import",
+    attachmentDecisions: input.attachmentDecisions,
   });
   await settleMail(db, {
     mail: { ...input.mail, ...mail },

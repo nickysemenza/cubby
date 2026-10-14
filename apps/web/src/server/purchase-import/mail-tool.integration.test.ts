@@ -23,6 +23,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -246,7 +247,7 @@ describe("public mail tool", () => {
         {
           orderMailId: source.id,
           providerAttachmentId: "synthetic-label-pending",
-          filename: "marketplace-label-SYNTHETIC.pdf",
+          filename: "scan-001.pdf",
           mimeType: "application/octet-stream",
           checksum: "a".repeat(64),
           pendingObjectKey: "synthetic/label-pending",
@@ -254,7 +255,7 @@ describe("public mail tool", () => {
         {
           orderMailId: source.id,
           providerAttachmentId: "synthetic-label-image",
-          filename: "return-label.pdf",
+          filename: "invoice.pdf",
           mimeType: "application/pdf",
           checksum: "b".repeat(64),
           imageId: printable.id,
@@ -262,7 +263,7 @@ describe("public mail tool", () => {
         {
           orderMailId: source.id,
           providerAttachmentId: "synthetic-receipt",
-          filename: "shipping-label-receipt.pdf",
+          filename: "shipping-label.pdf",
           mimeType: "application/pdf",
           checksum: "c".repeat(64),
           imageId: receipt.id,
@@ -284,11 +285,34 @@ describe("public mail tool", () => {
         purchaseIds: [target.shortcode],
       },
     });
-    await expect(resolveMail(ctx.db, input, ctx.actor)).resolves.toMatchObject({
+    // Model answers deliberately contradict filename cues: two labels and a receipt.
+    const decisionPort: DecisionPort = vi.fn<DecisionPort>(async (input) => {
+      const evidence = JSON.parse(input.state);
+      const choice =
+        evidence.attachment.checksum === "c".repeat(64) ? "c0" : "c1";
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice,
+            confidence: 0.98,
+            probabilities: {
+              c0: choice === "c0" ? 0.98 : 0.01,
+              c1: choice === "c1" ? 0.98 : 0.01,
+              c2: 0.01,
+            },
+          },
+        },
+      };
+    });
+    await expect(
+      resolveMail(ctx.db, input, ctx.actor, undefined, decisionPort),
+    ).resolves.toMatchObject({
       status: "completed",
       purchaseIds: [target.shortcode],
     });
-    await resolveMail(ctx.db, input, ctx.actor);
+    await resolveMail(ctx.db, input, ctx.actor, undefined, decisionPort);
+    expect(decisionPort).toHaveBeenCalledTimes(6);
     expect(fetch).not.toHaveBeenCalled();
     expect(
       await getDb(ctx.db)
@@ -315,6 +339,40 @@ describe("public mail tool", () => {
     expect(read.content.bodyText).toBe("Shipping label cost USD 8.50");
     expect(read.purchaseIds).toEqual([target.shortcode]);
     expect(read.attachments).toHaveLength(3);
+    let changed = false;
+    const changingPort: DecisionPort = vi.fn<DecisionPort>(async (input) => {
+      if (!changed) {
+        changed = true;
+        await getDb(ctx.db)
+          .update(orderMailAttachment)
+          .set({ filename: "changed-source.pdf" })
+          .where(
+            and(
+              eq(orderMailAttachment.orderMailId, source.id),
+              eq(
+                orderMailAttachment.providerAttachmentId,
+                "synthetic-label-pending",
+              ),
+            ),
+          );
+      }
+      return decisionPort(input);
+    });
+    await expect(
+      resolveMail(ctx.db, input, ctx.actor, undefined, changingPort),
+    ).rejects.toThrow("evidence changed");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(
+      await getDb(ctx.db)
+        .select({ imageId: entityAttachment.imageId })
+        .from(entityAttachment)
+        .where(
+          and(
+            eq(entityAttachment.entityKind, "purchase"),
+            eq(entityAttachment.entityId, target.id),
+          ),
+        ),
+    ).toEqual([{ imageId: receipt.id }]);
   });
 
   it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {

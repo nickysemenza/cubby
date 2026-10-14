@@ -28,6 +28,7 @@ import {
   FIELD_SUGGESTION_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
+  MAIL_ATTACHMENT_PURPOSE_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
@@ -233,6 +234,26 @@ function featureRows(): CatalogRow[] {
       { options: plainOptions(triage.choices) },
     ),
     ...lineRows,
+    featureRow(
+      MAIL_ATTACHMENT_PURPOSE_FEATURE.feature,
+      "Email attachment purpose",
+      "Choose whether one retained Email file belongs on a Purchase",
+      MAIL_ATTACHMENT_PURPOSE_FEATURE,
+      MAIL_ATTACHMENT_PURPOSE_FEATURE.prompt(
+        JSON.stringify({
+          email: {
+            subject: "Shipping paperwork",
+            bodyText: "Attached is the receipt for your postage purchase.",
+          },
+          attachment: {
+            filename: "document.pdf",
+            mimeType: "application/pdf",
+            checksum: "synthetic-checksum",
+          },
+        }),
+      ),
+      { options: plainOptions(MAIL_ATTACHMENT_PURPOSE_FEATURE.choices) },
+    ),
     featureRow(
       SETTLEMENT_CANDIDATE_RANK_FEATURE.feature,
       "Settlement tie-break",
