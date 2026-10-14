@@ -165,10 +165,10 @@ describe("list editor metadata refresh", () => {
         screen.getByRole("button", { name: "Manufacturer: any" }),
       );
       expect(
-        await screen.findByRole("button", { name: "Updated maker" }),
+        await screen.findByRole("option", { name: "Updated maker" }),
       ).toBeVisible();
       expect(
-        screen.queryByRole("button", { name: "Earlier maker" }),
+        screen.queryByRole("option", { name: "Earlier maker" }),
       ).not.toBeInTheDocument();
     },
   );
