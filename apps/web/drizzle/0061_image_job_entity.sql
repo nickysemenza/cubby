@@ -2,8 +2,6 @@ SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 SET LOCAL statement_timeout = '600s';--> statement-breakpoint
 -- Authorized breaking cutover: image-job writers are paused; hold the table through commit.
 LOCK TABLE "ImageProcessingJob" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
-ALTER TABLE "Entity" DROP CONSTRAINT "Entity_kind_check";--> statement-breakpoint
-ALTER TABLE "Entity" DROP CONSTRAINT "Entity_shortcode_prefix_check";--> statement-breakpoint
 ALTER TABLE "ImageProcessingJob" DROP CONSTRAINT "ImageProcessingJob_kind_check";--> statement-breakpoint
 ALTER TABLE "ImageProcessingJob" DROP CONSTRAINT "ImageProcessingJob_state_check";--> statement-breakpoint
 ALTER TABLE "ImageProcessingJob" DROP CONSTRAINT "ImageProcessingJob_submissionId_ImageProcessingSubmission_id_fk";
@@ -37,6 +35,10 @@ BEGIN
 END $$;--> statement-breakpoint
 ALTER TABLE "ImageProcessingJob" ALTER COLUMN "shortcode" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "ImageProcessingJob" ADD COLUMN "deletedAt" timestamp;--> statement-breakpoint
+-- Widen Entity only now: dropping its checks takes ACCESS EXCLUSIVE on the shared identity
+-- table, so the per-job backfill above runs without blocking other entities.
+ALTER TABLE "Entity" DROP CONSTRAINT "Entity_kind_check";--> statement-breakpoint
+ALTER TABLE "Entity" DROP CONSTRAINT "Entity_shortcode_prefix_check";--> statement-breakpoint
 INSERT INTO "Entity" ("id", "kind", "shortcode", "createdAt", "deletedAt")
 SELECT id, 'imageJob', shortcode, "createdAt", NULL FROM "ImageProcessingJob"
 ON CONFLICT (id) DO NOTHING;--> statement-breakpoint
