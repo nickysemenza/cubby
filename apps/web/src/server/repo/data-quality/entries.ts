@@ -2,6 +2,7 @@ import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import { cookbookChecks } from "./checks/cookbook";
 import { deviceChecks } from "./checks/device";
+import { imageJobChecks } from "./checks/image-job";
 import { emailChecks } from "./checks/email";
 import { expenseChecks } from "./checks/expense";
 import { financialAccountChecks } from "./checks/financial-account";
@@ -68,5 +69,6 @@ export const dataQualityEntries = {
   ledgerParty: ledgerPartyChecks,
   ledgerTransfer: ledgerTransferChecks,
   device: deviceChecks,
+  imageJob: imageJobChecks,
   image: imageChecks,
 } satisfies DataQualityEntries;

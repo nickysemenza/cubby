@@ -274,7 +274,7 @@ export const listRendererCoverage = {
     "purchase-links": implemented(emailListRenderers["purchase-links"]),
   },
   run: scoredCoverage<"run">(),
-  imageJob: unscoredCoverage<"imageJob">(),
+  imageJob: scoredCoverage<"imageJob">(),
   "usda-food": {
     "data-quality": implemented<
       ClientListRenderer<ClientListRows["usda-food"]>

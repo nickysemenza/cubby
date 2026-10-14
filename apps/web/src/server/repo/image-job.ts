@@ -136,6 +136,7 @@ const hydrateRead = (
   projection: ListProjection,
 ): Promise<ListReadRow[]> =>
   hydrateListRead(db, "imageJob", rows, projection, {
+    media: true,
     load: () =>
       Promise.all([
         lookupEntityReferences(
