@@ -1,0 +1,19 @@
+apps/web/src/routes/auth.$authView.tsx
+  s_6bf66a3f066362::t_143528e9e3971c 44,56-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4c583b5b56ede20e1fdafd40a582defa0a65840e",
+  "prompts": {},
+  "sessions": {
+    "s_6bf66a3f066362": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "021c528a-dd11-44cd-a4d2-5864dc6ccc9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
