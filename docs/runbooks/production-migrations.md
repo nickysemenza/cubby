@@ -183,11 +183,20 @@ stamp `retiredAt` by hand.
 
 ## Shared Assessments and Feedback
 
-The owner applies the migrations shipped with ADR 0016 only after the final
-journal tags and the copy/retirement map have been checked against the reviewed
-PR. Record the exact expansion, final reconciliation and contraction tags
-privately; substitute those tags in the bounded commands above. Never apply a
-contract migration merely because it is the next journal entry.
+The reviewed cutover has these inclusive journal boundaries:
+
+- Online expansion ends at `0064_shared_assessment_expansion`, which creates
+  storage without copying reviews or changing legacy supersession triggers.
+- `0065_derived_ddl`, `0066_shared_assessment_reconciliation`,
+  `0067_derived_ddl` and `0068_derived_ddl` run only inside the enforced
+  quiesced cutover barrier. Final reconciliation locks and transforms legacy
+  reviews and retires their storage; final derived DDL establishes current
+  supersession and identity-evidence invalidation.
+
+Check these exact tags against the final PR journal before execution. Never
+include `0065_derived_ddl` in an online expansion: it redirects field triggers
+before legacy Suggestions have been reconciled, allowing raw field changes to
+leave stale pending legacy rows.
 
 Before pushing or applying the cutover, prove preservation from a populated
 predecessor database and capture a private production baseline. Compare origin
