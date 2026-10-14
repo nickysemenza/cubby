@@ -240,13 +240,11 @@ export async function recoverHistoricalReclassification(db: Database) {
             inputFingerprint: await sha256Hex(JSON.stringify(source.input)),
             state: "completed",
             completedAt: new Date(),
-            result: z
-              .json()
-              .parse({
-                continuationRunId,
-                reconciled: input.emails.length,
-                selected: candidates.length,
-              }),
+            result: z.json().parse({
+              continuationRunId,
+              reconciled: input.emails.length,
+              selected: candidates.length,
+            }),
           });
       });
     }

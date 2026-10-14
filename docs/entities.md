@@ -484,6 +484,8 @@ Repository closures still own transactions and service injection.
 For entities using the shared search-document behavior, `ports.search: "document"`
 selects the standard projection, semantic text, and dependent refresh bindings;
 use explicit references when an entity needs a different implementation.
+Search presentation branches use current shared kind values; retired kind names
+must not survive as label conditions in SQL.
 
 The model owns scalar validation and physical column factories as well as
 presentation. `model.storage` declares stored columns; `create`, `update`,

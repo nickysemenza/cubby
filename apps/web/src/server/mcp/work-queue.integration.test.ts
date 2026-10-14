@@ -223,13 +223,11 @@ describe("member actionable Work queue", () => {
         createdAt: new Date("2026-10-09T01:00:00Z"),
       },
     );
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: transaction.id,
-        purchaseId: order.id,
-        amount: 25,
-      });
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: transaction.id,
+      purchaseId: order.id,
+      amount: 25,
+    });
     const read = (kind: "awaiting_posting" | "repair") =>
       readWorkQueue(
         ctx.db,

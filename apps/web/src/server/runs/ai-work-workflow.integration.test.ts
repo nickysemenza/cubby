@@ -29,15 +29,13 @@ it("continues an interrupted Email lease through the actual Workflow event-wait 
     userId: ctx.actor.userId,
   });
   const mailboxId = "synthetic-workflow-mailbox";
-  await getDb(ctx.db)
-    .insert(account)
-    .values({
-      id: crypto.randomUUID(),
-      accountId: mailboxId,
-      providerId: "google",
-      userId: ctx.actor.userId,
-      updatedAt: new Date(),
-    });
+  await getDb(ctx.db).insert(account).values({
+    id: crypto.randomUUID(),
+    accountId: mailboxId,
+    providerId: "google",
+    userId: ctx.actor.userId,
+    updatedAt: new Date(),
+  });
   const authorization = await issueExecutionAuthorization(
     ctx.db,
     ctx.actor,
