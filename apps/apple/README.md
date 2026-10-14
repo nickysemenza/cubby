@@ -95,6 +95,9 @@ before replacement, preserving its macOS privacy approvals across rebuilds.
 The Debug CLI's app-approved sign-in opens Dev; a Release CLI opens production.
 Site universal links and password autofill remain associated with production;
 Dev navigation uses `cubby-dev` links.
+Google sign-in in Dev requires the web deployment's callback-scheme support;
+deploy that support before using Dev's Google flow. Password sign-in does not
+use the browser callback.
 
 ### Headless companion (`cubby companion`)
 
