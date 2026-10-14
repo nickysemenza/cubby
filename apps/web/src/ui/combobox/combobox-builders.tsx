@@ -56,7 +56,7 @@ const MAX_TRAILING = 2;
  * become right-aligned chips. The same declaration drives the phone list row
  * and native, so a picker row says what the record's card says.
  */
-export function recordRowProjection<E extends ShortcodeType>(
+function recordRowProjection<E extends ShortcodeType>(
   entity: E,
   record: PickerRecord,
 ) {
