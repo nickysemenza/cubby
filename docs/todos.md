@@ -966,7 +966,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   facet or the declared `savedViews` (Email: Needs attention, Review
   conflicts) could render as a segmented control on a list page and inside a
   relation section, e.g. an Emails section's Linked · Suggested · Dismissed.
-  `ViewSwitcher`/`ChoiceSwitcher` and `DataTableViews` exist; decide the
+  `Picker`'s `segmented` mode and `DataTableViews` exist; decide the
   declaration (facet or saved view) and wire it generically on web and native.
 
 - 🤔 🧪 **Record who proposed other reviewed decisions.** Email Purchase links

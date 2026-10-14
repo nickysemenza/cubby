@@ -17,19 +17,21 @@ import {
   toolsSearchSchema,
 } from "~/app/tools/tool-search";
 import { pageTitle } from "~/lib/page-title";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Page } from "~/ui/page/Page";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 type ToolsView = ToolGalleryPresentation | "usage";
 
-const VIEW_OPTIONS: ViewSwitcherOption<ToolsView>[] = [
-  { value: "cards", label: "Cards", icon: GridFourIcon },
-  { value: "compact", label: "Compact", icon: GridNineIcon },
-  { value: "flow", label: "Flow", icon: LayoutIcon },
-  { value: "usage", label: "Usage", icon: TableIcon },
+const VIEW_OPTIONS: readonly (PickerOption & { value: ToolsView })[] = [
+  { value: "cards", label: "Cards", icon: <GridFourIcon className="size-4" /> },
+  {
+    value: "compact",
+    label: "Compact",
+    icon: <GridNineIcon className="size-4" />,
+  },
+  { value: "flow", label: "Flow", icon: <LayoutIcon className="size-4" /> },
+  { value: "usage", label: "Usage", icon: <TableIcon className="size-4" /> },
 ];
 
 export const Route = createFileRoute("/_authenticated/tools")({
@@ -111,11 +113,16 @@ function ToolsPage() {
       layout="full"
       bodyGutter="none"
       workbenchControls={
-        <ViewSwitcher
-          ariaLabel="Tools view"
+        <Picker
+          mode="segmented"
+          label="Tools view"
           options={VIEW_OPTIONS}
           value={view === "gallery" ? presentation : "usage"}
-          onValueChange={(nextView) => {
+          onValueChange={(value) => {
+            const nextView = VIEW_OPTIONS.find(
+              (option) => option.value === value,
+            )?.value;
+            if (!nextView) return;
             if (nextView !== "usage") setPresentation(nextView);
             void navigate({
               search: (previous) => ({
@@ -125,7 +132,7 @@ function ToolsPage() {
               replace: true,
             });
           }}
-          compactOnMobile
+          iconOnlyOnPhone
         />
       }
     >

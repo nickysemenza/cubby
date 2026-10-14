@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
@@ -30,8 +31,12 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import {
+  buildRecordComboboxItem,
+  buildVendorComboboxItem,
+} from "~/ui/combobox/combobox-builders";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -126,12 +131,17 @@ function MerchantVendorRulesCard() {
   const [merchant, setMerchant] = useState("");
   const [vendorId, setVendorId] = useState("");
   const rules = useQuery(runOperations.merchantRules.queryOptions());
-  const vendorOptions = useMemo(
+  const vendorItems = useMemo(
     () =>
-      (rules.data?.vendors ?? []).map((vendor): PickerOption => ({
-        value: vendor.shortcode,
-        label: vendor.name,
-      })),
+      (rules.data?.vendors ?? []).map((vendor) =>
+        buildVendorComboboxItem(
+          {
+            id: parseShortcodeFor("vendor", vendor.shortcode),
+            name: vendor.name,
+          },
+          { itemId: "shortcode" },
+        ),
+      ),
     [rules.data],
   );
   const save = useMutation({
@@ -181,9 +191,12 @@ function MerchantVendorRulesCard() {
                   inputId="purchase-merchant-vendor"
                   label="Vendor"
                   placeholder="Choose a vendor"
-                  options={vendorOptions}
-                  value={vendorId || null}
-                  onValueChange={(next) => setVendorId(next ?? "")}
+                  entity="vendor"
+                  items={vendorItems}
+                  value={
+                    vendorItems.find((item) => item.id === vendorId) ?? null
+                  }
+                  setValue={(next) => setVendorId(next?.id ?? "")}
                 />
               </div>
               <Button
@@ -299,17 +312,26 @@ function MemberLoginPicker({
   disabled: boolean;
   onChange: (ledgerParty: string | null) => void;
 }) {
-  const options = useMemo(
-    (): PickerOption[] => [
-      { value: "", label: "Not linked" },
-      ...parties.map((party) => ({
-        value: party.shortcode,
-        label: party.name,
-        ...(party.userId !== null &&
-          party.userId !== userId && {
-            disabledReason: "Linked to another login",
-          }),
-      })),
+  // "" is the unlinked sentinel: not a ledger-party code, so the record
+  // picker holds it as-is.
+  const items = useMemo(
+    (): ComboboxItem[] => [
+      { id: "", name: "Not linked" },
+      ...parties.map((party) => {
+        const item = buildRecordComboboxItem("ledgerParty", {
+          id: party.shortcode,
+          name: party.name,
+        });
+        return party.userId !== null && party.userId !== userId
+          ? {
+              ...item,
+              presentation: {
+                ...item.presentation,
+                disabledReason: "Linked to another login",
+              },
+            }
+          : item;
+      }),
     ],
     [parties, userId],
   );
@@ -317,10 +339,11 @@ function MemberLoginPicker({
     <Picker
       mode="choose"
       label={`Ledger party for ${userName}`}
-      options={options}
-      value={value}
+      entity="ledgerParty"
+      items={items}
+      value={items.find((item) => item.id === value) ?? null}
       disabled={disabled}
-      onValueChange={(next) => onChange(next || null)}
+      setValue={(next) => onChange(next?.id || null)}
     />
   );
 }

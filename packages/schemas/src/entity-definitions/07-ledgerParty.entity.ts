@@ -52,7 +52,11 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.ledgerPartyKind,
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: ledgerPartyKind,
           create: ledgerPartyKind,

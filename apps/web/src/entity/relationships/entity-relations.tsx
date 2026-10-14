@@ -50,7 +50,6 @@ import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { ChoiceSwitcher, ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
   GRAPH_BRANCH_PAGE_SIZE,
@@ -67,9 +66,14 @@ import {
 import { GraphExplorer } from "./graph-explorer";
 
 const VIEW_OPTIONS = [
-  { value: "list", label: "List", icon: ListIcon },
-  { value: "graph", label: "Graph", icon: NetworkIcon },
-] as const;
+  { value: "list", label: "List", icon: <ListIcon className="size-4" /> },
+  { value: "graph", label: "Graph", icon: <NetworkIcon className="size-4" /> },
+] as const satisfies readonly PickerOption[];
+const DEPTH_OPTIONS: readonly PickerOption[] = [
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+];
 export function supportsEntityGraph(entity: Entity) {
   return (
     entityManifest[entity].dbTable !== null &&
@@ -598,20 +602,24 @@ function EntityRelationsContent(
         </p>
       )}
       <Row wrap gap="sm" align="center">
-        <ViewSwitcher
+        <Picker
+          mode="segmented"
+          label="Switch view"
           options={VIEW_OPTIONS}
           value={current.view ?? "list"}
-          onValueChange={(view) => change({ view })}
+          onValueChange={(value) => {
+            const choice = VIEW_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) change({ view: choice.value });
+          }}
         />
-        <ChoiceSwitcher
-          ariaLabel="Declared relationship depth"
-          options={[
-            { value: "1", label: "1" },
-            { value: "2", label: "2" },
-            { value: "3", label: "3" },
-          ]}
+        <Picker
+          mode="segmented"
+          label="Declared relationship depth"
+          options={DEPTH_OPTIONS}
           value={String(current.depth ?? 1)}
-          onValueChange={(value: string) => {
+          onValueChange={(value) => {
             const depth = ([1, 2, 3] as const).find(
               (candidate) => String(candidate) === value,
             );

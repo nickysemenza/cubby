@@ -24,6 +24,7 @@ import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import { buildProductComboboxItem } from "~/ui/combobox/combobox-builders";
 import { Picker } from "~/ui/combobox/picker";
 import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -441,6 +442,10 @@ export function EnrichmentEditor({
   const [mappingProductId, setMappingProductId] = useState<string | null>(
     product?.id ?? null,
   );
+  const productItems = useMemo(
+    () => row.product.map((candidate) => buildProductComboboxItem(candidate)),
+    [row.product],
+  );
 
   const [food, setFood] = useState<UsdaFoodListRow | null>(initialFood);
   const [priceQty, setPriceQty] = useState("1");
@@ -575,12 +580,12 @@ export function EnrichmentEditor({
           <p className="text-xs font-medium">Store this conversion on</p>
           <Picker
             mode="choose"
-            options={row.product.map((candidate) => ({
-              value: candidate.id,
-              label: candidate.name,
-            }))}
-            value={mappingProductId}
-            onValueChange={setMappingProductId}
+            entity="product"
+            items={productItems}
+            value={
+              productItems.find((item) => item.id === mappingProductId) ?? null
+            }
+            setValue={(item) => setMappingProductId(item?.id ?? null)}
             label="product"
             placeholder="Choose a product"
           />

@@ -32,11 +32,9 @@ import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { formatCount, formatCurrency } from "~/lib/utils";
-import {
-  isReferencePickerEntity,
-  referenceEntitySearch,
-} from "~/ui/combobox/reference-entity-search";
+import { formatCurrency } from "~/lib/utils";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -645,47 +643,6 @@ export function renderDetailFieldValue<TRecord extends object>(
     "detail",
     { entity, field },
   );
-}
-
-/**
- * A field's value as short plain text for dense, non-interactive surfaces
- * (picker rows and chips, accessible names): references read as their names,
- * never codes; numbers follow the declared format; enums use their label.
- */
-export function compactFieldText<TRecord extends object>(
-  entity: Entity,
-  record: TRecord,
-  field: DisplayField,
-): string | null {
-  const reference = readDisplayReferenceField(record, field);
-  if (reference !== null) {
-    const names = reference.items.flatMap((item) =>
-      item.name ? [item.name] : [],
-    );
-    return names.length > 0 ? names.join(", ") : null;
-  }
-  if (!field.readKey && field.display.readPath === null) return null;
-  const value = readScalarField(entity, record, field);
-  switch (value.kind) {
-    case "empty":
-    case "json":
-      return null;
-    case "number":
-      return field.display.format === "currency" ||
-        field.display.format === "signedCurrency"
-        ? formatCurrency(value.raw)
-        : formatCount(value.raw, 2);
-    case "boolean":
-      return value.raw ? "Yes" : "No";
-    case "timestamp":
-      return new Date(value.raw).toLocaleDateString();
-    case "list":
-      return value.raw.join(", ");
-    default:
-      return "label" in value && typeof value.label === "string"
-        ? value.label
-        : String(value.raw);
-  }
 }
 
 /** Dense surfaces prefer a row-backed domain value before scalar fallback. */

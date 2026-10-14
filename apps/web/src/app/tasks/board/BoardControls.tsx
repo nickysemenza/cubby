@@ -2,23 +2,21 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 
-const COLS_OPTIONS: ViewSwitcherOption<BoardColsMode>[] = [
+const COLS_OPTIONS: readonly (PickerOption & { value: BoardColsMode })[] = [
   { value: "status", label: "Status" },
   { value: "project", label: "Project" },
   { value: "trade", label: "Trade" },
 ];
 
 type LaneChoice = "none" | BoardLaneMode;
-const LANE_OPTIONS: ViewSwitcherOption<LaneChoice>[] = [
+const LANE_OPTIONS: readonly (PickerOption & { value: LaneChoice })[] = [
   { value: "none", label: "None" },
   { value: "project", label: "Project" },
   { value: "trade", label: "Trade" },
@@ -49,21 +47,30 @@ export function BoardControls({
       <Row align="center" gap="md" wrap className="hidden md:flex">
         <Row align="center" gap="sm">
           <span className="text-sm text-muted-foreground">Columns</span>
-          <ViewSwitcher
-            ariaLabel="Board columns"
+          <Picker
+            mode="segmented"
+            label="Board columns"
             options={COLS_OPTIONS}
             value={cols}
-            onValueChange={onColsChange}
+            onValueChange={(v) => {
+              const next = COLS_OPTIONS.find((option) => option.value === v);
+              if (next) onColsChange(next.value);
+            }}
           />
         </Row>
         {cols === "status" && (
           <Row align="center" gap="sm">
             <span className="text-sm text-muted-foreground">Group by</span>
-            <ViewSwitcher
-              ariaLabel="Board swimlanes"
+            <Picker
+              mode="segmented"
+              label="Board swimlanes"
               options={LANE_OPTIONS}
               value={lane ?? "none"}
-              onValueChange={(v) => onLaneChange(v === "none" ? null : v)}
+              onValueChange={(v) => {
+                const next = LANE_OPTIONS.find((option) => option.value === v);
+                if (next)
+                  onLaneChange(next.value === "none" ? null : next.value);
+              }}
             />
           </Row>
         )}

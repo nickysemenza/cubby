@@ -15,15 +15,17 @@ import {
 } from "~/app/meals/meal-search";
 import { ShoppingListPage } from "~/app/meals/shopping-list-page";
 import { pageTitle } from "~/lib/page-title";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Page } from "~/ui/page/Page";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
-const VIEW_OPTIONS: ViewSwitcherOption<ShoppingListView>[] = [
-  { value: "list", label: "List", icon: ListIcon },
-  { value: "matrix", label: "Matrix", icon: GridNineIcon },
+const VIEW_OPTIONS: readonly (PickerOption & { value: ShoppingListView })[] = [
+  { value: "list", label: "List", icon: <ListIcon className="size-4" /> },
+  {
+    value: "matrix",
+    label: "Matrix",
+    icon: <GridNineIcon className="size-4" />,
+  },
 ];
 
 export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
@@ -43,11 +45,16 @@ function ShoppingListRoute() {
       title="Shopping list"
       layout="full"
       actions={
-        <ViewSwitcher
-          ariaLabel="Shopping list view"
+        <Picker
+          mode="segmented"
+          label="Shopping list view"
           options={VIEW_OPTIONS}
           value={view ?? "list"}
-          onValueChange={(next) =>
+          onValueChange={(value) => {
+            const next = VIEW_OPTIONS.find(
+              (option) => option.value === value,
+            )?.value;
+            if (!next) return;
             void navigate({
               to: "/meals/shopping-list",
               // The default maps to undefined so stripSearchParams keeps a
@@ -57,8 +64,8 @@ function ShoppingListRoute() {
                 view: next === "list" ? undefined : next,
               }),
               replace: true,
-            })
-          }
+            });
+          }}
         />
       }
     >

@@ -33,6 +33,8 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import {
   RecordDot,
@@ -54,7 +56,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { ChoiceSwitcher, ViewSwitcher } from "~/ui/primitives/view-switcher";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 type EntityTimelineMode = "events" | "lifecycles";
@@ -92,14 +93,19 @@ export interface EntityTimelineProps<
   controlsPlacement?: "body" | "band" | undefined;
 }
 
-const MODE_OPTIONS = [
-  { value: "events", label: "Events", icon: ClockIcon },
-  { value: "lifecycles", label: "Lifecycles", icon: CalendarBlankIcon },
-] as const satisfies readonly {
-  value: EntityTimelineMode;
-  label: string;
-  icon: typeof ClockIcon;
-}[];
+const MODE_OPTIONS: readonly (PickerOption & { value: EntityTimelineMode })[] =
+  [
+    {
+      value: "events",
+      label: "Events",
+      icon: <ClockIcon className="size-4" />,
+    },
+    {
+      value: "lifecycles",
+      label: "Lifecycles",
+      icon: <CalendarBlankIcon className="size-4" />,
+    },
+  ];
 
 /**
  * Kind → mark colour. Product movements keep their ledger tones; audit and
@@ -172,14 +178,16 @@ function TimelineLink({
   );
 }
 
-const ORDER_OPTIONS = [
-  { value: "desc", label: "Newest", icon: ArrowDownIcon },
-  { value: "asc", label: "Oldest", icon: ArrowUpIcon },
-] as const satisfies readonly {
+const ORDER_OPTIONS: readonly (PickerOption & {
   value: EntityTimelineOrder;
-  label: string;
-  icon: typeof ArrowDownIcon;
-}[];
+})[] = [
+  {
+    value: "desc",
+    label: "Newest",
+    icon: <ArrowDownIcon className="size-4" />,
+  },
+  { value: "asc", label: "Oldest", icon: <ArrowUpIcon className="size-4" /> },
+];
 
 /** One labelled From / To chip of the band. */
 function BandDate({
@@ -238,12 +246,18 @@ function ControlsBand({
       className="flex h-10 [scrollbar-width:none] items-center gap-3 overflow-x-auto border-b border-border bg-card px-2 [&::-webkit-scrollbar]:hidden"
     >
       {hasRows && (
-        <ViewSwitcher
-          ariaLabel="Timeline mode"
+        <Picker
+          mode="segmented"
+          label="Timeline mode"
           options={MODE_OPTIONS}
           value={state.mode}
-          compactOnMobile
-          onValueChange={(value) => onChange({ mode: value })}
+          iconOnlyOnPhone
+          onValueChange={(value) => {
+            const choice = MODE_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) onChange({ mode: choice.value });
+          }}
         />
       )}
       <BandDate
@@ -258,12 +272,16 @@ function ControlsBand({
         min={state.from}
         onChange={(to) => onChange({ to })}
       />
-      <ChoiceSwitcher
-        ariaLabel="Timeline order"
+      <Picker
+        mode="segmented"
+        label="Timeline order"
         options={ORDER_OPTIONS}
         value={state.order}
-        compactOnMobile
-        onValueChange={(order) => onChange({ order })}
+        iconOnlyOnPhone
+        onValueChange={(value) => {
+          const choice = ORDER_OPTIONS.find((option) => option.value === value);
+          if (choice) onChange({ order: choice.value });
+        }}
       />
       {cohort && (
         <span className="ml-auto shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
@@ -327,12 +345,18 @@ function Controls({
         </Button>
       </Row>
       {hasRows && (
-        <ViewSwitcher
-          ariaLabel="Timeline mode"
+        <Picker
+          mode="segmented"
+          label="Timeline mode"
           options={MODE_OPTIONS}
           value={mode}
-          compactOnMobile
-          onValueChange={(value) => onChange({ mode: value })}
+          iconOnlyOnPhone
+          onValueChange={(value) => {
+            const choice = MODE_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) onChange({ mode: choice.value });
+          }}
         />
       )}
     </Row>

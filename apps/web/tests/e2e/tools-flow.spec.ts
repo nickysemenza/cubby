@@ -44,7 +44,10 @@ test("tool Flow keeps group order across pagination, jumps to unloaded groups, a
   }
 
   await gotoAuthenticatedPage(page, `/tools?q=${encodeURIComponent(prefix)}`);
-  await page.getByRole("button", { name: "Flow view", exact: true }).click();
+  await page
+    .getByRole("group", { name: "Tools view" })
+    .getByRole("button", { name: "Flow", exact: true })
+    .click();
 
   const flow = page.getByTestId("grouped-flow");
   const firstMarker = flow.locator(

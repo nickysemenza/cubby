@@ -21,6 +21,8 @@ import {
   entityIntegrity,
   integrityProblems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
@@ -33,7 +35,6 @@ import {
 } from "~/ui/primitives/card";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { StatTile } from "~/ui/primitives/stat-tile";
-import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
   type EntityGraphLens,
@@ -44,14 +45,18 @@ type EntityRow = IntegrityCatalog["entities"][number];
 type EntityRelationship = EntityRow["relationships"][number];
 type IntegrityLens = EntityGraphLens | "physical";
 
-const LENS_OPTIONS: {
-  value: IntegrityLens;
-  label: string;
-  icon: typeof PathIcon;
-}[] = [
-  { value: "logical", label: "Logical", icon: PathIcon },
-  { value: "physical", label: "Physical", icon: DatabaseIcon },
-  { value: "health", label: "Health", icon: HeartbeatIcon },
+const LENS_OPTIONS: readonly (PickerOption & { value: IntegrityLens })[] = [
+  { value: "logical", label: "Logical", icon: <PathIcon className="size-4" /> },
+  {
+    value: "physical",
+    label: "Physical",
+    icon: <DatabaseIcon className="size-4" />,
+  },
+  {
+    value: "health",
+    label: "Health",
+    icon: <HeartbeatIcon className="size-4" />,
+  },
 ];
 
 const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
@@ -151,10 +156,16 @@ export function EntityIntegrityTab({
           One node per entity — click a node (or a chip below) to inspect its
           relationships, incoming edges, and lifecycle dispositions.
         </p>
-        <ViewSwitcher<IntegrityLens>
-          ariaLabel="Graph lens"
+        <Picker
+          mode="segmented"
+          label="Graph lens"
           value={lens}
-          onValueChange={setLens}
+          onValueChange={(value) => {
+            const choice = LENS_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) setLens(choice.value);
+          }}
           options={LENS_OPTIONS}
         />
       </Row>

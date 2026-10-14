@@ -1102,7 +1102,7 @@ describe("useAutoFieldSuggestion", () => {
           name: "Kitchen Remodel",
           presentation: {
             group: { id: "suggested", label: "Suggested", order: -1 },
-            status: { label: "92%" },
+            trailing: [{ text: "92%" }],
           },
         }),
         expect.objectContaining({
@@ -1110,7 +1110,7 @@ describe("useAutoFieldSuggestion", () => {
           name: "Deck Build",
           presentation: {
             group: { id: "suggested", label: "Suggested", order: -1 },
-            status: { label: "5%" },
+            trailing: [{ text: "5%" }],
           },
         }),
       ]);

@@ -74,7 +74,11 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -117,7 +121,11 @@ export default defineEntity({
             { value: "disabled", label: "Disabled" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         validation: {
           read: vendorAccountStatus,
           create: vendorAccountStatus.default("active"),

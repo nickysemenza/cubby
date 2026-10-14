@@ -26,7 +26,7 @@ import { z } from "zod";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { EntityIcon, entityLabel } from "~/entity/entities";
-import { compactFieldText } from "~/entity/entity-display";
+import { compactFieldText } from "~/entity/field-text";
 import { locationToSegments } from "~/features/locations/location-breadcrumb";
 import { LocationIcon } from "~/features/locations/location-icons";
 import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";

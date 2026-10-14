@@ -28,6 +28,8 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
+import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
@@ -142,18 +144,27 @@ export function AddToMeal({
     operations,
   });
 
-  const mealOptions = useMemo(
-    () => [
-      { value: NEW_MEAL, label: "Create a new meal" },
-      ...(existingMeals.data?.map((meal) => ({
-        value: meal.id,
-        // The kind rides the label for non-cooked meals so the consequence is
-        // visible before selecting, not only after.
-        label:
-          meal.mealKind === "cooked"
-            ? `${mealListLabel(meal)} (${countLabel(meal.recipes.length, "recipe")})`
-            : `${mealListLabel(meal)} — ${MEAL_KIND_LABELS[meal.mealKind]}`,
-      })) ?? []),
+  // The NEW_MEAL sentinel is not a meal code, so the record picker holds it
+  // as-is ahead of the day's meal records.
+  const mealItems = useMemo(
+    (): ComboboxItem[] => [
+      { id: NEW_MEAL, name: "Create a new meal" },
+      ...(existingMeals.data?.map((meal) => {
+        // The picture only: the day is already chosen, so the row's date
+        // projection would repeat it.
+        const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
+        return {
+          id,
+          shortcode,
+          thumb,
+          // The kind rides the label for non-cooked meals so the consequence
+          // is visible before selecting, not only after.
+          name:
+            meal.mealKind === "cooked"
+              ? `${mealListLabel(meal)} (${countLabel(meal.recipes.length, "recipe")})`
+              : `${mealListLabel(meal)} — ${MEAL_KIND_LABELS[meal.mealKind]}`,
+        };
+      }) ?? []),
     ],
     [existingMeals.data],
   );
@@ -264,10 +275,11 @@ export function AddToMeal({
             <Label>Meal</Label>
             <Picker
               mode="choose"
-              options={mealOptions}
-              value={target}
+              entity="meal"
+              items={mealItems}
+              value={mealItems.find((item) => item.id === target) ?? null}
               disabled={existingMeals.isLoading}
-              onValueChange={(value) => setTarget(value ?? NEW_MEAL)}
+              setValue={(item) => setTarget(item?.id ?? NEW_MEAL)}
               label="meal"
             />
           </Stack>

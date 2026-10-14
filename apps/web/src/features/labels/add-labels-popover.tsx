@@ -1,27 +1,29 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
 import { countLabel } from "@cubby/shared/pluralize";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
-import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import { LocationPickerThumb } from "~/features/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/features/locations/location-type-theme";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
+/**
+ * Adds a location's label, or every QR-eligible child's, to the sheet. The
+ * location is chosen with the shared location picker; the two actions apply
+ * to the chosen record.
+ */
 export function AddLabelsPopover({
   codes,
   onCodesChange,
@@ -31,31 +33,8 @@ export function AddLabelsPopover({
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 });
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Focus search input when popover opens
-  useEffect(() => {
-    if (open) {
-      // Small delay to let the popover render
-      const timer = setTimeout(() => inputRef.current?.focus(), 50);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  // `location.search`, not `.list`: this roster only renders name + breadcrumb
-  // + cover, so it has no use for `.list`'s inventory/product/pricing payload.
-  const { data: searchResults, isLoading } = useQuery({
-    ...location.search.queryOptions({
-      filters: { nameFilter: debouncedSearch || undefined },
-      pagination: { pageIndex: 0, pageSize: 10 },
-      sort: { orderBy: "name", direction: "asc" },
-    }),
-    enabled: open,
-  });
-
-  const locations = searchResults?.data ?? [];
+  const [selected, setSelected] =
+    useState<ComboboxItem<LocationShortcode> | null>(null);
 
   function mergeCodes(newShortcodes: string[]) {
     const existing =
@@ -67,19 +46,21 @@ export function AddLabelsPopover({
     onCodesChange(merged.join(","));
   }
 
-  function handleAddSingle(location: {
+  async function handleAddSingle(location: {
     id: LocationShortcode;
     name: string;
-    type: LocationType | null;
   }) {
-    if (!typeSupportsQrCode(location.type)) {
-      toast.warning(
-        `${location.name} is a ${location.type} and doesn't support QR labels`,
-      );
+    const full = await queryClient.fetchQuery(
+      entityDetailFor("location").queryOptions(location.id),
+    );
+    if (!full) {
+      toast.warning(`${location.name} no longer exists`);
       return;
     }
-    if (!location.id) {
-      toast.warning(`${location.name} has no shortcode`);
+    if (!typeSupportsQrCode(full.type)) {
+      toast.warning(
+        `${location.name} is a ${full.type} and doesn't support QR labels`,
+      );
       return;
     }
     mergeCodes([location.id]);
@@ -116,7 +97,13 @@ export function AddLabelsPopover({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSelected(null);
+      }}
+    >
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
@@ -125,82 +112,41 @@ export function AddLabelsPopover({
           </Button>
         }
       />
-      {/* Keep the full 24rem desktop width: the Add/Children pair takes a fixed
-          ~7rem, and at narrower widths the breadcrumb can drop exactly the
-          "lower"/"upper" suffix it exists to disambiguate. Phone viewports cap
-          the surface to their gutter and let the ancestry line wrap instead. */}
       <PopoverContent
         align="start"
         aria-label="Add labels"
-        className="w-[calc(100vw-1rem)] p-0 sm:w-96"
+        className="w-[calc(100vw-1rem)] sm:w-96"
       >
-        <div className="flex items-center gap-2 border-b px-2 py-2">
-          <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            type="text"
-            aria-label="Search locations"
+        <Stack gap="sm">
+          <EntityReferencePicker
+            entity="location"
+            label="Location"
             placeholder="Search locations..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
+            openOnMount
+            value={selected}
+            setValue={setSelected}
           />
-        </div>
-        <div className="max-h-64 overflow-y-auto p-1">
-          {isLoading ? (
-            <Description className="px-2 py-4 text-center">
-              Searching...
-            </Description>
-          ) : locations.length === 0 ? (
-            <Description className="px-2 py-4 text-center">
-              No locations found
-            </Description>
-          ) : (
-            locations.map((loc) => (
-              <div
-                key={loc.id}
-                // No vertical padding: the thumbnail is full-bleed and its
-                // own min-height sets the row height, matching the location
-                // combobox rows.
-                className="flex items-center gap-2 px-2 text-sm"
+          {selected && (
+            <Row gap="sm" justify="end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleAddChildren(selected)}
               >
-                <LocationPickerThumb
-                  imageUrl={loc.coverImage?.url}
-                  type={loc.type}
-                />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{loc.name}</span>
-                  {loc.ancestors.length > 0 && (
-                    <span className="text-xs break-words text-muted-foreground sm:truncate">
-                      {loc.ancestors.map((a) => a.name).join(" › ")}
-                    </span>
-                  )}
-                </span>
-                <div className="flex shrink-0 gap-1">
-                  {typeSupportsQrCode(loc.type) && loc.id && (
-                    <button
-                      type="button"
-                      aria-label={`Add ${loc.name}`}
-                      className="min-h-11 min-w-11 px-2 text-xs text-primary hover:bg-muted sm:min-h-0 sm:min-w-0 sm:px-1.5 sm:py-0.5" /* tight */
-                      onClick={() => handleAddSingle(loc)}
-                    >
-                      Add
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={`Add children of ${loc.name}`}
-                    className="flex min-h-11 items-center gap-1 px-2 text-xs text-primary hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5" /* tight */
-                    onClick={() => void handleAddChildren(loc)}
-                  >
-                    <UsersIcon className="size-3" />
-                    Children
-                  </button>
-                </div>
-              </div>
-            ))
+                <UsersIcon className="size-4" />
+                Add children
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleAddSingle(selected)}
+              >
+                Add {selected.name}
+              </Button>
+            </Row>
           )}
-        </div>
+        </Stack>
       </PopoverContent>
     </Popover>
   );

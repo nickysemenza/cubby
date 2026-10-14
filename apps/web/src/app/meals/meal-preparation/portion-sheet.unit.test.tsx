@@ -5,8 +5,14 @@ import {
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { useMutation } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  fireEvent,
+  render as renderUi,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -96,6 +102,17 @@ const source = view.preparations[0]!;
 const targetMeals = [source.portions[0]!.targetMeal];
 const eaters = [source.portions[0]!.eater];
 
+// The eater and meal pickers are record pickers, which read the query cache.
+let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
+afterEach(() => {
+  harness?.dispose();
+  harness = undefined;
+});
+function render(ui: ReactElement) {
+  harness ??= createBrowserTestHarness();
+  return renderUi(ui, { wrapper: harness.wrapper });
+}
+
 describe("PortionSheet", () => {
   it("sends its rendered save through the meal preparation operation contract", async () => {
     const requests: unknown[] = [];
@@ -110,7 +127,7 @@ describe("PortionSheet", () => {
         });
       },
     );
-    const harness = createBrowserTestHarness();
+    const operationHarness = createBrowserTestHarness();
 
     function OperationBackedSheet() {
       const save = useMutation(saveOperation.mutationOptions());
@@ -128,7 +145,9 @@ describe("PortionSheet", () => {
     }
 
     try {
-      render(<OperationBackedSheet />, { wrapper: harness.wrapper });
+      renderUi(<OperationBackedSheet />, {
+        wrapper: operationHarness.wrapper,
+      });
       fireEvent.click(screen.getByRole("button", { name: "Save portions" }));
       await waitFor(() => expect(requests).toHaveLength(1));
       expect(requests[0]).toMatchObject({
@@ -138,7 +157,7 @@ describe("PortionSheet", () => {
         changes: [],
       });
     } finally {
-      harness.dispose();
+      operationHarness.dispose();
     }
   });
 

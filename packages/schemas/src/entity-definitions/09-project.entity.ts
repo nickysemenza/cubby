@@ -225,6 +225,7 @@ export default defineEntity({
           options: selectControlOptions.projectStatus,
         },
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           list: true,
           detail: true,
         },
@@ -435,6 +436,7 @@ Rules:
         nullable: true,
         control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
         display: {
+          mobile: { slot: "trailing", priority: 10 },
           columnLabel: "Estimate",
           list: true,
           detail: true,

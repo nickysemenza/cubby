@@ -1,47 +1,8 @@
-import {
-  type CookbookShortcode,
-  cookbookShortcode,
-} from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
-import { useId, useMemo } from "react";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { useId } from "react";
 
-import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { Picker } from "~/ui/combobox/picker";
-import type { PickerOption } from "~/ui/combobox/picker-option";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Row } from "~/ui/layout";
-import { Image } from "~/ui/primitives/image";
-
-/**
- * The Cookbook list as picker options, led by an empty-value option
- * (`value: ""`) named `emptyLabel`. Each row carries the cookbook's cover.
- */
-export function useCookbookOptions() {
-  const { data: cookbooks, isLoading } = useQuery(
-    cookbook.list.queryOptions(null),
-  );
-  const options = useMemo(
-    () =>
-      (cookbooks ?? []).map((book): PickerOption => {
-        const cover = book.displayImages[0]?.url;
-        return {
-          value: book.id,
-          label: book.name,
-          ...(cover && {
-            icon: (
-              <Image
-                src={cover}
-                alt=""
-                displayWidth={20}
-                className="size-5 rounded-[3px] object-cover"
-              />
-            ),
-          }),
-        };
-      }),
-    [cookbooks],
-  );
-  return { options, isLoading };
-}
 
 interface CookbookSelectProps {
   value: CookbookShortcode | undefined;
@@ -49,33 +10,25 @@ interface CookbookSelectProps {
 }
 
 /**
- * "Cookbook" scope filter: a labeled picker over the Cookbook list with an
- * "All cookbooks" empty option. Owns the query and the string →
- * CookbookShortcode boundary parse so callers deal only in branded ids.
+ * "Cookbook" scope filter: a labeled Cookbook record picker whose cleared
+ * state is "All cookbooks". Callers deal only in branded ids.
  */
 export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
   const inputId = useId();
-  const { options: books, isLoading } = useCookbookOptions();
-  const options = useMemo(
-    () => [{ value: "", label: "All cookbooks" }, ...books],
-    [books],
-  );
-
   return (
     <Row align="center" gap="sm" className="w-fit text-sm">
       <label htmlFor={inputId} className="text-muted-foreground">
         Cookbook
       </label>
-      <Picker
+      <EntityReferencePicker
+        entity="cookbook"
         inputId={inputId}
         label="Cookbook"
         className="w-48"
-        options={options}
-        isLoading={isLoading}
-        value={value ?? ""}
-        onValueChange={(next) =>
-          onChange(next ? cookbookShortcode.parse(next) : undefined)
-        }
+        placeholder="All cookbooks"
+        clearable
+        value={value ? { id: value, name: value } : null}
+        setValue={(item) => onChange(item?.id)}
       />
     </Row>
   );

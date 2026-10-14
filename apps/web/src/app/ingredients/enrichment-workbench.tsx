@@ -29,6 +29,8 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { createNameColumn } from "~/ui/data-table/columnHelpers";
 import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
@@ -50,10 +52,6 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Progress } from "~/ui/primitives/progress";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 import {
   type EquivalenceDraft,
@@ -72,7 +70,9 @@ import { EnrichmentWorkbenchInspector, type Suggestion } from "./workbench-row";
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 type WorkbenchView = "browse" | "review";
 
-const WORKBENCH_VIEW_OPTIONS: ViewSwitcherOption<WorkbenchView>[] = [
+const WORKBENCH_VIEW_OPTIONS: readonly (PickerOption & {
+  value: WorkbenchView;
+})[] = [
   { value: "browse", label: "Browse" },
   { value: "review", label: "Review" },
 ];
@@ -186,12 +186,18 @@ function WorkbenchFilterToolbar({
           Hide cookbook-only ({cookbookOnlyCount})
         </Button>
       )}
-      <ViewSwitcher
+      <Picker
+        mode="segmented"
         className="ml-auto"
-        ariaLabel="Workbench view"
+        label="Workbench view"
         options={WORKBENCH_VIEW_OPTIONS}
         value={view}
-        onValueChange={onViewChange}
+        onValueChange={(next) => {
+          const choice = WORKBENCH_VIEW_OPTIONS.find(
+            (option) => option.value === next,
+          );
+          if (choice) onViewChange(choice.value);
+        }}
       />
     </Row>
   );

@@ -122,7 +122,7 @@ describe("EntityTimeline", () => {
       screen.getByText("Toolco · Order 42").compareDocumentPosition(unknown) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Lifecycles view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lifecycles" }));
     expect(
       within(screen.getByRole("region", { name: "Date unknown" })).getByText(
         "Discarded free tool",
@@ -147,9 +147,7 @@ describe("EntityTimeline", () => {
       "href",
       "/expenses/EXP-2222",
     );
-    expect(
-      screen.queryByRole("button", { name: "Lifecycles view" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Lifecycles" })).toBeNull();
   });
 
   it("switches to lifecycle rows and marks an unconfident span as inferred", async () => {
@@ -162,7 +160,7 @@ describe("EntityTimeline", () => {
       { wrapper: harness.wrapper },
     );
     expect(await screen.findByText("Toolco · Order 42")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Lifecycles view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lifecycles" }));
     expect(await screen.findByText("Record")).toBeInTheDocument();
     expect(
       screen.getAllByTitle("Uncertain after Feb 1, 2026").length,

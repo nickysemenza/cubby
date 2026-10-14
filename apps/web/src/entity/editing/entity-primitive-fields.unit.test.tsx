@@ -12,7 +12,7 @@ import type { EntitySuggestionsOperations } from "~/features/ai/field-suggestion
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 
 import {
   buildFieldGroups,

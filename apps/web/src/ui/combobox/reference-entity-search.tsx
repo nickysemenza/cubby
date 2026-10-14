@@ -10,6 +10,7 @@ import {
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
+import { isReferencePickerEntity } from "./reference-picker-entities";
 import { treePickerItems } from "./tree-items";
 import {
   useEntityListSource,
@@ -119,34 +120,6 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
     },
   });
 }
-
-/** Manifest reference targets with an assignment picker. Multi-value and media
- * relations intentionally stay with their dedicated controls. */
-const referencePickerEntities = new Set<PickerEntity>([
-  "ingredient",
-  "location",
-  "product",
-  "productCategory",
-  "spendingCategory",
-  "recipe",
-  "project",
-  "task",
-  "vendor",
-  "financialAccount",
-  "purchase",
-  "ledgerParty",
-  "plant",
-  "planting",
-  "vendorAccount",
-]);
-
-export const isReferencePickerEntity = (
-  entity: string,
-): entity is PickerEntity => {
-  // SAFETY: Set membership is the runtime proof that this arbitrary string is
-  // one of the closed PickerEntity literals.
-  return referencePickerEntities.has(entity as PickerEntity);
-};
 
 /** The generic (non-vendor, non-productCategory) picker's search provider: a
  * direct `useEntityListSource` call in the render-prop shape `PickerEntity`'s

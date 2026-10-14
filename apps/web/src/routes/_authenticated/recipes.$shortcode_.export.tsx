@@ -32,16 +32,14 @@ import { RecipeSpecView } from "~/features/recipes/RecipeSpecView";
 import { useRecipeTree } from "~/features/recipes/useRecipeTree";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { pageTitle } from "~/lib/page-title";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDetailTitle } from "~/ui/hooks/useDocumentTitle";
 import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
 import { Row } from "~/ui/layout";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
@@ -49,12 +47,20 @@ import { recipeExportSearchSchema } from "./-recipe-export-search";
 
 type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
 
-const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
-  { value: "prep", label: "Prep sheet", icon: ListChecksIcon },
-  { value: "read", label: "Read", icon: BookOpenIcon },
-  { value: "nested", label: "Spec", icon: TreeViewIcon },
-  { value: "matrix", label: "Matrix", icon: GridNineIcon },
-  { value: "flow", label: "Flow", icon: GitBranchIcon },
+const FORMAT_OPTIONS: readonly (PickerOption & { value: ExportFormat })[] = [
+  {
+    value: "prep",
+    label: "Prep sheet",
+    icon: <ListChecksIcon className="size-4" />,
+  },
+  { value: "read", label: "Read", icon: <BookOpenIcon className="size-4" /> },
+  { value: "nested", label: "Spec", icon: <TreeViewIcon className="size-4" /> },
+  {
+    value: "matrix",
+    label: "Matrix",
+    icon: <GridNineIcon className="size-4" />,
+  },
+  { value: "flow", label: "Flow", icon: <GitBranchIcon className="size-4" /> },
 ];
 
 const searchDefaults = {
@@ -154,11 +160,17 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
     <Page variant="bare">
       <div className="mx-auto max-w-3xl">
         <Row align="center" gap="sm" wrap className="mb-4 print:hidden">
-          <ViewSwitcher
-            ariaLabel="Export format"
+          <Picker
+            mode="segmented"
+            label="Export format"
             options={FORMAT_OPTIONS}
             value={format}
-            onValueChange={setFormat}
+            onValueChange={(value) => {
+              const choice = FORMAT_OPTIONS.find(
+                (option) => option.value === value,
+              );
+              if (choice) setFormat(choice.value);
+            }}
           />
           <RecipeScaleControl
             recipe={recipe}

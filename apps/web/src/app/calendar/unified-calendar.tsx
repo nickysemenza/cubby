@@ -29,6 +29,7 @@ import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
@@ -37,7 +38,6 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
 import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
-import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
@@ -525,11 +525,17 @@ export function UnifiedCalendar({
           </h2>
           <Row align="center" gap="xs" className="ml-auto">
             <PeriodActions render={periodActions} range={activePeriod} />
-            <ChoiceSwitcher
-              ariaLabel="Calendar period"
+            <Picker
+              mode="segmented"
+              label="Calendar period"
               options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
               value={period}
-              onValueChange={onPeriodChange}
+              onValueChange={(v) => {
+                const next = PERIOD_OPTIONS.find(
+                  (option) => option.value === v,
+                );
+                if (next) onPeriodChange(next.value);
+              }}
             />
           </Row>
         </Row>

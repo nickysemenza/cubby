@@ -25,16 +25,13 @@ import {
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { useWakeLock } from "~/ui/hooks/useWakeLock";
 import { Row, Stack } from "~/ui/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
-import {
-  ChoiceSwitcher,
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 import EntityImageList from "../../entity/components/EntityImageList";
 import { useRecipeCostingData } from "../../ui/hooks/useRecipeCostingData";
@@ -67,12 +64,24 @@ const RecipeCostTreemap = lazy(
  * sub-modes — one flat row of tabs. */
 export type RecipeViewMode = "read" | "spec" | "data" | "prep" | "flow";
 
-const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
-  { value: "read", label: "Read", icon: BookOpenIcon },
-  { value: "spec", label: "Spec", icon: ClipboardTextIcon },
-  { value: "data", label: "Data", icon: TableIcon },
-  { value: "prep", label: "Prep", icon: ListChecksIcon },
-  { value: "flow", label: "Flow", icon: GitBranchIcon },
+const RECIPE_VIEW_OPTIONS: readonly (PickerOption & {
+  value: RecipeViewMode;
+})[] = [
+  { value: "read", label: "Read", icon: <BookOpenIcon className="size-4" /> },
+  {
+    value: "spec",
+    label: "Spec",
+    icon: <ClipboardTextIcon className="size-4" />,
+  },
+  { value: "data", label: "Data", icon: <TableIcon className="size-4" /> },
+  { value: "prep", label: "Prep", icon: <ListChecksIcon className="size-4" /> },
+  { value: "flow", label: "Flow", icon: <GitBranchIcon className="size-4" /> },
+];
+const NUTRITION_BASIS_OPTIONS: readonly (PickerOption & {
+  value: "whole" | "serving";
+})[] = [
+  { value: "whole", label: "Whole scaled recipe" },
+  { value: "serving", label: "Per serving" },
 ];
 
 function RecipeViewContent({
@@ -476,24 +485,33 @@ function RecipeWorkflowControls({
           onFactorChange={setFactor}
         />
         {hasServingBasis ? (
-          <ChoiceSwitcher
-            ariaLabel="Nutrition basis"
-            options={[
-              { value: "whole", label: "Whole scaled recipe" },
-              { value: "serving", label: "Per serving" },
-            ]}
+          <Picker
+            mode="segmented"
+            label="Nutrition basis"
+            options={NUTRITION_BASIS_OPTIONS}
             value={nutritionBasis}
-            onValueChange={onNutritionBasisChange}
+            onValueChange={(value) => {
+              const choice = NUTRITION_BASIS_OPTIONS.find(
+                (option) => option.value === value,
+              );
+              if (choice) onNutritionBasisChange(choice.value);
+            }}
           />
         ) : null}
         {/* Five labelled segments measured 395px on Linux Chromium, wider
             than a 402px phone's content box; icons keep it on one line. */}
-        <ViewSwitcher
-          ariaLabel="Recipe view"
-          compactOnMobile
+        <Picker
+          mode="segmented"
+          label="Recipe view"
+          iconOnlyOnPhone
           options={RECIPE_VIEW_OPTIONS}
           value={viewMode}
-          onValueChange={setViewMode}
+          onValueChange={(value) => {
+            const choice = RECIPE_VIEW_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) setViewMode(choice.value);
+          }}
         />
         <DetailAction>
           <Link

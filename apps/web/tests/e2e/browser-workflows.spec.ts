@@ -172,7 +172,10 @@ test("recipe scaling and shopping checkmarks keep their existing behavior", asyn
   const staple = uniqueName(testInfo, "Recipe oats");
   const { recipe } = await seedStaplePlanningPrerequisite(page, staple);
   await gotoAuthenticatedPage(page, `/recipes/${recipe.id}`);
-  await page.getByRole("button", { name: "Scale 2×", exact: true }).click();
+  await page
+    .getByRole("group", { name: "Scale recipe" })
+    .getByRole("button", { name: "2×", exact: true })
+    .click();
   await expect(page).toHaveURL(/scale=2/);
   await gotoAuthenticatedPage(
     page,

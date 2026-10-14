@@ -813,7 +813,10 @@ function SearchPicker<TId extends string>({
       normalizedQuery.toLocaleLowerCase(),
   );
   const parsedCode = parseShortcode(normalizedQuery);
-  const entityPrefix = entity ? entityManifest[entity].shortcodePrefix : null;
+  // The manifest prefix carries its dash ("PRD-").
+  const entityPrefix = entity
+    ? entityManifest[entity].shortcodePrefix.replace(/-$/u, "")
+    : null;
   const wrongPrefix =
     entity != null && parsedCode != null && parsedCode.type !== entity;
   const searchingForCode =

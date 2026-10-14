@@ -132,7 +132,9 @@ describe("buildLocationComboboxItem tree presentation", () => {
       "location",
     );
     expect(item.name).toBe("Workshop drawer");
-    expect(item.detail).toBe("Garage › Workbench");
+    // The tree header and indent show the path; it stays searchable.
+    expect(item.detail).toBeUndefined();
+    expect(item.aliases).toContain("Garage › Workbench");
     expect(item.presentation).toMatchObject({
       group: { id: "LOC-1ABC", label: "Garage" },
       depth: 2,
@@ -189,38 +191,20 @@ describe("buildLocationComboboxItem tree presentation", () => {
 });
 
 describe("location search picker imagery", () => {
-  it.each([
-    ["live", "drawer"],
-    ["missing", null],
-    ["retired", "quarter-crate"],
-  ])("uses the full location tile for a %s type hint", (_label, typeHint) => {
-    const item = buildSearchHitComboboxItem(
-      locationSearchHit({ typeHint }),
+  it("pictures a location by its cover, falling back to its type glyph", () => {
+    const pictured = buildSearchHitComboboxItem(
+      locationSearchHit({ typeHint: "drawer" }),
       "location",
     );
-    const { container } = render(item.icon);
-
-    expect(container.firstElementChild).toHaveStyle({
-      width: "52px",
-      minHeight: "52px",
-    });
-    expect(container.querySelector("img")).toHaveAttribute(
-      "src",
+    expect(pictured.thumb?.imageUrl).toBe(
       "https://example.com/workshop-drawer.jpg",
     );
-  });
-
-  it("keeps the full location tile when no image is available", () => {
-    const item = buildSearchHitComboboxItem(
+    const bare = buildSearchHitComboboxItem(
       locationSearchHit({ imageUrl: null, typeHint: null }),
       "location",
     );
-    const { container } = render(item.icon);
-
-    expect(container.firstElementChild).toHaveStyle({
-      width: "52px",
-      minHeight: "52px",
-    });
+    expect(bare.thumb?.imageUrl).toBeNull();
+    const { container } = render(bare.thumb?.fallback);
     expect(container.querySelector("svg")).not.toBeNull();
   });
 });
@@ -248,8 +232,10 @@ describe("product stock picker evidence", () => {
         .presentation,
     ).toEqual({
       group: { id: "needs-stock", label: "Needs stocking", order: 0 },
-      status: { label: "Need 1", tone: "positive" },
-      facts: ["0 on hand / 1 expected"],
+      trailing: [
+        { text: "Need 1", tone: "positive" },
+        { text: "0 on hand / 1 expected" },
+      ],
     });
   });
 
@@ -261,11 +247,7 @@ describe("product stock picker evidence", () => {
     };
     const item = buildProductComboboxItem(photographed, "stock");
 
-    const { container } = render(item.icon);
-    expect(container.querySelector("img")).toHaveAttribute(
-      "src",
-      photographed.coverImageUrl,
-    );
+    expect(item.thumb?.imageUrl).toBe(photographed.coverImageUrl);
   });
 
   it("keeps a fully returned product visible below likely choices", () => {
@@ -284,8 +266,7 @@ describe("product stock picker evidence", () => {
       ).presentation,
     ).toEqual({
       group: { id: "other", label: "Other products", order: 2 },
-      status: { label: "Returned" },
-      facts: ["0 on hand / 0 expected"],
+      trailing: [{ text: "Returned" }, { text: "0 on hand" }],
     });
   });
 
@@ -303,8 +284,11 @@ describe("product stock picker evidence", () => {
     );
     expect(item.presentation).toMatchObject({
       group: { id: "check" },
-      status: { label: "Check quantity", tone: "warning" },
-      facts: ["Mixed units on hand", "1 line without quantity"],
+      trailing: [
+        { text: "Check quantity", tone: "warning" },
+        { text: "Mixed units on hand", tone: "warning" },
+        { text: "1 line without quantity", tone: "warning" },
+      ],
     });
   });
 
@@ -321,9 +305,9 @@ describe("product stock picker evidence", () => {
       "stock",
     );
 
-    expect(item.presentation).toMatchObject({
-      group: { id: "check" },
-      facts: ["Mixed units on hand"],
-    });
+    expect(item.presentation).toMatchObject({ group: { id: "check" } });
+    expect(item.presentation?.trailing?.map((chip) => chip.text)).toContain(
+      "Mixed units on hand",
+    );
   });
 });

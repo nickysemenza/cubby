@@ -171,6 +171,7 @@ export default defineEntity({
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           columnLabel: "Provider",
           list: true,
           detail: true,
@@ -253,7 +254,11 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         provenance: {
           kind: "derived",
           sources: [

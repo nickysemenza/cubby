@@ -70,7 +70,11 @@ export default defineEntity({
         key: "author",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: z.array(z.string()),
           create: null,
@@ -124,7 +128,11 @@ export default defineEntity({
       {
         key: "recipeCount",
         kind: "number",
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "recipe", relation: "recipes" }],
