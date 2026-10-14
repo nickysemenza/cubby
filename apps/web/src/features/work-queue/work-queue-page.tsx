@@ -54,15 +54,12 @@ import {
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
-import {
-  numberCellData,
-  selectCellData,
-  textCellData,
-} from "~/ui/data-table/cell-data";
+import { numberCellData, textCellData } from "~/ui/data-table/cell-data";
 import {
   createCurrencyColumn,
   createImageColumn,
   createPlainDateColumn,
+  createSelectColumn,
   renderOptionCell,
 } from "~/ui/data-table/columnHelpers";
 import {
@@ -373,23 +370,16 @@ function queueColumns(
       }),
     );
     add(
-      helper.accessor((row) => row.kind, {
-        id: "kind",
+      createSelectColumn(helper, "kind", {
         header: "Kind",
         size: 112,
-        meta: attachCubbyColumnMeta<QueueTableRow>({
-          mobile: { slot: "meta", priority: 0, label: "Kind" },
-          cellData: selectCellData<QueueTableRow>(
-            (row) => row.kind,
-            KIND_OPTIONS,
-          ),
-          filterConfig: {
-            placeholder: "Filter kind",
-            filterType: "select",
-            options: KIND_OPTIONS,
-          },
-        }),
-        cell: ({ row }) => renderOptionCell(row.original.kind, KIND_OPTIONS),
+        options: KIND_OPTIONS,
+        mobile: { slot: "meta", priority: 0, label: "Kind" },
+        filterConfig: {
+          placeholder: "Filter kind",
+          filterType: "select",
+          options: KIND_OPTIONS,
+        },
       }),
     );
     add(
@@ -530,24 +520,16 @@ function queueColumns(
       }),
     );
     add(
-      helper.accessor((row) => row.source, {
-        id: "source",
+      createSelectColumn(helper, "source", {
         header: "Source",
         size: 144,
-        meta: attachCubbyColumnMeta<QueueTableRow>({
-          mobile: { slot: "meta", priority: 3, label: "Source" },
-          cellData: selectCellData<QueueTableRow>(
-            (row) => row.source,
-            SOURCE_OPTIONS,
-          ),
-          filterConfig: {
-            placeholder: "Filter source",
-            filterType: "select",
-            options: SOURCE_OPTIONS,
-          },
-        }),
-        cell: ({ row }) =>
-          renderOptionCell(row.original.source, SOURCE_OPTIONS),
+        options: SOURCE_OPTIONS,
+        mobile: { slot: "meta", priority: 3, label: "Source" },
+        filterConfig: {
+          placeholder: "Filter source",
+          filterType: "select",
+          options: SOURCE_OPTIONS,
+        },
       }),
     );
   });
