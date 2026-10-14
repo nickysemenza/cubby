@@ -53,9 +53,18 @@ test("Sources group internal citations and open their entity", async ({
   });
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute("href", `/vendors/${vendor.id}`);
-  // Two documents: each one's citations start folded under their count.
-  await section.getByText("2 citations").click();
-  await expect(section.getByText("Synthetic tool identity.")).toBeVisible();
+  // Two documents: each one's citations start folded under their count. Sections above
+  // still load and shift the page, so a click can miss; open it until it is open.
+  const citations = section
+    .locator("details")
+    .filter({ hasText: "2 citations" });
+  await expect(async () => {
+    if (!(await citations.evaluate((el) => (el as HTMLDetailsElement).open)))
+      await citations.locator("summary").click();
+    await expect(section.getByText("Synthetic tool identity.")).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
   await expect(section.getByText("Synthetic maker evidence.")).toBeVisible();
   await expect(
     section.locator('a[href="https://example.test/specification"]'),
