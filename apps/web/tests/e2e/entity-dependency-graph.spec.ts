@@ -70,7 +70,7 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   await page.reload();
   await waitForAppHydration(page);
   await expect(find).toHaveValue(name);
-  await expect(types).toHaveValue("task");
+  await expect(types).toHaveText(/Tasks only/);
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
   await graphLink.click();
