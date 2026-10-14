@@ -21,6 +21,7 @@ import type {
   EntityKernelCoreBinding,
   EntityKernelContext,
 } from "./adapter";
+import { resolveCurrentMemberFilters } from "./current-member-filter";
 import { parseGroupBy, parseSorts, parseSchema } from "./list-input";
 
 type ListReadFailure = Parameters<typeof normalizeStartOperationError>[0];
@@ -41,7 +42,7 @@ export function defineProgressiveListOperations<
   E extends ListEntity,
   S extends EntityBindingSchemas,
 >(binding: EntityKernelCoreBinding<E, S>) {
-  const filtersFor = (input: z.output<typeof inputSchema>["filters"]) => {
+  const parseFilters = (input: z.output<typeof inputSchema>["filters"]) => {
     const { ids, ...rest } = z
       .object({ ids: z.array(z.string()).max(500).optional() })
       .passthrough()
@@ -53,6 +54,10 @@ export function defineProgressiveListOperations<
       ids === undefined ? {} : { ids },
     );
   };
+  const filtersFor = (
+    context: EntityKernelContext,
+    input: z.output<typeof inputSchema>["filters"],
+  ) => resolveCurrentMemberFilters(context, parseFilters(input));
   const reader = () => {
     if (!binding.repository.listRead)
       throw new Error(`Missing progressive list reader: ${binding.entity}`);
@@ -65,6 +70,7 @@ export function defineProgressiveListOperations<
     requested: readonly ListEnrichmentGroup[],
   ) => {
     const fields = listReadFields(binding.entity);
+    const filters = await filtersFor(context, { ids });
     const page = await withTrace(
       "entity.list.enrichment",
       () =>
@@ -77,7 +83,7 @@ export function defineProgressiveListOperations<
           () =>
             reader()(
               context,
-              filtersFor({ ids }),
+              filters,
               [],
               { pageIndex: 0, pageSize: 500 },
               {
@@ -105,7 +111,7 @@ export function defineProgressiveListOperations<
   const readBase = async (
     context: EntityKernelContext,
     input: z.output<typeof inputSchema>,
-    filters: ReturnType<typeof filtersFor>,
+    filters: ReturnType<typeof parseFilters>,
   ) => {
     const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
     const result = await withTrace(
@@ -137,7 +143,7 @@ export function defineProgressiveListOperations<
       const { pagination, result } = await readBase(
         context,
         input,
-        filtersFor(input.filters),
+        await filtersFor(context, input.filters),
       );
       const fields = listReadFields(binding.entity);
       return {
@@ -167,7 +173,7 @@ export function defineProgressiveListOperations<
         owners[group].some((field) => fields.includes(field)),
       );
       const input = inputSchema.parse(value);
-      const filters = filtersFor(input.filters);
+      const filters = await filtersFor(context, input.filters);
       const [{ pagination, result }, sums] = await Promise.all([
         readBase(context, input, filters),
         binding.repository.listSummary?.(context, filters),
@@ -287,7 +293,7 @@ export function defineProgressiveListOperations<
     },
     async summary(context: EntityKernelContext, value: unknown) {
       const input = inputSchema.parse(value);
-      const filters = filtersFor(input.filters);
+      const filters = await filtersFor(context, input.filters);
       const sums = await withTrace(
         "entity.list.summary",
         async () =>

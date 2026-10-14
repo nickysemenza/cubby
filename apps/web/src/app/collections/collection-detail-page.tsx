@@ -121,12 +121,8 @@ function formatSmartMatch(match: SmartCollectionMatch): string {
   const evidence = match.evidence.join(" · ");
   if (evidence) return evidence;
   switch (match.kind) {
-    case "effectiveOwnerEquals":
-      return `Owner is ${match.value}`;
     case "categoryEquals":
       return `Classification is ${match.value}`;
-    case "categoryFeatureEquals":
-      return `Classification feature is ${match.value}`;
     case "manufacturerEquals":
       return `Manufacturer is ${match.value}`;
     case "productTagEquals":

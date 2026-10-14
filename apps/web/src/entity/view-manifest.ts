@@ -83,6 +83,10 @@ export interface ViewDefinition {
    * normalization against the table's current code-defined columns. */
   layout?: ViewLayout;
   problem?: ViewProblem;
+  /** The list view (`?view=`) the saved view opens in. */
+  view?: string;
+  /** A shortcut on another surface (the home "Your views" row). */
+  pin?: { surface: "home"; order: number };
 }
 
 const isProblemKey = (key: string): key is ProblemKey =>
@@ -118,6 +122,8 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
     };
   if (view.problem)
     definition.problem = { ...view.problem, key: problemKey(view.problem.key) };
+  if (view.view) definition.view = view.view;
+  if (view.pin) definition.pin = { ...view.pin };
   return definition;
 };
 

@@ -231,8 +231,8 @@ existing block. Extend the generic path when it almost fits. See
   preserve raw diagnostics and caller-owned mutation retry eligibility (`ScreenStyle.swift`).
 - Paged, searchable record lists: `GenericEntityListModel` owns paging, de-duplication,
   stale-result discard, retry and the debounced `EntityListSearchModel`. A surface whose rows
-  do not come from the declared list route (scoped picker, photo lane, relationship cursor,
-  wardrobe) injects an `EntityListPageSource` (contract in its doc comment) and swaps scope with
+  do not come from the declared list route (scoped picker, photo lane, relationship cursor)
+  injects an `EntityListPageSource` (contract in its doc comment) and swaps scope with
   `setSource(_:)` instead of keeping its own page/busy/error/generation state.
 
   Editor picker text uses the declared primary search key before any text-filter fallback,

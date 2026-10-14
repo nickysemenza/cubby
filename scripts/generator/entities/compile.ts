@@ -1628,8 +1628,12 @@ const validateSavedViews = (
   views: readonly SavedView[],
   fieldModel: EntityFieldModel,
   descriptors: readonly FilterDescriptor[],
+  listViews: CompiledEntity["inspector"]["list"]["views"],
   context: string,
 ): void => {
+  const listViewIds = new Set(
+    listViews.map((view) => (typeof view === "string" ? view : view.id)),
+  );
   const byColumn = new Map(
     descriptors.map((descriptor) => [descriptor.columnId, descriptor]),
   );
@@ -1648,6 +1652,10 @@ const validateSavedViews = (
     if (ids.has(view.id))
       throw new EntityDeclarationError(`${context} repeats the id ${view.id}.`);
     ids.add(view.id);
+    if (view.view !== null && !listViewIds.has(view.view))
+      throw new EntityDeclarationError(
+        `${where} opens in ${view.view}, which this list does not offer.`,
+      );
     const filterIds = new Set<string>();
     for (const filter of view.filters) {
       const descriptor = byColumn.get(filter.id);
@@ -2021,6 +2029,7 @@ export const compileEntity = (
     inspector.list.savedViews,
     fieldModel,
     filterDescriptorsWithAudit,
+    inspector.list.views,
     `${context}.presentation.list.savedViews`,
   );
   const shortcode = compiledShortcode(descriptor, context);

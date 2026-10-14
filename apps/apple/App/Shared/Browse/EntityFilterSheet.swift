@@ -11,6 +11,20 @@ struct EntityFilterDraft: Hashable {
         self.state = state
     }
 
+    /// Ledger Party filters accept this literal alongside shortcodes; the server resolves it to
+    /// the signed-in member (docs/adr/0015-current-member-filter-token.md).
+    static let currentMemberToken = "@me"
+
+    /// The picked ids as shown to a person: the token reads "Me", never `@me`.
+    static func displayName(forFilterValue value: String) -> String {
+        value == currentMemberToken ? "Me" : value
+    }
+
+    /// Whether the "Me" option applies: any id filter whose target is a Ledger Party.
+    static func offersCurrentMember(_ filter: FilterDescriptor) -> Bool {
+        filter.targetEntity == .ledgerParty
+    }
+
     /// `text`, `select`, `id`: the one string under the parameter, empty when unset.
     func single(_ filter: FilterDescriptor) -> String {
         guard case .param(let name) = filter.wire else { return "" }
@@ -20,6 +34,21 @@ struct EntityFilterDraft: Hashable {
     mutating func setSingle(_ value: String, for filter: FilterDescriptor) {
         guard case .param(let name) = filter.wire else { return }
         state.set(.single(value), for: name)
+    }
+
+    func selectsCurrentMember(_ filter: FilterDescriptor) -> Bool {
+        (filter.kind == .idMulti ? many(filter) : [single(filter)]).contains(Self.currentMemberToken)
+    }
+
+    /// Adds or removes the token; other picked ids stay (a single-valued filter holds one value).
+    mutating func setCurrentMember(_ on: Bool, for filter: FilterDescriptor) {
+        let token = Self.currentMemberToken
+        if filter.kind == .idMulti {
+            let rest = many(filter).filter { $0 != token }
+            setMany(on ? [token] + rest : rest, for: filter)
+        } else {
+            setSingle(on ? token : "", for: filter)
+        }
     }
 
     /// `multiselect`, `idMulti`: the array under the parameter.
@@ -178,19 +207,30 @@ struct EntityFilterSheet: View {
                     EntityPickerSheet(
                         target: target,
                         multiple: filter.kind == .idMulti,
-                        selected: filter.kind == .idMulti
-                            ? draft.many(filter) : [draft.single(filter)].filter { !$0.isEmpty }
+                        selected: pickedIDs(filter)
                     ) { picks in
+                        // The picker never sees the "Me" token, so keep it across a pick.
+                        let keepsMe = draft.selectsCurrentMember(filter)
                         if filter.kind == .idMulti {
-                            draft.setMany(picks.map(\.id), for: filter)
-                        } else {
-                            draft.setSingle(picks.first?.id ?? "", for: filter)
+                            draft.setMany(
+                                (keepsMe ? [EntityFilterDraft.currentMemberToken] : []) + picks.map(\.id),
+                                for: filter)
+                        } else if let first = picks.first {
+                            draft.setSingle(first.id, for: filter)
+                        } else if !keepsMe {
+                            draft.setSingle("", for: filter)
                         }
                     }
                 }
             }
         }
         .nativeSheet(.editor)
+    }
+
+    /// The ids the picker preselects: real records only, never the "Me" token.
+    private func pickedIDs(_ filter: FilterDescriptor) -> [String] {
+        (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
+            .filter { !$0.isEmpty && $0 != EntityFilterDraft.currentMemberToken }
     }
 
     @ViewBuilder
@@ -274,8 +314,19 @@ struct EntityFilterSheet: View {
         case .boolean:
             threeState(filter, on: ("true", "Yes"), off: ("false", "No"))
         case .id, .idMulti:
-            let ids =
-                filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)].filter { !$0.isEmpty }
+            let ids = (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
+                .filter { !$0.isEmpty }
+                .map(EntityFilterDraft.displayName(forFilterValue:))
+            if EntityFilterDraft.offersCurrentMember(filter) {
+                Toggle(
+                    "Me",
+                    isOn: Binding(
+                        get: { draft.selectsCurrentMember(filter) },
+                        set: { draft.setCurrentMember($0, for: filter) })
+                )
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+                .accessibilityIdentifier("filter.\(filter.columnId).me")
+            }
             Button {
                 picking = filter
             } label: {

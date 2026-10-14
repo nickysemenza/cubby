@@ -1274,6 +1274,21 @@ const buildMetadataSchemas = () => {
                     .nullable()
                     .optional()
                     .default(null),
+                  /** The list view (`table`, `shelf`, ...) the view opens in. */
+                  view: nonEmptyString().nullable().optional().default(null),
+                  /**
+                   * A shortcut on another surface. `home` lists the view in
+                   * the home "Your views" row on web and Apple, by `order`.
+                   */
+                  pin: z
+                    .object({
+                      surface: z.literal("home"),
+                      order: z.number().int().nonnegative(),
+                    })
+                    .strict()
+                    .nullable()
+                    .optional()
+                    .default(null),
                   /** Columns the view reveals (or hides) when applied. */
                   layout: z
                     .object({

@@ -2,7 +2,7 @@ import {
   seedProductPrerequisite,
   seedProductCategoryPrerequisite,
 } from "./fixtures-catalog";
-import { createEntityFixture, seedConcurrently } from "./fixtures-core";
+import { seedConcurrently } from "./fixtures-core";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
@@ -109,20 +109,6 @@ test("dense record header preserves identity, actions, and the editor", async ({
     await expect(editor).toBeHidden();
     await expectViewportBounded(page);
   }
-  const owner = await createEntityFixture(page, "ledgerParty", {
-    name: "Example wardrobe owner",
-    kind: "member",
-  });
-  await gotoAuthenticatedPage(page, `/ledger-parties/${owner.id}`);
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  const wardrobe = page
-    .getByRole("dialog", { name: "More actions", exact: true })
-    .getByRole("link", { name: "Open wardrobe", exact: true });
-  await expect(wardrobe).toHaveAttribute(
-    "href",
-    `/collections/wardrobe/${owner.id}`,
-  );
-  await page.keyboard.press("Escape");
   await seedConcurrently(
     Array.from({ length: 18 }, (_, index) => index),
     (index) =>

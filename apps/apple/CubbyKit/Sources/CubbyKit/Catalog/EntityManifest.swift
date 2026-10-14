@@ -47,6 +47,33 @@ extension EntityDescriptor {
     public func relation(_ key: String) -> RelationDescriptor? { relations.first { $0.key == key } }
 }
 
+/// A saved view the manifest pins to a surface (`pin.surface`), with the entity that owns it.
+public struct PinnedSavedView: Sendable, Hashable, Identifiable {
+    public let entity: EntityKey
+    public let savedView: SavedView
+    public var id: String { "\(entity.rawValue)/\(savedView.id)" }
+}
+
+extension EntityCatalog {
+    /// Every saved view pinned to `surface` across all entities, by `pin.order` (ties keep
+    /// declaration order).
+    public static func pinnedSavedViews(surface: String) -> [PinnedSavedView] {
+        all.flatMap { descriptor in
+            descriptor.presentation.savedViews.compactMap { savedView in
+                savedView.pin?.surface == surface
+                    ? PinnedSavedView(entity: descriptor.key, savedView: savedView) : nil
+            }
+        }
+        .enumerated()
+        .sorted {
+            ($0.element.savedView.pin?.order ?? 0, $0.offset) < (
+                $1.element.savedView.pin?.order ?? 0, $1.offset
+            )
+        }
+        .map(\.element)
+    }
+}
+
 public enum EntityCatalog {
     /// Every declared entity, in declaration order. Decoded from the bundled manifest on first
     /// use; a manifest that does not decode is a build defect (`EntityManifestTests` fails CI).

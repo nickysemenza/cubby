@@ -78,15 +78,6 @@ const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
  */
 export const detailSlots = {
   email: { review: reportSlot<"email">("email.review") },
-  ledgerParty: {
-    wardrobe: slot(
-      () =>
-        import("~/app/collections/wardrobe-link").then((m) => ({
-          default: m.WardrobeLink,
-        })),
-      (record) => record.kind === "member" || record.kind === "guest",
-    ),
-  },
   product: {
     ownership: slot(() =>
       import("~/app/products/product-runs").then((m) => ({

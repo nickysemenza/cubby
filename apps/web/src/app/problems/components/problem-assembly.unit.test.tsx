@@ -60,7 +60,7 @@ describe("problemListLocation", () => {
           filters: [{ id: "notAProductFilter", value: "x" }],
         },
       }),
-    ).toThrow(/unknown product filter notAProductFilter/);
+    ).toThrow(/product list has no filter notAProductFilter/);
   });
 
   it("offers each exact branch while leaving a derived branch unlinked", () => {

@@ -239,6 +239,7 @@ export const manifestWire = {
   }),
   SavedViewSort: record({ id: "string", desc: "boolean" }),
   SavedViewFlow: record({ kind: "string", label: "string" }),
+  SavedViewPin: record({ surface: "string", order: "integer" }),
   SavedView: record(
     {
       id: "string",
@@ -249,6 +250,8 @@ export const manifestWire = {
       flow: "SavedViewFlow~",
       columnVisibility: "[string:boolean]",
       problemKey: "string~",
+      view: "string~",
+      pin: "SavedViewPin~",
     },
     { conformances: identifiable },
   ),

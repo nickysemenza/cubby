@@ -2,7 +2,7 @@ import Observation
 
 /// An injected page source for `GenericEntityListModel`, for surfaces whose rows come from
 /// something other than the descriptor's declared list (scoped pickers, photo destination lanes,
-/// relationship cursors, the wardrobe shelf). The model keeps one paginator — request generation,
+/// relationship cursors). The model keeps one paginator — request generation,
 /// cancellation, ID de-duplication, retry and error state — and the source only answers "page N".
 ///
 /// Contract for `loadPage` / `searchPage`:
@@ -259,6 +259,9 @@ public final class GenericEntityListModel {
         guard source == nil else { return }
         let newFilters = savedView.filterState
         let newSort = savedView.sortParameter
+        // The view mode is not part of active-view matching (`activeSavedView`): switching it
+        // never changes the query, so it must not depend on whether the query changed.
+        if let newView = savedView.listView(in: descriptor) { await select(view: newView) }
         guard filters != newFilters || sort != newSort else { return }
         filters = newFilters
         sort = newSort

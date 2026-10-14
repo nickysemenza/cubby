@@ -5,18 +5,10 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
 
-import {
-  entities,
-  entityPluralLabel,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { entityPluralLabel, isBrowserRoutedEntity } from "~/entity/entities";
+import { entityListHref } from "~/entity/entity-list-href";
 import { getEntityFilters } from "~/entity/filter-manifest";
-import {
-  encodeFilters,
-  FILTER_ANY,
-  FILTER_NONE,
-  sortToParam,
-} from "~/entity/filters";
+import { FILTER_ANY, FILTER_NONE } from "~/entity/filters";
 import type { ProblemQuery } from "~/entity/problem-query";
 import { cn } from "~/lib/utils";
 import { Button, buttonVariants } from "~/ui/primitives/button";
@@ -53,27 +45,12 @@ export const problemListLocation = (
   ) {
     return undefined;
   }
-  const params = new URLSearchParams({ worklist: query.key });
-  const specs = getEntityFilters(query.source.entity);
-  const values = new Map(
-    query.source.filters.map(({ id, value }) => [id, value]),
-  );
-  const known = new Set(specs.map((spec) => spec.columnId));
-  const unknown = query.source.filters.find(({ id }) => !known.has(id));
-  if (unknown) {
-    throw new Error(
-      `Problem ${query.key} cannot link unknown ${query.source.entity} filter ${unknown.id}`,
-    );
-  }
-  for (const [key, value] of Object.entries(
-    encodeFilters(specs, (columnId) => values.get(columnId)),
-  )) {
-    if (value !== undefined) params.set(key, value);
-  }
-  const sort = query.source.sort && sortToParam([...query.source.sort]);
-  if (sort) params.set("sort", sort);
   return {
-    href: `${entities[query.source.entity].routes.list}?${params.toString()}`,
+    href: entityListHref(
+      query.source.entity,
+      { filters: query.source.filters, sort: query.source.sort },
+      { worklist: query.key },
+    ),
     entity: query.source.entity,
   };
 };

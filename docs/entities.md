@@ -729,9 +729,20 @@ Reads expose effective `assigneeId`, `assigneeName`, and `fieldResolutions.assig
 list filters and sorts use the same effective SQL as hydration. Explicit null
 means None and reset clears the stored override. Project’s field label is
 Default assignee; task’s is Assignee. The static My tasks saved view combines
-open status with actor-aware boolean `assignedToMe` (decoded by the generic
-HTTP query path); Unassigned uses the assignee
-presence filter. Both reuse the generic saved-view and resolution-badge paths.
+open status with `assigneeId: @me`; every Ledger Party filter accepts `@me`,
+which the entity kernel resolves to the actor's linked member (nothing matches
+without one; [ADR 0015](adr/0015-current-member-filter-token.md)). Unassigned uses the assignee presence filter. Both reuse the generic saved-view and resolution-badge paths.
+
+A saved view may also declare `view` (the list view it opens in, such as
+`shelf`) and `pin: { surface: "home", order }`, which lists it in the home
+"Your views" row on web and Apple; neither takes part in active-view matching.
+Inventory's `ownerLedgerPartyId` filter matches the effective owner (explicit,
+else inherited from acquisition evidence) by running the ownership resolver
+and narrowing by id before paging; its presence filter is
+`ownerPresenceFilter`. Product's owner filter adds Unlocated products whose
+single acquisition would hand the owner down. My stuff, Wardrobe (plus the
+`apparel` category family), Bought for me, and the ownership work queues are
+saved views over these filters.
 
 Native saved views compile column filters to HTTP query parameters, expanding
 nullable sentinels into presence filters and static range presets into their
@@ -743,7 +754,7 @@ Zod read/create/update schema; existing enum storage contracts stay unchanged.
 Native manual reference selection applies the declaration's explicit-intent
 patch before its selected value, so choosing a value after Use inherited
 replaces the staged reset. Every filtered task presentation, including Next,
-charts, board, and timeline, forwards the actor for My tasks resolution.
+charts, board, and timeline, resolves `@me` before reading.
 
 Three generic display rules follow from declarations rather than code. A
 select option's `description` is shown as the tooltip of its pill wherever

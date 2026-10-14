@@ -1,5 +1,6 @@
 import { tradeSchema } from "./task-fields";
 import { productCategoryShortcode } from "./identifier-fields";
+import { productCategoryFeature } from "./product-category-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
@@ -107,6 +108,11 @@ export const inventoryFilterFields = {
     .string()
     .optional()
     .describe("Filter by product manufacturer (substring)"),
+  categoryFeatureFilter: oneOrMany(productCategoryFeature)
+    .optional()
+    .describe(
+      "Filter by product category family, inherited from the nearest classified ancestor",
+    ),
   categoryFilter: oneOrMany(productCategoryShortcode)
     .optional()
     .describe("Filter by product category"),
@@ -120,6 +126,12 @@ export const inventoryFilterFields = {
     .optional()
     .describe("Filter by a stable household location role."),
   verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
+  ownerPresenceFilter: z
+    .enum(["has", "none"])
+    .optional()
+    .describe(
+      "Entries that do / don't have an effective individual owner (explicit or inherited)",
+    ),
   /**
    * Derived valuation integrity. `missing_with_priced_product` is the precise
    * "the Product has a price, but this stored unit cannot reach it" state.

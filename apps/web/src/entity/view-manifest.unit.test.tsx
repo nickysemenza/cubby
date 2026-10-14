@@ -1,4 +1,5 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
@@ -311,8 +312,16 @@ describe("views reveal the columns they select on", () => {
       servingAsLocations: true,
     });
 
+    // A filter with no list column (derived ownership) is explained by its
+    // filter chip; every column-backed filter must be visible.
+    const listColumns = new Set(
+      entityFieldModels.product.fields
+        .filter((field) => field.display.list)
+        .map((field) => field.display.columnId ?? field.key),
+    );
     for (const view of productViews) {
       for (const filter of view.filters) {
+        if (!listColumns.has(filter.id)) continue;
         expect(
           view.layout?.columnVisibility?.[filter.id],
           `${view.id} filters on ${filter.id} without revealing it`,

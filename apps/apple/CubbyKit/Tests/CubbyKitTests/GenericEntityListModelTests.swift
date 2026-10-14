@@ -56,18 +56,48 @@ struct GenericEntityListModelTests {
         #expect(model.activeSavedView?.id == mine.id)
         #expect(requests.withLock { $0.count } == 1)
         let mineFilters = requests.withLock { $0[0] }
-        #expect(mineFilters["assignedToMe"] == true)
+        #expect(mineFilters["assigneeId"] == ["@me"])
         #expect(mineFilters["search"] == nil)
         #expect(model.filters["search"] == nil)
         await model.apply(savedView: unassigned)
-        #expect(model.filters["assignedToMe"] == nil)
+        #expect(model.filters["assigneeId"] == nil)
         #expect(model.filters["assigneePresenceFilter"] == .single("none"))
         #expect(requests.withLock { $0.count } == 2)
         let unassignedFilters = requests.withLock { $0[1] }
         #expect(unassignedFilters["assigneePresenceFilter"] == "none")
-        #expect(unassignedFilters["assignedToMe"] == nil)
+        #expect(unassignedFilters["assigneeId"] == nil)
         await model.apply(filters: EntityFilterState())
         #expect(model.activeSavedView == nil)
+    }
+
+    /// A saved view that declares a list view opens in it (wardrobe -> shelf), even when its
+    /// query matches the current one; active-view matching stays filters + sort only.
+    @Test func savedViewSelectsItsDeclaredListView() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        var empty = try #require(
+            JSONSerialization.jsonObject(with: Fixtures.data(named: "products-list.json"))
+                as? [String: Any])
+        empty["items"] = []
+        let body = try JSONSerialization.data(withJSONObject: empty)
+        ListStub.handler.withLock { $0 = { _ in (200, body) } }
+        let descriptor = EntityCatalog[.inventory]
+        let wardrobe = try #require(descriptor.presentation.savedViews.first { $0.id == "wardrobe" })
+        #expect(wardrobe.listView(in: descriptor) == .shelf)
+        let model = GenericEntityListModel(
+            descriptor: descriptor, client: try makeClient(), view: .table, progressive: false)
+        await model.apply(savedView: wardrobe)
+        #expect(model.view == .shelf)
+        #expect(model.activeSavedView?.id == wardrobe.id)
+        await model.select(view: .table)
+        #expect(model.activeSavedView?.id == wardrobe.id)
+    }
+
+    @Test func homePinnedViewsAreOrderedByPin() {
+        let pinned = EntityCatalog.pinnedSavedViews(surface: "home")
+        let orders = pinned.compactMap { $0.savedView.pin?.order }
+        #expect(!pinned.isEmpty)
+        #expect(orders == orders.sorted())
+        #expect(pinned.first?.id == "inventory/wardrobe")
     }
 
     /// A header sort must restart server paging, retain filters, and use the same order for

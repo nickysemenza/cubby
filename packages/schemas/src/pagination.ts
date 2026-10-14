@@ -1,4 +1,7 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import {
+  CURRENT_MEMBER_FILTER,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "@cubby/shared";
 import { z } from "zod";
 
 /** The one page-size ceiling and default every list boundary shares. */
@@ -121,6 +124,13 @@ export const entityFilter = <T extends z.ZodTypeAny>(schema: T) => {
 
 export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
   oneOrMany(entityFilter(schema));
+
+/**
+ * A Ledger Party filter: canonical shortcodes plus `@me`, the signed-in
+ * member, which the entity kernel resolves before any repository reads it.
+ */
+export const partyFilterList = <T extends z.ZodTypeAny>(schema: T) =>
+  oneOrMany(z.union([entityFilter(schema), z.literal(CURRENT_MEMBER_FILTER)]));
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),

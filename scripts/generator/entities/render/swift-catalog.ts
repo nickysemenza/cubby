@@ -548,6 +548,8 @@ const presentationJSON = (
           : { kind: view.flow.kind, label: view.flow.label },
       columnVisibility: { ...view.layout?.columnVisibility },
       problemKey: view.problem?.key ?? null,
+      view: view.view,
+      pin: view.pin === null ? null : { ...view.pin },
     })),
   };
 };

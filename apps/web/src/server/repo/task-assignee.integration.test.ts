@@ -1,9 +1,12 @@
+import type { TaskFilters } from "@cubby/schemas/project";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { ledgerParty } from "~/server/db/schema";
+import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 
 import { getDb } from "./database-helpers";
 import { updateLedgerParty } from "./ledger-party";
@@ -207,13 +210,18 @@ describe("member assignee inheritance", () => {
       explicit.output.id,
       task.output.id,
     ]);
+    // `@me` resolves to the actor's linked member; an unlinked actor matches
+    // nothing rather than dropping the filter.
+    const me = (filters: TaskFilters) =>
+      resolveCurrentMemberFilters(
+        { db: ctx.db, actorContext: ctx.actor },
+        filters,
+      );
     const beforeLink = await taskList(
       ctx.db,
-      { assignedToMe: true },
+      await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
       [],
       { pageIndex: 0, pageSize: 20 },
-      "page",
-      ctx.actor,
     );
     expect(beforeLink.data).toEqual([]);
     await getDb(ctx.db)
@@ -222,17 +230,24 @@ describe("member assignee inheritance", () => {
       .where(eq(ledgerParty.id, member.entityId));
     const mine = await taskList(
       ctx.db,
-      { assignedToMe: true },
+      await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
       [],
       { pageIndex: 0, pageSize: 20 },
-      "page",
-      ctx.actor,
     );
     expect(mine.data.map((row) => row.id)).toContain(task.output.id);
+    expect(mine.data.map((row) => row.id)).not.toContain(explicit.output.id);
+    const mineOrEarlier = await taskList(
+      ctx.db,
+      await me({ assigneeId: [CURRENT_MEMBER_FILTER, earlier.output.id] }),
+      [],
+      { pageIndex: 0, pageSize: 20 },
+    );
+    expect(mineOrEarlier.data.map((row) => row.id)).toEqual(
+      expect.arrayContaining([task.output.id, explicit.output.id]),
+    );
     const actionable = await listActionableTasks(
       ctx.db,
-      { assignedToMe: true },
-      ctx.actor,
+      await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
     );
     expect(actionable.next.map((row) => row.id)).toContain(task.output.id);
     const unassigned = await taskList(
@@ -242,12 +257,5 @@ describe("member assignee inheritance", () => {
       { pageIndex: 0, pageSize: 20 },
     );
     expect(unassigned.data.map((row) => row.id)).not.toContain(task.output.id);
-    const mineWithoutActor = await taskList(
-      ctx.db,
-      { assignedToMe: true },
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
-    expect(mineWithoutActor.data).toEqual([]);
   });
 });

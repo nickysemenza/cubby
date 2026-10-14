@@ -91,6 +91,7 @@ interface DerivedFilterNeeds {
   z: boolean;
   oneOrMany: boolean;
   entityFilterList: boolean;
+  partyFilterList: boolean;
   shortcodeSchema: boolean;
   presence: boolean;
   numeric: boolean;
@@ -157,6 +158,7 @@ const derivedFilterImports = (
   }
   const pagination = [
     ...(needs.entityFilterList ? ["entityFilterList"] : []),
+    ...(needs.partyFilterList ? ["partyFilterList"] : []),
     ...(needs.oneOrMany ? ["oneOrMany"] : []),
     ...(needs.presence ? ["presenceFilter"] : []),
   ];
@@ -212,6 +214,7 @@ const renderDerivedFilterFields = (
     z: false,
     oneOrMany: false,
     entityFilterList: false,
+    partyFilterList: false,
     shortcodeSchema: false,
     presence: false,
     numeric: false,
@@ -269,6 +272,11 @@ const renderDerivedFilterFields = (
           const code = `shortcodeSchema(${JSON.stringify(target)})`;
           if (descriptor.kind === "id")
             return `${key}:${code}.optional()${describe}`;
+          // A Ledger Party filter also accepts `@me` (CURRENT_MEMBER_FILTER).
+          if (target === "ledgerParty") {
+            needs.partyFilterList = true;
+            return `${key}:partyFilterList(${code}).optional()${describe}`;
+          }
           needs.entityFilterList = true;
           return `${key}:entityFilterList(${code}).optional()${describe}`;
         }

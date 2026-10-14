@@ -2,10 +2,11 @@ import type { Entity } from "@cubby/schemas/entity";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { Fragment } from "react";
 
+import type { ListSearch } from "~/entity/entity-list/list-slot-types";
 import {
   isViewActive,
   type ViewDefinition,
@@ -42,6 +43,8 @@ interface SavedViewsMenuProps {
   onResetPage?: () => void;
   /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
   onApplyLayout?: (layout: SavedLayout) => void;
+  /** Switches the list view (`?view=`) a saved view opens in. */
+  onApplyListView?: (view: string) => void;
 }
 
 /**
@@ -92,6 +95,7 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
   table,
   entity,
 }: DataTableViewsProps<TData>) {
+  const navigate = useNavigate();
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
 
@@ -105,6 +109,13 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
       onApplyFilters={(filters) => table.setColumnFilters(filters)}
       onApplySort={(sort) => table.setSorting(sort)}
       onApplyLayout={(savedLayout) => applyTableLayout(table, savedLayout)}
+      onApplyListView={(view) =>
+        // SAFETY: as in `useListSearch`, route-specific search keys are erased;
+        // every generated index route validates `view`.
+        void navigate({
+          search: (previous: ListSearch) => ({ ...previous, view }),
+        } as never)
+      }
       onResetPage={() => table.setPageIndex(0)}
     />
   );
@@ -135,6 +146,7 @@ function SavedViewsMenuItems({
   onApplySort,
   onResetPage,
   onApplyLayout,
+  onApplyListView,
 }: SavedViewsMenuProps) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
@@ -145,6 +157,8 @@ function SavedViewsMenuItems({
     // Layout does not participate in active-state matching: manual column
     // adjustments keep the view checked while its filter/sort contract holds.
     if (view.layout) onApplyLayout?.(view.layout);
+    // Like layout, the list view stays out of active-state matching.
+    if (view.view) onApplyListView?.(view.view);
     onResetPage?.();
   };
 

@@ -67,6 +67,12 @@ extension SavedView {
         guard !sort.isEmpty else { return nil }
         return sort.map { ($0.desc ? "-" : "") + $0.id }.joined(separator: ",")
     }
+
+    /// The declared list view this saved view opens in (`view: "shelf"`), when the entity offers it.
+    public func listView(in descriptor: EntityDescriptor) -> ListView? {
+        guard let view else { return nil }
+        return descriptor.presentation.listViews.first { $0.id == view }
+    }
 }
 
 /// Thrown by `EntityKernel.swift` when a filter cannot be sent.

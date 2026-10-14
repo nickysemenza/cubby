@@ -42,6 +42,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🟢 ✨ **Data-quality check for a missing cutout.** Wardrobe galleries prefer
+  the transparent representation (`representations.transparent`), so a Product
+  with photos but no cutout looks out of place. Add a Product check so "no
+  cutout" joins Wardrobe's needs-attention view. Deferred from Wardrobe v1,
+  which uses the existing `product_image` check and unconfirmed-owner filter;
+  pair it with the next photo-import pass.
+
 - 🤔 🧪 **Review existing duplicate research images.** New research admissions
   reuse same-byte item attachments under the Product lock and retain each source's
   support. Existing duplicate galleries and historical images without SHA-256
@@ -176,11 +183,10 @@ history is the archive. Permanent product constraints live in the
   mixed-entity batches distort the MCP usage dashboard; telemetry attributes a
   batch to its first item's entity.
 
-- ⏳ ✨ **Apparel photo routing and size/color fields.** Routing categories are
-  plants, food, documents, and home; size and color live in the Product name
-  and notes, one Product per variant. Revisit an apparel category once the
-  hosted coordinator routes photos, and structured size/color once wardrobe
-  filtering by size is wanted.
+- ⏳ ✨ **Apparel photo routing.** Routing categories are plants, food,
+  documents, and home. Revisit an apparel category once the hosted coordinator
+  routes photos. Size and color stay in the Product name and notes, one Product
+  per variant; structured size/color fields are not planned.
 
 - ⏳ 🧪 **Driven simulator smoke for the photo flow.** Promote when the next
   SwiftUI identity/state bug ships. `simctl addmedia` two fixture photos, drive
@@ -526,6 +532,25 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   recorded money and physical stock; add a synthetic regression before fixing
   the projection or schema. Do not round real quantities to satisfy validation.
 
+- ⏳ ✨ **Collapse a Product's entries into one Wardrobe card.** One Inventory
+  entry already holds every copy with the same owner, Location and placement,
+  so v1 cards show an amount badge, and a second card means a second Location.
+  Promote if the same Product spread across Locations clutters a gallery;
+  collapsing needs a paging/count unit, a quantity sum across units, and a
+  per-entry target for actions such as owner confirmation.
+
+- ⏳ 🛠️ **Set-based SQL for effective Inventory ownership.** The owner filter
+  runs the TypeScript ownership resolver (`repo/inventory/ownership.ts`) over
+  live stock and injects the matching ids before paging. Promote if that makes
+  Inventory lists measurably slow; a SQL form must keep the resolver's
+  ambiguity rules (one acquisition, conflicting beneficiaries, invalid account
+  defaults), not a fallback chain, and needs parity tests against the resolver.
+
+- 🔭 ✨ **Wear history and outfits for Wardrobe.** Logging when a garment is
+  worn, building outfits, and a "not worn in a year" cleanup view. Wardrobe v1
+  is browse plus needs-attention; this is a new domain (wear events) and was
+  explicitly deferred as a maybe.
+
 ---
 
 ## Tasks, projects & garden
@@ -818,6 +843,27 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 ---
 
 ## Entity platform & data model
+
+- 🟢 ✨ **Group lists by a related record's field, on web and Apple
+  (high priority).** Wardrobe wants Shirts / Pants / Outerwear sections, which
+  means grouping Inventory by `product.category`. Web sections today group only
+  by the entity's own sort fields (`groupable`/`grouping` in
+  `entity-definitions/definition.ts`, checked in `entity-kernel/list-input.ts`),
+  and the Apple generic list has no sections at all (only `TaskBoardLanes`).
+  Wardrobe v1 ships with subcategory filter chips and a category sort; this
+  item makes sections a declared capability for every list, then gives the
+  Wardrobe saved view a `groupBy`. Deferred from Wardrobe v1 because grouping
+  should improve generically first, not as a wardrobe-only path.
+
+- ⏳ ✨ **Per-member home pins.** Saved views pin to the home "Your views" row
+  from their declaration, in a fixed order, and `@me` already makes the
+  contents personal. Promote when the row feels crowded or members want
+  different pins; that adds a stored per-member preference and a settings
+  surface, which one trusted household did not need for v1.
+
+- 🟢 ✨ **Pin the Research queue to home.** Products sorted by weakest data
+  quality as a pinned saved view with a count. Left out of the first home row
+  (Wardrobe, My stuff, My tasks, Needs a home) to keep it to four.
 
 - 🤔 ✨ **Product Category feature expectations.** Decide whether Food _expects_
   an ingredient and Books an ISBN (both `unknown` today, so no data-quality

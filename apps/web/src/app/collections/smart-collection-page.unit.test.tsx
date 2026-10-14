@@ -44,9 +44,7 @@ function operations() {
           sourceCounts: {
             productTagEquals: 0,
             manufacturerEquals: 0,
-            effectiveOwnerEquals: 0,
             categoryEquals: 0,
-            categoryFeatureEquals: 0,
             locationNameContains: 1,
             historicalExpenseTrade: 1,
           },

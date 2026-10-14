@@ -302,8 +302,9 @@ Further docs:
 The flows below include the shipped
 [Email entity](docs/adr/0011-email-as-a-first-class-entity.md) and
 [import convergence](docs/adr/0012-import-convergence-through-burn-down.md). Sources can arrive in any order: later evidence supports the same
-Purchase and exact Product variant. Wardrobe uses apparel Products, Images and
-Inventory; Claude/Codex sessions also research wardrobe details through MCP.
+Purchase and exact Product variant. Wardrobe is a saved view of the viewer's
+apparel Inventory (`@me` owner, `apparel` category family); Claude/Codex
+sessions also research wardrobe details through MCP.
 
 ```mermaid
 flowchart TB

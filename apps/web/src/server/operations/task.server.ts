@@ -5,6 +5,7 @@ import type { z } from "zod";
 
 import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
+import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listAll } from "~/server/repo/list-all";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
@@ -65,27 +66,36 @@ export const taskBulkReorderWorkflow = Object.assign(
 );
 
 export const taskHandlers = implementOperationDomain(taskContract, {
-  listActionable: (context, input) =>
-    listActionableTasks(context.db, input ?? {}, context.actorContext),
-  chartData: async (context, input) =>
-    (
+  listActionable: async (context, input) =>
+    listActionableTasks(
+      context.db,
+      await resolveCurrentMemberFilters(context, input ?? {}),
+    ),
+  chartData: async (context, input) => {
+    const filters = await resolveCurrentMemberFilters(context, input);
+    return (
       await listAll((pagination) =>
         taskList(
           context.db,
-          input,
+          filters,
           [{ orderBy: "createdAt", direction: "desc" }],
           pagination,
           "page",
-          context.actorContext,
         ),
       )
-    ).data,
+    ).data;
+  },
   summary: (context) => getTaskSummary(context.db),
   todayBriefing: (context) => getTaskTodayBriefing(context.db),
-  board: (context, input) =>
-    getTaskBoard(context.db, input, context.actorContext),
-  timeline: (context, input) =>
-    getTaskTimeline(context.db, input, context.actorContext),
+  // Board and timeline read outside the entity kernel, so they resolve `@me`
+  // themselves.
+  board: async (context, input) =>
+    getTaskBoard(context.db, await resolveCurrentMemberFilters(context, input)),
+  timeline: async (context, input) =>
+    getTaskTimeline(
+      context.db,
+      await resolveCurrentMemberFilters(context, input),
+    ),
   bulkReorder: (context, input) =>
     taskBulkReorderWorkflow(context.db, input, context.actorContext),
 });

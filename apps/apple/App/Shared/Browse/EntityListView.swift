@@ -65,16 +65,20 @@ struct EntityListView: View {
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
     private let initialFilters: EntityFilterState
+    private let initialSavedView: SavedView?
     private let usesBrowseSelection: Bool
 
     init(
-        key: EntityKey, filters: EntityFilterState = EntityFilterState(),
+        key: EntityKey, filters: EntityFilterState = EntityFilterState(), savedViewID: String? = nil,
         model: GenericEntityListModel? = nil,
         presentation: BrowsePresentation = .list,
         usesBrowseSelection: Bool = false
     ) {
         self.key = key
         self.initialFilters = filters
+        self.initialSavedView = savedViewID.flatMap { id in
+            EntityCatalog[key].presentation.savedViews.first { $0.id == id }
+        }
         self.usesBrowseSelection = usesBrowseSelection
         // Reached via `.navigationDestination(for: Route.self)` (`Route.entityList`, a fresh
         // path entry per distinct `key`/`filters`) or, on macOS, `.id(key)`-scoped in
@@ -170,9 +174,13 @@ struct EntityListView: View {
         .toolbar { toolbarContent }
         .task(id: key) {
             if model == nil {
+                // A saved view opens the list in its own query and view mode in one step, so no
+                // unscoped first page is ever requested.
                 model = GenericEntityListModel(
-                    descriptor: descriptor, client: appModel.client, filters: initialFilters,
-                    view: renderableViews.first ?? .table)
+                    descriptor: descriptor, client: appModel.client,
+                    sort: initialSavedView?.sortParameter,
+                    filters: initialSavedView?.filterState ?? initialFilters,
+                    view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table)
             }
             await model?.loadInitial()
         }

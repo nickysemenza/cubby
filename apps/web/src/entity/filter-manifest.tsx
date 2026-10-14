@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { humanize } from "@cubby/shared";
+import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 
 import {
   barFieldFromConfig,
@@ -28,8 +27,6 @@ export interface FilterSpec extends FilterSpecCore {
   options?: FilterableComboboxItem[];
   optionsKey?: string;
   label?: string;
-  /** Declared target for the shortcode-native reference, when applicable. */
-  referenceEntity?: ShortcodeEntity;
 }
 
 export { entityFilterFieldMaps };
@@ -58,9 +55,16 @@ const resolveSpecOptions = (
   const resolved = optionsKey
     ? filterOptionItems(runtimeOptions?.[optionsKey])
     : (spec.options ?? []);
-  return spec.nullable
-    ? [...nullableSentinelOptions(spec.nullable.label), ...resolved]
-    : resolved;
+  // Every Ledger Party filter offers the signed-in member as `@me`.
+  const me =
+    spec.referenceEntity === "ledgerParty"
+      ? [{ value: CURRENT_MEMBER_FILTER, label: "Me", meta: true as const }]
+      : [];
+  return [
+    ...(spec.nullable ? nullableSentinelOptions(spec.nullable.label) : []),
+    ...me,
+    ...resolved,
+  ];
 };
 
 const specFilterConfig = (
