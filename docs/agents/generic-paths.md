@@ -205,7 +205,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   bursts fold through `foldAuditEntries` (`features/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
-  `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.
+  `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`, and
+  `useServerTree` for a tree entity's whole server-nested hierarchy.
   Cursor-paged operations use `cursorQueryOptions`
   (`integrations/tanstack-query/cursor-query-options.ts`); numeric
   page/offset paging stays on `infiniteQueryOptions`.
