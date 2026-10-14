@@ -17,6 +17,7 @@ const proposal = (
   state: PhotoGroupProposal["state"] = "proposed",
 ): PhotoGroupProposal => ({
   groupKey,
+  origin: null,
   state,
   images: images.map((code, index) => ({
     id: img(code),

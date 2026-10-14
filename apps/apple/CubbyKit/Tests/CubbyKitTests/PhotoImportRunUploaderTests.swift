@@ -9,9 +9,20 @@ import Testing
 /// shared across suites intermittently answers one suite's request with another's response.
 private final class PhotoImportRunUploaderStub: URLProtocol, @unchecked Sendable {
     static let handler = Mutex<StubNetworking.Handler?>(nil)
+    static let cancelNextResponse = Mutex<String?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        let cancel = Self.cancelNextResponse.withLock { suffix in
+            guard let value = suffix, request.url?.path.hasSuffix(value) == true else { return false }
+            suffix = nil
+            return true
+        }
+        if cancel {
+            _ = Self.handler.withLock { $0 }?(request)
+            client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+            return
+        }
         StubNetworking.startLoading(
             request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
@@ -34,6 +45,10 @@ private final class RunUploaderScript: @unchecked Sendable {
         let state: String
         let error: String?
     }
+
+    private let admittedBatchID = Mutex<String?>(nil)
+    private let admissionOffset: Int
+    init(admissionOffset: Int = 0) { self.admissionOffset = admissionOffset }
 
     private let seenBox = Mutex<[Seen]>([])
     private let failNextFinalize = Mutex<Bool>(false)
@@ -74,12 +89,27 @@ private final class RunUploaderScript: @unchecked Sendable {
             seenBox.withLock { $0.append(Seen(path: path, fields: fields)) }
 
             if path.hasSuffix("/photoImport/createRun") {
+                admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
                 let shouldFail = failNextCreateRun.withLock { pending in
                     defer { pending = false }
                     return pending
                 }
                 if shouldFail { return (500, Data(#"{"code":"INTERNAL","message":"try again"}"#.utf8)) }
+                admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
                 return (200, Data(#"{"runId": "RUN-TEST"}"#.utf8))
+            }
+            if path.hasSuffix("/photoImport/admitBatch") || path.hasSuffix("/photoImport/sealBatch") {
+                if path.hasSuffix("/photoImport/admitBatch") {
+                    admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
+                } else if fields["clientBatchId"]?.stringValue != admittedBatchID.withLock({ $0 }) {
+                    return (400, Data(#"{"code":"VALIDATION","message":"Unknown upload batch"}"#.utf8))
+                }
+                return (
+                    200,
+                    Data(
+                        #"{"runId":"RUN-TEST","clientBatchId":"00000000-0000-0000-0000-000000000001","positionOffset":\#(admissionOffset),"lifecycle":{"processor":"cubby","phase":"waiting_for_upload","plannedImageCount":1,"openBatchCount":0,"finalizedImageCount":0,"describedImageCount":0,"failedImageIds":[],"skippedImageCount":0,"proposedGroupCount":0,"committedGroupCount":0,"dispatchError":null}}"#
+                            .utf8)
+                )
             }
             if path.hasSuffix("/photoImport/stage") {
                 let items = fields["items"]?.arrayValue ?? []
@@ -179,6 +209,382 @@ struct PhotoImportRunUploaderTests {
             provenance: PhotoAnalysisProvenance(source: .files, filename: "\(id).jpg"))
     }
 
+    /// A 25-photo chunk must expose each completed PUT while the next PUT is blocked;
+    /// finalized count stays zero until the server confirms the chunk.
+    @Test func twentyFivePhotosReportTransfersBeforeFinalize() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let gate = Gate()
+        let calls = Mutex<Int>(0)
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), maximumConcurrentUploads: 1,
+            put: { _, _, _ in
+                let count = calls.withLock {
+                    $0 += 1; return $0
+                }
+                if count == 2 { try await gate.pass() }
+            })
+        let photos = try (0..<25).map { try photo("photo-\($0)") }
+        let task = Task {
+            try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        await gate.arrivals()
+        let progress = await uploader.progress
+        #expect(progress.transferred == 1)
+        #expect(progress.uploaded == 0)
+        #expect(script.requests(matching: "/photoImport/finalize").isEmpty)
+        gate.open()
+        _ = try await task.value
+        #expect(await uploader.progress.transferred == 25)
+        #expect(await uploader.progress.uploaded == 25)
+    }
+
+    /// Termination after PUT but before finalize must recover the same staged image without
+    /// another PUT. Explicit cancellation must remove the journal from automatic recovery.
+    @Test func durableRecoveryRetainsTransferredPhotosAndCancellation() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        script.failNextFinalizeCall()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let puts = Mutex<Int>(0)
+        let put: PresignedUpload.FilePut = { _, _, _ in puts.withLock { $0 += 1 } }
+        let first = PhotoImportRunUploader(client: try makeClient(), checkpointURL: checkpoint, put: put)
+        do {
+            _ = try await first.upload(
+                [try photo("recovery")], runID: "RUN-TEST", performLocalAnalysis: false)
+            Issue.record("Expected finalize to fail")
+        } catch {}
+        let second = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint, put: put,
+            analyze: { input in fakeAnalysis(for: input.id) })
+        #expect(try await second.recover() == "RUN-TEST")
+        #expect(puts.withLock { $0 } == 1)
+        try await second.cancelRemaining()
+        #expect(try PhotoImportRunCheckpoint.pending(in: directory).isEmpty)
+    }
+
+    /// Unfavorable conditions block all new work until the gate is released. Cancelling the
+    /// wait interrupts immediately without starting an upload or silently overriding policy.
+    @Test func conditionWaitIsCancellableWithoutUploading() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let gate = Gate()
+        let puts = Mutex<Int>(0)
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), waitForConditions: { _ in try await gate.pass() },
+            waitingReason: { "Waiting for Wi-Fi" },
+            put: { _, _, _ in puts.withLock { $0 += 1 } })
+        let photos = [try photo("waiting")]
+        let task = Task { try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false) }
+        await gate.arrivals()
+        #expect(await uploader.progress.waitingReason == "Waiting for Wi-Fi")
+        #expect(puts.withLock { $0 } == 0)
+        task.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+        #expect(script.requests(matching: "/photoImport/stage").isEmpty)
+    }
+
+    /// One failed transfer must not abandon successful photos in its chunk. Retrying the
+    /// failed photo stages only that photo and preserves the original positions.
+    @Test func individualRetryKeepsSuccessfulPhotosImported() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let fail = Mutex<Bool>(true)
+        let puts = Mutex<Int>(0)
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(),
+            put: { file, _, _ in
+                puts.withLock { $0 += 1 }
+                if file.lastPathComponent.hasSuffix("-bad.jpg"),
+                    fail.withLock({ pending in
+                        let previous = pending
+                        pending = false
+                        return previous
+                    })
+                {
+                    throw URLError(.networkConnectionLost)
+                }
+            }, analyze: { input in fakeAnalysis(for: input.id) })
+        let photos = try [photo("bad")] + (0..<104).map { try photo("good-\($0)") }
+        await #expect(throws: PhotoImportRunUploader.Failure.self) {
+            _ = try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        #expect(await uploader.progress.uploaded == 99)
+        #expect(await uploader.failedUploadPhotos.map(\.id) == ["bad"])
+        try await uploader.retryPhoto("bad")
+        #expect(await uploader.progress.uploaded == 105)
+        #expect(puts.withLock { $0 } == 106)
+        let staged = script.requests(matching: "/photoImport/stage")
+        #expect(staged.count == 3)
+        #expect(staged[1].fields["items"]?.arrayValue?.count == 1)
+        #expect(staged.last?.fields["items"]?.arrayValue?.count == 5)
+    }
+
+    /// Excluding a failed first-chunk photo must still upload untouched later chunks.
+    @Test func excludingFailureUploadsUntouchedLaterChunks() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(),
+            put: { file, _, _ in
+                if file.lastPathComponent.hasSuffix("-bad.jpg") { throw URLError(.networkConnectionLost) }
+            }, analyze: { input in fakeAnalysis(for: input.id) })
+        let photos = try [photo("bad")] + (0..<104).map { try photo("later-\($0)") }
+        await #expect(throws: PhotoImportRunUploader.Failure.self) {
+            _ = try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        #expect(await uploader.progress.uploaded == 99)
+        try await uploader.continueWithoutFailedUploads()
+        #expect(await uploader.progress.uploaded == 104)
+        #expect(await uploader.progress.remaining == 0)
+        #expect(await uploader.progress.excluded == 1)
+        #expect(script.requests(matching: "/photoImport/sealBatch").count == 1)
+    }
+
+    /// One missing journal-owned original must leave other originals importable and the
+    /// missing photo explicitly retryable/excludable rather than failing the whole chunk.
+    @Test func missingOriginalFailsOnlyItsPhoto() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let missing = try photo("missing")
+        try FileManager.default.removeItem(at: missing.file.url)
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), put: { _, _, _ in }, analyze: { input in fakeAnalysis(for: input.id) })
+        await #expect(throws: PhotoImportRunUploader.Failure.self) {
+            _ = try await uploader.upload(
+                [missing, try photo("present")], runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        #expect(await uploader.progress.uploaded == 1)
+        #expect(await uploader.failedUploadPhotos.map(\.id) == ["missing"])
+        try await uploader.continueWithoutFailedUploads()
+        #expect(await uploader.progress.remaining == 0)
+        #expect(await uploader.progress.excluded == 1)
+    }
+
+    /// Recovery renews only a proven expired AWS presign after consuming the background
+    /// result. A 403 on a still-valid URL remains attention, never an unconditional replay.
+    @Test(arguments: [true, false]) func recoveryRenewsOnlyExpiredPresigns(expired: Bool) async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let first = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint,
+            put: { file, _, _ in
+                if file.lastPathComponent == "0" { throw CancellationError() }
+            })
+        await #expect(throws: PhotoImportRunUploader.Failure.self) {
+            _ = try await first.upload(
+                [try photo("pending"), try photo("confirmed")], runID: "RUN-TEST", performLocalAnalysis: false
+            )
+        }
+        var journal = try JSONDecoder().decode(
+            PhotoImportRunCheckpoint.self, from: Data(contentsOf: checkpoint))
+        journal.pending["pending"]?.url = try #require(
+            URL(
+                string:
+                    "https://uploads.example/x?X-Amz-Date=\(expired ? "20000101" : "20990101")T000000Z&X-Amz-Expires=60"
+            ))
+        try journal.save(at: checkpoint)
+        let renewed = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint,
+            put: { _, url, _ in
+                if url.query != nil {
+                    throw CubbyAPIError(status: 403, operationID: "presigned.put", detail: nil)
+                }
+            }, analyze: { input in fakeAnalysis(for: input.id) })
+        if expired {
+            #expect(try await renewed.recover() == "RUN-TEST")
+            #expect(await renewed.progress.uploaded == 2)
+            #expect(script.requests(matching: "/photoImport/stage").count == 2)
+        } else {
+            await #expect(throws: PhotoImportRunUploader.Failure.self) { _ = try await renewed.recover() }
+            #expect(await renewed.progress.uploaded == 1)
+            #expect(script.requests(matching: "/photoImport/stage").count == 1)
+        }
+    }
+
+    /// Cancellation after the server admitted a batch but its response was lost must
+    /// replay the durable intent and seal before deleting the journal.
+    @Test(arguments: [true, false]) func cancellationSettlesAmbiguousAdmission(newRun: Bool) async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        PhotoImportRunUploaderStub.cancelNextResponse.withLock {
+            $0 = newRun ? "/photoImport/createRun" : "/photoImport/admitBatch"
+        }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint, put: { _, _, _ in })
+        let create = PhotoImportCreateRunInput(
+            processor: .cubby, clientBatchId: UUID().uuidString, imageCount: 1)
+        await #expect(throws: (any Error).self) {
+            _ = try await uploader.upload(
+                [try photo("admission")], runID: newRun ? nil : "RUN-TEST", createRun: newRun ? create : nil)
+        }
+        try await uploader.recordCancellationIntent()
+        let state = try JSONDecoder().decode(
+            PhotoImportRunCheckpoint.self, from: Data(contentsOf: checkpoint))
+        #expect(state.needsCancellationSettlement)
+        let recovered = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint, put: { _, _, _ in })
+        try await recovered.settleCancellation()
+        #expect(script.requests(matching: "/photoImport/sealBatch").count == 1)
+        #expect(!FileManager.default.fileExists(atPath: checkpoint.path))
+        #expect(
+            script.requests(matching: newRun ? "/photoImport/createRun" : "/photoImport/admitBatch").count
+                == 2)
+    }
+
+    /// Done may wait on cancellation settlement: a completed transfer is finalized and
+    /// reflected in confirmed selection IDs, while the blocked remaining transfer is excluded.
+    @Test @MainActor func cancellationWaitsForSettlementAndRefreshesConfirmedIDs() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let gate = Gate()
+        let puts = Mutex<Int>(0)
+        let session = PhotoImportRunSession(
+            uploader: PhotoImportRunUploader(
+                client: try makeClient(), checkpointURL: checkpoint, maximumConcurrentUploads: 1,
+                put: { _, _, _ in
+                    let next = puts.withLock {
+                        $0 += 1; return $0
+                    }
+                    if next == 2 { try await gate.pass() }
+                }))
+        session.start([try photo("confirmed"), try photo("remaining")], runID: "RUN-TEST")
+        await gate.arrivals()
+        await observe { session.progress.transferred == 1 }
+        session.cancel()
+        #expect(session.hasActiveWork)
+        await session.waitUntilIdle()
+        #expect(session.phase == .cancelled)
+        #expect(session.importedPhotoIDs == ["confirmed"])
+        #expect(session.progress.uploaded == 1)
+        #expect(session.progress.excluded == 1)
+        #expect(script.requests(matching: "/photoImport/sealBatch").count == 1)
+        #expect(!FileManager.default.fileExists(atPath: checkpoint.path))
+    }
+
+    /// A reason transition while work stays suspended must reach progress immediately;
+    /// it cannot keep claiming that the network is unavailable after the network recovers.
+    @Test func waitingReasonChangesWhileConditionsRemainBlocked() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let gate = Gate()
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(),
+            waitForConditions: { changed in
+                await changed("Waiting for Low Power Mode to turn off")
+                try await gate.pass()
+            }, waitingReason: { "Waiting for unmetered Wi-Fi or Ethernet" }, put: { _, _, _ in })
+        let task = Task {
+            try await uploader.upload([try photo("waiting")], runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        await gate.arrivals()
+        #expect(await uploader.progress.waitingReason == "Waiting for Low Power Mode to turn off")
+        #expect(script.requests(matching: "/photoImport/stage").isEmpty)
+        task.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+    }
+
+    /// Capture facts must travel in finalize, before optional Vision analysis, including a
+    /// recovery after the finalize response fails.
+    @Test func libraryCaptureFactsSurviveDurableFinalizeRetry() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        script.failNextFinalizeCall()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let original = try photo("metadata")
+        let capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let metadata = LibraryAssetMetadata(
+            localIdentifier: "synthetic-asset", creationDate: capturedAt,
+            location: .init(latitude: 10, longitude: 20), sourceType: .userLibrary,
+            pixelWidth: 8, pixelHeight: 8, captureTimeZoneOffsetMinutes: -420)
+        let library = LibrarySightingBuilder.reportFields(
+            for: metadata, installationID: "synthetic-installation", observedAt: capturedAt)
+        let selected = PhotoImportRunPhoto(
+            id: original.id, file: original.file,
+            provenance: original.provenance, library: library)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let first = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint, put: { _, _, _ in })
+        await #expect(throws: CubbyAPIError.self) {
+            _ = try await first.upload([selected], runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        let second = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint,
+            put: { _, _, _ in }, analyze: { input in fakeAnalysis(for: input.id) })
+        _ = try await second.recover()
+        let finalized = try #require(script.requests(matching: "/photoImport/finalize").last)
+        let facts = try #require(finalized.fields["images"]?.arrayValue?.first?["library"])
+        #expect(facts["capturedAt"]?.stringValue != nil)
+        #expect(facts["capturedAtOffsetMinutes"]?.doubleValue == -420)
+        #expect(facts["location"]?["lat"]?.doubleValue == 10)
+    }
+
+    @Test func appendAdmissionOffsetSurvivesRecovery() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript(admissionOffset: 40)
+        script.failNextFinalizeCall()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("import.json")
+        let photos = try [photo("first"), photo("second")]
+        let first = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint, put: { _, _, _ in })
+        await #expect(throws: CubbyAPIError.self) {
+            _ = try await first.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
+        }
+        let restored = PhotoImportRunUploader(
+            client: try makeClient(), checkpointURL: checkpoint,
+            put: { _, _, _ in }, analyze: { input in fakeAnalysis(for: input.id) })
+        _ = try await restored.recover()
+        let positions = script.requests(matching: "/photoImport/finalize").flatMap {
+            ($0.fields["images"]?.arrayValue ?? []).compactMap { $0["position"]?.doubleValue }
+        }
+        #expect(positions == [40, 41, 40, 41])
+        #expect(script.requests(matching: "/photoImport/admitBatch").count == 1)
+    }
+
+    /// The headless path has no journal URL; creating and sealing must still use the same
+    /// durable batch identity supplied by the caller.
+    @Test func newRunUsesSameBatchIdentityWithoutCheckpoint() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let batchID = UUID().uuidString
+        let uploader = PhotoImportRunUploader(
+            client: try makeClient(), put: { _, _, _ in }, analyze: { input in fakeAnalysis(for: input.id) })
+        _ = try await uploader.upload(
+            [try photo("headless")],
+            createRun: .init(processor: .cubby, clientBatchId: batchID, imageCount: 1),
+            performLocalAnalysis: false)
+        let seal = try #require(script.requests(matching: "/photoImport/sealBatch").first)
+        #expect(seal.fields["clientBatchId"]?.stringValue == batchID)
+        #expect(script.requests(matching: "/photoImport/admitBatch").isEmpty)
+    }
+
     @Test @MainActor func sessionRetryRetainsNewRunDetailsAfterCreationFails() async throws {
         defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
         let script = RunUploaderScript()
@@ -190,7 +596,10 @@ struct PhotoImportRunUploaderTests {
                 client: try makeClient(), put: { _, _, _ in },
                 analyze: { input in fakeAnalysis(for: input.id) }))
 
-        session.start(photos, createRun: PhotoImportCreateRunInput())
+        session.start(
+            photos,
+            createRun: PhotoImportCreateRunInput(
+                processor: .cubby, clientBatchId: UUID().uuidString, imageCount: photos.count))
         #expect(session.progress.total == 1)
         await session.idle()
         #expect(session.canRetry)

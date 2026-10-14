@@ -135,6 +135,7 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
     id: shortcode,
     shortcode,
     name: hit.title,
+    imageUrl: hit.imageUrl,
     secondary: hit.subtitle ?? hit.typeHint ?? undefined,
     detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,
     presentation:
@@ -229,6 +230,7 @@ function productPickerBase(
     id: product.id,
     shortcode: product.id,
     name: product.name,
+    imageUrl: coverImageUrl,
     aliases: product.aliases ?? [],
     secondary: product.manufacturer,
     detail: product.category
@@ -348,6 +350,7 @@ export const buildLocationComboboxItem = (location: {
     id: location.id,
     shortcode: location.id,
     name: location.name,
+    imageUrl: location.coverImage?.url,
     aliases: location.aliases ?? [],
     secondary: location.type ?? undefined,
     detail: ancestors?.length

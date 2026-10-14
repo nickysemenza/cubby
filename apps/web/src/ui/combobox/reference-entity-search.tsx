@@ -2,7 +2,12 @@ import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/entity/entity-media/entity-display-images";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { Image } from "~/ui/primitives/image";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 import { treePickerItems } from "./tree-items";
@@ -85,11 +90,39 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
     [categories, query],
   );
 
+  const images = useEntityDisplayImages(
+    items.map((item) => ({ entityKind: "productCategory", entityId: item.id })),
+  );
+  const illustratedItems = items.map((item) => {
+    const imageUrl =
+      images[
+        entityDisplayImageKey({
+          entityKind: "productCategory",
+          entityId: item.id,
+        })
+      ]?.url;
+    return {
+      ...item,
+      imageUrl,
+      icon: imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt=""
+          displayWidth={40}
+          className="size-10 shrink-0 rounded-sm border border-border object-cover"
+        />
+      ) : (
+        item.icon
+      ),
+    };
+  });
   return children({
-    items,
+    items: illustratedItems,
     onSearchChange,
     isLoading,
-    onOpenChange: () => {},
+    onOpenChange: (open) => {
+      if (!open) setQuery("");
+    },
   });
 }
 

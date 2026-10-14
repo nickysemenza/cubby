@@ -5,6 +5,8 @@ import UIKit
 /// `CubbyLink` navigation, for both a cold launch (`connectionOptions.shortcutItem`) and a
 /// shortcut invoked while the app is already running (`performActionFor`).
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    private var backgroundUploadCompletion: (() -> Void)?
+    private var importEventsBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -12,6 +14,61 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         PhotoBackgroundProcessing.register()
         LibrarySyncBackgroundProcessing.register()
         return true
+    }
+
+    func application(
+        _ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == PhotoImportBackgroundUpload.identifier else {
+            completionHandler()
+            return
+        }
+        backgroundUploadCompletion = completionHandler
+        PhotoImportBackgroundUpload.shared.handleEvents { [weak self] in
+            Task { @MainActor in
+                await self?.settleBackgroundUploads()
+            }
+        }
+    }
+
+    func application(
+        _ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        PhotoImportNotificationCoordinator.shared.receivedDeviceToken(deviceToken)
+    }
+
+    func application(
+        _ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error
+    ) {
+        Diagnostics.report(error, context: "photos.import.notification.deviceToken")
+    }
+
+    private func settleBackgroundUploads() async {
+        importEventsBackgroundTask = UIApplication.shared.beginBackgroundTask(
+            withName: "Finalize photo import"
+        ) {
+            [weak self] in
+            Task { @MainActor in
+                AppModel.active?.interruptPhotoImports()
+                self?.finishImportEvents()
+            }
+        }
+        if let model = AppModel.active {
+            if model.phase == .restoring { await model.restoreSession() }
+            model.continuePhotoImports()
+            await model.waitForPhotoImports()
+        }
+        finishImportEvents()
+    }
+
+    private func finishImportEvents() {
+        backgroundUploadCompletion?()
+        backgroundUploadCompletion = nil
+        if importEventsBackgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(importEventsBackgroundTask)
+            importEventsBackgroundTask = .invalid
+        }
     }
 
     /// A link that arrived before `AppModel.active` existed. In practice this should never be

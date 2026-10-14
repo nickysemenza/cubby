@@ -85,6 +85,7 @@ import {
   importSourceProduct,
   imageDerivative,
   imageProcessingJob,
+  runPushRegistration,
   ledgerSourceClaim,
   mealFoodEntry,
   mealRecipe,
@@ -1026,6 +1027,15 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       })
       .returning();
     if (!photoRun) throw new Error("Delete policy photo Run missing");
+    if (deviceId)
+      await insertAndReturn(db, runPushRegistration, {
+        runId: photoRun.id,
+        deviceId,
+        kind: "alert",
+        pushToken: "synthetic-delete-policy-token",
+        apnsEnvironment: "development",
+        appIdentity: "production",
+      });
     await insertAndReturn(db, photoRunImage, {
       runId: photoRun.id,
       imageId,

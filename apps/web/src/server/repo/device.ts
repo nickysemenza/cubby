@@ -21,7 +21,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { device, imageSighting } from "~/server/db/schema";
+import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   buildPartialUpdateValues,
@@ -70,6 +70,12 @@ const DEVICE_DELETE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
+  },
+  "RunPushRegistration.deviceId": {
+    code: "cascade-push-registrations",
+    effect: "hard-delete",
+    description:
+      "A removed install receives no more Run pushes; its registrations go with it.",
   },
   "PhotoRunImage.deviceWorkDeviceId": {
     code: "clearFk",
@@ -278,6 +284,16 @@ const deleteDeviceSightings = async (
     await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
 };
 
+/** A removed install's Run push registrations go with it. */
+const deleteDevicePushRegistrations = async (
+  tx: DrizzleTransaction,
+  ids: DeviceId[],
+) => {
+  await tx
+    .delete(runPushRegistration)
+    .where(inArray(runPushRegistration.deviceId, ids));
+};
+
 export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
   get: onDb(getDeviceByShortcode),
@@ -286,6 +302,9 @@ export const deviceRepository = defineRepository("device", {
   create: asActor(createDevice),
   update: asActor(updateDevice),
   deleteHooks: {
-    overrides: { "ImageSighting.deviceId": deleteDeviceSightings },
+    overrides: {
+      "ImageSighting.deviceId": deleteDeviceSightings,
+      "RunPushRegistration.deviceId": deleteDevicePushRegistrations,
+    },
   },
 });

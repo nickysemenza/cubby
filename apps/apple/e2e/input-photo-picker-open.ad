@@ -1,0 +1,14 @@
+context platform=ios timeout=600000
+
+open com.nickysemenza.cubby
+# Enter through the shared Library tab, independent of statement intake.
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "All photos" 30000
+click "label=\"All photos\""
+wait "id=photo.source.systemPicker" 30000
+click "id=photo.source.systemPicker"
+wait "label=Photos" 30000
+wait "id=PXGGridLayout-Info" 30000
+
+# The selection phase uses fresh snapshot refs for the newest batch.

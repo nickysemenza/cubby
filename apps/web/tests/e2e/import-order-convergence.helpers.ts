@@ -305,9 +305,16 @@ export async function createConvergenceHarness(
   }
 
   async function photo() {
+    const clientBatchId = crypto.randomUUID();
     const run = await post(
       "photoImport/createRun",
-      { notes: `Synthetic occurrence ${token}` },
+      {
+        notes: `Synthetic occurrence ${token}`,
+        // The member groups this Run through saveGroups below; Pi never runs.
+        processor: "external",
+        clientBatchId,
+        imageCount: 2,
+      },
       photoImportContract.ops.createRun.output,
     );
     photoRunId = run.runId;
@@ -351,7 +358,7 @@ export async function createConvergenceHarness(
     await updateImageProcessingSettings(db, { enabled: false, paused: false });
     const result = await post(
       "photoImport/finalize",
-      { runId: run.runId, images: finalized },
+      { runId: run.runId, clientBatchId, images: finalized },
       photoImportContract.ops.finalize.output,
     );
     expect(result.finalized).toHaveLength(2);

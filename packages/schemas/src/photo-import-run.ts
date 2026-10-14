@@ -1,3 +1,4 @@
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
 
 import {
@@ -14,6 +15,8 @@ import {
 import { runStatus } from "./run-fields";
 import { purchaseImportRunExecution } from "./purchase-import";
 import { productImagePurpose } from "./image";
+import { imageSightingReportFields } from "./image-sighting";
+import { photoRunProcessor } from "./photo-run-input";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
 import { runTargetState } from "./purchase-import";
@@ -214,6 +217,19 @@ export const photoGroupProposalState = z.enum([
 ]);
 export type PhotoGroupProposalState = z.infer<typeof photoGroupProposalState>;
 
+/**
+ * Who last wrote a proposal's payload: the Run's Pi coordinator, an external
+ * Claude/Codex session over MCP, or the member's own review edit. Honest
+ * last-writer metadata only — no proposal field is a Jev/Clef suggestion.
+ * Null on rows written before the origin was recorded.
+ */
+export const photoGroupProposalOrigin = z.enum([
+  "coordinator",
+  "external_agent",
+  "member",
+]);
+export type PhotoGroupProposalOrigin = z.infer<typeof photoGroupProposalOrigin>;
+
 export const photoGroupProposalGroup = commitPhotoGroupInputBase
   .omit({ runId: true })
   .extend({
@@ -316,6 +332,8 @@ export const photoGroupProposal = z.object({
     })
     .nullable(),
   evidence: z.string().nullable(),
+  /** Last writer of this payload; null = written before origin was recorded. */
+  origin: photoGroupProposalOrigin.nullable(),
   /** Live Products whose name/alias collided on the last approval attempt. */
   conflict: z.array(proposalProductSummary).nullable(),
   lastError: z.string().nullable(),
@@ -398,6 +416,8 @@ export const photoRunImage = z.object({
   /** The camera's UTC offset at capture, for reading `capturedAt` as local time. */
   capturedAtOffsetMinutes: z.number().int().nullable(),
   targetState: runTargetState,
+  /** Why a `skipped` photo was left out; the Image itself is kept. */
+  skipReason: z.string().nullable(),
   originalUrl: z.string(),
   cutoutUrl: z.string().nullable(),
   /** Current-source subject-lift and description job states; null = never queued. */
@@ -522,12 +542,68 @@ export const photoProductCandidateSearchInput = z.object({
   manufacturer: z.string().trim().max(300).optional(),
 });
 
+export {
+  storedPhotoRunInput,
+  photoInventoryRunInput,
+  type PhotoInventoryRunInput,
+  photoRunProcessor,
+  type PhotoRunProcessor,
+  photoRunUploadBatch,
+  type PhotoRunUploadBatch,
+} from "./photo-run-input";
+
+/**
+ * Where a photo Run stands, derived on every read from durable rows:
+ * - `waiting_for_upload`: an admitted upload batch is not sealed yet.
+ * - `describing`: required photo descriptions are queued or running.
+ * - `needs_attention`: a description failed; continue without those photos
+ *   (`excludeFailed`) or retry them.
+ * - `grouping`: the Pi coordinator is grouping (cubby).
+ * - `ready_for_handoff`: descriptions settled; copy the prompt to Claude/Codex (external).
+ * - `ready_for_review`: proposals wait for member approval.
+ * - `completed`: nothing pending remains.
+ */
+export const photoRunLifecyclePhase = z.enum([
+  "waiting_for_upload",
+  "describing",
+  "needs_attention",
+  "grouping",
+  "ready_for_handoff",
+  "ready_for_review",
+  "completed",
+]);
+export type PhotoRunLifecyclePhase = z.infer<typeof photoRunLifecyclePhase>;
+
+export const photoRunLifecycle = z.object({
+  /** Null on a legacy Run created before the choice existed (manual grouping). */
+  processor: photoRunProcessor.nullable(),
+  phase: photoRunLifecyclePhase,
+  /** Photos every admitted batch planned; null on a legacy Run. */
+  plannedImageCount: z.number().int().nonnegative().nullable(),
+  /** Admitted batches not yet sealed; grouping waits for zero. */
+  openBatchCount: z.number().int().nonnegative(),
+  /** Finalized run targets, whatever their state. */
+  finalizedImageCount: z.number().int().nonnegative(),
+  /** Pending photos whose description is ready, skipped, or not required. */
+  describedImageCount: z.number().int().nonnegative(),
+  /** Pending photos whose description failed; they block automatic grouping. */
+  failedImageIds: z.array(imageShortcode),
+  /** Photos skipped with a reason (kept, never deleted). */
+  skippedImageCount: z.number().int().nonnegative(),
+  proposedGroupCount: z.number().int().nonnegative(),
+  committedGroupCount: z.number().int().nonnegative(),
+  /** The last coordinator dispatch failure, verbatim. */
+  dispatchError: z.string().nullable(),
+});
+export type PhotoRunLifecycle = z.infer<typeof photoRunLifecycle>;
+
 /** The run page's review read: proposals plus every run photo. */
 export const photoRunReviewResponse = z.object({
   review: photoGroupProposalList,
   images: z.array(photoRunImage),
   /** Household image work is paused, so queued descriptions wait and grouping cannot start. */
   imageProcessingPaused: z.boolean(),
+  lifecycle: photoRunLifecycle,
 });
 export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;
 
@@ -536,9 +612,62 @@ export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;
 export const photoImportCreateRunInput = z.object({
   ledgerPartyId: ledgerPartyShortcode.optional(),
   notes: z.string().max(2_000).optional(),
+  processor: photoRunProcessor,
+  /**
+   * The first batch's durable client UUID. It is also the Run's idempotency
+   * key: resending the same id returns the Run already created.
+   */
+  clientBatchId: z.uuid(),
+  /** Photos the first batch plans to finalize (progress only). */
+  imageCount: z.int().positive(),
 });
 export const photoImportCreateRunOutput = z.object({
   runId: runShortcode,
+});
+
+/**
+ * Admit another batch into an existing Run before uploading it; replaying a
+ * `clientBatchId` changes nothing. A new batch on a `cubby` Run fences the
+ * active coordinator generation and drops every still-`proposed` group, so
+ * the next generation regroups all unapproved photos; committed and
+ * discarded groups stay frozen.
+ */
+export const photoImportAdmitBatchInput = z.object({
+  runId: runShortcode,
+  clientBatchId: z.uuid(),
+  imageCount: z.int().positive(),
+});
+/**
+ * Close a batch after its last finalize chunk, or when the uploader gives up
+ * on its remaining photos. Omit `clientBatchId` to close every open batch
+ * (a member continuing with the photos already uploaded). Idempotent.
+ */
+export const photoImportSealBatchInput = z.object({
+  runId: runShortcode,
+  clientBatchId: z.uuid().optional(),
+});
+export const photoRunLifecycleOutput = z.object({
+  runId: runShortcode,
+  lifecycle: photoRunLifecycle,
+});
+/** Positions in this batch's finalize calls are `positionOffset + index`. */
+export const photoImportAdmitBatchOutput = photoRunLifecycleOutput.extend({
+  clientBatchId: z.uuid(),
+  positionOffset: z.int().nonnegative(),
+});
+
+export const photoRunSetProcessorInput = z.object({
+  runId: runShortcode,
+  processor: photoRunProcessor,
+});
+
+/**
+ * Continue without photos whose description failed: each becomes a `skipped`
+ * run target with this reason. The Image and its bytes are kept.
+ */
+export const photoRunExcludeFailedInput = z.object({
+  runId: runShortcode,
+  imageIds: z.array(imageShortcode).min(1).max(500),
 });
 
 export const photoImportFinalizeImage = z.object({
@@ -547,9 +676,22 @@ export const photoImportFinalizeImage = z.object({
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
   width: z.int().positive(),
   height: z.int().positive(),
+  /**
+   * This device's library facts about the asset (capture date and offset,
+   * location, camera, asset key), recorded as an `import` ImageSighting so
+   * the Image's capture fields are durable without local Vision analysis.
+   * Same block as the manifest commit's `library`.
+   */
+  library: imageSightingReportFields.optional(),
 });
 export const photoImportFinalizeInput = z.object({
   runId: runShortcode,
+  /**
+   * The admitted batch these photos belong to; required on every Run with a
+   * processor choice (only a legacy Run omits it). New photos are refused
+   * once that batch is sealed; replaying already-finalized photos is not.
+   */
+  clientBatchId: z.uuid().optional(),
   images: z.array(photoImportFinalizeImage).min(1).max(100),
 });
 export const photoImportFinalizeOutput = z.object({
@@ -557,3 +699,78 @@ export const photoImportFinalizeOutput = z.object({
   alreadyFinalized: z.array(imageShortcode),
   submissionId: z.string(),
 });
+
+/**
+ * The Live Activity a native install started for a Run it created. The
+ * per-activity APNs push token is a credential: it is stored for delivery and
+ * never returned by any read.
+ */
+export const apnsEnvironment = z.enum(["development", "production"]);
+export type ApnsEnvironment = z.infer<typeof apnsEnvironment>;
+/** What a `RunPushRegistration` token is for: an Activity or opt-in alerts. */
+export const runPushKind = z.enum(["live_activity", "alert"]);
+export type RunPushKind = z.infer<typeof runPushKind>;
+/**
+ * Which Cubby app build registered a push token, keyed like
+ * `APPLE_APP_IDENTITIES`: it names the APNs topic (the build's bundle id), so
+ * a token is never addressed to another build's topic.
+ */
+export const photoRunPushAppIdentity = z.keyof(
+  z.object(
+    // SAFETY: one entry per APPLE_APP_IDENTITIES key, built from its own keys.
+    Object.fromEntries(
+      Object.keys(APPLE_APP_IDENTITIES).map((key) => [key, z.unknown()]),
+    ) as Record<keyof typeof APPLE_APP_IDENTITIES, z.ZodUnknown>,
+  ),
+);
+export type PhotoRunPushAppIdentity = z.infer<typeof photoRunPushAppIdentity>;
+export const photoRunLiveActivityRegisterInput = z.object({
+  runId: runShortcode,
+  pushToken: z.string().regex(/^[0-9a-f]{16,256}$/),
+  apnsEnvironment,
+  /** Live Activities exist only in the production app; `development` is refused. */
+  appIdentity: photoRunPushAppIdentity,
+});
+export const photoRunLiveActivityRegisterOutput = z.object({
+  registered: z.literal(true),
+});
+export const photoRunLiveActivityEndInput = z.object({ runId: runShortcode });
+export const photoRunLiveActivityEndOutput = z.object({
+  ended: z.boolean(),
+});
+
+/**
+ * Opt-in "notify me when ready" for a Run this install created: the
+ * standard APNs device token (not an Activity token). One alert per entry
+ * into `needs_attention`, `ready_for_review` or `ready_for_handoff`; the
+ * registration stays active across phases and new batches until ended.
+ */
+export const photoRunNotificationRegisterInput = z.object({
+  runId: runShortcode,
+  deviceToken: z.string().regex(/^[0-9a-f]{16,256}$/),
+  apnsEnvironment,
+  appIdentity: photoRunPushAppIdentity,
+});
+export const photoRunNotificationRegisterOutput = z.object({
+  registered: z.literal(true),
+});
+export const photoRunNotificationEndInput = z.object({ runId: runShortcode });
+export const photoRunNotificationEndOutput = z.object({
+  ended: z.boolean(),
+});
+
+/**
+ * `PhotoRunActivityAttributes.ContentState` on the device. Keys are the
+ * Swift Codable keys, so the APNs `content-state` decodes without mapping.
+ */
+export const photoRunLiveActivityContentState = z.object({
+  phase: z.enum(["uploading", ...photoRunLifecyclePhase.options]),
+  title: z.string(),
+  detail: z.string(),
+  completed: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  needsAttention: z.boolean(),
+});
+export type PhotoRunLiveActivityContentState = z.infer<
+  typeof photoRunLiveActivityContentState
+>;

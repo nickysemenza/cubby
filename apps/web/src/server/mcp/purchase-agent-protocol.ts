@@ -104,13 +104,21 @@ export async function purchaseAgentTargetFingerprint(
   return sha256Hex(JSON.stringify(await targetSnapshot(db, args)));
 }
 
-type TrustedPurchaseAgent = { runId: string; grantId: string };
+type TrustedPurchaseAgent = {
+  runId: string;
+  grantId: string;
+  generation?: string | undefined;
+};
 
 export function trustedPurchaseAgent(
   extra: ToolExtra,
 ): TrustedPurchaseAgent | null {
   const parsed = z
-    .object({ runId: z.uuid(), grantId: z.string().min(1) })
+    .object({
+      runId: z.uuid(),
+      grantId: z.string().min(1),
+      generation: z.string().min(1).optional(),
+    })
     .safeParse(extra.http?.authInfo?.extra?.purchaseAgent);
   return parsed.success ? parsed.data : null;
 }

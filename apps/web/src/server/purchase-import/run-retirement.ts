@@ -110,7 +110,13 @@ export async function retireSettledCoordinators(
 ) {
   await closeRetiredExecutionFindings(db);
   const rows = await getDb(db)
-    .select({ id: runTable.id, agentId: runTable.agentSessionId })
+    .select({
+      id: runTable.id,
+      agentId: runTable.agentSessionId,
+      status: runTable.status,
+      // Text, not a Date: microsecond precision survives the round trip.
+      observedAt: sql<string>`${runTable.updatedAt}::text`,
+    })
     .from(runTable)
     .where(
       and(
@@ -124,18 +130,28 @@ export async function retireSettledCoordinators(
     .limit(limit);
   let retired = 0;
   const failures: string[] = [];
-  for (const { id, agentId } of rows) {
+  for (const { id, agentId, status, observedAt } of rows) {
     if (!agentId) continue;
     const retire = async () => (await coordinator(agentId).retire()).disposed;
     try {
       // A real failure repeats on the follow-up, which reports it.
       if (!((await retire().catch(() => false)) || (await retire()))) continue;
-      await withTransaction(db, async (tx) => {
+      // Reopened Runs must neither be stamped retired nor lose their findings.
+      const stamped = await withTransaction(db, async (tx) => {
         const now = new Date();
-        await tx
+        const [retiredRun] = await tx
           .update(runTable)
           .set({ retiredAt: now, retirementReason: "settled" })
-          .where(eq(runTable.id, id));
+          .where(
+            and(
+              eq(runTable.id, id),
+              eq(runTable.status, status),
+              sql`${runTable.updatedAt}::text = ${observedAt}`,
+              isNull(runTable.retiredAt),
+            ),
+          )
+          .returning({ id: runTable.id });
+        if (!retiredRun) return false;
         await tx
           .update(runFinding)
           .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
@@ -146,8 +162,9 @@ export async function retireSettledCoordinators(
               obsoleteExecutionFindingSql('"RunFinding"'),
             ),
           );
+        return true;
       });
-      retired += 1;
+      if (stamped) retired += 1;
     } catch (error) {
       failures.push(`${id}: ${String(error)}`);
     }

@@ -742,11 +742,21 @@ const selfGoverned = (action: CompiledAction) =>
 function actionArguments(
   action: CompiledAction,
   params: ToolArguments,
+  signedGeneration: string | undefined,
 ): ToolArguments {
   const { action: _action, _runExecution, ...args } = params;
-  return action.keepsRunExecution && _runExecution !== undefined
-    ? { ...args, _runExecution }
-    : args;
+  if (!action.keepsRunExecution || _runExecution === undefined) return args;
+  // Only the run-bound delegation's signature names a coordinator
+  // generation; a caller-written value is never trusted.
+  const { generation: _claimed, ...envelope } = z
+    .looseObject({ generation: z.unknown().optional() })
+    .parse(_runExecution);
+  return {
+    ...args,
+    _runExecution: signedGeneration
+      ? { ...envelope, generation: signedGeneration }
+      : envelope,
+  };
 }
 
 export function registerMcpTools(
@@ -775,7 +785,9 @@ function registerCompiledTool(
     const action = actionOf(params);
     if (!action) return undefined;
     return action.telemetryEntity(
-      action.input.parse(action.prepareInput(actionArguments(action, params))),
+      action.input.parse(
+        action.prepareInput(actionArguments(action, params, undefined)),
+      ),
     );
   });
   declareToolInputJsonSchema(server, tool.name, tool.inputJsonSchema);
@@ -831,7 +843,13 @@ function registerCompiledTool(
             .optional()
             .parse(params._runExecution);
           const input = action.input.parse(
-            action.prepareInput(actionArguments(action, params)),
+            action.prepareInput(
+              actionArguments(
+                action,
+                params,
+                trustedPurchaseAgent(callExtra)?.generation,
+              ),
+            ),
           );
           entity = action.telemetryEntity(input);
           stage = "context";

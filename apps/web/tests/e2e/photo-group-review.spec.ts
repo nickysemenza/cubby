@@ -49,10 +49,19 @@ test("approves two selected photo groups with one reviewed batch action", async 
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
-  await page
-    .getByRole("checkbox", { name: /Select Gray crew t-shirt/ })
-    .check();
-  await page.getByRole("checkbox", { name: /Select .* solo find/ }).check();
+  // Reviewing a batch must not require switching a single mounted editor;
+  // selecting all still goes through the explicit, revision-checked approval.
+  await expect(
+    page.getByRole("heading", { name: /Gray crew t-shirt/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /solo find/ })).toBeAttached();
+  await page.getByRole("button", { name: "Select all ready items" }).click();
+  await expect(
+    page.getByRole("checkbox", { name: /Select Gray crew t-shirt/ }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: /Select .* solo find/ }),
+  ).toBeChecked();
   await page.getByRole("button", { name: "Approve 2 selected items" }).click();
 
   await expect(
@@ -64,6 +73,11 @@ test("approves two selected photo groups with one reviewed batch action", async 
     page
       .getByRole("navigation", { name: "Photo item groups" })
       .getByText("Approved", { exact: true }),
+  ).toHaveCount(2);
+  await expect(
+    page
+      .getByLabel("Products from this import")
+      .getByText("Created by this import", { exact: true }),
   ).toHaveCount(2);
 });
 
@@ -304,6 +318,9 @@ test("suggests an existing variant and previews every merge decision for a creat
     })
     .toBeTruthy();
 
+  await page
+    .getByRole("heading", { name: `Approved · ${createdName}` })
+    .click();
   await page.getByText("Review possible matches", { exact: true }).click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
@@ -430,8 +447,10 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
-  const comparison = page.getByRole("region", { name: "Product comparison" });
-  await expect(comparison.getByText(existingName)).toBeVisible();
+  const comparison = page
+    .locator("#photo-group-g1")
+    .getByRole("region", { name: "Product comparison" });
+  await expect(comparison.getByText(existingName).first()).toBeVisible();
   await expect(comparison.getByText("Counted now").first()).toBeVisible();
   await expect(comparison.getByText("Ledger expected").first()).toBeVisible();
   await expect(
@@ -447,7 +466,10 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
       ),
     ).toBe(true);
   }
-  await page.getByRole("button", { name: "Approve item" }).click();
+  await page
+    .locator("#photo-group-g1")
+    .getByRole("button", { name: "Approve item" })
+    .click();
   await expect(
     page
       .getByRole("navigation", { name: "Photo item groups" })
@@ -462,6 +484,9 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
       (group: { groupKey: string }) => group.groupKey === "g1",
     )?.committedInventoryId,
   ).toBeTruthy();
+  await page
+    .getByRole("heading", { name: `Approved · ${existingName}` })
+    .click();
   const linkSection = page.getByRole("region", {
     name: "Unlinked purchase lines",
   });
@@ -562,10 +587,14 @@ test("distinguishes blocking description failure from optional cutout failure", 
     page.getByText(/Description failed: Synthetic description failure/),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Approve item" }),
+    page
+      .locator("#photo-group-g1")
+      .getByRole("button", { name: "Approve item" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("link", { name: "Open photo to retry" }),
+    page
+      .locator("#photo-group-g1")
+      .getByRole("link", { name: "Open photo to retry" }),
   ).toHaveAttribute("href", new RegExp(seed.itemImage.shortcode));
   await page
     .getByRole("navigation", { name: "Photo item groups" })
@@ -575,7 +604,9 @@ test("distinguishes blocking description failure from optional cutout failure", 
     page.getByText(/Optional cutout failed: Synthetic cutout failure/),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Approve item" }),
+    page
+      .locator("#photo-group-g2")
+      .getByRole("button", { name: "Approve item" }),
   ).toBeEnabled();
 });
 
@@ -639,8 +670,14 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     .getByRole("navigation", { name: "Photo item groups" })
     .getByRole("button", { name: /ForgeWear work boots tan size 7/ })
     .click();
-  await expect(page.getByText(/OCR: SKU FW-7744/)).toBeVisible();
-  const comparison = page.getByRole("region", { name: "Product comparison" });
+  const bootGroup = page.locator("#photo-group-g2");
+  await bootGroup
+    .getByText("Photo descriptions and label text", { exact: true })
+    .click();
+  await expect(bootGroup.getByText(/OCR: SKU FW-7744/)).toBeVisible();
+  const comparison = bootGroup.getByRole("region", {
+    name: "Product comparison",
+  });
   const exactIdentifier = comparison.getByText(
     "Exact label identifier: FW-7744",
   );

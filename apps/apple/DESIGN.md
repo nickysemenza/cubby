@@ -36,6 +36,9 @@ The pilot opens `/RUN-4K7M?nativeWorkspace=run-evidence#evidence` and accepts it
 
 The hosted sheet disables global web search and blocks SPA navigation outside its evidence document. Its header omits list breadcrumbs, and same-record hash navigation retains the pilot parameter. Ordinary routes strip it with a document replace before rendering so client search retention cannot restore it or promote a later Run link into hosted mode. Auth redirects retain that parameter and render only the auth-required bridge, while Swift also intercepts auth URLs before loading them. Bootstrap uses the resolved auth session-cookie descriptor. Hosted documents, Start commands and HTTP API calls share the `UPGRADE_REQUIRED` body with `reason: CLIENT_UPDATE_REQUIRED`. Related records hand off to native navigation. Retry replaces both the session host and the displayed WebKit view, so recovery cannot load an unattached browser.
 
+Photo import interaction, recovery, and device-work rules live in
+[Photos library deduplication](../../docs/photo-library-dedup.md#native-import-run-lifecycle).
+
 ## Density and feedback
 
 The shell follows Native Archive, details follow Record Dossier, and cooking, imports, reconciliation, photo review, and project tasks retain focused Working Context through their existing controls. Shared presentation reaches specialist screens without replacing their task-specific interaction. Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.

@@ -156,6 +156,21 @@ beforeEach(() => {
       };
     if (operation === "run.control")
       return { ok: true, data: { run: detailRun, successor: null } };
+    if (operation === "run.aiUsage")
+      return {
+        ok: true,
+        data: {
+          standardCost: 0,
+          chargedCost: 0,
+          standardUnpricedCount: 0,
+          chargedUnpricedCount: 0,
+          savings: 0,
+          comparedCalls: 0,
+          count: 0,
+          records: [],
+          nextCursor: null,
+        },
+      };
     if (operation === "photoImport.review")
       return {
         ok: true,
@@ -167,6 +182,19 @@ beforeEach(() => {
             unassignedImageIds: [],
           },
           images: [],
+          lifecycle: {
+            processor: null,
+            phase: "completed",
+            plannedImageCount: null,
+            openBatchCount: 0,
+            finalizedImageCount: 0,
+            describedImageCount: 0,
+            failedImageIds: [],
+            skippedImageCount: 0,
+            proposedGroupCount: 0,
+            committedGroupCount: 0,
+            dispatchError: null,
+          },
           imageProcessingPaused: false,
         },
       };

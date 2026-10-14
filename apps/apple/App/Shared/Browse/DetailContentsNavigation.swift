@@ -111,6 +111,7 @@ extension View {
 /// The outline navigates the same mounted detail; selecting an entry never changes its content.
 struct DetailContentsNavigation: ViewModifier {
     let entries: [DetailContentsEntry]
+    var initialSectionID: String? = nil
     @State private var presented = false
     @State private var current: String?
     @State private var destination: DetailContentsJump?
@@ -166,6 +167,14 @@ struct DetailContentsNavigation: ViewModifier {
                             #endif
                         }
                     }
+                }
+                .task(id: initialSectionID) {
+                    guard let initialSectionID else { return }
+                    await Task.yield()
+                    // Initial action destinations use a bounded body row, clear of overlaid
+                    // navigation bars even when the enclosing sheet is medium-height.
+                    proxy.scrollTo(DetailContentsAnchorID(id: initialSectionID), anchor: .center)
+                    destination = DetailContentsJump(id: initialSectionID)
                 }
             }
         }

@@ -6,6 +6,13 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { linkablePhotoGroupExpenses } from "~/server/photo-import-run/expense-link";
 import { startPhotoGroupingForActor } from "~/server/photo-import-run/grouping";
 import {
+  admitPhotoRunBatch,
+  excludeFailedPhotoRunImages,
+  readPhotoRunLifecycle,
+  sealPhotoRunBatch,
+  setPhotoRunProcessor,
+} from "~/server/photo-import-run/lifecycle";
+import {
   approvePhotoGroupProposals,
   assertPhotoRunReviewer,
   chooseExistingProductForPhotoGroup,
@@ -15,6 +22,12 @@ import {
   proposePhotoGroups,
   updatePhotoGroupProductDraft,
 } from "~/server/photo-import-run/proposals";
+import {
+  endPhotoRunLiveActivity,
+  endPhotoRunNotification,
+  registerPhotoRunLiveActivity,
+  registerPhotoRunNotification,
+} from "~/server/photo-import-run/run-push";
 import { commitPhotoGroup } from "~/server/photo-import-run/writer";
 import {
   finalizePhotoRun,
@@ -49,12 +62,18 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const [review, images, settings] = await Promise.all([
+      const [review, images, settings, lifecycle] = await Promise.all([
         listPhotoGroupProposals(context.db, input.runId),
         listPhotoRunImages(context.db, input.runId),
         readImageProcessingSettings(context.db),
+        readPhotoRunLifecycle(context.db, input.runId),
       ]);
-      return { review, images, imageProcessingPaused: settings.paused };
+      return {
+        review,
+        images,
+        imageProcessingPaused: settings.paused,
+        lifecycle,
+      };
     },
     candidates: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -143,7 +162,7 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const saved = await proposePhotoGroups(context.db, input);
+      const saved = await proposePhotoGroups(context.db, input, "member");
       return { ...saved, results: [] };
     },
     stage: (context, input) => stagePhotoImport(context.db, input),
@@ -157,9 +176,55 @@ export const photoImportHandlers = implementOperationDomain(
         ledgerPartyId,
         actorUserId: context.auth.userId,
         notes: input.notes,
+        grouping: {
+          processor: input.processor,
+          clientBatchId: input.clientBatchId,
+          imageCount: input.imageCount,
+        },
+        deviceId: context.actorContext.deviceId,
       });
       return { runId: run.publicId };
     },
+    admitBatch: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return admitPhotoRunBatch(context.db, input);
+    },
+    sealBatch: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return sealPhotoRunBatch(context.db, input);
+    },
+    setProcessor: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return setPhotoRunProcessor(context.db, input);
+    },
+    excludeFailed: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return excludeFailedPhotoRunImages(context.db, input);
+    },
+    registerLiveActivity: (context, input) =>
+      registerPhotoRunLiveActivity(context.db, context.actorContext, input),
+    endLiveActivity: (context, input) =>
+      endPhotoRunLiveActivity(context.db, context.actorContext, input),
+    registerNotification: (context, input) =>
+      registerPhotoRunNotification(context.db, context.actorContext, input),
+    endNotification: (context, input) =>
+      endPhotoRunNotification(context.db, context.actorContext, input),
     finalize: (context, input) =>
       finalizePhotoRun(context.db, input, context.actorContext),
     reconcile: (context, input) => reconcilePhotoImport(context.db, input),
@@ -204,7 +269,21 @@ export const photoImportHandlers = implementOperationDomain(
     }),
     proposals: (context, input) =>
       listPhotoGroupProposals(context.db, input.runId),
-    proposeGroups: (context, input) => proposePhotoGroups(context.db, input),
+    // A run-bound coordinator's envelope carries its signed dispatch
+    // generation (`tool-registration` drops any unsigned value); any other
+    // MCP caller is an external Claude/Codex session.
+    proposeGroups: (context, input) =>
+      proposePhotoGroups(
+        context.db,
+        input,
+        context.actorContext.channel === "mcp" &&
+          input._runExecution?.generation
+          ? "coordinator"
+          : context.actorContext.channel === "mcp"
+            ? "external_agent"
+            : "member",
+        input._runExecution?.generation,
+      ),
     commitGroup: (context, input) =>
       commitPhotoGroup(context.db, input, context.actorContext),
   },

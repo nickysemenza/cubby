@@ -203,11 +203,14 @@ targets:
             UIApplicationShortcutItemTitle: Search
             UIApplicationShortcutItemIconSymbolName: magnifyingglass
     settings:
+      base:
+        APS_ENVIRONMENT: production
       configs:
         # Lets `Cubby-iOS-Tests` `@testable import Cubby` to reach internal preview/content
         # sub-views (e.g. `SearchContent`, `PreviewFixtures`).
         Debug:
           ENABLE_TESTABILITY: YES
+          APS_ENVIRONMENT: development
     dependencies:
       - target: CubbyLiveActivity
         embed: true
@@ -217,6 +220,7 @@ targets:
     sources:
       - path: App/LiveActivity
       - path: App/iOS/DeviceWorkAttributes.swift
+      - path: App/iOS/PhotoRunActivityAttributes.swift
     info:
       path: App/LiveActivity/Info.plist
       properties:
@@ -248,6 +252,12 @@ targets:
     info:
       properties:
         LSApplicationCategoryType: public.app-category.productivity
+    settings:
+      base:
+        APS_ENVIRONMENT: production
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
   # Tests for iOS-only screens. Hosted by Cubby-iOS so `@testable import Cubby`
   # and `.environment`/`AppModel` work exactly as the app's own `#Preview`s do.
   # macOS hosts the cross-platform navigation contracts below.
@@ -286,6 +296,7 @@ targets:
       - path: App/Tests/Navigation
       - path: App/Tests/CliAuth
       - path: App/Tests/Browse
+      - path: App/Tests/Photos/PhotoImportRunPreparationTests.swift
       - path: App/Tests/Photos/PhotoDestinationOptionTests.swift
       - path: App/Tests/Photos/PhotoEntityChooserModelTests.swift
       - path: App/Tests/Photos/PhotoTestStores.swift

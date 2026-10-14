@@ -1,0 +1,11 @@
+context platform=ios timeout=600000
+
+open com.nickysemenza.cubby
+# Enter through the shared Library tab, independent of statement intake.
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "All photos" 30000
+click "label=\"All photos\""
+wait "id=photos.grid.details" 30000
+
+# The selection phase uses fresh refs from the authorized Library grid.

@@ -116,6 +116,12 @@ export const purchaseImportRunExecution = z
     run: runShortcode.optional(),
     operationId: importOperationId,
     itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
+    /**
+     * The coordinator dispatch generation this call belongs to. Stamped by
+     * the agent host, signed into the run-bound delegation, and overwritten
+     * from that signature server-side; any other caller's value is dropped.
+     */
+    generation: z.string().min(1).max(200).optional(),
   })
   .refine((value) => !(value.runId && value.run), {
     message: "Name the import Run once: runId (agent) or run (member)",

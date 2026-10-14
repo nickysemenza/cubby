@@ -37,8 +37,8 @@ nonisolated struct PhotoSelectionItem: Identifiable, Sendable {
         queryOverride = nil
     }
 
-    init(file: PhotoFile, preview: CGImage, query: HashQuery? = nil) {
-        id = UUID().uuidString
+    init(file: PhotoFile, preview: CGImage, query: HashQuery? = nil, id: String = UUID().uuidString) {
+        self.id = id
         source = .file(file)
         self.preview = preview
         capturedAt = file.capturedAt
@@ -50,6 +50,26 @@ nonisolated struct PhotoSelectionItem: Identifiable, Sendable {
         case .library(let asset): try await PhotoLibraryIO.shared.file(for: asset, progress: progress)
         case .file(let file): file
         }
+    }
+
+    var importFilename: String {
+        switch source {
+        case .file(let file): file.filename
+        case .library(let asset):
+            PHAssetResource.assetResources(for: asset).first?.originalFilename ?? "Photo"
+        }
+    }
+
+    @MainActor func importLibraryFields(file: PhotoFile) -> ImageSightingReportFields? {
+        guard case .library(let asset) = source else { return nil }
+        let metadata = LibrarySightingBuilder.metadata(
+            from: PHAssetLibraryFacts(asset: asset), cloudIdentifier: nil
+        )
+        .mergingFileEXIF(
+            camera: file.camera, gpsLocation: file.gpsLocation,
+            captureTimeZoneOffsetMinutes: file.captureTimeZoneOffsetMinutes)
+        return LibrarySightingBuilder.reportFields(
+            for: metadata, installationID: AppInstallationID.current.uuidString.lowercased())
     }
 
     func query() async throws -> HashQuery {

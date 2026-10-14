@@ -14,7 +14,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   resolveImportSightingContext,
   setImageOwnDeviceSource,
-  upsertImageSightingInTransaction,
+  recordImportSightings,
 } from "~/server/repo/image-sighting";
 import {
   activateImportImages,
@@ -413,39 +413,15 @@ async function applyImportProvenance(
     actorUserId,
   );
   if (!context) return;
-  for (const staged of verified) {
-    const imageId: ImageId = parseEntityId("image", staged.row.id);
-    for (const sighting of staged.sightings) {
-      await upsertImageSightingInTransaction(
-        tx,
-        {
-          imageId,
-          ledgerPartyId: context.ledgerPartyId,
-          deviceId: context.deviceId,
-          assetKey: sighting.assetKey,
-          cloudIdentifier: sighting.cloudIdentifier,
-          localIdentifier: sighting.localIdentifier,
-          sourceType: sighting.sourceType,
-          mediaSubtypes: sighting.mediaSubtypes,
-          originalFilename: sighting.originalFilename,
-          pixelWidth: sighting.pixelWidth,
-          pixelHeight: sighting.pixelHeight,
-          hasAdjustments: sighting.hasAdjustments,
-          capturedAt: sighting.capturedAt,
-          capturedAtOffsetMinutes: sighting.capturedAtOffsetMinutes,
-          addedAt: sighting.addedAt,
-          location: sighting.location,
-          placeName: sighting.placeName,
-          camera: sighting.camera,
-          matchKind: "import",
-          hashDistance: sighting.hashDistance,
-          aspectGate: sighting.aspectGate,
-          observedAt: sighting.observedAt,
-        },
-        actor,
-      );
-    }
-  }
+  await recordImportSightings(
+    tx,
+    context,
+    verified.flatMap((staged) => {
+      const imageId: ImageId = parseEntityId("image", staged.row.id);
+      return staged.sightings.map((sighting) => ({ imageId, sighting }));
+    }),
+    actor,
+  );
 }
 
 export async function commitPhotoImport(

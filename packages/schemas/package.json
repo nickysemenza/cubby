@@ -146,6 +146,7 @@
     "./email-candidates": "./src/email-candidates.ts",
     "./import-run-agent": "./src/import-run-agent.ts",
     "./photo-import-run": "./src/photo-import-run.ts",
+    "./photo-run-input": "./src/photo-run-input.ts",
     "./product-variant-comparison": "./src/product-variant-comparison.ts",
     "./purchase": "./src/purchase.ts",
     "./purchase-agent-services": "./src/purchase-agent-services.ts",

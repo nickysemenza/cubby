@@ -656,10 +656,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the actual SDK with focused behavior tests. Preserve the OS 26 path until a
   floor bump is chosen. Owners: `apps/apple/project.yml`, `App`, `CubbyKit`.
 
-- 🤔 ✨ **Live Activities for server runs started on this device.** Record the
-  initiating install separately from `ActivityRun.executors`, then send
-  ActivityKit push updates so the phone shows progress while suspended. Keep
-  the local-work Live Activity feed separate.
+- 🤔 ✨ **Live Activities for other server Runs started on this device.** Photo
+  Runs push ActivityKit updates to their initiating install (`Run.deviceId`,
+  `RunPushRegistration`); extend the same registration to other agent Runs. Keep
+  the local-work Live Activity feed separate. The photo-import path needs
+  APNs Worker credentials, Push Notifications-enabled release provisioning,
+  and a locked-device acceptance check; local payload tests and unsigned
+  builds do not establish push delivery. Extend verified photo support to
+  other server Run purposes afterward.
 
 - 🤔 🧪 **Judge the hosted Run evidence pilot.** Run evidence (transcript,
   logs, AI usage) is the one hosted native view

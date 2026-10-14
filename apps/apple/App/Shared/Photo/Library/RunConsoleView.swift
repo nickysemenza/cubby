@@ -12,7 +12,12 @@ import SwiftUI
 /// slot (drawn from this screen's `RunReviewSession`, whose approvals stay exactly the frozen,
 /// selected ready groups), and a purchase validation's corrections review follows the hero.
 struct RunConsoleView: View {
+    enum InitialSection: String {
+        case photoReview = "photo-review"
+    }
+
     let runID: String
+    private let initialSection: InitialSection?
     private let isPreview: Bool
 
     @Environment(AppModel.self) private var appModel
@@ -21,8 +26,9 @@ struct RunConsoleView: View {
     @State private var reportBatches = ReportBatchStore()
     @State private var batch: ReportBatchModel?
 
-    init(runID: String, previewSession: RunReviewSession? = nil) {
+    init(runID: String, initialSection: InitialSection? = nil, previewSession: RunReviewSession? = nil) {
         self.runID = runID
+        self.initialSection = initialSection
         isPreview = previewSession != nil
         _session = State(
             initialValue: previewSession
@@ -102,7 +108,7 @@ struct RunConsoleView: View {
             DetailContentsNavigation(
                 entries: sections.map {
                     .init(id: $0.id, title: $0.title ?? $0.id, group: "Run")
-                })
+                }, initialSectionID: session.review == nil ? nil : initialSection?.rawValue)
         )
         .fieldGuideDetailDensity()
         .fieldGuideScreen()
@@ -213,7 +219,12 @@ struct RunPhotoBatchSlot: View {
             let review = PhotoRunReviewResponse(
                 review: PhotoGroupProposalList(
                     runId: runID, runStatus: .running, proposals: [group], unassignedImageIds: []),
-                images: images, imageProcessingPaused: false)
+                images: images, imageProcessingPaused: false,
+                lifecycle: .init(
+                    processor: .cubby, phase: .readyForReview, plannedImageCount: 2,
+                    openBatchCount: 0, finalizedImageCount: 2, describedImageCount: 2,
+                    failedImageIds: [], skippedImageCount: 0, proposedGroupCount: 1,
+                    committedGroupCount: 0, dispatchError: nil))
             let run = RunWorkSnapshotOutput(
                 runId: runID, purpose: .photoInventory, status: .running,
                 startedAt: .now.addingTimeInterval(-12), endedAt: nil,

@@ -195,7 +195,7 @@ and sanitized replay artifacts; see [validation](agents/validation.md) and
 [Apple iteration](../apps/apple/ITERATION.md). A manual local session does not
 replace the GitHub merge gate.
 
-For finite simulator smoke or QA journeys in the shared T3 Device panel, set
+For finite simulator smoke, QA or input journeys in the shared T3 Device panel, set
 `CUBBY_E2E_AGENT_DEVICE` to the JSON `{command,targetArgs}` returned by
 `device_open`, The harness selects the returned simulator automatically and rejects a conflicting
 `CUBBY_SIM_DEVICE` before setup.
@@ -204,7 +204,7 @@ every driver command, and leaves the shared session and daemon running.
 Single-file `.ad` journeys use `replay` in that session; `test` would fork an
 attempt session and conflict with an already-open panel. Replay diagnostics and
 root scenario results remain in the sanitized harness bundle.
-Watch, input and Tester Army modes keep their owned driver lifecycle and
+Watch and Tester Army modes keep their owned driver lifecycle and
 reject this override.
 
 ## Fixture previews and warm HMR validation

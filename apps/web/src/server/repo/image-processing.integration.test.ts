@@ -36,6 +36,7 @@ import {
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
+import { loadImageProcessingIssues } from "./image-processing-issues";
 import { updateImageProcessingSettings } from "./image-processing-maintenance";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
 import { hydrateImageReadProjection } from "./image-read-projection";
@@ -73,6 +74,57 @@ describe("durable image representations", () => {
     if (!scheduled) throw new Error("Expected persisted job");
     return { ...row, ...scheduled };
   }
+
+  it("does not keep a completed cutout in eligibility review because an earlier device description requested review", async () => {
+    const row = await source();
+    const jobId = await createImageProcessingJob(ctx.db, {
+      imageId: parseEntityId("image", row.id),
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!jobId) throw new Error("Expected description job");
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        state: "ready",
+        result: { description: { cutoutEligibility: "review" } },
+      })
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(
+      (await loadImageProcessingIssues(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      ),
+    ).toBe("review_needed");
+    const lease = await claimImageProcessingJob(ctx.db, {
+      jobId: row.jobId,
+      kinds: ["subject_lift"],
+      leaseMs: 60000,
+    });
+    if (!lease) throw new Error("Expected cutout lease");
+    const outcome = {
+      kind: "subject_lift" as const,
+      status: "completed" as const,
+      sha256: "b".repeat(64),
+      width: 10,
+      height: 10,
+      contentType: "image/png" as const,
+    };
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: row.jobId,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome,
+      },
+      verifiedDerivative: outcome,
+    });
+    expect(
+      (await loadImageProcessingIssues(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      ),
+    ).toBeNull();
+  });
 
   it("rotates attempt output keys and rejects stale completion without orphaning the current result", async () => {
     const row = await source();

@@ -1,9 +1,11 @@
 import { mailAttachmentOriginal } from "@cubby/schemas/mailbox-research";
+import type { Context } from "@earendil-works/chord";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
 import {
   defineExtension,
   defineTool,
   type Extension,
+  type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
 import {
@@ -99,6 +101,11 @@ function toolResult(raw: unknown): ToolExecutionResult {
 export function cubbyMcpExtension(
   tools: readonly McpToolDefinition[],
   services: () => RunServices,
+  /** The dispatch generation of the request that issued this tool call. */
+  generationFor?: (
+    api: ToolExecutionApi,
+    context: Context,
+  ) => Promise<string | undefined>,
 ): Extension {
   let client: Promise<Client> | undefined;
   const connected = () => {
@@ -117,12 +124,17 @@ export function cubbyMcpExtension(
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: Type.Unsafe<JsonObject>(tool.inputSchema),
         replay: "safe",
-        execute: async (args, _api, context) =>
+        execute: async (args, api, context) =>
           toolResult(
             await (
               await connected()
             ).callTool(
-              { name: tool.name, arguments: args },
+              {
+                name: tool.name,
+                arguments: await stampGeneration(args, () =>
+                  generationFor?.(api, context),
+                ),
+              },
               { signal: context.abortSignal },
             ),
           ),
@@ -130,3 +142,25 @@ export function cubbyMcpExtension(
     ),
   });
 }
+
+/**
+ * Overwrite any model-written `_runExecution.generation` with the host's own
+ * record of the issuing request's generation; the bearer minted for the call
+ * signs it, and the server fences superseded generations by it.
+ */
+async function stampGeneration(
+  args: JsonObject,
+  generation: () => Promise<string | undefined> | undefined,
+): Promise<JsonObject> {
+  const envelope = args._runExecution;
+  if (!isJsonObject(envelope)) return args;
+  const { generation: _claimed, ...rest } = envelope;
+  const stamped = await generation();
+  return {
+    ...args,
+    _runExecution: stamped ? { ...rest, generation: stamped } : rest,
+  };
+}
+
+const isJsonObject = (value: unknown): value is JsonObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);

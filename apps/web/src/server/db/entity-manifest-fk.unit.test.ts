@@ -232,6 +232,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run a model call belonged to",
   },
+  "RunPushRegistration.runId": {
+    classification: "ownership",
+    reason: "a push registration owned by its Run",
+  },
+  "RunPushRegistration.deviceId": {
+    classification: "metadata",
+    reason: "the native install that registered for pushes",
+  },
   "Suggestion.runId": {
     classification: "metadata",
     reason: "records the Sweep or suggestion Run that computed a Suggestion",

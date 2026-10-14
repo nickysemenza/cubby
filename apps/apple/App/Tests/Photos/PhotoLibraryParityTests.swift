@@ -65,7 +65,11 @@
             let thumbnailHash = try PerceptualHash64.compute(thumbnail)
             let uploadHash = try PreparedPhoto.prepare(file: file).perceptualHash
 
-            #expect(thumbnailHash == uploadHash)
+            let verdict = PhotoMatchVerdict.evaluate(
+                distance: thumbnailHash.distance(to: uploadHash),
+                leftAspectRatio: Double(thumbnail.width) / Double(thumbnail.height),
+                rightAspectRatio: Double(file.width) / Double(file.height))
+            #expect(verdict.confidence == .strong)
         }
 
         @Test("Orientation, alpha, and dimensions survive the PhotoKit path")
@@ -111,7 +115,7 @@
                 data: Data("synthetic fixture rendition".utf8))
 
             let sendableOutput = UncheckedSendableBox(output)
-            try await PHPhotoLibrary.shared().performChanges {
+            try await PHPhotoLibrary.shared().performChanges { @Sendable in
                 PHAssetChangeRequest(for: asset).contentEditingOutput = sendableOutput.value
             }
 

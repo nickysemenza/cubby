@@ -87,6 +87,7 @@ export const verifyMcpToken = async (request: Request) => {
         clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
         purchaseAgentRunId: delegation.run_id,
         purchaseAgentGrantId: delegation.grant_id,
+        purchaseAgentGeneration: delegation.generation,
       };
     }
   }

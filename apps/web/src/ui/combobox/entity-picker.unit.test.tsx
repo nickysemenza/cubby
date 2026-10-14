@@ -80,6 +80,27 @@ describe("matchesPickerItem", () => {
 });
 
 describe("EntityPicker", () => {
+  it("shows the selected record image before opening or searching", () => {
+    render(
+      <EntityPicker
+        entity="location"
+        label="Receive into"
+        items={[
+          {
+            id: "LOC-4K7M",
+            name: "Example shelf",
+            imageUrl: "/synthetic-shelf.jpg",
+          },
+        ]}
+        value={{ id: "LOC-4K7M", name: "Example shelf" }}
+        setValue={vi.fn()}
+      />,
+    );
+    expect(screen.getByAltText("Selected Receive into")).toHaveAttribute(
+      "src",
+      expect.stringContaining("synthetic-shelf"),
+    );
+  });
   it("keeps entity-search rows' existing icon and swatch marks", () => {
     render(
       <EntityPicker

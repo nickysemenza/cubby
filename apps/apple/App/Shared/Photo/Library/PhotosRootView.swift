@@ -48,8 +48,7 @@ struct PhotosRootView: View {
                 guard let items = pendingSelection else { return }
                 runBatch = PhotoImportRunBatch(
                     items: items,
-                    flow: PhotoImportRunFlow(
-                        client: appModel.client, activityCenter: appModel.backgroundActivity))
+                    flow: appModel.makePhotoImportFlow())
                 pendingSelection = nil
             }
             Button("Cancel", role: .cancel) { pendingSelection = nil }
@@ -64,9 +63,21 @@ struct PhotosRootView: View {
         }
         .sheet(item: $runBatch) { batch in
             PhotoImportRunSheet(items: batch.items, flow: batch.flow) { _ in
-                let uploadedIDs = Set(batch.items.map(\.id))
+                let uploadedIDs = batch.flow.session.importedPhotoIDs
                 appModel.photoLibrary.selectedIDs.removeAll { uploadedIDs.contains($0) }
+                appModel.retirePhotoImport(batch.flow)
                 runBatch = nil
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let flow = appModel.photoImportFlows.first(where: {
+                $0.hasPendingWork || $0.needsAttention || $0.session.phase == .complete
+            }) {
+                Button("View import", systemImage: "photo.stack") {
+                    runBatch = PhotoImportRunBatch(items: flow.selectedPhotos, flow: flow)
+                }
+                .buttonStyle(.bordered)
+                .padding(FieldGuideTokens.Space.sm)
             }
         }
         .task {

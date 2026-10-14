@@ -67,5 +67,8 @@ struct DeviceWorkWidget: Widget {
 
 @main
 struct CubbyLiveActivityBundle: WidgetBundle {
-    var body: some Widget { DeviceWorkWidget() }
+    var body: some Widget {
+        DeviceWorkWidget()
+        PhotoRunWidget()
+    }
 }

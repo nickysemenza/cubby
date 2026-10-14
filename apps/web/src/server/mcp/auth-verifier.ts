@@ -48,6 +48,8 @@ export interface McpActor {
   purchaseAgentRunId?: string;
   /** OAuth refresh-grant row that authorized the private delegation. */
   purchaseAgentGrantId?: string;
+  /** Signed coordinator generation of the delegated tool call, when stamped. */
+  purchaseAgentGeneration?: string | undefined;
 }
 
 interface McpTokenVerifierDependencies {
