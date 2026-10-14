@@ -130,6 +130,16 @@ const syntheticCases = [
     body: "Community newsletter with gardening tips and upcoming neighborhood events.",
     html: '<p>Community newsletter with gardening tips and upcoming neighborhood events.</p><a href="https://example.test/subscription" style="display:none">Manage preferences</a>',
   },
+  {
+    label: "related",
+    body: "",
+    html: '<div aria-hidden="true">Your order is confirmed. Order #SYN-12345: synthetic kettle, total $42 paid. Delivery is scheduled for Friday.</div>',
+  },
+  {
+    label: "unrelated",
+    body: "",
+    html: '<div aria-hidden="true">Community newsletter with gardening tips and upcoming neighborhood events. Explore seasonal planting ideas and visit our public gardens this weekend.</div>',
+  },
 ] as const;
 
 const inputSchema = z

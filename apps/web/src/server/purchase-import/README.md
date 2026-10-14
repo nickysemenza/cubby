@@ -41,6 +41,8 @@ pending: nothing here starts Product research.
    and retains its missing-evidence guard. Hidden image destinations on pictures
    explicitly at most one pixel in both dimensions are tracking metadata;
    their labels and surrounding links still participate in evidence checks.
+   Accessibility-only `aria-hidden` does not hide visually rendered Email
+   text or pictures; actual CSS visibility and `hidden` attributes still do.
    Hidden HTTP(S) links and their labels are retained in the bounded link set;
    omitted cue-bearing links and cues lost during URL normalization still mark
    evidence incomplete. Hidden receipt text
