@@ -1,6 +1,6 @@
 import type { ListNesting } from "@cubby/schemas/pagination";
 import { useQueries } from "@tanstack/react-query";
-import type { ExpandedState, OnChangeFn } from "@tanstack/react-table";
+import type { ExpandedState, OnChangeFn, RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -20,12 +20,12 @@ export const serverTreeChildCount = (row: unknown): number =>
 
 /** A row the server says has children that match the list's filters. */
 export const serverTreeRowCanExpand = (row: unknown): boolean =>
-  serverTreeChildCount(row) > 0;
+  (childCountSchema.safeParse(row).data?.childCount ?? 0) > 0;
 
 /** An expanded parent's children read, shown as one row after its children. */
 export type ServerTreeChildStatus =
   | { kind: "loading" }
-  | { kind: "error"; error: unknown; retry: () => void }
+  | { kind: "error"; error: Error; retry: () => void }
   | {
       kind: "more";
       /** Matching children the loaded pages have not shown yet. */
@@ -34,8 +34,9 @@ export type ServerTreeChildStatus =
       loadMore: () => void;
     };
 
-const TREE_STATUS = Symbol("serverTreeStatus");
-type StatusRow = { [TREE_STATUS]: ServerTreeChildStatus };
+// Status rows are registered by identity, so no record field can be
+// mistaken for one.
+const statusRows = new WeakMap<object, ServerTreeChildStatus>();
 
 /**
  * The status a synthetic tree row carries, or undefined for a real record.
@@ -43,11 +44,9 @@ type StatusRow = { [TREE_STATUS]: ServerTreeChildStatus };
  * skips it.
  */
 export const serverTreeStatusOf = (
-  row: unknown,
+  row: RowData,
 ): ServerTreeChildStatus | undefined =>
-  typeof row === "object" && row !== null && TREE_STATUS in row
-    ? (row as StatusRow)[TREE_STATUS]
-    : undefined;
+  typeof row === "object" && row !== null ? statusRows.get(row) : undefined;
 
 type ChildPage<TData> = ListQueryResponse<TData> & {
   /** A deferred group that did not arrive; its fields would read as empty. */
@@ -98,9 +97,9 @@ const NO_EXPANDED: Readonly<Record<string, boolean>> = {};
 
 type ChildResult<TData> = {
   data?: ChildPage<TData>;
-  error: unknown;
+  error: Error | null;
   isPending: boolean;
-  refetch: () => unknown;
+  refetch: () => Promise<object>;
 };
 
 /**
@@ -151,10 +150,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
       ),
     [expandedIds, planFor, state.pages],
   );
-  const combine = useCallback(
-    (results: ChildResult<TData>[]) => results,
-    [],
-  );
+  const combine = useCallback((results: ChildResult<TData>[]) => results, []);
   const results = useQueries({
     queries: requests.map(({ plan }) => ({
       queryKey: [...plan.queryKey, "__tree_children__"],
@@ -204,7 +200,10 @@ export function useServerTreeChildren<TData extends { id: string }>({
         failed.length > 0
           ? {
               kind: "error",
-              error: failed[0]?.error ?? failed[0]?.data?.enrichmentError,
+              error:
+                failed[0]?.error ??
+                failed[0]?.data?.enrichmentError ??
+                new Error("Nested rows failed to load"),
               retry: () => {
                 for (const page of failed) void page.refetch();
               },
@@ -244,13 +243,15 @@ export function useServerTreeChildren<TData extends { id: string }>({
           const subRows = visit(children.items);
           // The status row copies its parent's fields so a grouped list
           // files it in the parent's section; it is never expandable.
-          if (children.status)
-            subRows.push({
+          if (children.status) {
+            const statusRow = {
               ...row,
               id: `${row.id}:tree-status`,
               childCount: 0,
-              [TREE_STATUS]: children.status,
-            });
+            };
+            statusRows.set(statusRow, children.status);
+            subRows.push(statusRow);
+          }
           return { ...row, subRows };
         });
       return visit(roots);

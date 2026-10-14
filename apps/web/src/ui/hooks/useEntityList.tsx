@@ -96,7 +96,7 @@ function fixedPreviewEntity(
 // Router search also carries typed dialog and pagination state, not just filters.
 const routeSearchSchema = z.record(z.string(), z.json().optional());
 const ROOTS_SCOPE: ListNesting = { scope: "roots" };
-const isServerTreeRecord = (row: unknown) => !serverTreeStatusOf(row);
+const isServerTreeRecord = (row: { id: string }) => !serverTreeStatusOf(row);
 const serverTreeRowOffersExpansion = (row: { original: unknown }) =>
   serverTreeRowCanExpand(row.original);
 // SAFETY: a server tree's table rows are exactly `attach`'s output.

@@ -12,7 +12,10 @@ import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 
 import type { EntityListRecord } from "./useAllEntityRecords";
 import { useHydratedLoading } from "./useHydrated";
-import { type ServerTreeRow, serverTreeChildCount } from "./useServerTreeChildren";
+import {
+  type ServerTreeRow,
+  serverTreeChildCount,
+} from "./useServerTreeChildren";
 
 const TREE_PAGE_SIZE = 500;
 
@@ -44,7 +47,7 @@ async function readScope<E extends ListEntity>(
 type ScopeResult<E extends ListEntity> = {
   data?: EntityListRecord<E>[];
   error: Error | null;
-  refetch: () => unknown;
+  refetch: () => Promise<object>;
 };
 
 /**

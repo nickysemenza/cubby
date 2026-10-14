@@ -14,13 +14,10 @@ import type { ServerTreeChildStatus } from "../hooks/useServerTreeChildren";
 export function TreeStatusRow({ status }: { status: ServerTreeChildStatus }) {
   if (status.kind === "loading")
     return (
-      <span
-        role="status"
-        className="flex min-h-9 items-center gap-2 text-xs text-muted-foreground"
-      >
+      <output className="flex min-h-9 items-center gap-2 text-xs text-muted-foreground">
         <Spinner size="sm" />
         Loading nested rows…
-      </span>
+      </output>
     );
   if (status.kind === "error") {
     const { message, diagnostics, requestId } = getAppErrorDetails(
