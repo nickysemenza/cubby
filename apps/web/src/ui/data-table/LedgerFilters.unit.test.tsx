@@ -86,7 +86,7 @@ describe("LedgerFilters", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Trade: any" }));
     fireEvent.click(
-      await screen.findByRole("button", { name: "Electrical & Lighting" }),
+      await screen.findByRole("option", { name: "Electrical & Lighting" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 

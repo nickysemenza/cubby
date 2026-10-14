@@ -24,6 +24,8 @@ import { z } from "zod";
 import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
@@ -41,10 +43,6 @@ import {
 } from "~/ui/primitives/dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Textarea } from "~/ui/primitives/textarea";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./RecipeFlowRenderers";
@@ -52,10 +50,16 @@ import { RecipeWalkthrough } from "./RecipeWalkthrough";
 
 export type RecipeFlowLayoutMode = "walkthrough" | "map" | "table";
 
-const FLOW_LAYOUT_OPTIONS: ViewSwitcherOption<RecipeFlowLayoutMode>[] = [
-  { value: "walkthrough", label: "Walkthrough", icon: BookOpenIcon },
-  { value: "map", label: "Map", icon: GitBranchIcon },
-  { value: "table", label: "Table", icon: TableIcon },
+const FLOW_LAYOUT_OPTIONS: readonly (PickerOption & {
+  value: RecipeFlowLayoutMode;
+})[] = [
+  {
+    value: "walkthrough",
+    label: "Walkthrough",
+    icon: <BookOpenIcon className="size-4" />,
+  },
+  { value: "map", label: "Map", icon: <GitBranchIcon className="size-4" /> },
+  { value: "table", label: "Table", icon: <TableIcon className="size-4" /> },
 ];
 
 function FlowLoading() {
@@ -223,11 +227,17 @@ function FlowPlan({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
-            <ViewSwitcher
-              ariaLabel="Flow layout"
+            <Picker
+              mode="segmented"
+              label="Flow layout"
               options={FLOW_LAYOUT_OPTIONS}
               value={layout}
-              onValueChange={onLayoutChange}
+              onValueChange={(value) => {
+                const choice = FLOW_LAYOUT_OPTIONS.find(
+                  (option) => option.value === value,
+                );
+                if (choice) onLayoutChange(choice.value);
+              }}
             />
             <CopyJsonButton
               value={artifact.plan}

@@ -33,10 +33,8 @@ import { filterUrlKey } from "~/entity/filters";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
-import {
-  isReferencePickerEntity,
-  referenceEntitySearch,
-} from "~/ui/combobox/reference-entity-search";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";

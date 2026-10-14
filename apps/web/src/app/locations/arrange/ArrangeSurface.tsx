@@ -7,12 +7,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { collectTreeProductIds } from "~/features/locations/location-gallery-data";
 import { ProductImageSummariesProvider } from "~/features/products/product-image-summaries";
 import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/ui/primitives/view-switcher";
 
 import { findUnknownRoot } from "./arrange-tree-utils";
 import { ArrangeBoard } from "./ArrangeBoard";
@@ -22,9 +20,9 @@ import { useArrangeMutations } from "./use-arrange-mutations";
 
 type ArrangeView = "board" | "tree";
 
-const VIEW_OPTIONS: ViewSwitcherOption<ArrangeView>[] = [
-  { value: "board", label: "Board", icon: ColumnsIcon },
-  { value: "tree", label: "Tree", icon: TreeViewIcon },
+const VIEW_OPTIONS: readonly (PickerOption & { value: ArrangeView })[] = [
+  { value: "board", label: "Board", icon: <ColumnsIcon className="size-4" /> },
+  { value: "tree", label: "Tree", icon: <TreeViewIcon className="size-4" /> },
 ];
 
 /** Stable empty default — a fresh `[]` per render would thrash the image query. */
@@ -111,11 +109,15 @@ export function ArrangeSurface({
   return (
     <Stack gap="md" className="min-h-[calc(100dvh-9rem)]">
       <Row align="center" justify="between" gap="sm" wrap>
-        <ViewSwitcher
-          ariaLabel="Arrange view"
+        <Picker
+          mode="segmented"
+          label="Arrange view"
           options={VIEW_OPTIONS}
           value={view}
-          onValueChange={onViewChange}
+          onValueChange={(next) => {
+            const choice = VIEW_OPTIONS.find((option) => option.value === next);
+            if (choice) onViewChange(choice.value);
+          }}
         />
         <Row align="center" gap="sm">
           <label htmlFor={depthId} className="text-xs text-muted-foreground">

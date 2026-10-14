@@ -501,7 +501,6 @@ export function ToolMatrixPage({
             <Picker
               mode="choose"
               compact
-              widthMode="intrinsic"
               label="Filter projects by completion year"
               options={completionYearOptions}
               value={search.completed ?? ""}

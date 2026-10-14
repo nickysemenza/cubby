@@ -17,9 +17,10 @@ import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
 import { Image } from "~/ui/primitives/image";
-import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 import { compactRound } from "../recipe-scaling-pct";
 import { RecipeSourceLink, sourceLabel } from "../recipe-source";
@@ -81,6 +82,11 @@ const extractRecipeRows = (costing: RecipeCosting | null): RecipeRowMap => {
 // Shared "1 decimal below 10, whole above" rule (compactRound) so the grid's
 // gram/baker-% figures round exactly like the scaling-% labels.
 const compareNum = compactRound;
+
+const BASIS_OPTIONS: readonly (PickerOption & { value: CompareBasis })[] = [
+  { value: "gram", label: "Grams" },
+  { value: "baker", label: "Baker's %" },
+];
 
 const formatValue = (v: number, basis: CompareBasis): string =>
   basis === "baker" ? `${compareNum(v)}%` : `${compareNum(v)} g`;
@@ -256,14 +262,17 @@ export const RecipeCompareGrid: React.FC<{
   return (
     <div className="overflow-x-auto border border-[var(--border)] bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2 py-2">
-        <ChoiceSwitcher
-          ariaLabel="Comparison basis"
-          options={[
-            { value: "gram", label: "Grams" },
-            { value: "baker", label: "Baker's %" },
-          ]}
+        <Picker
+          mode="segmented"
+          label="Comparison basis"
+          options={BASIS_OPTIONS}
           value={basis}
-          onValueChange={setBasisOverride}
+          onValueChange={(value) => {
+            const choice = BASIS_OPTIONS.find(
+              (option) => option.value === value,
+            );
+            if (choice) setBasisOverride(choice.value);
+          }}
         />
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           <span

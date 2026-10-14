@@ -1,4 +1,5 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type LocationShortcode,
@@ -25,14 +26,17 @@ import { z } from "zod";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { EntityIcon, entityLabel } from "~/entity/entities";
+import { compactFieldText } from "~/entity/field-text";
 import { locationToSegments } from "~/features/locations/location-breadcrumb";
 import { LocationIcon } from "~/features/locations/location-icons";
-import { LocationPickerThumb } from "~/features/locations/location-picker-thumb";
 import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";
 import { matchKindLabel } from "~/features/search/search-utils";
 import { formatCount } from "~/lib/utils";
-import type { ComboboxItem, PickerThumb } from "~/ui/combobox/combobox-types";
-import { Image } from "~/ui/primitives/image";
+import type {
+  ComboboxItem,
+  PickerChip,
+  PickerThumb,
+} from "~/ui/combobox/combobox-types";
 
 export type ProductPickerIntent = "reference" | "stock";
 
@@ -41,33 +45,86 @@ export const pickerRecord = z.object({ id: z.string() }).catchall(z.unknown());
 export type PickerRecord = z.infer<typeof pickerRecord>;
 const pickerAliases = z.array(z.string());
 const pickerTitle = z.string();
+const emojiValue = z.string().nullable().optional();
 
-function SearchPickerIcon({
-  entity,
-  imageUrl,
-  emoji,
-}: {
-  entity: SearchableEntity;
-  imageUrl: string | null;
-  emoji?: string | null;
-  typeHint: string | null;
-}) {
-  const fallback = emoji ? (
-    <RecordEmoji entity={entity} emoji={emoji} />
-  ) : (
-    <EntityIcon entity={entity} size={14} colored />
-  );
-  return imageUrl ? (
-    <Image
-      src={imageUrl}
-      alt=""
-      displayWidth={24}
-      fallback={fallback}
-      className="size-6 shrink-0 border border-[var(--border)] object-cover"
-    />
-  ) : (
-    fallback
-  );
+/** Trailing chips a row shows at most — the inspo row: one or two figures. */
+const MAX_TRAILING = 2;
+
+/**
+ * A record's row data from its manifest phone-row projection: the field in
+ * the `subtitle` slot reads inline after the name, and `trailing` fields
+ * become right-aligned chips. The same declaration drives the phone list row
+ * and native, so a picker row says what the record's card says.
+ */
+function recordRowProjection<E extends ShortcodeType>(
+  entity: E,
+  record: PickerRecord,
+) {
+  const titleField = entitySummary[entity].titleField;
+  const slotted = entityFieldModels[entity].fields
+    .flatMap((field) => {
+      const mobile = field.display.mobile;
+      if (!mobile || field.key === titleField) return [];
+      return [{ field, slot: mobile.slot, priority: mobile.priority ?? 50 }];
+    })
+    .sort((a, b) => a.priority - b.priority);
+  const text = (entry: (typeof slotted)[number]) =>
+    compactFieldText(entity, record, entry.field);
+  const secondary = slotted
+    .filter((entry) => entry.slot === "subtitle")
+    .map(text)
+    .find((value): value is string => !!value);
+  const trailing = slotted
+    .filter((entry) => entry.slot === "trailing")
+    .flatMap((entry): PickerChip[] => {
+      const value = text(entry);
+      return value ? [{ text: value }] : [];
+    })
+    .slice(0, MAX_TRAILING);
+  return { ...(secondary && { secondary }), trailing };
+}
+
+/** `displayImages[0]` is the server-resolved cover for every entity that
+ * declares images; the record's emoji (or entity glyph) stands in otherwise. */
+function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
+  const cover = displayImagesField.safeParse(record.displayImages).data?.[0];
+  return {
+    imageUrl: cover?.url ?? null,
+    fallback: (
+      <RecordEmoji
+        entity={entity}
+        emoji={emojiValue.safeParse(record.emoji).data}
+        size={14}
+      />
+    ),
+  };
+}
+
+/**
+ * A picker row for any manifest entity: the declared `titleField` is the
+ * name, aliases stay searchable, the cover is the picture, and the phone-row
+ * projection supplies the inline secondary and trailing chips.
+ */
+export function buildRecordComboboxItem<E extends ShortcodeType>(
+  entity: E,
+  record: PickerRecord,
+): ComboboxItem<ShortcodeFor<E>> {
+  const shortcode = parseShortcodeFor(entity, record.id);
+  const title = record[entitySummary[entity].titleField];
+  const aliases = pickerAliases.safeParse(record.aliases).data;
+  const { secondary, trailing } = recordRowProjection(entity, record);
+  return {
+    id: shortcode,
+    shortcode,
+    // A record without its declared title is unnamed, never its code.
+    name:
+      pickerTitle.safeParse(title).data ??
+      `Untitled ${entityLabel(entity).toLowerCase()}`,
+    ...(aliases && { aliases }),
+    thumb: recordThumb(entity, record),
+    ...(secondary && { secondary }),
+    ...(trailing.length > 0 && { presentation: { trailing } }),
+  };
 }
 
 const buildSearchLocationHitComboboxItem = <E extends SearchableEntity>(
@@ -94,33 +151,11 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
   if (entity === "location" && hit.locationPath) {
     return buildSearchLocationHitComboboxItem(hit, shortcode, hit.locationPath);
   }
-  const locationKind =
-    entity === "location" ? locationType.safeParse(hit.typeHint).data : null;
-  const fallback =
-    entity === "location" ? (
-      <LocationPickerThumb
-        imageUrl={hit.imageUrl}
-        type={locationKind ?? null}
-      />
-    ) : entity === "vendor" ? (
-      <VendorMark
-        vendor={hit.title}
-        vendorId={parseShortcodeFor("vendor", hit.id)}
-        logo={hit.imageUrl ? { url: hit.imageUrl } : null}
-      />
-    ) : (
-      <SearchPickerIcon
-        entity={entity}
-        imageUrl={hit.imageUrl}
-        typeHint={hit.typeHint}
-        emoji={hit.emoji}
-      />
-    );
-
-  const facts =
+  // A non-title match says why the row is here; a title match is self-evident.
+  const matchReason =
     hit.matchField === "title" || hit.matchField === "shortcode"
       ? undefined
-      : [hit.matchReason];
+      : hit.matchReason;
   // The embedding fallback is the one match kind a picker cannot justify by
   // looking at it: a lexical hit shows you the letters it matched, an
   // embedding hit shows a row whose name shares nothing with what you typed.
@@ -139,29 +174,18 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
     name: hit.title,
     thumb: searchHitThumb(hit, entity),
     secondary: hit.subtitle ?? hit.typeHint ?? undefined,
-    detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,
-    presentation:
-      facts || group
-        ? { ...(facts && { facts }), ...(group && { group }) }
-        : undefined,
-    icon: fallback,
+    ...(matchReason && { detail: matchReason }),
+    ...(group && { presentation: { group } }),
   };
 }
 
 function searchHitThumb(hit: SearchHit, entity: SearchableEntity): PickerThumb {
   if (entity === "vendor")
-    return {
-      imageUrl: null,
-      shape: "round",
-      fallback: (
-        <VendorMark
-          vendor={hit.title}
-          vendorId={parseShortcodeFor("vendor", hit.id)}
-          logo={hit.imageUrl ? { url: hit.imageUrl } : null}
-          className="size-full"
-        />
-      ),
-    };
+    return vendorThumb({
+      id: parseShortcodeFor("vendor", hit.id),
+      name: hit.title,
+      logo: hit.imageUrl ? { url: hit.imageUrl } : null,
+    });
   return {
     imageUrl: hit.imageUrl,
     fallback: hit.emoji ? (
@@ -252,22 +276,18 @@ function productPickerBase(
   product: ProductPickerInput,
   coverImageUrl: string | null,
 ): ComboboxItem<ProductShortcode> {
+  const secondary = [
+    product.manufacturer,
+    product.category ? formatCategoryLabel(product.category) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return {
     id: product.id,
     shortcode: product.id,
     name: product.name,
     aliases: product.aliases ?? [],
-    secondary: product.manufacturer,
-    detail: product.category
-      ? formatCategoryLabel(product.category)
-      : undefined,
-    icon: (
-      <SearchPickerIcon
-        entity="product"
-        imageUrl={coverImageUrl}
-        typeHint={null}
-      />
-    ),
+    ...(secondary && { secondary }),
     thumb: {
       imageUrl: coverImageUrl,
       fallback: <EntityIcon entity="product" size={14} colored />,
@@ -275,6 +295,11 @@ function productPickerBase(
   };
 }
 
+/**
+ * Stock evidence as trailing chips: what is on hand (and expected, when it
+ * differs), how many ledger lines lack a quantity, and — for a stock picker —
+ * the cue and group that rank the roster.
+ */
 function withProductInventoryPresentation(
   base: ComboboxItem<ProductShortcode>,
   ledger: NonNullable<ProductPickerInput["quantityLedger"]>,
@@ -289,36 +314,46 @@ function withProductInventoryPresentation(
       : onHand.state === "counted"
         ? onHand.units
         : null;
-  const facts = [
+  const evidence: PickerChip[] = [
     knownOnHand === null
-      ? "Mixed units on hand"
-      : `${formatCount(knownOnHand, 3)} on hand / ${formatCount(expected, 3)} expected`,
+      ? { text: "Mixed units on hand", tone: "warning" }
+      : knownOnHand === expected
+        ? { text: `${formatCount(knownOnHand, 3)} on hand` }
+        : {
+            text: `${formatCount(knownOnHand, 3)} on hand / ${formatCount(expected, 3)} expected`,
+          },
   ];
-  if (unknownLines > 0) {
-    facts.push(
-      `${unknownLines} ${unknownLines === 1 ? "line" : "lines"} without quantity`,
-    );
-  }
+  if (unknownLines > 0)
+    evidence.push({
+      text: `${unknownLines} ${unknownLines === 1 ? "line" : "lines"} without quantity`,
+      tone: "warning",
+    });
 
-  if (intent === "reference") return { ...base, presentation: { facts } };
+  if (intent === "reference")
+    return { ...base, presentation: { trailing: evidence } };
 
   const uncertain = unknownLines > 0 || knownOnHand === null || expected < 0;
   if (uncertain)
-    return productPickerInventoryGroup(
-      base,
-      { id: "check", label: "Check quantity", order: 1 },
-      { label: "Check quantity", tone: "warning" },
-      facts,
-    );
+    return {
+      ...base,
+      presentation: {
+        group: { id: "check", label: "Check quantity", order: 1 },
+        trailing: [{ text: "Check quantity", tone: "warning" }, ...evidence],
+      },
+    };
 
   const need = expected - knownOnHand;
   if (need > 0)
-    return productPickerInventoryGroup(
-      base,
-      { id: "needs-stock", label: "Needs stocking", order: 0 },
-      { label: `Need ${formatCount(need, 3)}`, tone: "positive" },
-      facts,
-    );
+    return {
+      ...base,
+      presentation: {
+        group: { id: "needs-stock", label: "Needs stocking", order: 0 },
+        trailing: [
+          { text: `Need ${formatCount(need, 3)}`, tone: "positive" },
+          ...evidence,
+        ],
+      },
+    };
 
   const returned =
     expected === 0 && knownOnHand === 0 && ledger.exitedUnits > 0;
@@ -326,25 +361,18 @@ function withProductInventoryPresentation(
     ...base,
     presentation: {
       group: { id: "other", label: "Other products", order: 2 },
-      status: {
-        label: returned
-          ? "Returned"
-          : knownOnHand > 0
-            ? "Already on hand"
-            : "None expected",
-      },
-      facts,
+      trailing: [
+        {
+          text: returned
+            ? "Returned"
+            : knownOnHand > 0
+              ? "Already on hand"
+              : "None expected",
+        },
+        ...evidence,
+      ],
     },
   };
-}
-
-function productPickerInventoryGroup(
-  base: ComboboxItem<ProductShortcode>,
-  group: { id: string; label: string; order: number },
-  status: { label: string; tone: "warning" | "positive" },
-  facts: string[],
-): ComboboxItem<ProductShortcode> {
-  return { ...base, presentation: { group, status, facts } };
 }
 
 /**
@@ -353,13 +381,11 @@ function productPickerInventoryGroup(
  * derived from its nested parent chain, see `locationToSegments`), and a
  * freshly-created location (neither — it has no parent chain loaded yet).
  *
- * When `ancestors` is present, the row also carries `presentation.group`
- * (the root location) and `presentation.depth` (the path length) — the
- * blank-query list picker reads as a tree the same way `productCategory`'s
- * does, instead of a flat alphabetical roster. A root location (empty
- * `ancestors`) groups under itself. Every group gets the same `order`
- * (0): the list is already server-sorted so siblings arrive contiguous,
- * and `Picker`'s stable sort leaves same-order rows in that order.
+ * With `ancestors`, the row carries `presentation.group` (the root location)
+ * and `presentation.depth` (the path length), so the roster reads as a tree
+ * under its root headers and the breadcrumb is not repeated on every row.
+ * Every group gets the same `order` (0): the list is already server-sorted so
+ * siblings arrive contiguous, and `Picker`'s stable sort keeps that order.
  */
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
@@ -379,17 +405,15 @@ export const buildLocationComboboxItem = (location: {
     id: location.id,
     shortcode: location.id,
     name: location.name,
-    aliases: location.aliases ?? [],
+    // The tree's root header and indent show the path, so rows stay one
+    // line; the path stays searchable ("shelf 1" exists in four rooms).
+    aliases: [
+      ...(location.aliases ?? []),
+      ...(ancestors?.length
+        ? [ancestors.map((ancestor) => ancestor.name).join(" › ")]
+        : []),
+    ],
     secondary: location.type ?? undefined,
-    detail: ancestors?.length
-      ? ancestors.map((ancestor) => ancestor.name).join(" › ")
-      : undefined,
-    icon: (
-      <LocationPickerThumb
-        imageUrl={location.coverImage?.url}
-        type={location.type}
-      />
-    ),
     thumb: {
       imageUrl: location.coverImage?.url ?? null,
       fallback: (
@@ -426,48 +450,28 @@ export const buildLocationComboboxItemFromDetail = (
     coverImage: resolveLocationPrimaryVisual(location).image,
   });
 
-/**
- * A picker row for any list-backed manifest entity: the declared
- * `presentation.titleField` is the name, and declared aliases stay searchable.
- * Product, location and vendor keep their own builders above/below because
- * their rows carry stock, tree, and roster evidence.
- */
-export function buildRecordComboboxItem<E extends ShortcodeType>(
-  entity: E,
-  record: PickerRecord,
-): ComboboxItem<ShortcodeFor<E>> {
-  const shortcode = parseShortcodeFor(entity, record.id);
-  const title = record[entitySummary[entity].titleField];
-  const aliases = pickerAliases.safeParse(record.aliases).data;
-  // `displayImages[0]` is the server-resolved cover for every entity that
-  // declares images; the glyph stands in when there is none.
-  const cover = displayImagesField.safeParse(record.displayImages).data?.[0];
-  const icon = (
-    <RecordEmoji
-      entity={entity}
-      emoji={z.string().nullable().optional().parse(record.emoji)}
-      size={14}
-    />
-  );
-  return {
-    id: shortcode,
-    shortcode,
-    // A record without its declared title is unnamed, never its code.
-    name:
-      pickerTitle.safeParse(title).data ??
-      `Untitled ${entityLabel(entity).toLowerCase()}`,
-    ...(aliases && { aliases }),
-    icon,
-    thumb: { imageUrl: cover?.url ?? null, fallback: icon },
-  };
-}
-
 type VendorPickerInput = {
   id: VendorShortcode;
   name: string;
   count?: number;
   logo?: { url: string } | null;
 };
+
+/** A vendor's mark (logo, else monogram) as the row and field picture. */
+function vendorThumb(vendor: VendorPickerInput): PickerThumb {
+  return {
+    imageUrl: null,
+    shape: "round",
+    fallback: (
+      <VendorMark
+        vendor={vendor.name}
+        vendorId={vendor.id}
+        logo={vendor.logo}
+        className="size-full"
+      />
+    ),
+  };
+}
 
 /**
  * One vendor row, two identities. `itemId: "shortcode"` is for persisted
@@ -502,27 +506,15 @@ const vendorComboboxItem = <Id extends string>(
   id,
   shortcode: vendor.id,
   name: vendor.name,
-  presentation:
-    vendor.count == null
-      ? undefined
-      : {
-          facts: [
-            `${vendor.count} ${vendor.count === 1 ? "purchase" : "purchases"}`,
-          ],
+  thumb: vendorThumb(vendor),
+  ...(vendor.count != null && {
+    presentation: {
+      trailing: [
+        {
+          text: `${vendor.count} ${vendor.count === 1 ? "purchase" : "purchases"}`,
+          node: formatCount(vendor.count),
         },
-  icon: (
-    <VendorMark vendor={vendor.name} vendorId={vendor.id} logo={vendor.logo} />
-  ),
-  thumb: {
-    imageUrl: null,
-    shape: "round",
-    fallback: (
-      <VendorMark
-        vendor={vendor.name}
-        vendorId={vendor.id}
-        logo={vendor.logo}
-        className="size-full"
-      />
-    ),
-  },
+      ],
+    },
+  }),
 });

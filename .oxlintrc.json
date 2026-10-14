@@ -424,7 +424,14 @@
       "rules": {
         "cubby/no-raw-table": "error",
         "cubby/no-hand-rolled-record-list": "error",
-        "cubby/no-native-select": "error"
+        "cubby/no-native-select": "error",
+        "cubby/no-raw-value-control": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/ui/combobox/picker.tsx"],
+      "rules": {
+        "cubby/no-raw-value-control": "off"
       }
     },
     {

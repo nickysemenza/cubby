@@ -283,7 +283,6 @@ export function NotionImport() {
               </div>
               <Picker
                 mode="choose"
-                widthMode="intrinsic"
                 label="Filter Notion recipes by status"
                 options={filterOptions}
                 value={filter}

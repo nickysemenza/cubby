@@ -16,7 +16,7 @@ import {
   type DetailFieldRenderer,
 } from "~/entity/entity-display";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

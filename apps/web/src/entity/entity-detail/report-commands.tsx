@@ -27,15 +27,12 @@ import {
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
-import {
-  isReferencePickerEntity,
-  requireReferenceEntitySearch,
-} from "~/ui/combobox/reference-entity-search";
+import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 const sameSelection = (
   sent: readonly { id: string; expectedChecksum: string }[] | undefined,
@@ -471,11 +468,12 @@ function CommandOperand({
       : undefined;
   if (chosen && input.kind === "choice")
     return (
-      <ChoiceSwitcher
-        ariaLabel={input.label}
+      <Picker
+        mode="segmented"
+        label={input.label}
         options={input.options}
         value={chosen.value}
-        onValueChange={onChange}
+        onValueChange={(next) => onChange(next ?? undefined)}
       />
     );
   return (

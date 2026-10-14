@@ -176,7 +176,11 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: locationShortcode.nullable(),
           create: locationShortcode.nullable().default(null),
@@ -226,7 +230,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         validation: {
           read: plantingStatus,
           create: plantingStatus.default("planned"),

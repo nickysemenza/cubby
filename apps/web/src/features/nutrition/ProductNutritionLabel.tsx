@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 import { sourceNutritionEstimate, trimAmount } from "~/lib/nutrition-format";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { usdaNutrientBasis } from "~/lib/unit-mapping-utils";
+import { Picker } from "~/ui/combobox/picker";
 import { Stack } from "~/ui/layout";
-import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 import { NutritionLabel } from "./NutritionLabel";
 
@@ -107,14 +107,17 @@ export function ProductNutritionLabel({
   return (
     <Stack gap="sm">
       {basis && (
-        <ChoiceSwitcher
-          ariaLabel="Nutrition basis"
+        <Picker
+          mode="segmented"
+          label="Nutrition basis"
           options={[
             { value: "per100", label: `Per 100 ${basisLabel}` },
             { value: "serving", label: `Per ${basis.label}` },
           ]}
           value={view}
-          onValueChange={setView}
+          onValueChange={(next) => {
+            if (next === "per100" || next === "serving") setView(next);
+          }}
         />
       )}
       <NutritionLabel

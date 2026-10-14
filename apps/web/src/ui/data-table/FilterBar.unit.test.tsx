@@ -169,11 +169,11 @@ describe("FilterBar", () => {
     ]);
   });
 
-  it("edits a multiselect field's chip through a checklist with a Clear/Apply footer", async () => {
+  it("edits a multiselect field's chip through a multiple picker with a Clear/Apply footer", async () => {
     const { onChange } = renderBar([]);
 
     fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Home" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -219,9 +219,10 @@ describe("FilterBar", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Category: any" }));
-    expect(screen.getByText("Food")).toBeInTheDocument();
-    const citrus = screen.getByRole("button", { name: "Produce / Citrus" });
-    expect(citrus).toHaveStyle({ paddingInlineStart: "20px" });
+    expect(await screen.findByText("Food")).toBeInTheDocument();
+    const citrus = screen.getByRole("option", { name: "Produce / Citrus" });
+    // Depth indents the tree row; the row reads its own label.
+    expect(citrus).toHaveStyle({ paddingLeft: "18px" });
     expect(citrus).toHaveTextContent("Citrus");
     fireEvent.click(citrus);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));

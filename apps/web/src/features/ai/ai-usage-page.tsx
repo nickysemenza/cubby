@@ -654,7 +654,6 @@ export function AiUsagePage() {
       <Picker
         mode="choose"
         label="Transport"
-        widthMode="intrinsic"
         className="w-40"
         options={TRANSPORT_OPTIONS}
         value={filters.transport ?? ""}
@@ -668,7 +667,6 @@ export function AiUsagePage() {
       <Picker
         mode="choose"
         label="Status"
-        widthMode="intrinsic"
         className="w-36"
         options={STATUS_OPTIONS}
         value={filters.status ?? ""}

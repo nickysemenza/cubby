@@ -26,7 +26,6 @@ import { Picker } from "~/ui/combobox/picker";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { Label } from "~/ui/primitives/label";
 import { Toaster } from "~/ui/primitives/sonner";
-import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
   PREVIEW_ENTITIES,
@@ -118,14 +117,18 @@ function PreviewToolbar({
           }}
         />
       </div>
-      <ViewSwitcher
-        ariaLabel="Preview state"
+      <Picker
+        mode="segmented"
+        label="Preview state"
         options={PREVIEW_STATES.map((value) => ({
           value,
           label: STATE_LABELS[value],
         }))}
         value={state}
-        onValueChange={(next) => openPreview(entity, next)}
+        onValueChange={(next) => {
+          const chosen = PREVIEW_STATES.find((value) => value === next);
+          if (chosen) openPreview(entity, chosen);
+        }}
       />
     </header>
   );

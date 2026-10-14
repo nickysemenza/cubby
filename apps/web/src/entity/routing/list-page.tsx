@@ -88,7 +88,7 @@ const VIEW_ICONS = {
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
 /** One view menu, with choices derived from the manifest at every width. */
-function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
+function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
   const { views, view } = resolveListView(entity, search);
@@ -190,7 +190,7 @@ export function listPage({
         override={override}
       />
     ),
-    workbenchControls: () => <ListViewSwitcher entity={entity} />,
+    workbenchControls: () => <ListViewMenu entity={entity} />,
     bodyGutter: function useBodyGutter() {
       return useListBodyGutter(entity);
     },
@@ -225,7 +225,7 @@ interface ListChromeOptions {
   compact?: boolean;
   actions?: () => ReactNode;
   /**
-   * A `ViewSwitcher` or similar, rendered in the workbench query
+   * A view menu or segmented `Picker`, rendered in the workbench query
    * tier. A thunk for the same reason as `actions`: it closes over that
    * route's own `Route.useSearch()`/`useNavigate()`, so it has to be called
    * during this shell's render rather than built at module load.
@@ -263,9 +263,7 @@ export function listChromePage({
       entity !== undefined && isBrowserRoutedEntity(entity) ? entity : null;
     const resolvedWorkbenchControls =
       workbenchControls ??
-      (routedEntity
-        ? () => <ListViewSwitcher entity={routedEntity} />
-        : undefined);
+      (routedEntity ? () => <ListViewMenu entity={routedEntity} /> : undefined);
     return (
       <EntityListCardDensityProvider>
         <Page

@@ -7,7 +7,7 @@ import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 const route = getRouteApi("/_authenticated/tasks/");
 
 /**
- * Compact counts strip above the Tasks page's `ViewSwitcher` — backed by the
+ * Compact counts strip above the Tasks page's view picker — backed by the
  * cheap `task.summary` read (server-computed counts) rather than a
  * fetch-everything `chartData` reduced client-side. Each tile links to the
  * view that surfaces those tasks.

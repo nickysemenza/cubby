@@ -113,17 +113,17 @@ describe("Picker records", () => {
       expect.stringContaining("synthetic-shelf"),
     );
   });
-  it("keeps entity-search rows' existing icon and swatch marks", () => {
+  it("leads a record row with one mark: its picture, never a swatch beside it", () => {
     render(
       <Picker
         entity="product"
         label="product"
         items={[
           {
-            id: "icon-product",
-            name: "Icon Product",
+            id: "pictured",
+            name: "Pictured Product",
             color: "rgb(1, 2, 3)",
-            icon: <span data-testid="entity-icon">entity glyph</span>,
+            thumb: { imageUrl: "/synthetic-product.jpg", fallback: null },
           },
         ]}
         value={null}
@@ -132,14 +132,14 @@ describe("Picker records", () => {
     );
 
     openPicker(screen.getByRole("combobox", { name: "product" }));
-    const option = screen.getByRole("option", { name: "Icon Product" });
-    expect(within(option).getAllByTestId("entity-icon")).toHaveLength(1);
-    expect(option.querySelectorAll('[style*="background-color"]')).toHaveLength(
-      1,
+    const option = screen.getByRole("option", { name: "Pictured Product" });
+    expect(option.querySelectorAll("[data-picker-visual] img")).toHaveLength(1);
+    expect(option.querySelectorAll("[data-enum-option-swatch]")).toHaveLength(
+      0,
     );
   });
 
-  it("sizes an intrinsic picker to its options while retaining the trigger minimum", () => {
+  it("matches the popup to the field, growing a narrow field's popup to 16rem", () => {
     render(
       <Picker
         label="cost type"
@@ -149,16 +149,15 @@ describe("Picker records", () => {
         ]}
         value={null}
         setValue={vi.fn()}
-        widthMode="intrinsic"
       />,
     );
 
     openPicker(screen.getByRole("combobox", { name: "cost type" }));
     const popup = screen.getByRole("listbox").parentElement;
     expect(popup).toHaveClass("w-max");
-    expect(popup).toHaveClass("min-w-[var(--anchor-width)]");
+    expect(popup).toHaveClass("min-w-(--anchor-width)");
     expect(popup).toHaveClass(
-      "max-w-[min(24rem,var(--available-width),calc(100vw-16px))]",
+      "max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))]",
     );
   });
 
@@ -382,8 +381,10 @@ describe("Picker records", () => {
             name: "Returned brace",
             presentation: {
               group: { id: "other", label: "Other products", order: 2 },
-              status: { label: "Returned" },
-              facts: ["0 on hand / 0 expected"],
+              trailing: [
+                { text: "Returned" },
+                { text: "0 on hand / 0 expected" },
+              ],
             },
           },
           {
@@ -395,8 +396,10 @@ describe("Picker records", () => {
                 label: "Needs stocking",
                 order: 0,
               },
-              status: { label: "Need 1", tone: "positive" },
-              facts: ["0 on hand / 1 expected"],
+              trailing: [
+                { text: "Need 1", tone: "positive" },
+                { text: "0 on hand / 1 expected" },
+              ],
             },
           },
           {
@@ -526,6 +529,108 @@ describe("Picker options", () => {
   });
 });
 
+describe("Picker segmented and multiple", () => {
+  it("shows every option inline in segmented mode and selects by press", () => {
+    const onValueChange = vi.fn();
+    render(
+      <Picker
+        mode="segmented"
+        label="View"
+        options={[
+          { value: "list", label: "List" },
+          { value: "board", label: "Board" },
+        ]}
+        value="list"
+        onValueChange={onValueChange}
+      />,
+    );
+    const group = screen.getByRole("group", { name: "View" });
+    const board = within(group).getByRole("button", { name: "Board" });
+    expect(within(group).getByRole("button", { name: "List" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.click(board);
+    expect(onValueChange).toHaveBeenCalledWith("board");
+  });
+
+  it("keeps several values as removable chips and adds from the list", () => {
+    const onValuesChange = vi.fn();
+    render(
+      <Picker
+        multiple
+        label="cost types"
+        options={OPTIONS}
+        values={["materials"]}
+        onValuesChange={onValuesChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Materials" }));
+    expect(onValuesChange).toHaveBeenLastCalledWith([]);
+    openPicker(screen.getByRole("combobox", { name: "cost types" }));
+    fireEvent.click(screen.getByRole("option", { name: "Services" }));
+    expect(onValuesChange).toHaveBeenLastCalledWith(["materials", "services"]);
+  });
+
+  // Regression: hand-rolled chips sat outside Base UI's chips context, so
+  // Backspace in the empty input could not remove the last selection.
+  it("removes the last chip with Backspace in the empty input", () => {
+    const onValuesChange = vi.fn();
+    render(
+      <Picker
+        multiple
+        label="cost types"
+        options={OPTIONS}
+        values={["materials", "services"]}
+        onValuesChange={onValuesChange}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "cost types" });
+    input.focus();
+    fireEvent.keyDown(input, { key: "Backspace" });
+    expect(onValuesChange).toHaveBeenLastCalledWith(["materials"]);
+  });
+
+  // Regression: the open-on-mount effect re-ran whenever the caller's
+  // search callback changed identity (as its results loaded), wiping the
+  // typed query.
+  it("keeps the typed query when the search callback changes identity", () => {
+    function Harness({ version }: { version: number }) {
+      const onSearchChange = (query: string) => void [query, version];
+      return (
+        <Picker
+          multiple
+          openOnMount
+          label="tags"
+          options={OPTIONS}
+          values={[]}
+          onValuesChange={vi.fn()}
+          onSearchChange={onSearchChange}
+        />
+      );
+    }
+    const { rerender } = render(<Harness version={1} />);
+    const input = screen.getByRole("combobox", { name: "tags" });
+    fireEvent.change(input, { target: { value: "serv" } });
+    rerender(<Harness version={2} />);
+    expect(input).toHaveValue("serv");
+  });
+
+  it("shows a row's trailing chips and announces them", () => {
+    render(
+      <Picker
+        label="sheet"
+        options={[{ value: "maple", label: "Maple", hint: "$47/sheet" }]}
+        value={null}
+        onValueChange={vi.fn()}
+      />,
+    );
+    openPicker(screen.getByRole("combobox", { name: "sheet" }));
+    const row = screen.getByRole("option", { name: "Maple $47/sheet" });
+    expect(within(row).getByText("$47/sheet")).toBeInTheDocument();
+  });
+});
+
 describe("Picker stored codes", () => {
   const CODE = "PRD-4K7M";
 
@@ -558,7 +663,7 @@ describe("Picker stored codes", () => {
       client,
     );
     const input = screen.getByRole("combobox", { name: "product" });
-    expect(input).toHaveValue("Rolled Oats — Harvest Mill");
+    expect(input).toHaveValue("Rolled Oats");
     expect(container.querySelector("[data-picker-visual] img")).not.toBeNull();
     expect(container).not.toHaveTextContent(CODE);
   });

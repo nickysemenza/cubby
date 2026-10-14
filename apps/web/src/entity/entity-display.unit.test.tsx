@@ -17,7 +17,7 @@ import {
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

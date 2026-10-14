@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
+import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
 import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -453,6 +454,20 @@ function PortionDraftRow({
     () => (source.recipeYield ? [source.recipeYield.unit] : []),
     [source.recipeYield],
   );
+  const eaterItems = useMemo(
+    () => eaters.map((eater) => buildRecordComboboxItem("ledgerParty", eater)),
+    [eaters],
+  );
+  const mealItems = useMemo(
+    () =>
+      targetMeals.map((meal) => {
+        // `mealLabel` already names the day; the row's date projection would
+        // repeat it.
+        const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
+        return { id, shortcode, thumb, name: mealLabel(meal) };
+      }),
+    [targetMeals],
+  );
   return (
     <div className="space-y-2 border border-[var(--border)] bg-card p-3">
       <Row align="center" justify="between" gap="sm">
@@ -473,33 +488,20 @@ function PortionDraftRow({
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_minmax(11rem,0.9fr)]">
         <Picker
           mode="choose"
-          options={eaters.map((eater) => ({
-            value: eater.id,
-            label: eater.name,
-          }))}
-          value={row.eaterId}
-          onValueChange={(value) =>
-            onUpdate({
-              eaterId: eaters.find((eater) => eater.id === value)?.id ?? null,
-            })
-          }
+          entity="ledgerParty"
+          items={eaterItems}
+          value={eaterItems.find((item) => item.id === row.eaterId) ?? null}
+          setValue={(item) => onUpdate({ eaterId: item?.id ?? null })}
           label="Eater"
           placeholder="Choose person"
           className="min-w-0"
         />
         <Picker
           mode="choose"
-          options={targetMeals.map((meal) => ({
-            value: meal.id,
-            label: mealLabel(meal),
-          }))}
-          value={row.targetMealId}
-          onValueChange={(value) =>
-            onUpdate({
-              targetMealId:
-                targetMeals.find((meal) => meal.id === value)?.id ?? null,
-            })
-          }
+          entity="meal"
+          items={mealItems}
+          value={mealItems.find((item) => item.id === row.targetMealId) ?? null}
+          setValue={(item) => onUpdate({ targetMealId: item?.id ?? null })}
           label="Meal"
           placeholder="Choose meal"
           className="min-w-0"

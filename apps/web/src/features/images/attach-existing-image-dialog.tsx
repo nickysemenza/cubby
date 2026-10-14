@@ -5,16 +5,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { entityLabel } from "~/entity/entities";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   image as imageOperations,
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { buildSearchHitComboboxItem } from "~/ui/combobox/combobox-builders";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
-import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
@@ -26,22 +28,33 @@ const PURPOSE_OPTIONS: readonly PickerOption[] = [
 export function AttachExistingImageDialog({
   image,
   onClose,
+  findTargets = search.find,
 }: {
   image: ImageWithEntity;
   onClose: () => void;
+  /** The target search; a test injects an in-memory transport. */
+  findTargets?: typeof search.find;
 }) {
-  const [targetId, setTargetId] = useState("");
+  const [query, setQuery] = useState("");
+  const [target, setTarget] = useState<ComboboxItem | null>(null);
   const [purpose, setPurpose] = useState<"item" | "label">("item");
   const queryClient = useQueryClient();
   const attachedIds = new Set(image.associations.map((item) => item.entityId));
   const targetSearch = useQuery({
-    ...search.find.queryOptions({
-      query: targetId.trim() || "_",
+    ...findTargets.queryOptions({
+      query: query.trim() || "_",
       entityKinds: [...galleryEntities],
       limit: 10,
     }),
-    enabled: targetId.trim().length > 0,
+    enabled: query.trim().length > 0,
   });
+  const targetItems = (targetSearch.data ?? [])
+    .filter((hit) => !attachedIds.has(hit.id))
+    .map((hit) => {
+      const item = buildSearchHitComboboxItem(hit, hit.entityKind);
+      // A mixed-entity roster names each row's kind.
+      return { ...item, detail: item.detail ?? entityLabel(hit.entityKind) };
+    });
   const attach = useMutation(
     imageOperations.attachExisting.mutationOptions({
       onSuccess: async (result) => {
@@ -53,8 +66,8 @@ export function AttachExistingImageDialog({
       },
     }),
   );
-  const normalized = targetId.trim().toUpperCase();
-  const duplicate = attachedIds.has(normalized);
+  const targetId = target?.id ?? "";
+  const isProduct = targetId.startsWith("PRD-");
 
   return (
     <ResponsiveDialog
@@ -63,34 +76,38 @@ export function AttachExistingImageDialog({
         if (!open) onClose();
       }}
       title="Attach to record"
-      description="Enter any live gallery record shortcode. Garden entries use GDE- codes."
+      description="Search any live gallery record by name or shortcode. Garden entries use GDE- codes."
       footer={
         <DialogFormActions
           onCancel={onClose}
           submitLabel="Attach"
           pending={attach.isPending}
-          submitDisabled={!normalized || duplicate}
+          submitDisabled={!target}
           error={attach.error ? getErrorMessage(attach.error) : null}
           onSubmit={() =>
             void attach.mutateAsync({
               imageId: image.id,
-              targetId: normalized,
-              purpose: normalized.startsWith("PRD-") ? purpose : undefined,
+              targetId,
+              purpose: isProduct ? purpose : undefined,
             })
           }
         />
       }
     >
       <div className="space-y-2">
-        <Label htmlFor="existing-image-target">Record shortcode</Label>
-        <Input
-          id="existing-image-target"
-          placeholder="GDE-3FX7, REC-… or PRJ-…"
-          value={targetId}
-          onChange={(event) => setTargetId(event.target.value)}
-          aria-invalid={duplicate}
+        <Label htmlFor="existing-image-target">Record</Label>
+        <Picker
+          inputId="existing-image-target"
+          label="Record"
+          placeholder="Search by name, GDE-3FX7, PRJ-…"
+          items={targetItems}
+          value={target}
+          setValue={setTarget}
+          onSearchChange={setQuery}
+          isLoading={targetSearch.isFetching}
+          clearable
         />
-        {normalized.startsWith("PRD-") && (
+        {isProduct && (
           <>
             <Label htmlFor="existing-image-purpose">Product image use</Label>
             <Picker
@@ -104,31 +121,6 @@ export function AttachExistingImageDialog({
               }
             />
           </>
-        )}
-        {targetSearch.data && targetSearch.data.length > 0 && (
-          <div className="divide-y divide-border overflow-hidden rounded-sm border border-border">
-            {targetSearch.data
-              .filter((result) => !attachedIds.has(result.id))
-              .map((result) => (
-                <button
-                  className="flex w-full flex-col items-start px-2 py-1.5 text-left hover:bg-muted"
-                  key={`${result.entityKind}:${result.id}`}
-                  type="button"
-                  onClick={() => setTargetId(result.id)}
-                >
-                  <span className="font-medium">{result.title}</span>
-                  <span className="text-2xs text-muted-foreground">
-                    {result.entityKind}
-                    {result.subtitle ? ` · ${result.subtitle}` : ""}
-                  </span>
-                </button>
-              ))}
-          </div>
-        )}
-        {duplicate && (
-          <p className="text-xs text-destructive">
-            This image is already attached to that record.
-          </p>
         )}
       </div>
     </ResponsiveDialog>

@@ -287,7 +287,7 @@ function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
 /**
  * Photo-first "shelf" grid with loading / empty / error states and optional
  * infinite-scroll. The reusable half of the Shelf/Table pattern — feed it items
- * and a `renderCard` (use ShelfCard) and pair it with `ViewSwitcher`.
+ * and a `renderCard` (use ShelfCard) and pair it with a segmented `Picker`.
  */
 function shelfItems<T>(
   items: T[],

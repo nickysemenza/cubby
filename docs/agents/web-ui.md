@@ -53,20 +53,24 @@ layout repeats or encodes a real decision. `gap` is for flex/grid siblings;
 
 Every value choice renders through the one `Picker`
 (`ui/combobox/picker.tsx`); `PickerField` (`ui/form-utils/picker-field.tsx`) is
-its only react-hook-form binding. Native `<select>` is banned
-(`cubby/no-native-select`). Choose the mode explicitly: `search` (a text input
-that filters or drives server search, with create) for records and long lists;
-`choose` (a button with arrow keys, Home/End, letter typeahead and no soft
-keyboard, built on Base UI `Select`) for a short fixed list. String choices pass
-`options` (`PickerOption`); records pass `items` with an `entity`. Each mode and
-`PickerField` store keeps its own value, empty value, focus, and search
-contract — `PickerField`'s `store` names it. A closed picker leads with the
-selected option's glyph or the record's picture, and never displays or
-announces a shortcode: a stored code resolves to its record through
+its only react-hook-form binding. Native `<select>` (`cubby/no-native-select`)
+and raw Base UI combobox/select/toggle-group or the toggle-group primitive
+(`cubby/no-raw-value-control`) are banned outside it. Choose the mode
+explicitly: `search` (text input, filter or server search, create) for records
+and long lists; `choose` (Base UI `Select`: arrows, Home/End, letter typeahead,
+no soft keyboard) for a short fixed list; `segmented` (inline button group) for
+a handful of view modes or formats. `multiple` keeps several values as chips;
+`footer` pins Clear/Apply for a draft filter. String choices pass `options`
+(`PickerOption`); records pass `items` with an `entity`, built by
+`combobox-builders.tsx` from the manifest — `displayImages[0]` is the picture
+and the phone-row projection (`display.mobile` `subtitle` and `trailing` slots)
+supplies the inline secondary and trailing chips, so declare those slots
+rather than hand-building row content. Each mode and `PickerField` store keeps
+its own value, empty value, focus, and search contract. A picker never displays
+or announces a shortcode: a stored code resolves to its record through
 `useSelectedPickerItems`, showing a loading state meanwhile. `DropdownMenu`
-and the `cmdk` command menu are for navigation and actions, never a value. The
-filter bar's multi-value editor is an inline checklist inside its popover
-(Clear/Apply), not a popup, and reuses `PickerVisual` for its option marks.
+and the `cmdk` command menu are for navigation and actions, never a value.
+Visual rules live in [DESIGN.md](../../apps/web/DESIGN.md#controls-and-suggestions).
 
 Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
 with conditional children for loading and errors. A plain empty-state element

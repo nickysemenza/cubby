@@ -2,13 +2,13 @@ import {
   type ProductCategoryShortcode,
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Picker } from "~/ui/combobox/picker";
-import type { PickerOption } from "~/ui/combobox/picker-option";
-import { treePickerItems } from "~/ui/combobox/tree-items";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { Input } from "~/ui/primitives/input";
+
+const CategorySearch = referenceEntitySearch("productCategory");
 
 export interface TriageBoundsValue {
   minSpend: number | undefined;
@@ -25,24 +25,6 @@ export function TriageBounds({
   categoryId,
   onChange,
 }: TriageBoundsValue & { onChange: (next: TriageBoundsValue) => void }) {
-  const { categories } = useProductCategories();
-  const categoryOptions = useMemo<PickerOption[]>(
-    () => [
-      { value: "", label: "All categories" },
-      ...treePickerItems(categories, {
-        idOf: (category) => category.id,
-        parentIdOf: (category) => category.path.at(-2)?.id ?? null,
-        labelOf: (category) => category.name,
-      }).map((item) => ({
-        value: item.id,
-        label: item.name,
-        group: item.presentation?.group,
-        depth: item.presentation?.depth,
-        rowLabel: item.presentation?.rowLabel,
-      })),
-    ],
-    [categories],
-  );
   const [draft, setDraft] = useState(minSpend?.toString() ?? "");
 
   const commitSpend = () => {
@@ -74,19 +56,34 @@ export function TriageBounds({
       </label>
       <div className="flex items-center gap-2">
         <span className="shrink-0 eyebrow">Category</span>
-        <Picker
-          inputId="triage-category"
-          label="Category"
-          options={categoryOptions}
-          value={categoryId ?? ""}
-          onValueChange={(value) => {
-            const parsed = productCategoryShortcode.safeParse(value);
-            onChange({
-              minSpend,
-              categoryId: parsed.success ? parsed.data : undefined,
-            });
-          }}
-        />
+        <CategorySearch>
+          {({ items, ...search }) => (
+            <Picker
+              {...search}
+              inputId="triage-category"
+              label="Category"
+              entity="productCategory"
+              placeholder="All categories"
+              clearable
+              items={items}
+              value={
+                categoryId
+                  ? (items.find((item) => item.id === categoryId) ?? {
+                      id: categoryId,
+                      name: categoryId,
+                    })
+                  : null
+              }
+              setValue={(item) => {
+                const parsed = productCategoryShortcode.safeParse(item?.id);
+                onChange({
+                  minSpend,
+                  categoryId: parsed.success ? parsed.data : undefined,
+                });
+              }}
+            />
+          )}
+        </CategorySearch>
       </div>
     </div>
   );

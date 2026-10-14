@@ -127,7 +127,7 @@ describe("EntityGraphControls", () => {
     ).not.toBeInTheDocument();
     // Record codes stay searchable but are never shown.
     expect(screen.queryByText(/TSK-CD34/)).not.toBeInTheDocument();
-    pick(/Write proposal/);
+    fireEvent.click(screen.getByRole("option", { name: /Write proposal/ }));
     choose("Dependency direction", "Blockers");
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Hide completed work" }),

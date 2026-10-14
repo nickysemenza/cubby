@@ -12,9 +12,9 @@ import type { VendorOut } from "@cubby/schemas/vendor";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import { RecordEmoji } from "~/entity/components/record-emoji";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Picker } from "~/ui/combobox/picker";
@@ -223,16 +223,11 @@ export function ProductCategoryClassification({
     <ClassificationReview
       initialCategory={
         record.spendingCategoryId
-          ? {
+          ? buildRecordComboboxItem("spendingCategory", {
               id: record.spendingCategoryId,
-              name: record.spendingCategoryName ?? record.spendingCategoryId,
-              icon: (
-                <RecordEmoji
-                  entity="spendingCategory"
-                  emoji={record.spendingCategoryEmoji}
-                />
-              ),
-            }
+              name: record.spendingCategoryName,
+              emoji: record.spendingCategoryEmoji,
+            })
           : null
       }
       initial={{
@@ -263,18 +258,11 @@ export function VendorClassification({ record }: { record: VendorOut }) {
     <ClassificationReview
       initialCategory={
         record.defaultSpendingCategoryId
-          ? {
+          ? buildRecordComboboxItem("spendingCategory", {
               id: record.defaultSpendingCategoryId,
-              name:
-                record.defaultSpendingCategoryName ??
-                record.defaultSpendingCategoryId,
-              icon: (
-                <RecordEmoji
-                  entity="spendingCategory"
-                  emoji={record.defaultSpendingCategoryEmoji}
-                />
-              ),
-            }
+              name: record.defaultSpendingCategoryName,
+              emoji: record.defaultSpendingCategoryEmoji,
+            })
           : null
       }
       initial={{

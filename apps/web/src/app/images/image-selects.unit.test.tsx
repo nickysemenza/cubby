@@ -4,6 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AttachExistingImageDialog } from "~/features/images/attach-existing-image-dialog";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ImageEditDialog } from "./image-edit-dialog";
@@ -52,17 +53,37 @@ describe("image dialog pickers", () => {
     expect(source).toHaveTextContent("Our photo");
   });
 
-  it("keeps the product image purpose as a controlled selection", async () => {
-    render(<AttachExistingImageDialog image={image} onClose={vi.fn()} />, {
-      wrapper: harness.wrapper,
-    });
-
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Record shortcode" }),
-      {
-        target: { value: "PRD-4K7M" },
-      },
+  it("picks the target record from search and keeps the product image purpose", async () => {
+    render(
+      <AttachExistingImageDialog
+        image={image}
+        onClose={vi.fn()}
+        findTargets={search.find.withTransport(async () => [
+          {
+            id: "PRD-4K7M",
+            entityKind: "product",
+            title: "Example oats",
+            subtitle: null,
+            typeHint: null,
+            imageUrl: null,
+            matchKind: "text",
+            matchField: "title",
+            matchReason: "Name",
+            matchTerms: ["oats"],
+          },
+        ])}
+      />,
+      { wrapper: harness.wrapper },
     );
+
+    const target = await screen.findByRole("combobox", { name: "Record" });
+    target.focus();
+    fireEvent.keyDown(target, { key: "ArrowDown" });
+    fireEvent.change(target, { target: { value: "oats" } });
+    const hit = await screen.findByRole("option", { name: /Example oats/ });
+    fireEvent.click(hit);
+    // The record's name shows, never its code.
+    expect(target).toHaveValue("Example oats");
     const purpose = await screen.findByRole("combobox", {
       name: "Product image use",
     });

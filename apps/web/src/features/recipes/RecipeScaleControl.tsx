@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -18,7 +19,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
-import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
 import { getIngredientName } from "./recipe-utils";
@@ -28,10 +28,17 @@ const QUICK_FACTORS = [0.5, 1, 2, 3] as const;
 const factorLabel = (f: number): string =>
   f === 0.5 ? "½×" : `${Number.isInteger(f) ? f : roundTo(f, 2)}×`;
 
+const QUICK_FACTOR_OPTIONS: readonly PickerOption[] = QUICK_FACTORS.map(
+  (f) => ({ value: String(f), label: factorLabel(f) }),
+);
+
 type AnchorMode = ScaleAnchor["type"];
 
-const isAnchorMode = (value: string): value is AnchorMode =>
-  value === "multiplier" || value === "totalWeight" || value === "ingredient";
+const ANCHOR_OPTIONS: readonly (PickerOption & { value: AnchorMode })[] = [
+  { value: "multiplier", label: "×" },
+  { value: "totalWeight", label: "Weight" },
+  { value: "ingredient", label: "Ingredient" },
+];
 
 /**
  * An ingredient whose line couldn't reach grams, so the total-weight anchor
@@ -137,28 +144,16 @@ export function RecipeScaleControl({
       <span className="eyebrow">Scale</span>
 
       {/* Quick ×-chips */}
-      <ToggleGroup
-        aria-label="Scale recipe"
-        disabled={!hydrated}
-        variant="outline"
-        size="sm"
-        value={[activeChip != null ? String(activeChip) : "custom"]}
-        onValueChange={(values: string[]) => {
-          const next = values[0];
-          if (next && next !== "custom") onFactorChange(Number(next));
+      <Picker
+        mode="segmented"
+        label="Scale recipe"
+        options={QUICK_FACTOR_OPTIONS}
+        value={activeChip != null ? String(activeChip) : null}
+        onValueChange={(next) => {
+          const chip = QUICK_FACTORS.find((f) => String(f) === next);
+          if (chip != null) onFactorChange(chip);
         }}
-      >
-        {QUICK_FACTORS.map((f) => (
-          <ToggleGroupItem
-            key={f}
-            value={String(f)}
-            aria-label={`Scale ${factorLabel(f)}`}
-            className="max-sm:min-h-11"
-          >
-            {factorLabel(f)}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      />
 
       {/* Custom anchor popover */}
       <Popover open={open} onOpenChange={setOpen}>
@@ -178,31 +173,22 @@ export function RecipeScaleControl({
         <PopoverContent className="w-[min(18rem,calc(100vw-2rem))] space-y-4">
           <Stack gap="sm">
             <Label className="eyebrow">Scale by</Label>
-            <ToggleGroup
-              aria-label="Scale anchor"
-              variant="outline"
-              size="sm"
-              spacing={0}
-              className="w-full"
-              value={[mode]}
-              onValueChange={(values: string[]) => {
-                const next = values.find(isAnchorMode);
+            <Picker
+              mode="segmented"
+              label="Scale anchor"
+              className="w-full *:flex-1"
+              options={ANCHOR_OPTIONS}
+              value={mode}
+              onValueChange={(value) => {
+                const next = ANCHOR_OPTIONS.find(
+                  (option) => option.value === value,
+                );
                 if (next) {
-                  setMode(next);
+                  setMode(next.value);
                   setDraft("");
                 }
               }}
-            >
-              <ToggleGroupItem value="multiplier" className="flex-1">
-                ×
-              </ToggleGroupItem>
-              <ToggleGroupItem value="totalWeight" className="flex-1">
-                Weight
-              </ToggleGroupItem>
-              <ToggleGroupItem value="ingredient" className="flex-1">
-                Ingredient
-              </ToggleGroupItem>
-            </ToggleGroup>
+            />
           </Stack>
 
           {mode === "ingredient" && (

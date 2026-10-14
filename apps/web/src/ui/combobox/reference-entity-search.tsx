@@ -2,14 +2,15 @@ import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
+import { EntityIcon } from "~/entity/entities";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
-import { Image } from "~/ui/primitives/image";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
+import { isReferencePickerEntity } from "./reference-picker-entities";
 import { treePickerItems } from "./tree-items";
 import {
   useEntityListSource,
@@ -101,19 +102,13 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
           entityId: item.id,
         })
       ]?.url ?? null;
+    // Category rows come from the taxonomy tree, which carries no images.
     return {
       ...item,
-      thumb: { imageUrl, fallback: item.icon ?? null },
-      icon: imageUrl ? (
-        <Image
-          src={imageUrl}
-          alt=""
-          displayWidth={40}
-          className="size-10 shrink-0 rounded-sm border border-border object-cover"
-        />
-      ) : (
-        item.icon
-      ),
+      thumb: {
+        imageUrl,
+        fallback: <EntityIcon entity="productCategory" size={14} colored />,
+      },
     };
   });
   return children({
@@ -125,34 +120,6 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
     },
   });
 }
-
-/** Manifest reference targets with an assignment picker. Multi-value and media
- * relations intentionally stay with their dedicated controls. */
-const referencePickerEntities = new Set<PickerEntity>([
-  "ingredient",
-  "location",
-  "product",
-  "productCategory",
-  "spendingCategory",
-  "recipe",
-  "project",
-  "task",
-  "vendor",
-  "financialAccount",
-  "purchase",
-  "ledgerParty",
-  "plant",
-  "planting",
-  "vendorAccount",
-]);
-
-export const isReferencePickerEntity = (
-  entity: string,
-): entity is PickerEntity => {
-  // SAFETY: Set membership is the runtime proof that this arbitrary string is
-  // one of the closed PickerEntity literals.
-  return referencePickerEntities.has(entity as PickerEntity);
-};
 
 /** The generic (non-vendor, non-productCategory) picker's search provider: a
  * direct `useEntityListSource` call in the render-prop shape `PickerEntity`'s

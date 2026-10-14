@@ -131,8 +131,9 @@ function pickerListFilters(
 ): EntitySearchScope {
   const own: [string, string | readonly string[]][] = [];
   if (entity === "ledgerParty") own.push(["kind", ["member"]]);
-  if (entity !== "planting")
-    own.push([resolveBlankFilterKey(entity), searchQuery]);
+  // Plantings are found by scope (location, date), never by a typed name.
+  const nameKey = entity === "planting" ? null : resolveBlankFilterKey(entity);
+  if (nameKey) own.push([nameKey, searchQuery]);
   return Object.fromEntries([...own, ...Object.entries(scope ?? {})]);
 }
 
@@ -259,26 +260,30 @@ function productConfig(
   };
 }
 
-const manifestConfigs = {
-  ledgerTransfer: manifestConfig("ledgerTransfer"),
-  spendingCategory: manifestConfig("spendingCategory"),
-  ingredient: manifestConfig("ingredient", "dialog"),
-  ledgerParty: manifestConfig("ledgerParty"),
-  recipe: manifestConfig("recipe"),
-  project: manifestConfig("project"),
-  task: manifestConfig("task"),
-  plant: manifestConfig("plant"),
-  planting: manifestConfig("planting"),
-  financialAccount: manifestConfig("financialAccount"),
-  purchase: manifestConfig("purchase"),
-  vendorAccount: manifestConfig("vendorAccount"),
-} satisfies {
-  [K in ManifestPickerEntity]: UseEntitySearchConfig<
-    ShortcodeFor<K>,
-    PickerRecord,
-    PickerRecord
-  >;
-};
+/** The editable entities a picker can create from a typed name. */
+const dialogCreateEntities = new Set<string>([
+  "ingredient",
+  "location",
+  "product",
+]);
+
+/** One config per list-backed entity, built on first use: the manifest
+ * supplies its list, filters, title, and row projection. */
+const manifestConfigs = new Map<
+  ManifestPickerEntity,
+  ReturnType<typeof manifestConfig<ManifestPickerEntity>>
+>();
+
+function manifestConfigFor(entity: ManifestPickerEntity) {
+  const cached = manifestConfigs.get(entity);
+  if (cached) return cached;
+  const config = manifestConfig(
+    entity,
+    dialogCreateEntities.has(entity) ? "dialog" : "none",
+  );
+  manifestConfigs.set(entity, config);
+  return config;
+}
 
 const productConfigs = {
   reference: productConfig("reference"),
@@ -297,12 +302,10 @@ function pickerConfig<E extends EntitySearchEntity>(
       ? productConfigs[intent]
       : entity === "location"
         ? locationConfig
-        : manifestConfigs[entity as ManifestPickerEntity];
+        : manifestConfigFor(entity as ManifestPickerEntity);
   // SAFETY: see above — `config` belongs to `entity`'s own id and rows.
   return config as never;
 }
-
-const dialogCreateEntities = new Set(["ingredient", "location", "product"]);
 
 /**
  * The one entity combobox source: search-query state, the deferred-open gate,

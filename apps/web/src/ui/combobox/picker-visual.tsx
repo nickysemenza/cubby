@@ -58,6 +58,7 @@ export function PickerVisual({
       <span
         aria-hidden
         data-picker-visual=""
+        data-enum-option-swatch=""
         className="size-2 shrink-0"
         style={{ backgroundColor: item.color }}
       />

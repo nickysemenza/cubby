@@ -44,10 +44,8 @@ import {
 import { basisValueOf } from "~/features/ai/field-suggestion";
 import { FormFieldResolution } from "~/features/ai/form-field-resolution";
 import type { EntitySearchScope } from "~/ui/combobox/entity-search-hooks";
-import {
-  isReferencePickerEntity,
-  requireReferenceEntitySearch,
-} from "~/ui/combobox/reference-entity-search";
+import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { PickerField } from "~/ui/form-utils/picker-field";
 
 const EntityEditFieldScopeContext = createContext<string | undefined>(

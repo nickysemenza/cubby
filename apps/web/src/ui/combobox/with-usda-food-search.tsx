@@ -192,7 +192,6 @@ export function UsdaFoodSearchField({
             isLoading={parsedFdcId != null ? byIdLoading : isLoading}
             onSearchChange={setSearchQuery}
             value={value}
-            wide
             renderItem={(item) => {
               const food = foodsById.get(item.id);
               return food ? <UsdaFoodResultRow food={food} /> : item.name;

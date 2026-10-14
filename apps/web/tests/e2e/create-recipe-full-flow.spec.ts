@@ -67,7 +67,10 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Switch to the Data view (table sub-mode) for cost/weight verification.
     // Exact match avoids colliding with the "Data" nav-group dropdown trigger.
-    await page.getByRole("button", { name: "Data view", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Recipe view" })
+      .getByRole("button", { name: "Data", exact: true })
+      .click();
 
     const ingredientLink = page
       .getByRole("table", { name: "Recipe Ingredients Table" })

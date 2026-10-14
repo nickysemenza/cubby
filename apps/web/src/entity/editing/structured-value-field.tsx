@@ -18,10 +18,8 @@ import {
 import { z } from "zod";
 
 import { Picker } from "~/ui/combobox/picker";
-import {
-  isReferencePickerEntity,
-  requireReferenceEntitySearch,
-} from "~/ui/combobox/reference-entity-search";
+import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
   NullableNumericField,
   PlainDateField,

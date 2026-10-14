@@ -175,7 +175,10 @@ test.describe("Recipe Flow", () => {
       actions.getByRole("button", { name: "Add to meal", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "Flow view", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Recipe view" })
+      .getByRole("button", { name: "Flow", exact: true })
+      .click();
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),
     ).toBeVisible({ timeout: 15000 });
@@ -202,7 +205,10 @@ test.describe("Recipe Flow", () => {
       ),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Table view", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Flow layout" })
+      .getByRole("button", { name: "Table", exact: true })
+      .click();
     await expect(page.getByText("Water", { exact: true })).toBeVisible();
     await expect(page.getByText("Mix dough", { exact: true })).toBeVisible();
     await expect(page.getByText("until smooth", { exact: true })).toBeVisible();

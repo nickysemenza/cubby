@@ -1,10 +1,12 @@
+import { parseShortcode } from "@cubby/shared";
 import { useId, useMemo } from "react";
 
+import { EntityIcon } from "~/entity/entities";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
@@ -66,10 +68,9 @@ export function EntityGraphControls({
     ],
     [data.nodes],
   );
-  const focusOptions = useMemo(
-    (): PickerOption[] => [
-      { value: "", label: "All records" },
-      ...data.nodes
+  const focusItems = useMemo(
+    (): ComboboxItem[] =>
+      data.nodes
         .filter(
           (node) =>
             !filters.workKind ||
@@ -90,22 +91,22 @@ export function EntityGraphControls({
               .toLowerCase()
               .includes(search.toLowerCase()),
         )
-        .map((node) => ({
-          value: node.id,
-          label: node.name,
-          ...(node.kindLabel && { detail: node.kindLabel }),
-          ...(node.imageUrl && {
-            icon: (
-              <Image
-                src={node.imageUrl}
-                alt=""
-                displayWidth={20}
-                className="size-5 rounded-[3px] object-cover"
-              />
-            ),
-          }),
-        })),
-    ],
+        .map((node) => {
+          // Graph nodes span entities, so each row's glyph follows its code.
+          const entity = parseShortcode(node.id)?.type;
+          return {
+            id: node.id,
+            shortcode: node.id,
+            name: node.name,
+            ...(node.kindLabel && { detail: node.kindLabel }),
+            thumb: {
+              imageUrl: node.imageUrl ?? null,
+              fallback: entity ? (
+                <EntityIcon entity={entity} size={14} colored />
+              ) : null,
+            },
+          };
+        }),
     [data.nodes, filters.workKind, filters.location, filters.focus, search],
   );
   return (
@@ -115,7 +116,6 @@ export function EntityGraphControls({
           <Picker
             mode="choose"
             compact
-            widthMode="intrinsic"
             label="Record types"
             options={WORK_KIND_OPTIONS}
             value={filters.workKind ?? "all"}
@@ -133,7 +133,6 @@ export function EntityGraphControls({
                 locationOptions.length > CHOOSE_MODE_MAX ? "search" : "choose"
               }
               compact
-              widthMode="intrinsic"
               label="Location"
               className="min-w-0"
               options={locationOptions}
@@ -166,14 +165,15 @@ export function EntityGraphControls({
           compact
           label="Focus record"
           className="w-56 max-w-full"
-          options={focusOptions}
-          value={filters.focus ?? ""}
-          onValueChange={(value) => onChange({ focus: value || undefined })}
+          placeholder="All records"
+          clearable
+          items={focusItems}
+          value={focusItems.find((item) => item.id === filters.focus) ?? null}
+          setValue={(item) => onChange({ focus: item?.id })}
         />
         <Picker
           mode="choose"
           compact
-          widthMode="intrinsic"
           label="Dependency direction"
           className="max-w-full"
           options={recipes ? RECIPE_DIRECTION_OPTIONS : WORK_DIRECTION_OPTIONS}
@@ -195,7 +195,6 @@ export function EntityGraphControls({
             <Picker
               mode="choose"
               compact
-              widthMode="intrinsic"
               label="Group by"
               className="min-w-0"
               options={GROUP_BY_OPTIONS}

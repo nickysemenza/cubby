@@ -32,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/ui/primitives/table";
-import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
   cropName,
@@ -44,11 +43,19 @@ import { usePlantingScheduleLabel } from "./planting-schedule-label";
 
 export type GardenMode = "timing" | "practice" | "plan";
 
-const modes = [
-  { value: "timing", label: "Timing", icon: CalendarBlankIcon },
-  { value: "practice", label: "Practice", icon: ListChecksIcon },
-  { value: "plan", label: "Plan", icon: PlantIcon },
-] as const;
+const modes: readonly (PickerOption & { value: GardenMode })[] = [
+  {
+    value: "timing",
+    label: "Timing",
+    icon: <CalendarBlankIcon className="size-4" />,
+  },
+  {
+    value: "practice",
+    label: "Practice",
+    icon: <ListChecksIcon className="size-4" />,
+  },
+  { value: "plan", label: "Plan", icon: <PlantIcon className="size-4" /> },
+];
 
 const crops = [...gardenCropKeys].sort((a, b) =>
   cropName(a).localeCompare(cropName(b)),
@@ -405,11 +412,16 @@ export function GardenWorkbench({
   return (
     <Stack gap="lg">
       <div className="flex flex-wrap items-end gap-3 border-b border-border pb-3">
-        <ViewSwitcher
+        <Picker
+          mode="segmented"
+          label="Switch view"
           options={modes}
           value={mode}
-          onValueChange={onModeChange}
-          compactOnMobile
+          onValueChange={(next) => {
+            const choice = modes.find((option) => option.value === next);
+            if (choice) onModeChange(choice.value);
+          }}
+          iconOnlyOnPhone
         />
         <div className="grid min-w-24 gap-1 text-xs text-muted-foreground">
           <span>Year</span>

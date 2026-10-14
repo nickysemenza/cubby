@@ -262,7 +262,6 @@ export function GraphExplorer({
         <Picker
           mode="choose"
           label="Filter map records"
-          widthMode="intrinsic"
           className="w-40"
           options={kindOptions}
           value={kind}

@@ -125,7 +125,11 @@ export default defineEntity({
             { value: "no", label: "No" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          mobile: { slot: "trailing", priority: 10 },
+        },
         validation: {
           read: plantVerdict.nullable(),
           create: plantVerdict.nullable().default(null),
@@ -150,7 +154,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { detail: true },
+        display: { detail: true, mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: optionalText,
           create: optionalText.default(null),

@@ -1,12 +1,26 @@
 import type React from "react";
 import { z } from "zod";
 
+import type { DetailEntity } from "~/entity/generated/entity-details.gen";
+import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+
 export const ComboboxItem = z.object({
   name: z.string(),
   id: z.string(),
 });
 
-type PickerTone = "neutral" | "positive" | "warning" | "destructive";
+export type PickerTone = "neutral" | "positive" | "warning" | "destructive";
+
+/**
+ * One right-aligned data chip on a row — a count, a price, an on-hand
+ * figure, a confidence. `text` is what the row announces; `node` is the
+ * formatted display when it differs (a currency value), never interactive.
+ */
+export interface PickerChip {
+  text: string;
+  tone?: PickerTone;
+  node?: React.ReactNode;
+}
 
 export interface PickerPresentation {
   /** Optional result section. Providers control its order; rows stay stable inside it. */
@@ -24,26 +38,18 @@ export interface PickerPresentation {
    * the input filters on ("Apparel / Clothes / Pants"). A row without it
    * renders `name`. */
   rowLabel?: string;
-  /** Short action/status cue, e.g. "Need 2" or "In progress". */
-  status?: {
-    label: string;
-    tone?: PickerTone;
-  };
-  /** Compact evidence beneath the name, rendered in the data voice. */
-  facts?: string[];
+  /** Right-aligned data chips, in order: counts, prices, status cues. */
+  trailing?: PickerChip[];
   /** Known-invalid choices remain explainable but cannot be selected. */
   disabledReason?: string;
-  /** Trailing count in the data voice ("254") — see `PickerOption.hint`. */
-  hint?: string;
   /** A predicate about the data ("(none)", "Has project") rather than a value
    * from it: eyebrow register, divided from the roster below. */
   meta?: boolean;
 }
 
 /**
- * A record's picture as data, so each surface sizes it: the closed field and
- * chips render it at 20px, rows at 24px (`PickerVisual`). A node built for a
- * row (a 52px location tile, a hover preview) cannot be shrunk safely.
+ * A record's picture as data, so each surface sizes it (`PickerVisual`): 20px
+ * in the closed field and rows, 16px in chips.
  */
 export interface PickerThumb {
   imageUrl: string | null;
@@ -60,7 +66,7 @@ export type ComboboxItem<TId extends string = string> = {
   id: TId;
   /** Public entity identifier — searchable, never displayed or announced. */
   shortcode?: string;
-  /** Row glyph. A record also carries `thumb`, which the closed field uses. */
+  /** An option's glyph (already tinted). Records carry `thumb` instead. */
   icon?: React.ReactNode;
   thumb?: PickerThumb;
   /** True while a stored id is still resolving to its record; the closed
@@ -70,33 +76,18 @@ export type ComboboxItem<TId extends string = string> = {
   color?: string;
   /** Alternate searchable names. */
   aliases?: string[];
-  /** Compact secondary row metadata (manufacturer, location type, etc.). */
+  /** Muted text inline after the name — the manifest's card subtitle
+   * (manufacturer, location type). */
   secondary?: string;
   /**
-   * Second-line context under the name — a location's ancestor breadcrumb.
-   * Distinct from `secondary`, which is a short trailing tag on the name line:
-   * this is the longer disambiguator that earns its own row.
+   * Second-line context under the name — a location's ancestor breadcrumb, a
+   * search match reason. Rows stay one line without it.
    */
   detail?: string;
   /** Contextual ranking and evidence for the shared entity picker. */
   presentation?: PickerPresentation;
 };
 
-export type PickerEntity =
-  | "ledgerTransfer"
-  | "spendingCategory"
-  | "ingredient"
-  | "location"
-  | "product"
-  | "productCategory"
-  | "recipe"
-  | "project"
-  | "task"
-  | "planting"
-  | "vendor"
-  | "financialAccount"
-  | "purchase"
-  | "ledgerParty"
-  | "vendorAccount"
-  | "plant"
-  | "planting";
+/** Every entity with a list (candidates) and a detail read (a stored code's
+ * record) can be picked. */
+export type PickerEntity = Extract<DetailEntity, ListEntity>;
