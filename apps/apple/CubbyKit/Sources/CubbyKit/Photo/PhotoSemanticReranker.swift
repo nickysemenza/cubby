@@ -255,18 +255,31 @@ public struct FoundationModelsPhotoSemanticModel: PhotoSemanticModel {
                     photoID: $0.photoID, routeID: $0.routeID, candidateID: $0.candidateID,
                     explanation: $0.explanation)
             }
-        } catch let error as LanguageModelSession.GenerationError {
+        } catch {
+            if let failure = Self.failure(for: error) { throw failure }
+            throw error
+        }
+    }
+
+    // OS 27 splits generation failures across model, session, and parsing errors.
+    // Preserve the fallback categories while letting unrelated errors propagate.
+    static func failure(for error: any Error) -> PhotoSemanticModelFailure? {
+        switch error {
+        case SystemLanguageModel.Error.assetsUnavailable: return .assetsUnavailable
+        case LanguageModelSession.Error.concurrentRequests: return .concurrentRequest
+        case is GeneratedContent.ParsingError: return .decoding
+        case let error as LanguageModelError:
             switch error {
-            case .assetsUnavailable: throw PhotoSemanticModelFailure.assetsUnavailable
-            case .concurrentRequests: throw PhotoSemanticModelFailure.concurrentRequest
-            case .decodingFailure, .unsupportedGuide: throw PhotoSemanticModelFailure.decoding
-            case .exceededContextWindowSize: throw PhotoSemanticModelFailure.contextLimit
-            case .guardrailViolation: throw PhotoSemanticModelFailure.guardrail
-            case .rateLimited: throw PhotoSemanticModelFailure.rateLimited
-            case .refusal: throw PhotoSemanticModelFailure.refusal
-            case .unsupportedLanguageOrLocale: throw PhotoSemanticModelFailure.unsupportedLocale
-            @unknown default: throw PhotoSemanticModelFailure.transient
+            case .unsupportedGenerationGuide: return .decoding
+            case .contextSizeExceeded: return .contextLimit
+            case .guardrailViolation: return .guardrail
+            case .rateLimited: return .rateLimited
+            case .refusal: return .refusal
+            case .unsupportedLanguageOrLocale: return .unsupportedLocale
+            case .timeout, .unsupportedCapability, .unsupportedTranscriptContent: return .transient
+            @unknown default: return .transient
             }
+        default: return nil
         }
     }
 

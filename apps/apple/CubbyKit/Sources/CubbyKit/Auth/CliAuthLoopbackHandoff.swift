@@ -297,7 +297,7 @@
 
         /// Drains until the client closes or errors (it will: `Connection: close`), then runs
         /// cleanup. One receive is not proof: an unread request byte is not a close.
-        private func drain(_ connection: NWConnection, then cleanup: @escaping () -> Void) {
+        private func drain(_ connection: NWConnection, then cleanup: @escaping @Sendable () -> Void) {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) {
                 [weak self] _, _, complete, error in
                 guard let self else { connection.cancel(); cleanup(); return }

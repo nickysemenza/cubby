@@ -16,6 +16,9 @@ Native builds require Xcode 27 with Swift 6.4 or newer and target iOS/macOS 27.
 The image-description implementation must compile in every build; runtime
 Apple Intelligence and vision availability remain device-dependent. Settings →
 This device reports the current image-description availability reason.
+Photo semantic reranking maps OS 27 model, session, and parsing errors to its
+existing deterministic fallback categories; cancellation and unrelated errors
+propagate unchanged.
 GitHub runner and toolchain selection live in the Apple workflows and the shared
 `setup-apple` action.
 
@@ -28,6 +31,9 @@ Xcode project in dependency order. Outputs are gitignored. The
 Direct `build-rust.sh --targets sim` is useful for a one-slice FFI iteration;
 restore all slices before a Mac/CLI build. The first GUI build asks to trust
 OpenAPIGenerator; command-line builds skip package-plugin validation.
+The OpenAPI typed-record keep-list retains schemas decoded from generic kernel
+rows. Its reachability check allows those roots alongside HTTP paths, replacing
+Redocly's path-only unused-component rule.
 
 For archive symbolication, install `getsentry/tools/sentry-cli` and put the org
 auth token in `~/.sentryclirc`. Only the archive phase needs it; a missing CLI
