@@ -1,0 +1,23 @@
+apps/web/drizzle/0064_inventory_ownership_explicit.sql
+  s_a7bec1ba59cec5::t_5f8ab5382a0aba 5-8
+apps/web/src/server/photo-import-run/proposals.integration.test.ts
+  s_a7bec1ba59cec5::t_0dfdbefb982ef6 1-2,1117-1178
+apps/web/src/server/repo/inventory/ownership-migration.integration.test.ts
+  s_a7bec1ba59cec5::t_854dbf075eba13 1-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6d01162f1715eb9861812708a7e657933e4fcb9e",
+  "prompts": {},
+  "sessions": {
+    "s_a7bec1ba59cec5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10faf483-7285-407e-800f-2dad5a8b10b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
