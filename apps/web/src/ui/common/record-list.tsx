@@ -330,7 +330,7 @@ export function RecordScore({
         />
       </span>
       <span className="font-mono text-2xs">{percent}%</span>
-      {spoken ? <span className="sr-only">{label}</span> : null}
+      <span className="sr-only">{label}</span>
     </span>
   );
 }
