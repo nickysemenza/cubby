@@ -100,13 +100,11 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
           ))
         )}
       </Stack>
-      {preparationView ? (
-        <MealPortionsSection
-          view={preparationView}
-          onAddPreparedPortion={preparation.beginAddPreparedPortion}
-          onEditPreparation={preparation.openCurrentPreparation}
-        />
-      ) : null}
+      <MealPortionsSection
+        mealId={mealId}
+        onAddPreparedPortion={preparation.beginAddPreparedPortion}
+        onEditPreparation={preparation.openCurrentPreparation}
+      />
       <MealPreparationOverlays
         preparation={preparation}
         currentMealId={mealId}

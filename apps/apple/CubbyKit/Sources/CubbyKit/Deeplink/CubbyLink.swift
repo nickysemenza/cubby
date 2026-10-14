@@ -38,9 +38,9 @@ public enum CubbyLink: Sendable, Hashable {
     case localActivity(String)
     case cliAuth(port: UInt16, nonce: String)
 
-    public static let scheme = "cubby"
+    public static let scheme = AppleAppIdentity.current.callbackScheme
 
-    public init?(url: URL) {
+    public init?(url: URL, appIdentity: AppleAppIdentity = .current) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
             let scheme = components.scheme?.lowercased()
         else { return nil }
@@ -53,7 +53,9 @@ public enum CubbyLink: Sendable, Hashable {
             return
         }
 
-        guard scheme == Self.scheme, let host = components.host?.lowercased() else { return nil }
+        guard scheme == appIdentity.callbackScheme, let host = components.host?.lowercased() else {
+            return nil
+        }
         let segments = components.path.split(separator: "/").map(String.init)
         let location = components.queryItems?.first { $0.name == "location" }?.value
         switch (host, segments.count) {
@@ -128,8 +130,12 @@ public enum CubbyLink: Sendable, Hashable {
     }
 
     public var url: URL {
+        url(appIdentity: .current)
+    }
+
+    public func url(appIdentity: AppleAppIdentity) -> URL {
         var components = URLComponents()
-        components.scheme = Self.scheme
+        components.scheme = appIdentity.callbackScheme
         switch self {
         case .entity(_, let id):
             components.host = "entity"

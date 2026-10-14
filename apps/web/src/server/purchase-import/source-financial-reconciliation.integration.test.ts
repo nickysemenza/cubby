@@ -55,6 +55,74 @@ describe("accepted source financial reconciliation", () => {
     allShipmentsDelivered: false,
   };
 
+  // A free reward must reduce spend once, remain a discount on replay, and
+  // never become a synthetic payment or alter the receipt's stated total.
+  it("imports and replays a receipt reward as one signed discount", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic reward member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic rewards shop",
+    });
+    const rewardReceipt: ExtractedOrderCandidate = {
+      ...candidate,
+      orderId: "SYNTHETIC-FREE-REWARD",
+      printedGrandTotal: 196.57,
+      lines: [
+        { title: "Synthetic goods", amount: 201.57, lineKind: "principal" },
+        { title: "Free receipt reward", amount: -5, lineKind: "discount" },
+      ],
+      payments: [{ amount: 196.57, chargedAt: "2026-09-02T12:00:00Z" }],
+    };
+    const submit = () =>
+      memberImport(ctx.db, ctx.actor, {
+        key: "synthetic-free-reward",
+        orders: [
+          {
+            stableOrderId: "synthetic-free-reward",
+            vendorId: vendor.shortcode,
+            source: {
+              kind: "receipt_photo",
+              externalKey: "synthetic:free-reward",
+              checksum: "b".repeat(64),
+            },
+            extraction: { status: "ready", candidate: rewardReceipt },
+          },
+        ],
+      });
+    await submit();
+    await submit();
+    const database = getDb(ctx.db);
+    const recorded = await database.query.purchase.findFirst({
+      where: eq(purchase.orderId, rewardReceipt.orderId!),
+    });
+    if (!recorded) throw new Error("Synthetic reward Purchase missing");
+    expect(recorded.statedTotal).toBe(196.57);
+    const lines = await database
+      .select()
+      .from(expense)
+      .where(eq(expense.purchaseId, recorded.id));
+    expect(lines).toHaveLength(2);
+    expect(lines.find((line) => line.lineKind === "discount")).toMatchObject({
+      cost: -5,
+      name: "Free receipt reward",
+    });
+    expect(
+      lines.reduce(
+        (total, line) => total + Math.round((line.cost ?? 0) * 100),
+        0,
+      ),
+    ).toBe(19657);
+    const payments = await database
+      .select()
+      .from(purchasePaymentEvidence)
+      .where(eq(purchasePaymentEvidence.purchaseId, recorded.id));
+    expect(payments).toHaveLength(1);
+    expect(payments[0]?.amount).toBe(196.57);
+  });
+
   async function world(
     firstKind:
       | "vendor_export"

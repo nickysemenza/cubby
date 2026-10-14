@@ -386,6 +386,41 @@
       "when": 1791931652567,
       "tag": "0054_ai_cost_accounting_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791941216811,
+      "tag": "0055_remove_label_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791941280814,
+      "tag": "0056_retire_label_review_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1791945943233,
+      "tag": "0057_durable-member-ai-work",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791945949696,
+      "tag": "0058_preserve-manual-ai-run-history",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791945959250,
+      "tag": "0059_discovery-handling-receipts",
+      "breakpoints": true
     }
   ]
 }

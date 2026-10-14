@@ -20,6 +20,29 @@ and Expense booking have separate coverage; a charge is itemized only when
 every Purchase it settles is.
 Gift and previously-owned Product provenance needs no purchase proof.
 
+Free rewards and coupons reduce the incurred price: record a signed negative
+Expense with `lineKind=discount`, its receipt description, and retained source
+evidence. For example, gross $201.57 less a free $5 reward is $196.57 owed and
+paid. Purchased gift cards or store credit are payment tender, not another
+discount. Do not subtract a reward again when the receipt's line amounts or
+net total already include it. Preserve literal stated receipt totals; correct
+a total only when the receipt establishes that correction. Ambiguous reward
+or tender evidence stays unresolved; never change an amount to force a match.
+
+Settlement queue work waits through two complete Monday–Friday days after its
+start date, in America/Los_Angeles, without a holiday calendar. Friday evidence
+is awaiting posting on Tuesday and becomes investigation work on Wednesday.
+Use the effective transaction date, then Purchase date when no transaction
+exists, then first observation (`createdAt`) only for undated evidence. A
+reimport never resets dated age; an old dated record imported today is already
+actionable. Recent Purchase settlement discrepancies and missing settlement
+evidence from the declared unsettled view carry `awaiting_posting` in
+reconciliation, fenced by source and tender authority; unmatched account-transfer
+counterparts do too. Counts and kind filters use that state before paging, while factual
+amounts and data-quality discrepancies remain unchanged. Independent research
+gaps remain research. Aging calls for investigation, never an inferred defect
+or permission to fabricate a missing charge or transfer leg.
+
 Category policies apply to the assigned category, without inheriting a parent
 policy. An explicit `unknown` Purchase or transaction override also stops
 fallback. Reviewed reimbursement purpose can support the original spending

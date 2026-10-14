@@ -278,7 +278,7 @@ async function observeClassification(
     const actual = calls.find((entry) => entry?.operation === stamp.feature);
     if (actual?.promptVersion) stamp.promptVersion = actual.promptVersion;
   }
-  await recordEmailClassificationObservation(db, {
+  return recordEmailClassificationObservation(db, {
     emailId: prior.id,
     runId: input.runId ?? null,
     checksum,
@@ -574,21 +574,37 @@ async function acquireEligible(
 ): Promise<GmailAcquisitionOutcome> {
   const normalized = normalizeMessage(identity.mailboxId, message);
   const checksum = await originalChecksum(normalized);
-  if (await deferClassificationRefresh(db, executionPolicy, prior))
+  if (
+    (await deferClassificationRefresh(db, executionPolicy, prior)) ||
+    prior?.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION
+  ) {
+    await publishGmailEvidence(
+      db,
+      {
+        ...identity,
+        runId: input.runId,
+        executionPolicy,
+        expected: prior,
+        evaluation: input.evaluation,
+      },
+      async () => {
+        throw new Error("Email eligibility changed; retrying");
+      },
+    );
     return { kind: "skipped" };
-  if (prior?.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION)
-    return { kind: "blocked" };
+  }
   const unchanged =
     !input.reclassify && unchangedClassification(prior, checksum);
   const search = memberSearchOwnership(input, prior, executionPolicy);
-  const publication = {
+  const publication: Parameters<typeof publishGmailEvidence>[1] = {
     ...identity,
     runId: input.runId,
     executionPolicy,
     expected: prior,
     evaluation: input.evaluation
-      ? { ...input.evaluation, sourceChecksum: checksum }
+      ? { ...input.evaluation, sourceChecksum: checksum, observationId: null }
       : undefined,
+    observationId: null,
   };
   const metadata = {
     ledgerPartyId: input.ledgerPartyId,
@@ -650,8 +666,12 @@ async function acquireEligible(
       executionPolicy,
       await readEmail(db, identity),
     )
-  )
+  ) {
+    await publishGmailEvidence(db, publication, async () => {
+      throw new Error("Email eligibility changed; retrying");
+    });
     return { kind: "skipped" };
+  }
   const retain = retainResearchOriginal(
     decision.classification,
     normalized,
@@ -695,7 +715,7 @@ async function acquireEligible(
             },
           };
           await saveMailboxMetadata(tx, metadata);
-          await observeClassification(
+          const observation = await observeClassification(
             tx,
             input,
             identity,
@@ -706,6 +726,9 @@ async function acquireEligible(
             classificationCallFor(decision.stage, triageCall, relevanceCall),
             [triageCall, relevanceCall],
           );
+          publication.observationId = observation?.id ?? null;
+          if (publication.evaluation)
+            publication.evaluation.observationId = observation?.id ?? null;
           const reclassified =
             input.reclassify && current
               ? await reclassifyPublication(
@@ -829,6 +852,7 @@ async function relatedEmailPreview(
       runId: input.runId,
       executionPolicy,
       expected: email,
+      recordHandlingReceipt: false,
     },
     async (tx) => {
       await recordEmailCandidateObservation(tx, { emailId: email.id, preview });
@@ -868,7 +892,7 @@ export async function ingestGmailMessages(
     refreshStage?: "mailbox-triage" | "mailbox-relevance";
     refreshSkipRelevance?: boolean;
     refreshDependencies?: AiProvenance["dependencies"];
-    evaluation?: { id: string; token: string };
+    evaluation?: { id: string; token: string; reclassification?: boolean };
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },
@@ -898,7 +922,27 @@ export async function ingestGmailMessages(
       messageId,
     };
     const beforeFetch = await readEmail(db, identity);
-    if (await deferClassificationRefresh(db, executionPolicy, beforeFetch)) {
+    if (
+      (await deferClassificationRefresh(db, executionPolicy, beforeFetch)) ||
+      beforeFetch?.classificationVersion ===
+        HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION
+    ) {
+      if (input.runId)
+        await publishGmailEvidence(
+          db,
+          {
+            ...identity,
+            runId: input.runId,
+            executionPolicy,
+            expected: beforeFetch,
+            evaluation: input.evaluation,
+          },
+          async () => {
+            throw new Error(
+              "Email eligibility changed before publication; retrying",
+            );
+          },
+        );
       handled += 1;
       await reportAcquisitionProgress(input, handled);
       continue;
@@ -925,6 +969,9 @@ export async function ingestGmailMessages(
           runId: input.runId,
           executionPolicy,
           expected: beforeFetch,
+          evaluation: input.evaluation
+            ? { ...input.evaluation, removed: true }
+            : undefined,
         },
         async (tx) => {
           if (fetched.missing)

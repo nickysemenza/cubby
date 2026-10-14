@@ -27,6 +27,7 @@ export async function completeCloudImageDescription(
       typeof describeOriginalImage
     >[1]["normalizedInput"];
   },
+  describe: typeof describeOriginalImage = describeOriginalImage,
 ) {
   // Use the run that requested this job when one was recorded at
   // scheduling time, so its AI usage is attributed to that run's actor
@@ -38,7 +39,7 @@ export async function completeCloudImageDescription(
     (await ensureRun(db, systemActor(), {
       purpose: "background",
     }));
-  const { result, fingerprint } = await describeOriginalImage(db, {
+  const { result, fingerprint } = await describe(db, {
     imageId: input.imageId,
     attemptId: input.attemptId,
     runId,

@@ -58,9 +58,9 @@ const RETENTION = {
 
 const bindingFor = (purpose: WorkflowRunPurpose) => {
   const binding =
-    purpose === "ai_refresh"
-      ? getAiRefreshWorkflow()
-      : getMailDiscoveryWorkflow();
+    purpose === "mail_discovery"
+      ? getMailDiscoveryWorkflow()
+      : getAiRefreshWorkflow();
   if (!binding)
     throw new Error(`The ${purpose} Workflow binding is not configured`);
   return binding;

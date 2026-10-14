@@ -1,4 +1,5 @@
 import { entityRefKey, entitySchema } from "@cubby/schemas/entity";
+import { gardenEntryKind } from "@cubby/schemas/garden-fields";
 import {
   embeddableEntities,
   type SearchableEntity,
@@ -353,7 +354,7 @@ async function getSearchDocumentSources(
     // plantings.
     gardenEntry: sql`
       SELECT 'gardenEntry', ge."id"::text, ge."shortcode",
-        (CASE ge."kind" WHEN 'observation' THEN 'Note' WHEN 'harvest' THEN 'Harvest' ELSE 'Move' END)
+        (CASE ge."kind" WHEN ${gardenEntryKind.enum.note} THEN 'Note' WHEN ${gardenEntryKind.enum.harvest} THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
         (SELECT string_agg(COALESCE(p."name", 'Unknown plant'), ', ' ORDER BY pl."shortcode")
          FROM "EntityLink" gep

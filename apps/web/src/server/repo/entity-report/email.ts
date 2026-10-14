@@ -11,6 +11,7 @@ import type {
   ReportBlock,
   ReportCommand,
   ReportRecordRow,
+  ReportRowState,
 } from "@cubby/schemas/entity-report";
 import {
   parseEntityId,
@@ -49,6 +50,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { hasRetainedEmailImportContent } from "~/server/purchase-import/email-content";
+import { runRowState } from "~/server/repo/collection-items";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { readEmailAssociations } from "~/server/repo/email";
 import { getEmailAccuracyReport } from "~/server/repo/email-accuracy";
@@ -429,13 +431,30 @@ function emailAccuracyReviewBlocks(report: EmailAccuracyReport): ReportBlock[] {
 }
 
 type Observation = typeof emailClassificationObservation.$inferSelect;
-type PipelineState = "Ran" | "Skipped" | "Not reached" | "Failed";
-const stateTone = {
-  Ran: "positive",
-  Skipped: "muted",
-  "Not reached": "muted",
-  Failed: "destructive",
-} as const;
+type PipelineState =
+  | "Ran"
+  | "Running"
+  | "Paused"
+  | "Skipped"
+  | "Not reached"
+  | "Failed";
+const stateKind = {
+  Ran: "done",
+  Running: "running",
+  Paused: "warning",
+  Skipped: "skipped",
+  "Not reached": "not_reached",
+  Failed: "failed",
+} as const satisfies Record<PipelineState, ReportRowState>;
+/** The import Run's own status as the stage's state: a paused Run needs someone, so it warns. */
+const IMPORT_RUN_STATE = {
+  done: "Ran",
+  running: "Running",
+  warning: "Paused",
+  failed: "Failed",
+  skipped: "Skipped",
+  not_reached: "Not reached",
+} as const satisfies Record<ReportRowState, PipelineState>;
 const automatedStages = ["rule", "decision", "model"] as const;
 const stageStep = {
   rule: "Rule",
@@ -463,10 +482,9 @@ function pipelineRow(
   } = {},
 ): ReportRecordRow {
   const conflict = conflictText(input.conflict ?? null);
-  const statuses: NonNullable<ReportRecordRow["statuses"]> = [
-    { label: state, tone: stateTone[state] },
-  ];
-  if (conflict) statuses.push({ label: conflict, tone: "warning" });
+  const statuses: NonNullable<ReportRecordRow["statuses"]> = conflict
+    ? [{ label: conflict, tone: "warning" }]
+    : [];
   const row: ReportRecordRow = {
     entity: input.entity ?? null,
     id: input.id ?? null,
@@ -477,6 +495,7 @@ function pipelineRow(
         .filter((line): line is string => Boolean(line))
         .join("\n") || null,
     trailing: null,
+    state: { kind: stateKind[state], label: state },
     statuses,
   };
   if (input.at) row.at = input.at.toISOString();
@@ -617,7 +636,7 @@ function retrievedRow(
       ? "Content cleared; metadata and checksum kept. Reclassify refetches it from Gmail."
       : "Metadata only; Reclassify refetches the original from Gmail.";
   return pipelineRow("Retrieved", "Ran", {
-    lines: [content, `Mailbox ${email.mailboxId}`],
+    lines: [content],
     at: email.contentClearedAt ?? email.createdAt,
   });
 }
@@ -761,9 +780,7 @@ function importRow(
       mailResearchRunInput.safeParse(importRun.input).data?.sources.length ?? 1;
     return pipelineRow(
       "Import Run",
-      ["failed", "dispatch_failed"].includes(importRun.status)
-        ? "Failed"
-        : "Ran",
+      IMPORT_RUN_STATE[runRowState(importRun.status) ?? "done"],
       {
         entity: "run",
         id: importRun.shortcode,
@@ -869,14 +886,15 @@ async function runMembership(
 /** The Gmail original, by thread when Gmail grouped it. */
 const gmailOriginal = (email: EmailRow) => ({
   label: "Open in Gmail",
+  hint: `Mailbox ${email.mailboxId}`,
   url: `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(email.threadId ?? email.messageId)}`,
 });
 
-const LINK_TONE = {
-  linked: undefined,
+const LINK_STATE = {
+  linked: "done",
   suggested: "warning",
-  dismissed: "muted",
-} as const;
+  dismissed: "skipped",
+} as const satisfies Record<string, ReportRowState>;
 
 /** Link and Dismiss for one pair, offered only to the Email's owner. */
 function linkCommands(
@@ -963,11 +981,11 @@ async function purchaseLinksBlock(
           title: target?.orderId ? `Order ${target.orderId}` : link.purchaseId,
           subtitle: target?.date ?? null,
           trailing: null,
+          state: {
+            kind: LINK_STATE[link.state],
+            label: EMAIL_LINK_STATE_LABEL[link.state],
+          },
           statuses: [
-            {
-              label: EMAIL_LINK_STATE_LABEL[link.state],
-              tone: LINK_TONE[link.state],
-            },
             ...(link.accepted
               ? [{ label: "Imported from this Email", tone: "muted" as const }]
               : []),
@@ -999,7 +1017,7 @@ async function purchaseLinksBlock(
           title: row.orderId ? `Order ${row.orderId}` : row.shortcode,
           subtitle: row.date,
           trailing: null,
-          statuses: [{ label: "Purchase deleted", tone: "warning" }],
+          state: { kind: "warning", label: "Purchase deleted" },
         })),
       ),
     empty: "No Purchase relates to this Email.",
@@ -1143,7 +1161,7 @@ export async function emailReviewReport(
     {
       kind: "records",
       title: "Email pipeline",
-      presentation: "ledger",
+      presentation: "timeline",
       rows: [
         {
           ...retrievedRow(email, retained, failures[0], predictions[0]),

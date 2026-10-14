@@ -14,6 +14,7 @@ import { readExecutionAuthorizationEvidence } from "~/server/runs/execution-auth
 
 import { listAiUsageForRun } from "./ai-usage";
 import { getDb, notDeleted } from "./database-helpers";
+import { readDiscoveryEmailAudit } from "./discovery-email-audit";
 
 /** A Workflow's persisted read needs its member owner, never an agent session. */
 export async function findOwnedMailDiscovery(
@@ -43,6 +44,7 @@ export async function loadMailDiscoveryRead(
   db: Database,
   publicId: string,
   owner: ExecutionAuthorizationOwner | null,
+  page: { cursor: number; limit: number } = { cursor: 0, limit: 50 },
 ) {
   const row = await findOwnedMailDiscovery(db, publicId, owner);
   if (!row) return null;
@@ -58,8 +60,6 @@ export async function loadMailDiscoveryRead(
     .parse(row.input);
   // Historical omissions are unknown scope, not an empty query list or the
   // current launch policy. Status/findings remain readable without readiness.
-  if (input.scopedQueries === undefined || input.executionPolicy === undefined)
-    return null;
   const [mailbox, evidence, totals, [counts]] = await Promise.all([
     loadGmailCursor(db, {
       ledgerPartyId: owner.ledgerPartyId,
@@ -86,10 +86,17 @@ export async function loadMailDiscoveryRead(
       "Discovery mailbox is outside its retained execution approval.",
     );
   return {
+    emails: await readDiscoveryEmailAudit(
+      db,
+      row,
+      input.mailboxId,
+      input.emailAuditVersion === 1 && row.status === "completed",
+      page,
+    ),
     scope: {
       mailboxId: input.mailboxId,
-      scopedQueries: input.scopedQueries,
-      executionPolicy: input.executionPolicy,
+      scopedQueries: input.scopedQueries ?? null,
+      executionPolicy: input.executionPolicy ?? null,
     },
     checkpoint: row.progress
       ? mailboxDiscoveryProgress.parse(row.progress)

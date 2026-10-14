@@ -1,3 +1,4 @@
+import { workflowRecoveryProgress } from "./workflow-runs";
 import {
   type AiRefreshRunInput,
   aiRefreshProgress,
@@ -43,6 +44,7 @@ export const runTrigger = z.enum([
 ]);
 export const runStatus = z.enum([
   "running",
+  "paused",
   "paused_auth",
   "paused_offline",
   "paused_approval",
@@ -302,15 +304,24 @@ export const suggestionSweepRunInput = z.object({
   filters: z.record(z.string(), z.json()),
   decisionModel: supportedDecisionModelSchema,
   taxonomyRevision: z.string().optional(),
-  paused: z.boolean(),
+  /** Retained legacy snapshots; current pause state belongs to Run.status. */
+  paused: z.boolean().optional(),
 });
 export type SuggestionSweepRunInput = z.infer<typeof suggestionSweepRunInput>;
-export const suggestionSweepRunProgress = z.object({
+const sweepCounters = z.object({
   total: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),
   applied: z.number().int().nonnegative(),
   queued: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
+});
+export const suggestionSweepRunProgress = sweepCounters.extend({
+  ...workflowRecoveryProgress.shape,
+  attempt: z.number().int().nonnegative().optional(),
+  rosterPrepared: z.boolean().optional(),
+  legacyCounts: sweepCounters
+    .pick({ done: true, applied: true, queued: true, failed: true })
+    .optional(),
   diagnostics: z
     .array(
       z.object({
@@ -341,7 +352,7 @@ export const mailReclassifyRunInput = z.strictObject({
 export type MailReclassifyRunInput = z.infer<typeof mailReclassifyRunInput>;
 /** A member's Reclassify Run: classification-tier work that never admits import. */
 export const isMailReclassifyRun = (run: { purpose: string; input: unknown }) =>
-  run.purpose === "background" &&
+  (run.purpose === "background" || run.purpose === "mail_reclassify") &&
   mailReclassifyRunInput.safeParse(run.input).success;
 export const isAiRefreshMailRun = (run: {
   purpose: string;

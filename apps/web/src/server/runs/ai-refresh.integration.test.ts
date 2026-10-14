@@ -70,7 +70,10 @@ describe("targeted prompt refresh", () => {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.6).suggestPorts,
     });
-    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -175,7 +178,10 @@ describe("targeted prompt refresh", () => {
       },
     });
     expect(runs).toHaveLength(1);
-    const rows = await getDb(ctx.db).select().from(aiEvaluation);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     expect(rows).toHaveLength(1);
     const [stored] = await getDb(ctx.db)
       .select({ id: product.id })
@@ -202,7 +208,10 @@ describe("targeted prompt refresh", () => {
     };
     await discoverAiRefresh(ctx.db, ports);
     await discoverAiRefresh(ctx.db, ports);
-    const evaluations = await getDb(ctx.db).select().from(aiEvaluation);
+    const evaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     expect(evaluations).toHaveLength(1);
     const [pending] = await getDb(ctx.db)
       .select()
@@ -244,7 +253,10 @@ describe("targeted prompt refresh", () => {
       suggestPorts: categoryPorts(0.95).suggestPorts,
     };
     await discoverAiRefresh(ctx.db, ports);
-    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
     const history = await getDb(ctx.db).select().from(suggestion);
     expect(history.map((row) => row.status).sort()).toEqual([
@@ -260,7 +272,12 @@ describe("targeted prompt refresh", () => {
     expect(applied.acceptanceReceipt!.auditIds.length).toBeGreaterThan(0);
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
     expect(await discoverAiRefresh(ctx.db, ports)).toEqual([]);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+    ).toHaveLength(1);
   });
 
   it("fences an old result on rollback while leaving unrelated feature generations alone", async () => {
@@ -284,7 +301,10 @@ describe("targeted prompt refresh", () => {
       suggestPorts: categoryPorts(0.6).suggestPorts,
     };
     await discoverAiRefresh(ctx.db, ports);
-    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
     const changed = {
       ...manifest,
@@ -334,7 +354,10 @@ describe("targeted prompt refresh", () => {
       suggestPorts: categoryPorts(0.6).suggestPorts,
     };
     await discoverAiRefresh(ctx.db, ports);
-    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     const otherIds = [crypto.randomUUID(), crypto.randomUUID()];
     for (const id of otherIds)
       await getDb(ctx.db)
@@ -427,14 +450,22 @@ describe("targeted prompt refresh", () => {
         .map((row) => aiRefreshRunInput.parse(row.input).emails!.length)
         .sort((a, b) => a - b),
     ).toEqual([1, 200]);
-    const evaluations = await getDb(ctx.db).select().from(aiEvaluation);
+    const evaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     expect(evaluations).toHaveLength(201);
     expect(evaluations.every((row) => row.state === "blocked")).toBe(true);
     expect(
       evaluations.some((row) => row.target.recordId === confident.id),
     ).toBe(false);
     await discoverAiRefresh(ctx.db);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(201);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+    ).toHaveLength(201);
     expect(
       (
         await getDb(ctx.db)
@@ -471,22 +502,40 @@ describe("targeted prompt refresh", () => {
       },
     };
     await discoverAiRefresh(ctx.db, ports);
-    const [first] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [first] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     await executeAiRefreshTarget(ctx.db, first!.id, ports);
-    expect((await getDb(ctx.db).select().from(aiEvaluation))[0]?.state).toBe(
-      "completed",
-    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+      )[0]?.state,
+    ).toBe("completed");
     expect(
       (await getDb(ctx.db).select().from(suggestion))[0]?.supersessionReceipt
         ?.reason,
     ).toBe("no_proposal");
     await discoverAiRefresh(ctx.db, ports);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+    ).toHaveLength(1);
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Synthetic changed evidence" });
     await discoverAiRefresh(ctx.db, ports);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(2);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+    ).toHaveLength(2);
   });
 
   it("bounds transient reinference and preserves the same rejected semantic proposal", async () => {
@@ -516,7 +565,10 @@ describe("targeted prompt refresh", () => {
       suggestPorts: categoryPorts(0.6).suggestPorts,
     };
     await discoverAiRefresh(ctx.db, ports);
-    const [first] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [first] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     let physicalCalls = 0;
     const failing = {
       ...ports,
@@ -535,9 +587,14 @@ describe("targeted prompt refresh", () => {
       await executeAiRefreshTarget(ctx.db, first!.id, failing);
     }
     expect(physicalCalls).toBe(3);
-    expect((await getDb(ctx.db).select().from(aiEvaluation))[0]?.state).toBe(
-      "failed",
-    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+      )[0]?.state,
+    ).toBe("failed");
     await executeAiRefreshTarget(ctx.db, first!.id, failing);
     expect(physicalCalls).toBe(3);
     // An explicit operator retry may recover; the earlier rejected row still suppresses its candidate.
@@ -556,9 +613,12 @@ describe("targeted prompt refresh", () => {
         status: async () => ({ state: "running", error: null }),
       },
     );
-    const replacement = (await getDb(ctx.db).select().from(aiEvaluation)).find(
-      (row) => row.id !== first!.id,
-    )!;
+    const replacement = (
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+    ).find((row) => row.id !== first!.id)!;
     await executeAiRefreshTarget(ctx.db, replacement.id, ports);
     expect(
       (
@@ -610,7 +670,10 @@ describe("targeted prompt refresh", () => {
       },
     };
     await discoverAiRefresh(ctx.db, empty);
-    const [first] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [first] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
     await executeAiRefreshTarget(ctx.db, first!.id, empty);
     await getDb(ctx.db)
       .update(product)
@@ -631,9 +694,12 @@ describe("targeted prompt refresh", () => {
       },
     };
     await discoverAiRefresh(ctx.db, ports);
-    const second = (await getDb(ctx.db).select().from(aiEvaluation)).find(
-      (row) => row.id !== first!.id,
-    )!;
+    const second = (
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+    ).find((row) => row.id !== first!.id)!;
     const outstanding = executeAiRefreshTarget(ctx.db, second.id, ports);
     await started.promise;
     for (const value of [taxonomyShortcode("food"), null])
@@ -696,6 +762,11 @@ describe("targeted prompt refresh", () => {
       fieldDone: true,
       emailDone: true,
     });
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(0);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+    ).toHaveLength(0);
   });
 });

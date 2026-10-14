@@ -27,7 +27,6 @@ const EXCEPTION_REASONS = {
   product_manufacturer: ["not_applicable", "unavailable"],
   product_category: ["not_applicable", "insufficient_detail"],
   product_external_id: ["not_issued", "unavailable"],
-  product_label_review: ["unavailable", "insufficient_detail"],
   // `unavailable` is the common one and the reason this check earns its keep:
   // a discontinued item whose listings are all retired has NO canonical asset,
   // and substituting a neighbouring generation is worse than no image because

@@ -13,15 +13,17 @@ public actor AuthFlow {
     private let credentials: CredentialProvider
     private let identity: ClientIdentity
     private let session: URLSession
+    private let appIdentity: AppleAppIdentity
 
     public init(
         baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
-        session: URLSession = .cubbyShared
+        session: URLSession = .cubbyShared, appIdentity: AppleAppIdentity = .current
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
         self.identity = identity
         self.session = session
+        self.appIdentity = appIdentity
     }
 
     /// Signs in with email + password, stores the returned bearer token, and returns it.
@@ -82,13 +84,14 @@ public actor AuthFlow {
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge", value: codeChallenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "callback_scheme", value: appIdentity.callbackScheme),
         ]
         guard let authorizationURL = components?.url else {
             throw AuthError.invalidCallback
         }
 
         let callbackURL = try await authenticate(authorizationURL)
-        let transfer = try Self.transfer(from: callbackURL)
+        let transfer = try transfer(from: callbackURL)
         guard transfer.state == state else { throw AuthError.stateMismatch }
 
         var request = URLRequest(url: baseURL.appending(path: "/api/auth/electron/token"))
@@ -174,9 +177,9 @@ public actor AuthFlow {
         return credential
     }
 
-    private static func transfer(from callbackURL: URL) throws -> GoogleTransfer {
+    private func transfer(from callbackURL: URL) throws -> GoogleTransfer {
         guard
-            callbackURL.scheme?.lowercased() == "cubby",
+            callbackURL.scheme?.lowercased() == appIdentity.callbackScheme,
             callbackURL.host?.lowercased() == "auth",
             callbackURL.path == "/callback",
             let fragment = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.fragment,

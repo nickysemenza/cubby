@@ -2,7 +2,7 @@ import { z } from "zod";
 import { backgroundTaskSchema } from "./background-tasks";
 
 /**
- * Cubby runs two Cloudflare Queues rather than one. The split is deliberate:
+ * Cubby runs separate background, cloud image and telemetry Cloudflare Queues rather than one. The split is deliberate:
  * consumer settings (`max_batch_timeout`, `max_batch_size`, `max_concurrency`)
  * are per-queue, and the two workloads want opposite values — background
  * tasks need `max_batch_timeout: 0` for latency, while telemetry wants a 5s

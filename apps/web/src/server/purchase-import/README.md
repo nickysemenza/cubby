@@ -108,7 +108,13 @@ pending: nothing here starts Product research.
    authorized the coordinator writes a durable fence table, refuses every
    entry point (also after a restart) and drains admitted ones before
    deleting, so nothing recreates storage before `retiredAt` is stamped; an
-   inventory holding only the fence is empty. A stored finding whose fix kind is retired reads as having no
+   inventory holding only the fence is empty. Retirement atomically dismisses
+   only the machine-written Run execution alerts for coordinator inactivity or
+   an unfinished coordinator, and each pass closes those alerts on already
+   retired Runs. Finding evidence, genuine source review (including Run-targeted
+   review), unresolved entity and settlement work, and Run provenance remain.
+   Readers exclude obsolete retired execution alerts before maintenance catches
+   up. A stored finding whose fix kind is retired reads as having no
    executable fix (`storedImportFix`).
 
 ## Member imports

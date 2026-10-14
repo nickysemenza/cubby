@@ -186,7 +186,6 @@ export default defineEntity({
                 "product_external_id",
                 "product_category",
                 "product_image",
-                "product_label_review",
               ],
             },
           ],
@@ -553,7 +552,6 @@ export default defineEntity({
           "upcPresence",
         ],
         derived: [
-          "labelEvidenceRevision",
           "price",
           "pricing",
           "fieldResolutions",
@@ -879,39 +877,6 @@ Rules:
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
           update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "labelReviewedRevision",
-        kind: "text",
-        nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: z.string().min(1).nullable().optional(),
-        },
-      },
-      {
-        key: "labelEvidenceRevision",
-        kind: "text",
-        nullable: true,
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "image", relation: "images" }],
-        },
-        explanation: {
-          ruleId: "product.label-evidence-revision",
-          description:
-            "The canonical revision of live label-purpose images, including image identity and content hashes or an explicit unknown-content revision. New evidence reopens label review.",
-          projections: {
-            list: "labelEvidenceRevision",
-            summary: "labelEvidenceRevision",
-          },
-        },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
         },
       },
       {
@@ -1856,7 +1821,6 @@ Rules:
       "model",
       "expectedQuantity",
       "notes",
-      "labelReviewedRevision",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -1900,7 +1864,6 @@ Rules:
       "pendingImagePurposes",
     ],
     update: [
-      "labelReviewedRevision",
       "acquisitionOrigin",
       "name",
       "aliases",
@@ -1929,7 +1892,6 @@ Rules:
     ],
     bulk: ["stockTracked"],
     audit: [
-      "labelReviewedRevision",
       "acquisitionOrigin",
       "name",
       "aliases",
@@ -2072,8 +2034,6 @@ Rules:
       update: ["full", "identity", "price", "stock"],
     },
     output: [
-      "labelReviewedRevision",
-      "labelEvidenceRevision",
       "acquisitionOrigin",
       "id",
       "name",
@@ -3223,16 +3183,6 @@ Rules:
       exceptions: true,
       listOrder: 7,
       checks: [
-        {
-          id: "product_label_review",
-          satisfiedLabel: "Label review complete",
-          placement: { section: "labels" },
-          facet: "provenance",
-          weight: 2,
-          label: "Label review",
-          message:
-            "Current label photos need source-backed transcription and exact variant review.",
-        },
         {
           id: "product_orphaned",
           satisfiedLabel: "Retaining evidence recorded",

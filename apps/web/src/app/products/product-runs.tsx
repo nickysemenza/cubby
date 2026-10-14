@@ -1,6 +1,4 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -9,7 +7,7 @@ import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { entityListFor } from "~/entity/entity-list";
 import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { RecordDot, RecordList, RecordRow } from "~/ui/common/record-list";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -22,19 +20,16 @@ function JourneyStep({
   detail: string;
   complete: boolean;
 }) {
-  const Icon = complete ? CheckCircleIcon : CircleDashedIcon;
   return (
     <RecordRow
       leading={
-        <Icon
-          className={`size-3.5 shrink-0 ${complete ? "text-positive" : "text-muted-foreground"}`}
-          aria-hidden
+        <RecordDot
+          state={complete ? "done" : "not_reached"}
+          label={complete ? "Done" : "Not yet"}
         />
       }
-      primary={<span className="text-xs font-semibold">{label}</span>}
-      secondary={
-        <span className="text-xs text-muted-foreground">{detail}</span>
-      }
+      primary={<span className="font-medium">{label}</span>}
+      secondary={detail}
       clip={false}
     />
   );
@@ -90,25 +85,42 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
       {purchases.isError ? (
         <StatusText tone="destructive">{purchases.error.message}</StatusText>
       ) : null}
-      {linkedPurchases.map((purchase) => (
-        <div
-          key={purchase.id}
-          className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
-        >
-          <Link
-            to="/purchases/$shortcode"
-            params={{ shortcode: purchase.id }}
-            className="font-medium text-primary hover:underline"
-          >
-            {purchaseLabel(purchase)}
-          </Link>
-          <span className="text-muted-foreground">
-            {purchase.financialReconciliation.status === "match"
-              ? "Statement matched"
-              : "Statement evidence not matched"}
-          </span>
-        </div>
-      ))}
+      {linkedPurchases.length ? (
+        <RecordList aria-label="Purchase evidence">
+          {linkedPurchases.map((purchase) => {
+            const matched = purchase.financialReconciliation.status === "match";
+            return (
+              <RecordRow
+                key={purchase.id}
+                leading={
+                  <RecordDot
+                    state={matched ? "done" : "warning"}
+                    label={
+                      matched
+                        ? "Statement matched"
+                        : "Statement evidence not matched"
+                    }
+                  />
+                }
+                primary={
+                  <Link
+                    to="/purchases/$shortcode"
+                    params={{ shortcode: purchase.id }}
+                    className="font-medium underline-offset-2 hover:text-primary hover:underline"
+                  >
+                    {purchaseLabel(purchase)}
+                  </Link>
+                }
+                secondary={
+                  matched
+                    ? "Statement matched"
+                    : "Statement evidence not matched"
+                }
+              />
+            );
+          })}
+        </RecordList>
+      ) : null}
       {evidence.state !== "exited" ? (
         <Link
           to="/purchases"

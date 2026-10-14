@@ -11,7 +11,7 @@ import {
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -24,7 +24,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { exceptionReasonsFor } from "./exception-reasons";
 import { loadDataQualities } from "./hydrate";
 import { liveQualityRow } from "./registry";
-import { entryFor, fingerprintSql, gapCondition } from "./sql";
+import { checksOf, entryFor, fingerprintSql, gapCondition } from "./sql";
 
 const probeRow = z.object({
   fingerprint: z.string(),
@@ -99,7 +99,12 @@ FOR UPDATE`);
       await tx
         .select()
         .from(dataExceptionRecord)
-        .where(eq(dataExceptionRecord.entityId, id))
+        .where(
+          and(
+            eq(dataExceptionRecord.entityId, id),
+            inArray(dataExceptionRecord.check, [...checksOf(entityKind)]),
+          ),
+        )
         .orderBy(dataExceptionRecord.check)
     ).map(storedException);
     const currentFingerprint = currentRow.data.fingerprint;

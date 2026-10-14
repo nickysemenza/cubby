@@ -260,7 +260,8 @@ describe("Email review report", () => {
       expect.objectContaining({
         entity: "purchase",
         id: purchase.shortcode,
-        statuses: [{ label: "Dismissed", tone: "muted" }],
+        state: { kind: "skipped", label: "Dismissed" },
+        statuses: [],
       }),
     ]);
     // Another member's Email reads as metadata: no pipeline, no review.
@@ -282,7 +283,7 @@ describe("Email review report", () => {
       expect.objectContaining({
         entity: null,
         id: null,
-        statuses: [{ label: "Purchase deleted", tone: "warning" }],
+        state: { kind: "warning", label: "Purchase deleted" },
       }),
     );
     expect(

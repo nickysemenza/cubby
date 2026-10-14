@@ -5,12 +5,38 @@
  */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { and, asc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run as runTable } from "~/server/db/schema";
+import { run as runTable, runFinding } from "~/server/db/schema";
 import type { PurchaseImportRunAgentRpc } from "~/server/purchase-agent/environment";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
+
+// includes-deleted: retirement closes obsolete execution alerts even on retained deleted Run identities.
+/** Legacy coordinator alerts have exact machine-written summaries; source review stays open. */
+export const obsoleteExecutionFindingSql = (findingAlias: string) =>
+  sql.raw(`(
+  ${findingAlias}."entityKind" = 'run'
+  AND ${findingAlias}."entityId" = ${findingAlias}."runId"
+  AND ${findingAlias}.kind = 'other'
+  AND ${findingAlias}."proposedFix" IS NULL
+  AND ${findingAlias}.summary IN ('No coordinator activity for two hours', 'Coordinator ended without finishing the run')
+  /* includes-deleted: retired identity history still owns obsolete execution alerts. */
+  AND EXISTS (SELECT 1 FROM "Run" retired WHERE retired.id = ${findingAlias}."runId" AND retired."retiredAt" IS NOT NULL)
+)`);
+
+async function closeRetiredExecutionFindings(db: Database) {
+  const now = new Date();
+  await getDb(db)
+    .update(runFinding)
+    .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(runFinding.status, "open"),
+        obsoleteExecutionFindingSql('"RunFinding"'),
+      ),
+    );
+}
 
 const TERMINAL = ["completed", "failed", "needs_review", "cancelled"] as const;
 
@@ -82,6 +108,7 @@ export async function retireSettledCoordinators(
   before: Date,
   limit = 200,
 ) {
+  await closeRetiredExecutionFindings(db);
   const rows = await getDb(db)
     .select({ id: runTable.id, agentId: runTable.agentSessionId })
     .from(runTable)
@@ -103,10 +130,23 @@ export async function retireSettledCoordinators(
     try {
       // A real failure repeats on the follow-up, which reports it.
       if (!((await retire().catch(() => false)) || (await retire()))) continue;
-      await getDb(db)
-        .update(runTable)
-        .set({ retiredAt: new Date(), retirementReason: "settled" })
-        .where(eq(runTable.id, id));
+      await withTransaction(db, async (tx) => {
+        const now = new Date();
+        await tx
+          .update(runTable)
+          .set({ retiredAt: now, retirementReason: "settled" })
+          .where(eq(runTable.id, id));
+        await tx
+          .update(runFinding)
+          .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(runFinding.runId, id),
+              eq(runFinding.status, "open"),
+              obsoleteExecutionFindingSql('"RunFinding"'),
+            ),
+          );
+      });
       retired += 1;
     } catch (error) {
       failures.push(`${id}: ${String(error)}`);

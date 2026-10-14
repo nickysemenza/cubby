@@ -2,11 +2,12 @@ import { mailReclassificationCheckpoint } from "@cubby/schemas/email-actions";
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { and, eq, sql } from "drizzle-orm";
+import { reclassifyForTest as reclassifyEmails } from "tooling/ai-work";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
-import { email, run } from "~/server/db/schema";
+import { aiEvaluationRequest, email, run } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
@@ -20,7 +21,6 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
 import * as providers from "./provider";
-import { reclassifyEmails } from "./reclassify";
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
 import type { GmailMessage, GmailProvider } from "./types";
@@ -141,7 +141,7 @@ describe("durable member reclassification recovery", () => {
         .from(run)
         .where(
           and(
-            eq(run.purpose, "background"),
+            eq(run.purpose, "mail_reclassify"),
             eq(run.ledgerPartyId, f.owner.ledgerPartyId),
           ),
         );
@@ -200,7 +200,7 @@ describe("durable member reclassification recovery", () => {
     expect(f.getMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("retains earlier receipts and marks publication unknown after checkpoint failure", async () => {
+  it("retains exact publication receipts when the Run progress checkpoint fails", async () => {
     const f = await fixture();
     const first = await f.seed("synthetic-checkpoint-first");
     const second = await f.seed("synthetic-checkpoint-second");
@@ -239,7 +239,7 @@ describe("durable member reclassification recovery", () => {
       .from(run)
       .where(
         and(
-          eq(run.purpose, "background"),
+          eq(run.purpose, "mail_reclassify"),
           eq(run.ledgerPartyId, f.owner.ledgerPartyId),
         ),
       );
@@ -249,12 +249,12 @@ describe("durable member reclassification recovery", () => {
       f.owner,
     );
     expect(recorded?.status).toBe("failed");
-    expect(recovered?.notes).toContain("Synthetic checkpoint failure");
+    expect(recorded?.dispatchError).toContain("Synthetic checkpoint failure");
     expect(recovered?.receipts).toMatchObject({
-      complete: false,
-      results: [{ id: first.shortcode }],
+      complete: true,
+      results: [{ id: first.shortcode }, { id: second.shortcode }],
     });
-    expect(recovered?.receipts?.results).toHaveLength(1);
+    expect(recovered?.receipts?.results).toHaveLength(2);
     expect(
       recovered?.classificationObservations.some(
         (item) => item.id === second.shortcode,
@@ -268,7 +268,7 @@ describe("durable member reclassification recovery", () => {
     expect(f.getMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("recovers deferred receipts after discarding the response and refuses foreign ownership", async () => {
+  it("recovers completed durable receipts after discarding the response and refuses foreign ownership", async () => {
     const f = await fixture();
     const first = await f.seed("synthetic-budget-first");
     const second = await f.seed("synthetic-budget-second");
@@ -276,14 +276,14 @@ describe("durable member reclassification recovery", () => {
       ctx.db,
       { ids: [first.shortcode, second.shortcode] },
       ctx.actor,
-      { triage: f.triage, relevance: f.relevance, timeBudgetMs: 0 },
+      { triage: f.triage, relevance: f.relevance },
     );
     const [recorded] = await getDb(ctx.db)
       .select()
       .from(run)
       .where(
         and(
-          eq(run.purpose, "background"),
+          eq(run.purpose, "mail_reclassify"),
           eq(run.ledgerPartyId, f.owner.ledgerPartyId),
         ),
       );
@@ -295,7 +295,7 @@ describe("durable member reclassification recovery", () => {
     expect(recovered?.receipts?.complete).toBe(true);
     expect(recovered?.receipts?.results.map((item) => item.outcome)).toEqual([
       "replaced",
-      "deferred",
+      "replaced",
     ]);
     expect(recorded?.status).toBe("completed");
     const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -311,7 +311,7 @@ describe("durable member reclassification recovery", () => {
     await expect(
       loadMailReclassificationRead(ctx.db, recorded!.shortcode, null),
     ).rejects.toThrow(/belong/iu);
-    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.getMessage).toHaveBeenCalledTimes(2);
   });
 
   it("keeps legacy receipts unknown and reads deleted identities without writing or leaking UUIDs", async () => {
@@ -326,13 +326,16 @@ describe("durable member reclassification recovery", () => {
       .from(run)
       .where(
         and(
-          eq(run.purpose, "background"),
+          eq(run.purpose, "mail_reclassify"),
           eq(run.ledgerPartyId, f.owner.ledgerPartyId),
         ),
       );
     expect(
       mailReclassificationCheckpoint.parse(recorded!.progress).results,
     ).toHaveLength(1);
+    await getDb(ctx.db)
+      .delete(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, recorded!.id));
     await getDb(ctx.db)
       .update(run)
       .set({ progress: null, notes: "Synthetic legacy note" })

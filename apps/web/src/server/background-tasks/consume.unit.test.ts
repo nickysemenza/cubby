@@ -69,6 +69,34 @@ const maintenanceTask = (
 });
 
 describe("handleBackgroundQueueBatch", () => {
+  it.each(["cubby-background", "cubby-image-cloud"] as const)(
+    "measures %s transport wait independently of the older intent timestamp",
+    async (queue) => {
+      const receivedAt = Date.parse("2026-10-13T12:00:10.000Z");
+      const clock = vi.spyOn(Date, "now").mockReturnValue(receivedAt);
+      const info = vi.spyOn(console, "info").mockImplementation(() => {});
+      handle.mockResolvedValue("succeeded");
+      try {
+        const message = {
+          ...delivered(task("timing")),
+          timestamp: new Date(receivedAt - 10_000),
+        };
+        await handleBackgroundQueueBatch(
+          db,
+          { queue, messages: [message] },
+          { handleTask: handle, captureException: vi.fn() },
+        );
+        expect(info).toHaveBeenCalledWith(
+          `[background-tasks] delivery queue=${queue} kind=recipe-totals.recompute queue_wait_ms=10000`,
+        );
+        expect(message.ack).toHaveBeenCalledOnce();
+      } finally {
+        clock.mockRestore();
+        info.mockRestore();
+      }
+    },
+  );
+
   beforeEach(() => {
     handle.mockReset();
   });

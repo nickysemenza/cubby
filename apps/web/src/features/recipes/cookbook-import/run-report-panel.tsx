@@ -7,6 +7,12 @@ import { useMemo } from "react";
 
 import { formatMinutesSeconds } from "~/lib/format-duration";
 import { AiCost, formatAiCostSubtotal } from "~/ui/common/ai-cost";
+import {
+  RecordDetail,
+  RecordDot,
+  RecordList,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -25,7 +31,7 @@ import {
 } from "~/ui/primitives/table";
 
 import {
-  flagSummary,
+  type ChunkRow,
   reportCalls,
   reportEscalation,
   reportUnresolvedRefs,
@@ -88,26 +94,11 @@ export function FailuresPanel({
       </Row>
 
       {troubled.length > 0 && (
-        <ul className="space-y-1">
+        <RecordList aria-label="Troubled chunks">
           {troubled.map((chunk) => (
-            <li
-              key={chunk.id}
-              className="font-mono text-2xs text-muted-foreground"
-              title={flagSummary(chunk)}
-            >
-              {chunk.id}
-              {chunk.start !== undefined && chunk.end !== undefined
-                ? ` · lines ${chunk.start}–${chunk.end}`
-                : ""}
-              {chunk.final_model ? ` · ${chunk.final_model}` : ""}
-              {chunk.attempts !== undefined
-                ? ` · ${countLabel(chunk.attempts, "attempt")}`
-                : ""}
-              {chunk.flags.length > 0 ? ` · ${flagSummary(chunk)}` : ""}
-              {chunk.status === "failed" ? " · failed" : ""}
-            </li>
+            <ChunkRecord key={chunk.id} chunk={chunk} />
           ))}
-        </ul>
+        </RecordList>
       )}
 
       {missing.length > 0 && (
@@ -117,6 +108,89 @@ export function FailuresPanel({
         </Description>
       )}
     </Stack>
+  );
+}
+
+/** One troubled chunk: its outcome as the mark, where it sits and how it ran, and why. */
+function ChunkRecord({ chunk }: { chunk: ChunkRow }) {
+  const failed = chunk.status === "failed";
+  const facts = [
+    ...(chunk.start !== undefined && chunk.end !== undefined
+      ? [
+          <span key="lines">
+            lines {chunk.start}–{chunk.end}
+          </span>,
+        ]
+      : []),
+    ...(chunk.final_model
+      ? [
+          <code key="model" className="font-mono text-2xs">
+            {chunk.final_model}
+          </code>,
+        ]
+      : []),
+    ...(chunk.attempts !== undefined
+      ? [<span key="attempts">{countLabel(chunk.attempts, "attempt")}</span>]
+      : []),
+  ];
+  // A flag's tag is shown inline; anything else the crate wrote on it is kept as raw evidence.
+  const diagnostics = chunk.flags.filter(
+    (flag) => Object.keys(flag).length > 1,
+  );
+  return (
+    <RecordRow
+      leading={
+        <RecordDot
+          state={
+            failed ? "failed" : chunk.flags.length > 0 ? "warning" : "done"
+          }
+          label={
+            failed ? "Failed" : chunk.flags.length > 0 ? "Flagged" : "Done"
+          }
+        />
+      }
+      primary={<code className="font-mono text-xs">{chunk.id}</code>}
+      clip={false}
+      secondary={
+        <span className="grid gap-0.5">
+          {facts.length > 0 ? (
+            <span>
+              {facts.map((fact, index) => (
+                <span key={fact.key}>
+                  {index > 0 ? " · " : null}
+                  {fact}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          {chunk.flags.length > 0 ? (
+            <span className="flex flex-wrap gap-x-2 text-warning-ink">
+              {[...new Set(chunk.flags.map((flag) => flag.flag))].map(
+                (flag) => (
+                  <code key={flag} className="font-mono text-2xs">
+                    {flag}
+                  </code>
+                ),
+              )}
+            </span>
+          ) : null}
+          {failed ? (
+            <span className="break-words text-destructive">
+              Failed — the recipes in this chunk were lost.
+            </span>
+          ) : null}
+        </span>
+      }
+      detail={
+        diagnostics.length > 0 ? (
+          <RecordDetail summary="Flag details">
+            <pre className="max-h-60 overflow-auto bg-muted/30 p-2 font-mono text-2xs break-words whitespace-pre-wrap">
+              {JSON.stringify(diagnostics, null, 2)}
+            </pre>
+          </RecordDetail>
+        ) : null
+      }
+    />
   );
 }
 

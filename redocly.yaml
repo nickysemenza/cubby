@@ -5,3 +5,6 @@ rules:
   operation-summary: off
   security-defined: error
   operation-operationId-unique: error
+  # Kernel rows are decoded through NATIVE_TYPED_RECORDS without path refs.
+  # openapi-document.unit.test.ts checks reachability from paths + that keep-list.
+  no-unused-components: off

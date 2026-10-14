@@ -361,11 +361,14 @@ export function CommandButton({
   command,
   commands,
   compact = false,
+  quiet = false,
 }: {
   command: ReportCommand;
   commands: ReportCommands;
   /** One inline line: inputs carry their label as their accessible name, not a stacked caption. */
   compact?: boolean;
+  /** A row command inside a ledger line: ghost unless prominent, within the row's height. */
+  quiet?: boolean;
 }) {
   const [values, setValues] = useState<Record<string, string | number>>(() =>
     Object.fromEntries(
@@ -405,7 +408,8 @@ export function CommandButton({
       <Button
         type="button"
         size="sm"
-        variant={command.prominent ? "default" : "outline"}
+        variant={command.prominent ? "default" : quiet ? "ghost" : "outline"}
+        className={quiet ? "h-6" : undefined}
         disabled={commands.pending || !complete || !request.success}
         onClick={() => {
           if (request.success && complete) commands.run(request.data);

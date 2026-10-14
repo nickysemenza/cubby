@@ -1,21 +1,24 @@
 import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
-import { and, eq, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
-
-import { setCfEnv } from "./cf-env";
+import { getAiGatewayEgress, setCfEnv } from "./cf-env";
 import { withRequestDbClient } from "./db";
-import { aiEvaluation, run } from "./db/schema";
-import { getDb } from "./repo/database-helpers";
-import type { WorkflowRunParams } from "./workflow-runs/contract";
-import { claimWorkflowRun, failWorkflowRun } from "./workflow-runs/lifecycle";
+import {
+  isWorkflowRunPurpose,
+  type WorkflowRunParams,
+} from "./workflow-runs/contract";
+import {
+  claimWorkflowRun,
+  failWorkflowRun,
+  launchWorkflowRun,
+  runFailureText,
+} from "./workflow-runs/lifecycle";
 
 export class AiRefreshWorkflow extends WorkflowEntrypoint<
   Env,
@@ -26,8 +29,8 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
     step: WorkflowStep,
   ) {
     setCfEnv(this.env);
-    const { aiEvaluationProgress } = await import("./repo/ai-evaluation");
-    const { executeAiRefreshTarget } = await import("./runs/ai-refresh");
+    const { advanceAiWorkRun, executeAiWorkTarget } =
+      await import("./runs/ai-work");
     const withDb = async <T>(
       work: (db: typeof import("./db").db) => Promise<T>,
     ) =>
@@ -37,10 +40,12 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
     try {
       const discovery = await withDb(async (db) => {
         const owner = await claimWorkflowRun(db, event.payload);
-        return owner ? aiRefreshRunInput.parse(owner.input).discovery : false;
+        return owner?.purpose === "ai_refresh"
+          ? aiRefreshRunInput.parse(owner.input).discovery
+          : false;
       });
       if (discovery) {
-        for (let page = 0; ; page++) {
+        for (let page = 0; page < 128; page++) {
           const more = await step.do(
             `discover:${page}`,
             {
@@ -76,80 +81,27 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               }),
           );
           if (!more) break;
+          if (page === 127) {
+            await step.do("continue-discovery", () =>
+              withDb(async (db) => {
+                const owner = await claimWorkflowRun(db, event.payload);
+                if (owner && isWorkflowRunPurpose(owner.purpose))
+                  await launchWorkflowRun(db, {
+                    runId: owner.id,
+                    purpose: owner.purpose,
+                    expectedAttempt: event.payload.attempt,
+                  });
+              }),
+            );
+            return { runId: event.payload.runId };
+          }
         }
       }
-      for (let cycle = 0; ; cycle++) {
-        const pending = await withDb(async (db) => {
-          if (!(await claimWorkflowRun(db, event.payload))) return null;
-          const rows = await getDb(db)
-            .select()
-            .from(aiEvaluation)
-            .where(eq(aiEvaluation.runId, event.payload.runId));
-          await getDb(db)
-            .update(run)
-            .set({
-              progress: aiEvaluationProgress(rows, event.payload.attempt),
-            })
-            .where(
-              and(
-                eq(run.id, runEntityId.parse(event.payload.runId)),
-                eq(run.status, "running"),
-                sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${event.payload.attempt}`,
-              ),
-            );
-          return getDb(db)
-            .select({
-              id: aiEvaluation.id,
-              state: aiEvaluation.state,
-              deadlineAt: aiEvaluation.deadlineAt,
-              nextAttemptAt: aiEvaluation.nextAttemptAt,
-            })
-            .from(aiEvaluation)
-            .where(
-              and(
-                eq(aiEvaluation.runId, event.payload.runId),
-                notInArray(aiEvaluation.state, [
-                  "completed",
-                  "blocked",
-                  "failed",
-                  "obsolete",
-                  "cancelled",
-                ]),
-              ),
-            )
-            .orderBy(
-              sql`COALESCE(${aiEvaluation.nextAttemptAt}, ${aiEvaluation.deadlineAt}, ${aiEvaluation.createdAt})`,
-            )
-            .limit(2);
-        });
-        if (pending === null) break;
-        if (!pending.length) {
-          await withDb(async (db) => {
-            if (!(await claimWorkflowRun(db, event.payload))) return;
-            const rows = await getDb(db)
-              .select()
-              .from(aiEvaluation)
-              .where(eq(aiEvaluation.runId, event.payload.runId));
-            const progress = aiEvaluationProgress(rows, event.payload.attempt);
-            await getDb(db)
-              .update(run)
-              .set({
-                status: progress.failed ? "failed" : "completed",
-                failureCode: progress.failed ? "ai_refresh_failed" : null,
-                dispatchError: progress.errors?.join("\n") || null,
-                endedAt: new Date(),
-                progress,
-              })
-              .where(
-                and(
-                  eq(run.id, runEntityId.parse(event.payload.runId)),
-                  eq(run.status, "running"),
-                  sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${event.payload.attempt}`,
-                ),
-              );
-          });
-          break;
-        }
+      for (let cycle = 0; cycle < 128; cycle++) {
+        const pending = await withDb((db) =>
+          advanceAiWorkRun(db, event.payload),
+        );
+        if (pending === null || !pending.length) break;
         const now = Date.now();
         const due = pending.filter(
           (row) =>
@@ -165,6 +117,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               `target:${cycle}:${id}`,
               {
                 retries: {
+                  // Re-entry repairs a failed read/claim; target leases and receipts own effect retries.
                   limit: 2,
                   delay: "5 seconds",
                   backoff: "exponential",
@@ -174,23 +127,58 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               () =>
                 withDb(async (db) => {
                   const admitted = (await claimWorkflowRun(db, event.payload))
-                    ? await executeAiRefreshTarget(db, id)
+                    ? await executeAiWorkTarget(db, id, event.payload.runId)
                     : false;
                   return { id, admitted };
                 }),
             ),
           ),
         );
-        await step.sleep(
-          `pace:${cycle}`,
+        if (
           z
             .array(z.object({ admitted: z.boolean() }))
             .parse(attempts)
             .some((attempt) => attempt.admitted)
-            ? "1 second"
-            : "30 seconds",
+        )
+          continue;
+        const next = Math.min(
+          ...pending.map((row) =>
+            (
+              row.nextAttemptAt ??
+              row.deadlineAt ??
+              new Date(now + 30_000)
+            ).getTime(),
+          ),
         );
+        const seconds =
+          next > Date.now()
+            ? Math.max(1, Math.ceil((next - Date.now()) / 1_000))
+            : 30;
+        try {
+          await step.waitForEvent(`wake:${cycle}`, {
+            type: "ai-work",
+            timeout: `${seconds} seconds`,
+          });
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !/timeout|timed out/i.test(error.message)
+          )
+            throw error;
+          // SILENT: the expected due-time timeout rechecks durable state; event delivery is only a hint.
+        }
       }
+      await step.do("continue", () =>
+        withDb(async (db) => {
+          const owner = await claimWorkflowRun(db, event.payload);
+          if (owner && isWorkflowRunPurpose(owner.purpose))
+            await launchWorkflowRun(db, {
+              runId: owner.id,
+              purpose: owner.purpose,
+              expectedAttempt: event.payload.attempt,
+            });
+        }),
+      );
     } catch (error) {
       await step.do(
         "fail",
@@ -198,10 +186,15 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
         () =>
           withDb((db) =>
             failWorkflowRun(db, event.payload, {
-              failureCode: "ai_refresh_workflow_failed",
-              message: scrubErrorMessage(String(error)),
+              failureCode: "ai_work_workflow_failed",
+              message: runFailureText(
+                error instanceof Error ? error : String(error),
+              ),
             }),
           ),
+      );
+      await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
+        event.payload.runId,
       );
       throw error;
     }

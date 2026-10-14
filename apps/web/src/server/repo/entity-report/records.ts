@@ -63,8 +63,16 @@ const records = (
   empty: string,
   actions: readonly CollectionActionId[] = [],
   thumbnail: Extract<ReportBlock, { kind: "records" }>["thumbnail"] = "small",
+  presentation?: Extract<ReportBlock, { kind: "records" }>["presentation"],
 ): ReportBlock[] => [
-  { kind: "records", rows, empty, actions: [...actions], thumbnail },
+  {
+    kind: "records",
+    rows,
+    empty,
+    actions: [...actions],
+    thumbnail,
+    ...(presentation ? { presentation } : {}),
+  },
 ];
 
 /**
@@ -423,28 +431,27 @@ export const recordRunsReport =
             .filter(Boolean)
             .join("\n"),
           at: completed ?? row.at,
-          trailing: null,
-          statuses: [
-            { label: phaseLabel(runs[index]!.status) },
-            ...Array.from(
-              new Set(scoped.map((target) => target.outcome ?? target.state)),
-            ).map((outcome) => ({
-              label: phaseLabel(outcome),
-              tone:
-                outcome === "verified"
-                  ? ("positive" as const)
-                  : [
-                        "partially_verified",
-                        "ambiguous",
-                        "temporarily_blocked",
-                        "researched_with_gaps",
-                      ].includes(outcome)
-                    ? ("warning" as const)
-                    : undefined,
-            })),
-          ],
+          statuses: Array.from(
+            new Set(scoped.map((target) => target.outcome ?? target.state)),
+          ).map((outcome) => ({
+            label: phaseLabel(outcome),
+            tone:
+              outcome === "verified"
+                ? ("positive" as const)
+                : [
+                      "partially_verified",
+                      "ambiguous",
+                      "temporarily_blocked",
+                      "researched_with_gaps",
+                    ].includes(outcome)
+                  ? ("warning" as const)
+                  : undefined,
+          })),
         };
       }),
       `No research run has been recorded for this ${kind}.`,
+      [],
+      "small",
+      "ledger",
     );
   };

@@ -1,13 +1,17 @@
+import type { NativeCallbackScheme } from "@cubby/shared/apple-app-identity";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { z } from "zod";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
-import { authClient } from "~/lib/auth-client";
+import { createCubbyAuthClient } from "~/lib/auth-client";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import {
+  nativeAuthSearch,
+  nativeAuthDefaults,
+  nativeAuthCallbackURLs,
+} from "~/lib/native-auth";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
 import { Button } from "~/ui/primitives/button";
 import {
   Card,
@@ -16,22 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/ui/primitives/card";
-
-const nativeAuthSearch = z.object({
-  state: urlStringParam,
-  code_challenge: urlStringParam,
-  code_challenge_method: urlStringParam,
-  complete: z.boolean().optional().catch(undefined),
-  google_error: z.boolean().optional().catch(undefined),
-});
-
-const nativeAuthDefaults = {
-  state: undefined,
-  code_challenge: undefined,
-  code_challenge_method: undefined,
-  complete: undefined,
-  google_error: undefined,
-} as const;
 
 export const Route = createFileRoute("/auth/native")({
   validateSearch: nativeAuthSearch,
@@ -42,28 +30,38 @@ export const Route = createFileRoute("/auth/native")({
 
 function NativeAuthPage() {
   const search = Route.useSearch();
+  const authClient = useMemo(
+    () => createCubbyAuthClient(search.callback_scheme),
+    [search.callback_scheme],
+  );
 
   return (
     <AuthEntryFrame>
       {search.complete ? (
-        <NativeAuthCompletion />
+        <NativeAuthCompletion authClient={authClient} />
       ) : (
         <NativeAuthStart
           state={search.state}
           codeChallenge={search.code_challenge}
           codeChallengeMethod={search.code_challenge_method}
           googleError={search.google_error === true}
+          authClient={authClient}
+          callbackScheme={search.callback_scheme}
         />
       )}
     </AuthEntryFrame>
   );
 }
 
-function NativeAuthCompletion() {
+function NativeAuthCompletion({
+  authClient,
+}: {
+  authClient: ReturnType<typeof createCubbyAuthClient>;
+}) {
   useEffect(() => {
     const interval = authClient.ensureElectronRedirect();
     return () => clearInterval(interval);
-  }, []);
+  }, [authClient]);
 
   return (
     <Card>
@@ -87,11 +85,15 @@ function NativeAuthStart({
   codeChallenge,
   codeChallengeMethod,
   googleError,
+  authClient,
+  callbackScheme,
 }: {
   state: string | undefined;
   codeChallenge: string | undefined;
   codeChallengeMethod: string | undefined;
   googleError: boolean;
+  authClient: ReturnType<typeof createCubbyAuthClient>;
+  callbackScheme: NativeCallbackScheme;
 }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -104,17 +106,15 @@ function NativeAuthStart({
     setBusy(true);
     setError(undefined);
     try {
-      const errorSearch = new URLSearchParams({
-        google_error: "true",
+      const callbackURLs = nativeAuthCallbackURLs(
+        callbackScheme,
         state,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-      });
+        codeChallenge,
+      );
       const result = await authClient.signIn.social(
         {
           provider: "google",
-          callbackURL: "/auth/native?complete=true",
-          errorCallbackURL: `/auth/native?${errorSearch.toString()}`,
+          ...callbackURLs,
           requestSignUp: false,
           scopes: [GMAIL_READONLY_SCOPE],
         },
@@ -137,7 +137,7 @@ function NativeAuthStart({
     } finally {
       setBusy(false);
     }
-  }, [codeChallenge, codeChallengeMethod, state]);
+  }, [authClient, callbackScheme, codeChallenge, codeChallengeMethod, state]);
 
   useEffect(() => {
     if (!validRequest || googleError || started.current) return;

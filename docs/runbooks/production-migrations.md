@@ -34,6 +34,34 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Label-review retirement
+
+Deploy the code that removes Product label-review fields and filters retired
+exception records before applying `0055_remove_label_review` and
+`0056_retire_label_review_metadata`. This contraction removes only the review
+marker and retired-check exceptions; identity exceptions lose their label-photo
+revision while retaining their observed values and notes. Verify Product notes,
+Image and EntityAttachment rows, EntitySource evidence, and InventoryEntry amounts
+are preserved, then confirm the retired column and exception records are gone.
+
+## Durable member AI work
+
+Provision `cubby-image-cloud` using the one-time commands in
+[infrastructure](../infrastructure.md#workflow-backed-runs) before deploying its
+producer binding. Keep the shared background queue's existing concurrency bound.
+Apply through `0059_discovery-handling-receipts` before matching code deploys.
+The expansion adds request receipts and execution metadata and widens Run values.
+`0058_preserve-manual-ai-run-history` changes completed/failed and machine
+budget-paused manual relevance Run purposes, plus persisted legacy Sweep pause statuses. Preview Runs,
+Email decisions, stored inputs/progress, observations and financial rows survive.
+
+Before and after application, compare aggregate household entity counts, signed
+Expense totals and immutable Run input/progress evidence. Read back changed
+purposes/statuses and the request-table/index/check catalog. Historical recovery
+starts under matching code and current authorization; migration itself does not
+rerun models or repair missing audit history. The populated predecessor
+migration regression verifies these preservation boundaries with synthetic data.
+
 ## Typed Source references
 
 Apply expansion only through `0051_entity_source_targets`, then deploy the

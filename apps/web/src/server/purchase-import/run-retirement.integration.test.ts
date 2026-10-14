@@ -29,8 +29,9 @@ import { z } from "zod";
 
 import { handleBackgroundTask } from "~/server/background-tasks/handle";
 import { setCfEnv } from "~/server/cf-env";
-import { run, runOperation } from "~/server/db/schema";
+import { run, runOperation, runFinding } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { findOpenRunFindings } from "~/server/repo/problems/detectors-import";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   executeAtomicOperation,
@@ -105,6 +106,101 @@ const readRun = async (runId: string) => {
 };
 
 describe("settled coordinator retirement", () => {
+  // Obsolete execution alerts must close for both new and historical retirements;
+  // source review and live coordinator alerts must retain their evidence and status.
+  it("dismisses only obsolete execution alerts on new and existing retired Runs", async () => {
+    const historical = await agentRun();
+    await settle(historical);
+    await retire(historical);
+    const newlySettled = await agentRun();
+    await settle(newlySettled);
+    const live = await agentRun();
+    const owner = (await readRun(historical))!.ledgerPartyId!;
+    const findings = [];
+    for (const runId of [historical, newlySettled, live]) {
+      for (const [index, summary] of [
+        "No coordinator activity for two hours",
+        "Coordinator ended without finishing the run",
+        "Synthetic source still needs review",
+      ].entries()) {
+        findings.push({
+          runId,
+          entityId: runId,
+          entityKind: "run" as const,
+          ledgerPartyId: owner,
+          kind: "other",
+          summary,
+          evidenceFingerprint: `synthetic-${runId}-${index}`,
+        });
+      }
+    }
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic retained review product",
+      manufacturer: "Synthetic maker",
+    });
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values([
+        ...findings,
+        {
+          runId: historical,
+          entityId: product.id,
+          entityKind: "product",
+          ledgerPartyId: owner,
+          kind: "other",
+          summary: "No coordinator activity for two hours",
+          evidenceFingerprint: "synthetic-product-review",
+        },
+        {
+          runId: historical,
+          entityId: newlySettled,
+          entityKind: "run",
+          ledgerPartyId: owner,
+          kind: "other",
+          summary: "Coordinator ended without finishing the run",
+          evidenceFingerprint: "synthetic-other-run-review",
+        },
+      ]);
+    const before = await getDb(ctx.db).select().from(runFinding);
+    const visible = await findOpenRunFindings(ctx.db);
+    expect(visible.map((row) => row.id).sort()).toEqual(
+      before
+        .filter(
+          (row) =>
+            !(
+              row.runId === historical &&
+              row.entityKind === "run" &&
+              row.entityId === row.runId &&
+              row.summary !== "Synthetic source still needs review"
+            ),
+        )
+        .map((row) => row.id)
+        .sort(),
+    );
+    await retireSettledCoordinators(
+      ctx.db,
+      () => ({ retire: async () => ({ disposed: true }) }),
+      new Date(),
+    );
+    const after = await getDb(ctx.db).select().from(runFinding);
+    expect(after).toHaveLength(before.length);
+    const obsolete = (original: (typeof before)[number]) =>
+      original.runId !== live &&
+      original.entityKind === "run" &&
+      original.entityId === original.runId &&
+      original.summary !== "Synthetic source still needs review";
+    for (const original of before.filter(obsolete))
+      expect(after.find((row) => row.id === original.id)).toEqual({
+        ...original,
+        status: "dismissed",
+        resolvedAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+      });
+    for (const original of before.filter((row) => !obsolete(row)))
+      expect(after.find((row) => row.id === original.id)).toEqual(original);
+    expect((await readRun(live))!.retiredAt).toBeNull();
+  });
+
   it("retires only settled agent Runs, stamping retiredAt only after the coordinator acknowledges disposal", async () => {
     const live = await agentRun();
     const settled = await agentRun();

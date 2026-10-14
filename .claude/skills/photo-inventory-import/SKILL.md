@@ -130,22 +130,6 @@ location, an unresolved `conflict`). Then check
 `dataGap: product_unpurchased` — a photo-created Product left there is a
 handoff to purchase-import, not a task this run repeats.
 
-Finish label transcription through the Product's derived Research queue gap
-`product_label_review`, including for reused Products with existing notes.
-Read `labelEvidenceRevision` from the Product, inspect its live label photos,
-and establish the exact variant. Keep size/color in the title and printed tag
-text in notes; record the text verbatim in `sources` with `selectedVariant` when
-known. Ask the member through Claude/Codex when the photos leave a material
-detail uncertain. In the same `entity.update`, write the reviewed facts and
-`labelReviewedRevision` equal to the revision you read. A stale revision refuses
-the patch, so reread and review the changed evidence. Completion is the cleared
-gap; new label membership or content reopens it and invalidates relevant old
-identity exceptions. An interrupted import leaves this work discoverable in
-Research independently of the Run's status.
-If the current label evidence is unavailable or illegible after searching, record
-an evidence-bound `unavailable` or `insufficient_detail` exception for
-`product_label_review`. New label evidence reopens that exception.
-
 Do only the requested import: never infer prices, receipts, purchases,
 vendors, or purchase relationships from a photo. A later receipt is handled
 by `purchase-import`, which matches this same Product (see `dataGap:

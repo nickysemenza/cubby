@@ -30,6 +30,7 @@ import {
   routedEntity,
   rowKeys,
   RowTitle,
+  STATE_VARIANT,
   STATUS_VARIANT,
   TONE_TEXT,
 } from "./records-row-parts";
@@ -85,8 +86,13 @@ function RowExtras({
 }) {
   return (
     <>
-      {(row.statuses ?? []).length > 0 ? (
+      {row.state || (row.statuses ?? []).length > 0 ? (
         <Row gap="xs" className="flex-wrap">
+          {row.state ? (
+            <Badge variant={STATE_VARIANT[row.state.kind]}>
+              {row.state.label}
+            </Badge>
+          ) : null}
           {(row.statuses ?? []).map((status) => (
             <Badge
               key={status.label}
@@ -122,6 +128,7 @@ function RowExtras({
         {row.externalLink ? (
           <a
             href={row.externalLink.url}
+            title={row.externalLink.hint}
             target="_blank"
             rel="noreferrer"
             className={buttonVariants({ variant: "outline" })}
@@ -186,6 +193,7 @@ function rowHasEvidence(row: ReportRecordRow, hasRecord: boolean) {
     row.choice,
     row.detail,
     row.externalLink,
+    row.state,
     row.statuses?.length,
     row.lines?.length,
     row.commands?.length,
@@ -395,6 +403,7 @@ function RecordFilmstrip({
 function RecordsRows({
   block,
   ledger,
+  day,
   commands,
   choices,
   choicesLocked,
@@ -403,6 +412,7 @@ function RecordsRows({
 }: {
   block: RecordsBlock;
   ledger: boolean;
+  day: string | null;
   commands: ReportCommands;
   choices: ChoiceAnswerState | null;
   choicesLocked: boolean;
@@ -413,7 +423,16 @@ function RecordsRows({
     return <RecordFilmstrip block={block} commands={commands} />;
   if (block.rows.length === 0)
     return block.empty ? <Description>{block.empty}</Description> : null;
-  if (ledger) return <RecordLedger rows={block.rows} commands={commands} />;
+  if (ledger)
+    return (
+      <RecordLedger
+        rows={block.rows}
+        commands={commands}
+        timeline={block.presentation === "timeline"}
+        day={day}
+        dayHeading={!block.title}
+      />
+    );
   const keys = rowKeys(block.rows);
   return (
     <RecordList>
@@ -449,20 +468,21 @@ function RecordsHeader({
   commands: ReactNode[] | null;
 }) {
   const title = hasRows ? declared : undefined;
-  if (commands === null) return title ? <Eyebrow>{title}</Eyebrow> : null;
+  const heading = title ? (
+    <Eyebrow className={commands === null ? undefined : "my-0"}>
+      {title}
+      {day ? (
+        <>
+          {" "}
+          · <DateDisplay start={day} />
+        </>
+      ) : null}
+    </Eyebrow>
+  ) : null;
+  if (commands === null) return heading;
   return (
     <Row gap="sm" wrap align="center">
-      {title ? (
-        <Eyebrow className="my-0">
-          {title}
-          {day ? (
-            <>
-              {" "}
-              · <DateDisplay start={day} />
-            </>
-          ) : null}
-        </Eyebrow>
-      ) : null}
+      {heading}
       <Row gap="sm" wrap className="ml-auto">
         {commands}
       </Row>
@@ -520,6 +540,7 @@ export function RecordsBlockView({
         <RecordsRows
           block={block}
           ledger={ledger}
+          day={day}
           commands={commands}
           choices={form ? choices : null}
           choicesLocked={choicesLocked}

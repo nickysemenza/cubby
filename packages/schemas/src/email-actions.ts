@@ -1,3 +1,4 @@
+import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 import { emailLinkState } from "./email-fields.js";
 import {
@@ -107,7 +108,7 @@ export const reclassifyEmailsInput = z
  * member's resolution or independent review, `frozen` is an admitted or unresolved historical
  * import source, `changed` means the Email changed during the rerun, and
  * `removed` is deleted or in Spam/Trash at Gmail. `deferred` Emails were not
- * reached within one request's time budget; reclassify them again. `failed`
+ * reached within a historical request's time budget. `failed`
  * can occur after publication during read-back; reconcile before retrying.
  */
 export const emailReclassifyOutcome = z.enum([
@@ -120,25 +121,24 @@ export const emailReclassifyOutcome = z.enum([
   "changed",
   "deferred",
   "failed",
+  "cancelled",
 ]);
 export type EmailReclassifyOutcome = z.infer<typeof emailReclassifyOutcome>;
-export const reclassifyEmailsOut = z
+export const emailReclassifyResult = z
   .object({
-    runIds: z.array(runShortcode),
-    results: z.array(
-      z
-        .object({
-          id: emailShortcode,
-          outcome: emailReclassifyOutcome,
-          /** The rerun's result, whether or not it replaced Relevance. */
-          classification: mailboxClassification.nullable(),
-          stage: mailboxClassificationStage.nullable(),
-          conflict: z.boolean(),
-          error: z.string().nullable(),
-        })
-        .strict(),
-    ),
+    id: emailShortcode,
+    outcome: emailReclassifyOutcome,
+    /** The rerun's result, whether or not it replaced Relevance. */
+    classification: mailboxClassification.nullable(),
+    stage: mailboxClassificationStage.nullable(),
+    conflict: z.boolean(),
+    error: z.string().nullable(),
   })
+  .strict();
+export const emailReclassifyResults = z.array(emailReclassifyResult);
+export type EmailReclassifyResult = z.infer<typeof emailReclassifyResult>;
+export const reclassifyEmailsOut = z
+  .object({ runIds: z.array(runShortcode) })
   .strict();
 export type ReclassifyEmailsInput = z.infer<typeof reclassifyEmailsInput>;
 export type ReclassifyEmailsOut = z.infer<typeof reclassifyEmailsOut>;
@@ -154,10 +154,12 @@ export type RerunEmailPreviewOut = z.infer<typeof rerunEmailPreviewOut>;
 
 /** Exact publication receipts; an observation alone cannot establish an outcome. */
 export const mailReclassificationCheckpoint = z.strictObject({
+  ...workflowRecoveryProgress.shape,
   kind: z.literal("mail_reclassification"),
   version: z.literal(1),
+  attempt: z.number().int().nonnegative().optional(),
   complete: z.boolean(),
-  results: reclassifyEmailsOut.shape.results,
+  results: emailReclassifyResults,
 });
 export type MailReclassificationCheckpoint = z.infer<
   typeof mailReclassificationCheckpoint
@@ -167,6 +169,8 @@ export const mailReclassificationRead = z.strictObject({
     z.strictObject({ id: emailShortcode.nullable(), checksum: z.string() }),
   ),
   receipts: mailReclassificationCheckpoint.nullable(),
+  /** Linked historical or changing-evidence recovery stays navigable after the original Run completes. */
+  continuationRuns: z.array(runShortcode),
   /** Historical Run notes may have been truncated; they are not receipts. */
   notes: z.string().nullable(),
   /** Immutable model evidence, not proof that publication succeeded. */

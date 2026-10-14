@@ -290,6 +290,10 @@ const loadEvaluations = async (
   ) ORDER BY dq_exception."check")
   FROM "DataException" dq_exception
   WHERE dq_exception."entityId" = ${t.id}
+    AND dq_exception."check" IN (${sql.join(
+      checks.map((check) => sql`${check}`),
+      sql`, `,
+    )})
 ), '[]'::jsonb)`
     : sql`'[]'::jsonb`;
   const result = await unwrapDb(db).execute(sql`SELECT

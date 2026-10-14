@@ -11,6 +11,7 @@ import {
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
+import { APPLE_APP_IDENTITIES } from "../../../../packages/shared/src/apple-app-identity.ts";
 import {
   ACTIVITY_KIND_LABEL,
   IMPORT_REPORT_RUN_PURPOSES,
@@ -46,12 +47,48 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
     ).join("\n");
   return [
     {
+      relativePath: "apps/apple/Generated/MacDebugAppIdentity.xcconfig",
+      source:
+        generatedHeader +
+        '#include "AppleVersion.xcconfig"\n' +
+        `CUBBY_APP_BUNDLE_IDENTIFIER = ${APPLE_APP_IDENTITIES.development.bundleIdentifier}\n` +
+        `CUBBY_APP_PRODUCT_NAME = ${APPLE_APP_IDENTITIES.development.productName}\n` +
+        `CUBBY_CALLBACK_SCHEME = ${APPLE_APP_IDENTITIES.development.callbackScheme}\n`,
+    },
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/AppleAppIdentity.swift",
+      source:
+        generatedHeader +
+        `import Foundation
+
+public struct AppleAppIdentity: Hashable, Sendable {
+    public let bundleIdentifier: String
+    public let productName: String
+    public let callbackScheme: String
+    public var sessionService: String { "\\(bundleIdentifier).session" }
+    public var installationService: String { "\\(bundleIdentifier).installation" }
+    public var imageCacheName: String { productName.lowercased().replacingOccurrences(of: " ", with: "-") + "-images" }
+${Object.entries(APPLE_APP_IDENTITIES)
+  .map(
+    ([name, identity]) =>
+      `    public static let ${name} = Self(bundleIdentifier: ${swiftString(identity.bundleIdentifier)}, productName: ${swiftString(identity.productName)}, callbackScheme: ${swiftString(identity.callbackScheme)})`,
+  )
+  .join("\n")}
+    public static let current = Bundle.main.bundleIdentifier == development.bundleIdentifier ? development : production
+}
+`,
+    },
+    {
       // project.yml's configFiles; releases override only CURRENT_PROJECT_VERSION.
       relativePath: "apps/apple/Generated/AppleVersion.xcconfig",
       source:
         generatedHeader +
         "// APPLE_CLIENT_COMPATIBILITY_VERSION (packages/shared/src/apple-client-version.ts).\n" +
-        `MARKETING_VERSION = ${APPLE_CLIENT_COMPATIBILITY_VERSION}\n`,
+        `MARKETING_VERSION = ${APPLE_CLIENT_COMPATIBILITY_VERSION}\n` +
+        `CUBBY_APP_BUNDLE_IDENTIFIER = ${APPLE_APP_IDENTITIES.production.bundleIdentifier}\n` +
+        `CUBBY_APP_PRODUCT_NAME = ${APPLE_APP_IDENTITIES.production.productName}\n` +
+        `CUBBY_CALLBACK_SCHEME = ${APPLE_APP_IDENTITIES.production.callbackScheme}\n`,
     },
     {
       relativePath:

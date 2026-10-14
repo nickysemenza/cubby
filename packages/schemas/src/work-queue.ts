@@ -33,7 +33,12 @@ export const workWaitingForSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unresolved"), reason: z.string().min(1) }),
 ]);
 
-export const workQueueKindSchema = z.enum(["research", "review", "repair"]);
+export const workQueueKindSchema = z.enum([
+  "research",
+  "review",
+  "repair",
+  "awaiting_posting",
+]);
 export const workQueueSourceSchema = z.enum([
   "research",
   "email",

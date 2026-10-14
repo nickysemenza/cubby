@@ -355,9 +355,7 @@ it("shows durable progress and diagnostics alongside photo group review", async 
   expect(await screen.findByText("group-1")).toBeInTheDocument();
   expect(screen.getByText("System log")).toBeInTheDocument();
   expect(await screen.findByText("Work at a glance")).toBeInTheDocument();
-  expect(
-    screen.getByRole("region", { name: "Run step timing table" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("list", { name: "Run steps" })).toBeInTheDocument();
   expect(screen.getByText("Total run wall time")).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "Start new run with same inputs" }),
@@ -389,9 +387,7 @@ it("shows the remaining photo milestones while a run is active", async () => {
     { wrapper: harness.wrapper },
   );
 
-  const table = await screen.findByRole("region", {
-    name: "Run step timing table",
-  });
+  const table = await screen.findByRole("list", { name: "Run steps" });
   expect(table).toHaveTextContent("Read photos and analysis");
   expect(table).toHaveTextContent("Compare existing products");
   expect(table).toHaveTextContent("Propose item groups");

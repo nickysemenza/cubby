@@ -4,7 +4,13 @@ import type {
   CookbookRecipe,
   CookbookRunReport,
 } from "@cubby/schemas/cookbook";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -352,8 +358,13 @@ describe("cookbook book card", () => {
     );
 
     expect(screen.getByText(/1 chunk failed/)).toBeVisible();
-    expect(screen.getByText(/c2 · lines 100–200/)).toBeVisible();
-    expect(screen.getByText(/claude-sonnet/)).toBeVisible();
+    const chunks = screen.getByRole("list", { name: "Troubled chunks" });
+    expect(chunks.textContent).toMatch(/c2/);
+    expect(chunks.textContent).toMatch(
+      /lines 100–200 · claude-sonnet · 3 attempts/,
+    );
+    expect(chunks.textContent).toMatch(/recipes in this chunk were lost/);
+    expect(within(chunks).getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText(/Cherry Pie/)).toBeVisible();
     expect(
       screen.getByRole("button", { name: /Retry extraction/ }),

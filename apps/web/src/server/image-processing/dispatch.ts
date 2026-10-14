@@ -35,6 +35,11 @@ import {
 } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
+export type CloudImageDispatchOptions = {
+  /** External storage/provider boundary; adoption still uses the real job ledger. */
+  describe?: Parameters<typeof completeCloudImageDescription>[2];
+};
+
 type ImageProcessingStub = ReturnType<
   NonNullable<ReturnType<typeof getImageProcessingNamespace>>["getByName"]
 >;
@@ -49,6 +54,7 @@ function companionRpc(value: ImageProcessingStub): ImageProcessingCompanionRpc {
 export async function dispatchImageProcessingWakeup(
   db: Database,
   jobId: string,
+  options: CloudImageDispatchOptions = {},
 ): Promise<"dispatched" | "completed" | "waiting" | "skipped"> {
   const settings = await readImageProcessingSettings(db);
   if (settings.paused) return "skipped";
@@ -112,12 +118,16 @@ export async function dispatchImageProcessingWakeup(
         },
       });
       if (!assigned) return "skipped";
-      return (await completeCloudImageDescription(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        imageId: claimed.imageId,
-        runId: claimed.runId,
-      }))
+      return (await completeCloudImageDescription(
+        db,
+        {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          imageId: claimed.imageId,
+          runId: claimed.runId,
+        },
+        options.describe,
+      ))
         ? "completed"
         : "skipped";
     }

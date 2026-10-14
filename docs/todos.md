@@ -336,10 +336,12 @@ unattended Mail import / interactive Burn-down boundary.
   Return the durable result accurately; callers must read `purchase_status`
   with the original operation identity before retrying an ambiguous response.
 
-- 🤔 ✨ **Run Reclassify in the background.** A 200-Email Reclassify runs inside
-  the request and defers what its 150 s budget does not reach, so the member
-  reruns the remainder. Dispatch the `mail_reclassify` Run to a background
-  runner with per-Email progress instead.
+- 🤔 🛠️ **Continue durable mechanical backfills after the AI bulk migration.**
+  UPC image backfill and page-oriented image maintenance are the next candidates
+  for shared durable execution. Select concrete recovery gaps and reuse the
+  infrastructure in [ADR 0015](adr/0015-unified-durable-work-coordination.md). Agent,
+  device, queue, telemetry and interactive runtime migration needs evidence of
+  meaningful duplication or a demonstrated recovery failure.
 
 - 🤔 🐛 **Settle a member search's abandoned matches.** A member's `mail.search`
   runs only the free rule stage, so every new non-Spam/Trash match is retained
@@ -906,8 +908,8 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 - 🤔 🧪 **Record who proposed other reviewed decisions.** Email Purchase links
   keep `proposedBy` (member, agent, import, heuristic) so the Accuracy view can
-  count dismissed agent proposals. Run fix decisions, photo-group review and
-  Product label review cannot tell an agent's proposal from a member's; record
+  count dismissed agent proposals. Run fix decisions and photo-group review
+  cannot tell an agent's proposal from a member's; record
   the proposer on each and surface dismissal rates per proposer.
 
 - 🤔 ✨ **Declarative "many, clamped to one" cardinality.** Image provenance
@@ -1162,17 +1164,6 @@ consume the declarations.
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
-
-- 🤔 🛠️ **Move mechanical backfills onto existing Workflow-backed Runs.**
-  Scheduled Gmail discovery uses a Workflow. Long, page-oriented
-  mechanical backfills are the next fit: give each a
-  Run whose progress is the cursor and reuse `server/workflow-runs/`. Evaluated
-  and kept as they are: `cubby-background` tasks (single, freshness-gated and
-  idempotent, so a queue fits), image processing (a device-companion
-  WebSocket Durable Object with leases), the purchase agent (Agents SDK
-  Durable Object with pi-durable state), and telemetry (a batched queue).
-  Device-local work (library scan, classification sweep, sighting backfill)
-  can post into `runProjection` as a transport addition.
 
 - ⏳ ✨ **Failed Runs on the Problems page.** Routine scheduled Runs are hidden
   by default, so a failed scheduled pass is visible only in the Runs list.

@@ -98,7 +98,3 @@ export const troubledChunks = (report: CookbookRunReport): ChunkRow[] =>
   reportChunks(report).filter(
     (chunk) => chunk.status === "failed" || chunk.flags.length > 0,
   );
-
-/** A one-line summary of a chunk's flags, for the panel and its tooltip. */
-export const flagSummary = (chunk: ChunkRow): string =>
-  chunk.flags.map((flag) => flag.flag).join(", ");

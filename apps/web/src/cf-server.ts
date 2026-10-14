@@ -603,6 +603,14 @@ const handler = {
             import("./server/background-tasks/consume"),
           ]);
           await handleBackgroundQueueBatch(db, batch, {
+            ...(batch.queue === "cubby-image-cloud"
+              ? {
+                  handleTask: async (db, task) =>
+                    (
+                      await import("./server/image-processing/cloud-queue")
+                    ).handleCloudImageTask(db, task),
+                }
+              : {}),
             captureException: (error) => {
               Sentry.captureException(error);
             },

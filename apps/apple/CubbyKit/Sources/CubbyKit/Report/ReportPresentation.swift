@@ -145,6 +145,8 @@ public struct ReportPresentation: Hashable, Sendable {
         public let detailText: String?
         public var externalLinkLabel: String? = nil
         public var externalLinkURL: URL? = nil
+        /// Which account or mailbox the link opens.
+        public var externalLinkHint: String? = nil
         /// Commands on this row; each runs an existing operation after its declared confirmation.
         public let commands: [ReportCommand]
         /// A decision the person makes on this row (see `Records.form`).
@@ -225,6 +227,17 @@ public struct ReportPresentation: Hashable, Sendable {
     public struct Status: Hashable, Sendable {
         public let label: String
         public let tone: Tone?
+    }
+
+    /// A row state's chip tone, keyed by the wire value; running reads untoned.
+    static let stateTone: [String: Tone] = [
+        "done": .positive, "warning": .warning, "failed": .destructive,
+        "skipped": .muted, "not_reached": .muted,
+    ]
+
+    /// The row's state leads its chips; web draws it as the row's mark instead.
+    static func stateChip(label: String?, kind: String?) -> [Status] {
+        label.map { [Status(label: $0, tone: kind.flatMap { stateTone[$0] })] } ?? []
     }
 
     public struct Line: Hashable, Sendable {
@@ -429,15 +442,19 @@ public struct ReportPresentation: Hashable, Sendable {
                                 CollectionActionID(rawValue: $0.rawValue)
                             },
                             key: row.key, disabledReason: row.disabledReason,
-                            statuses: (row.statuses ?? []).map {
-                                Status(label: $0.label, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
-                            },
+                            statuses: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
+                                + (row.statuses ?? []).map {
+                                    Status(
+                                        label: $0.label,
+                                        tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                                },
                             lines: (row.lines ?? []).map {
                                 Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                             },
                             detailLabel: row.detail?.label, detailText: row.detail?.text,
                             externalLinkLabel: row.externalLink?.label,
                             externalLinkURL: row.externalLink.flatMap { URL(string: $0.url) },
+                            externalLinkHint: row.externalLink?.hint,
                             commands: row.commands ?? [], choice: row.choice.map(choice))
                     },
                     empty: records.empty,

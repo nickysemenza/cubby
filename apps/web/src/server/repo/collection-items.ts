@@ -2,10 +2,12 @@ import type { Amount } from "@cubby/schemas/codec";
 import type {
   ReportCommand,
   ReportRecordRow,
+  ReportRowState,
 } from "@cubby/schemas/entity-report";
 import type { ImageAssociation } from "@cubby/schemas/image";
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 import type { RunSummary } from "@cubby/schemas/run";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 
 /**
@@ -17,6 +19,18 @@ import { countLabel } from "@cubby/shared/pluralize";
 
 export const phaseLabel = (phase: string) =>
   phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
+
+const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set(ACTIVE_RUN_STATUSES);
+
+/** A run, phase or operation status as a row state; undefined while it means nothing settled. */
+export const runRowState = (status: string): ReportRowState | undefined => {
+  if (status === "completed" || status === "succeeded") return "done";
+  if (["failed", "cancelled", "aborted", "dispatch_failed"].includes(status))
+    return "failed";
+  if (status.startsWith("paused")) return "warning";
+  if (status === "started" || LIVE_RUN_STATUSES.has(status)) return "running";
+  return undefined;
+};
 
 /** The cookbooks whose physical copies this product is, one row each opening the cookbook. */
 export const cookbookItems = (
@@ -155,7 +169,16 @@ export const runHistoryItems = (
         `${run.skipped} skipped`,
       ].join(" · "),
     ].join("\n"),
-    trailing: run.status,
+    trailing: null,
     at: run.startedAt,
+    ...withState(run.status),
     badges: run.failureCode ? [run.failureCode] : [],
   }));
+
+/** The row's `state` for a run status that has one; any other status stays its trailing text. */
+const withState = (status: string) => {
+  const kind = runRowState(status);
+  return kind
+    ? { state: { kind, label: phaseLabel(status) } }
+    : { trailing: phaseLabel(status) };
+};

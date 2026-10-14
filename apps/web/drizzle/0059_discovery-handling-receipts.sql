@@ -1,0 +1,2 @@
+ALTER TABLE "AiEvaluation" DROP CONSTRAINT "AiEvaluation_execution_kind_check";--> statement-breakpoint
+ALTER TABLE "AiEvaluation" ADD CONSTRAINT "AiEvaluation_execution_kind_check" CHECK ("AiEvaluation"."executionKind" IN ('ai_refresh','mail_reclassify','suggestion_sweep','mail_discovery'));

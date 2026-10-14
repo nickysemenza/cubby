@@ -7,6 +7,7 @@ import {
   type RunProgressEvent,
 } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
@@ -78,10 +79,13 @@ export async function getRunLiveProgress(
     record.run.purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
       : undefined;
+  const workflowProgress = z
+    .object({ attempt: z.number() })
+    .safeParse(record.run.progress);
   const workflow = await workflowAttempt(
     launcher,
     record.run,
-    discovery?.attempt ?? 0,
+    workflowProgress.success ? workflowProgress.data.attempt : 0,
   );
   const events = record.run.progressHistory ?? [];
   return {
@@ -128,7 +132,9 @@ export async function recordRunProgress(
     if (!current) throw new Error("Progress Run does not exist");
     const eventIds = current.progressEventIds ?? [];
     if (eventIds.includes(input.eventId)) return { recorded: false };
-    const workflow = mailDiscoveryRunProgress.safeParse(current.progress);
+    const workflow = z
+      .object({ attempt: z.number() })
+      .safeParse(current.progress);
     const generation =
       current.dispatchEventId ??
       (workflow.success ? `workflow:${workflow.data.attempt}` : null);

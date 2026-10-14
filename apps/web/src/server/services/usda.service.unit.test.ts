@@ -97,8 +97,6 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
         partial: false,
       },
       usdaUnavailable: null,
-      labelReviewedRevision: null,
-      labelEvidenceRevision: null,
       stockTracked: null,
       kind: null,
       dataQuality: testCompleteDataQuality(),

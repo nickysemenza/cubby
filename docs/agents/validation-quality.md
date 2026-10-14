@@ -41,7 +41,9 @@ environment variable, a tool outside the workspace) must add it to its inputs,
 or a cached pass can hide a regression ([CI](../ci.md#cache-keys-and-the-remote-cache)).
 
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
-filters. Keep constraint-focused one-line local exceptions. Oxfmt owns
+filters. The SQL vocabulary rule reads every schema enum: adding a value can
+expose literals in otherwise unchanged consumers. Run the lint gate after a
+vocabulary addition and shrink its baseline when replacing existing literals. Keep constraint-focused one-line local exceptions. Oxfmt owns
 maintained source, CSS, Markdown, MDX, YAML, and TOML; generated files,
 the pnpm lockfile, and vendored/build output remain excluded. Do not weaken a
 gate to accommodate a change.
@@ -68,7 +70,9 @@ Lint policy the exceptions follow:
 Generated output is never committed. `pnpm install`, `build`, `typecheck` and
 every test entry point run `scripts/ensure.ts generate`, which runs the
 Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
-`pnpm generate` forces a run. The
+`pnpm generate` forces a run. Cache restores are pruned against the artifact
+manifest, including wholly retired output directories, before consumers read
+generated sources. The
 Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin
 and the UniFFI shim by `apps/apple/scripts/build-rust.sh`.
 

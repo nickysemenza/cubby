@@ -842,6 +842,15 @@ export const runChildren = [
         reference: { table: "run", column: "id" },
       },
       { key: "workKey", kind: "text", notNull: true },
+      { key: "shareKey", kind: "text" },
+      {
+        key: "executionKind",
+        kind: "text",
+        type: "AiExecutionKind",
+        notNull: true,
+        default: "ai_refresh",
+      },
+      { key: "restarts", kind: "integer", notNull: true, default: 0 },
       { key: "feature", kind: "text", notNull: true },
       {
         key: "target",
@@ -877,12 +886,23 @@ export const runChildren = [
     types: [
       {
         module: "@cubby/schemas/ai-evaluation",
-        exports: ["AiEvaluationTarget", "AiProvenance"],
+        exports: ["AiEvaluationTarget", "AiProvenance", "AiExecutionKind"],
       },
       { module: "@cubby/schemas/identifiers", exports: ["RunId"] },
     ],
     indexes: [
       { name: "AiEvaluation_work_key", unique: true, on: ["workKey"] },
+      {
+        name: "AiEvaluation_pending_share_key",
+        unique: true,
+        on: ["shareKey"],
+        where:
+          "{shareKey} IS NOT NULL AND {state} IN ('queued','running','result_ready','retry_wait')",
+      },
+      {
+        name: "AiEvaluation_admission_idx",
+        on: ["executionKind", "state", "deadlineAt"],
+      },
       {
         name: "AiEvaluation_run_state_idx",
         on: ["runId", "state", "nextAttemptAt"],
@@ -891,9 +911,56 @@ export const runChildren = [
     ],
     checks: [
       {
+        name: "AiEvaluation_execution_kind_check",
+        sql: "{executionKind} IN ('ai_refresh','mail_reclassify','suggestion_sweep','mail_discovery')",
+      },
+      {
         name: "AiEvaluation_state_check",
         sql: "{state} IN ('queued','running','result_ready','retry_wait','completed','blocked','failed','obsolete','cancelled')",
       },
+    ],
+  }),
+  defineChildTable({
+    name: "AiEvaluationRequest",
+    exportName: "aiEvaluationRequest",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        type: "RunId",
+        notNull: true,
+        reference: { table: "run", column: "id" },
+      },
+      {
+        key: "evaluationId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "aiEvaluation", column: "id" },
+      },
+      { key: "sequence", kind: "integer", notNull: true, default: 0 },
+      { key: "cancelledAt", kind: "timestamp" },
+      { key: "receipt", kind: "jsonb" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [{ module: "@cubby/schemas/identifiers", exports: ["RunId"] }],
+    indexes: [
+      {
+        name: "AiEvaluationRequest_run_item_key",
+        unique: true,
+        on: ["runId", "evaluationId"],
+      },
+      { name: "AiEvaluationRequest_evaluation_idx", on: ["evaluationId"] },
     ],
   }),
   defineChildTable({

@@ -1,3 +1,4 @@
+import { workflowRecoveryProgress } from "./workflow-runs";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import {
@@ -5,6 +6,7 @@ import {
   purchaseShortcode,
   financialTransactionShortcode,
   financialAccountShortcode,
+  ledgerPartyShortcode,
 } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 import { importSourceIdentity } from "./import-source";
@@ -119,6 +121,8 @@ export const mailboxPage = z.object({
 });
 export type MailboxPage = z.infer<typeof mailboxPage>;
 export const mailboxDiscoveryInput = z.object({
+  /** Present only for Runs whose every handled Email has a durable handling receipt. */
+  emailAuditVersion: z.literal(1).optional(),
   executionAuthorization: executionAuthorizationRef.optional(),
   executionPolicy: z
     .enum(["classification_only", "import"])
@@ -127,6 +131,7 @@ export const mailboxDiscoveryInput = z.object({
   scopedQueries: z.array(mailboxScopedQuery),
 });
 export const mailboxDiscoveryProgress = z.object({
+  ...workflowRecoveryProgress.shape,
   attempt: z.number().int().nonnegative(),
   phase: z.enum(["listing", "fetching", "completed", "failed", "paused"]),
   pagesDone: z.number().int().nonnegative().default(0),
@@ -407,4 +412,50 @@ export const mailSearchOut = z.object({
     }),
   ),
   nextPageToken: z.string().nullable(),
+});
+
+/** Stored execution evidence is separate from the Email's later state. */
+export const discoveryEmailReceipt = z.object({
+  id: emailShortcode,
+  emailId: z.uuid(),
+  sourceChecksum: z.string().nullable(),
+  handledAt: z.iso.datetime(),
+  observationId: z.uuid().nullable(),
+  outcome: z.enum([
+    "classified",
+    "reused",
+    "frozen",
+    "removed",
+    "excluded",
+    "changed",
+  ]),
+  classification: mailboxClassification.nullable(),
+  stage: mailboxClassificationStage.nullable(),
+  ownershipAtExecution: z.object({
+    memberId: ledgerPartyShortcode.nullable(),
+    mailboxId: z.string(),
+  }),
+});
+export const discoveryEmailAuditPage = z.object({
+  coverage: z.enum(["complete", "incomplete"]),
+  total: z.number().int().nonnegative(),
+  nextCursor: z.number().int().nonnegative().nullable(),
+  items: z.array(
+    discoveryEmailReceipt.omit({ emailId: true, observationId: true }).extend({
+      evidence: z.enum(["observation", "receipt"]),
+      currentAvailability: z.enum([
+        "available",
+        "removed",
+        "ownership_changed",
+      ]),
+      current: z
+        .object({
+          classification: mailboxClassification,
+          stage: mailboxClassificationStage.nullable(),
+          status: emailStatus,
+          checksum: z.string().nullable(),
+        })
+        .nullable(),
+    }),
+  ),
 });

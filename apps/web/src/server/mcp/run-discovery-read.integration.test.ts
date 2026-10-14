@@ -86,7 +86,14 @@ describe("member discovery readiness through MCP", () => {
       expect(result.structuredContent).toMatchObject({
         runId: discovery.shortcode,
         status: "completed",
-        mailDiscovery: null,
+        mailDiscovery: {
+          scope: {
+            mailboxId: input.mailboxId,
+            scopedQueries: "scopedQueries" in input ? [] : null,
+            executionPolicy: "executionPolicy" in input ? "import" : null,
+          },
+          emails: { coverage: "incomplete", items: [] },
+        },
       });
       expect(await getDb(ctx.db).select().from(run)).toEqual(before);
       expect(await getDb(ctx.db).select().from(runOperation)).toEqual([]);

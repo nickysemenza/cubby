@@ -269,7 +269,7 @@ describe("import report blocks", () => {
     expect(operation).toMatchObject({
       title: "extract",
       at: "2026-09-20T16:01:00.000Z",
-      statuses: [{ label: "failed", tone: "destructive" }],
+      state: { kind: "failed", label: "failed" },
     });
     expect(operation?.lines).toContainEqual({
       text: 'relation "x" does not exist (SQLSTATE 42P01)',
@@ -854,7 +854,7 @@ describe("liveProgressBlocks", () => {
     expect(
       rows.find((row) => row.subtitle === "503 from upstream"),
     ).toMatchObject({
-      statuses: [{ tone: "destructive" }],
+      state: { kind: "failed" },
     });
   });
 
@@ -1059,10 +1059,8 @@ describe("aiUsageBlocks", () => {
   it("describes each call with its tokens, cache and cost", () => {
     const [call] = recordsOf(aiUsageBlocks(usage)).rows;
     expect(call?.title).toBe("extract · import · fixture-provider");
-    expect(call?.statuses).toEqual([
-      { label: "succeeded", tone: "positive" },
-      { label: "ChatGPT plan" },
-    ]);
+    expect(call?.state).toEqual({ kind: "done", label: "succeeded" });
+    expect(call?.statuses).toEqual([{ label: "ChatGPT plan" }]);
     expect(call?.lines?.map((l) => l.text)).toEqual([
       "fixture-model · attempt 1",
       "100 in / — out",

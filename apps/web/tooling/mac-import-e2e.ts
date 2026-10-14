@@ -9,6 +9,7 @@ import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../scripts/lib/run.ts";
 import { request } from "@playwright/test";
 import { z } from "zod";
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import {
   acquireMacFixtureLease,
   assertMacFixturesIdle,
@@ -810,6 +811,9 @@ async function main(): Promise<void> {
           "COMPILER_INDEX_STORE_ENABLE=NO",
           "CODE_SIGNING_ALLOWED=NO",
           "ENABLE_DEBUG_DYLIB=NO",
+          // The isolated fixture keeps production's product and callback contract.
+          `CUBBY_APP_PRODUCT_NAME=${APPLE_APP_IDENTITIES.production.productName}`,
+          `CUBBY_CALLBACK_SCHEME=${APPLE_APP_IDENTITIES.production.callbackScheme}`,
           `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
           "build",
         ]);
