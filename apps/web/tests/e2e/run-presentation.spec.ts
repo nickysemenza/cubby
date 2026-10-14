@@ -11,8 +11,13 @@ import { seedActivityHistory } from "./fixtures-photos";
 // A successful image result must not look queued; skipped work must explain the actual outcome.
 test("image jobs show completed status and an Apple skip reason", async ({
   page,
+  e2eRuntime,
 }) => {
-  const sample = await seedActivityHistory(page, "Synthetic image outcome");
+  const sample = await seedActivityHistory(
+    page,
+    "Synthetic image outcome",
+    e2eRuntime.objectStorageUrl,
+  );
   const db = getDb(getFixtureDb());
   await db
     .update(imageProcessingJob)

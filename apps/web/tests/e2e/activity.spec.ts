@@ -119,10 +119,12 @@ test("Image jobs list by submission and show every attempt and event", async ({
 
 test("Image jobs open in the generic detail and their Run's section, while Activity shows changes", async ({
   page,
+  e2eRuntime,
 }) => {
   const sample = await seedActivityHistory(
     page,
     `Synthetic history ${Date.now()}`,
+    e2eRuntime.objectStorageUrl,
   );
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAuthenticatedPage(page, `/image-jobs?imageId=${sample.imageId}`);
@@ -133,7 +135,15 @@ test("Image jobs open in the generic detail and their Run's section, while Activ
   const lift = table
     .getByRole("row")
     .filter({ hasText: `Subject lift · ${sample.filename}` });
-  await expect(lift.locator("img").first()).toBeVisible();
+  const thumbnail = lift.getByRole("img", { name: "Image", exact: true });
+  await expect(thumbnail).toBeVisible();
+  await expect
+    .poll(() =>
+      thumbnail.evaluate(
+        (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
   await expect(lift.getByText(/^\d{1,3}$/u).first()).toBeVisible();
 
   await gotoAuthenticatedPage(page, `/image-jobs/${sample.jobId}`);
