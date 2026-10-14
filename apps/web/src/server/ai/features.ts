@@ -230,7 +230,7 @@ export const PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-identity",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-10-14.2",
+  promptVersion: "2026-10-14.3",
 }) satisfies AiDecisionFeature;
 
 export const FIELD_SUGGESTION_FEATURE = defineFeature({

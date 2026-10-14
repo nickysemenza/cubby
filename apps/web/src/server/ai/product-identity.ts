@@ -33,6 +33,10 @@ import {
   retainedProductIdentifierClaim,
 } from "~/server/repo/product-identity-claims";
 import { publishProductPair } from "~/server/repo/product-match-candidate";
+import {
+  sourceConfirmedVariantFacts,
+  verifiedVariantFacts,
+} from "~/server/repo/product-variant-comparison";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { productionVectorStore } from "~/server/semantic/vector-store";
 
@@ -83,6 +87,7 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     );
   const sources = await client
     .select({
+      id: entitySource.id,
       field: entitySource.fieldPath,
       valueFingerprint: entitySource.valueFingerprint,
       selectedVariant: entitySource.selectedVariant,
@@ -129,6 +134,22 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     (source) =>
       source.field === "model" && source.valueFingerprint === modelFingerprint,
   );
+  const nameFingerprint = await sha256Hex(canonicalJson(row.name));
+  const manufacturerFingerprint = await sha256Hex(
+    canonicalJson(row.manufacturer),
+  );
+  const verifiedVariant = sourceConfirmedVariantFacts(
+    row.name,
+    sources
+      .filter(
+        (source) =>
+          source.field === "name" &&
+          source.valueFingerprint === nameFingerprint,
+      )
+      .map((source) =>
+        [source.quote, source.selectedVariant].filter(Boolean).join(" · "),
+      ),
+  );
   const claims = await loadProductIdentifierClaims(db, id);
   const snapshot = {
     ...row,
@@ -137,6 +158,14 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     sources,
     photos,
     verifiedModel: currentModelSources.length ? row.model : null,
+    verifiedManufacturer: sources.some(
+      (source) =>
+        source.field === "manufacturer" &&
+        source.valueFingerprint === manufacturerFingerprint,
+    )
+      ? row.manufacturer
+      : null,
+    verifiedVariant,
   };
   return {
     snapshot: z.json().parse(snapshot),
@@ -229,6 +258,8 @@ const identityFacts = z
       z.object({ source: z.string(), kind: z.string(), value: z.string() }),
     ),
     verifiedModel: z.string().nullable(),
+    verifiedManufacturer: z.string().nullable(),
+    verifiedVariant: verifiedVariantFacts,
     claims: z.array(retainedProductIdentifierClaim),
   })
   .passthrough();
@@ -254,14 +285,55 @@ export async function prepareProductIdentityPair(
   if (!first?.eligible || !second?.eligible) return null;
   const a = identityFacts.parse(first.snapshot),
     b = identityFacts.parse(second.snapshot);
-  const aClaims = [...a.identifiers, ...a.claims],
-    bClaims = [...b.identifiers, ...b.claims];
+  const registeredClaims = (facts: typeof a) =>
+    facts.identifiers.map((identifier) => ({
+      ...identifier,
+      exactVariant: ["asin", "gtin_14", "manufacturer_part"].includes(
+        identifier.kind,
+      ),
+      variant: null,
+      productUrl: null,
+    }));
+  const aClaims = [...registeredClaims(a), ...a.claims],
+    bClaims = [...registeredClaims(b), ...b.claims];
+  const variantDimensions = verifiedVariantFacts.keyof().options;
+  const identifierToken = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/gu, "");
+  const completeCurrentVariant = (
+    facts: typeof a,
+    claim: (typeof aClaims)[number],
+  ) =>
+    facts.verifiedModel !== null &&
+    facts.verifiedManufacturer !== null &&
+    identifierToken(claim.value) !== identifierToken(facts.verifiedModel) &&
+    claim.variant !== null &&
+    variantDimensions.every((dimension) => {
+      return (
+        facts.verifiedVariant[dimension] !== null &&
+        facts.verifiedVariant[dimension] === claim.variant?.[dimension]
+      );
+    });
+  const sameCompleteVariant = (
+    one: (typeof aClaims)[number],
+    other: (typeof bClaims)[number],
+  ) =>
+    one.productUrl !== null &&
+    one.productUrl === other.productUrl &&
+    a.verifiedManufacturer === b.verifiedManufacturer &&
+    a.verifiedModel === b.verifiedModel &&
+    completeCurrentVariant(a, one) &&
+    completeCurrentVariant(b, other) &&
+    variantDimensions.every((dimension) => {
+      return a.verifiedVariant[dimension] === b.verifiedVariant[dimension];
+    });
   const exact = aClaims.some((one) =>
     bClaims.some(
       (other) =>
         one.source === other.source &&
         one.kind === other.kind &&
-        one.value === other.value,
+        one.value === other.value &&
+        ((one.exactVariant && other.exactVariant) ||
+          sameCompleteVariant(one, other)),
     ),
   );
   return preparedProductIdentityPair.parse({
@@ -274,9 +346,15 @@ export async function prepareProductIdentityPair(
     exact,
     conflict:
       exact &&
-      a.verifiedModel !== null &&
-      b.verifiedModel !== null &&
-      a.verifiedModel !== b.verifiedModel,
+      ((a.verifiedModel !== null &&
+        b.verifiedModel !== null &&
+        a.verifiedModel !== b.verifiedModel) ||
+        variantDimensions.some(
+          (key) =>
+            a.verifiedVariant[key] !== null &&
+            b.verifiedVariant[key] !== null &&
+            a.verifiedVariant[key] !== b.verifiedVariant[key],
+        )),
   });
 }
 export async function prepareProductIdentityCatalog(
@@ -321,7 +399,7 @@ export async function evaluatePreparedProductIdentityPair(
     source: "detector" as const,
     evidence: pair.exact
       ? pair.conflict
-        ? "An exact identifier conflicts with source-confirmed model variants"
+        ? "An exact identifier conflicts with source-confirmed variants"
         : "Retained source evidence binds both records to the same exact identifier"
       : "Candidate similarity requires member investigation",
     sourceUrls: [],
@@ -344,7 +422,7 @@ export async function evaluatePreparedProductIdentityPair(
       ? {
           kind: "rule" as const,
           model: null,
-          revision: "identity-v2",
+          revision: "identity-v3",
           runId,
           evaluationId: options.evaluationId ?? null,
         }

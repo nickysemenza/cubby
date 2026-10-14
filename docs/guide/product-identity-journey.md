@@ -57,7 +57,7 @@ flowchart LR
 ```
 
 A registered identifier has one Product owner. Accepted order lines retain
-their actual Product bindings, so an exact variant claim can expose a conflict
+their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs or complete retained variant evidence with matching current Source receipts can support exact identity. A shared model/style identifier stays a ranking clue. Current title facts become verified size, color or pack evidence only when a Source supports that current value and explicitly corroborates the fact. A confirmed variant contradiction under an exact claim exposes a conflict
 without assigning the identifier twice. Shared URLs and partial variant words
 remain clues for review.
 

@@ -113,13 +113,7 @@ export async function publishProductPair(
                 runId: null,
                 evaluationId: null,
               }
-            : {
-                kind: "rule",
-                model: null,
-                revision: "identity-v1",
-                runId: null,
-                evaluationId: null,
-              }),
+            : null),
         evidence: data,
         fingerprint: input.fingerprint ?? null,
       },

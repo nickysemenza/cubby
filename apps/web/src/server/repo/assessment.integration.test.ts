@@ -5,12 +5,14 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { publishAssessment, recordFeedback } from "~/server/repo/assessment";
 import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   kernelCtx,
   productFixture,
+  recordId,
 } from "~/server/runs/suggestion-sweep.fixtures";
 
 // Failure modes: retry publication mutates historical evidence; corrected null
@@ -131,7 +133,13 @@ describe("shared Assessment history", () => {
   });
 
   it("retains corrected null and separates wrong from presentation suppression", async () => {
-    const first = await publishAssessment(ctx.db, publication());
+    const record = await productFixture(ctx, "Synthetic history subject");
+    const subjectId = await recordId(ctx.db, record.id, "product");
+    const original = publication();
+    const first = await publishAssessment(ctx.db, {
+      ...original,
+      subject: { ...original.subject, recordId: subjectId },
+    });
     await recordFeedback(ctx.db, {
       assessmentId: first.id,
       operationId: "synthetic-review",
@@ -150,10 +158,24 @@ describe("shared Assessment history", () => {
       .from(assessmentState)
       .where(eq(assessmentState.id, first.id));
     expect(current?.suppression).toBeNull();
-    await getDb(ctx.db)
-      .delete(assessmentState)
+    await executeEntity(kernelCtx(ctx), {
+      action: "delete",
+      entity: "product",
+      ids: [record.id],
+    });
+    const [retired] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
       .where(eq(assessmentState.id, first.id));
+    expect(retired).toMatchObject({
+      active: false,
+      status: "superseded",
+      suppression: null,
+    });
     expect((await getDb(ctx.db).select().from(assessment)).length).toBe(1);
+    expect(
+      (await getDb(ctx.db).select().from(assessment))[0]?.subject,
+    ).toMatchObject({ recordId: subjectId });
     expect((await getDb(ctx.db).select().from(feedback)).length).toBe(1);
     await expect(
       getDb(ctx.db).execute(

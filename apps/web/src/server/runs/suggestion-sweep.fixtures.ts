@@ -119,6 +119,7 @@ export const productFixture = (
   name: string,
   input: {
     manufacturer?: string;
+    model?: ReturnType<typeof makeProductInput>["model"];
     notes?: string;
     categoryId?: ReturnType<typeof taxonomyId>;
   } = {},

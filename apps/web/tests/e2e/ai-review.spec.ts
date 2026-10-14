@@ -1,4 +1,5 @@
 import type { Route } from "@playwright/test";
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { eq, inArray } from "drizzle-orm";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
@@ -62,7 +63,14 @@ test("list pills accept immediately without unloading another row's suggestion",
     );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (!dispatchesOperation(route.request(), "assessment.review")) {
+    if (
+      !dispatchesOperation(
+        route.request(),
+        "assessment.review",
+        (item) =>
+          assessmentReviewInput.safeParse(item.input).data?.intent === "apply",
+      )
+    ) {
       await route.continue();
       return;
     }
@@ -305,7 +313,7 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
     .toEqual(["applied", "superseded"]);
   await expect(rows).toHaveCount(1);
   await expect(rows.getByRole("alert")).toContainText(
-    "Pending Suggestion not found",
+    "Assessment evidence is stale",
   );
   await expect(page.getByText("1 could not be settled")).toBeVisible();
   // The superseded row can no longer settle, so it offers no selection.

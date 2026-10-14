@@ -11,9 +11,13 @@ import {
   purchase,
   product,
 } from "~/server/db/schema";
-import { lineIdentifiers } from "~/server/purchase-import/writer";
+import { amazonAsin } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { lookupProductIdentifierSource } from "~/server/repo/product-identifier-source";
+import {
+  extractRetainedVariantFacts,
+  verifiedVariantFacts,
+} from "~/server/repo/product-variant-comparison";
 
 export const retainedProductIdentifierClaim = z.object({
   productId: z.uuid(),
@@ -28,6 +32,8 @@ export const retainedProductIdentifierClaim = z.object({
   acceptedChecksum: z.string(),
   originalExternalKey: z.string(),
   productUrl: z.string().nullable(),
+  exactVariant: z.boolean().default(false),
+  variant: verifiedVariantFacts.nullable().default(null),
 });
 /** Only an accepted original line and its durable Product binding establish a claim. */
 export async function loadProductIdentifierClaims(
@@ -71,7 +77,13 @@ export async function loadProductIdentifierClaims(
       continue;
     const line = original.data.extraction.candidate.lines[row.lineIndex];
     if (!line) continue;
-    const identifiers = lineIdentifiers(line);
+    const asin = amazonAsin(line.productUrl);
+    const identifiers = [
+      ...(line.sku
+        ? [{ kind: "retailer_sku", externalId: line.sku, exactVariant: false }]
+        : []),
+      ...(asin ? [{ kind: "asin", externalId: asin, exactVariant: true }] : []),
+    ];
     if (!identifiers.length) continue;
     const source = await lookupProductIdentifierSource(db, {
       url: line.productUrl,
@@ -87,6 +99,8 @@ export async function loadProductIdentifierClaims(
           value: identifier.externalId,
           originalChecksum: original.data.checksum,
           productUrl: line.productUrl ?? null,
+          exactVariant: identifier.exactVariant,
+          variant: extractRetainedVariantFacts(line.title),
         }),
       );
   }
