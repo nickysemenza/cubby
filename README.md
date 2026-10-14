@@ -95,7 +95,7 @@ flowchart TB
   GardenEntry -- "notes or harvest from" --> Planting
   Project -- "broken into" --> Task
   Vendor -- "sold us" --> Purchase
-  VendorAccount -- "our login at" --> Vendor
+  VendorAccount -- "a member buys from" --> Vendor
   Purchase -- "itemized into" --> Expense
   SpendingCategory -- "what it was for" --> Expense
   FinancialAccount -- "has statement rows" --> FinancialTransaction
@@ -171,15 +171,15 @@ flowchart TB
 
 ### Money
 
-| Entity                          | What it is                                                          | Relates to                                                                        | Typical use                                                                                      |
-| ------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Vendor** `VEN-`               | Somewhere money goes (identity only)                                | 1:N Purchase, VendorAccount; default SpendingCategory                             | Vendor roster                                                                                    |
-| **VendorAccount** `VACCT-`      | One member's account with a vendor                                  | N:1 Vendor                                                                        | Order-history and mail imports                                                                   |
-| **Purchase** `PUR-`             | One order or receipt: order id, date, literal stated total, invoice | N:1 Vendor; 1:N Expense; N:M FinancialTransaction; N:1 Run that imported it       | Grouping lines from one checkout                                                                 |
-| **Expense** `EXP-`              | A spend line, and **the only place money lives**                    | N:1 Purchase, Project, Product, SpendingCategory; attribution to LedgerParty      | Every spend total; `lineKind` covers principal, tax, shipping, discount, fee, tip and adjustment |
-| **SpendingCategory** `SPC-`     | What money was spent on                                             | Tree; 1:N Expense, Purchase, FinancialTransaction                                 | Budget views, classification                                                                     |
-| **FinancialAccount** `FAC-`     | A card or bank account                                              | 1:N FinancialTransaction; owner LedgerParty                                       | Statement import                                                                                 |
-| **FinancialTransaction** `FTX-` | A charge, refund or payment from a statement, as evidence only      | N:1 FinancialAccount; N:M Purchase via allocations that sum exactly to its amount | Reconciliation: match / mismatch / pending                                                       |
+| Entity                          | What it is                                                                                          | Relates to                                                                        | Typical use                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Vendor** `VEN-`               | Somewhere money goes (identity only)                                                                | 1:N Purchase, VendorAccount; default SpendingCategory                             | Vendor roster                                                                                    |
+| **VendorAccount** `VACCT-`      | One member's purchasing relationship with a vendor, including guest checkout and in-store purchases | N:1 Vendor; 1:N Purchase                                                          | Member-scoped purchases, order-history and mail imports                                          |
+| **Purchase** `PUR-`             | One order or receipt: order id, date, literal stated total, invoice                                 | N:1 Vendor; 1:N Expense; N:M FinancialTransaction; N:1 Run that imported it       | Grouping lines from one checkout                                                                 |
+| **Expense** `EXP-`              | A spend line, and **the only place money lives**                                                    | N:1 Purchase, Project, Product, SpendingCategory; attribution to LedgerParty      | Every spend total; `lineKind` covers principal, tax, shipping, discount, fee, tip and adjustment |
+| **SpendingCategory** `SPC-`     | What money was spent on                                                                             | Tree; 1:N Expense, Purchase, FinancialTransaction                                 | Budget views, classification                                                                     |
+| **FinancialAccount** `FAC-`     | A card or bank account                                                                              | 1:N FinancialTransaction; owner LedgerParty                                       | Statement import                                                                                 |
+| **FinancialTransaction** `FTX-` | A charge, refund or payment from a statement, as evidence only                                      | N:1 FinancialAccount; N:M Purchase via allocations that sum exactly to its amount | Reconciliation: match / mismatch / pending                                                       |
 
 ### People and system
 

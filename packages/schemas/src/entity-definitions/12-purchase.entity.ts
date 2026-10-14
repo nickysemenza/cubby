@@ -127,13 +127,16 @@ export default defineEntity({
           id: "research-queue",
           label: "Research queue",
           description:
-            "Purchases whose lines or paperwork research could complete, weakest first",
-          // An order or receipt photo that still needs its item lines, and
-          // orders missing their order id (terminology "Research queue").
+            "Purchases missing account attribution, lines, or paperwork, weakest first",
+          // Missing account attribution and order facts are actionable here.
           filters: [
             {
               id: "dataGaps",
-              value: ["purchase_itemization", "order_id"],
+              value: [
+                "purchase_itemization",
+                "order_id",
+                "purchase_vendor_account",
+              ],
             },
           ],
           sort: [{ id: "dataQuality", desc: false }],
@@ -1734,6 +1737,16 @@ export default defineEntity({
       exceptions: true,
       related: ["product"],
       checks: [
+        {
+          id: "purchase_vendor_account",
+          satisfiedLabel: "Vendor account recorded",
+          placement: { field: "vendorAccountId" },
+          facet: "identity",
+          weight: 1,
+          exceptions: "forbidden",
+          label: "Missing vendor account",
+          message: "Purchase is not assigned to a member's vendor account.",
+        },
         {
           id: "purchase_date",
           satisfiedLabel: "Date recorded",

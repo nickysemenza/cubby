@@ -1,4 +1,7 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type BrowserRoutedEntity,
+  localRelationshipByKey,
+} from "@cubby/schemas/entity-manifest";
 import type {
   RelatedPreviewGroup,
   RelatedViewDefinition,
@@ -95,6 +98,14 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
             const sourceId = info.row.original.id;
             return (
               <RelatedPreviewCell
+                source={entity}
+                relationship={
+                  view.relationship &&
+                  localRelationshipByKey(entity, view.relationship)
+                    .cardinality === "many"
+                    ? view.relationship
+                    : undefined
+                }
                 group={state?.byCell.get(`${sourceId}:${view.key}`)}
                 loading={state?.loadingSourceIds.has(sourceId) ?? false}
                 error={state?.errorsBySourceId.get(sourceId)}

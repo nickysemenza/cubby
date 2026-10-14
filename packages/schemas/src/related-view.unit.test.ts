@@ -25,6 +25,7 @@ import {
   relatedViewRegistry,
 } from "./related-view";
 import { vendorFilterFields } from "./vendor";
+import { vendorAccountFilterFields } from "./vendor-account";
 import { wishFilterFields } from "./wish";
 
 const declaredLocalEdges = new Set(
@@ -177,6 +178,7 @@ describe("relatedViewRegistry", () => {
       project: projectFilterFields,
       task: taskFilterFields,
       vendor: vendorFilterFields,
+      vendorAccount: vendorAccountFilterFields,
       purchase: purchaseFilterFields,
       expense: expenseFilterFields,
       financialAccount: financialAccountFilterFields,

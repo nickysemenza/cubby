@@ -681,6 +681,10 @@ _Avoid_: rerun triage, retriage
 Another name a Vendor trades under, recorded by a member, a Vendor merge, or Sender proof, so import finds the existing Vendor by that name.
 _Avoid_: vendor nickname, similar vendor
 
+**Vendor Account**:
+A member's purchasing relationship with one Vendor, including guest checkout and in-store purchases. It groups that member's Purchases independently of who paid or which login supplied evidence.
+_Avoid_: vendor login, payment account
+
 **Sender proof**:
 An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A shared domain alone is not Sender proof.
 _Avoid_: domain match

@@ -22,7 +22,7 @@ export default defineEntity({
   presentation: {
     list: {
       read: {
-        derived: ["lastRunAt", "lastSuccessAt"],
+        derived: ["lastRunAt", "lastSuccessAt", "purchaseCount"],
         relations: [
           "vendorId",
           "ledgerPartyId",
@@ -34,10 +34,11 @@ export default defineEntity({
     },
     titleField: "label",
     domain: "finance",
-    description: "A member's vendor orders and email evidence.",
+    description: "A member's purchasing relationship with a vendor.",
     emptyState: {
       title: "No vendor accounts yet",
-      description: "Connect a member to a vendor's orders and mail.",
+      description:
+        "Connect a member to their purchases, including guest checkout and in-store purchases.",
       actionLabel: "Add vendor account",
     },
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
@@ -61,7 +62,7 @@ export default defineEntity({
       {
         key: "label",
         kind: "text",
-        control: { kind: "text", placeholder: "Household vendor login" },
+        control: { kind: "text", placeholder: "Member's vendor relationship" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().min(1),
@@ -172,6 +173,26 @@ export default defineEntity({
         },
         validation: {
           read: z.date().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "purchaseCount",
+        kind: "number",
+        display: { list: true, detail: true, width: "sm" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchases" }],
+        },
+        explanation: {
+          ruleId: "vendor-account.purchase-count",
+          description:
+            "Number of live purchases assigned to this vendor account.",
+          readPath: "purchaseCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
           create: null,
           update: null,
         },
@@ -292,6 +313,7 @@ export default defineEntity({
       "cursor",
       "lastRunAt",
       "lastSuccessAt",
+      "purchaseCount",
       "vendorName",
       "ledgerPartyName",
       "createdAt",
@@ -330,6 +352,29 @@ export default defineEntity({
       export: "vendorAccountFilterFields",
     },
     descriptors: [
+      {
+        columnId: "related:vendorAccount.purchases",
+        field: "purchaseSearch",
+        deriveSchema: true,
+        urlKey: "related-purchase",
+        kind: "text",
+        placeholder: "Search related purchases...",
+      },
+      {
+        columnId: "purchaseId",
+        deriveSchema: true,
+        kind: "idMulti",
+        placeholder: "Filter by related purchase...",
+        brandRef: { entity: "purchase" },
+        urlOnly: true,
+      },
+      {
+        columnId: "purchasePresenceFilter",
+        deriveSchema: true,
+        kind: "presence",
+        placeholder: "Filter related purchases presence...",
+        urlOnly: true,
+      },
       {
         columnId: "label",
         field: "search",
@@ -371,6 +416,19 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.vendorAccountId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.vendorAccountId", direction: "outgoing" }],
+      },
+    },
     {
       key: "emails",
       label: "Emails",

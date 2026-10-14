@@ -78,6 +78,13 @@ export default defineEntity({
     list: {
       savedViews: [
         {
+          id: "research-queue",
+          label: "Research queue",
+          description: "Vendors missing a displayable logo",
+          filters: [{ id: "dataGaps", value: ["vendor_logo"] }],
+          sort: [{ id: "dataQuality", desc: false }],
+        },
+        {
           id: "needs-classification",
           label: "Needs classification",
           description: "Records missing an effective spending category",
@@ -1197,7 +1204,7 @@ export default defineEntity({
           weight: 1,
           label: "Logo",
           message: "No logo is recorded for this vendor.",
-          coverage: "vendorsWithPurchases",
+          coverage: "vendors",
         },
         {
           id: "vendor_website",

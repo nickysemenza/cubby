@@ -283,6 +283,13 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    key: "vendorAccount.purchases",
+    source: "vendorAccount",
+    relationship: "purchases",
+    defaultVisible: true,
+    order: "newest",
+  },
+  {
     key: "vendor.purchases",
     source: "vendor",
     relationship: "purchases",
@@ -455,6 +462,7 @@ const relatedViewRelationshipKeys = {
   "task.blockedBy": "blocked-by",
   "task.parent": "parent",
   "vendor.expenses": "expenses",
+  "vendorAccount.purchases": "purchases",
   "vendor.purchases": "purchases",
   "vendor.products": "products",
   "vendor.projects": "projects",
@@ -528,8 +536,6 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   planting:
     "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own relation sections",
   gardenEntry: "garden timelines render entries directly",
-  vendorAccount:
-    "vendor account ownership and vendor links are rendered as detail fields",
   run: "read-only runs have no detail route to hang a related view on; vendor account/vendor/member links are rendered as list columns",
   productCategory:
     "the category tree is rendered through the product-category records page",

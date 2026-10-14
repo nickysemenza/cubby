@@ -108,6 +108,10 @@ export const purchaseChecks = defineEntityChecks({
     )`,
   },
   checks: {
+    purchase_vendor_account: {
+      missing: (t) => sql`${t.vendorAccountId} IS NULL`,
+      fingerprint: (t) => [sql`${t.vendorId}`, sql`${t.vendorAccountId}`],
+    },
     purchase_date: {
       missing: (t) => sql`${t.date} IS NULL`,
       fingerprint: (t) => [sql`${t.date}`],
