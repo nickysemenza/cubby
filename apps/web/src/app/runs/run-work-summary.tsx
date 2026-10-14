@@ -33,17 +33,11 @@ export function RunSubject({ run }: { run: ActivityRun }) {
 }
 
 /** The first targets as linked chips, then how many more the run holds. */
-export function RunTargetChips({
-  run,
-  wrap = false,
-}: {
-  run: ActivityRun;
-  wrap?: boolean;
-}) {
+function RunTargetChips({ run }: { run: ActivityRun }) {
   if (run.targetPreview.length === 0) return null;
   const more = (run.targetCounts?.total ?? 0) - run.targetPreview.length;
   return (
-    <Row gap="xs" align="center" wrap={wrap} className="min-w-0">
+    <Row gap="xs" align="center" wrap className="min-w-0">
       {run.targetPreview.map((target) =>
         isBrowserRoutedEntity(target.entity) ? (
           <EntityRefLink
@@ -53,7 +47,7 @@ export function RunTargetChips({
             id={target.id}
             name={target.name}
             displayImage={target.displayImage}
-            wrap={wrap}
+            wrap
           />
         ) : (
           <span key={target.id} className="font-mono text-xs">
@@ -98,7 +92,7 @@ export function RunWorkFacts({ run }: { run: ActivityRun }) {
           </LedgerCell>
           <LedgerCell as="dd" slot="secondary" className="grid gap-1">
             <span className="tabular-nums">{outcome}</span>
-            <RunTargetChips run={run} wrap />
+            <RunTargetChips run={run} />
           </LedgerCell>
         </LedgerRow>
       ) : null}
