@@ -17,6 +17,15 @@ const scalar = z.union([
   z.array(z.string()),
 ]);
 
+/** Money is declared either as a currency display format or as the money
+ * number control (`renderer: "money"`, e.g. a project's cost estimate). */
+const isMoneyField = (field: DisplayField) =>
+  field.display.format === "currency" ||
+  field.display.format === "signedCurrency" ||
+  (field.control !== null &&
+    "renderer" in field.control &&
+    field.control.renderer === "money");
+
 /**
  * A field's value as short plain text for dense, non-interactive surfaces
  * (picker rows and chips, accessible names): references read as their names,
@@ -43,10 +52,7 @@ export function compactFieldText<TRecord extends object>(
   if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : null;
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number")
-    return field.display.format === "currency" ||
-      field.display.format === "signedCurrency"
-      ? formatCurrency(value)
-      : formatCount(value, 2);
+    return isMoneyField(field) ? formatCurrency(value) : formatCount(value, 2);
   if (field.kind === "enum") return enumFieldLabel(entity, field.key, value);
   if (field.kind === "timestamp") return new Date(value).toLocaleDateString();
   // A plain identifier field is a code; only its reference names display.

@@ -377,7 +377,7 @@ function PickerChipView({ chip }: { chip: PickerChip }) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 shrink-0 items-center rounded-[3px] px-1.5 font-mono text-xs tabular-nums",
+        "h-5 max-w-full min-w-0 shrink truncate rounded-[3px] px-1.5 font-mono text-xs leading-5 tabular-nums",
         chipToneClass[chip.tone ?? "neutral"],
       )}
     >
@@ -400,7 +400,9 @@ function PickerRowContent<TId extends string>({
     <>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="min-w-0 shrink truncate">
+          {/* The name keeps a readable floor; secondary text and chips give
+              way first in a narrow popup. */}
+          <span className="min-w-[5rem] shrink truncate">
             {presentation?.rowLabel ?? item.name}
           </span>
           {item.secondary ? (
@@ -421,7 +423,7 @@ function PickerRowContent<TId extends string>({
         ) : null}
       </span>
       {presentation?.trailing?.length ? (
-        <span className="flex shrink-0 items-center gap-1">
+        <span className="flex max-w-[55%] min-w-0 shrink items-center justify-end gap-1 overflow-hidden">
           {presentation.trailing.map((chip) => (
             <PickerChipView key={chip.text} chip={chip} />
           ))}
@@ -703,35 +705,22 @@ const pickerItemValue = (item: ComboboxItem) => item.id;
 const pickerItemsEqual = (item: ComboboxItem, selected: ComboboxItem) =>
   item.id === selected.id;
 
-/** A selected record or option inside a multiple field. */
-function SelectionChip({
-  item,
-  onRemove,
-  disabled,
-}: {
-  item: ComboboxItem;
-  onRemove: () => void;
-  disabled?: boolean;
-}) {
+/** A selected record or option inside a multiple field: Base UI's chip
+ * parts, so Backspace in the empty input and arrow keys reach the chips. */
+function SelectionChip({ item }: { item: ComboboxItem }) {
   const name = item.pending ? "Loading…" : item.name;
   return (
-    <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-[3px] bg-muted pr-0.5 pl-1 text-xs">
+    <ComboboxPrimitive.Chip className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-[3px] bg-muted pr-0.5 pl-1 text-xs outline-none data-highlighted:bg-accent">
       <PickerVisual item={item} size={16} />
       <span className="min-w-0 truncate">{name}</span>
-      <button
-        type="button"
+      <ComboboxPrimitive.ChipRemove
         aria-label={`Remove ${item.pending ? "selection" : item.name}`}
-        disabled={disabled}
-        className="flex size-4 items-center justify-center rounded-[2px] text-muted-foreground hover:bg-background hover:text-foreground"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRemove();
-        }}
+        // 16px glyph; a 44px phone target around it.
+        className="relative flex size-4 items-center justify-center rounded-[2px] text-muted-foreground hover:bg-background hover:text-foreground max-sm:before:absolute max-sm:before:-inset-[14px] max-sm:before:content-['']"
       >
         <XIcon className="size-3" />
-      </button>
-    </span>
+      </ComboboxPrimitive.ChipRemove>
+    </ComboboxPrimitive.Chip>
   );
 }
 
@@ -849,8 +838,13 @@ function SearchPicker<TId extends string>({
     [onOpenChange, onSearchChange],
   );
 
+  // Once per mount: a caller's search callback changes identity as its
+  // results load, and re-opening would wipe the query being typed.
+  const openedOnMount = React.useRef(false);
   React.useEffect(() => {
-    if (openOnMount) changeOpen(true);
+    if (!openOnMount || openedOnMount.current) return;
+    openedOnMount.current = true;
+    changeOpen(true);
   }, [openOnMount, changeOpen]);
 
   const emptyMessage = wrongPrefix
@@ -861,6 +855,28 @@ function SearchPicker<TId extends string>({
   const addCreated = (item: ComboboxItem<TId>) =>
     setValues(multiple ? [...values, item] : [item]);
 
+  const input = (
+    <ComboboxPrimitive.Input
+      id={inputId}
+      ref={setInputRef}
+      aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      placeholder={
+        single?.pending
+          ? "Loading…"
+          : multiple && values.length > 0
+            ? undefined
+            : (placeholder ?? placeholderDefault)
+      }
+      className={cn(
+        // A floor so a field squeezed into a narrow cell (a recipe
+        // ingredient row) keeps its text; the caret and clear give way.
+        "h-full min-w-12 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+        multiple && "min-w-16",
+      )}
+    />
+  );
+
   const field = (
     <ComboboxPrimitive.InputGroup
       ref={anchorRef}
@@ -868,38 +884,18 @@ function SearchPicker<TId extends string>({
       className={cn(fieldFrameClass(compact), multiple && "flex-wrap py-0.5")}
     >
       {multiple ? (
-        values.map((value) => (
-          <SelectionChip
-            key={value.id}
-            item={value}
-            disabled={gate.disabled}
-            onRemove={() =>
-              setValues(values.filter((item) => item.id !== value.id))
-            }
-          />
-        ))
-      ) : open ? null : (
-        <SelectedLead value={single} />
+        <ComboboxPrimitive.Chips className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {values.map((value) => (
+            <SelectionChip key={value.id} item={value} />
+          ))}
+          {input}
+        </ComboboxPrimitive.Chips>
+      ) : (
+        <>
+          {open ? null : <SelectedLead value={single} />}
+          {input}
+        </>
       )}
-      <ComboboxPrimitive.Input
-        id={inputId}
-        ref={setInputRef}
-        aria-label={ariaLabel}
-        aria-describedby={ariaDescribedBy}
-        placeholder={
-          single?.pending
-            ? "Loading…"
-            : multiple && values.length > 0
-              ? undefined
-              : (placeholder ?? placeholderDefault)
-        }
-        className={cn(
-          // A floor so a field squeezed into a narrow cell (a recipe
-          // ingredient row) keeps its text; the caret and clear give way.
-          "h-full min-w-12 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
-          multiple && "min-w-16",
-        )}
-      />
       {open || multiple ? null : <SelectedTrailing value={single} />}
       {clearable && values.length > 0 ? (
         <ComboboxPrimitive.Clear

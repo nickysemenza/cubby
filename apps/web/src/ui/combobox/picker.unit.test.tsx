@@ -572,6 +572,50 @@ describe("Picker segmented and multiple", () => {
     expect(onValuesChange).toHaveBeenLastCalledWith(["materials", "services"]);
   });
 
+  // Regression: hand-rolled chips sat outside Base UI's chips context, so
+  // Backspace in the empty input could not remove the last selection.
+  it("removes the last chip with Backspace in the empty input", () => {
+    const onValuesChange = vi.fn();
+    render(
+      <Picker
+        multiple
+        label="cost types"
+        options={OPTIONS}
+        values={["materials", "services"]}
+        onValuesChange={onValuesChange}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "cost types" });
+    input.focus();
+    fireEvent.keyDown(input, { key: "Backspace" });
+    expect(onValuesChange).toHaveBeenLastCalledWith(["materials"]);
+  });
+
+  // Regression: the open-on-mount effect re-ran whenever the caller's
+  // search callback changed identity (as its results loaded), wiping the
+  // typed query.
+  it("keeps the typed query when the search callback changes identity", () => {
+    function Harness({ version }: { version: number }) {
+      const onSearchChange = (query: string) => void [query, version];
+      return (
+        <Picker
+          multiple
+          openOnMount
+          label="tags"
+          options={OPTIONS}
+          values={[]}
+          onValuesChange={vi.fn()}
+          onSearchChange={onSearchChange}
+        />
+      );
+    }
+    const { rerender } = render(<Harness version={1} />);
+    const input = screen.getByRole("combobox", { name: "tags" });
+    fireEvent.change(input, { target: { value: "serv" } });
+    rerender(<Harness version={2} />);
+    expect(input).toHaveValue("serv");
+  });
+
   it("shows a row's trailing chips and announces them", () => {
     render(
       <Picker
