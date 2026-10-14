@@ -67,3 +67,11 @@ Confirm the previous IDs survived, intended removals are absent, the new image
 has a one-based display position and valid dimensions/MIME/SHA-256, and PDFs or
 failed-integrity files remain non-displayable. Stop and report gallery drift on
 any mismatch. A family image is allowed only when explicitly disclosed.
+
+Image width/height describe encoded original bytes. Explicit verification can
+normalize legacy swapped dimensions when the stored SHA-256 matches the exact
+original; MIME, byte length and hash mismatches remain failures. After a repair,
+read back the preferred own-photo cover, label gallery and inventory valuation.
+For unrecoverable catalog assets, retain exact source evidence and the specific
+image gap rather than attaching a guessed variant or repeatedly retrying an
+unchanged blocked page.

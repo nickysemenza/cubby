@@ -67,8 +67,12 @@ import {
   findProductsByExternalIds,
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
-import { findExactProductNameMatches } from "~/server/repo/product/resolve-names";
+import {
+  findExactProductNameMatches,
+  findProductIdentityReviewCandidates,
+} from "~/server/repo/product/resolve-names";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
+import { readRetainedMail } from "~/server/repo/retained-mail";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { receivableProductIds } from "~/server/repo/stock-tracking";
 
@@ -489,11 +493,11 @@ export function receiptProductQuantity(
 
 /**
  * A created Product must not fork an Exact identity match (terminology). An
- * identifier another Product owns always refuses; an exact name or alias match
- * refuses unless a Distinct-from decision names it. A distinct Product still
+ * identifier another Product owns always refuses; exact names and strong live
+ * brand/item candidates require a sourced Distinct-from decision. A distinct Product still
  * cannot take the identical name, which the (name, manufacturer) index holds.
  */
-async function assertNoExactIdentity(
+async function assertNoUnreviewedIdentity(
   tx: DrizzleTransaction,
   line: ExtractedPurchaseLine,
   source: string,
@@ -510,11 +514,15 @@ async function assertNoExactIdentity(
       );
   }
   const cleared = new Set(distinctFrom.map(({ productId }) => productId));
-  for (const match of await findExactProductNameMatches(tx, line.title)) {
+  const exact = await findExactProductNameMatches(tx, line.title);
+  const review = await findProductIdentityReviewCandidates(tx, line.title);
+  for (const match of new Map(
+    [...exact, ...review].map((row) => [row.id, row]),
+  ).values()) {
     if (!cleared.has(match.id))
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `Line "${line.title}" exactly matches ${match.shortcode} ("${match.name}"); resolve the line to ${match.shortcode}, or mark it distinctFrom ${match.shortcode} with a Source showing the difference.`,
+        `Line "${line.title}" matches or resembles ${match.shortcode} ("${match.name}"); resolve the line to ${match.shortcode}, or mark it distinctFrom ${match.shortcode} with a Source showing the difference.`,
       );
     if (match.name === line.title && match.manufacturer === "")
       throw createAppError(
@@ -537,7 +545,7 @@ export async function assertNewLineProductIdentity(
         vendorId: parseEntityId("vendor", vendorId),
       })
     : "";
-  await assertNoExactIdentity(tx, line, source, distinctFrom);
+  await assertNoUnreviewedIdentity(tx, line, source, distinctFrom);
 }
 
 export async function resolveLineProduct(
@@ -585,7 +593,12 @@ export async function resolveLineProduct(
   const titleKey = `title:${line.title.trim().toLowerCase()}`;
   const createdEarlier = productsByExternalIdentity.get(titleKey);
   if (createdEarlier) return parseEntityId("product", createdEarlier);
-  await assertNoExactIdentity(tx, line, source, decision.distinctFrom ?? []);
+  await assertNoUnreviewedIdentity(
+    tx,
+    line,
+    source,
+    decision.distinctFrom ?? [],
+  );
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
     manufacturer: "",
@@ -1015,11 +1028,32 @@ export async function importVendorOrder(
   options: { applyUnassignedPurposeFallback?: boolean } = {},
 ): Promise<ImportWriterOutput> {
   const input = importWriterInput.parse(rawInput);
-  // Validation consumes this exact deterministic projection before any writer
-  // side effect. Keep it on the mutation path so plan drift is explicit.
-  const semanticPlan = buildPurchaseImportPlan(input.extraction);
   await assertRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
+  const candidateDateMissing = input.extraction.candidate?.orderedAt === null;
+  const confirmation =
+    (input.extraction.candidate?.sourceEvent ?? "confirmation") ===
+    "confirmation";
+  const mailKey =
+    input.source.kind === "mail_message"
+      ? /^gmail:(.+?):([^:]+)$/u.exec(input.source.externalKey)
+      : null;
+  const [dateMail] =
+    candidateDateMissing && confirmation && mailKey
+      ? await readRetainedMail(db, {
+          ledgerPartyIds: [parseEntityId("ledgerParty", input.ledgerPartyId)],
+          mailboxId: mailKey[1],
+          messageId: mailKey[2],
+        })
+      : [];
+  const fallbackAt =
+    dateMail?.rawChecksum === input.source.checksum
+      ? (dateMail.receivedAt?.toISOString() ?? null)
+      : null;
+  if (fallbackAt && input.extraction.candidate)
+    input.extraction.candidate.orderedAt = fallbackAt;
+  const semanticPlan = buildPurchaseImportPlan(input.extraction);
+
   const skipsLineWrites = semanticPlan.writeBlockReason !== null;
   const identityOnly = [
     "missing_currency",
@@ -1461,9 +1495,10 @@ export async function importVendorOrder(
         });
       }
     }
+    const usedFallbackDate = fallbackAt !== null && !target?.date;
     const orderDate = purchaseDateFor(
-      candidate.orderedAt,
-      target?.date ?? null,
+      target?.date ?? candidate.orderedAt,
+      null,
     );
     if (!target) {
       target = await insertWithShortcode(tx, "purchase", {
@@ -1528,6 +1563,22 @@ export async function importVendorOrder(
         .where(eq(purchase.id, target.id));
     }
     const purchaseId = parseEntityId("purchase", target.id);
+    if (usedFallbackDate && fallbackAt && dateMail) {
+      await recordEntitySources(tx, {
+        entityKind: "purchase",
+        entityId: purchaseId,
+        recorder: importActor,
+        detail: { date: orderDate },
+        sources: [
+          {
+            fieldPath: "date",
+            url: `https://mail.google.com/mail/u/0/#all/${dateMail.messageId}`,
+            quote: `Order date defaults to email receipt time (${fallbackAt}); no printed order date was supplied.`,
+          },
+        ],
+      });
+    }
+
     const findingIds: string[] = [];
     const productLines: NonNullable<
       ImportSourceAssociationInput["productBindings"]

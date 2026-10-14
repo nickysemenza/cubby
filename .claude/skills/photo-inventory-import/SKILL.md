@@ -132,8 +132,9 @@ handoff to purchase-import, not a task this run repeats.
 
 Do only the requested import: never infer prices, receipts, purchases,
 vendors, or purchase relationships from a photo. A later receipt is handled
-by `purchase-import`, which matches this same Product (see `dataGap:
-product_unpurchased`) using itemized order and exact-variant evidence; it
+by `purchase-import`, which compares evidence before creating and matches the
+same Product (see `dataGap: product_unpurchased`) using itemized order and
+exact-variant evidence; it
 handles settlement separately and creates no new inventory.
 
 ## Joining later evidence

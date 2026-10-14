@@ -176,8 +176,8 @@ same outcome without prescribing an agent runtime.
    per-variant retailer SKU, ASIN, UPC/GTIN, or exact manufacturer part number.
    A style, family, or model number shared by sizes or colors only ranks
    candidates. Then inspect Product aliases, names, and details. Before
-   choosing `new`, check inventory-first Products (`dataGap: product_unpurchased`,
-   same category/owner) — see the either-side-first contract in
+   choosing `new`, include inventory-first Products (`dataGap: product_unpurchased`);
+   category and owner rank candidates without excluding missing metadata — see the either-side-first contract in
    [product identity](../product-enrichment/references/product-identity.md).
    An exact-variant identifier match resolves the line straight to that Product
    (`existing`). So does a candidate whose name or alias is the line's exact
@@ -185,19 +185,17 @@ same outcome without prescribing an agent runtime.
    recorded fields contradicts the line: a missing identifier alone is no
    reason to fork it. Commit enforces this: `new` is refused beside a
    candidate flagged `exactIdentifierMatch`, and beside one flagged
-   `exactNameMatch` unless the resolution's `distinctFrom` names it with the
-   url and quoted text that show the difference (model, size, pack, kit
+   `exactNameMatch` or a strong brand/item review candidate unless the
+   resolution's `distinctFrom` names it with the url and quoted text that show
+   the difference (model, size, pack, kit
    contents). Browse the listings to find that difference; without one,
-   resolve to the match. A descriptive-only match — a similar but not identical
-   name, such as a photo Product described from its tag — does not resolve
-   the line: choose `new` for this line's own vendor Product instead, then
-   call `product_enrichment.propose_match` with the candidate pair and
-   evidence for human review. Otherwise choose an
-   existing Product shortcode, explicitly choose `new`, or leave the line
-   `unresolved`. When the line proves a purchased item but catalog identity
-   remains incomplete, save only its supported Product facts and continue
-   research after checking existing matches. Preserve the original order-line
-   evidence; a descriptive-only candidate is not a direct match.
+   resolve to the match. For a differently titled photo Product, compare its
+   own photos, labels and Sources against the purchased variant before
+   choosing a resolution, following [product identity](../product-enrichment/references/product-identity.md).
+   Reuse a supported same-variant match; leave ambiguity `unresolved`; choose
+   `new` only after distinguishing the reviewed candidates. Preserve the
+   original order-line evidence and save only supported facts when catalog
+   research remains incomplete.
    Every order is household spending, but not every line is a stocked item:
    choose `expense_only` for prepared food and drinks from a restaurant or
    delivery order, event or travel tickets, rides, donations, and paid labor
@@ -235,10 +233,14 @@ same outcome without prescribing an agent runtime.
    review and cannot use this path. Re-importing an accepted original with
    changed Product choices returns a review finding.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
-   terminal; `conflict` requires review. Read back every requested principal
-   Product binding and its source association, and compare the Expense total
-   and row count with the original ledger before reporting completion.
-7. Report every conflict or open finding; resolve it through the Problems UI.
+   terminal; `conflict` requires review.
+7. Read back every principal merchandise line's Product binding and source
+   association, the Expense row count and the printed
+   total versus `SUM(Expense.cost)`, order/Expense dates and date provenance.
+   Confirm original inventory quantities and own-photo covers survived. For
+   an existing stocked item with a priced acquisition, check its derived
+   valuation; a Purchase-Product link alone supplies no cost basis.
+   Report every conflict or open finding; resolve it through the Problems UI.
 
 Mail import is Pi's version of this flow; [mail-import.md](references/mail-import.md)
 adds the Email dispositions (`mail.resolve`: a lifecycle `linked` event,

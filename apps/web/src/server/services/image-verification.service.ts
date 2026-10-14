@@ -77,12 +77,22 @@ export const verifyImageRows = async (
         ?.trim()
         .toLowerCase();
       const inspected = await ports.inspectImageFile(bytes, row.contentType);
+      // Legacy upright dimensions are safe to normalize only when the exact bytes are proven.
+      const swappedDimensions =
+        row.sha256 !== null &&
+        row.sha256 === inspected.sha256 &&
+        row.width === inspected.height &&
+        row.height === inspected.width;
       const metadataMismatch =
         (storedContentType !== undefined &&
           storedContentType !== row.contentType.toLowerCase()) ||
         bytes.length !== row.size ||
-        (row.width !== null && row.width !== inspected.width) ||
-        (row.height !== null && row.height !== inspected.height) ||
+        (!swappedDimensions &&
+          row.width !== null &&
+          row.width !== inspected.width) ||
+        (!swappedDimensions &&
+          row.height !== null &&
+          row.height !== inspected.height) ||
         (row.detectedContentType !== null &&
           row.detectedContentType !== inspected.detectedContentType) ||
         (row.sha256 !== null && row.sha256 !== inspected.sha256);

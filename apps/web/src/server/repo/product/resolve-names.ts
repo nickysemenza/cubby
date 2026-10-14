@@ -6,7 +6,7 @@ import type {
   ProductResolveNamesInput,
   ProductResolveNamesOut,
 } from "@cubby/schemas/product";
-import { and, inArray } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
@@ -182,3 +182,61 @@ export const findExactProductNameMatches = async (
     .where(and(notDeleted(product), inArray(product.id, ids)));
   return ids.flatMap((id) => rows.filter((row) => row.id === id));
 };
+
+/** Live lexical review fence: independent of embeddings and background indexing.
+ * Brand plus two substantive item words ranks a possible duplicate, never proves a variant. */
+export async function findProductIdentityReviewCandidates(
+  db: Database | DrizzleTransaction,
+  name: string,
+) {
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, " ")
+      .trim();
+  const title = normalize(name);
+  const rows = await unwrapDb(db)
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      model: product.model,
+      aliases: product.aliases,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`length(trim(${product.manufacturer})) > 0`,
+        sql`strpos(${" " + title + " "}, ' ' || trim(regexp_replace(lower(${product.manufacturer}), '[^a-z0-9]+', ' ', 'g')) || ' ') > 0`,
+      ),
+    );
+  return rows
+    .filter((row) => {
+      const brand = new Set(normalize(row.manufacturer).split(" "));
+      const words = (value: string) =>
+        new Set(
+          normalize(value)
+            .split(" ")
+            .filter(
+              (word) =>
+                word.length > 2 &&
+                !brand.has(word) &&
+                !["with", "the", "for", "size", "style"].includes(word),
+            ),
+        );
+      const wanted = words(name);
+      return [row.name, ...row.aliases].some((value) => {
+        const candidate = words(value);
+        const shared = [...candidate].filter((word) => wanted.has(word)).length;
+        return (
+          shared >= 2 && shared / Math.min(candidate.size, wanted.size) >= 0.6
+        );
+      });
+    })
+    .map(({ aliases: _aliases, ...row }) => row);
+}
+
+export const PRODUCT_IDENTITY_REVIEW_REASON =
+  "Review similar brand/item identity before creating; compare photos, model, size and color.";
