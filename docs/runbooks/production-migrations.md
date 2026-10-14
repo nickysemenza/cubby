@@ -185,9 +185,9 @@ stamp `retiredAt` by hand.
 
 The reviewed cutover has these inclusive journal boundaries:
 
-- Online expansion ends at `0067_shared_assessment_expansion`, which creates
+- Online expansion ends at `0068_shared_assessment_expansion`, which creates
   storage without copying reviews or changing legacy supersession triggers.
-- `0068_shared_assessment_reconciliation` and `0069_derived_ddl` run only inside the enforced
+- `0069_shared_assessment_reconciliation` and `0070_derived_ddl` run only inside the enforced
   quiesced cutover barrier. Final reconciliation locks and transforms legacy
   reviews and retires their storage; final derived DDL establishes current
   supersession, identity-evidence invalidation and retained order-event lifecycle.
