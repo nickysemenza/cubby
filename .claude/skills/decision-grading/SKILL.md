@@ -27,8 +27,9 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   exhaust the connection pool. Show sample sizes and the inference budget before
   replay calls. Keep private worklists and originals in session memory; files
   contain aggregates and synthetic examples only.
-- Keep originals immutable. Never use `mail.reclassify`, `accept_suggestion`
-  or `reject_suggestion` to measure; they write.
+- Keep originals immutable. Use the grading paths below for measurement;
+  `mail.reclassify` and member review/apply through `review_assessment` change
+  operational authority rather than record an independent evaluation.
 
 ## Field decisions (Jev vs Clef, prompts, options)
 
