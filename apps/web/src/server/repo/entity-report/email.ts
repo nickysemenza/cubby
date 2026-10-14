@@ -55,6 +55,10 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { readEmailAssociations } from "~/server/repo/email";
 import { getEmailAccuracyReport } from "~/server/repo/email-accuracy";
 import { readEmailPurchaseLinks } from "~/server/repo/email-purchase-links";
+import {
+  emailFeedbackObservationIdSql,
+  emailFeedbackHasClassificationSql,
+} from "~/server/repo/email-sql";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import type { ReportViewer } from "./records";
@@ -670,7 +674,12 @@ const correctRelevanceCommand = (
 
 function memberRow(
   email: EmailRow,
-  review: { label: typeof feedback.$inferSelect } | undefined,
+  review:
+    | {
+        label: typeof feedback.$inferSelect;
+        prediction: typeof emailClassificationObservation.$inferSelect;
+      }
+    | undefined,
   correct: ReportCommand,
 ) {
   if (email.classificationStage === "resolution")
@@ -684,7 +693,7 @@ function memberRow(
   if (review)
     return pipelineRow("Member review", "Ran", {
       lines: [
-        `Reviewed ${MAILBOX_CLASSIFICATION_LABEL[mailboxClassification.parse(review.label.correction.present ? review.label.correction.value : null)]}`,
+        `Reviewed ${MAILBOX_CLASSIFICATION_LABEL[mailboxClassification.parse(review.label.correction.present ? review.label.correction.value : review.prediction.classification)]}`,
         review.label.reason,
       ],
       at: review.label.createdAt,
@@ -1112,7 +1121,7 @@ export async function emailReviewReport(
         emailClassificationObservation,
         eq(
           sql`${emailClassificationObservation.id}::text`,
-          sql`${feedback.metadata}->>'predictionId'`,
+          emailFeedbackObservationIdSql(sql`${feedback}`),
         ),
       )
       .where(
@@ -1120,6 +1129,7 @@ export async function emailReviewReport(
           eq(emailClassificationObservation.emailId, id),
           eq(feedback.actorUserId, actor.userId),
           eq(feedback.authority, "member"),
+          emailFeedbackHasClassificationSql(sql`${feedback}`),
         ),
       )
       .orderBy(desc(feedback.createdAt), desc(feedback.id))
@@ -1245,7 +1255,9 @@ export async function emailReviewReport(
       rows: reviews.map(({ label, prediction }) => ({
         id: label.id,
         cells: [
-          label.correction.present ? String(label.correction.value) : "Unknown",
+          label.correction.present
+            ? String(label.correction.value)
+            : prediction.classification,
           prediction.classification,
           prediction.checksum === email.checksum ? "Current" : "Stale",
           label.reason ?? "Unknown",

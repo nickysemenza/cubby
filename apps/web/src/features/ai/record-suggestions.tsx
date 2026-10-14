@@ -1203,22 +1203,25 @@ function BoundRecordSuggestions({
           "Suggestion saved, but the updated record could not be verified.",
         );
       const savedRecord = recordSchema.parse(saved);
-      if (recordValue(entity, savedRecord, field).value === suggestion.value) {
-        const assessmentId = suggestion.assessmentId;
-        if (!assessmentId) throw new Error("Suggestion assessment is missing.");
-        const receipt = await storedSuggestionOperations.review({
-          assessmentId,
-          operationId: crypto.randomUUID(),
-          verdict: "correct",
-          correction: { present: false },
-          intent: "apply",
-          reason: null,
-          evidence: null,
-          application: { kind: "saved_field", recordId: id },
-        });
-        if (!receipt.applied)
-          throw new Error("Saved suggestion feedback was not recorded.");
-      }
+      const expectedSaved = isRemove
+        ? basisValueOf(patch[field])
+        : suggestion.value;
+      if (recordValue(entity, savedRecord, field).value !== expectedSaved)
+        throw new Error("The saved field changed from the reviewed value");
+      const assessmentId = suggestion.assessmentId;
+      if (!assessmentId) throw new Error("Suggestion assessment is missing.");
+      const receipt = await storedSuggestionOperations.review({
+        assessmentId,
+        operationId: crypto.randomUUID(),
+        verdict: "correct",
+        correction: { present: false },
+        intent: "apply",
+        reason: null,
+        evidence: null,
+        application: { kind: "saved_field", recordId: id },
+      });
+      if (!receipt.applied)
+        throw new Error("Saved suggestion feedback was not recorded.");
     },
   };
   const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);

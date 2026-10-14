@@ -52,17 +52,18 @@ export async function decideEmailPurchase(
   db: Database,
   rawInput: EmailPurchaseDecisionInput,
   actor: ActorContext,
+  options: { eventId?: string; originalId?: string } = {},
 ) {
   const input = emailPurchaseDecisionInput.parse(rawInput);
   try {
-    return await decideOnce(db, input, actor);
+    return await decideOnce(db, input, actor, options);
   } catch (error) {
     if (
       input.decision !== "linked" ||
       !isUniqueViolation(error, "AssessmentState_email_one_link_key")
     )
       throw error;
-    return decideOnce(db, input, actor);
+    return decideOnce(db, input, actor, options);
   }
 }
 
@@ -75,6 +76,7 @@ async function decideOnce(
   db: Database,
   input: EmailPurchaseDecisionInput,
   actor: ActorContext,
+  options: { eventId?: string; originalId?: string },
 ) {
   if (actor.runId)
     throw new Error(
@@ -112,6 +114,8 @@ async function decideOnce(
         "Only the Email's owner can link or dismiss it for a Purchase.",
       );
     const orderMailId = found.email.orderMailId;
+    if (options.originalId && orderMailId !== options.originalId)
+      throw new Error("Email original changed; request a fresh Assessment");
     if (!orderMailId)
       throw new Error(
         "This Email has no retained order events to link; retrieve its original first.",
@@ -178,7 +182,11 @@ async function decideOnce(
     // and an Email with several events needs mail.resolve to name them.
     const events = new Map<string, EventChoice>();
     for (const row of evidence)
-      if (row.eventId && row.kind !== "accepted")
+      if (
+        row.eventId &&
+        row.kind !== "accepted" &&
+        (!options.eventId || row.eventId === options.eventId)
+      )
         events.set(row.eventId, { proposedBy: row.proposedBy, kind: row.kind });
     if (events.size === 0 && input.decision === "linked") {
       const active = await tx
@@ -188,6 +196,9 @@ async function decideOnce(
           and(
             eq(orderMailEvent.orderMailId, orderMailId),
             isNull(orderMailEvent.supersededAt),
+            options.eventId
+              ? eq(orderMailEvent.id, options.eventId)
+              : undefined,
           ),
         )
         .limit(2);
@@ -229,14 +240,18 @@ async function decideOnce(
     ) {
       const reason = `Linked to ${input.purchaseId} by the member.`;
       await snapshotStoredEmailPrediction(tx, email);
-      await recordEmailClassificationObservation(databaseForTransaction(tx), {
-        emailId: email.id,
-        checksum: email.checksum,
-        classification: "related",
-        stage: "resolution",
-        reason,
-        classificationVersion: MAILBOX_RESEARCH_VERSION,
-      });
+      await recordEmailClassificationObservation(
+        databaseForTransaction(tx),
+        {
+          emailId: email.id,
+          checksum: email.checksum,
+          classification: "related",
+          stage: "resolution",
+          reason,
+          classificationVersion: MAILBOX_RESEARCH_VERSION,
+        },
+        actor,
+      );
       await getDb(databaseForTransaction(tx))
         .update(emailTable)
         .set({

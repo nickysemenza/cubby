@@ -90,6 +90,37 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.recommendation,
 ]);
 
+/** Internal event authority is never a public entity, shortcode, or search target. */
+const publicAssessmentTarget = z.object({
+  entity: z.enum(shortcodeEntities),
+  recordId: z.uuid(),
+});
+export const assessmentProjectionTargets = {
+  field: publicAssessmentTarget,
+  email_relevance: z.object({ entity: z.literal("email"), recordId: z.uuid() }),
+  email_link: z
+    .discriminatedUnion("entity", [
+      z.object({ entity: z.literal("email"), recordId: z.uuid() }),
+      z.object({
+        entity: z.literal("orderMailEvent"),
+        recordId: z.uuid(),
+        data: z.object({ eventId: z.uuid() }).passthrough(),
+      }),
+    ])
+    .refine(
+      (target) =>
+        target.entity !== "orderMailEvent" ||
+        target.recordId === target.data.eventId,
+      "Internal Email link target must name its retained event",
+    ),
+  image_description: z.object({
+    entity: z.literal("image"),
+    recordId: z.uuid(),
+  }),
+  product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
+  recommendation: publicAssessmentTarget,
+};
+
 export const assessmentJudgments = {
   field: z.object({
     outcome: z.json().optional(),

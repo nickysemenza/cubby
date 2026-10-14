@@ -226,11 +226,12 @@ export const INGREDIENT_MERGE_FEATURE = defineFeature({
  * `FIELD_SUGGEST_REGISTRY` (`field-suggest/registry.ts`) needs no new entry
  * here.
  */
+export const PRODUCT_IDENTITY_RULE_REVISION = "identity-v5";
 export const PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-identity",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-10-14.3",
+  promptVersion: "2026-10-14.5",
 }) satisfies AiDecisionFeature;
 
 export const FIELD_SUGGESTION_FEATURE = defineFeature({
@@ -255,7 +256,7 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   prompt: mailTriagePrompt,
   feature: "mailbox-triage",
-  promptVersion: "2026-10-14.3",
+  promptVersion: "2026-10-14.4",
   cache: false,
   tier: "decision",
   collectPayload: false,
@@ -264,7 +265,7 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
 export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
   request: mailRelevanceRequest,
   feature: "mailbox-relevance",
-  promptVersion: "2026-10-14.3",
+  promptVersion: "2026-10-14.4",
   cache: false,
   collectPayload: false,
   tier: "fast",

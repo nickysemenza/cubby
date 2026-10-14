@@ -57,6 +57,20 @@ export async function retireAssessmentTargetsTx(
   entityIds: readonly string[],
 ): Promise<void> {
   if (!entityIds.length) return;
+  if (entityKind === "email")
+    await tx
+      .update(assessmentState)
+      .set({
+        entity: "orderMailEvent",
+        recordId: sql`(${assessmentState.data}->>'eventId')::uuid`,
+      })
+      .where(
+        and(
+          eq(assessmentState.family, "email_link"),
+          eq(assessmentState.entity, "email"),
+          inArray(assessmentState.recordId, [...entityIds]),
+        ),
+      );
   await tx
     .update(assessmentState)
     .set({

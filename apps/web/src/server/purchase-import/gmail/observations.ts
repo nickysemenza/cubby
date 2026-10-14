@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailCandidatePreview,
   type EmailCandidatePreview,
@@ -109,6 +110,7 @@ function sameClassificationObservation(
 export async function recordEmailClassificationObservation(
   db: Database,
   input: z.input<typeof emailClassificationObservationInput>,
+  actor?: ActorContext,
 ) {
   const parsed = emailClassificationObservationInput.parse(input);
   return withTransaction(db, async (tx) => {
@@ -178,8 +180,14 @@ export async function recordEmailClassificationObservation(
         assessmentId: assessment.id,
         operationId: "resolution",
         verdict: "correct",
-        authority: parsed.runId ? "automatic" : "member",
-        actorUserId: null,
+        authority: actor
+          ? actor.runId
+            ? "automatic"
+            : "member"
+          : parsed.runId
+            ? "automatic"
+            : "unknown",
+        actorUserId: actor?.userId ?? null,
         intent: "apply",
         correction: { present: true, value: parsed.classification },
         reason: parsed.reason,

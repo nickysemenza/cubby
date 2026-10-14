@@ -14,7 +14,10 @@ import {
   runDecisionChoice,
   type DecisionPort,
 } from "~/server/ai/decision-model";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
+import {
+  PRODUCT_IDENTITY_FEATURE,
+  PRODUCT_IDENTITY_RULE_REVISION,
+} from "~/server/ai/features";
 import type { Database } from "~/server/db";
 import {
   product,
@@ -194,6 +197,7 @@ export async function retrieveProductIdentityCandidates(
         ne(product.id, id),
         or(
           exact,
+          sql`EXISTS (SELECT 1 FROM "EntitySource" own JOIN "EntitySource" other ON other.url=own.url WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND own.url <> '' AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id)`,
           and(
             eq(product.manufacturer, seed.manufacturer),
             eq(product.model, seed.model ?? ""),
@@ -297,43 +301,14 @@ export async function prepareProductIdentityPair(
   const aClaims = [...registeredClaims(a), ...a.claims],
     bClaims = [...registeredClaims(b), ...b.claims];
   const variantDimensions = verifiedVariantFacts.keyof().options;
-  const identifierToken = (value: string) =>
-    value.toLowerCase().replace(/[^a-z0-9]/gu, "");
-  const completeCurrentVariant = (
-    facts: typeof a,
-    claim: (typeof aClaims)[number],
-  ) =>
-    facts.verifiedModel !== null &&
-    facts.verifiedManufacturer !== null &&
-    identifierToken(claim.value) !== identifierToken(facts.verifiedModel) &&
-    claim.variant !== null &&
-    variantDimensions.every((dimension) => {
-      return (
-        facts.verifiedVariant[dimension] !== null &&
-        facts.verifiedVariant[dimension] === claim.variant?.[dimension]
-      );
-    });
-  const sameCompleteVariant = (
-    one: (typeof aClaims)[number],
-    other: (typeof bClaims)[number],
-  ) =>
-    one.productUrl !== null &&
-    one.productUrl === other.productUrl &&
-    a.verifiedManufacturer === b.verifiedManufacturer &&
-    a.verifiedModel === b.verifiedModel &&
-    completeCurrentVariant(a, one) &&
-    completeCurrentVariant(b, other) &&
-    variantDimensions.every((dimension) => {
-      return a.verifiedVariant[dimension] === b.verifiedVariant[dimension];
-    });
   const exact = aClaims.some((one) =>
     bClaims.some(
       (other) =>
         one.source === other.source &&
         one.kind === other.kind &&
         one.value === other.value &&
-        ((one.exactVariant && other.exactVariant) ||
-          sameCompleteVariant(one, other)),
+        one.exactVariant &&
+        other.exactVariant,
     ),
   );
   return preparedProductIdentityPair.parse({
@@ -345,16 +320,15 @@ export async function prepareProductIdentityPair(
     ),
     exact,
     conflict:
-      exact &&
-      ((a.verifiedModel !== null &&
+      (a.verifiedModel !== null &&
         b.verifiedModel !== null &&
         a.verifiedModel !== b.verifiedModel) ||
-        variantDimensions.some(
-          (key) =>
-            a.verifiedVariant[key] !== null &&
-            b.verifiedVariant[key] !== null &&
-            a.verifiedVariant[key] !== b.verifiedVariant[key],
-        )),
+      variantDimensions.some(
+        (key) =>
+          a.verifiedVariant[key] !== null &&
+          b.verifiedVariant[key] !== null &&
+          a.verifiedVariant[key] !== b.verifiedVariant[key],
+      ),
   });
 }
 export async function prepareProductIdentityCatalog(
@@ -422,7 +396,7 @@ export async function evaluatePreparedProductIdentityPair(
       ? {
           kind: "rule" as const,
           model: null,
-          revision: "identity-v3",
+          revision: PRODUCT_IDENTITY_RULE_REVISION,
           runId,
           evaluationId: options.evaluationId ?? null,
         }

@@ -48,6 +48,9 @@ import {
 } from "~/server/repo/email-purchase-links";
 import {
   emailAcceptedEvidenceSql,
+  emailFeedbackObservationIdSql,
+  emailFeedbackClassificationSql,
+  emailFeedbackHasClassificationSql,
   emailLinkedSql,
   emailPurchaseAssociationsSql,
   emailReviewConflictSql,
@@ -343,7 +346,9 @@ const hydrateRead = async (
             : await unwrapDb(db)
                 .select({
                   emailId: emailTable.id,
-                  classification: sql<string>`${feedback.correction}->>'value'`,
+                  classification: emailFeedbackClassificationSql(
+                    sql`${feedback}`,
+                  ),
                   reason: feedback.reason,
                 })
                 .from(emailTable)
@@ -365,11 +370,12 @@ const hydrateRead = async (
                   feedback,
                   and(
                     eq(
-                      sql`${feedback.metadata}->>'predictionId'`,
+                      emailFeedbackObservationIdSql(sql`${feedback}`),
                       sql`${emailClassificationObservation.id}::text`,
                     ),
                     eq(feedback.authority, "member"),
                     eq(feedback.actorUserId, ledgerParty.userId),
+                    emailFeedbackHasClassificationSql(sql`${feedback}`),
                   ),
                 )
                 .where(

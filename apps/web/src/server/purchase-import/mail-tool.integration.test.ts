@@ -29,6 +29,8 @@ import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
   emailClassificationObservation,
+  feedback,
+  assessment,
   importSourceClaim,
   importSourceOrder,
   mailboxCursor,
@@ -174,6 +176,20 @@ describe("public mail tool", () => {
         }),
       ]),
     );
+    const memberResolution = await getDb(ctx.db)
+      .select({ actor: feedback.actorUserId, authority: feedback.authority })
+      .from(feedback)
+      .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+      .where(
+        and(
+          eq(assessment.family, "email_relevance"),
+          eq(feedback.authority, "member"),
+        ),
+      );
+    expect(memberResolution).toContainEqual({
+      actor: ctx.actor.userId,
+      authority: "member",
+    });
     const beforeReplay = await history();
     await resolveMail(ctx.db, input, ctx.actor);
     expect(await history()).toEqual(beforeReplay);

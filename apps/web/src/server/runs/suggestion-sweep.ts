@@ -263,6 +263,7 @@ export async function publishSweepSuggestions(
             eq(suggestionTable.runId, runId),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
+            eq(suggestionTable.active, true),
           ),
         );
       if (saved.length)
@@ -312,6 +313,7 @@ export async function publishSweepSuggestions(
             eq(suggestionTable.entity, input.entity),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
+            eq(suggestionTable.active, true),
           ),
         )
         .for("update");
@@ -361,6 +363,18 @@ export async function publishSweepSuggestions(
             (row) =>
               proposalKey(jsonValue(row.suggestedValue)) ===
               proposalKey(entry.suggestedValue),
+          ) &&
+          !predecessors.some(
+            (row) =>
+              row.status === "rejected" &&
+              input.provenance &&
+              row.provenance &&
+              proposalKey(jsonValue(row.suggestedValue)) ===
+                proposalKey(entry.suggestedValue) &&
+              canonicalJson(z.json().parse(row.provenance)) ===
+                canonicalJson(
+                  z.json().parse({ ...input.provenance, model: entry.model }),
+                ),
           ),
       );
       for (const previous of predecessors) {

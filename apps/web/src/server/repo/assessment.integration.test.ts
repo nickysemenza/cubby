@@ -1,14 +1,22 @@
 import { feedbackVerdict } from "@cubby/schemas/assessment";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import {
+  assessment,
+  assessmentState,
+  feedback,
+  auditLog,
+} from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { publishAssessment, recordFeedback } from "~/server/repo/assessment";
+import { readConfirmedDescription } from "~/server/repo/assessment-image";
+import { assessRecommendation } from "~/server/repo/assessment-recommendation";
 import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   kernelCtx,
   productFixture,
@@ -130,6 +138,226 @@ describe("shared Assessment history", () => {
         application: { kind: "saved_field", recordId: changed.id },
       }),
     ).rejects.toThrow(/saved field/);
+  });
+
+  // Command replay must outlive projection resolution; another command cannot inherit success.
+  it.each([false, true])(
+    "replays the exact field application once, correction=%s",
+    async (corrected) => {
+      const product = await productFixture(ctx, "Synthetic command replay", {
+        notes: "Original note",
+      });
+      const target = await recordId(ctx.db, product.id, "product");
+      const prediction = await publishAssessment(
+        ctx.db,
+        {
+          publicationKey: "synthetic:field-replay",
+          family: "field",
+          subject: {
+            kind: "field",
+            entity: "product",
+            recordId: target,
+            field: "notes",
+          },
+          judgment: { value: "Proposed note" },
+          fingerprint: null,
+          producer: null,
+          evidence: null,
+        },
+        {
+          suggestedValue: "Proposed note",
+          currentValue: "Original note",
+          confidence: 1,
+        },
+      );
+      const command = {
+        assessmentId: prediction.id,
+        operationId: "synthetic:apply-once",
+        verdict: corrected ? ("wrong" as const) : ("correct" as const),
+        intent: "apply" as const,
+        correction: corrected
+          ? { present: true as const, value: "Corrected note" }
+          : { present: false as const },
+      };
+      const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+      const history = await getDb(ctx.db).select().from(feedback);
+      const audit = await getDb(ctx.db).select().from(auditLog);
+      expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+        first,
+      );
+      expect(await getDb(ctx.db).select().from(feedback)).toEqual(history);
+      expect(await getDb(ctx.db).select().from(auditLog)).toEqual(audit);
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          ...command,
+          correction: { present: true, value: "Conflicting reuse" },
+        }),
+      ).rejects.toThrow(/Immutable Feedback retry/);
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          ...command,
+          operationId: "synthetic:another-command",
+          correction: { present: true, value: "Another correction" },
+        }),
+      ).rejects.toThrow(/resolved/);
+    },
+  );
+  it("replays an image confirmation without allowing another operation to reuse its success", async () => {
+    const picture = await insertWithShortcode(ctx.db, "image", {
+      key: "synthetic/replay.jpg",
+      filename: "replay.jpg",
+      size: 1,
+      contentType: "image/jpeg",
+      sha256: "a".repeat(64),
+    });
+    const prediction = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic:image-replay",
+      family: "image_description",
+      subject: {
+        kind: "image_description",
+        entity: "image",
+        recordId: picture.id,
+        contentHash: picture.sha256,
+      },
+      judgment: "Original image text",
+      fingerprint: picture.sha256,
+      producer: null,
+      evidence: null,
+    });
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
+      .where(eq(assessmentState.id, prediction.id));
+    const command = {
+      assessmentId: prediction.id,
+      operationId: "synthetic:image-command",
+      verdict: "wrong" as const,
+      intent: "apply" as const,
+      correction: { present: true as const, value: "Confirmed image text" },
+    };
+    const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+      first,
+    );
+    expect(
+      (
+        await readConfirmedDescription(
+          ctx.db,
+          parseEntityId("image", picture.id),
+        )
+      )?.confirmedAt.getTime(),
+    ).toBeGreaterThan(new Date("2000-01-01T00:00:00Z").getTime());
+    const confirmedAt = (
+      await readConfirmedDescription(ctx.db, parseEntityId("image", picture.id))
+    )?.confirmedAt;
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        ...command,
+        operationId: "synthetic:new-image-command",
+        correction: { present: true, value: "Later text" },
+      }),
+    ).rejects.toThrow(/resolved/);
+    // The test transaction freezes now(); retain an explicitly later failed grade.
+    await getDb(ctx.db)
+      .insert(feedback)
+      .values({
+        assessmentId: prediction.id,
+        operationId: "synthetic:later-failed-grade",
+        verdict: "wrong",
+        intent: "apply",
+        authority: "member",
+        correction: { present: true, value: "Unapplied text" },
+        createdAt: new Date("2030-01-01T00:00:00Z"),
+      });
+    expect(
+      (
+        await readConfirmedDescription(
+          ctx.db,
+          parseEntityId("image", picture.id),
+        )
+      )?.confirmedAt,
+    ).toEqual(confirmedAt);
+  });
+
+  it("retires a nonsearchable category projection while retaining immutable history", async () => {
+    const category = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Synthetic retired category",
+    });
+    const prediction = await publishAssessment(ctx.db, {
+      ...publication(),
+      publicationKey: "synthetic:category-lifecycle",
+      subject: {
+        ...publication().subject,
+        entity: "productCategory",
+        recordId: category.id,
+      },
+    });
+    await executeEntity(kernelCtx(ctx), {
+      action: "delete",
+      entity: "productCategory",
+      ids: [parseShortcodeFor("productCategory", category.shortcode)],
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, prediction.id))
+      )[0],
+    ).toMatchObject({ active: false, status: "superseded" });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessment)
+          .where(eq(assessment.id, prediction.id))
+      )[0]?.subject,
+    ).toEqual(prediction.subject);
+  });
+  it("refuses invalid draft and saved intents before recording Feedback", async () => {
+    const prediction = await publishAssessment(ctx.db, publication());
+    for (const command of [
+      { intent: "draft" as const },
+      {
+        intent: "apply" as const,
+        application: { kind: "saved_field" as const, recordId: "PRD-4K7M" },
+      },
+    ])
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: prediction.id,
+          operationId: "synthetic:invalid",
+          verdict: "wrong",
+          correction: { present: true, value: "Synthetic invalid correction" },
+          ...command,
+        }),
+      ).rejects.toThrow(/field Assessment/);
+    expect(await getDb(ctx.db).select().from(feedback)).toEqual([]);
+  });
+
+  it("reuses a recommendation publication on unchanged repeated reads", async () => {
+    const product = await productFixture(
+      ctx,
+      "Synthetic repeat recommendation",
+    );
+    const first = await assessRecommendation(
+      ctx.db,
+      product.id,
+      "synthetic.related",
+      ["same-candidate"],
+      { evidence: "same" },
+    );
+    expect(
+      await assessRecommendation(
+        ctx.db,
+        product.id,
+        "synthetic.related",
+        ["same-candidate"],
+        { evidence: "same" },
+      ),
+    ).toEqual(first);
+    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(assessmentState)).toHaveLength(1);
   });
 
   it("retains corrected null and separates wrong from presentation suppression", async () => {

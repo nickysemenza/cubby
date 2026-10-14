@@ -2,6 +2,8 @@ import {
   assessmentReviewInput,
   assessmentReviewBatchInput,
   assessmentSubjects,
+  assessmentJudgments,
+  assessmentProjectionTargets,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -13,6 +15,7 @@ import type { Database } from "~/server/db";
 import {
   assessment,
   assessmentState,
+  feedback,
   email,
   purchase,
   image,
@@ -36,6 +39,7 @@ import { runMutationSideEffects } from "~/server/services/mutation-side-effects"
 type Review = z.infer<typeof assessmentReviewInput>;
 type Handler = {
   subject: z.ZodType;
+  target: z.ZodType;
   actions: readonly Review["verdict"][];
   transactionBound: boolean;
   apply: (
@@ -49,6 +53,7 @@ type Handler = {
 export const assessmentFamilies = {
   field: {
     subject: assessmentSubjects.field,
+    target: assessmentProjectionTargets.field,
     transactionBound: true,
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
@@ -67,6 +72,7 @@ export const assessmentFamilies = {
   },
   email_relevance: {
     subject: assessmentSubjects.email_relevance,
+    target: assessmentProjectionTargets.email_relevance,
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain"],
     apply: async (db, context, state, input) => {
@@ -108,6 +114,7 @@ export const assessmentFamilies = {
   },
   email_link: {
     subject: assessmentSubjects.email_link,
+    target: assessmentProjectionTargets.email_link,
     transactionBound: false,
     actions: ["correct", "wrong", "dismissed"],
     apply: async (db, context, state, input) => {
@@ -124,10 +131,26 @@ export const assessmentFamilies = {
         .from(email)
         .where(eq(email.id, parseEntityId("email", subject.recordId)))
         .limit(1);
+      const currentTarget = z
+        .object({ purchaseId: z.uuid() })
+        .parse(state.data);
+      const decision = assessmentJudgments.email_link.parse(
+        input.correction.present
+          ? input.correction.value
+          : prediction?.judgment,
+      ).decision;
       const [target] = await getDb(db)
         .select({ code: purchase.shortcode })
         .from(purchase)
-        .where(eq(purchase.id, parseEntityId("purchase", subject.purchaseId)))
+        .where(
+          and(
+            eq(
+              purchase.id,
+              parseEntityId("purchase", currentTarget.purchaseId),
+            ),
+            notDeleted(purchase),
+          ),
+        )
         .limit(1);
       if (!mail || !target)
         throw new Error("Email link target no longer exists");
@@ -139,14 +162,16 @@ export const assessmentFamilies = {
           id: parseShortcodeFor("email", mail.code),
           purchaseId: parseShortcodeFor("purchase", target.code),
           expectedChecksum: subject.checksum,
-          decision: input.verdict === "correct" ? "linked" : "dismissed",
+          decision,
         },
         context.actorContext,
+        { eventId: subject.eventId, originalId: subject.originalId },
       );
     },
   },
   image_description: {
     subject: assessmentSubjects.image_description,
+    target: assessmentProjectionTargets.image_description,
     transactionBound: true,
     actions: ["correct", "wrong", "uncertain"],
     apply: async (db, _context, state, input) => {
@@ -194,6 +219,7 @@ export const assessmentFamilies = {
   },
   product_pair: {
     subject: assessmentSubjects.product_pair,
+    target: assessmentProjectionTargets.product_pair,
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
@@ -221,6 +247,7 @@ export const assessmentFamilies = {
   },
   recommendation: {
     subject: assessmentSubjects.recommendation,
+    target: assessmentProjectionTargets.recommendation,
     transactionBound: true,
     actions: ["wrong", "uncertain", "dismissed"],
     apply: async () => {
@@ -312,6 +339,30 @@ export async function reviewAssessment(
     throw new Error(
       "Applying Feedback requires acceptance or an explicit correction",
     );
+  if (input.intent === "draft" && prediction.family !== "field")
+    throw new Error("Only field Assessments support draft acceptance");
+  if (
+    input.application?.kind === "saved_field" &&
+    prediction.family !== "field"
+  )
+    throw new Error("Saved-field receipts require a field Assessment");
+  if (
+    input.application?.kind === "product_merge" &&
+    prediction.family !== "product_pair"
+  )
+    throw new Error(
+      "Product merge application requires a Product pair Assessment",
+    );
+  if (input.correction.present) {
+    if (prediction.family === "email_link")
+      assessmentJudgments.email_link.parse(input.correction.value);
+    if (prediction.family === "email_relevance")
+      z.enum(["related", "unrelated", "uncertain"]).parse(
+        input.correction.value,
+      );
+    if (prediction.family === "image_description")
+      z.string().parse(input.correction.value);
+  }
   const event = await recordFeedback(db, {
     ...input,
     assessmentId: prediction.id,
@@ -333,42 +384,97 @@ export async function reviewAssessment(
       applied: false,
     };
   }
-  if (input.intent === "apply" && input.application?.kind === "saved_field") {
-    if (prediction.family !== "field")
-      throw new Error("Saved-field receipts require a field Assessment");
-    await acknowledgeSavedField(db, context, prediction, {
-      recordId: input.application.recordId,
-      operationId: input.operationId,
-      correction: input.correction,
-    });
-    return {
+  if (input.intent === "apply") {
+    const outcome = {
       assessmentId: prediction.id,
       feedbackId: event.id,
       status: "applied",
       applied: true,
     };
-  }
-  if (input.intent === "apply" && !family.transactionBound) {
-    const [state] = await getDb(db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, prediction.id))
-      .limit(1);
-    if (
-      !state ||
-      (prediction.family !== "product_pair" &&
-        (!state.active || state.status === "superseded"))
-    )
-      throw new Error(
-        "Assessment evidence is stale; request a fresh assessment",
+    return withTransactionDatabase(db, async (transactionDb) => {
+      // Serialize generic commands without taking projection locks ahead of the
+      // domain's parent locks. Receipt and mutation commit in the same boundary.
+      await getDb(transactionDb).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
       );
-    await family.apply(db, context, state, input);
-    return {
-      assessmentId: prediction.id,
-      feedbackId: event.id,
-      status: "applied",
-      applied: true,
-    };
+      const [receipt] = await getDb(transactionDb)
+        .select()
+        .from(feedback)
+        .where(
+          and(
+            eq(feedback.assessmentId, prediction.id),
+            eq(
+              feedback.operationId,
+              `command-application:${input.operationId}`,
+            ),
+          ),
+        )
+        .limit(1);
+      if (receipt) return outcome;
+      if (input.application?.kind === "saved_field") {
+        await acknowledgeSavedField(transactionDb, context, prediction, {
+          recordId: input.application.recordId,
+          operationId: input.operationId,
+          correction: input.correction,
+        });
+      } else {
+        const query = getDb(transactionDb)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, prediction.id))
+          .limit(1);
+        const [state] = family.transactionBound
+          ? await query.for("update")
+          : await query;
+        if (!state?.active || state.status === "superseded")
+          throw new Error(
+            "Assessment evidence is stale; request a fresh assessment before applying",
+          );
+        if (
+          state.status === "applied" ||
+          (prediction.family === "field" && state.status !== "pending")
+        )
+          throw new Error(
+            "Assessment already resolved by another command; request a fresh assessment",
+          );
+        if (
+          input.expectedFingerprint !== undefined &&
+          input.expectedFingerprint !== state.fingerprint
+        )
+          throw new Error("Assessment evidence fingerprint changed");
+        family.target.parse(state);
+        await family.apply(
+          transactionDb,
+          { ...context, db: transactionDb },
+          state,
+          input,
+        );
+        if (!family.transactionBound)
+          await getDb(transactionDb)
+            .update(assessmentState)
+            .set({ status: "applied" })
+            .where(
+              and(
+                eq(assessmentState.id, state.id),
+                eq(assessmentState.active, true),
+              ),
+            );
+      }
+      await recordFeedback(transactionDb, {
+        assessmentId: prediction.id,
+        operationId: `command-application:${input.operationId}`,
+        verdict: "ungraded",
+        intent: "apply",
+        authority: "member",
+        actorUserId: context.actorContext.userId,
+        receipt: outcome,
+        metadata: {
+          kind: "assessment_application",
+          commandFeedbackId: event.id,
+        },
+      });
+      return outcome;
+    });
   }
   const status = await withTransactionDatabase(db, async (transactionDb) => {
     const [state] = await getDb(transactionDb)
@@ -377,25 +483,6 @@ export async function reviewAssessment(
       .where(eq(assessmentState.id, prediction.id))
       .for("update")
       .limit(1);
-    if (input.intent === "apply") {
-      if (!state?.active || state.status === "superseded")
-        throw new Error(
-          "Assessment evidence is stale; request a fresh assessment before applying",
-        );
-      if (
-        input.expectedFingerprint !== undefined &&
-        input.expectedFingerprint !== state.fingerprint
-      )
-        throw new Error("Assessment evidence fingerprint changed");
-      if (state.status === "applied") return state.status;
-      await family.apply(
-        transactionDb,
-        { ...context, db: transactionDb },
-        state,
-        input,
-      );
-      return "applied";
-    }
     if (state?.active && input.suppression) {
       if (input.verdict !== "dismissed")
         throw new Error(
@@ -407,7 +494,8 @@ export async function reviewAssessment(
         .where(eq(assessmentState.id, state.id));
       return "resolved";
     } else if (
-      state?.active &&
+      state &&
+      (state.active || prediction.family === "field") &&
       !["applied", "superseded"].includes(state.status) &&
       input.verdict !== "uncertain"
     ) {
@@ -429,7 +517,7 @@ export async function reviewAssessment(
     assessmentId: prediction.id,
     feedbackId: event.id,
     status,
-    applied: input.intent === "apply",
+    applied: false,
   };
 }
 export async function reviewAssessmentBatch(

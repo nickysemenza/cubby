@@ -98,6 +98,23 @@ it("reconciles every legacy review family after an intervening writer without lo
         `INSERT INTO "OrderMailCandidateDecision" ("eventId","purchaseId",decision,"evidenceChecksum","decidedByUserId","proposedBy") VALUES ($1,$2,'linked','synthetic-checksum','synthetic-review-member','member')`,
         [event, purchase],
       );
+      // Legacy event authority is valid even when no Email was materialized.
+      const orphanOriginal = (
+        await client.query(
+          `INSERT INTO "OrderMail" ("ledgerPartyId","rawChecksum") VALUES ($1,'synthetic-orphan-checksum') RETURNING id`,
+          [party],
+        )
+      ).rows[0].id;
+      const orphanEvent = (
+        await client.query(
+          `INSERT INTO "OrderMailEvent" ("orderMailId",event,"sourceKey") VALUES ($1,'ordered','synthetic-orphan-event') RETURNING id`,
+          [orphanOriginal],
+        )
+      ).rows[0].id;
+      await client.query(
+        `INSERT INTO "OrderMailCandidateDecision" ("eventId","purchaseId",decision,"evidenceChecksum","decidedByUserId","proposedBy") VALUES ($1,$2,'dismissed','synthetic-orphan-checksum','synthetic-review-member','member')`,
+        [orphanEvent, purchase],
+      );
       const observation = (
         await client.query(
           `INSERT INTO "EmailClassificationObservation" ("emailId",checksum,classification,stage) VALUES ($1,'synthetic-checksum','unrelated',NULL) RETURNING id`,
@@ -238,7 +255,9 @@ it("reconciles every legacy review family after an intervening writer without lo
               [table],
             )
           ).rows[0].count,
-        ).toBe(table === "Suggestion" ? 2 : 1);
+        ).toBe(
+          ["Suggestion", "OrderMailCandidateDecision"].includes(table) ? 2 : 1,
+        );
       expect(
         (
           await client.query(
@@ -247,6 +266,118 @@ it("reconciles every legacy review family after an intervening writer without lo
           )
         ).rows[0],
       ).toEqual(rawSupersession);
+      const orphanState = (
+        await client.query(
+          `SELECT s.entity,s."recordId",a.subject,a.producer FROM "AssessmentState" s JOIN "Assessment" a USING(id) WHERE a.family='email_link' AND a.subject->>'eventId'=$1`,
+          [orphanEvent],
+        )
+      ).rows[0];
+      expect(orphanState).toEqual(
+        expect.objectContaining({
+          entity: "orderMailEvent",
+          recordId: orphanEvent,
+          producer: null,
+          subject: expect.objectContaining({
+            recordId: null,
+            originalId: orphanOriginal,
+            eventId: orphanEvent,
+          }),
+        }),
+      );
+      expect(
+        (
+          await client.query(
+            `SELECT decision FROM "AssessmentEmailLink" WHERE "eventId"=$1`,
+            [orphanEvent],
+          )
+        ).rows,
+      ).toEqual([{ decision: "dismissed" }]);
+      // Exercise the actual active indexes using independent immutable histories.
+      const duplicate = (
+        await client.query(
+          `INSERT INTO "Assessment" ("publicationKey",family,subject,judgment) SELECT 'synthetic:duplicate-event','email_link',subject,judgment FROM "Assessment" WHERE subject->>'eventId'=$1 RETURNING id`,
+          [orphanEvent],
+        )
+      ).rows[0].id;
+      await expect(
+        client.query(
+          `INSERT INTO "AssessmentState" (id,family,entity,"recordId",data) SELECT $1,'email_link','orderMailEvent',$2,data FROM "AssessmentState" WHERE data->>'eventId'=$3`,
+          [duplicate, orphanEvent, orphanEvent],
+        ),
+      ).rejects.toMatchObject({
+        code: "23505",
+        constraint: "AssessmentState_email_event_purchase_key",
+      });
+      const extraPurchase = (
+        await client.query(
+          `INSERT INTO "Purchase" (shortcode,"vendorId",date) VALUES ('${SHORTCODE_PREFIX.purchase}-4K7N',$1,'2026-01-01') RETURNING id`,
+          [vendor],
+        )
+      ).rows[0].id;
+      await expect(
+        client.query(
+          `INSERT INTO "AssessmentState" (id,family,entity,"recordId",data) SELECT $1,'email_link','orderMailEvent',$2,jsonb_set(data,'{purchaseId}',to_jsonb($3::text)) FROM "AssessmentState" WHERE data->>'eventId'=$4`,
+          [duplicate, event, extraPurchase, event],
+        ),
+      ).rejects.toMatchObject({
+        code: "23505",
+        constraint: "AssessmentState_email_one_link_key",
+      });
+      // Actual Email deletion preserves its link and retires relevance only.
+      await client.query(`UPDATE "Email" SET "deletedAt"=now() WHERE id=$1`, [
+        email,
+      ]);
+      expect(
+        (
+          await client.query(
+            `SELECT entity,"recordId",active FROM "AssessmentState" WHERE family='email_link' AND data->>'eventId'=$1`,
+            [event],
+          )
+        ).rows[0],
+      ).toEqual({ entity: "orderMailEvent", recordId: event, active: true });
+      expect(
+        (
+          await client.query(
+            `SELECT decision FROM "AssessmentEmailLink" WHERE "eventId"=$1`,
+            [event],
+          )
+        ).rows,
+      ).toEqual([{ decision: "linked" }]);
+      expect(
+        (
+          await client.query(
+            `SELECT active FROM "AssessmentState" WHERE family='email_relevance'`,
+          )
+        ).rows,
+      ).toEqual([{ active: false }]);
+      await client.query(
+        `UPDATE "OrderMailEvent" SET "supersededAt"=now() WHERE id=$1`,
+        [orphanEvent],
+      );
+      expect(
+        (
+          await client.query(
+            `SELECT * FROM "AssessmentEmailLink" WHERE "eventId"=$1`,
+            [orphanEvent],
+          )
+        ).rows,
+      ).toEqual([]);
+      await client.query(`DELETE FROM "OrderMailEvent" WHERE id=$1`, [event]);
+      expect(
+        (
+          await client.query(
+            `SELECT * FROM "AssessmentEmailLink" WHERE "eventId"=$1`,
+            [event],
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (
+          await client.query(
+            `SELECT count(*)::int AS count FROM "Assessment" WHERE family='email_link' AND origin IS NOT NULL`,
+          )
+        ).rows[0].count,
+      ).toBe(2);
       const outcome = (
         await client.query(
           `SELECT verdict,correction FROM "Feedback" WHERE "assessmentId"=$1`,

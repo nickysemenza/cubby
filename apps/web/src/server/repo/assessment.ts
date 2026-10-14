@@ -1,6 +1,7 @@
 import {
   assessmentPublication,
   assessmentJudgments,
+  assessmentProjectionTargets,
   feedbackEvent,
 } from "@cubby/schemas/assessment";
 import { and, eq, sql } from "drizzle-orm";
@@ -47,18 +48,26 @@ export async function publishAssessment(
       throw new Error(
         "Assessment publication retry changed immutable evidence",
       );
-    if (inserted && input.subject.recordId !== null)
+    const target =
+      input.subject.kind === "email_link" && input.subject.recordId === null
+        ? { entity: "orderMailEvent", recordId: input.subject.eventId }
+        : { entity: input.subject.entity, recordId: input.subject.recordId };
+    if (inserted && target.recordId !== null) {
+      const currentTarget = assessmentProjectionTargets[input.family].parse({
+        ...target,
+        ...projection,
+      });
       await client.insert(assessmentState).values({
         id: row.id,
         family: input.family,
-        entity: input.subject.entity,
-        recordId: input.subject.recordId,
+        ...currentTarget,
         field: input.subject.kind === "field" ? input.subject.field : "",
         fingerprint: input.fingerprint,
         ...projection,
         suggestedValue:
           suggestedValue === null ? sql`'null'::jsonb` : suggestedValue,
       });
+    }
     return row;
   });
 }

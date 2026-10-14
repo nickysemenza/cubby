@@ -170,8 +170,8 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
 
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
-    await retireAssessmentTargetsTx(tx, entity, [...ids]);
   }
+  await retireAssessmentTargetsTx(tx, entity, [...ids]);
 
   // An exception is a decision about one entity's evidence (ADR 0006); it
   // goes with the entity rather than carrying onto a merge survivor.

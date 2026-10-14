@@ -3,6 +3,10 @@ import type {
   enrichmentProposalPrecomputeInput,
 } from "@cubby/schemas/ai";
 import {
+  fieldSuggestionSchema,
+  fieldSuggestionOutcomeSchema,
+} from "@cubby/schemas/ai";
+import {
   parseEntityId,
   type IngredientId,
   type RunId,
@@ -10,6 +14,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
@@ -18,6 +23,7 @@ import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
+import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   listAiUsageFilterOptions,
@@ -25,6 +31,7 @@ import {
   summarizeAiUsage,
 } from "~/server/repo/ai-usage";
 import { publishAssessment } from "~/server/repo/assessment";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import {
   resolveAllOrThrow,
@@ -219,18 +226,17 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
   }),
 );
 /** AI reads are authoritative: suggestions must see the row just written. */
-const suggestionsForContext = async (
-  context: AuthenticatedStartOperationContext,
+export const inferFieldAssessments = async (
+  context: Pick<AuthenticatedStartOperationContext, "db" | "actorContext">,
   input: FieldSuggestionsInput,
+  ports?: Parameters<typeof suggestFields>[3],
 ) => {
   const runId = await actorAiRun(context, { runKey: input.runKey });
   const captured = await withAiInputs(false, () =>
-    suggestFields(
-      context.db,
-      runId,
-      input,
-      input.decisionModel ? { decisionModel: input.decisionModel } : undefined,
-    ),
+    suggestFields(context.db, runId, input, {
+      ...ports,
+      ...(input.decisionModel ? { decisionModel: input.decisionModel } : {}),
+    }),
   );
   const output = captured.result;
   const recordId = input.entityId
@@ -246,54 +252,110 @@ const suggestionsForContext = async (
     const fingerprint = await sha256Hex(
       JSON.stringify({ basis: input.basis, inputs, field }),
     );
-    const prediction = await publishAssessment(
+    const publicationKey = `field-inference:${input.entity}:${recordId}:${field}:${fingerprint}`;
+    const prediction = await withTransactionDatabase(
       context.db,
-      {
-        publicationKey: `field-inference:${runId}:${recordId}:${field}:${fingerprint}:${await sha256Hex(JSON.stringify({ suggestion, outcome }))}`,
-        family: "field",
-        subject: {
-          kind: "field",
-          entity: input.entity,
-          recordId,
-          field,
-          draft: !input.entityId,
-        },
-        judgment: z
-          .json()
-          .parse({
-            value: suggestion?.value ?? null,
-            ...(suggestion
+      async (transactionDb) => {
+        await getDb(transactionDb).execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey},0))`,
+        );
+        const [existing] = await getDb(transactionDb)
+          .select()
+          .from(assessment)
+          .where(eq(assessment.publicationKey, publicationKey))
+          .limit(1);
+        if (existing) return existing;
+        return publishAssessment(
+          transactionDb,
+          {
+            publicationKey,
+            family: "field",
+            subject: {
+              kind: "field",
+              entity: input.entity,
+              recordId,
+              field,
+              draft: !input.entityId,
+            },
+            judgment: z.json().parse({
+              value: suggestion?.value ?? null,
+              ...(suggestion
+                ? {
+                    operation: suggestion.operation,
+                    removals: suggestion.removals,
+                  }
+                : {}),
+              outcome,
+            }),
+            fingerprint,
+            producer: producer
               ? {
-                  operation: suggestion.operation,
-                  removals: suggestion.removals,
+                  kind: "model",
+                  model: producer.model,
+                  revision: producer.promptVersion,
+                  runId,
+                  evaluationId: null,
                 }
-              : {}),
-            outcome,
-          }),
-        fingerprint,
-        producer: producer
-          ? {
-              kind: "model",
-              model: producer.model,
-              revision: producer.promptVersion,
-              runId,
-              evaluationId: null,
-            }
-          : null,
-        evidence: z.json().parse({ basis: input.basis, inputs }),
-      },
-      {
-        runId,
-        model: producer?.model ?? "unknown",
-        suggestedValue: suggestion?.value ?? null,
-        confidence: suggestion?.probability ?? outcome.probability ?? 0,
-        financeReviewFingerprint:
-          suggestion?.financeReview?.fingerprint ?? null,
-        status: suggestion ? "pending" : "resolved",
+              : null,
+            evidence: z
+              .json()
+              .parse({
+                basis: input.basis,
+                inputs,
+                proposal: suggestion ?? null,
+              }),
+          },
+          {
+            runId,
+            model: producer?.model ?? "unknown",
+            suggestedValue: suggestion?.value ?? null,
+            confidence: suggestion?.probability ?? outcome.probability ?? 0,
+            financeReviewFingerprint:
+              suggestion?.financeReview?.fingerprint ?? null,
+            status: suggestion ? "pending" : "resolved",
+            active: false,
+          },
+        );
       },
     );
-    outcome.assessmentId = prediction.id;
-    if (suggestion) suggestion.assessmentId = prediction.id;
+    const [state] = await getDb(context.db)
+      .select({ status: assessmentState.status })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, prediction.id))
+      .limit(1);
+    const draftMiss =
+      recordId === null
+        ? await getDb(context.db)
+            .select({ id: feedback.id })
+            .from(feedback)
+            .where(
+              and(
+                eq(feedback.assessmentId, prediction.id),
+                eq(feedback.authority, "member"),
+                eq(feedback.verdict, "wrong"),
+              ),
+            )
+            .limit(1)
+        : [];
+    if (state?.status === "rejected" || draftMiss.length) {
+      output.suggestions[field] = null;
+      if (output.outcomes) delete output.outcomes[field];
+      continue;
+    }
+    const original = z
+      .object({ proposal: fieldSuggestionSchema.nullable() })
+      .parse(prediction.evidence);
+    const originalJudgment = z
+      .object({ outcome: fieldSuggestionOutcomeSchema })
+      .parse(prediction.judgment);
+    output.suggestions[field] = original.proposal
+      ? { ...original.proposal, assessmentId: prediction.id }
+      : null;
+    if (output.outcomes)
+      output.outcomes[field] =
+        originalJudgment.outcome.kind === "evaluated"
+          ? { ...originalJudgment.outcome, assessmentId: prediction.id }
+          : originalJudgment.outcome;
   }
   return output;
 };
@@ -402,9 +464,9 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   latestSuggestionSweepStatus: (context) =>
     latestSuggestionSweepStatus(context.db),
   // Both presentations share the page run grouping and authoritative inference.
-  suggestFields: suggestionsForContext,
+  suggestFields: (context, input) => inferFieldAssessments(context, input),
   suggestFieldsReview: async (context, input) => {
-    const { suggestions, ...contextual } = await suggestionsForContext(
+    const { suggestions, ...contextual } = await inferFieldAssessments(
       context,
       input,
     );

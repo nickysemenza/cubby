@@ -4,7 +4,10 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { productIdentitySnapshot } from "~/server/ai/product-identity";
+import {
+  productIdentitySnapshot,
+  prepareProductIdentityPair,
+} from "~/server/ai/product-identity";
 import {
   assessment,
   assessmentState,
@@ -21,6 +24,7 @@ import { withAuditReceipts } from "~/server/repo/audit-receipts";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { canonicalJson } from "~/server/repo/entity-source";
 import { loadProductImageOrderFacts } from "~/server/repo/product-match";
+import { currentProductPairPolicy } from "~/server/repo/product-match-candidate";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { matchSurvivorImageOrder } from "~/server/services/product-match-ranking";
 
@@ -75,6 +79,23 @@ export async function mergeReviewedProductPair(
       .limit(1);
     if ((await previousReceipt(transactionDb)).length)
       return { ok: true as const };
+    if (!currentProductPairPolicy(prediction.producer))
+      throw new Error(
+        "Product identity policy is obsolete; request a fresh assessment",
+      );
+    const currentPair = await prepareProductIdentityPair(transactionDb, [
+      keepId,
+      mergeId,
+    ]);
+    if (
+      !currentPair ||
+      (prediction.producer?.kind === "rule" && !currentPair.exact)
+    )
+      throw new Error(
+        "Current evidence does not support Product identity admission",
+      );
+    if (currentPair.conflict)
+      throw new Error("Confirmed variant conflict prevents Product merging");
     const pair = z
       .object({ otherId: z.uuid(), conflict: z.boolean().optional() })
       .parse(state?.data);

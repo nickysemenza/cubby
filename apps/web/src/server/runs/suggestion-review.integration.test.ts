@@ -13,6 +13,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
+import { inferFieldAssessments } from "~/server/operations/ai.server";
 import { publishAssessment } from "~/server/repo/assessment";
 import {
   reviewAssessment,
@@ -66,6 +67,163 @@ describe("Suggestion review", () => {
         { context: kernelCtx(ctx), ...categoryPorts() },
       )
     ).id;
+
+  it("keeps live inference out of the queue and allows a concurrent sweep publication", async () => {
+    const record = await productFixture(ctx, "Synthetic live inference", {
+      categoryId: taxonomyId("tools"),
+    });
+    const inference = await inferFieldAssessments(
+      kernelCtx(ctx),
+      {
+        entity: "product",
+        entityId: record.id,
+        basisMode: "provided",
+        basis: {
+          name: "Synthetic live inference",
+          categoryId: taxonomyShortcode("tools"),
+        },
+        targets: ["categoryId"],
+      },
+      categoryPorts(0.8).suggestPorts,
+    );
+    expect(inference.suggestions.categoryId?.assessmentId).toBeDefined();
+    expect(
+      await listSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [record.id],
+        minConfidence: 0,
+      }),
+    ).toEqual([]);
+    const runId = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [record.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.8) },
+    );
+    expect(
+      await listSuggestions(ctx.db, {
+        runId: await runCode(ctx.db, runId.id),
+        minConfidence: 0,
+      }),
+    ).toHaveLength(1);
+  });
+  it("does not repropose reviewed wrong live inference across requesting Runs", async () => {
+    const record = await productFixture(ctx, "Synthetic live wrong", {
+      categoryId: taxonomyId("tools"),
+    });
+    const input = {
+      entity: "product" as const,
+      entityId: record.id,
+      basisMode: "provided" as const,
+      basis: {
+        name: "Synthetic live wrong",
+        categoryId: taxonomyShortcode("tools"),
+      },
+      targets: ["categoryId"],
+    };
+    const first = await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...input, runKey: crypto.randomUUID() },
+      { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
+    );
+    const id = first.suggestions.categoryId?.assessmentId;
+    if (!id) throw new Error("Synthetic live assessment missing");
+    const repeat = await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...input, runKey: crypto.randomUUID() },
+      { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
+    );
+    expect(repeat.suggestions.categoryId?.assessmentId).toBe(id);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: id,
+      operationId: "synthetic:live-wrong",
+      verdict: "wrong",
+      intent: "history",
+    });
+    const replay = await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...input, runKey: crypto.randomUUID() },
+      { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
+    );
+    expect(replay.suggestions.categoryId).toBeNull();
+    await executeEntity(kernelCtx(ctx), {
+      action: "update",
+      entity: "product",
+      id: record.id,
+      data: { name: "Synthetic revised live evidence" },
+    });
+    const revised = await inferFieldAssessments(
+      kernelCtx(ctx),
+      {
+        ...input,
+        runKey: crypto.randomUUID(),
+        basis: { ...input.basis, name: "Synthetic revised live evidence" },
+      },
+      { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
+    );
+    expect(revised.suggestions.categoryId?.assessmentId).toBeDefined();
+    expect(revised.suggestions.categoryId?.assessmentId).not.toBe(id);
+  });
+  it("does not repropose a wrong field for unchanged evidence and policy, but permits a genuine evidence revision", async () => {
+    const record = await productFixture(ctx, "Synthetic unchanged field", {
+      categoryId: taxonomyId("tools"),
+    });
+    const start = () =>
+      startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [record.id] },
+        },
+        { context: kernelCtx(ctx), ...categoryPorts(0.8) },
+      );
+    const first = await start();
+    const [row] = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, first.id),
+      minConfidence: 0,
+    });
+    if (!row) throw new Error("Synthetic field assessment missing");
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: row.id,
+      operationId: "synthetic:wrong-field",
+      verdict: "wrong",
+      intent: "history",
+    });
+    await start();
+    expect(
+      await listSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [record.id],
+        minConfidence: 0,
+      }),
+    ).toEqual([]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, row.id))
+      )[0]?.suppression,
+    ).toBeNull();
+    await executeEntity(kernelCtx(ctx), {
+      action: "update",
+      entity: "product",
+      id: record.id,
+      data: { name: "Synthetic revised field evidence" },
+    });
+    await start();
+    expect(
+      await listSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [record.id],
+        minConfidence: 0,
+      }),
+    ).toHaveLength(1);
+  });
 
   it("accepts a persisted Suggestion through the entity kernel, applies its value and supersedes siblings", async () => {
     const context = kernelCtx(ctx);

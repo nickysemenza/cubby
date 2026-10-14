@@ -273,14 +273,18 @@ export async function correctEmailRelevance(
           uploadKey: uploadKeys.get(attachment.sourceKey),
           fetchData: async () => bytes.get(attachment.sourceKey),
         });
-      await recordEmailClassificationObservation(txDb, {
-        emailId: current.id,
-        checksum,
-        classification: input.classification,
-        stage: "resolution",
-        reason: input.reason,
-        classificationVersion: MAILBOX_RESEARCH_VERSION,
-      });
+      await recordEmailClassificationObservation(
+        txDb,
+        {
+          emailId: current.id,
+          checksum,
+          classification: input.classification,
+          stage: "resolution",
+          reason: input.reason,
+          classificationVersion: MAILBOX_RESEARCH_VERSION,
+        },
+        actor,
+      );
       await getDb(txDb)
         .update(emailTable)
         .set({

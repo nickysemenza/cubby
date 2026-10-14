@@ -57,7 +57,7 @@ flowchart LR
 ```
 
 A registered identifier has one Product owner. Accepted order lines retain
-their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs or complete retained variant evidence with matching current Source receipts can support exact identity. A shared model/style identifier stays a ranking clue. Current title facts become verified size, color or pack evidence only when a Source supports that current value and explicitly corroborates the fact. A confirmed variant contradiction under an exact claim exposes a conflict
+their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs can support exact identity. A raw SKU stays a ranking clue even when current Sources corroborate matching size, color and pack: other relevant dimensions can differ. A shared model/style identifier stays a ranking clue. Current title facts become verified size, color or pack evidence only when a Source supports that current value and explicitly corroborates the fact. A confirmed variant contradiction under an exact claim exposes a conflict
 without assigning the identifier twice. Shared URLs and partial variant words
 remain clues for review.
 
@@ -93,7 +93,7 @@ Cards load as they approach the viewport and retain unfinished edits after
 scrolling away. Approved and discarded details stay collapsed until opened.
 
 Proposal values name their last recorded writer. They are not Jev/Clef field
-suggestions. Product identity detection reads every live Product through durable AI refresh work; review surfaces read stored pair Assessments. Exact identifiers and verified variants carry the decision evidence. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
+suggestions. Product identity detection reads every live Product through durable AI refresh work; review surfaces read at most 200 stored pair Assessments per queue read. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs retrieve ranking candidates even when names differ; they never establish exact identity by themselves. Migrated pair records with unknown fingerprints remain historical/read-only until current evidence is reassessed. Exact identifiers and verified variants carry the decision evidence. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
 writer was not recorded say so. Manufacturer is text on a Product, not a
 separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative

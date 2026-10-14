@@ -1,13 +1,20 @@
-import { type AssessmentProducer } from "@cubby/schemas/assessment";
+import {
+  assessmentProducer,
+  type AssessmentProducer,
+} from "@cubby/schemas/assessment";
 import {
   parseEntityId,
   productId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  PRODUCT_IDENTITY_FEATURE,
+  PRODUCT_IDENTITY_RULE_REVISION,
+} from "~/server/ai/features";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { assessment, assessmentState } from "~/server/db/schema";
 import { publishAssessment } from "~/server/repo/assessment";
@@ -45,6 +52,13 @@ export const canonicalProductPair = (a: ProductId, b: ProductId) =>
   a < b ? { productAId: a, productBId: b } : { productAId: b, productBId: a };
 export const productPairKey = (a: string, b: string): string =>
   a < b ? `${a}|${b}` : `${b}|${a}`;
+export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
+  !producer ||
+  producer.kind === "agent" ||
+  (producer.kind === "rule" &&
+    producer.revision === PRODUCT_IDENTITY_RULE_REVISION) ||
+  (producer.kind === "model" &&
+    producer.revision === PRODUCT_IDENTITY_FEATURE.promptVersion);
 
 export async function publishProductPair(
   db: Database,
@@ -64,6 +78,11 @@ export async function publishProductPair(
   if (pair.productAId === pair.productBId)
     throw new Error("Cannot assess a Product against itself");
   const data = pairProjection.parse({ otherId: pair.productBId, ...input });
+  const distinct =
+    !data.actionable &&
+    z
+      .object({ decision: z.object({ selectedIndex: z.number().nullable() }) })
+      .safeParse(data.signals).data?.decision.selectedIndex === 1;
   const digest = await sha256Hex(
     JSON.stringify([
       pair.productAId,
@@ -88,7 +107,11 @@ export async function publishProductPair(
       .from(assessment)
       .where(eq(assessment.publicationKey, publicationKey))
       .limit(1);
-    const previous = await listProductMatchRows(transactionDb, pair.productAId);
+    const previous = await listProductMatchRows(
+      transactionDb,
+      pair.productAId,
+      { includeObsolete: true },
+    );
     const old = previous.find((row) => row.productBId === pair.productBId);
     const prediction = await publishAssessment(
       transactionDb,
@@ -117,7 +140,7 @@ export async function publishProductPair(
         evidence: data,
         fingerprint: input.fingerprint ?? null,
       },
-      { data },
+      { data, ...(distinct ? { status: "resolved" } : {}) },
     );
     await client
       .update(assessmentState)
@@ -171,34 +194,41 @@ export async function upsertAgentProductMatch(
   },
 ) {
   const database = "select" in db ? databaseForTransaction(db) : db;
-  const { productIdentitySnapshot } =
+  const { prepareProductIdentityPair } =
     await import("~/server/ai/product-identity");
-  const snapshots = await Promise.all(
-    input.productIds.map((id) => productIdentitySnapshot(database, id)),
-  );
-  if (snapshots.some((value) => !value))
-    throw new Error("Product identity target no longer exists");
-  const { canonicalJson } = await import("~/server/repo/entity-source");
-  const fingerprint = await sha256Hex(
-    canonicalJson(snapshots.map((value) => value!.fingerprint).sort()),
-  );
+  const prepared = await prepareProductIdentityPair(database, input.productIds);
+  if (!prepared) throw new Error("Product identity target no longer exists");
   return publishProductPair(database, {
     ...input,
     source: "agent",
-    fingerprint,
+    fingerprint: prepared.fingerprint,
+    conflict: prepared.conflict,
+    actionable: prepared.exact,
+    signals: z
+      .json()
+      .parse({
+        snapshots: [prepared.first, prepared.second],
+        exact: prepared.exact,
+        admissionRevision: PRODUCT_IDENTITY_RULE_REVISION,
+      }),
   });
 }
 export async function listProductMatchRows(
   db: Database,
   productId?: ProductId,
+  options: { includeObsolete?: boolean } = {},
 ): Promise<ProductMatchCandidateRow[]> {
   const rows = await getDb(db)
-    .select()
+    .select(getTableColumns(assessmentState))
     .from(assessmentState)
+    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
     .where(
       and(
         eq(assessmentState.family, "product_pair"),
         eq(assessmentState.active, true),
+        options.includeObsolete
+          ? undefined
+          : sql`(${assessment.producer} IS NULL OR ${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`,
         or(
           eq(assessmentState.status, "pending"),
           sql`${assessmentState.suppression} IS NOT NULL`,
@@ -210,7 +240,12 @@ export async function listProductMatchRows(
             )
           : undefined,
       ),
-    );
+    )
+    .orderBy(
+      sql`(${assessmentState.data}->>'actionable')::boolean DESC`,
+      assessmentState.id,
+    )
+    .limit(options.includeObsolete ? 2147483647 : 200);
   return rows.map((row) => {
     const data = pairProjection.parse(row.data);
     return pairRow.parse({
