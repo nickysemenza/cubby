@@ -141,6 +141,16 @@ const syntheticCases = [
     body: "",
     html: '<div aria-hidden="true">Community newsletter with gardening tips and upcoming neighborhood events. Explore seasonal planting ideas and visit our public gardens this weekend.</div>',
   },
+  {
+    label: "unrelated",
+    body: "Community newsletter with gardening tips and upcoming events.",
+    html: '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Free shipping on orders over $50"></div>',
+  },
+  {
+    label: "related",
+    body: "Community updates.",
+    html: '<p>Community updates.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Your purchase is confirmed. Order #SYN-7788 paid $24"></div>',
+  },
 ] as const;
 
 const inputSchema = z
@@ -347,6 +357,7 @@ async function evaluateRelevance() {
     ? cases
     : [
         ...cases.slice(0, 2),
+        ...cases.slice(-2),
         {
           label: "related",
           body: "How was the kettle you purchased last week? Please review your purchase.",
@@ -382,7 +393,7 @@ async function evaluateRelevance() {
     negativeVetoes: 0,
     errors: 0,
   };
-  for (const entry of fallbackCases) {
+  for (const [caseIndex, entry] of fallbackCases.entries()) {
     const part = (body: string, mimeType: string) => ({
       mimeType,
       body: {
@@ -460,6 +471,19 @@ async function evaluateRelevance() {
         },
       );
       const rawClassification = rawResult.classification;
+      if (
+        !privateInput &&
+        (rawClassification !== entry.label ||
+          guarded.classification !== entry.label)
+      )
+        console.log(
+          JSON.stringify({
+            caseIndex,
+            expected: entry.label,
+            rawClassification,
+            classification: guarded.classification,
+          }),
+        );
       counts.noInference += Number(rawClassification === null);
       counts.rawCorrect += Number(
         rawClassification !== null && rawClassification === entry.label,

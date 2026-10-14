@@ -76,6 +76,34 @@ describe("transient Gmail triage", () => {
     },
   );
 
+  it("shows fixed-pixel labels and marks labels clipped by its view as incomplete", async () => {
+    const picture = (label: string) =>
+      `<div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="${label}"></div>`;
+    const { content, view } = await route(
+      message(
+        `<p>Community newsletter.</p>${picture("Free shipping on orders over $50")}`,
+        "text/html",
+      ),
+    );
+    expect(JSON.parse(content).htmlEvidence.trackingImageLabels).toEqual([
+      "Free shipping on orders over $50",
+    ]);
+    expect(view?.incompleteReasons).not.toContain("images_clipped");
+    for (const pictures of [
+      picture("x".repeat(200)),
+      Array.from({ length: 7 }, (_, i) => picture(`Shipping offer ${i}`)).join(
+        "",
+      ),
+    ]) {
+      const clipped = await route(
+        message(`<p>Community newsletter.</p>${pictures}`, "text/html"),
+      );
+      expect(clipped.view?.incompleteReasons).toContain("images_clipped");
+      expect(JSON.parse(clipped.content).htmlEvidenceComplete).toBe(false);
+      expect(clipped.decision.classification).toBe("unrelated");
+    }
+  });
+
   it("compacts the shared Email fixtures exactly as workerd does", () => {
     expect(summarizeEmailFixtures(recipebridge.compact_email_html)).toEqual(
       EMAIL_FIXTURE_SUMMARY,

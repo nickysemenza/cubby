@@ -40,7 +40,10 @@ pending: nothing here starts Product research.
    fallback. The fallback uses the same Email compactor, including preheaders,
    and retains its missing-evidence guard. Hidden image destinations on pictures
    explicitly at most one pixel in both dimensions are tracking metadata;
-   their labels and surrounding links still participate in evidence checks.
+   their bounded labels remain in the model view as readable metadata (including
+   explicit transaction confirmations), and
+   surrounding links still participate in evidence checks. Omitted or clipped
+   pixel labels retain incompleteness; larger hidden pictures retain their guards.
    Accessibility-only `aria-hidden` does not hide visually rendered Email
    text or pictures; actual CSS visibility and `hidden` attributes still do.
    Hidden HTTP(S) links and their labels are retained in the bounded link set;
