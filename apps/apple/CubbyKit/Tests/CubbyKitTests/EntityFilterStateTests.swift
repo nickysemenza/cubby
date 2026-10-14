@@ -25,4 +25,15 @@ struct EntityFilterStateTests {
         #expect(state["b"] == .many(["x"]))
         #expect(state.activeCount == 1)
     }
+
+    /// A link from a record to a filtered list names the declared URL key; the state carries the
+    /// filter's wire parameter, and an undeclared key is dropped rather than sent.
+    @Test func urlFiltersMapDeclaredKeysToWireNames() {
+        let state = EntityFilterState(
+            entity: .imageJob, urlFilters: ["imageId": "IMG-4K7M", "notAFilter": "x"])
+        let wire = EntityCatalog[.imageJob].filters.first { $0.urlKey == "imageId" }?.wire.names.first
+        #expect(wire != nil)
+        #expect(state.activeCount == 1)
+        #expect(state[wire ?? ""] == .single("IMG-4K7M"))
+    }
 }

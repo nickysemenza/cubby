@@ -249,15 +249,7 @@ public struct ReportPresentation: Hashable, Sendable {
 
         /// The list's filter state: each declared URL key mapped to its wire parameter.
         public var filterState: EntityFilterState {
-            var state = EntityFilterState()
-            for (urlKey, value) in filters {
-                guard
-                    let name = EntityCatalog[entity].filters.first(where: { $0.urlKey == urlKey })?.wire.names
-                        .first
-                else { continue }
-                state.set(.single(value), for: name)
-            }
-            return state
+            EntityFilterState(entity: entity, urlFilters: filters)
         }
     }
 

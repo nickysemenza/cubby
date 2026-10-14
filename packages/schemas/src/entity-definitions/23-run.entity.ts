@@ -170,6 +170,7 @@ export default defineEntity({
     list: {
       // Display images borrow from the vendor; they load as list media.
       read: { media: ["displayImages"], quality: ["dataQuality"] },
+      tree: { parentField: "parentRunId", toggle: true, defaultNested: false },
       savedViews: [
         {
           id: "imports",
@@ -227,29 +228,6 @@ export default defineEntity({
           value: ["foreground", "discovery", "manual", "backfill", "scheduled"],
         },
         { id: "routine", value: "false" },
-      ],
-      views: [
-        "table",
-        // Image jobs are not entities yet (docs/todos.md), so their attempt
-        // history keeps one slot over the activity projection.
-        {
-          kind: "slot",
-          id: "image-jobs",
-          label: "Image jobs",
-          searchKeys: [
-            "selected",
-            "kind",
-            "state",
-            "attentionOnly",
-            "subjectId",
-            "submissionId",
-            "executor",
-            "deviceId",
-            "from",
-            "to",
-            "order",
-          ],
-        },
       ],
     },
   },

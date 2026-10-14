@@ -584,6 +584,12 @@ describe("MCP catalog schemas", () => {
       "run.resolutions[].stableLineId",
       "run.id",
       "entity_read.filters.mailboxId",
+      // An Image job joins image-processing submissions by their `IPS-` public
+      // id; a submission is a child row, not a shortcode entity.
+      "entity_read.filters.submissionId",
+      // A tree list's children scope names a parent of the listed entity's own
+      // kind, so no single prefix pattern fits.
+      "entity_read.nesting.parentId",
       // Reconciliation is addressed by its finding or accepted source order,
       // and accuracy review by its evaluation and frozen prediction: none of
       // those rows has a shortcode.

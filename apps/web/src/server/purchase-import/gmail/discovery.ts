@@ -724,6 +724,11 @@ export async function pruneRoutineRuns(
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId" = "Run"."id")`,
     ),
+    // ImageProcessingJob.runId is ON DELETE NO ACTION: a run that requested
+    // image work is kept. includes-deleted: any job row holds the FK.
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."runId" = "Run"."id")`,
+    ),
   );
   return withTransaction(db, async (tx) => {
     const ids = (

@@ -510,6 +510,8 @@ export const productListOverride = defineListOverride<
       compose,
       tree,
       list,
+      // Kit detection (`ProductListHydration`) and the category grouping key.
+      wrapReadFields: PRODUCT_WRAP_READ_FIELDS,
       below: ({ data }) => {
         const quickEditProduct = quickEditProductId
           ? (data.find((p) => p.id === quickEditProductId) ?? null)
@@ -533,6 +535,8 @@ export const productListOverride = defineListOverride<
     };
   },
 });
+
+const PRODUCT_WRAP_READ_FIELDS = ["componentCount", "categoryId"] as const;
 
 /**
  * Derives the kit id set from the loaded rows as a stable array, so the query

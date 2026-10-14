@@ -1,4 +1,4 @@
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -61,6 +61,8 @@ export type ListQueryOptionsFn<
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
+  /** A declared tree's scope; omitted reads the flat list. */
+  nesting?: ListNesting;
 }) => ListQueryPlan<TData, TPage>;
 
 interface UsePaginatedTableCoreOptions<

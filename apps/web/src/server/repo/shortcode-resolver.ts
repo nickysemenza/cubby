@@ -34,6 +34,7 @@ import {
   location,
   meal,
   email as emailTable,
+  imageProcessingJob as imageProcessingJobTable,
   plant,
   planting,
   product,
@@ -281,6 +282,11 @@ export async function lookupShortcodes(
  * `shortcode-resolver-labels.unit.test.ts` for the parity check this backs.
  */
 export const LABEL_COLUMN_OVERRIDES = {
+  imageJob: {
+    column: imageProcessingJobTable.kind,
+    reason:
+      "titleField (displayName) joins the kind label to the Image's filename; kind is the stored, always-present part",
+  },
   email: {
     column: emailTable.subject,
     reason:

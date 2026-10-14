@@ -87,6 +87,9 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   vendor,
   aiUsage,
+  imageProcessingAttempt,
+  imageProcessingEvent,
+  imageProcessingSubmissionJob,
   aiEvaluation,
   aiEvaluationRequest,
   auditLog,
@@ -326,6 +329,43 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 }
 
 export const ENTITY_EDGES = {
+  imageJob: edges({
+    "ImageProcessingAttempt.jobId": {
+      column: imageProcessingAttempt.jobId,
+      role: "history",
+      label: "attempts",
+      description:
+        "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
+    },
+    "ImageProcessingEvent.jobId": {
+      column: imageProcessingEvent.jobId,
+      role: "history",
+      label: "events",
+      description: "A step this job's processing recorded.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
+    },
+    "ImageProcessingSubmissionJob.jobId": {
+      column: imageProcessingSubmissionJob.jobId,
+      role: "history",
+      label: "submissions",
+      description:
+        "A schedule or retry request that included this job, with its disposition.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
+    },
+  }),
   email: edges({
     "EmailCandidateObservation.emailId": {
       column: emailCandidateObservation.emailId,
@@ -1528,7 +1568,7 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "image processing jobs",
       description:
-        "A queued image-processing job requested by this run; the column is cleared when the run goes.",
+        "An Image job requested by this run. The FK is NO ACTION; the one Run hard delete (routine-run pruning) skips runs with jobs.",
       liveness: {
         kind: "allow-target-deleted",
         reason:

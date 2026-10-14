@@ -270,8 +270,9 @@ final class CompanionActivitySource: BackgroundActivitySource {
         let activity = self.activity()
         guard activity.phase == .processing else { return [] }
         let title = activity.kind == "subject_lift" ? "Creating image cutout" : "Describing image"
-        let link: BackgroundActivity.Link =
-            activity.jobID.map { .serverRun($0) } ?? .localActivity("companion-image-job")
+        // The companion knows the job's internal UUID, not its `IPR-` code, so the row opens its
+        // own device-local detail rather than a server record.
+        let link: BackgroundActivity.Link = .localActivity("companion-image-job")
         return [
             BackgroundActivity(
                 id: activity.jobID ?? "companion-image-job",

@@ -1,6 +1,6 @@
 import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { imageAnalysisHistory } from "~/server/repo/activity";
+import { imageAnalysisHistory } from "~/server/repo/image-analysis-history";
 import {
   getImageProcessingReadProjection,
   saveImageDescriptionCorrection,

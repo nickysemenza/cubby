@@ -238,6 +238,10 @@ const checkList = (
       throw new EntityDeclarationError(
         `${lookup.context}.list.tree.parentField ${list.tree.parentField} must be a readable single reference to ${entityKey}.`,
       );
+    if (!list.tree.toggle && !list.tree.defaultNested)
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.tree.defaultNested false without toggle never nests.`,
+      );
   }
   if (
     (timelineSection || viewIds.has("timeline")) &&

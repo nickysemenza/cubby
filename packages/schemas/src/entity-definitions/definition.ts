@@ -1326,11 +1326,18 @@ const buildMetadataSchemas = () => {
             .default(null),
           /**
            * Nest the table under a self-reference: each row sits under the
-           * row its `parentField` names. A row whose parent is not loaded (a
-           * search match) stays at the top, so filtering never hides it.
+           * row its `parentField` names. The server pages the roots and each
+           * parent's children (`nesting` on every list read); a row whose
+           * parent does not match the filters stays a root, so filtering
+           * never hides it. `toggle` offers a nested/flat switch whose
+           * opening state is `defaultNested`.
            */
           tree: z
-            .object({ parentField: fieldKey })
+            .object({
+              parentField: fieldKey,
+              toggle: z.boolean().optional().default(false),
+              defaultNested: z.boolean().optional().default(true),
+            })
             .strict()
             .nullable()
             .optional()

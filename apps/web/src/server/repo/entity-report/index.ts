@@ -22,6 +22,7 @@ import {
 import { emailReviewReport } from "./email";
 import { expenseSettlementReport } from "./expense-settlement";
 import { foldRepeatedRows } from "./fold-repeats";
+import { imageJobAttemptsReport } from "./image-job";
 import { locationContentsValuationReport } from "./location";
 import {
   projectAnalyticsReport,
@@ -182,6 +183,7 @@ const REPORTS = {
     ),
   })),
   "image.associations": reportBuilder(imageAssociationsReport),
+  "imageJob.attempts": reportBuilder(imageJobAttemptsReport),
   "purchase.runs": reportDependency(async (execution) => {
     const party = await execution.read(reportMember);
     return {

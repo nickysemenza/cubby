@@ -148,7 +148,7 @@ export function EntityInspectorFrame({
 }
 
 /** The sticky identity header and scroll surface every side inspector shares. */
-export function InspectorChrome({
+function InspectorChrome({
   label,
   id,
   name,

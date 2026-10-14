@@ -1,7 +1,13 @@
+import { ImageStatus } from "@cubby/schemas/image";
 import {
+  imageCutoutEligibility,
+  imageProcessingAttemptState,
   imageProcessingJobKind,
+  imageProcessingJobState,
   type ImageProcessingJobKind,
 } from "@cubby/schemas/image-processing";
+
+const JOB = imageProcessingJobState.enum;
 import {
   imageProcessingSettings,
   imageProcessingMaintenanceCounts,
@@ -111,17 +117,17 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
       WITH current_images AS (
         SELECT i.id, j.state, j.result
         FROM "Image" i
-        LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id
+        LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id AND j."deletedAt" IS NULL
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${revision}
-        WHERE i."deletedAt" IS NULL AND i.status = 'UPLOADED' AND i.sha256 IS NOT NULL
+        WHERE i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED} AND i.sha256 IS NOT NULL
           AND i."contentType" LIKE 'image/%'
       )
-      SELECT count(*) FILTER (WHERE state = 'ready')::int AS current,
-        count(*) FILTER (WHERE state IN ('pending', 'leased'))::int AS pending,
-        count(*) FILTER (WHERE state = 'waiting_for_device')::int AS waiting,
-        count(*) FILTER (WHERE state = 'skipped')::int AS skipped,
-        count(*) FILTER (WHERE state = 'failed')::int AS failed,
-        count(*) FILTER (WHERE result->'description'->>'cutoutEligibility' = 'review')::int AS "reviewNeeded",
+      SELECT count(*) FILTER (WHERE state = ${JOB.ready})::int AS current,
+        count(*) FILTER (WHERE state IN (${JOB.pending}, ${JOB.leased}))::int AS pending,
+        count(*) FILTER (WHERE state = ${JOB.waiting_for_device})::int AS waiting,
+        count(*) FILTER (WHERE state = ${JOB.skipped})::int AS skipped,
+        count(*) FILTER (WHERE state = ${JOB.failed})::int AS failed,
+        count(*) FILTER (WHERE result->'description'->>'cutoutEligibility' = ${imageCutoutEligibility.enum.review})::int AS "reviewNeeded",
         count(*) FILTER (WHERE state IS NULL)::int AS remaining
       FROM current_images
     `);
@@ -165,17 +171,17 @@ export async function backfillImageProcessing(
   const missing = kinds.map(
     (
       kind,
-    ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
+    ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND j."deletedAt" IS NULL
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${REVISION_BY_KIND[kind]})`,
   );
   if (kinds.includes("describe_image"))
     missing.push(sql`NOT EXISTS (
-    SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
+    SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND j."deletedAt" IS NULL
       AND j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."sourceContentHash" = i.sha256
       AND j."processorRevision" = ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION})`);
   const result = await getDb(db).execute(sql`
     SELECT i.shortcode FROM "Image" i
-    WHERE i."deletedAt" IS NULL AND i.status = 'UPLOADED'
+    WHERE i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED}
       AND i.sha256 IS NOT NULL AND i."contentType" LIKE 'image/%'
       AND (${sql.join(missing, sql` OR `)})
     ORDER BY i."createdAt", i.id LIMIT ${input.batchSize}
@@ -212,7 +218,7 @@ export async function pruneExecutorlessWaitingAttempts(
   const result = await getDb(db).execute(sql`
     WITH doomed AS (
       SELECT id, "jobId" FROM "ImageProcessingAttempt"
-      WHERE state = 'waiting' AND executor IS NULL
+      WHERE state = ${imageProcessingAttemptState.enum.waiting} AND executor IS NULL
       ORDER BY "startedAt", id
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED

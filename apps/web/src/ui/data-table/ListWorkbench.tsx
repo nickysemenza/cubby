@@ -8,7 +8,7 @@ import type { EntityActionsEntry } from "../../entity/actions/entity-actions";
 import type { UseEntitySelectionReturn } from "../hooks/useEntitySelection";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableColumnLayout } from "./column-layout";
-import RTable, { type RTableProps } from "./Table";
+import RTable, { type NestToggle, type RTableProps } from "./Table";
 import { type CubbyTable, useCubbyTable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 
@@ -44,6 +44,8 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   groupConfig?: GroupConfig<TItem>;
   grouped?: boolean;
   onGroupedChange?: (value: boolean) => void;
+  /** A server tree's nested/flat switch (`list.tree.toggle`). */
+  nestToggle?: NestToggle;
 }
 
 /** Server-backed lists always provide the complete asynchronous controls. */
@@ -195,6 +197,7 @@ export function ListWorkbench<TItem extends RowData>({
         groupConfig={model.groupConfig}
         grouped={model.grouped}
         onGroupedChange={model.onGroupedChange}
+        nestToggle={model.nestToggle}
         embedded={embedded}
         toolbarMode={embedded ? "internal" : "auto"}
         additionalToolbarContent={contextualStatus}

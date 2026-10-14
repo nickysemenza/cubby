@@ -330,25 +330,24 @@ describe("HTTP boundary", () => {
     );
   });
   it.each([
-    ["excludeTriggers=manual", ["manual"]],
-    ["excludeTriggers=manual&excludeTriggers=backfill", ["manual", "backfill"]],
+    ["locationIds=LOC-ABCD", ["LOC-ABCD"]],
+    ["locationIds=LOC-ABCD&locationIds=LOC-EFGH", ["LOC-ABCD", "LOC-EFGH"]],
     [
-      "excludeTriggers%5B0%5D=manual&excludeTriggers%5B1%5D=backfill",
-      ["manual", "backfill"],
+      "locationIds%5B0%5D=LOC-ABCD&locationIds%5B1%5D=LOC-EFGH",
+      ["LOC-ABCD", "LOC-EFGH"],
     ],
-    ["excludeTriggers%5B%5D=manual", ["manual"]],
-  ])(
-    "decodes native list query values for %s",
-    async (query, excludeTriggers) => {
-      expect((await request(`activity/list?${query}`)).status).toBe(200);
-      expect(ports.dispatch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operation: "activity.list",
-          input: expect.objectContaining({ excludeTriggers }),
-        }),
-      );
-    },
-  );
+    ["locationIds%5B%5D=LOC-ABCD", ["LOC-ABCD"]],
+  ])("decodes native list query values for %s", async (query, locationIds) => {
+    expect((await request(`inventory/getByLocationIds?${query}`)).status).toBe(
+      200,
+    );
+    expect(ports.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "inventory.getByLocationIds",
+        input: expect.objectContaining({ locationIds }),
+      }),
+    );
+  });
   // A domain blocker (e.g. PROJECT_HAS_TASKS, covered against PostgreSQL in
   // project.integration.test.ts) must reach an HTTP client as its own status
   // with the blockers intact, not as a generic 500.

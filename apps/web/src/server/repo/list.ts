@@ -10,8 +10,11 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   buildTakeSkip,
+  type ListNesting,
+  listNestingSchema,
   type PaginationParams,
   presenceFilter,
   type SortParams,
@@ -20,8 +23,10 @@ import {
   searchableEntities,
   type SearchableEntity,
 } from "@cubby/schemas/search";
+import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
+  and,
   asc,
   desc,
   getTableColumns,
@@ -377,6 +382,17 @@ const listIdsSchema = z
 export const listIdsCondition = (shortcode: AnyColumn, filters: unknown) =>
   shortcodeSetCondition(sql`${shortcode}`, listIdsSchema.parse(filters).ids);
 
+const listNestingCarrier = z
+  .object({ nesting: listNestingSchema.optional() })
+  .passthrough();
+/**
+ * The kernel's `filters.nesting` scope (`parseNesting`), carried beside the
+ * entity's own filters like `ids`. Where-builders ignore it; `list` applies it.
+ */
+const listNestingFromFilters = (filters: unknown): ListNesting =>
+  listNestingCarrier.parse(filters).nesting ?? { scope: "flat" };
+const listRowIdSchema = z.object({ id: z.string() });
+
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
@@ -401,6 +417,70 @@ export function listScaffold<
   // list at once rather than beside each repo's own conditions.
   const scored = isScoredEntity(entity) ? entity : null;
   const scoreSort = scored ? dataQualitySortResolver(scored, table) : null;
+  /** The self-reference a declared `list.tree` nests under. */
+  const treeParent = (): AnyColumn => {
+    const tree = Object.entries(entitySummary).find(
+      ([key]) => key === entity,
+    )?.[1].list.tree;
+    if (!tree) throw new Error(`${entity} declares no list.tree to nest by`);
+    const columns: Record<string, AnyColumn> = getTableColumns(table);
+    const column = columns[tree.parentField];
+    if (!column)
+      throw new Error(
+        `${entity}.list.tree.parentField ${tree.parentField} has no table column`,
+      );
+    return column;
+  };
+  /**
+   * The nesting scope over `filtered` (the full filter where). The subqueries
+   * re-read the same unaliased table, so every filter column inside them
+   * binds to the inner row: "matches the filters" is judged per parent, over
+   * the whole filtered set rather than a loaded page.
+   */
+  const nestingCondition = (
+    nesting: Exclude<ListNesting, { scope: "flat" }>,
+    parent: AnyColumn,
+    filtered: SQL | undefined,
+  ): SQL => {
+    if (nesting.scope === "children") {
+      const requested = shortcodeSetCondition(sql`${table.shortcode}`, [
+        nesting.parentId,
+      ]);
+      return sql`${parent} IN (SELECT ${table.id} FROM ${table} WHERE ${requested})`;
+    }
+    // A row whose parent is absent, deleted, or filtered out is a root.
+    return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${table} WHERE ${filtered ?? sql`true`}))`;
+  };
+  /** Each listed parent's direct children that match `filtered`, by shortcode. */
+  const childCounts = async (
+    db: Database | DrizzleTransaction,
+    parent: AnyColumn,
+    filtered: SQL | undefined,
+    codes: readonly string[],
+  ): Promise<Map<string, number>> => {
+    const name = sql.identifier(getTableName(table));
+    const id = sql.identifier(table.id.name);
+    const shortcode = sql.identifier(table.shortcode.name);
+    // Qualified by hand: Drizzle may render a column bare, which inside the
+    // aliased subquery would bind to `p` rather than the counted row.
+    const parentOf = sql`${name}.${sql.identifier(parent.name)}`;
+    const listed = shortcodeSetCondition(sql`p.${shortcode}`, codes);
+    // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
+    const rows = await unwrapDb(db)
+      .select({
+        code: sql<string>`(SELECT p.${shortcode} FROM ${name} p WHERE p.${id} = ${parentOf})`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(table as PgTable)
+      .where(
+        and(
+          filtered,
+          sql`${parent} IN (SELECT p.${id} FROM ${name} p WHERE ${listed})`,
+        ),
+      )
+      .groupBy(sql`${parent}`);
+    return new Map(rows.map((row) => [row.code, row.count]));
+  };
   const scaffold = {
     /**
      * `computed` is every condition that isn't a declared stored or
@@ -482,8 +562,16 @@ export function listScaffold<
       request: ListRequest<Filters>,
       spec: ListSpec<Row, Out>,
     ): Promise<{ data: Out[]; count: number }> {
-      const where =
+      const filtered =
         "where" in spec ? spec.where : scaffold.where(request.filters);
+      const nesting = listNestingFromFilters(request.filters);
+      const parent = nesting.scope === "flat" ? null : treeParent();
+      if (parent && spec.count)
+        throw new Error(`${entity} counts its own FROM and cannot nest`);
+      const where =
+        nesting.scope === "flat" || !parent
+          ? filtered
+          : and(filtered, nestingCondition(nesting, parent, filtered));
       const projection = request.projection ?? { kind: "full" };
       const { take, skip } = buildTakeSkip(request.pagination);
       const page: ListPage = {
@@ -546,10 +634,31 @@ export function listScaffold<
           });
           if (request.readIntent === "count" || data.length === 0)
             return { data: [], count };
-          return withListReadTracing({ rows: data.length }, async () => ({
-            data: await spec.hydrate(data, projection),
-            count,
-          }));
+          return withListReadTracing({ rows: data.length }, async () => {
+            const hydrated = await spec.hydrate(data, projection);
+            if (!parent) return { data: hydrated, count };
+            const codeOf = (row: Out) => {
+              const { id } = listRowIdSchema.parse(row);
+              return parseShortcode(id)?.shortcode ?? id;
+            };
+            const counts = await childCounts(
+              db,
+              parent,
+              filtered,
+              hydrated.map(codeOf),
+            );
+            return {
+              // SAFETY: `codeOf` parsed each hydrated row as an object; adding
+              // `childCount` keeps every field the row's `Out` type declares.
+              data: hydrated.map(
+                (row) =>
+                  Object.assign({}, row as object, {
+                    childCount: counts.get(codeOf(row)) ?? 0,
+                  }) as Out,
+              ),
+              count,
+            };
+          });
         },
       );
     },

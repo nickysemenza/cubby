@@ -121,6 +121,7 @@ public actor CubbyClient {
             case .wish: .wish
             case .expense: .expense
             case .email: .email
+            case .imageJob: .imageJob
             case .usdaFood: .usdaFood
             case .image: .image
             case .planting: .planting
@@ -470,116 +471,6 @@ public actor CubbyClient {
                         items: items.map { .init(id: $0.id, perceptualHash: $0.perceptualHash.hex) })
                 )
             ).ok.body.json
-        }
-    }
-
-    // MARK: - Activity
-
-    public struct ActivityFilters: Sendable, Hashable {
-        public enum Executor: Sendable, Hashable {
-            case all
-            case cloud
-            case unknown
-            case device(String)
-
-            fileprivate var query: (name: String, deviceID: String?) {
-                switch self {
-                case .all: ("all", nil)
-                case .cloud: ("cloud", nil)
-                case .unknown: ("unknown", nil)
-                case .device(let id): ("device", id)
-                }
-            }
-        }
-
-        public var kind: ActivityKind?
-        public var state: String?
-        public var subjectID: String?
-        public var submissionID: String?
-        public var executor: Executor
-        public var from: Date?
-        public var to: Date?
-
-        public init(
-            kind: ActivityKind? = nil, state: String? = nil, subjectID: String? = nil,
-            submissionID: String? = nil, executor: Executor = .all, from: Date? = nil,
-            to: Date? = nil
-        ) {
-            self.kind = kind
-            self.state = state
-            self.subjectID = subjectID
-            self.submissionID = submissionID
-            self.executor = executor
-            self.from = from
-            self.to = to
-        }
-    }
-
-    public func activityRuns(
-        filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
-    ) async throws -> ActivityListOutput {
-        return try await perform {
-            try await api.activity_list(
-                query: .init(
-                    kind: filters.kind.map(activityListKind), state: filters.state,
-                    subjectId: filters.subjectID, submissionId: filters.submissionID,
-                    executor: .init(rawValue: filters.executor.query.name),
-                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
-                    sort: .newest, cursor: cursor, limit: limit)
-            ).ok.body.json
-        }
-    }
-
-    public func activityGroups(
-        filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
-    ) async throws -> ActivityGroupsOutput {
-        return try await perform {
-            try await api.activity_groups(
-                query: .init(
-                    kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
-                    subjectId: filters.subjectID, submissionId: filters.submissionID,
-                    executor: .init(rawValue: filters.executor.query.name),
-                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
-                    sort: .newest, cursor: cursor, limit: limit)
-            ).ok.body.json
-        }
-    }
-
-    public func activityGroupChildren(
-        rootID: String, filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
-    ) async throws -> ActivityListOutput {
-        return try await perform {
-            try await api.activity_groupChildren(
-                query: .init(
-                    kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
-                    subjectId: filters.subjectID, submissionId: filters.submissionID,
-                    executor: .init(rawValue: filters.executor.query.name),
-                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
-                    sort: .newest, cursor: cursor, limit: limit, rootId: rootID)
-            ).ok.body.json
-        }
-    }
-
-    private func activityListKind(
-        _ kind: ActivityKind
-    ) -> Operations.Activity_list.Input.Query.KindPayload {
-        switch kind {
-        case .accountSync: .accountSync
-        case .mailImport: .mailImport
-        case .purchaseValidation: .purchaseValidation
-        case .productEnrichment: .productEnrichment
-        case .suggestionSweep: .suggestionSweep
-        case .photoInventory: .photoInventory
-        case .describeImage: .describeImage
-        case .identifyImage: .identifyImage
-        case .subjectLift: .subjectLift
-        case .aiSuggest: .aiSuggest
-        case .aiRefresh: .aiRefresh
-        case .background: .background
-        case .fileImport: .fileImport
-        case .mailSearch: .mailSearch
-        case .mailDiscovery: .mailDiscovery
-        case .mailReclassify: .mailReclassify
         }
     }
 

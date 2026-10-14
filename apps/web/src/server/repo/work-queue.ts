@@ -58,7 +58,6 @@ import {
   suggestion as suggestionTable,
 } from "~/server/db/schema";
 import { obsoleteExecutionFindingSql } from "~/server/purchase-import/run-retirement";
-import { activityAttentionStatePredicate } from "~/server/repo/activity";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb, ilikeContains } from "~/server/repo/database-helpers";
@@ -76,6 +75,7 @@ import {
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
 import { buildVendorWhereClause } from "~/server/repo/vendor";
+import { attentionStatePredicate } from "~/server/repo/work-attention";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
 import {
   NO_FACT_COLUMNS,
@@ -448,7 +448,7 @@ async function workQueueProjection(
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       owners: workRunReviewOwners(sql`"Run".id`),
       where: sql`"Run"."deletedAt" IS NULL AND (
-        (${activityAttentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
+        (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND finding.status = ${openFindingStatus} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}

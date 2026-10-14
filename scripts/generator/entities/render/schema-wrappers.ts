@@ -35,6 +35,7 @@ const WRAPPERS = {
   expense: "update+ updateInput+ out+ listItem+ filtersBase",
   financialAccount: "create+ update+ updateInput+ out+ filtersBase",
   financialTransaction: "filtersBase",
+  imageJob: "out+ filtersBase",
   gardenEntry: "create update updateInput out+ listItem filtersBase",
   ingredient: "create+ update updateInput+ filtersBase",
   ledgerParty: "create+ update+ updateInput+ out+ filters+",

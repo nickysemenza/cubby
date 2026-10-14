@@ -48,6 +48,21 @@ public struct EntityFilterState: Sendable, Hashable {
     }
 }
 
+extension EntityFilterState {
+    /// Filters keyed by each declared URL key (`imageId`), mapped to the filter's wire parameter.
+    /// A key the entity does not declare is dropped.
+    public init(entity: EntityKey, urlFilters: [String: String]) {
+        self.init()
+        for (urlKey, value) in urlFilters {
+            guard
+                let name = EntityCatalog[entity].filters.first(where: { $0.urlKey == urlKey })?.wire.names
+                    .first
+            else { continue }
+            set(.single(value), for: name)
+        }
+    }
+}
+
 extension FilterDescriptor: Identifiable {
     /// `columnId` is unique within one entity's filters (the compiler checks it).
     public var id: String { columnId }

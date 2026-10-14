@@ -10,7 +10,6 @@ enum Route: Hashable {
     case statementCsvImport
     case graph(EntityRef?)
     case nutrition(day: String)
-    case activityDetail(String)
     /// A device-local `BackgroundActivity`'s own detail, resolved by id against whatever is
     /// currently reporting activities (see `BackgroundActivityCenter`). "Finished" once the id is
     /// gone rather than a distinct terminal state.
