@@ -56,8 +56,8 @@ import {
 import { SectionHeader } from "./SectionHeader";
 import { collectTableEntityMediaRefs } from "./table-entity-media";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
-import { TreeStatusRow } from "./tree-status-row";
 import TableHeaderLayout from "./TableHeaderLayout";
+import { TreeStatusRow } from "./tree-status-row";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 

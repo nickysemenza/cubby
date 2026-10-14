@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { getFeatureColor } from "~/features/products/category-theme";
 import { compileEntityListInput } from "~/entity/entity-list";
+import { getFeatureColor } from "~/features/products/category-theme";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useServerTree } from "~/ui/hooks/useServerTree";
 

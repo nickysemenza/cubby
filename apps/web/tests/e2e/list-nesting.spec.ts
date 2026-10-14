@@ -155,7 +155,9 @@ test("an expanded category retries a failed read and loads more children", async
 /** A tree chart node's distance from the root, from its laid-out position. */
 const treeDepthOffset = (node: Locator) =>
   node.evaluate((element) => {
-    const transform = element.closest("g[transform]")?.getAttribute("transform");
+    const transform = element
+      .closest("g[transform]")
+      ?.getAttribute("transform");
     return Number(/translate\(([-\d.]+)/.exec(transform ?? "")?.[1]);
   });
 

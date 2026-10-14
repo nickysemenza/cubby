@@ -7,7 +7,12 @@ const cat = (
   id: string,
   feature: Cat["feature"] = null,
   children?: Cat[],
-): Cat => ({ id, name: id, feature, ...(children ? { subRows: children } : {}) });
+): Cat => ({
+  id,
+  name: id,
+  feature,
+  ...(children ? { subRows: children } : {}),
+});
 
 describe("buildCategoryHierarchy", () => {
   it("rolls direct counts up and inherits the closest feature", () => {
