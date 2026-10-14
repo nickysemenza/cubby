@@ -42,6 +42,21 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🤔 🧪 **Retest the complete photo-import UX across infrastructure with live Pi.**
+  Extend the [coupled import journey](tester-army.md#coupled-import-journeys)
+  using synthetic photos, the native upload client, and web review. Run the
+  built Worker/workerd and real Pi Durable Object in the containerized test
+  stack (Docker or Apple `container`), with PostgreSQL, actual queue consumers,
+  object storage, and real declared models through the existing test-only model
+  authorization and egress path; do not script descriptions or group proposals.
+  Cover a 25-photo batch, failure/retry/exclusion, interrupted-work recovery,
+  automatic grouping and regrouping, proposal attribution, skipped-photo fate,
+  picker thumbnails and existing/new matches, scrolling review and select-all
+  approval, created-Product results, inventory ownership, and accurate image
+  needs-attention status. Assert durable outcomes as well as visible states;
+  retain provider/queue timings to explain waits. Container coverage does not
+  establish physical-device APNs delivery or iOS background execution.
+
 - 🟢 🛠️ **Audit legacy image orientation mismatches.** After the hash-guarded
   verification fix deploys, review existing `metadata_mismatch` rows through
   explicit verification. Normalize swapped dimensions only when the stored
@@ -598,6 +613,25 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   cancellation, and automatic recovery; an awaited preparation must not resurrect
   cancelled work after termination.
 
+- 🟢 🐛 **Explain revoked notification permission in the import sheet.** A saved
+  import-alert preference can remain on after iOS permission is disabled. Show
+  the effective permission and a System Settings shortcut beside the per-import
+  choice, including after returning from Settings; preserve the saved intent
+  without implying that alerts can currently be delivered. Owner:
+  `PhotoImportRunSheet.swift` and the shared Notifications settings.
+
+- 🤔 ✨ **General app push notifications and a web-to-device test action.** Extend
+  the existing photo-import APNs alerts rather than creating another push path;
+  decide which events notify and reuse registered-device identity, alert
+  permission/preferences, token rotation and invalid-token cleanup, and deep-link
+  routing. Keep notification permission separate from Live Activities. Add
+  “Send test notification” on the web Device surface, selecting a named registered
+  device and sending through the same server/APNs dispatch as normal alerts.
+  Show unavailable permission/registration and provider failures clearly; APNs
+  acceptance alone must not be labelled device delivery. Use the registration's
+  app topic and environment, never manually entered tokens or signing keys.
+  Current photo support: [photo imports](photo-library-dedup.md#native-import-run-lifecycle).
+
 - 🤔 ✨ **One native picker with names and pictures, never codes.** Web
   now has one value picker (`apps/web/src/ui/combobox/picker.tsx`): a closed
   field leads with the option glyph or the record's picture, a stored
@@ -608,6 +642,9 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   value choices — and shows codes in picker and row chrome
   (`EntityPickerSheet.swift` renders `pick.id`; `EntityListView`,
   `DetailSectionViews` and `NeedsPhotoView` print a record id as a line).
+  Category, receive-into, and Manufacturer choices must show their selected
+  picture before searching, where available, and distinguish existing matches
+  from new values.
   1. 🧪 Inventory every native value choice (sheet, `Picker`, `Menu`,
      segmented control) and every place a shortcode is rendered as text.
   2. 🤔 Decide the native shape with `axiom-design`: one `EntityPicker`
@@ -967,7 +1004,11 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   keep `proposedBy` (member, agent, import, heuristic) so the Accuracy view can
   count dismissed agent proposals. Run fix decisions and photo-group review
   cannot tell an agent's proposal from a member's; record
-  the proposer on each and surface dismissal rates per proposer.
+  the proposer on each and surface dismissal rates per proposer. Photo review
+  also needs field-level source attribution: distinguish member edits,
+  import/heuristic values, Cubby/Pi or external Claude/Codex proposals, and
+  Jev/Clef suggestions where recorded; show unknown attribution explicitly
+  rather than guessing from the value or current execution engine.
 
 - 🤔 ✨ **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
