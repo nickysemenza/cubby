@@ -332,7 +332,8 @@ function LedgerRow({
         ) : undefined
       }
       primary={
-        <span className="flex flex-wrap items-center gap-1">
+        // min-w-0 lets a long record chip shrink to the row instead of pushing past it.
+        <span className="flex min-w-0 flex-wrap items-center gap-1">
           <RowTitle row={row} />
           {/* A done mark needs no word; any other state also says what it is. */}
           {row.state && row.state.kind !== "done" ? (
