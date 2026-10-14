@@ -22,7 +22,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -31,6 +31,7 @@ import { ProductVariantEvidence } from "~/features/products/product-variant-evid
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   photoImport,
+  product as productOperations,
   purchaseImport,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -42,8 +43,9 @@ import { formatCurrency } from "~/lib/utils";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Picker } from "~/ui/combobox/picker";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Section, Stack } from "~/ui/layout";
+import { CollapsibleSection, Row, Section, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
@@ -397,63 +399,93 @@ function GroupPhotos({
           );
         }}
       />
-      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
-        {[...entries].map(([id, role]) => {
-          const photo = imagesById.get(id);
-          if (!photo) return null;
-          return (
-            <div
-              key={id}
-              className="min-w-0 border-t border-border pt-2 text-xs"
-            >
-              <p className="font-medium">
-                {role.purpose === "label"
-                  ? "Label photo"
-                  : role.purpose === "item"
-                    ? "Item photo"
-                    : "Skipped photo"}{" "}
-                · original upload
+      {proposal.skip.length > 0 ? (
+        <div className="space-y-1 border-t border-border pt-2 text-xs">
+          <p className="font-medium">
+            Skipped photos stay in this run. Approval does not attach them to
+            the Product or count them as inventory.
+          </p>
+          {proposal.skip.map((entry) => (
+            <p key={entry.id} className="text-muted-foreground">
+              {entry.id}: {entry.reason}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {[...entries.keys()].map((id) => {
+        const photo = imagesById.get(id);
+        if (
+          !photo ||
+          (photo.describe !== "failed" && photo.cutout !== "failed")
+        )
+          return null;
+        return (
+          <div key={id} className="border-t border-border pt-2 text-xs">
+            {photo.describe === "failed" && (
+              <p className="text-destructive">
+                Description failed:{" "}
+                {photo.describeReason || "No reason available"}.{" "}
+                <a
+                  className="underline"
+                  href={`/images/${encodeURIComponent(id)}`}
+                >
+                  Open photo to retry
+                </a>
               </p>
-              {photo.description && (
-                <p className="mt-1 text-muted-foreground">
-                  <span className="text-foreground">Description:</span>{" "}
-                  {photo.description}
+            )}
+            {photo.cutout === "failed" && (
+              <p className="text-muted-foreground">
+                Optional cutout failed:{" "}
+                {photo.cutoutReason || "No reason available"}.{" "}
+                <a
+                  className="underline"
+                  href={`/images/${encodeURIComponent(id)}`}
+                >
+                  Open photo to retry
+                </a>
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <details className="border-t border-border pt-2">
+        <summary className="cursor-pointer text-xs font-medium">
+          Photo descriptions and label text
+        </summary>
+        <div className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+          {[...entries].map(([id, role]) => {
+            const photo = imagesById.get(id);
+            if (!photo) return null;
+            return (
+              <div
+                key={id}
+                className="min-w-0 border-t border-border pt-2 text-xs"
+              >
+                <p className="font-medium">
+                  {role.purpose === "label"
+                    ? "Label photo"
+                    : role.purpose === "item"
+                      ? "Item photo"
+                      : "Skipped photo"}{" "}
+                  · original upload
                 </p>
-              )}
-              {photo.recognizedText && (
-                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                  <span className="text-foreground">OCR:</span>{" "}
-                  {photo.recognizedText}
-                </p>
-              )}
-              {photo.describe === "failed" && (
-                <p className="mt-1 text-destructive">
-                  Description failed:{" "}
-                  {photo.describeReason || "No reason available"}.{" "}
-                  <a
-                    className="underline"
-                    href={`/images/${encodeURIComponent(id)}`}
-                  >
-                    Open photo to retry
-                  </a>
-                </p>
-              )}
-              {photo.cutout === "failed" && (
-                <p className="mt-1 text-muted-foreground">
-                  Optional cutout failed:{" "}
-                  {photo.cutoutReason || "No reason available"}.{" "}
-                  <a
-                    className="underline"
-                    href={`/images/${encodeURIComponent(id)}`}
-                  >
-                    Open photo to retry
-                  </a>
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                {photo.description && (
+                  <p className="mt-1 text-muted-foreground">
+                    <span className="text-foreground">Description:</span>{" "}
+                    {photo.description}
+                  </p>
+                )}
+                {photo.recognizedText && (
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                    <span className="text-foreground">OCR:</span>{" "}
+                    {photo.recognizedText}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </details>
     </div>
   );
 }
@@ -466,6 +498,8 @@ function CommitInput({
   disabled,
   type = "text",
   className,
+  options,
+  optionsLoading,
 }: {
   label: string;
   value: string;
@@ -473,16 +507,26 @@ function CommitInput({
   disabled: boolean;
   type?: "text" | "number";
   className?: string;
+  options?: readonly { value: string; count: number }[];
+  optionsLoading?: boolean;
 }) {
+  const optionsId = useId();
+  const inputId = useId();
+  const hintId = useId();
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
     if (draft.trim() !== value) onCommit(draft.trim());
   };
   return (
-    <label className={`flex min-w-0 flex-col gap-1 text-xs ${className ?? ""}`}>
-      <span className="text-muted-foreground">{label}</span>
+    <div className={`flex min-w-0 flex-col gap-1 text-xs ${className ?? ""}`}>
+      <label htmlFor={inputId} className="text-muted-foreground">
+        {label}
+      </label>
       <Input
+        id={inputId}
+        aria-describedby={options ? hintId : undefined}
+        list={options ? optionsId : undefined}
         type={type}
         min={type === "number" ? 1 : undefined}
         value={draft}
@@ -493,7 +537,34 @@ function CommitInput({
           if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
-    </label>
+      {options ? (
+        <>
+          <datalist id={optionsId}>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.value}
+              </option>
+            ))}
+          </datalist>
+          <span id={hintId} className="text-muted-foreground">
+            {optionsLoading
+              ? "Checking existing manufacturer names…"
+              : draft.trim()
+                ? (() => {
+                    const match = options.find(
+                      (option) =>
+                        option.value.toLocaleLowerCase() ===
+                        draft.trim().toLocaleLowerCase(),
+                    );
+                    return match
+                      ? `Existing name · used on ${countLabel(match.count, "product")}`
+                      : "New manufacturer name · saved as text on this Product";
+                  })()
+                : "Use an existing manufacturer name or enter one."}
+          </span>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -515,8 +586,28 @@ function ProductPanel({
   const attachExisting = (existingId: ProductShortcode) =>
     saveProduct({ kind: "existing", existingId });
   const product = proposal.product;
+  const manufacturers = useQuery({
+    ...productOperations.manufacturerOptions.queryOptions(),
+    enabled: product.kind === "create",
+  });
   return (
     <Stack gap="sm" className="min-w-0">
+      <p className="text-xs text-muted-foreground">
+        {proposal.origin === "coordinator"
+          ? "Proposed by Cubby / Pi"
+          : proposal.origin === "external_agent"
+            ? "Proposed by an external agent"
+            : proposal.origin === "member"
+              ? "Last saved by you"
+              : "Proposal source not recorded"}
+        {" · "}Review these proposed values before approving. They are not
+        Jev/Clef field suggestions.
+      </p>
+      {manufacturers.isError ? (
+        <StatusText tone="destructive">
+          {manufacturers.error.message}
+        </StatusText>
+      ) : null}
       <Row gap="sm" align="end" wrap className="min-w-0">
         <div className="min-w-0 flex-1">
           <EntityReferencePicker
@@ -636,6 +727,13 @@ function ProductPanel({
           <Row gap="sm" className="min-w-0">
             <CommitInput
               label="Manufacturer"
+              options={
+                manufacturers.data?.map((entry) => ({
+                  value: entry.manufacturer,
+                  count: entry.count,
+                })) ?? []
+              }
+              optionsLoading={manufacturers.isPending}
               className="flex-1"
               value={product.create.manufacturer ?? ""}
               disabled={busy}
@@ -1179,11 +1277,11 @@ function ProposalCard({
   const stale = isStaleGroup(proposal, imagesById, runStatus);
   const descriptionsPending = awaitingDescriptions(proposal, imagesById);
   return (
-    <Card>
+    <Card className="rounded-none border-x-0 border-b-0 shadow-none">
       <CardHeader>
         <Row align="center" justify="between" wrap gap="sm">
           <Row align="center" gap="sm" className="min-w-0">
-            <CardTitle as="h3" className="truncate">
+            <CardTitle as="h3" className="min-w-0 break-words">
               {proposalName(proposal)}
             </CardTitle>
             <Badge
@@ -1195,9 +1293,6 @@ function ProposalCard({
                 ? "New product"
                 : "Existing product"}
             </Badge>
-            <span className="hidden font-mono text-2xs text-muted-foreground lg:inline">
-              {proposal.groupKey}
-            </span>
           </Row>
           <Row align="center" gap="xs" wrap className="w-full sm:w-auto">
             {mergeTargets.length ? (
@@ -1271,9 +1366,9 @@ function ProposalCard({
           </Row>
         </Row>
       </CardHeader>
-      <CardContent>
-        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-          <div className="min-w-0 xl:sticky xl:top-20">
+      <CardContent className="@container/photo-editor">
+        <div className="grid min-w-0 items-start gap-4 @2xl/photo-editor:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+          <div className="min-w-0">
             <GroupPhotos
               proposal={proposal}
               proposals={proposals}
@@ -1771,11 +1866,47 @@ function ExpenseLinkReview({
   );
 }
 
-/**
- * The reviewer's workbench for a photo-inventory run: the agent's proposed
- * item groups (edit, approve, discard), photos no group claims yet, settled
- * groups, and every photo's processing state.
- */
+/** Offscreen editors must not start per-group catalogue queries on page load. */
+function DeferredPhotoGroup({
+  name,
+  eager,
+  children,
+}: {
+  name: string;
+  eager: boolean;
+  children: ReactNode;
+}) {
+  const region = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(eager);
+  useEffect(() => {
+    if (mounted) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setMounted(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setMounted(true);
+      },
+      { rootMargin: "600px" },
+    );
+    if (region.current) observer.observe(region.current);
+    return () => observer.disconnect();
+  }, [mounted]);
+  // Retain mounted editors after scrolling away so unfinished edits survive.
+  return (
+    <div ref={region}>
+      {mounted ? (
+        children
+      ) : (
+        <section className="min-h-80 border-t border-border pt-4">
+          <h3 className="text-lg font-semibold">{name}</h3>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export function PhotoGroupReview({
   runId,
   runStatus,
@@ -1882,13 +2013,56 @@ export function PhotoGroupReview({
   if (!query.data) return null;
 
   const { review, images } = query.data;
-  const emptyCopy = emptyReviewCopy(review.runStatus, hasAgent);
-  const imagesById = new Map(images.map((image) => [image.id, image]));
+  const emptyCopy =
+    query.data.lifecycle.phase === "needs_attention"
+      ? {
+          title: "Some photos need attention before grouping.",
+          detail:
+            query.data.lifecycle.dispatchError ??
+            (query.data.lifecycle.failedImageIds.length
+              ? "Retry failed descriptions above, or explicitly continue without those photos. Their originals are retained."
+              : "Review the ungrouped photos below and use a photo’s menu to propose a group. Existing approved items are retained."),
+        }
+      : query.data.lifecycle.processor === "external"
+        ? {
+            title: "Waiting for your Claude/Codex session to propose groups.",
+            detail:
+              "Use the handoff above once descriptions are ready, or use a photo’s menu to create a group yourself.",
+          }
+        : query.data.lifecycle.processor === "cubby"
+          ? {
+              title: "Cubby will prepare item groups automatically.",
+              detail:
+                "Grouping waits for uploads and required descriptions. Proposed items will appear here for your approval.",
+            }
+          : emptyReviewCopy(review.runStatus, hasAgent);
+  const imagesById: ImagesById = new Map(
+    images.map((image) => [image.id, image]),
+  );
   const proposed = review.proposals.filter(
     (proposal) => proposal.state === "proposed",
   );
   const settled = review.proposals.filter(
     (proposal) => proposal.state !== "proposed",
+  );
+  const results = review.proposals.filter(
+    (proposal) => proposal.state === "committed" && proposal.committedProduct,
+  );
+  const productsById = new Map<string, (typeof results)[number]>();
+  for (const proposal of results) {
+    if (!proposal.committedProduct) continue;
+    const previous = productsById.get(proposal.committedProduct.id);
+    if (!previous || proposal.product.kind === "create")
+      productsById.set(proposal.committedProduct.id, proposal);
+  }
+  const resultProducts = [...productsById.values()];
+  const ready = proposed.filter(
+    (proposal) =>
+      !isStaleGroup(proposal, imagesById, review.runStatus) &&
+      awaitingDescriptions(proposal, imagesById).length === 0 &&
+      !(proposal.product.kind === "existing" && !proposal.product.existing) &&
+      !proposal.conflict?.length &&
+      !proposal.lastError,
   );
   const selectedBatch = proposed.filter((proposal) =>
     batchKeys.has(proposal.groupKey),
@@ -1897,7 +2071,9 @@ export function PhotoGroupReview({
     (proposal) =>
       isStaleGroup(proposal, imagesById, review.runStatus) ||
       awaitingDescriptions(proposal, imagesById).length > 0 ||
-      (proposal.product.kind === "existing" && !proposal.product.existing),
+      (proposal.product.kind === "existing" && !proposal.product.existing) ||
+      Boolean(proposal.conflict?.length) ||
+      Boolean(proposal.lastError),
   );
   const groupByImage = new Map<string, string>();
   for (const proposal of review.proposals)
@@ -1912,6 +2088,80 @@ export function PhotoGroupReview({
 
   return (
     <Stack gap="lg">
+      {results.length > 0 ? (
+        <Section
+          title="Import results"
+          description={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
+        >
+          <RecordList aria-label="Products from this import">
+            {resultProducts.map((proposal) =>
+              proposal.committedProduct ? (
+                <RecordRow
+                  key={proposal.committedProduct.id}
+                  leading={
+                    <PhotoThumb
+                      image={imagesById.get(
+                        proposal.images.find(
+                          (entry) => entry.purpose === "item",
+                        )?.id ?? "",
+                      )}
+                      size={40}
+                    />
+                  }
+                  primary={
+                    <EntityRefLink
+                      entity="product"
+                      data={proposal.committedProduct}
+                      displayImage={
+                        proposal.committedProduct.coverUrl
+                          ? { url: proposal.committedProduct.coverUrl }
+                          : null
+                      }
+                    />
+                  }
+                  secondary={
+                    proposal.product.kind === "create"
+                      ? "Created by this import"
+                      : "Matched existing Product"
+                  }
+                  trailing={
+                    <Row gap="sm" wrap>
+                      {results
+                        .filter(
+                          (result) =>
+                            result.committedProduct?.id ===
+                              proposal.committedProduct?.id &&
+                            result.committedInventoryId,
+                        )
+                        .map((result) =>
+                          result.committedInventoryId ? (
+                            <EntityRefLink
+                              key={result.committedInventoryId}
+                              entity="inventory"
+                              data={{
+                                id: result.committedInventoryId,
+                                name: `${result.inventory?.quantity ?? 0} received`,
+                              }}
+                              displayImage={null}
+                            />
+                          ) : null,
+                        )}
+                      {results.some(
+                        (result) =>
+                          result.committedProduct?.id ===
+                            proposal.committedProduct?.id &&
+                          result.committedInventoryId,
+                      )
+                        ? null
+                        : "No inventory received"}
+                    </Row>
+                  }
+                />
+              ) : null,
+            )}
+          </RecordList>
+        </Section>
+      ) : null}
       <Section
         title="Photo review"
         description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
@@ -1919,21 +2169,45 @@ export function PhotoGroupReview({
         {proposed.length > 0 ? (
           <Row align="center" justify="between" gap="sm" className="flex-wrap">
             <span className="text-xs text-muted-foreground">
-              Select the reviewed items to approve together. Conflicts remain in
-              review.
+              Review each item below, then select the ones to approve together.
+              Blocked items stay in review.
             </span>
-            <Button
-              disabled={
-                selectedBatch.length === 0 ||
-                blockedBatch ||
-                busy ||
-                batchQueued
-              }
-              onClick={() => void approveBatch()}
-            >
-              <CheckIcon />
-              Approve {countLabel(selectedBatch.length, "selected item")}
-            </Button>
+            <Row gap="sm" wrap>
+              <Button
+                variant="outline"
+                disabled={busy || batchQueued || ready.length === 0}
+                onClick={() =>
+                  setBatchKeys(
+                    new Set(ready.map((proposal) => proposal.groupKey)),
+                  )
+                }
+              >
+                Select all ready items
+              </Button>
+              {batchKeys.size > 0 ? (
+                <Button
+                  variant="ghost"
+                  disabled={busy || batchQueued}
+                  onClick={() => setBatchKeys(new Set())}
+                >
+                  Clear selection
+                </Button>
+              ) : null}
+              <Button
+                disabled={
+                  selectedBatch.length === 0 ||
+                  blockedBatch ||
+                  busy ||
+                  batchQueued
+                }
+                onClick={() => void approveBatch()}
+              >
+                <CheckIcon />
+                {batchQueued
+                  ? "Approving selected items…"
+                  : `Approve ${countLabel(selectedBatch.length, "selected item")}`}
+              </Button>
+            </Row>
           </Row>
         ) : null}
         {proposed.length === 0 ? (
@@ -1959,7 +2233,7 @@ export function PhotoGroupReview({
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)]">
           <nav
             aria-label="Photo item groups"
-            className="min-w-0 border-y border-border lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-auto"
+            className="max-h-48 min-w-0 overflow-auto border-y border-border lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)]"
           >
             {review.proposals.map((proposal) => (
               <div
@@ -1985,7 +2259,12 @@ export function PhotoGroupReview({
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setSelectedKey(proposal.groupKey)}
+                  onClick={() => {
+                    setSelectedKey(proposal.groupKey);
+                    document
+                      .getElementById(`photo-group-${proposal.groupKey}`)
+                      ?.scrollIntoView({ block: "start" });
+                  }}
                   aria-current={
                     selected.groupKey === proposal.groupKey ? "true" : undefined
                   }
@@ -2040,81 +2319,100 @@ export function PhotoGroupReview({
               </div>
             ))}
           </nav>
-          <div className="min-w-0">
-            {selected.state === "proposed" ? (
-              <ProposalCard
+          <div className="min-w-0 space-y-6">
+            {review.proposals.map((selected, index) => (
+              <div
                 key={selected.groupKey}
-                runId={runId}
-                runStatus={review.runStatus}
-                proposal={selected}
-                proposals={review.proposals}
-                imagesById={imagesById}
-                busy={busy}
-                save={save}
-                action={action}
-                approve={approve}
-              />
-            ) : (
-              <section className="min-w-0 border border-border bg-card p-4">
-                <h3 className="text-lg font-semibold">
-                  {selected.state === "committed" ? "Approved" : "Discarded"} ·{" "}
-                  {proposalName(selected)}
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {selected.images
-                    .map((entry) => `${entry.purpose} ${entry.id}`)
-                    .join(" · ") || "No attached photos"}
-                </p>
-                {selected.committedProduct && (
-                  <p className="mt-2 text-sm">
-                    <EntityRefLink
-                      entity="product"
-                      data={{
-                        id: selected.committedProduct.id,
-                        name: selected.committedProduct.name,
-                      }}
-                      displayImage={null}
+                id={`photo-group-${selected.groupKey}`}
+                className="scroll-mt-20"
+              >
+                {selected.state === "proposed" ? (
+                  <DeferredPhotoGroup
+                    name={proposalName(selected)}
+                    eager={index === 0}
+                  >
+                    <ProposalCard
+                      key={selected.groupKey}
+                      runId={runId}
+                      runStatus={review.runStatus}
+                      proposal={selected}
+                      proposals={review.proposals}
+                      imagesById={imagesById}
+                      busy={busy}
+                      save={save}
+                      action={action}
+                      approve={approve}
                     />
-                  </p>
-                )}
-                {selected.committedInventoryId ? (
-                  <p className="mt-1 text-xs">
-                    Inventory entry{" "}
-                    <EntityRefLink
-                      entity="inventory"
-                      data={{
-                        id: selected.committedInventoryId,
-                        name:
-                          selected.inventory?.locationName ||
-                          selected.committedInventoryId,
-                      }}
-                      displayImage={null}
-                    />{" "}
-                    · {selected.inventory?.quantity ?? 0} received
-                  </p>
+                  </DeferredPhotoGroup>
                 ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    No Inventory write
-                  </p>
+                  <CollapsibleSection
+                    className="min-w-0 border-t border-border pt-3"
+                    title={
+                      <span>
+                        {selected.state === "committed"
+                          ? "Approved"
+                          : "Discarded"}{" "}
+                        · {proposalName(selected)}
+                      </span>
+                    }
+                  >
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selected.images
+                        .map((entry) => `${entry.purpose} ${entry.id}`)
+                        .join(" · ") || "No attached photos"}
+                    </p>
+                    {selected.committedProduct && (
+                      <p className="mt-2 text-sm">
+                        <EntityRefLink
+                          entity="product"
+                          data={{
+                            id: selected.committedProduct.id,
+                            name: selected.committedProduct.name,
+                          }}
+                          displayImage={null}
+                        />
+                      </p>
+                    )}
+                    {selected.committedInventoryId ? (
+                      <p className="mt-1 text-xs">
+                        Inventory entry{" "}
+                        <EntityRefLink
+                          entity="inventory"
+                          data={{
+                            id: selected.committedInventoryId,
+                            name:
+                              selected.inventory?.locationName ||
+                              selected.committedInventoryId,
+                          }}
+                          displayImage={null}
+                        />{" "}
+                        · {selected.inventory?.quantity ?? 0} received
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        No Inventory write
+                      </p>
+                    )}
+                    {selected.state === "committed" && (
+                      <ExpenseLinkReview runId={runId} proposal={selected} />
+                    )}
+                    {selected.state === "committed" &&
+                      selected.product.kind === "create" && (
+                        <CollapsibleSection
+                          className="mt-4 border-t border-border pt-3"
+                          title="Review possible matches"
+                        >
+                          <PhotoProductSuggestions
+                            runId={runId}
+                            proposal={selected}
+                            settled
+                          />
+                        </CollapsibleSection>
+                      )}
+                  </CollapsibleSection>
                 )}
-                {selected.state === "committed" && (
-                  <ExpenseLinkReview runId={runId} proposal={selected} />
-                )}
-                {selected.state === "committed" &&
-                  selected.product.kind === "create" && (
-                    <details className="mt-4 border-t border-border pt-3">
-                      <summary className="cursor-pointer text-xs font-medium">
-                        Review possible matches
-                      </summary>
-                      <PhotoProductSuggestions
-                        runId={runId}
-                        proposal={selected}
-                        settled
-                      />
-                    </details>
-                  )}
-              </section>
-            )}
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

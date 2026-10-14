@@ -99,7 +99,9 @@ graph coverage or an explicit non-graph metadata classification. A non-entity
 source table also needs `ENTITY_EDGE_OWNERS`, even when excluded from the graph.
 Run both `entity-manifest-fk.unit.test.ts` and `entity-edge-owners.unit.test.ts`
 after adding an FK, including ledger child tables; the owner guard loads the
-actual graph projection and catches module-initialization failures.
+actual graph projection and catches module-initialization failures. Populate new
+child-table FKs in `delete-policy.integration.test.ts` staging fixtures so the
+matrix exercises their real block, detach or cascade behavior.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.

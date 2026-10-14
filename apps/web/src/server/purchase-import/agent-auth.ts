@@ -39,6 +39,8 @@ const delegationClaims = z.object({
   iss: z.literal(`${OAUTH_ISSUER}/purchase-agent`),
   run_id: z.string().uuid(),
   grant_id: z.string().min(1),
+  /** The coordinator generation of the tool call this bearer was minted for. */
+  generation: z.string().min(1).optional(),
   iat: z.number(),
   exp: z.number(),
 });
@@ -203,6 +205,7 @@ export async function issuePurchaseAgentDelegation(input: {
   runId: string;
   userId: string;
   grantId: string;
+  generation?: string | undefined;
   secret: string;
 }) {
   return await signJWT(
@@ -214,6 +217,7 @@ export async function issuePurchaseAgentDelegation(input: {
       iss: `${OAUTH_ISSUER}/purchase-agent`,
       run_id: input.runId,
       grant_id: input.grantId,
+      ...(input.generation ? { generation: input.generation } : {}),
     },
     input.secret,
     DELEGATION_TTL_SECONDS,

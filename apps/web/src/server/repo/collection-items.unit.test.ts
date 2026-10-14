@@ -104,10 +104,12 @@ describe("recipeUsageItems", () => {
       format,
     );
     expect(forward).toEqual(reverse);
-    expect(forward.map((row) => row.subtitle)).toEqual([
-      "Gravy\na line",
-      "Gravy\nb line",
-    ]);
+    expect(forward.map((row) => row.lines?.map((entry) => entry.text))).toEqual(
+      [
+        ["Gravy", "a line"],
+        ["Gravy", "b line"],
+      ],
+    );
   });
 
   it("carries the badges the caller computed for a line", () => {
@@ -123,9 +125,9 @@ describe("recipeUsageItems", () => {
       recipeUsageItems(
         [only],
         () => "",
-        () => ["Re-parse changes amount"],
+        () => [{ label: "Re-parse changes amount", tone: "warning" }],
       )[0]?.badges,
-    ).toEqual(["Re-parse changes amount"]);
+    ).toEqual([{ label: "Re-parse changes amount", tone: "warning" }]);
   });
 
   const usage = (
@@ -159,10 +161,16 @@ describe("recipeUsageItems", () => {
     expect(rows[0]).toMatchObject({
       entity: "recipe",
       id: recipeId,
-      subtitle: "Gravy · 2 cup · sifted\n2 cups flour",
+      lines: [
+        { text: "Gravy · 2 cup · sifted", tone: "muted" },
+        { text: "2 cups flour", tone: "muted" },
+      ],
     });
     // A line with no captured source says so instead of leaving the row bare.
-    expect(rows[1]?.subtitle).toBe("2 cup · sifted\n(no source line)");
+    expect(rows[1]?.lines?.map((entry) => entry.text)).toEqual([
+      "2 cup · sifted",
+      "(no source line)",
+    ]);
   });
 });
 
@@ -178,7 +186,12 @@ describe("imageAssociationItems", () => {
         },
       ]),
     ).toMatchObject([
-      { entity: "recipe", id: recipeId, title: "Beef Stew", subtitle: "cover" },
+      {
+        entity: "recipe",
+        id: recipeId,
+        title: "Beef Stew",
+        lines: [{ text: "cover", tone: "muted" }],
+      },
     ]);
   });
 });
@@ -223,12 +236,17 @@ describe("runHistoryItems", () => {
       entity: "run",
       id: runId,
       title: "Purchase import",
-      subtitle:
-        "purchase validation · manual\n4 seen · 2 imported · 1 updated · 1 skipped",
+      lines: [
+        { text: "purchase validation · manual" },
+        {
+          text: "4 seen · 2 imported · 1 updated · 1 skipped",
+          tone: "muted",
+        },
+      ],
       trailing: null,
       state: { kind: "failed", label: "Failed" },
       at: "2026-03-04T10:15:00.000Z",
-      badges: ["login_expired"],
+      badges: [{ label: "login_expired", tone: "warning" }],
     });
   });
 });

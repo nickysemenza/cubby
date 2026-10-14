@@ -17,9 +17,7 @@ describe("resolveListView", () => {
       for (const declared of views) {
         expect(
           resolveListView(entity, { view: listViewId(declared) }).view,
-        ).toEqual(
-          entity === "run" && declared === "shelf" ? views[0] : declared,
-        );
+        ).toEqual(declared);
       }
       expect(resolveListView(entity, {}).view).toEqual(views[0]);
       expect(resolveListView(entity, { view: "no-such-view" }).view).toEqual(

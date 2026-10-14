@@ -2,7 +2,10 @@ import { retainedMailFixture } from "~/server/purchase-import/order-import.fixtu
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { imageShortcode, runShortcode } from "@cubby/schemas/identifiers";
-import type { photoImportCreateRunInput } from "@cubby/schemas/photo-import-run";
+import type {
+  photoImportCreateRunInput,
+  photoImportSealBatchInput,
+} from "@cubby/schemas/photo-import-run";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq, isNull } from "drizzle-orm";
@@ -107,6 +110,7 @@ async function uploadPhotoRun(services: CoupledServices) {
     operation: string,
     body:
       | z.input<typeof photoImportCreateRunInput>
+      | z.input<typeof photoImportSealBatchInput>
       | PhotoImportStageInput
       | PhotoImportFinalizeInput,
     schema: z.ZodType<T>,
@@ -122,11 +126,15 @@ async function uploadPhotoRun(services: CoupledServices) {
       );
     return schema.parse(json);
   };
+  const clientBatchId = crypto.randomUUID();
   const { runId } = await post(
     "createRun",
     {
       notes:
         "Synthetic wardrobe photos of two separate items: a slate-blue crew-neck T-shirt and a brown ankle boot. Brand and size are unknown.",
+      processor: "cubby",
+      clientBatchId,
+      imageCount: LIVE_IMPORT.photos.length,
     },
     z.object({ runId: runShortcode }),
   );
@@ -189,7 +197,12 @@ async function uploadPhotoRun(services: CoupledServices) {
       height: photo.item.height,
     });
   }
-  await post("finalize", { runId, images }, z.object({}).loose());
+  await post(
+    "finalize",
+    { runId, clientBatchId, images },
+    z.object({}).loose(),
+  );
+  await post("sealBatch", { runId, clientBatchId }, z.object({}).loose());
   return runId;
 }
 

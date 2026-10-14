@@ -197,8 +197,8 @@ test("image results compare descriptions and require explicit attachment confirm
   await page
     .getByRole("link", { name: "Image identification", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/runs\?selected=IPR-[A-Z0-9]+$/);
-  await expect(
-    page.getByRole("table", { name: "Runs and image jobs" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(
+    /\/runs\?view=image-jobs&selected=IPR-[A-Z0-9]+$/,
+  );
+  await expect(page.getByRole("table", { name: "Image jobs" })).toBeVisible();
 });

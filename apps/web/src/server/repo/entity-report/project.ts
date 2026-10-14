@@ -227,9 +227,8 @@ export async function projectContributionReport(
     entity: "ledgerParty",
     id: party.id,
     title: party.name,
-    subtitle: null,
     trailing: formatCurrency(amount),
-    statuses: [{ label: LEDGER_PARTY_KIND_LABELS[party.kind] }],
+    badges: [{ label: LEDGER_PARTY_KIND_LABELS[party.kind] }],
   });
   return [
     {

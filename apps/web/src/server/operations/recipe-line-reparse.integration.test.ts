@@ -79,7 +79,7 @@ describe("reparseRecipeLine", () => {
     const drifted = before.rows.filter((row) => (row.commands ?? []).length);
     expect(drifted).toHaveLength(1);
     expect(drifted[0]).toMatchObject({
-      badges: ["Re-parse changes amount"],
+      badges: [{ label: "Re-parse changes amount", tone: "warning" }],
       commands: [
         {
           label: "Re-parse",

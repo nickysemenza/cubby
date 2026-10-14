@@ -322,6 +322,7 @@
         "packages/schemas/src/money.ts",
         "packages/schemas/src/nutrition.ts",
         "packages/schemas/src/photo-categories.ts",
+        "packages/schemas/src/photo-run-input.ts",
         "packages/schemas/src/recipe-shared.ts",
         "packages/schemas/src/unitmapping.ts"
       ],
@@ -453,7 +454,6 @@
         "apps/web/src/app/cookbooks/cookbook-run-report.tsx",
         "apps/web/src/app/purchases/financial-settlement.tsx",
         "apps/web/src/app/purchases/purchase-import-run-detail.tsx",
-        "apps/web/src/app/runs/run-history.tsx",
         "apps/web/src/entity/detail-field-renderers/image-capture.tsx",
         "apps/web/src/lib/format-duration.ts",
         "apps/web/src/lib/wasm-execution.ts",

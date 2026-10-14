@@ -37,6 +37,7 @@ function OwnershipControl({ record }: { record: DetailRecordOf<"inventory"> }) {
     name: string;
   } | null>(ownership.explicitOwner);
   const [quantity, setQuantity] = useState("");
+  const [editing, setEditing] = useState(false);
   const save = useActionMutation({
     mutationFn: inventory.setOwnership.mutationOptions,
     success: "Ownership saved",
@@ -50,87 +51,108 @@ function OwnershipControl({ record }: { record: DetailRecordOf<"inventory"> }) {
   return (
     <Stack gap="sm">
       <output aria-label="Current ownership">{ownership.basis}</output>
-      <OverrideControl
-        label="Ownership"
-        options={modeOptions}
-        value={mode}
-        onChange={(value) => setMode(inventoryOwnershipMode.parse(value))}
-        disabled={save.isPending}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        aria-expanded={editing}
+        onClick={() => setEditing((open) => !open)}
       >
-        {mode === "person" ? (
-          <EntityReferencePicker
-            entity="ledgerParty"
-            scope={ownerScope}
-            label="Individual owner"
-            value={owner}
-            setValue={(item) =>
-              setOwner(
-                item
-                  ? {
-                      name: item.name,
-                      id: ledgerPartyShortcode.parse(item.id),
-                    }
-                  : null,
-              )
-            }
-          />
-        ) : null}
-      </OverrideControl>
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          aria-label="Quantity to assign; leave blank for entire entry"
-          type="number"
-          min="0"
-          step="any"
-          placeholder="Entire quantity"
-          value={quantity}
-          onChange={(event) => setQuantity(event.target.value)}
-          className="max-w-40"
-        />
-        <Button
-          size="sm"
-          disabled={
-            save.isPending ||
-            (mode === "person" && !owner) ||
-            (partial !== undefined &&
-              (!Number.isFinite(partial) || partial <= 0))
-          }
-          onClick={() => {
-            if (mode === "person" && !owner) return;
-            save.mutate({
-              inventoryEntryId: id,
-              ownership:
-                mode === "person" && owner
-                  ? { mode, ownerId: owner.id }
-                  : { mode: mode === "unassigned" ? "unassigned" : "inherit" },
-              quantity: partial,
-            });
-          }}
-        >
-          Save ownership
-        </Button>
-        {ownership.mode === "inherit" && ownership.effectiveOwner ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={
-              confirm.isPending ||
-              (partial !== undefined &&
-                (!Number.isFinite(partial) || partial <= 0))
-            }
-            onClick={() =>
-              confirm.mutate({
-                inventoryEntryId: id,
-                evidenceFingerprint: ownership.evidenceFingerprint,
-                quantity: partial,
-              })
-            }
+        Change ownership
+      </Button>
+      {editing && (
+        <div className="max-w-2xl space-y-2">
+          <OverrideControl
+            label="Ownership"
+            options={modeOptions}
+            value={mode}
+            onChange={(value) => setMode(inventoryOwnershipMode.parse(value))}
+            disabled={save.isPending}
           >
-            Confirm {ownership.effectiveOwner.name}
-          </Button>
-        ) : null}
-      </div>
-      <InventoryExpenseActions record={record} />
+            {mode === "person" ? (
+              <EntityReferencePicker
+                entity="ledgerParty"
+                scope={ownerScope}
+                label="Individual owner"
+                value={owner}
+                setValue={(item) =>
+                  setOwner(
+                    item
+                      ? {
+                          name: item.name,
+                          id: ledgerPartyShortcode.parse(item.id),
+                        }
+                      : null,
+                  )
+                }
+              />
+            ) : null}
+          </OverrideControl>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              aria-label="Quantity to assign; leave blank for entire entry"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="Entire quantity"
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              className="max-w-40"
+            />
+            <Button
+              size="sm"
+              disabled={
+                save.isPending ||
+                (mode === "person" && !owner) ||
+                (partial !== undefined &&
+                  (!Number.isFinite(partial) || partial <= 0))
+              }
+              onClick={() => {
+                if (mode === "person" && !owner) return;
+                save.mutate({
+                  inventoryEntryId: id,
+                  ownership:
+                    mode === "person" && owner
+                      ? { mode, ownerId: owner.id }
+                      : {
+                          mode:
+                            mode === "unassigned" ? "unassigned" : "inherit",
+                        },
+                  quantity: partial,
+                });
+              }}
+            >
+              Save ownership
+            </Button>
+            {ownership.mode === "inherit" && ownership.effectiveOwner ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  confirm.isPending ||
+                  (partial !== undefined &&
+                    (!Number.isFinite(partial) || partial <= 0))
+                }
+                onClick={() =>
+                  confirm.mutate({
+                    inventoryEntryId: id,
+                    evidenceFingerprint: ownership.evidenceFingerprint,
+                    quantity: partial,
+                  })
+                }
+              >
+                Confirm {ownership.effectiveOwner.name}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      )}
+      <details className="max-w-2xl">
+        <summary className="cursor-pointer text-xs font-medium">
+          Purchase or sale evidence
+        </summary>
+        <InventoryExpenseActions record={record} />
+      </details>
     </Stack>
   );
 }

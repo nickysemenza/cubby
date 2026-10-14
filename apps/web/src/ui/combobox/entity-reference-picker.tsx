@@ -1,5 +1,11 @@
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/entity/entity-media/entity-display-images";
+import { Image } from "~/ui/primitives/image";
+
 import type { ProductPickerIntent } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import type { EntitySearchScope } from "./entity-search-hooks";
@@ -43,6 +49,38 @@ export function EntityReferencePicker<E extends EntitySearchEntity>({
     entity,
     { intent, scope },
   );
+  const images = useEntityDisplayImages(
+    [...items, ...(picker.value ? [picker.value] : [])].map((item) => ({
+      entityKind: entity,
+      entityId: item.id,
+    })),
+  );
+  const withImage = (item: ComboboxItem<ShortcodeFor<E>>) => {
+    const imageUrl =
+      images[entityDisplayImageKey({ entityKind: entity, entityId: item.id })]
+        ?.url ??
+      item.thumb?.imageUrl ??
+      null;
+    return {
+      ...item,
+      thumb: {
+        ...item.thumb,
+        imageUrl,
+        fallback: item.thumb?.fallback ?? item.icon,
+      },
+      icon: imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt=""
+          displayWidth={40}
+          className="size-10 shrink-0 rounded-sm border border-border object-cover"
+        />
+      ) : (
+        item.icon
+      ),
+    };
+  };
+  const hydratedItems = items.map(withImage);
   return (
     <>
       {dialog}
@@ -50,7 +88,8 @@ export function EntityReferencePicker<E extends EntitySearchEntity>({
         {...picker}
         {...search}
         entity={entity}
-        items={mapItems ? mapItems(items) : items}
+        value={picker.value ? withImage(picker.value) : null}
+        items={mapItems ? mapItems(hydratedItems) : hydratedItems}
         onCreateNew={creatable ? onCreateNew : undefined}
       />
     </>

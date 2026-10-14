@@ -57,6 +57,8 @@ import {
 } from "~/server/repo/product/find-by-external-ids";
 import {
   findExactProductNameMatches,
+  findProductIdentityReviewCandidates,
+  PRODUCT_IDENTITY_REVIEW_REASON,
   findProductNameCandidates,
 } from "~/server/repo/product/resolve-names";
 import {
@@ -399,6 +401,8 @@ async function productCandidates(
     ).values(),
   ];
   const fuzzy = await findProductNameCandidates(db, line.title);
+  const review = await findProductIdentityReviewCandidates(db, line.title);
+  const reviewIds = new Set(review.map(({ id }) => id));
   const exactProductIds = new Set(exact.map(({ id }) => id));
   const exactNameIds = new Set(
     (await findExactProductNameMatches(db, line.title)).map(({ id }) => id),
@@ -440,7 +444,15 @@ async function productCandidates(
     ...exact,
     ...fuzzyRest.filter(({ id }) => exactNameIds.has(id)),
     ...modelRanked,
-    ...fuzzyRest.filter(({ id }) => !exactNameIds.has(id)),
+    ...review.filter(
+      ({ id }) =>
+        !exactProductIds.has(id) &&
+        !exactNameIds.has(id) &&
+        !modelRankedIds.has(id),
+    ),
+    ...fuzzyRest.filter(
+      ({ id }) => !exactNameIds.has(id) && !reviewIds.has(id),
+    ),
   ]
     .slice(0, 20)
     .map(({ id, shortcode, ...candidate }) => ({
@@ -450,7 +462,9 @@ async function productCandidates(
       exactNameMatch: exactNameIds.has(id),
       matchReason: modelRankedIds.has(id)
         ? MODEL_STYLE_MATCH_REASON
-        : undefined,
+        : reviewIds.has(id)
+          ? PRODUCT_IDENTITY_REVIEW_REASON
+          : undefined,
     }));
 }
 

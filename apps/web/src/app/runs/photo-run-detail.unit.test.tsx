@@ -1,9 +1,16 @@
 import { imageShortcode, shortcode } from "@cubby/schemas/identifiers";
 import type {
+  PhotoGroupProposal,
   PhotoRunImage,
   PhotoRunReview,
 } from "@cubby/schemas/photo-import-run";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
@@ -138,6 +145,7 @@ const photo = (
   capturedAt: null,
   capturedAtOffsetMinutes: null,
   targetState,
+  skipReason: null,
   originalUrl: `https://img.example.com/${id}.jpg`,
   cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
   cutout: null,
@@ -157,6 +165,19 @@ const photo = (
 });
 
 const review: PhotoRunReview = {
+  lifecycle: {
+    processor: null,
+    phase: "completed",
+    plannedImageCount: null,
+    openBatchCount: 0,
+    finalizedImageCount: 3,
+    describedImageCount: 2,
+    failedImageIds: [],
+    skippedImageCount: 0,
+    proposedGroupCount: 0,
+    committedGroupCount: 0,
+    dispatchError: null,
+  },
   imageProcessingPaused: false,
   review: {
     runId: RUN_ID,
@@ -172,6 +193,30 @@ const review: PhotoRunReview = {
     photo("IMG-4K7N", 2, "completed", { recognizedText: "Patagonia\nSize M" }),
     photo("IMG-4K7P", 3, "pending", {}),
   ],
+};
+
+const committedSweater: PhotoGroupProposal = {
+  groupKey: "fixture-sweater",
+  state: "committed",
+  origin: null,
+  images: [
+    { id: shortcode("IMG-4K7M"), purpose: "item" },
+    { id: shortcode("IMG-4K7N"), purpose: "label" },
+  ],
+  skip: [],
+  product: { kind: "create", create: { name: "Fixture sweater" } },
+  committedProduct: {
+    id: shortcode("PRD-4K7M"),
+    name: "Fixture sweater",
+    coverUrl: null,
+  },
+  inventory: null,
+  evidence: null,
+  conflict: null,
+  lastError: null,
+  missingImageCount: 0,
+  committedAt: "2026-09-20T16:04:00.000Z",
+  updatedAt: "2026-09-20T16:04:00.000Z",
 };
 
 beforeEach(() => {
@@ -193,6 +238,7 @@ afterEach(() => {
 describe("PhotoImportRunView", () => {
   it("keeps approval available for unresolved photos on a stopped review run", async () => {
     const stoppedReview: PhotoRunReview = {
+      ...review,
       imageProcessingPaused: false,
       review: {
         ...review.review,
@@ -200,6 +246,7 @@ describe("PhotoImportRunView", () => {
         proposals: [
           {
             groupKey: "fixture-shirt",
+            origin: null,
             state: "proposed",
             images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],
@@ -236,6 +283,49 @@ describe("PhotoImportRunView", () => {
       screen.queryByText(/photos that can no longer be reviewed/),
     ).not.toBeInTheDocument();
   });
+
+  it.each(["external", "cubby"] as const)(
+    "keeps %s handoff or retry available after reopening a Run with committed groups",
+    async (processor) => {
+      const reopened: PhotoRunReview = {
+        ...review,
+        lifecycle: {
+          ...review.lifecycle,
+          processor,
+          phase:
+            processor === "external" ? "ready_for_handoff" : "needs_attention",
+          dispatchError:
+            processor === "cubby"
+              ? "Connect the Cubby agent before grouping"
+              : null,
+        },
+        review: {
+          ...review.review,
+          runStatus: "running",
+          proposals: [committedSweater],
+        },
+      };
+      harness.queryClient.setQueryData(
+        photoImport.review.queryKey({ runId: RUN_ID }),
+        reopened,
+      );
+      render(<PhotoImportRunView run={{ ...run, status: "running" }} />, {
+        wrapper: harness.wrapper,
+      });
+      expect(
+        screen.getByRole("button", {
+          name:
+            processor === "external"
+              ? "Copy prompt for Claude/Codex"
+              : "Start grouping",
+        }),
+      ).toBeEnabled();
+      if (processor !== "cubby") return;
+      expect(
+        screen.getByText("Connect the Cubby agent before grouping"),
+      ).toBeVisible();
+    },
+  );
 
   it("starts grouping when the completed iPhone upload opens its review link", async () => {
     window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
@@ -392,30 +482,7 @@ describe("PhotoImportRunView", () => {
         ...review,
         review: {
           ...review.review,
-          proposals: [
-            {
-              groupKey: "fixture-sweater",
-              state: "committed",
-              images: [
-                { id: shortcode("IMG-4K7M"), purpose: "item" },
-                { id: shortcode("IMG-4K7N"), purpose: "label" },
-              ],
-              skip: [],
-              product: { kind: "create", create: { name: "Fixture sweater" } },
-              committedProduct: {
-                id: shortcode("PRD-4K7M"),
-                name: "Fixture sweater",
-                coverUrl: null,
-              },
-              inventory: null,
-              evidence: null,
-              conflict: null,
-              lastError: null,
-              missingImageCount: 0,
-              committedAt: "2026-09-20T16:04:00.000Z",
-              updatedAt: "2026-09-20T16:04:00.000Z",
-            },
-          ],
+          proposals: [committedSweater],
         },
         images: review.images.map((image) =>
           image.id === "IMG-4K7N"
@@ -460,6 +527,12 @@ describe("PhotoImportRunView", () => {
       within(labelRow).getByText("Cutout: not queued"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Cutout: Skipped")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("heading", { name: "Approved · Fixture sweater" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("heading", { name: "Review possible matches" }),
+    );
     expect(
       await screen.findByRole("region", { name: "Product comparison" }),
     ).toBeInTheDocument();
@@ -470,6 +543,7 @@ describe("PhotoImportRunView", () => {
 
   it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {
     const pendingReview: PhotoRunReview = {
+      ...review,
       imageProcessingPaused: false,
       review: {
         ...review.review,
@@ -477,6 +551,7 @@ describe("PhotoImportRunView", () => {
         proposals: [
           {
             groupKey: "fixture-sweater",
+            origin: null,
             state: "proposed",
             images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],

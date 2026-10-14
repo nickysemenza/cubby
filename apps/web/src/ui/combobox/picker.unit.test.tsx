@@ -92,6 +92,27 @@ describe("matchesPickerItem", () => {
 });
 
 describe("Picker records", () => {
+  it("shows the selected record image before opening or searching", () => {
+    const { container } = render(
+      <Picker
+        entity="location"
+        label="Receive into"
+        items={[
+          {
+            id: "LOC-4K7M",
+            name: "Example shelf",
+            thumb: { imageUrl: "/synthetic-shelf.jpg", fallback: null },
+          },
+        ]}
+        value={{ id: "LOC-4K7M", name: "Example shelf" }}
+        setValue={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("[data-picker-visual] img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("synthetic-shelf"),
+    );
+  });
   it("keeps entity-search rows' existing icon and swatch marks", () => {
     render(
       <Picker

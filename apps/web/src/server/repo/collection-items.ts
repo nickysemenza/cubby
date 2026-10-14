@@ -43,7 +43,6 @@ export const cookbookItems = (
     entity: "cookbook",
     id: cookbook.id,
     title: cookbook.name,
-    subtitle: null,
     // The count doubles as the link to the recipes taken from this cookbook.
     trailing: countLabel(cookbook.recipeCount, "recipe"),
     listLink: { entity: "recipe", filters: { source: cookbook.id } },
@@ -68,7 +67,6 @@ export const labelImageItems = (
     entity: "image",
     id: label.id,
     title: label.filename,
-    subtitle: null,
     trailing: null,
     imageUrl: label.representations?.original ?? label.url,
     actions: reviewable.has(label.id) ? ["reviewLabelNutrition"] : [],
@@ -99,7 +97,7 @@ export const recipeUsageItems = (
   usages: readonly UsageForItems[],
   formatAmount: (amount: Amount) => string,
   /** Badges for a line a fresh parse would change, composed by the caller (it owns the parser). */
-  badgesOf: (usage: UsageForItems) => string[] = () => [],
+  badgesOf: (usage: UsageForItems) => ReportRecordRow["badges"] = () => [],
   /** What the person can do to a line (re-parse it), composed by the caller. */
   commandsOf: (usage: UsageForItems) => ReportCommand[] = () => [],
 ): ReportRecordRow[] =>
@@ -107,7 +105,7 @@ export const recipeUsageItems = (
     entity: "recipe",
     id: usage.recipe.id,
     title: usage.recipe.name,
-    subtitle: [
+    lines: [
       [
         usage.sectionName,
         usage.amounts.map(formatAmount).join(", ") || null,
@@ -118,7 +116,7 @@ export const recipeUsageItems = (
       usage.rawLine || "(no source line)",
     ]
       .filter(Boolean)
-      .join("\n"),
+      .map((text) => ({ text, tone: "muted" as const })),
     trailing: null,
     badges: badgesOf(usage),
     commands: commandsOf(usage),
@@ -132,7 +130,7 @@ export const imageAssociationItems = (
     entity: association.entityKind,
     id: association.entityId,
     title: association.entityName,
-    subtitle: association.role,
+    lines: association.role ? [{ text: association.role, tone: "muted" }] : [],
     trailing: null,
   }));
 
@@ -146,7 +144,6 @@ export const aiDescriptionItems = (
           entity: null,
           id: null,
           title: description,
-          subtitle: null,
           trailing: null,
         },
       ]
@@ -160,19 +157,24 @@ export const runHistoryItems = (
     entity: "run",
     id: run.publicId,
     title: run.vendorName ?? run.vendorAccountLabel ?? "Purchase import",
-    subtitle: [
-      [run.purpose.replaceAll("_", " "), run.trigger].join(" · "),
-      [
-        `${run.ordersSeen} seen`,
-        `${run.imported} imported`,
-        `${run.updated} updated`,
-        `${run.skipped} skipped`,
-      ].join(" · "),
-    ].join("\n"),
+    lines: [
+      { text: [run.purpose.replaceAll("_", " "), run.trigger].join(" · ") },
+      {
+        text: [
+          `${run.ordersSeen} seen`,
+          `${run.imported} imported`,
+          `${run.updated} updated`,
+          `${run.skipped} skipped`,
+        ].join(" · "),
+        tone: "muted",
+      },
+    ],
     trailing: null,
     at: run.startedAt,
     ...withState(run.status),
-    badges: run.failureCode ? [run.failureCode] : [],
+    badges: run.failureCode
+      ? [{ label: run.failureCode, tone: "warning" }]
+      : [],
   }));
 
 /** The row's `state` for a run status that has one; any other status stays its trailing text. */

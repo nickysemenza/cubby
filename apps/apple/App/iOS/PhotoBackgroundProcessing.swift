@@ -16,7 +16,7 @@ enum PhotoBackgroundProcessing {
     }
 
     static func scheduleIfNeeded(model: AppModel) {
-        guard model.phase == .signedIn, model.participation.automaticWork,
+        guard model.phase == .signedIn, (model.participation.automaticWork || model.hasPendingPhotoImports),
             (model.photoLibrary.hasPendingMatching || model.photoLibrary.isLoadingLibrary)
         else { return }
         // At most one pending request for the resumable scan.
@@ -40,11 +40,13 @@ enum PhotoBackgroundProcessing {
             return
         }
         if model.phase == .restoring { await model.restoreSession() }
-        guard model.phase == .signedIn, model.participation.automaticWork else {
+        guard model.phase == .signedIn, (model.participation.automaticWork || model.hasPendingPhotoImports)
+        else {
             task.setTaskCompleted(success: true)
             return
         }
         let checkedBefore = model.photoLibrary.checked.count
+        model.continuePhotoImports()
         let worker = Task { @MainActor in
             await model.startAutomaticPhotoMatching()
             await model.photoLibrary.waitForMatching()
@@ -81,10 +83,11 @@ enum LibrarySyncBackgroundProcessing {
     }
 
     static func scheduleIfNeeded(model: AppModel) {
-        guard model.phase == .signedIn, model.participation.automaticWork else { return }
+        guard model.phase == .signedIn, (model.participation.automaticWork || model.hasPendingPhotoImports)
+        else { return }
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
         let request = BGProcessingTaskRequest(identifier: identifier)
-        request.requiresExternalPower = true
+        request.requiresExternalPower = !model.hasPendingPhotoImports
         request.requiresNetworkConnectivity = true
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -99,15 +102,23 @@ enum LibrarySyncBackgroundProcessing {
             return
         }
         if model.phase == .restoring { await model.restoreSession() }
-        guard model.phase == .signedIn, model.participation.automaticWork else {
+        guard model.phase == .signedIn, (model.participation.automaticWork || model.hasPendingPhotoImports)
+        else {
             task.setTaskCompleted(success: true)
             return
         }
+        model.continuePhotoImports()
         let worker = Task { @MainActor in
+            async let imports: Void = model.waitForPhotoImports()
+            guard model.participation.automaticWork else {
+                await imports
+                return model.hasPendingPhotoImports
+            }
             async let companionHasMore = model.runCompanionJobsInBackground()
             await model.startAutomaticPhotoMatching()
             await model.photoLibrary.waitForMatching()
             await model.libraryMetadataSync?.runInBackground()
+            await imports
             return await companionHasMore
         }
         task.expirationHandler = {
@@ -116,6 +127,7 @@ enum LibrarySyncBackgroundProcessing {
                 model.photoLibrary.interruptMatching()
                 model.libraryMetadataSync?.endBackgroundRun()
                 model.endCompanionBackgroundRun()
+                model.interruptPhotoImports()
             }
         }
         let companionHasMore = await worker.value
@@ -124,7 +136,9 @@ enum LibrarySyncBackgroundProcessing {
         task.setTaskCompleted(success: !expired)
         // Reschedule only when the window ended early or the scan is unfinished, so a fully
         // synced library does not relaunch on every background transition's behalf.
-        if expired || companionHasMore || model.photoLibrary.hasPendingMatching {
+        if expired || companionHasMore || model.photoLibrary.hasPendingMatching
+            || model.hasPendingPhotoImports
+        {
             scheduleIfNeeded(model: model)
         }
     }

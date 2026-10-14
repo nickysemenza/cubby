@@ -120,6 +120,10 @@ export const ENTITY_EDGE_OWNERS = {
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
   RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
+  RunPushRegistration: {
+    excluded:
+      "Push delivery state for a device's Run registration, not a relationship.",
+  },
   RunOperation: { excluded: WORKFLOW },
   ImportSourceClaim: { excluded: WORKFLOW },
   ImportSourceOrder: { excluded: WORKFLOW },

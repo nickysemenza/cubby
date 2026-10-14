@@ -41,11 +41,8 @@ import {
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
-import {
-  RecordsBlockView,
-  RecordsDetailActions,
-  ReportVerb,
-} from "./records-block";
+import { RecordsBlockView, RecordsDetailActions } from "./records-block";
+import { ReportVerb } from "./records-ledger";
 
 const TONE_TEXT = {
   positive: "text-positive",

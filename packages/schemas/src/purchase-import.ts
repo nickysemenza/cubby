@@ -47,7 +47,9 @@ const newProductResolution = z
       .array(distinctFromProduct(productShortcode.describe("Product")))
       .optional(),
   })
-  .describe("Create a Product; an exact match must be listed in distinctFrom.");
+  .describe(
+    "Create a Product; exact-name and strong similar brand/item candidates must be reviewed in distinctFrom.",
+  );
 
 export { runPurpose, runStatus, runTrigger } from "./run-fields";
 export type RunTrigger = z.infer<typeof runTrigger>;
@@ -114,6 +116,12 @@ export const purchaseImportRunExecution = z
     run: runShortcode.optional(),
     operationId: importOperationId,
     itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
+    /**
+     * The coordinator dispatch generation this call belongs to. Stamped by
+     * the agent host, signed into the run-bound delegation, and overwritten
+     * from that signature server-side; any other caller's value is dropped.
+     */
+    generation: z.string().min(1).max(200).optional(),
   })
   .refine((value) => !(value.runId && value.run), {
     message: "Name the import Run once: runId (agent) or run (member)",
@@ -161,7 +169,7 @@ const extractedOrderDate = z
   ])
   .nullable()
   .describe(
-    "Source-printed order date as YYYY-MM-DD, or an explicit ISO timestamp with timezone. Preserve a printed calendar day without inventing a time or timezone. Null when absent; email receipt time is not an order date.",
+    "Order date as YYYY-MM-DD or an ISO timestamp with timezone. Prefer a printed order date; when none is printed, leave null: the writer uses verified retained confirmation/receipt Email receivedAt as the fallback and records provenance on Purchase.date. Preserve an explicit member date override. Shipping, delivery, cancellation and refund event timestamps are not order-date fallbacks. Null when no eligible date exists.",
   );
 
 export const extractedOrderCandidate = z.object({

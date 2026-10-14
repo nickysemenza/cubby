@@ -62,6 +62,21 @@ starts under matching code and current authorization; migration itself does not
 rerun models or repair missing audit history. The populated predecessor
 migration regression verifies these preservation boundaries with synthetic data.
 
+## Photo import lifecycle
+
+Apply through `0060_photo-import-lifecycle` before deploying photo import push
+registration or proposal provenance writes. This expansion adds
+`RunPushRegistration` and nullable `PhotoGroupProposal.origin`; existing Runs,
+photo memberships, proposals, Products, inventory and financial records remain
+unchanged. Preserve the immutable applied journal prefix through
+`0059_discovery-handling-receipts` when integrating another branch.
+
+Before and after application, compare retained row counts and fingerprints,
+excluding only the newly added nullable origin column. Verify the exact applied
+journal prefix and full catalog equality. Configure the APNs Worker secrets
+listed in [infrastructure](../infrastructure.md#secrets-and-plaintext-variables) separately; schema
+application does not establish signed-client or locked-device push delivery.
+
 ## Typed Source references
 
 Apply expansion only through `0051_entity_source_targets`, then deploy the

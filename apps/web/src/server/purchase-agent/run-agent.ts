@@ -206,6 +206,17 @@ export class PurchaseImportRunAgent
     return runProgressStamp.parse({ generation, sequence });
   }
 
+  /** The dispatch generation of the request that issued a tool call. */
+  private async toolGeneration(
+    api: ToolExecutionApi,
+    context: Context,
+  ): Promise<string | undefined> {
+    const task = await api.getTask(api.taskId, context);
+    return task?.owner
+      ? this.readState(`request-generation:${task.owner}`)
+      : undefined;
+  }
+
   private async toolProgressStamp(
     api: ToolExecutionApi,
     context: Context,
@@ -333,7 +344,13 @@ export class PurchaseImportRunAgent
       }),
     );
     const mcpTools = await this.agentEnv.mcpTools(purpose);
-    this.registry.install(cubbyMcpExtension(mcpTools, () => this.services()));
+    this.registry.install(
+      cubbyMcpExtension(
+        mcpTools,
+        () => this.services(),
+        (api, context) => this.toolGeneration(api, context),
+      ),
+    );
     if (workflow.skills)
       this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;

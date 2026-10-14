@@ -12,155 +12,41 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("Run attention exposes a scoped child's failure and opens its inspector", async ({
+test("Runs list in the generic table, filter to attention, and open the record inspector", async ({
   page,
 }) => {
   const sample = await seedActiveResearchHistory(
     page,
-    uniqueName(test.info(), "Attention scope"),
-  );
-  const other = await seedActiveResearchHistory(
-    page,
-    uniqueName(test.info(), "Other attention"),
-  );
-  const diagnostic = "Synthetic retailer response: 503 source unavailable";
-  await setResearchHistoryStatus(sample.childId, "failed", diagnostic);
-  await setResearchHistoryStatus(
-    other.childId,
-    "failed",
-    "Unrelated synthetic failure",
-  );
-  await gotoAuthenticatedPage(
-    page,
-    `/runs?group=run&vendorId=${sample.vendorId}`,
-  );
-  const attention = page.getByRole("region", { name: "Needs attention" });
-  await expect(attention.getByRole("button", { name: "Open Run" })).toHaveCount(
-    1,
-  );
-  await expect(attention).toContainText(diagnostic);
-  await expect(attention).not.toContainText("Unrelated synthetic failure");
-  await attention.getByText("Failure details", { exact: true }).click();
-  await expect(attention.getByText(diagnostic, { exact: true })).toBeVisible();
-  await attention.getByRole("button", { name: "Show attention only" }).click();
-  await expect(
-    attention.getByRole("button", { name: "Show all statuses" }),
-  ).toBeVisible();
-  const summary = page.getByRole("status", { name: "Matching attempts" });
-  await expect(summary).toContainText("1 failed");
-  await expect(summary).not.toContainText("completed");
-  await page.reload();
-  await expect(summary).toContainText("1 failed");
-  await expect(summary).not.toContainText("completed");
-  await expect(
-    attention.getByRole("button", { name: "Show all statuses" }),
-  ).toBeVisible();
-  await attention.getByRole("button", { name: "Open Run" }).click();
-  await expect(page).toHaveURL(new RegExp(`selected=${sample.childId}`));
-  await expectViewportBounded(page);
-});
-
-test("Run attention preserves default exclusions across toggle and reload", async ({
-  page,
-}) => {
-  const visible = await seedActiveResearchHistory(
-    page,
-    uniqueName(test.info(), "Default attention"),
-  );
-  const hidden = await seedActiveResearchHistory(
-    page,
-    uniqueName(test.info(), "Ephemeral attention"),
-    "ephemeral",
+    uniqueName(test.info(), "Generic runs"),
   );
   await setResearchHistoryStatus(
-    visible.childId,
+    sample.childId,
     "failed",
-    "Synthetic default attention failure",
+    "Synthetic retailer response: 503 source unavailable",
   );
-  await setResearchHistoryStatus(
-    hidden.childId,
-    "failed",
-    "Synthetic excluded ephemeral failure",
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoAuthenticatedPage(page, `/runs?vendorId=${sample.vendorId}`);
+  const table = page.getByRole("table");
+  const status = (name: string) =>
+    table.getByRole("cell", { name, exact: true });
+  await expect(status("Completed")).toHaveCount(1);
+  await expect(status("Failed")).toHaveCount(1);
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?vendorId=${sample.vendorId}&status=failed`,
   );
-  await gotoAuthenticatedPage(page, "/runs");
-  const attention = page.getByRole("region", { name: "Needs attention" });
-  await expect(attention).toContainText("Synthetic default attention failure");
-  await expect(attention).not.toContainText(
-    "Synthetic excluded ephemeral failure",
-  );
-  await attention.getByRole("button", { name: "Show attention only" }).click();
-  await expect(attention).not.toContainText(
-    "Synthetic excluded ephemeral failure",
-  );
-  await page.reload();
+  await expect(status("Completed")).toHaveCount(0);
+  await status("Failed").click();
+  const inspector = page.getByRole("complementary", { name: "Run inspector" });
+  await expect(inspector).toContainText(sample.childId);
   await expect(
-    attention.getByRole("button", { name: "Show all statuses" }),
+    inspector.getByRole("button", { name: "Open full run details" }),
   ).toBeVisible();
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
-  await expect(table).toContainText(visible.name);
-  await expect(table).not.toContainText(hidden.name);
-  await expect(attention).not.toContainText(
-    "Synthetic excluded ephemeral failure",
-  );
-});
-
-test("Runs summarize matching attempts without claiming Product verification", async ({
-  page,
-}) => {
-  const sample = await seedActiveResearchHistory(
-    page,
-    uniqueName(test.info(), "Work overview"),
-  );
-  await seedActiveResearchHistory(page, uniqueName(test.info(), "Other scope"));
-  await gotoAuthenticatedPage(
-    page,
-    `/runs?group=run&vendorId=${sample.vendorId}`,
-  );
-  const summary = page.getByRole("status", { name: "Matching attempts" });
-  await expect(summary).toContainText("1 working");
-  await expect(summary).toContainText("1 completed");
-  await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.getByRole("textbox", { name: "Filter state" }).fill("failed");
-  await expect(summary).toContainText("No matching attempts");
-  await expectViewportBounded(page);
-});
-
-test("Grouped research refreshes collapsed roots and expanded or reopened children", async ({
-  page,
-}) => {
-  const sample = await seedActiveResearchHistory(
-    page,
-    uniqueName(test.info(), "Active research"),
-  );
-  // Active rows refresh on the page's 15s poll; the controlled clock jumps
-  // each poll instead of waiting it out.
-  await page.clock.install();
-  await gotoAuthenticatedPage(
-    page,
-    `/runs?group=run&vendorId=${sample.vendorId}`,
-  );
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
-  const expand = page.getByRole("button", {
-    name: `Expand jobs for ${sample.rootId}`,
-  });
-  await expect(expand).toBeVisible();
-  // The completed discovery parent must not hide its running research child.
-  await expect(table).toContainText("1 working · 1 completed");
-  await setResearchHistoryStatus(sample.rootId, "failed");
-  await page.clock.fastForward(15_000);
-  await expect(table.getByText("Failed", { exact: true })).toBeVisible();
-  await expand.click();
-  await expect(table.getByText("Processing", { exact: true })).toBeVisible();
-  await setResearchHistoryStatus(sample.childId, "completed");
-  await page.clock.fastForward(15_000);
-  await expect(table.getByText("Processing", { exact: true })).toHaveCount(0);
-  await expect(table.getByText("Completed", { exact: true })).toBeVisible();
-  await page
-    .getByRole("button", { name: `Collapse jobs for ${sample.rootId}` })
+  await inspector
+    .getByRole("button", { name: "Close inspector", exact: true })
     .click();
-  await setResearchHistoryStatus(sample.childId, "failed");
-  await expand.click();
-  await expect(table.getByText("Failed", { exact: true })).toHaveCount(2);
+  await expect(inspector).toHaveCount(0);
+  await expectViewportBounded(page);
 });
 
 test("Mail import exposes its persisted counts in the shared Run detail", async ({
@@ -210,7 +96,7 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
   const name = uniqueName(test.info(), "Paged history");
   const sample = await seedPagedActivityHistory(name, 22);
   await page.setViewportSize({ width: 1440, height: 2400 });
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  const table = page.getByRole("table", { name: "Image jobs" });
   // Keep all fixture rows inside the virtual window. The unfilled pane loads
   // page two automatically; asserting every row once verifies cursor order
   // without confusing an unmounted row with a missing result.
@@ -222,12 +108,12 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
   const newestFirst = Array.from({ length: 22 }, (_, index) =>
     String(index + 1).padStart(2, "0"),
   );
-  const history = `/runs?submissionId=${sample.submissionId}`;
+  const history = `/runs?view=image-jobs&submissionId=${sample.submissionId}`;
 
   await gotoAuthenticatedPage(page, history);
   await expect.poll(listedJobs).toEqual(newestFirst);
 
-  await gotoAuthenticatedPage(page, `${history}&sort=oldest`);
+  await gotoAuthenticatedPage(page, `${history}&order=oldest`);
   await expect.poll(listedJobs).toEqual([...newestFirst].reverse());
 
   await gotoAuthenticatedPage(page, `/runs/jobs/${sample.newestJobId}`);
@@ -250,7 +136,7 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
   ).toHaveCount(0);
 });
 
-test("Runs browse flat and grouped work with a responsive inspector, while Activity shows changes", async ({
+test("Image jobs browse with a responsive inspector, while Activity shows changes", async ({
   page,
 }) => {
   const sample = await seedActivityHistory(
@@ -258,21 +144,19 @@ test("Runs browse flat and grouped work with a responsive inspector, while Activ
     `Synthetic history ${Date.now()}`,
   );
   await page.setViewportSize({ width: 1440, height: 900 });
-  await gotoAuthenticatedPage(page, `/runs?subjectId=${sample.imageId}`);
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?view=image-jobs&subjectId=${sample.imageId}`,
+  );
+  const table = page.getByRole("table", { name: "Image jobs" });
   await expect(table).toContainText(sample.filename);
   // The Work column names image jobs by their kind.
   await expect(table).toContainText("Subject lift");
-  await page.getByRole("button", { name: "Group by run" }).click();
-  await expect(
-    page.getByRole("button", { name: `Expand jobs for ${sample.runId}` }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: `Expand jobs for ${sample.runId}` })
-    .click();
   await expect(table).toContainText("Image description");
-  await expect(table).toContainText("Subject lift");
-  await gotoAuthenticatedPage(page, `/runs?selected=${sample.jobId}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?view=image-jobs&selected=${sample.jobId}`,
+  );
   await expect(
     page.getByRole("button", { name: "Copy diagnostics", exact: true }).first(),
   ).toBeVisible();
@@ -283,10 +167,16 @@ test("Runs browse flat and grouped work with a responsive inspector, while Activ
   ).toBeVisible();
 
   await page.setViewportSize({ width: 900, height: 900 });
-  await gotoAuthenticatedPage(page, `/runs?selected=${sample.jobId}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?view=image-jobs&selected=${sample.jobId}`,
+  );
   await expect(page.getByRole("dialog")).toContainText(sample.jobId);
   await page.setViewportSize({ width: 390, height: 844 });
-  await gotoAuthenticatedPage(page, `/runs?selected=${sample.jobId}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?view=image-jobs&selected=${sample.jobId}`,
+  );
   await expect(page).toHaveURL(new RegExp(`/runs/jobs/${sample.jobId}$`));
   await gotoAuthenticatedPage(page, `/runs/jobs/${sample.jobId}`);
   await expect(page.getByText(sample.jobId).first()).toBeVisible();

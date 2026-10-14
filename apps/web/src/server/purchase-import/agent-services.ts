@@ -18,6 +18,7 @@ import {
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
 import { sha256Uuid } from "@cubby/shared/sha256";
+import { z } from "zod";
 
 import { assertNotInMaintenance } from "~/server/maintenance";
 import type { RunServices } from "~/server/purchase-agent/environment";
@@ -180,6 +181,7 @@ export function runServicesFor(
             runId,
             userId: scope.actorUserId,
             grantId: grant.id,
+            generation: stampedGeneration(body),
             secret: env.BETTER_AUTH_SECRET,
           })}`,
         );
@@ -287,4 +289,31 @@ export async function purchaseAgentMcpTools(purpose: AgentImportRunPurpose) {
   const { purchaseAgentToolCatalog } =
     await import("~/server/mcp/agent-tool-catalog");
   return purchaseAgentToolCatalog(purpose);
+}
+
+/**
+ * The coordinator generation the agent host stamped on a `tools/call`
+ * envelope (`cubby-mcp`), signed into that request's delegation so the MCP
+ * handler can fence writes from a superseded generation.
+ */
+function stampedGeneration(body: ArrayBuffer | undefined): string | undefined {
+  if (!body) return undefined;
+  try {
+    const message: unknown = JSON.parse(new TextDecoder().decode(body));
+    const parsed = z
+      .object({
+        method: z.literal("tools/call"),
+        params: z.object({
+          arguments: z.object({
+            _runExecution: z.object({ generation: z.string().min(1) }),
+          }),
+        }),
+      })
+      .safeParse(message);
+    return parsed.success
+      ? parsed.data.params.arguments._runExecution.generation
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -11,8 +11,8 @@ use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::page::{
-    collapse, image_source, is_block, is_hidden, link_label, resolve, select, truncate_utf8,
-    visible_text,
+    collapse, image_source, is_block, is_visually_hidden, link_label, resolve, select,
+    truncate_utf8, visible_text_with_visibility,
 };
 
 const MAX_TEXT_BYTES: usize = 256 * 1024;
@@ -124,7 +124,7 @@ fn is_zero(value: &str) -> bool {
 /// Text no mail client renders. `font-size:0` alone is not hidden: templates
 /// set it on wrapper cells to kill inline-block gaps and reset it inside.
 fn is_email_hidden(element: &ElementRef) -> bool {
-    if is_hidden(element) {
+    if is_visually_hidden(element) {
         return true;
     }
     let Some(style) = element.value().attr("style") else {
@@ -253,7 +253,7 @@ fn data_table_rows(table: ElementRef) -> Option<Vec<Vec<String>>> {
             row.children()
                 .filter_map(ElementRef::wrap)
                 .filter(|cell| matches!(cell.value().name(), "td" | "th") && !is_email_hidden(cell))
-                .map(|cell| clean(&visible_text(cell)))
+                .map(|cell| clean(&visible_text_with_visibility(cell, is_email_hidden)))
                 .collect::<Vec<_>>()
         })
         .filter(|cells| cells.iter().any(|cell| !cell.is_empty()))
@@ -377,6 +377,22 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
     if name == "table"
         && let Some(rows) = data_table_rows(element)
     {
+        state.visible_seen = true;
+        // Table extraction skips hidden descendants; retain their omission guards.
+        for hidden in element
+            .descendants()
+            .filter_map(ElementRef::wrap)
+            .filter(|node| {
+                is_email_hidden(node)
+                    && !node
+                        .ancestors()
+                        .filter_map(ElementRef::wrap)
+                        .take_while(|ancestor| ancestor.id() != element.id())
+                        .any(|ancestor| is_email_hidden(&ancestor))
+            })
+        {
+            walk(hidden, footer, state);
+        }
         let out = state.out(footer);
         newline(out);
         for row in rows {
@@ -948,6 +964,49 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Accessibility exclusion must not erase visually rendered Email evidence.
+    #[test]
+    fn keeps_aria_hidden_visual_email_evidence() {
+        let picture = compact_email_html(
+            r#"<p>Community gardening newsletter and neighborhood events with seasonal tips.</p><div aria-hidden="true"><img src="https://example.test/track/banner.png" width="600" height="200" alt="Seasonal gardening tips"></div>"#,
+        );
+        assert!(!picture.truncated);
+        assert_eq!(picture.images.len(), 1);
+
+        let receipt = compact_email_html(
+            r#"<div aria-hidden="true">Receipt for order #SYN-12345 paid $42</div>"#,
+        );
+        assert!(receipt.text.contains("SYN-12345"));
+        assert!(!receipt.truncated);
+
+        let table = compact_email_html(
+            r#"<table><tr><td><span aria-hidden="true">Synthetic kettle</span></td><td>$42</td></tr><tr><td>Tax</td><td>$3</td></tr></table>"#,
+        );
+        assert!(table.text.contains("Synthetic kettle | $42"));
+
+        for hidden in [
+            "hidden",
+            "style=\"display:none\"",
+            "style=\"visibility:hidden\"",
+            "style=\"opacity:0\"",
+        ] {
+            let unavailable = compact_email_html(&format!(
+                r#"<p>Community updates.</p><div aria-hidden="true" {hidden}>Receipt for order #SYN-12345 paid $42</div>"#,
+            ));
+            assert!(!unavailable.text.contains("SYN-12345"));
+            assert!(unavailable.truncated);
+        }
+    }
+
+    #[test]
+    fn accounts_for_hidden_receipt_evidence_in_data_tables() {
+        let email = compact_email_html(
+            r#"<p>Community updates.</p><table><tr><td>Workshop <span style="opacity:0">Receipt for order #SYN-12345 paid $42</span></td><td>Qty 2</td></tr><tr><td>Garden session</td><td>Qty 1</td></tr></table>"#,
+        );
+        assert!(!email.text.contains("SYN-12345"));
+        assert!(email.truncated);
+    }
 
     #[test]
     fn preserves_hidden_link_evidence_without_a_false_text_omission() {

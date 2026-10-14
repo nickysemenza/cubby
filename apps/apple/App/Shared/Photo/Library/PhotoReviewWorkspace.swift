@@ -94,38 +94,47 @@ private struct PhotoReviewConfirmations: ViewModifier {
 
     @Environment(AppModel.self) private var appModel
 
+    private enum Confirmation {
+        case group, all, selected, discard
+
+        var title: String {
+            switch self {
+            case .group: "Approve this item?"
+            case .all: "Approve all proposed items?"
+            case .selected: "Approve selected items?"
+            case .discard: "Discard this item?"
+            }
+        }
+    }
+
+    private var confirmation: Confirmation? {
+        if workspace.confirmingGroup != nil { return .group }
+        if workspace.confirmingAll { return .all }
+        if workspace.confirmingSelected { return .selected }
+        if workspace.discardingGroup != nil { return .discard }
+        return nil
+    }
+
     func body(content: Content) -> some View {
-        content
-            .confirmationDialog(
-                "Approve this item?",
-                isPresented: Binding(
-                    get: { workspace.confirmingGroup != nil },
-                    set: { if !$0 { workspace.confirmingGroup = nil } }
-                )
-            ) {
-                if workspace.confirmingGroup != nil {
-                    Button("Create or link product") { approve() }
-                }
-            } message: {
-                Text("This attaches the photos and commits the proposed product choice.")
-            }
-            .confirmationDialog("Approve all proposed items?", isPresented: $workspace.confirmingAll) {
+        content.confirmationDialog(
+            confirmation?.title ?? "Review item",
+            isPresented: Binding(
+                get: { confirmation != nil },
+                set: { presented in
+                    if !presented {
+                        workspace.confirmingGroup = nil
+                        workspace.confirmingAll = false
+                        workspace.confirmingSelected = false
+                        workspace.discardingGroup = nil
+                    }
+                })
+        ) {
+            switch confirmation {
+            case .group:
+                Button("Create or link product") { approve() }
+            case .all, .selected:
                 Button("Approve \(workspace.approvalKeys.count) items") { approve() }
-            }
-            .confirmationDialog(
-                "Approve selected items?", isPresented: $workspace.confirmingSelected
-            ) {
-                Button("Approve \(workspace.approvalKeys.count) items") { approve() }
-            } message: {
-                Text("Products are created or linked only for the selected, ready items.")
-            }
-            .confirmationDialog(
-                "Discard this item?",
-                isPresented: Binding(
-                    get: { workspace.discardingGroup != nil },
-                    set: { if !$0 { workspace.discardingGroup = nil } }
-                )
-            ) {
+            case .discard:
                 if let group = workspace.discardingGroup {
                     Button("Discard proposal", role: .destructive) {
                         Task {
@@ -135,7 +144,21 @@ private struct PhotoReviewConfirmations: ViewModifier {
                         }
                     }
                 }
+            case nil:
+                EmptyView()
             }
+        } message: {
+            switch confirmation {
+            case .group:
+                Text("This attaches the photos and commits the proposed product choice.")
+            case .selected:
+                Text("Products are created or linked only for the selected, ready items.")
+            case .all:
+                Text("Products are created or linked only after this confirmation.")
+            case .discard, nil:
+                EmptyView()
+            }
+        }
     }
 
     private func approve() {

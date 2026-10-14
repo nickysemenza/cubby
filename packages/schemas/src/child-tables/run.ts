@@ -1,3 +1,5 @@
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
+
 import { defineChildTable } from "../entity-definitions/child-definition.js";
 
 export const runChildren = [
@@ -422,6 +424,12 @@ export const runChildren = [
         reference: { table: "ledgerParty", column: "id" },
       },
       { key: "evidence", kind: "text" },
+      /** Last writer of the payload (`photoGroupProposalOrigin`); null = not recorded. */
+      {
+        key: "origin",
+        kind: "text",
+        type: "PhotoGroupProposalOrigin",
+      },
       /** Product shortcodes that collided with a `create` name on the last approval. */
       { key: "conflictProductIds", kind: "jsonb", type: "string[]" },
       { key: "lastError", kind: "text" },
@@ -454,7 +462,11 @@ export const runChildren = [
       },
       {
         module: "@cubby/schemas/photo-import-run",
-        exports: ["CommitPhotoGroupProductCreate", "PhotoGroupStoredInventory"],
+        exports: [
+          "CommitPhotoGroupProductCreate",
+          "PhotoGroupStoredInventory",
+          "PhotoGroupProposalOrigin",
+        ],
       },
     ],
     indexes: [
@@ -474,6 +486,10 @@ export const runChildren = [
       {
         name: "PhotoGroupProposal_product_kind_check",
         sql: "{productKind} IN ('existing', 'create')",
+      },
+      {
+        name: "PhotoGroupProposal_origin_check",
+        sql: "{origin} IS NULL OR {origin} IN ('coordinator', 'external_agent', 'member')",
       },
     ],
     foreignKeys: [
@@ -1062,6 +1078,116 @@ export const runChildren = [
       {
         name: "Suggestion_confidence_check",
         sql: "{confidence} BETWEEN 0 AND 1",
+      },
+    ],
+  }),
+  /**
+   * An APNs registration an Apple install made for a Run it created: a Live
+   * Activity push token (`live_activity`) or its opt-in alert device token
+   * (`alert`). The install is `Run.deviceId` (the initiator), never an
+   * executor. `pushToken` is an APNs credential: written here, read only by
+   * the push sender.
+   */
+  defineChildTable({
+    name: "RunPushRegistration",
+    exportName: "runPushRegistration",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        type: "RunId",
+        reference: { table: "run", column: "id", onDelete: "cascade" },
+      },
+      {
+        key: "deviceId",
+        kind: "uuid",
+        notNull: true,
+        type: "DeviceId",
+        reference: { table: "device", column: "id", onDelete: "cascade" },
+      },
+      {
+        key: "kind",
+        kind: "text",
+        notNull: true,
+        type: "RunPushKind",
+      },
+      { key: "pushToken", kind: "text", notNull: true },
+      {
+        key: "apnsEnvironment",
+        kind: "text",
+        notNull: true,
+        type: "ApnsEnvironment",
+      },
+      /** The registering app build; its bundle id is the APNs topic. */
+      {
+        key: "appIdentity",
+        kind: "text",
+        notNull: true,
+        type: "PhotoRunPushAppIdentity",
+      },
+      /**
+       * `live_activity`: fingerprint of the last content-state delivered,
+       * never resent unchanged. `alert`: the last phase and cumulative planned
+       * photo count, so late results cannot cross upload batches.
+       */
+      { key: "lastStateKey", kind: "text" },
+      { key: "lastSentAt", kind: "timestamp" },
+      /** APNs status and reason of the last failed delivery, verbatim. */
+      { key: "lastError", kind: "text" },
+      { key: "endedAt", kind: "timestamp" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: ["RunId", "DeviceId"],
+      },
+      {
+        module: "@cubby/schemas/photo-import-run",
+        exports: ["RunPushKind", "ApnsEnvironment", "PhotoRunPushAppIdentity"],
+      },
+    ],
+    indexes: [
+      {
+        name: "RunPushRegistration_run_device_kind_key",
+        unique: true,
+        on: ["runId", "deviceId", "kind"],
+      },
+      { name: "RunPushRegistration_device_idx", on: ["deviceId"] },
+    ],
+    checks: [
+      {
+        name: "RunPushRegistration_kind_check",
+        sql: "{kind} IN ('live_activity', 'alert')",
+      },
+      {
+        name: "RunPushRegistration_environment_check",
+        sql: "{apnsEnvironment} IN ('development', 'production')",
+      },
+      {
+        name: "RunPushRegistration_app_identity_check",
+        sql: `{appIdentity} IN (${Object.keys(APPLE_APP_IDENTITIES)
+          .map((key) => `'${key}'`)
+          .join(", ")})`,
       },
     ],
   }),

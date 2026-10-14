@@ -216,8 +216,12 @@ actor PhotoLibraryIO {
         for asset: PHAsset, network: Bool = true,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> PhotoFile {
+        let asset =
+            PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
+            .firstObject ?? asset
         let options = PHImageRequestOptions()
-        options.version = .current
+        options.version = Self.exportVersion(
+            resourceTypes: PHAssetResource.assetResources(for: asset).map(\.type))
         options.deliveryMode = .highQualityFormat
         options.isNetworkAccessAllowed = network
         options.progressHandler = { value, _, _, _ in progress?(value) }
@@ -261,6 +265,15 @@ actor PhotoLibraryIO {
         } onCancel: { [manager] in
             request.cancel(manager: manager)
         }
+    }
+
+    nonisolated private static func exportVersion(
+        resourceTypes: [PHAssetResourceType]
+    ) -> PHImageRequestOptionsVersion {
+        // `.current` can render an unedited PNG as JPEG, losing original bytes and alpha.
+        // Adjusted assets must still export the user's rendered edit rather than its source.
+        resourceTypes.contains(.adjustmentData) || resourceTypes.contains(.fullSizePhoto)
+            ? .current : .original
     }
 }
 

@@ -21,6 +21,7 @@ import {
 } from "./dependency";
 import { emailReviewReport } from "./email";
 import { expenseSettlementReport } from "./expense-settlement";
+import { foldRepeatedRows } from "./fold-repeats";
 import { locationContentsValuationReport } from "./location";
 import {
   projectAnalyticsReport,
@@ -257,7 +258,7 @@ export async function buildEntityReport(
     actor,
     services,
   });
-  return execution.read(REPORTS[input.slot]);
+  return foldRepeatedRows(await execution.read(REPORTS[input.slot]));
 }
 
 /** Slots preserve requested order and duplicates while sharing declared dependencies. */
@@ -281,6 +282,9 @@ export async function buildEntityReports(
   });
   const reports: EntityReportManyOut["reports"] = [];
   for (const slot of input.slots)
-    reports.push({ slot, report: await execution.read(REPORTS[slot]) });
+    reports.push({
+      slot,
+      report: foldRepeatedRows(await execution.read(REPORTS[slot])),
+    });
   return { reports };
 }

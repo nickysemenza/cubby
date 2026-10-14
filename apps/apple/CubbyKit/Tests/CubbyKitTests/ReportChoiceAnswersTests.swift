@@ -34,7 +34,7 @@ private func choiceJSON(_ id: String, title: String) -> String {
 private func lineRow(_ title: String, choice: String? = nil) -> String {
     let choice = choice.map { #","choice": \#($0)"# } ?? ""
     return
-        #"{"entity": null, "id": null, "title": "\#(title)", "subtitle": null, "trailing": "$12.50", "key": "line:\#(title)", "statuses": [], "lines": [], "commands": []\#(choice)}"#
+        #"{"entity": null, "id": null, "title": "\#(title)", "trailing": "$12.50", "key": "line:\#(title)", "badges": [], "lines": [], "commands": []\#(choice)}"#
 }
 
 /// A prepared batch: two Product lines (same stable line id in two orders), one adjustment.

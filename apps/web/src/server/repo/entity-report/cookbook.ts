@@ -196,7 +196,7 @@ export async function cookbookImportProgressReport(
       entity: null,
       id: null,
       title: entry.recipe.name,
-      subtitle: entry.chapter,
+      lines: entry.chapter ? [{ text: entry.chapter, tone: "muted" }] : [],
       trailing: null,
       key: entry.recipe.id,
       commands: [importCommand([entry.recipe.id], "Add", false)],

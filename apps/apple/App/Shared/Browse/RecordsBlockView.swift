@@ -10,8 +10,8 @@ struct ReportHost {
     var onChanged: () -> Void = {}
 }
 
-/// One server-composed row: an optional thumbnail, the title, a worded second line, badges, the
-/// trailing figure and instant. Opens the record it names.
+/// One server-composed row: an optional thumbnail, the title, its lines, badges, the trailing
+/// figure and instant. Opens the record it names.
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
     var large = false
@@ -32,34 +32,29 @@ struct RecordRowView: View {
             symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
             thumbnailSize: large ? 112 : 36
         ) {
-            if let subtitle = row.subtitle, !subtitle.isEmpty { Text(subtitle) }
+            ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+                Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
+                    .textSelection(.enabled)
+            }
         } rail: {
             if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
             if let at = row.at {
                 DateDisplay(date: at)
             }
         } supplement: {
-            ForEach(row.badges, id: \.self) { badge in
-                Label(badge, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            }
             extras
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// Toned status chips, lines, the raw block and commands a row carries beyond its title.
+    /// Toned badges, the raw block and commands a row carries beyond its title and lines.
     @ViewBuilder private var extras: some View {
-        if !row.statuses.isEmpty {
+        if !row.badges.isEmpty {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
-                ForEach(Array(row.statuses.enumerated()), id: \.offset) { _, status in
-                    StatusChip(text: status.label, tone: status.tone?.chipTone ?? .neutral)
+                ForEach(Array(row.badges.enumerated()), id: \.offset) { _, badge in
+                    StatusChip(text: badge.label, tone: badge.tone?.chipTone ?? .neutral)
                 }
             }
-        }
-        ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
-            Text(line.text).font(.caption).foregroundStyle(line.tone?.color ?? Color.primary)
-                .textSelection(.enabled)
         }
         if let label = row.detailLabel, let text = row.detailText {
             VStack(alignment: .leading) {

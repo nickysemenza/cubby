@@ -120,7 +120,7 @@ private func decode<T: Decodable>(_ json: String) throws -> T {
 }
 
 private func row(_ id: String, actions: String = "[]") -> String {
-    #"{"entity": null, "id": null, "title": "\#(id)", "subtitle": null, "trailing": null, "key": "\#(id)", "statuses": [], "lines": [], "commands": \#(actions)}"#
+    #"{"entity": null, "id": null, "title": "\#(id)", "trailing": null, "key": "\#(id)", "badges": [], "lines": [], "commands": \#(actions)}"#
 }
 
 private func report(

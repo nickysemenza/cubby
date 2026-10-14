@@ -28,6 +28,7 @@ import {
   type PhotoGroupProposalList,
   type PhotoGroupProposalProductSummary,
   type PhotoRunImage,
+  type PhotoGroupProposalOrigin,
   type ProposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import { runPurpose, runStatus } from "@cubby/schemas/purchase-import";
@@ -409,6 +410,7 @@ async function toViews(
           }
         : null,
       evidence: row.evidence,
+      origin: row.origin ?? null,
       conflict: row.conflictProductIds?.length
         ? row.conflictProductIds.flatMap((conflictCode) => {
             const entry = summaryByCode.get(
@@ -564,6 +566,7 @@ async function upsertProposal(
   txDb: Database,
   runId: RunId,
   entry: ResolvedGroup,
+  origin: PhotoGroupProposalOrigin | null,
 ) {
   const { group } = entry;
   const values = {
@@ -589,6 +592,7 @@ async function upsertProposal(
       : null,
     inventoryOwnerPartyId: entry.ownerPartyId,
     evidence: group.evidence ?? null,
+    origin,
     conflictProductIds: null,
     lastError: null,
     updatedAt: new Date(),
@@ -612,6 +616,10 @@ async function upsertProposal(
 export async function proposePhotoGroups(
   db: Database,
   rawInput: z.input<typeof proposePhotoGroupsInput>,
+  /** Recorded as each written row's last writer; null = not known. */
+  origin: PhotoGroupProposalOrigin | null = null,
+  /** A coordinator's signed dispatch generation (`_runExecution.generation`). */
+  coordinatorGeneration?: string,
 ): Promise<ProposePhotoGroupsOutput> {
   const input = proposePhotoGroupsInput.parse(rawInput);
   const run = await loadRun(db, input.runId);
@@ -627,11 +635,23 @@ export async function proposePhotoGroups(
     );
   }
   const frozenGroupKeys = await withTransactionDatabase(db, async (txDb) => {
-    await getDb(txDb)
-      .select({ id: runTable.id })
+    const [locked] = await getDb(txDb)
+      .select({ dispatchEventId: runTable.dispatchEventId })
       .from(runTable)
       .where(eq(runTable.id, run.id))
       .for("update");
+    // Generation fence: a coordinator writes only for the dispatch generation
+    // its delegation was signed with. Admitting a new upload batch replaces
+    // that generation, so a superseded coordinator — even one still running
+    // after the new generation started — cannot overwrite the regrouped Run.
+    if (
+      origin === "coordinator" &&
+      (!coordinatorGeneration ||
+        locked?.dispatchEventId !== coordinatorGeneration)
+    )
+      throw new Error(
+        `Photo run ${run.shortcode} was regrouped after new photos arrived; this coordinator generation is no longer active`,
+      );
     const [runImages, existing] = await Promise.all([
       loadRunImages(txDb, run.id),
       loadProposalRows(txDb, run.id),
@@ -679,7 +699,8 @@ export async function proposePhotoGroups(
           ),
         );
     }
-    for (const entry of resolved) await upsertProposal(txDb, run.id, entry);
+    for (const entry of resolved)
+      await upsertProposal(txDb, run.id, entry, origin);
     return frozen;
   });
   return { ...(await buildList(db, run)), frozenGroupKeys };
@@ -706,19 +727,23 @@ export async function chooseExistingProductForPhotoGroup(
         existingEntryId: group.inventory.existingEntryId,
       }
     : undefined;
-  return proposePhotoGroups(db, {
-    runId: input.runId,
-    groups: [
-      {
-        groupKey: group.groupKey,
-        images: group.images,
-        skip: group.skip,
-        product: { kind: "existing", existingId: input.productId },
-        inventory,
-        evidence: group.evidence,
-      },
-    ],
-  });
+  return proposePhotoGroups(
+    db,
+    {
+      runId: input.runId,
+      groups: [
+        {
+          groupKey: group.groupKey,
+          images: group.images,
+          skip: group.skip,
+          product: { kind: "existing", existingId: input.productId },
+          inventory,
+          evidence: group.evidence,
+        },
+      ],
+    },
+    "member",
+  );
 }
 
 /** Keep the reviewed photo grouping intact while correcting a new Product's identity. */
@@ -750,29 +775,33 @@ export async function updatePhotoGroupProductDraft(
         existingEntryId: group.inventory.existingEntryId,
       }
     : undefined;
-  return proposePhotoGroups(db, {
-    runId: input.runId,
-    groups: [
-      {
-        groupKey: group.groupKey,
-        images: group.images,
-        skip: group.skip,
-        product: {
-          kind: "create",
-          create: {
-            ...group.product.create,
-            name: input.name,
-            categoryId: input.categoryId ?? undefined,
-            manufacturer: input.manufacturer ?? undefined,
-            model: input.model ?? undefined,
-            notes: input.notes ?? undefined,
+  return proposePhotoGroups(
+    db,
+    {
+      runId: input.runId,
+      groups: [
+        {
+          groupKey: group.groupKey,
+          images: group.images,
+          skip: group.skip,
+          product: {
+            kind: "create",
+            create: {
+              ...group.product.create,
+              name: input.name,
+              categoryId: input.categoryId ?? undefined,
+              manufacturer: input.manufacturer ?? undefined,
+              model: input.model ?? undefined,
+              notes: input.notes ?? undefined,
+            },
           },
+          inventory,
+          evidence: group.evidence,
         },
-        inventory,
-        evidence: group.evidence,
-      },
-    ],
-  });
+      ],
+    },
+    "member",
+  );
 }
 
 /** Rebuild the writer's input from a stored row, refusing a row whose chosen Product or Location was deleted. */
@@ -1145,6 +1174,7 @@ export async function listPhotoRunImages(
       capturedAt: image.capturedAt,
       capturedAtOffsetMinutes: image.capturedAtOffsetMinutes,
       state: photoRunImage.state,
+      skipReason: photoRunImage.skipReason,
       deviceWorkState: photoRunImage.deviceWorkState,
       deviceWorkError: photoRunImage.deviceWorkError,
       deviceWorkAttempts: photoRunImage.deviceWorkAttempts,
@@ -1238,6 +1268,7 @@ export async function listPhotoRunImages(
       capturedAt: row.capturedAt?.toISOString() ?? null,
       capturedAtOffsetMinutes: row.capturedAtOffsetMinutes,
       targetState: photoRunImageState.parse(row.state),
+      skipReason: row.skipReason,
       originalUrl: rendition.original,
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,

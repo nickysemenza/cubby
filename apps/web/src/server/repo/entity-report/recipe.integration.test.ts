@@ -99,7 +99,7 @@ describe("recipe availability and costing coverage reports", () => {
       "report mystery",
     ]);
     // The covered row reads as such, in the shared wording.
-    expect(all?.rows[0]?.statuses).toEqual([
+    expect(all?.rows[0]?.badges).toEqual([
       { label: "Have enough", tone: "positive" },
     ]);
   });
@@ -128,9 +128,14 @@ describe("recipe availability and costing coverage reports", () => {
       entity: "ingredient",
       id: mystery.shortcode,
       title: "report mystery",
-      subtitle: "No product linked. Link one (with a USDA food) to cost it.",
+      lines: [
+        {
+          text: "No product linked. Link one (with a USDA food) to cost it.",
+          tone: "muted",
+        },
+      ],
       trailing: "Link product",
-      badges: expect.arrayContaining(["price"]),
+      badges: expect.arrayContaining([{ label: "price", tone: "warning" }]),
     });
     expect(gaps?.rows).toHaveLength(2);
   });
@@ -247,8 +252,8 @@ describe("recipe availability and costing coverage reports", () => {
       rows: [
         {
           title: "Make the dough",
-          subtitle: "Everything goes in one bowl.",
           lines: [
+            { text: "Everything goes in one bowl.", tone: "muted" },
             { text: "Mix the dough" },
             // The recipe's own instruction, unchanged, beside the AI's wording.
             { text: "Method · step 1: Mix.", tone: "muted" },

@@ -278,20 +278,34 @@ pnpm --dir apps/web exec wrangler secret put NAME --config wrangler.jsonc
 pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 ```
 
-| Name                   | Storage                        | Purpose                                                 |
-| ---------------------- | ------------------------------ | ------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                          |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                   |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                   |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                    |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                   |
-| `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding |
-| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                             |
+| Name                   | Storage                        | Purpose                                                       |
+| ---------------------- | ------------------------------ | ------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                         |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                         |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                          |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                         |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts) |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent         |
+| `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding       |
+| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                   |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
 client secrets, R2 secret keys, auth secrets, API tokens, and provider keys must
 not be committed.
+
+Photo import alert topics follow the registering build's canonical app identity,
+including the separate Mac development bundle. Live Activity registrations use
+the production Cubby app identity. Enable Push Notifications on each App ID and
+refresh its signing profiles before validating delivery; configuring an APNs
+key alone does not add the signed-client entitlement.
+Delivery results apply only while the token, app identity and APNs environment
+still match the registration that sent them. Correcting any of these resets
+delivery state and prevents a late response from ending the corrected registration.
+Alert delivery keys also include the cumulative planned photo count, so a late
+response from an earlier batch cannot end a later batch in the same phase.
 
 ## Google Cloud and Gmail OAuth
 

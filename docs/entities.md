@@ -227,7 +227,8 @@ body to write), `purchase.linkExpenseCandidates` and `purchase.checkLinkExpenses
 move off another purchase), `purchase.linkProductCandidates` (a search minus the
 explicitly attached). The write re-validates; a refused check sends no write.
 
-**Report commands and batching.** A `records` row may carry `statuses` (toned chips), `lines`,
+**Report commands and batching.** A `records` row may carry `badges` (toned chips), `lines` (an
+untoned line is the row's result, `muted` lines its evidence), a `trailing` figure,
 an `externalLink` (label and HTTP(S) URL), a collapsible `detail` and `commands`: each command names an existing operation and its exact
 body (`run-control`, `resolve-finding`, and the recipe, cookbook and meal commands) plus `confirm` copy: native asks before sending
 (approve, reject and apply carry one; dismiss and retry act on the tap), web acts on the tap as it always has.
@@ -1019,9 +1020,9 @@ checks assess recorded actor attribution, a consistent timeline, and terminal
 target outcomes for completed Mail import and photo inventory runs (and
 historical validation and enrichment runs). A skipped or unavailable target
 needs a recorded reason. Running or paused work does not need finished targets. Execution status remains separate from
-quality of the recorded facts. Activity feed rows hydrate the same Run quality,
-including the main Runs page and native activity rows; image-processing jobs
-carry null quality and remain unassessed. Scored and unscored web renderer
+quality of the recorded facts. The generic Runs list and native activity rows
+hydrate the same Run quality; image-processing jobs carry null quality, remain
+unassessed, and list in the Runs page's Image jobs view. Scored and unscored web renderer
 coverage is type-checked against the generated list shape. Browser captures are required by the specific
 commit contract, so their absence is not a universal Run quality defect.
 Immutable scored entities without soft deletion use the same evaluator with
@@ -1054,6 +1055,11 @@ shared research and unresolved for missing private ownership. This is a read
 projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
+Every source excludes Purchases dated after the current household day, and
+Purchases with live Expense lines all marked `future`. Purchase has no stored
+`future` flag; Expense does. Deleted lines do not count, mixed planned/incurred
+lines remain eligible, and an undated Purchase without lines is unknown rather
+than planned. The same exclusion applies to the record-detail queue.
 
 Research and Email rows carry structured `gaps` (`{check, message}`): the
 record's live gaps among the checks its saved view's `dataGaps` declares

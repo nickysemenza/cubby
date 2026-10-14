@@ -42,6 +42,12 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🟢 🛠️ **Audit legacy image orientation mismatches.** After the hash-guarded
+  verification fix deploys, review existing `metadata_mismatch` rows through
+  explicit verification. Normalize swapped dimensions only when the stored
+  original hash, byte length and MIME agree. Preserve files, attachments,
+  own-photo covers and labels; investigate remaining failures separately.
+
 - 🟢 ✨ **Data-quality check for a missing cutout.** Wardrobe galleries prefer
   the transparent representation (`representations.transparent`), so a Product
   with photos but no cutout looks out of place. Add a Product check so "no
@@ -250,6 +256,13 @@ See also the image operational passes at the end of this file.
 
 ### Review and apply corrections
 
+- 🤔 🛠️ **Review later printed dates against email-derived order dates.**
+  Missing confirmation dates now default from retained Email with field-scoped
+  provenance. Design a reviewed correction that recognizes an unchanged
+  fallback versus a member override and updates only acquisition Expenses
+  still carrying that fallback. Preserve payment posting, refund and shipment
+  event dates and accepted source replay; never bulk-shift independent dates.
+
 - 🤔 🛠️ **Simplify tests with unnecessary infrastructure dependencies.** Audit
   tests that start PostgreSQL, IntegreSQL, Workers or other services even though
   the assertion only inspects pure schemas or generated declarations. MCP
@@ -446,6 +459,20 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   kinds, and verify the list and attention summaries render. Individual Run
   detail pages still load; preserve their retained history.
 
+- 🧱 🛠️ **Declare image jobs as an entity.** Runs list and inspect through the
+  generic Run table, but image-processing jobs still need the hand-written
+  Image jobs view (`apps/web/src/app/runs/image-job-history.tsx`), their own
+  inspector (`ActivityRunDetail`, `RunWorkFacts`) and the `/runs/jobs/$id`
+  page. Declaring them in the manifest (shortcode, state, kind, subject,
+  attempts, cost) lets the generic list, inspector and detail page replace all
+  three; plan the identifier and attempts storage first.
+
+- 🤔 🛠️ **Trim the activity projection to what clients still read.** The web
+  reads `activity.list`/`detail`/`events` only for image jobs now, and no
+  longer reads `activity.groups`/`groupChildren` at all. Check the native
+  Activity screen and the MCP `activity` tool before narrowing these
+  operations to image jobs or deleting the Run grouping reads.
+
 - ⏳ ✨ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
   so Burn-down happens; no notifications or scheduling.
@@ -526,6 +553,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 ---
 
 ## Inventory, products & locations
+
+- 🤔 🧪 **Measure duplicate-candidate recall beyond live lexical matching.**
+  The purchase-import pre-create fence now reviews strong brand/item word matches without
+  waiting for indexing. Evaluate abbreviated receipt names, missing brands
+  and visually described photo Products against the existing semantic/photo
+  candidate paths. Add recall only where measured misses justify it; keep
+  variant evidence and reviewed reuse-or-distinct decisions, never automatic
+  merges from an embedding score.
 
 - 🤔 🐛 **Accept legitimate fractional acquisition quantities in Product pricing
   reads.** A detailed Product read can fail validation because
@@ -621,10 +656,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the actual SDK with focused behavior tests. Preserve the OS 26 path until a
   floor bump is chosen. Owners: `apps/apple/project.yml`, `App`, `CubbyKit`.
 
-- 🤔 ✨ **Live Activities for server runs started on this device.** Record the
-  initiating install separately from `ActivityRun.executors`, then send
-  ActivityKit push updates so the phone shows progress while suspended. Keep
-  the local-work Live Activity feed separate.
+- 🤔 ✨ **Live Activities for other server Runs started on this device.** Photo
+  Runs push ActivityKit updates to their initiating install (`Run.deviceId`,
+  `RunPushRegistration`); extend the same registration to other agent Runs. Keep
+  the local-work Live Activity feed separate. The photo-import path needs
+  APNs Worker credentials, Push Notifications-enabled release provisioning,
+  and a locked-device acceptance check; local payload tests and unsigned
+  builds do not establish push delivery. Extend verified photo support to
+  other server Run purposes afterward.
 
 - 🤔 🧪 **Judge the hosted Run evidence pilot.** Run evidence (transcript,
   logs, AI usage) is the one hosted native view

@@ -52,6 +52,7 @@ export async function recoverMissedWork(
     { retireSettledCoordinators },
     { disposeUnrelatedOriginals, disposeExpiredSearchOriginals },
     { productionOrderMailAttachmentStorage },
+    { advanceWaitingPhotoRuns },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
@@ -60,6 +61,7 @@ export async function recoverMissedWork(
     import("~/server/purchase-import/run-retirement"),
     import("~/server/purchase-import/gmail/persistence"),
     import("~/server/purchase-import/gmail/attachment-storage"),
+    import("~/server/photo-import-run/lifecycle"),
   ]);
   await (await import("~/server/runs/ai-refresh")).recoverAiRefresh(db);
   await (await import("~/server/runs/ai-work")).recoverManualAiWork(db);
@@ -72,6 +74,7 @@ export async function recoverMissedWork(
     retireResult,
     disposalResult,
     searchExpiryResult,
+    photoRunResult,
   ] = await Promise.allSettled([
     repairImageProcessingWork(db),
     expireStaleRuns(db),
@@ -93,6 +96,8 @@ export async function recoverMissedWork(
     // Retries an unrelated Email's disposal lost after its disposition.
     disposeUnrelatedOriginals(db, productionOrderMailAttachmentStorage),
     disposeExpiredSearchOriginals(db, productionOrderMailAttachmentStorage),
+    // Backstop for a cubby photo Run whose readiness hook was missed.
+    advanceWaitingPhotoRuns(db),
   ]);
   const errors = [
     image,
@@ -102,6 +107,7 @@ export async function recoverMissedWork(
     retireResult,
     disposalResult,
     searchExpiryResult,
+    photoRunResult,
   ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));

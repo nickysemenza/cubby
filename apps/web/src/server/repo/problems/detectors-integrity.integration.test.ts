@@ -40,6 +40,7 @@ import {
   orderMailAttachment,
   suggestion,
   photoGroupProposal,
+  runPushRegistration,
   productConversionCoverage,
   productMatchCandidate,
   productUnitMappings,
@@ -1576,6 +1577,26 @@ const SOURCE_FACTORIES = {
       groupKey: uniq("group"),
       productKind: "create",
       productCreate: { name: uniq("Proposal") },
+    }),
+
+  "RunPushRegistration.runId": async (db, targetId) =>
+    insertAndReturn(db, runPushRegistration, {
+      kind: "live_activity",
+      runId: parseEntityId("run", targetId),
+      deviceId: (await mkDevice(db)).id,
+      pushToken: "0123456789abcdef",
+      apnsEnvironment: "development",
+      appIdentity: "production",
+    }),
+
+  "RunPushRegistration.deviceId": async (db, targetId) =>
+    insertAndReturn(db, runPushRegistration, {
+      kind: "live_activity",
+      runId: (await mkRun(db)).id,
+      deviceId: parseEntityId("device", targetId),
+      pushToken: "0123456789abcdef",
+      apnsEnvironment: "development",
+      appIdentity: "production",
     }),
 
   "PhotoRunImage.runId": (db, targetId) =>

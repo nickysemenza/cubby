@@ -85,6 +85,36 @@ describe("verifyProductImages", () => {
     ]);
   });
 
+  // Legacy native uploads recorded upright dimensions; byte inspection reads encoded dimensions.
+  it.each([
+    { hash: inspected.sha256, expected: "available" },
+    { hash: "changed-hash", expected: "metadata_mismatch" },
+    { hash: null, expected: "metadata_mismatch" },
+  ])(
+    "repairs swapped dimensions only with a matching original hash ($hash)",
+    async ({ hash, expected }) => {
+      memory.rows = [{ ...stored, width: 3, height: 2, sha256: hash }];
+      memory.ports.inspectImageFile = async () => ({
+        ...inspected,
+        width: 2,
+        height: 3,
+      });
+      await expect(
+        verifyProductImages(
+          db,
+          testEntityId("product", "orientation"),
+          memory.ports,
+        ),
+      ).resolves.toEqual([{ imageId: stored.id, storageStatus: expected }]);
+      expect(memory.updates[0]).toMatchObject({
+        integrity:
+          expected === "available"
+            ? { width: 2, height: 3, renderStatus: "verified" }
+            : { renderStatus: "failed", storageStatus: "metadata_mismatch" },
+      });
+    },
+  );
+
   it("retains recorded metadata and marks changed bytes as a mismatch", async () => {
     memory.rows = [{ ...stored, sha256: "original-hash" }];
 
