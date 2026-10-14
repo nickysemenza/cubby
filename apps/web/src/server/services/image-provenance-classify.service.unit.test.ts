@@ -1,5 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { testEntityId } from "@cubby/schemas/testing";
+import { testShortcode, testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -26,6 +26,7 @@ const candidate = (id: string): ImageProvenanceCandidateRow => ({
   updatedAtToken: "2026-01-01 00:00:00.000000+00",
   capturedAt: null,
   provenanceEvidence: null,
+  sightingSourceTypes: [],
 });
 
 const decision = (
@@ -57,6 +58,7 @@ const portsFor = (
   publish,
   decide,
   ensureRun: vi.fn(async () => runId),
+  resolveRun: vi.fn(async () => testShortcode("run", "4K7M")),
 });
 
 describe("classifyImageProvenance", () => {

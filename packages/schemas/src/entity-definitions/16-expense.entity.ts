@@ -486,6 +486,7 @@ export default defineEntity({
           suggest: {
             basis: [...EXPENSE_LINE_ROLE_EVIDENCE_FIELDS],
             allowNone: true,
+            reviewRequired: true,
             rules: [EXPENSE_LINE_ROLE_RULES],
           },
         },
@@ -1880,11 +1881,15 @@ Rules:
             field: "spendingCategoryId",
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
+            refusal:
+              "Resolve the receipt role first. Only a principal item or service line may have a Spending category.",
           },
           {
             field: "projectId",
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
+            refusal:
+              "Resolve the receipt role first. Only a principal item or service line may be assigned to a Project.",
           },
         ],
       },

@@ -199,6 +199,7 @@ describe("derived field explanations against canonical records", () => {
       categoryId: child.id,
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture gift",
       cost: 15,
       date: "2026-09-01",
@@ -450,6 +451,7 @@ describe("derived field explanations against canonical records", () => {
     );
     for (let index = 0; index < 31; index += 1) {
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: `Count evidence ${index}`,
         productId: product.entityId,
         cost: 1,

@@ -75,6 +75,7 @@ const ENTITY_DEFAULTS = {
   // `trade` and `cost` stay unset on purpose: an absent trade is inherited from
   // the project/purchase, and a default would silently break that.
   expense: (f) => ({
+    lineKind: "principal",
     name: f.name("Expense"),
     date: SOME_DAY,
     costType: "materials",

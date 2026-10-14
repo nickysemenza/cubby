@@ -13,6 +13,8 @@ import { createDevice } from "~/server/repo/device";
 import { resolveEntityIdentity } from "~/server/repo/entity-identity";
 import {
   getImageById,
+  selectImagesForProvenanceClassification,
+  publishImageSourceClassifications,
   listImageSightings,
   updateImage,
 } from "~/server/repo/image";
@@ -76,6 +78,67 @@ describe("image-sighting", () => {
     matchKind: "import",
     observedAt: new Date("2026-06-01T10:00:00Z"),
     ...overrides,
+  });
+
+  it("admits processed weak evidence and fences publication when a strong sighting arrives", async () => {
+    const metadata = {
+      capturedAt: null,
+      capturedAtOffsetMinutes: null,
+      location: null,
+      camera: null,
+      orientation: null,
+    };
+    const image = await createImageFixture(ctx.db, "weak-source-evidence", {
+      source: "unknown",
+      embeddedMetadata: metadata,
+    });
+    const exifImage = await createImageFixture(ctx.db, "strong-exif-evidence", {
+      source: "unknown",
+      embeddedMetadata: { ...metadata, camera: { make: "Synthetic camera" } },
+    });
+    const member = await makeMember("Synthetic weak evidence member");
+    const reporter = await makeDevice("Synthetic weak evidence device", member);
+    await recordImageSightings(
+      ctx.db,
+      [
+        report(image, member, reporter, "WEAK-ASSET", {
+          sourceType: "cloudShared",
+        }),
+      ],
+      ctx.actor,
+    );
+    expect(await getImageById(ctx.db, image.id)).toMatchObject({
+      source: "unknown",
+    });
+    const candidates = await selectImagesForProvenanceClassification(
+      ctx.db,
+      100,
+    );
+    const snapshot = candidates.find((row) => row.id === image.id);
+    expect(snapshot).toMatchObject({
+      sightingSourceTypes: ["cloudShared"],
+      embeddedMetadata: metadata,
+    });
+    expect(candidates.some((row) => row.id === exifImage.id)).toBe(false);
+    if (!snapshot) throw new Error("Expected weak candidate");
+    await recordImageSightings(
+      ctx.db,
+      [report(image, member, reporter, "WEAK-ASSET")],
+      ctx.actor,
+    );
+    expect(
+      await publishImageSourceClassifications(ctx.db, [
+        {
+          id: snapshot.id,
+          expectedUpdatedAt: snapshot.updatedAtToken,
+          source: "catalog",
+        },
+      ]),
+    ).toEqual({ classified: 0, capturedAtSeeded: 0 });
+    expect(await getImageById(ctx.db, image.id)).toMatchObject({
+      source: "own",
+      sourceEvidence: null,
+    });
   });
 
   it.each([false, true])(

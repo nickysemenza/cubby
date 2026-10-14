@@ -1476,7 +1476,9 @@ reclassified automatically. New features also register their production adapter
 in the AI smoke catalog so the generic `/ai` form can exercise them.
 Image source Decisions record `sourceEvidence` separately from capture evidence;
 they establish neither a photographer nor a capture time or location. Existing
-manual, sighting, import, and EXIF evidence retains precedence over weak metadata.
+manual, strong sighting, import, and meaningful EXIF evidence retains precedence
+over weak metadata. Processed metadata without capture facts and weak library
+membership remain eligible source evidence; neither establishes ownership alone.
 Entity lists expose a generic pending-suggestion filter (any, Addition, or
 Correction) and can start a sweep across every declared target using the list's active filters.
 A Sweep freezes matching record/field membership and its selected model at launch,

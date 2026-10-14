@@ -8,6 +8,7 @@ import {
 import { getImageByIdSchema } from "@cubby/schemas/image";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
+import { testShortcode } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
@@ -206,7 +207,7 @@ describe("image repository", () => {
       feature: "image-provenance-classification",
       promptVersion: "2026-10-14.1",
       model: "synthetic-test-model",
-      runId: crypto.randomUUID(),
+      runId: testShortcode("run", "4K7M"),
       confidence: "high",
       probability: 0.98,
       evidenceFingerprint: "a".repeat(64),

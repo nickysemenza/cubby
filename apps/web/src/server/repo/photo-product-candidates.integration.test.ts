@@ -3,10 +3,12 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   entityExternalId,
   importSourceOrder,
   sourceOrderObservation,
+  user,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/purchase-import/order-import.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
@@ -21,10 +23,38 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { mergeVendors } from "~/server/repo/vendor";
 
-import { findPhotoProductCandidates } from "./photo-product-candidates";
+import { findPhotoProductCandidates as queryPhotoProductCandidates } from "./photo-product-candidates";
 
 describe("photo product candidates", () => {
   const ctx = withTestDb();
+  const unknownVariant: DecisionPort = async (request) => {
+    const criteria = request.questions.selection.criteria;
+    const choice = Object.entries(criteria).find(
+      ([, value]) => value === "color unknown; size unknown",
+    )?.[0];
+    if (!choice) throw new Error("Expected unknown variant option");
+    const keys = Object.keys(criteria);
+    return {
+      answers: {
+        selection: {
+          type: "choice",
+          choice,
+          confidence: 0.99,
+          probabilities: Object.fromEntries(
+            keys.map((key) => [
+              key,
+              key === choice ? 0.99 : 0.01 / (keys.length - 1),
+            ]),
+          ),
+        },
+      },
+    };
+  };
+  const findPhotoProductCandidates: typeof queryPhotoProductCandidates = (
+    db,
+    input,
+    actor,
+  ) => queryPhotoProductCandidates(db, input, actor, unknownVariant);
 
   it("exposes only known accepted line selectors owned by the reviewing member", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -90,9 +120,18 @@ describe("photo product candidates", () => {
         acceptedSourceLines: [{ sourceOrderId: association.id, lineIndex: 0 }],
       }),
     );
+    const otherReviewer = userId.parse(crypto.randomUUID());
+    await getDb(ctx.db)
+      .insert(user)
+      .values({
+        id: otherReviewer,
+        name: "Other reviewer",
+        email: "other-reviewer@synthetic.invalid",
+        emailVerified: true,
+      });
     const [otherMember] = await findPhotoProductCandidates(ctx.db, input, {
       ...ctx.actor,
-      userId: userId.parse(crypto.randomUUID()),
+      userId: otherReviewer,
     });
     expect(
       otherMember?.purchaseLines?.every(
@@ -268,8 +307,12 @@ describe("photo product candidates", () => {
       sharedNameTerms: ["pocket", "tee", "black", "small"],
       brandMatches: true,
       variant: {
-        color: { first: "Black", second: "Black", relation: "same" },
-        size: { first: "Small", second: "Small", relation: "same" },
+        color: { relation: "unknown" },
+        size: { relation: "unknown" },
+        evidence: {
+          firstTitle: "ForgeWear pocket tee black small",
+          secondTitle: expect.stringContaining(clean.name),
+        },
       },
     });
     expect(

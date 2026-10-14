@@ -43,16 +43,13 @@ import {
 } from "~/server/repo/product-match-candidate";
 import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  ensureRun,
-  aiCallRunInput,
-  systemActor,
-} from "~/server/runs/ensure-run";
+import { ensureRun, aiCallRunInput } from "~/server/runs/ensure-run";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/semantic/vector-store";
+import { traceAllBounded } from "~/server/tracing";
 
 import {
   describeSignals,
@@ -220,19 +217,28 @@ async function inferVariantComparisons(
     runId,
     operation: "product-match.variant-comparison",
   };
-  const comparisons = new Map<string, ProductVariantComparison>();
-  for (const [key, [a, b]] of unique) {
-    const [first, second] = orient(a, b);
-    comparisons.set(
-      key,
-      await decideVariant({
-        firstTitle: first.name,
-        secondTitle: second.name,
-        usage,
+  const tasks: Record<string, () => Promise<ProductVariantComparison>> =
+    Object.fromEntries(
+      [...unique].map(([key, [a, b]]) => {
+        const [first, second] = orient(a, b);
+        return [
+          key,
+          () =>
+            decideVariant({
+              firstTitle: first.name,
+              secondTitle: second.name,
+              usage,
+            }),
+        ];
       }),
     );
-  }
-  return comparisons;
+  return new Map(
+    Object.entries(
+      await traceAllBounded(tasks, 3, {
+        spanName: "product-match.variant-comparison",
+      }),
+    ),
+  );
 }
 
 function variantFor(
@@ -303,7 +309,7 @@ export async function getProductMatchQueue(
   db: Database,
   input: { productId?: ProductShortcode; candidateId?: ProductShortcode },
   deps: ProductMatchDependencies = productionProductMatchDependencies,
-  actorContext: ActorContext = systemActor(),
+  actorContext: ActorContext,
 ): Promise<ProductMatchQueueOut> {
   if (input.productId && input.candidateId)
     return getDirectedProductMatchQueue(

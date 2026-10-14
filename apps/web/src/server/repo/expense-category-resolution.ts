@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
-import { unwrapDb } from "./database-helpers";
+import { unwrapDb, sqlEnumConstant } from "./database-helpers";
 
 const column = (alias: string, key: string) =>
   sql`${sql.identifier(alias.replace(/^"|"$/gu, ""))}.${sql.identifier(key)}`;
@@ -143,7 +143,7 @@ export function expenseSpendingCategoryResolutionSql(
     draft,
   );
   const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
-  const unclassified = sql`${column(alias, "lineKind")} = ${expenseLineKindSchema.enum.unclassified}`;
+  const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
   return sql`(
     WITH RECURSIVE ancestors AS (

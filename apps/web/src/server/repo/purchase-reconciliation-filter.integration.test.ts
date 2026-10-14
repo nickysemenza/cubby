@@ -26,6 +26,7 @@ describe("purchase reconciliation=mismatch filter", () => {
     });
     if (cost !== null) {
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         purchaseId: purchase.id,
         name: `Line ${label}`,
         cost,
@@ -91,6 +92,7 @@ describe("purchase list display labels", () => {
       statedTotal: 100,
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       purchaseId: purchase.id,
       name: "Label line",
       cost: 50,

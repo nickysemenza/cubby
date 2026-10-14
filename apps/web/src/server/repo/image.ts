@@ -28,6 +28,7 @@ import type {
 import {
   attachableImageEntityId,
   IMAGE_METADATA_REVISION,
+  storedImageEmbeddedMetadataSchema,
 } from "@cubby/schemas/image";
 import {
   imageProvenanceEvidence,
@@ -35,9 +36,16 @@ import {
   type ImageProvenanceEvidence,
 } from "@cubby/schemas/image-capture-fields";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
+import {
+  imageSightingSourceType,
+  imageSightingMatchKind,
+} from "@cubby/schemas/image-sighting-fields";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import type { SearchableEntityRef } from "@cubby/schemas/search";
+import {
+  searchableEntitySchema,
+  type SearchableEntityRef,
+} from "@cubby/schemas/search";
 import {
   and,
   asc,
@@ -100,6 +108,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { correlated } from "~/server/repo/database-helpers";
 import {
   associatePendingImages,
   countWhere,
@@ -839,6 +848,7 @@ export interface ImageProvenanceCandidateRow {
   updatedAtToken: string;
   capturedAt: Date | null;
   provenanceEvidence: ImageProvenanceEvidence | null;
+  sightingSourceTypes: string[];
 }
 
 /** Model-derived source classification never overrides authoritative capture evidence. */
@@ -847,9 +857,15 @@ const provenanceClassificationCandidateWhere = and(
   eq(image.source, "unknown"),
   isNull(image.sourceEvidence),
   not(eq(image.captureAttribution, "confirmed")),
-  isNull(image.embeddedMetadata),
+  sql`${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.capturedAt} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.camera} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.location} IS NULL`,
   sql`COALESCE(${image.provenanceEvidence}->>'basis', '') NOT IN (${imageProvenanceEvidence.shape.basis.enum.manual}, ${imageProvenanceEvidence.shape.basis.enum.sighting}, ${imageProvenanceEvidence.shape.basis.enum["import-url"]}, ${imageProvenanceEvidence.shape.basis.enum.exif})`,
-  sql`NOT EXISTS (SELECT 1 FROM "ImageSighting" WHERE "ImageSighting"."imageId" = ${image.id} AND "ImageSighting"."deletedAt" IS NULL)`,
+  // Keep this authority boundary aligned with isStrongSighting in image-capture-derivation.ts.
+  sql`NOT EXISTS (SELECT 1 FROM "ImageSighting" s WHERE s."imageId" = ${image.id} AND s."deletedAt" IS NULL
+    AND (${imageSourceEvidence.shape.value.enum.screenshot} = ANY(s."mediaSubtypes")
+      OR (s."sourceType" = ${imageSightingSourceType.enum.userLibrary}
+        AND (s."matchKind" = ${imageSightingMatchKind.enum.import}
+          OR (s."hashDistance" >= 0 AND s."hashDistance" <= 2)
+          OR (s."hashDistance" > 2 AND s."hashDistance" <= 6 AND s."aspectGate" IS TRUE)))))`,
 );
 
 export async function selectImagesForProvenanceClassification(
@@ -871,6 +887,10 @@ export async function selectImagesForProvenanceClassification(
       updatedAtToken: sql<string>`${image.updatedAt}::text`,
       capturedAt: image.capturedAt,
       provenanceEvidence: image.provenanceEvidence,
+      sightingSourceTypes: correlated<
+        string[]
+      >(`ARRAY(SELECT DISTINCT s."sourceType" FROM "ImageSighting" s
+        WHERE s."imageId" = "Image"."id" AND s."deletedAt" IS NULL ORDER BY s."sourceType")`),
     })
     .from(image)
     .where(
@@ -2655,7 +2675,7 @@ const missingSearchDocumentWhere = and(
   notDeleted(image),
   sql`NOT EXISTS (
     SELECT 1 FROM "SearchDocument" sd
-    WHERE sd."entityKind" = 'image' AND sd."entityId" = ${sql.raw('"Image"."id"')}
+    WHERE sd."entityKind" = ${searchableEntitySchema.enum.image} AND sd."entityId" = ${sql.raw('"Image"."id"')}
       AND sd."deletedAt" IS NULL
   )`,
 );

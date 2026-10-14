@@ -221,13 +221,13 @@ describe("deriveImageCapture", () => {
     });
   });
 
-  it("no sightings, no EXIF, no prior evidence → source flips to own", () => {
+  it("no sightings, no EXIF, no prior evidence leaves source unresolved", () => {
     const result = deriveImageCapture({
       image: baseCurrent({ source: "unknown" }),
       sightings: [],
       exif: null,
     });
-    expect(result.source).toBe("own");
+    expect(result.source).toBe("unknown");
     expect(result.captureAttribution).toBe("none");
     expect(result.capturedByPartyId).toBeNull();
   });
@@ -285,6 +285,6 @@ describe("deriveImageCapture", () => {
     expect(result.capturedByPartyId).toBeNull();
     // Falls through to the terminal branch: no sightings counted as strong,
     // no EXIF, no prior evidence.
-    expect(result.source).toBe("own");
+    expect(result.source).toBe("unknown");
   });
 });

@@ -480,7 +480,7 @@ export default defineEntity({
         key: "sourceEvidence",
         kind: "json",
         nullable: true,
-        display: { detail: true },
+        display: { detail: true, detailLabelPath: "sourceEvidence.model" },
         validation: {
           read: imageSourceEvidence.nullable(),
           create: null,

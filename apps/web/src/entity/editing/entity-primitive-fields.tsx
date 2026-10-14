@@ -1149,13 +1149,18 @@ export function EntityIntentFields({
   const policyHiddenFields = useMemo(() => {
     const hidden = new Set<string>();
     sameRecordPolicies.forEach(([, policy], index) => {
+      const rawClassifier = basisValueOf(policyClassifierValues[index]);
+      const productId = basisValueOf(expenseProduct);
       const classifier =
         entity === "expense" && policy.classifier === "lineKind"
-          ? resolveExpenseLineKind({
-              lineKind: basisValueOf(policyClassifierValues[index]),
-              productId: basisValueOf(expenseProduct),
-            })
-          : basisValueOf(policyClassifierValues[index]);
+          ? (rawClassifier === null || rawClassifier === "auto") &&
+            productId === null
+            ? null
+            : resolveExpenseLineKind({
+                lineKind: rawClassifier,
+                productId,
+              })
+          : rawClassifier;
       for (const declaration of policy.fields) {
         if (classifier === null) continue;
         const value =

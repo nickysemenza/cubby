@@ -227,6 +227,7 @@ const mkWish = (db: Database) =>
 
 const mkExpense = (db: Database) =>
   insertWithShortcode(db, "expense", {
+    lineKind: "principal",
     name: uniq("Expense"),
     costType: "materials",
     trade: "other",
@@ -586,6 +587,7 @@ const SOURCE_FACTORIES = {
     }),
   "Expense.spendingCategoryId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
+      lineKind: "principal",
       name: uniq("Classified expense"),
       costType: "materials",
       trade: "other",
@@ -862,6 +864,7 @@ const SOURCE_FACTORIES = {
 
   "ExpenseAttribution.ledgerPartyId": async (db, targetId) => {
     const expense = await insertWithShortcode(db, "expense", {
+      lineKind: "principal",
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -1153,6 +1156,7 @@ const SOURCE_FACTORIES = {
 
   "Expense.productId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
+      lineKind: "principal",
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -1336,6 +1340,7 @@ const SOURCE_FACTORIES = {
 
   "Expense.projectId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
+      lineKind: "principal",
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -1420,6 +1425,7 @@ const SOURCE_FACTORIES = {
 
   "Expense.purchaseId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
+      lineKind: "principal",
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",

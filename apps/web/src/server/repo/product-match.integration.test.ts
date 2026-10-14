@@ -90,6 +90,7 @@ describe("product match queue", () => {
       ctx.db,
       { productId: source.id, candidateId: candidate.id },
       namesOnly,
+      ctx.actor,
     );
     expect(queue.items).toHaveLength(1);
     expect([queue.items[0]?.keeper.id, queue.items[0]?.other.id]).toEqual([
@@ -241,7 +242,14 @@ describe("product match queue", () => {
   };
 
   const queueFor = async (id: ProductShortcode) =>
-    (await getProductMatchQueue(ctx.db, { productId: id }, namesOnly)).items;
+    (
+      await getProductMatchQueue(
+        ctx.db,
+        { productId: id },
+        namesOnly,
+        ctx.actor,
+      )
+    ).items;
 
   const pairOf = (item: { keeper: { id: string }; other: { id: string } }) => [
     item.keeper.id,

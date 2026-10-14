@@ -103,6 +103,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
     ]);
     await Promise.all([
       insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: "Line A",
         cost: 10,
         date: "2026-01-01",
@@ -111,6 +112,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
         purchaseId: purchase.id,
       }),
       insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: "Line B",
         cost: 20,
         date: "2026-01-01",
@@ -251,6 +253,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ["Untracked line", untracked],
     ] as const)
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name,
         cost: 10,
         date: "2026-01-01",
@@ -315,6 +318,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ctx.actor,
     );
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Snack line",
       cost: 10,
       date: "2026-01-01",

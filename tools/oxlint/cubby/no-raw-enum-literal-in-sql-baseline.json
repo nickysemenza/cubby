@@ -71,7 +71,6 @@
   "apps/web/src/server/repo/connected-records.ts": 1,
   "apps/web/src/server/repo/data-quality/checks/product.ts": 1,
   "apps/web/src/server/repo/data-quality/checks/financial-account.ts": 2,
-  "apps/web/src/server/repo/image.ts": 1,
   "apps/web/src/server/repo/problems/detectors-financial.ts": 2,
   "apps/web/src/server/repo/problems/detectors-purchase.ts": 2,
   "apps/web/src/server/workflow-runs/lifecycle.ts": 1,

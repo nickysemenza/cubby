@@ -113,6 +113,38 @@ describe("extractBestPrice", () => {
     ).toBe(null);
   });
 
+  it("abstains when offer evidence exceeds the comparison bounds", async () => {
+    const decideComparability = async () => "comparable" as const;
+    const twentyOneOffers: UPCitemdbOffer[] = Array.from(
+      { length: 21 },
+      (_, index) => ({
+        merchant: `Synthetic merchant ${index}`,
+        domain: "shop.example",
+        title: "Sample item",
+        currency: "USD",
+        price: 8 + index,
+      }),
+    );
+
+    await expect(
+      extractBestPrice(twentyOneOffers, "Sample item", decideComparability),
+    ).resolves.toBe(null);
+    await expect(
+      extractBestPrice(
+        [{ ...twentyOneOffers[0]!, title: "x".repeat(401) }],
+        "Sample item",
+        decideComparability,
+      ),
+    ).resolves.toBe(null);
+    await expect(
+      extractBestPrice(
+        [twentyOneOffers[0]!],
+        "x".repeat(401),
+        decideComparability,
+      ),
+    ).resolves.toBe(null);
+  });
+
   it("returns null when all prices are zero", async () => {
     const offers: UPCitemdbOffer[] = [
       {

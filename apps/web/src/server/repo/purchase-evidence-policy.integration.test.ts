@@ -74,6 +74,7 @@ describe("purchase evidence policy", () => {
   it("keeps an orderless optional-receipt booking out of paperwork gaps", async () => {
     const { purchase } = await fixture();
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Reviewed statement booking",
       purchaseId: purchase.id,
       cost: 25,
@@ -442,6 +443,7 @@ describe("purchase evidence policy", () => {
         purchaseId: purchase.shortcode,
       });
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         purchaseId: purchase.id,
         name: "Reviewed credit booking",
         cost: -10,
@@ -454,6 +456,7 @@ describe("purchase evidence policy", () => {
       });
       if (role === "mixed")
         await insertWithShortcode(ctx.db, "expense", {
+          lineKind: "principal",
           purchaseId: purchase.id,
           name: "Mixed vendor booking",
           cost: 0,
@@ -517,6 +520,7 @@ describe("purchase evidence policy", () => {
       sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
     );
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       purchaseId: purchase.id,
       name: "Historical reviewed aggregate",
       cost: 25,
@@ -561,6 +565,7 @@ describe("purchase evidence policy", () => {
         sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
       );
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         purchaseId: purchase.id,
         name: "Historical reviewed aggregate",
         cost: 25,

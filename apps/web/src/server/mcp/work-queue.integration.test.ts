@@ -1467,6 +1467,7 @@ describe("member actionable Work queue", () => {
       date: "2026-09-20",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Synthetic lump booking",
       purchaseId: lumpOrder.id,
       cost: 30,

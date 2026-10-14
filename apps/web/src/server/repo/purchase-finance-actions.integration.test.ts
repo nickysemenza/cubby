@@ -236,6 +236,10 @@ describe("split and attach checks against the ledger", () => {
       keepProduct: false,
       productQuantity: "",
     });
+    const principalDraft = (name: string, cost: string) => ({
+      ...draft(name, cost),
+      lineKind: "principal" as const,
+    });
 
     it("conserves cents where floating point would not (0.1 + 0.2)", async () => {
       const source = await original(0.3);
@@ -246,7 +250,7 @@ describe("split and attach checks against the ledger", () => {
         ),
         {
           expenseId: parseShortcodeFor("expense", source.shortcode),
-          parts: [draft("A", "0.1"), draft("B", "0.2")],
+          parts: [principalDraft("A", "0.1"), principalDraft("B", "0.2")],
         },
       );
       expect(check.reason).toBeNull();
@@ -265,7 +269,7 @@ describe("split and attach checks against the ledger", () => {
       const code = parseShortcodeFor("expense", source.shortcode);
       const check = checkSplitDraft(await loadSplitOriginal(ctx.db, code), {
         expenseId: code,
-        parts: [draft("A", "0.1"), draft("B", "0.21")],
+        parts: [principalDraft("A", "0.1"), principalDraft("B", "0.21")],
       });
       expect(check.split).toBeNull();
       expect(check.delta).toBe(0.01);
@@ -276,14 +280,14 @@ describe("split and attach checks against the ledger", () => {
             expenseId: code,
             parts: [
               {
-                ...draft("A", "0.1"),
+                ...principalDraft("A", "0.1"),
                 cost: 0.1,
                 projectId: null,
                 productId: null,
                 productQuantity: null,
               },
               {
-                ...draft("B", "0.21"),
+                ...principalDraft("B", "0.21"),
                 cost: 0.21,
                 projectId: null,
                 productId: null,
@@ -308,7 +312,10 @@ describe("split and attach checks against the ledger", () => {
       const code = parseShortcodeFor("expense", source.shortcode);
       const check = await checkSplit({
         expenseId: code,
-        parts: [{ ...draft("A", "4"), projectId: "PRJ-ZZZZ" }, draft("B", "6")],
+        parts: [
+          { ...principalDraft("A", "4"), projectId: "PRJ-ZZZZ" },
+          principalDraft("B", "6"),
+        ],
       });
       expect(check.split).toBeNull();
       expect(check.reason).toMatch(/^Part 1:/);
@@ -318,8 +325,8 @@ describe("split and attach checks against the ledger", () => {
       const source = await original(10);
       const code = parseShortcodeFor("expense", source.shortcode);
       const parts = [
-        { ...draft("A", "4"), trade: null },
-        { ...draft("B", "6"), trade: null },
+        { ...principalDraft("A", "4"), trade: null },
+        { ...principalDraft("B", "6"), trade: null },
       ];
       const check = await checkSplit({ expenseId: code, parts });
       expect(check.split).toBeNull();
@@ -347,7 +354,7 @@ describe("split and attach checks against the ledger", () => {
       const code = parseShortcodeFor("expense", source.shortcode);
       const check = await checkSplit({
         expenseId: code,
-        parts: [draft("A", "4"), draft("B", "6")],
+        parts: [principalDraft("A", "4"), principalDraft("B", "6")],
       });
       expect(check.reason).toBeNull();
       expect(check.split).not.toBeNull();
@@ -469,7 +476,7 @@ describe("split and attach checks against the ledger", () => {
       });
       const loaded = await loadSplitOriginal(ctx.db, code);
       expect(loaded.hasAttribution).toBe(true);
-      const parts = [draft("A", "4"), draft("B", "6")];
+      const parts = [principalDraft("A", "4"), principalDraft("B", "6")];
       const undecided = checkSplitDraft(loaded, { expenseId: code, parts });
       expect(undecided.needsAttributionPolicy).toBe(true);
       expect(undecided.split).toBeNull();

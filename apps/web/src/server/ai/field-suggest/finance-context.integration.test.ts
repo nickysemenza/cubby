@@ -57,6 +57,7 @@ describe("reviewed linked finance category suggestions", () => {
       ctx.actor,
     );
     const line = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture crew shirt line",
       cost: 29.99,
       date: "2026-09-01",
@@ -233,6 +234,7 @@ describe("reviewed linked finance category suggestions", () => {
       lineKind: "tax",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture friend reimbursement",
       cost: -8,
       date: "2026-09-01",
@@ -241,6 +243,7 @@ describe("reviewed linked finance category suggestions", () => {
       economicRole: "reimbursement",
     });
     await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture retired aggregate",
       cost: 29.99,
       date: "2026-09-01",

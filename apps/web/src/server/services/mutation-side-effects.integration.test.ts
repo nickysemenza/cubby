@@ -177,6 +177,7 @@ describe("mutation side effects integration", () => {
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
+          lineKind: "principal",
           name: "Manifest Tracker Expense",
           date: "2026-01-02",
           projectId: project.id,

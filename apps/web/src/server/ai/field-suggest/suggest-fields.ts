@@ -999,7 +999,9 @@ export async function suggestFields(
     targets: classifiedInput.targets.filter((target) =>
       classificationAllowsField(
         classifiedInput.entity,
-        classifiedInput.basis,
+        target === "spendingCategoryId" && financeContext
+          ? financeContext.basis
+          : classifiedInput.basis,
         target,
       ),
     ),

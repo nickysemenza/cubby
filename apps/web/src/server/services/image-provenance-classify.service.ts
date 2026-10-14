@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { ImageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import type {
   ClassifyImageProvenanceInput,
@@ -19,6 +20,7 @@ import {
   type ImageProvenanceCandidateRow,
   type ImageSourceClassificationPublication,
 } from "~/server/repo/image";
+import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 
 type ImageDecision = Awaited<
@@ -35,6 +37,10 @@ export interface ImageProvenanceClassifierPorts {
     usage: AiRunContext,
   ) => Promise<ImageDecision>;
   ensureRun: (db: Database, actorContext: ActorContext) => Promise<RunId>;
+  resolveRun: (
+    db: Database,
+    runId: RunId,
+  ) => Promise<ImageSourceEvidence["runId"]>;
 }
 
 const productionPorts: ImageProvenanceClassifierPorts = {
@@ -51,13 +57,21 @@ const productionPorts: ImageProvenanceClassifierPorts = {
         sourceAssetUrl: row.sourceAssetUrl,
         sourcePageUrl: row.sourcePageUrl,
         sourceName: row.sourceName,
-        sightingSourceTypes: [],
+        sightingSourceTypes: row.sightingSourceTypes,
         hasExifCamera: Boolean(row.embeddedMetadata?.camera),
         hasExifCaptureTime: Boolean(row.embeddedMetadata?.capturedAt),
         analysisSummary: null,
       },
       usage,
     }),
+  resolveRun: async (db, runId) => {
+    const reference = (await lookupEntityReferences(db, "run", [runId])).get(
+      runId,
+    );
+    if (!reference)
+      throw new Error(`Decision Run ${runId} has no live public identity`);
+    return reference.id;
+  },
   ensureRun: (db, actorContext) =>
     ensureRun(db, actorContext, aiCallRunInput(actorContext)),
 };
@@ -74,6 +88,8 @@ const evidenceFingerprint = (row: ImageProvenanceCandidateRow): string =>
         sourceAssetUrl: row.sourceAssetUrl,
         sourcePageUrl: row.sourcePageUrl,
         sourceName: row.sourceName,
+        sightingSourceTypes: row.sightingSourceTypes,
+        embeddedMetadata: row.embeddedMetadata,
       }),
     )
     .digest("hex");
@@ -117,6 +133,7 @@ export async function classifyImageProvenance(
   }
 
   const runId = await ports.ensureRun(db, actorContext);
+  const runCode = await ports.resolveRun(db, runId);
   const usage: AiRunContext = {
     db,
     runId,
@@ -148,7 +165,7 @@ export async function classifyImageProvenance(
         feature: decision.feature,
         promptVersion: decision.promptVersion,
         model: decision.model,
-        runId,
+        runId: runCode,
         confidence: "high",
         probability: decision.probability,
         evidenceFingerprint: evidenceFingerprint(row),

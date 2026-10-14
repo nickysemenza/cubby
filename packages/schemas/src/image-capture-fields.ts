@@ -1,3 +1,4 @@
+import { runShortcode } from "./identifier-fields";
 import { z } from "zod";
 
 /** How confidently `Image.capturedByPartyId` reflects reality. */
@@ -46,7 +47,7 @@ export const imageSourceEvidence = z.object({
   feature: z.literal("image-provenance-classification"),
   promptVersion: z.string().min(1),
   model: z.string().min(1),
-  runId: z.string().uuid(),
+  runId: runShortcode,
   confidence: z.literal("high"),
   probability: z.number().finite().min(0).max(1),
   evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),

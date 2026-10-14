@@ -16,6 +16,7 @@ import type { ProductVariantComparison } from "@cubby/schemas/product-variant-co
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
@@ -43,6 +44,7 @@ import {
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
 import { ensureRun, aiCallRunInput } from "~/server/runs/ensure-run";
+import { traceAllBounded } from "~/server/tracing";
 
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 5;
@@ -348,6 +350,7 @@ export async function findPhotoProductCandidates(
     }[];
   },
   actor: ActorContext,
+  decisionPort?: DecisionPort,
 ): Promise<PhotoProductCandidate[]> {
   const { name, manufacturer } = input;
   const words = [...productIdentityWords(name)];
@@ -461,20 +464,30 @@ export async function findPhotoProductCandidates(
       runId,
       operation: "photo-import.product-variant-comparison",
     };
-    for (const candidate of preliminary) {
-      const comparison = await decideProductVariantComparison({
-        firstTitle: sourceTitle,
-        secondTitle: [
-          candidate.name,
-          candidate.model,
-          ...(candidate.aliases ?? []),
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        usage,
-      });
-      variantComparisons.set(candidate.id, comparison);
-    }
+    const tasks: Record<string, () => Promise<ProductVariantComparison>> =
+      Object.fromEntries(
+        preliminary.map((candidate) => [
+          candidate.id,
+          () =>
+            decideProductVariantComparison({
+              firstTitle: sourceTitle,
+              secondTitle: [
+                candidate.name,
+                candidate.model,
+                ...(candidate.aliases ?? []),
+              ]
+                .filter(Boolean)
+                .join("\n"),
+              usage,
+              port: decisionPort,
+            }),
+        ]),
+      );
+    const comparisons = await traceAllBounded(tasks, 3, {
+      spanName: "photo-import.product-variant-comparison",
+    });
+    for (const candidate of preliminary)
+      variantComparisons.set(candidate.id, comparisons[candidate.id]!);
   }
   const ranked = rankPhotoProductCandidates(
     name,

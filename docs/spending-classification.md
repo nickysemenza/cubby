@@ -42,7 +42,10 @@ roles are resolved. Explicit receipt roles remain authoritative; automatic
 classification accepts only a confident Decision result. Uncertainty remains
 unclassified, while a model failure fails the operation. Settlement booking waits
 until existing vendor receipt roles are resolved, preventing an unresolved
-amount from being booked again. Detaching a Purchase preserves unresolved
+amount from being booked again. An abstention with explicit role-dependent
+assignments refuses the write instead of dropping that intent. An inferred
+positive discount on a forward receipt stays unresolved; explicit source roles
+can represent signed reversals and corrections. Detaching a Purchase preserves unresolved
 Expenses and their signed amounts without inventing inherited attribution.
 
 Category completeness is independent of pricing and Project completeness. A

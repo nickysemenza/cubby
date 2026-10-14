@@ -116,6 +116,7 @@ const unchanged = (
  * (`sourceType: "userLibrary"`) — a cloud-shared or iTunes-synced copy proves
  * the asset reached the account, not that this member took the photo.
  */
+// Selection/publication uses the same boundary in repo/image.ts provenanceClassificationCandidateWhere.
 const isStrongSighting = (sighting: DeriveImageCaptureSighting): boolean =>
   sighting.sourceType === "userLibrary" &&
   (sighting.matchKind === "import" ||
@@ -345,22 +346,9 @@ export function deriveImageCapture(
       provenanceEvidence: null,
     };
   }
-  // A weak sighting supplies no evidence to undo a reviewed catalog or
-  // screenshot classification, even when no capture evidence was recorded.
-  const setsOwnSource = currentBasis === null || currentBasis === "filename";
-  return {
-    source: setsOwnSource
-      ? sourceWithoutCaptureEvidence(current.source)
-      : current.source,
-    captureAttribution: current.captureAttribution,
-    capturedAt: current.capturedAt,
-    capturedAtOffsetMinutes: current.capturedAtOffsetMinutes,
-    captureLocation: current.captureLocation,
-    capturePlaceName: current.capturePlaceName,
-    captureDeviceLabel: current.captureDeviceLabel,
-    capturedByPartyId: current.capturedByPartyId,
-    provenanceEvidence: current.provenanceEvidence,
-  };
+  // Weak membership supplies no source classification; only a Decision can
+  // classify an otherwise unknown source from these facts.
+  return unchanged(current);
 }
 
 /**

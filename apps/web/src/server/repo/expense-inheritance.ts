@@ -21,7 +21,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
-import { unwrapDb } from "~/server/repo/database-helpers";
+import { unwrapDb, sqlEnumConstant } from "~/server/repo/database-helpers";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -93,7 +93,7 @@ export const effectiveExpenseTradeSql = (
   );
 
   return sql<Trade | null>`CASE
-    WHEN ${lineKind} = ${expenseLineKindSchema.enum.unclassified} THEN NULL
+    WHEN ${lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)} THEN NULL
     WHEN ${lineKind} <> 'principal' THEN ${storedTrade}
     ELSE COALESCE(
       ${storedTrade},
@@ -141,7 +141,7 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
       ${effectiveProjectTradeSql(projectId)}
     ) END`;
   const projectSource = sql<string>`CASE
-    WHEN ${lineKind} = ${expenseLineKindSchema.enum.unclassified} THEN ${fieldResolutionSchema.shape.mode.enum.none}
+    WHEN ${lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)} THEN ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.none)}
     WHEN ${lineKind} <> 'principal' THEN 'purchase allocation'
     WHEN ${column(alias, "projectId")} IS NOT NULL THEN 'expense override'
     WHEN EXISTS (

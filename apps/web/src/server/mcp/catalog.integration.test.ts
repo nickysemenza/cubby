@@ -171,8 +171,20 @@ describe("MCP catalog", () => {
         action: "split",
         expenseId: expense.id,
         parts: [
-          { name: "part a", cost: 25, costType: "materials", trade: "other" },
-          { name: "part b", cost: 15, costType: "materials", trade: "other" },
+          {
+            lineKind: "principal",
+            name: "part a",
+            cost: 25,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            lineKind: "principal",
+            name: "part b",
+            cost: 15,
+            costType: "materials",
+            trade: "other",
+          },
         ],
       }),
     ).toMatchObject({ delta: 0 });
@@ -217,6 +229,7 @@ describe("MCP catalog", () => {
       action: "create",
       entity: "expense",
       data: {
+        lineKind: "principal",
         name: "Synthetic lump booking",
         purchaseId,
         cost: 12,

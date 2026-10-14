@@ -14,6 +14,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Textarea } from "~/ui/primitives/textarea";
 
 const ENTITY_OPTIONS: readonly PickerOption[] =
   fieldSuggestionsInput.shape.entity.options.map((option) => ({
@@ -54,7 +55,7 @@ function SmokeChoice({
 }
 
 const smokePropertySchema = z.object({
-  type: z.string().optional(),
+  type: z.union([z.string(), z.array(z.string())]).optional(),
   enum: z.array(z.string()).optional(),
 });
 export const smokeObjectSchema = z.object({
@@ -79,11 +80,18 @@ const imageFields = new Set(["imageId", "imageIds"]);
 export function smokeFieldControl(
   name: string,
   field: SmokeProperty,
-): "record" | "select" | "checkbox" | "unsupported" {
+): "record" | "select" | "checkbox" | "text" | "json" | "unsupported" {
   if (imageFields.has(name) || name === "runId" || name in pickerEntity)
     return "record";
   if (field.enum) return "select";
-  if (field.type === "boolean") return "checkbox";
+  const types = Array.isArray(field.type)
+    ? field.type
+    : field.type == null
+      ? []
+      : [field.type];
+  if (types.includes("boolean")) return "checkbox";
+  if (types.includes("string")) return "text";
+  if (types.includes("array") || types.includes("object")) return "json";
   return "unsupported";
 }
 
@@ -102,17 +110,71 @@ export function defaultSmokeInput(scenario: AiSmokeScenario) {
   return Object.fromEntries(
     Object.entries(schema.properties ?? {})
       .filter(([key]) => schema.required?.includes(key))
-      .map(([key, field]) => [
-        key,
-        field.enum?.[0] ??
-          (field.type === "array"
+      .map(([key, field]) => {
+        const types = Array.isArray(field.type)
+          ? field.type
+          : field.type == null
             ? []
-            : field.type === "object"
-              ? {}
-              : field.type === "boolean"
-                ? false
-                : ""),
-      ]),
+            : [field.type];
+        return [
+          key,
+          field.enum?.[0] ??
+            (types.includes("array")
+              ? []
+              : types.includes("object")
+                ? {}
+                : types.includes("boolean")
+                  ? false
+                  : ""),
+        ];
+      }),
+  );
+}
+
+function StructuredJsonField({
+  name,
+  value,
+  fieldType,
+  onChange,
+}: {
+  name: string;
+  value: SmokeValue | undefined;
+  fieldType: "array" | "object";
+  onChange: (value: SmokeValue) => void;
+}) {
+  const initialValue = value ?? (fieldType === "array" ? [] : {});
+  const [draft, setDraft] = useState(() =>
+    JSON.stringify(initialValue, null, 2),
+  );
+  const [invalidJson, setInvalidJson] = useState(false);
+  const label = name.replace(/([A-Z])/g, " $1");
+  return (
+    <label className="grid gap-1 text-sm font-medium">
+      {label}
+      <Textarea
+        aria-label={label}
+        aria-invalid={invalidJson}
+        value={draft}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDraft(next);
+          try {
+            const parsed = z.json().parse(JSON.parse(next));
+            setInvalidJson(false);
+            onChange(parsed);
+          } catch {
+            // SILENT: The inline invalid-JSON alert surfaces parse failure; submit the draft so validation cannot reuse stale data.
+            setInvalidJson(true);
+            onChange(next);
+          }
+        }}
+      />
+      {invalidJson && (
+        <span role="alert" className="text-destructive">
+          Enter valid JSON before running this probe.
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -517,6 +579,38 @@ export function AiSmokeForm({
               {name.replace(/([A-Z])/g, " $1")}
             </label>
           );
+        if (control === "text")
+          return (
+            <label key={name} className="grid gap-1 text-sm font-medium">
+              {name.replace(/([A-Z])/g, " $1")}
+              <Input
+                value={z.string().catch("").parse(value[name])}
+                onChange={(event) =>
+                  onChange({ ...value, [name]: event.target.value })
+                }
+              />
+            </label>
+          );
+        if (control === "json") {
+          const fieldType = Array.isArray(field.type)
+            ? field.type.find(
+                (type): type is "array" | "object" =>
+                  type === "array" || type === "object",
+              )
+            : field.type === "array" || field.type === "object"
+              ? field.type
+              : null;
+          if (fieldType)
+            return (
+              <StructuredJsonField
+                key={`${scenario}:${name}`}
+                name={name}
+                value={value[name]}
+                fieldType={fieldType}
+                onChange={(next) => onChange({ ...value, [name]: next })}
+              />
+            );
+        }
         return (
           <p key={name} className="text-sm text-destructive">
             No form control for {name}

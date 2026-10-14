@@ -29,6 +29,27 @@ export class PartialUpcBatchLookupError extends Error {
   }
 }
 
+/** The provider request budget was exhausted after these UPCs were checked. */
+export class UpcBatchDeferredError extends PartialUpcBatchLookupError {
+  constructor(
+    cause: Error,
+    readonly completedUpcs: readonly string[],
+    readonly results: ReadonlyMap<string, UPCLookupResponse>,
+    deferredUpcs: readonly string[],
+  ) {
+    super(cause, deferredUpcs);
+    this.name = "UpcBatchDeferredError";
+  }
+}
+
+/** Upstream was intentionally disabled, so stale and missing rows stay unresolved. */
+export class UpcLookupUnavailableError extends Error {
+  constructor(readonly unavailableUpcs: readonly string[]) {
+    super("UPC provider is disabled");
+    this.name = "UpcLookupUnavailableError";
+  }
+}
+
 /** Provider data is advisory; refresh at most once per UPC per week. */
 const UPC_LOOKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -46,7 +67,7 @@ export type CachedUpcLookup = {
   fetchedAt: Date;
 };
 
-const isFresh = (row: CachedUpcLookup, now: Date) =>
+export const isFreshUpcRow = (row: CachedUpcLookup, now: Date) =>
   row.status === "ready" &&
   (row.source === "manual" ||
     now.getTime() - row.fetchedAt.getTime() < UPC_LOOKUP_CACHE_MAX_AGE_MS);
@@ -133,6 +154,22 @@ export const recordUpcLookups = async (
     });
 };
 
+/** The only persistence operations used by `readCachedUpcLookups`. */
+export type UpcLookupCacheStore = {
+  getRows: (upcs: readonly string[]) => Promise<CachedUpcLookup[]>;
+  record: (
+    requestedUpcs: readonly string[],
+    hits: ReadonlyMap<string, UPCLookupResponse>,
+    fetchedAt: Date,
+  ) => Promise<void>;
+};
+
+const upcLookupCacheStore = (db: Database): UpcLookupCacheStore => ({
+  getRows: (upcs) => getCachedUpcRows(db, upcs),
+  record: (requestedUpcs, hits, fetchedAt) =>
+    recordUpcLookups(db, requestedUpcs, hits, fetchedAt),
+});
+
 /** Case-insensitive substring search over cached product identity. */
 export const searchCachedUpcs = async (
   db: Database,
@@ -177,16 +214,34 @@ const applyReadyCacheRows = (
 };
 
 const refreshUpcCache = async (
-  db: Database,
+  store: UpcLookupCacheStore,
   refresh: string[],
   cached: Map<string, CachedUpcLookup>,
   checkedAt: Date,
   lookupBatch: (upcs: string[]) => Promise<Map<string, UPCLookupResponse>>,
-): Promise<void> => {
-  if (refresh.length === 0) return;
-  const hits = await lookupBatch(refresh);
-  await recordUpcLookups(db, refresh, hits, checkedAt);
-  applyReadyCacheRows(cached, refresh, hits, checkedAt);
+): Promise<string[]> => {
+  if (refresh.length === 0) return [];
+  try {
+    const hits = await lookupBatch(refresh);
+    await store.record(refresh, hits, checkedAt);
+    applyReadyCacheRows(cached, refresh, hits, checkedAt);
+    return [];
+  } catch (error) {
+    if (error instanceof UpcBatchDeferredError) {
+      await store.record(error.completedUpcs, error.results, checkedAt);
+      applyReadyCacheRows(
+        cached,
+        error.completedUpcs,
+        error.results,
+        checkedAt,
+      );
+      return [...error.failedUpcs];
+    }
+    if (error instanceof UpcLookupUnavailableError) {
+      return [...error.unavailableUpcs];
+    }
+    throw error;
+  }
 };
 
 /**
@@ -197,6 +252,7 @@ export const readCachedUpcLookups = async (
   db: Database,
   upcs: readonly string[],
   lookupBatch: (upcs: string[]) => Promise<Map<string, UPCLookupResponse>>,
+  store: UpcLookupCacheStore = upcLookupCacheStore(db),
 ): Promise<{
   lookups: Map<string, UPCLookupResponse>;
   freshness: UpcEnrichmentFreshness;
@@ -215,14 +271,20 @@ export const readCachedUpcLookups = async (
     };
   }
 
-  const rows = await getCachedUpcRows(db, requested);
+  const rows = await store.getRows(requested);
   const cached = new Map(rows.map((row) => [row.upc, row]));
   const refresh = requested.filter((upc) => {
     const row = cached.get(upc);
-    return !row || !isFresh(row, checkedAt);
+    return !row || !isFreshUpcRow(row, checkedAt);
   });
 
-  await refreshUpcCache(db, refresh, cached, checkedAt, lookupBatch);
+  const unresolved = await refreshUpcCache(
+    store,
+    refresh,
+    cached,
+    checkedAt,
+    lookupBatch,
+  );
 
   const lookups = new Map<string, UPCLookupResponse>();
   const usedRows = requested
@@ -234,15 +296,24 @@ export const readCachedUpcLookups = async (
     if (isUpcHit(row)) lookups.set(row.upc, toUpcLookup(row));
   }
 
-  const unavailableCount = requested.filter(
-    (upc) => cached.get(upc)?.status !== "ready",
-  ).length;
+  const unresolvedSet = new Set(unresolved);
+  const unavailableCount = requested.filter((upc) => {
+    const row = cached.get(upc);
+    return (
+      unresolvedSet.has(upc) || row == null || !isFreshUpcRow(row, checkedAt)
+    );
+  }).length;
   const oldestFetchedAt = usedRows.reduce<Date | null>(
     (oldest, row) =>
       oldest == null || row.fetchedAt < oldest ? row.fetchedAt : oldest,
     null,
   );
-  const status = "fresh" as const;
+  const status =
+    unavailableCount === 0
+      ? "fresh"
+      : usedRows.length > 0
+        ? "stale"
+        : "unavailable";
 
   return {
     lookups,

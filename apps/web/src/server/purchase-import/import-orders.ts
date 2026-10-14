@@ -737,7 +737,7 @@ export async function preparePurchaseImport(
           // prepared line is the authoritative role used by roster and commit.
           const preparedCandidateLines: ExtractedPurchaseLine[] = [];
           for (const [position, line] of candidate.lines.entries()) {
-            const lineKind: ExpenseLineKind =
+            let lineKind: ExpenseLineKind =
               line.lineKind === "unclassified"
                 ? await decideExpenseLineRole(
                     { name: line.title, cost: line.amount, notes: null },
@@ -749,6 +749,17 @@ export async function preparePurchaseImport(
                     decisionPort,
                   )
                 : line.lineKind;
+            // An inferred positive discount on a forward receipt lacks reversal
+            // evidence. Keep the signed source amount and require role review;
+            // explicit source roles can represent documented corrections.
+            if (
+              line.lineKind === "unclassified" &&
+              lineKind === "discount" &&
+              line.amount > 0 &&
+              (candidate.printedGrandTotal === null ||
+                candidate.printedGrandTotal >= 0)
+            )
+              lineKind = "unclassified";
             preparedCandidateLines.push({ ...line, lineKind });
           }
           const linkedTarget =

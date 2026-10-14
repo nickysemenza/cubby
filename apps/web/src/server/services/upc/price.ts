@@ -18,12 +18,13 @@ export async function extractBestPrice(
   const validOffers = offers.filter(
     (offer) => Number.isFinite(offer.price) && offer.price > 0,
   );
-  if (validOffers.some((offer) => offer.title.length > 400))
-    throw new Error("UPC offer title exceeds the comparison evidence bound");
-  if (itemTitle.length > 400)
-    throw new Error("UPC item title exceeds the comparison evidence bound");
-  if (validOffers.length > MAX_COMPARABLE_OFFERS)
-    throw new Error("UPC offer count exceeds the comparison evidence bound");
+  if (
+    itemTitle.length > 400 ||
+    validOffers.length > MAX_COMPARABLE_OFFERS ||
+    validOffers.some((offer) => offer.title.length > 400)
+  ) {
+    return null;
+  }
   const judgments = await Promise.all(
     validOffers.map(async (offer) => ({
       price: offer.price,

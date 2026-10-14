@@ -194,6 +194,7 @@ export async function importedPurchaseFixture(
     actor,
   );
   await insertWithShortcode(db, "expense", {
+    lineKind: "principal",
     name: "Small Q-17 device",
     purchaseId: order.id,
     productId: item.entityId,

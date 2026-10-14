@@ -305,6 +305,69 @@ describe("useAutoFieldSuggestion", () => {
     expect(after).not.toContain("trade");
   });
 
+  it("keeps an explicit adjustment role renderable during a conflicting Product draft", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    render(
+      <Harness
+        entity="expense"
+        mode="create"
+        fieldKeys={["projectId"]}
+        textFields={["name", "lineKind", "productId"]}
+        operations={operationsReturning(() => ({ suggestions: {} }))}
+        onReady={(ready) => {
+          form = ready;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    act(() => {
+      form.setValue("lineKind", "tax");
+      form.setValue("productId", "PRD-4K7M");
+    });
+
+    expect(screen.getByLabelText("projectId")).toBeInTheDocument();
+  });
+
+  it("keeps a high-confidence Expense role proposal pending explicit review", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning(() => ({
+      suggestions: {
+        lineKind: {
+          ...tradeSuggestion,
+          value: "tax",
+          label: "Tax",
+          probability: 0.98,
+        },
+      },
+    }));
+    render(
+      <Harness
+        entity="expense"
+        mode="create"
+        fieldKeys={["lineKind"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(ready) => {
+          form = ready;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "sales tax" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("seed-items-lineKind").textContent).toContain(
+        '"id":"tax"',
+      ),
+    );
+
+    expect(form.getValues("lineKind")).toBe("");
+    expect(isDirtyText("lineKind")).toBe("false");
+  });
+
   it("keeps reset null deliberate and makes the next picker change explicit", async () => {
     let form!: UseFormReturn<FieldValues>;
     render(

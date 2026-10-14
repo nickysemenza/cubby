@@ -56,6 +56,7 @@ describe("reviewed spending classification", () => {
       categoryId: oldCategory.id,
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture item",
       cost: -20,
       productQuantity: -1,
@@ -65,6 +66,7 @@ describe("reviewed spending classification", () => {
       trade: "other",
     });
     const override = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture explicit purpose",
       cost: 10,
       productQuantity: 1,
@@ -198,6 +200,7 @@ describe("reviewed spending classification", () => {
         vendorId: vendor.id,
       });
       const expense = await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: "Fixture historical expense",
         date: "2026-09-01",
         cost: 12.34,
@@ -291,6 +294,7 @@ describe("reviewed spending classification", () => {
         vendorId,
       });
       return insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         name: "Fixture line",
         date: "2026-09-01",
         cost: 8.5,
@@ -337,6 +341,7 @@ describe("reviewed spending classification", () => {
       name: "Fixture gifts",
     });
     const expense = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Fixture purchase",
       cost: 12.34,
       date: "2026-09-01",

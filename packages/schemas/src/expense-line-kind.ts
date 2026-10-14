@@ -52,18 +52,13 @@ export const isPurchaseAdjustmentExpense = (expense: {
 }): boolean =>
   expense.lineKind !== "principal" && expense.lineKind !== "unclassified";
 
-/** Resolve only authoritative input. Missing roles stay unresolved until a
- * server decision; a live Product assignment is an explicit principal fact. */
+/** Resolve only authoritative input. A live Product is a principal fact. */
 export function resolveExpenseLineKind(input: {
   lineKind?: string | null;
   productId?: string | null;
 }): ExpenseLineKind {
   if (input.lineKind != null && input.lineKind !== "auto") {
-    const lineKind = expenseLineKindSchema.parse(input.lineKind);
-    if (input.productId && lineKind !== "principal") {
-      throw new Error("Only principal Expenses may link a Product.");
-    }
-    return lineKind;
+    return expenseLineKindSchema.parse(input.lineKind);
   }
   return input.productId ? "principal" : "unclassified";
 }

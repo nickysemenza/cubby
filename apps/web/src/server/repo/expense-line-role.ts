@@ -13,7 +13,7 @@ import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/features"
 import { expenseLineRoleRules } from "~/server/ai/prompts/purchase-lines";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 
 const roleChoices = expenseLineKindValues.filter(
   (lineKind): lineKind is Exclude<ExpenseLineKind, "unclassified"> =>
@@ -42,7 +42,7 @@ export async function classifyExpenseLineRole(
   evidence: RoleEvidence,
   port?: DecisionPort,
 ): Promise<ExpenseLineKind> {
-  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  const runId = await ensureRun(db, actor, aiCallRunInput(actor));
   return decideExpenseLineRole(
     evidence,
     {

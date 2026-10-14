@@ -209,6 +209,26 @@ describe("expense repository — CRUD", () => {
       };
     };
 
+  it("refuses conflicting explicit assignments on role abstention without dropping intent or money", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      defaultTrade: "building",
+    });
+    const input = makeExpenseInput({
+      name: "Synthetic unclear assigned row",
+      projectId: project.output.id,
+      cost: 12,
+    });
+    delete input.lineKind;
+    await expect(
+      createExpense(ctx.db, input, ctx.actor, decisionPort("none")),
+    ).rejects.toMatchObject({
+      reason: "CONSTRAINT_VIOLATION",
+      message: expect.stringContaining("Resolve the receipt role first"),
+    });
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);
+  });
+
   it("publishes an uncertain receipt role as unclassified and exposes its quality gap", async () => {
     const input = makeExpenseInput({ name: "Synthetic unclear receipt row" });
     delete input.lineKind;

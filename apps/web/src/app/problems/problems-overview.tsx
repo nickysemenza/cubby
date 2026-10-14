@@ -209,8 +209,8 @@ export function ProblemsOverview() {
           problems.upcFreshness != null && (
             <output className="block border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink">
               {problems.upcFreshness.status === "stale"
-                ? "UPC provider is unavailable; showing the last cached proposals."
-                : "UPC provider is unavailable; proposals will return when it recovers."}
+                ? "UPC refresh was deferred; showing cached proposals where available. Remaining codes will be retried on a later pass."
+                : "UPC lookup is disabled; proposals cannot be refreshed right now."}
             </output>
           )}
 

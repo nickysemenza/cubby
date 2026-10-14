@@ -25,6 +25,7 @@ describe("receipt Purchase itemization", () => {
         date: "2026-09-01",
       });
       await insertWithShortcode(ctx.db, "expense", {
+        lineKind: "principal",
         purchaseId: purchase.id,
         name: "Store visit",
         cost: 42,

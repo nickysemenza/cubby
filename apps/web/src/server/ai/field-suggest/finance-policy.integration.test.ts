@@ -83,6 +83,7 @@ describe("reviewed finance suggestions", () => {
           basisMode: "provided",
           targets: ["spendingCategoryId"],
           basis: {
+            ...(entity === "expense" ? { lineKind: "principal" } : {}),
             merchant: "Fixture restaurant",
             sourceCategory: "Restaurants",
             rawDescription: "Dinner",

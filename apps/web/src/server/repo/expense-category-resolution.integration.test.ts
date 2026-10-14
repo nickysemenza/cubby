@@ -77,6 +77,17 @@ describe("Expense category resolution", () => {
     );
     return rows.rows[0]?.category;
   }
+  it("groups derived category and trade by the same database expression", async () => {
+    await fixture();
+    const category = effectiveExpenseSpendingCategorySql("e");
+    const trade = effectiveExpenseTradeSql("e");
+    const rows = await unwrapDb(ctx.db)
+      .execute(sql`SELECT ${category} AS category, ${trade} AS trade, COUNT(*) AS count
+      FROM "Expense" e GROUP BY ${category}, ${trade}`);
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0]?.count).toBe("1");
+  });
+
   it("does not inherit Purchase category or trade for an unresolved receipt role", async () => {
     const f = await fixture();
     await unwrapDb(ctx.db).execute(

@@ -311,6 +311,7 @@ describe("purchase inheritance lifecycle", () => {
     });
     expect(
       await resolveDraftExpenseFields(ctx.db, {
+        lineKind: "principal",
         projectId: explicitProject.shortcode,
         purchaseId: source.shortcode,
         trade: "electrical",
@@ -323,7 +324,7 @@ describe("purchase inheritance lifecycle", () => {
         lineKind: "auto",
         purchaseId: source.shortcode,
       }),
-    ).toMatchObject({ projectId: { mode: "allocated", value: null } });
+    ).toMatchObject({ projectId: { mode: "none", value: null } });
     // A tax line follows its items for trade and cost type too, so neither
     // is offered as a per-line suggestion; a typed trade stays explicit.
     expect(
@@ -384,6 +385,7 @@ describe("purchase inheritance lifecycle", () => {
     });
     expect(
       await resolveDraftExpenseFields(ctx.db, {
+        lineKind: "principal",
         purchaseId: source.shortcode,
         trade: "electrical",
       }),

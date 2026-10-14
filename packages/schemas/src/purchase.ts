@@ -444,6 +444,7 @@ export const SPLIT_NEEDS_PURCHASE_REASON =
  * product link to this part (at most one part).
  */
 export const splitPartDraft = z.object({
+  lineKind: expenseLineKindSchema.optional(),
   name: z.string(),
   cost: z.string(),
   costType: costTypeSchema,

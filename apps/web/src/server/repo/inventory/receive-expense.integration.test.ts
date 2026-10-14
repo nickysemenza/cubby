@@ -47,6 +47,7 @@ describe("atomic reviewed Expense receiving", () => {
       date: "2026-09-01",
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Receiving fixture line",
       cost: 12,
       date: "2026-09-01",
@@ -129,6 +130,7 @@ describe("atomic reviewed Expense receiving", () => {
       ctx.actor,
     );
     const secondLine = await insertWithShortcode(ctx.db, "expense", {
+      lineKind: "principal",
       name: "Second line",
       cost: 5,
       date: "2026-09-01",

@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { resolveExpenseLineKind } from "./expense-line-kind";
 
 describe("resolveExpenseLineKind", () => {
-  it("keeps a missing role unclassified without a Product", () => {
+  it("keeps a missing role unclassified", () => {
     expect(resolveExpenseLineKind({})).toBe("unclassified");
   });
 
-  it("treats a Product assignment as principal", () => {
+  it("resolves a missing role from an authoritative Product assignment", () => {
     expect(resolveExpenseLineKind({ productId: "PRD-4K7M" })).toBe("principal");
   });
 
-  it("rejects an explicit incompatible role for a Product line", () => {
-    expect(() =>
+  it("keeps the authoritative role when a draft temporarily conflicts with a Product", () => {
+    expect(
       resolveExpenseLineKind({ lineKind: "tax", productId: "PRD-4K7M" }),
-    ).toThrow("Only principal Expenses may link a Product");
+    ).toBe("tax");
   });
 
   it("preserves an explicit concrete role without reclassifying its name", () => {
@@ -22,5 +22,14 @@ describe("resolveExpenseLineKind", () => {
 
   it("keeps the create-only auto sentinel unresolved", () => {
     expect(resolveExpenseLineKind({ lineKind: "auto" })).toBe("unclassified");
+  });
+
+  it("resolves create auto to principal when a Product is assigned", () => {
+    expect(
+      resolveExpenseLineKind({
+        lineKind: "auto",
+        productId: "PRD-4K7M",
+      }),
+    ).toBe("principal");
   });
 });
