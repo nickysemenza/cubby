@@ -82,8 +82,13 @@ pub(crate) fn resolve(base: Option<&Url>, raw: &str) -> Option<String> {
     matches!(resolved.scheme(), "http" | "https").then(|| resolved.to_string())
 }
 
-/// Elements whose text a reader never sees.
+/// Browser-page exclusions, including accessibility-hidden content.
 pub(crate) fn is_hidden(element: &ElementRef) -> bool {
+    is_visually_hidden(element) || element.value().attr("aria-hidden") == Some("true")
+}
+
+/// Visual and inert-content exclusions, independent of accessibility exposure.
+pub(crate) fn is_visually_hidden(element: &ElementRef) -> bool {
     let value = element.value();
     if matches!(
         value.name(),
@@ -91,7 +96,7 @@ pub(crate) fn is_hidden(element: &ElementRef) -> bool {
     ) {
         return true;
     }
-    if value.attr("hidden").is_some() || value.attr("aria-hidden") == Some("true") {
+    if value.attr("hidden").is_some() {
         return true;
     }
     value.attr("style").is_some_and(|style| {
@@ -133,8 +138,8 @@ pub(crate) fn is_block(name: &str) -> bool {
     )
 }
 
-fn push_text(element: ElementRef, out: &mut String) {
-    if out.len() >= MAX_TEXT_BYTES || is_hidden(&element) {
+fn push_text(element: ElementRef, out: &mut String, hidden: fn(&ElementRef) -> bool) {
+    if out.len() >= MAX_TEXT_BYTES || hidden(&element) {
         return;
     }
     let block = is_block(element.value().name());
@@ -155,7 +160,7 @@ fn push_text(element: ElementRef, out: &mut String) {
             }
             Node::Element(_) => {
                 if let Some(child) = ElementRef::wrap(child) {
-                    push_text(child, out);
+                    push_text(child, out, hidden);
                 }
             }
             _ => {}
@@ -243,8 +248,15 @@ fn literal_navigation(handler: &str) -> Option<&str> {
 
 /// What a reader sees in an element, collapsed to one line.
 pub(crate) fn visible_text(element: ElementRef) -> String {
+    visible_text_with_visibility(element, is_hidden)
+}
+
+pub(crate) fn visible_text_with_visibility(
+    element: ElementRef,
+    hidden: fn(&ElementRef) -> bool,
+) -> String {
     let mut out = String::new();
-    push_text(element, &mut out);
+    push_text(element, &mut out, hidden);
     collapse(&out)
 }
 
@@ -297,7 +309,7 @@ pub fn compact_browser_page(html: &str, url: &str) -> WCompactPage {
 
     let mut text = String::new();
     if let Some(body) = select(&document, "body").into_iter().next() {
-        push_text(body, &mut text);
+        push_text(body, &mut text, is_hidden);
     }
     truncate_utf8(&mut text, MAX_TEXT_BYTES);
     let text = text
