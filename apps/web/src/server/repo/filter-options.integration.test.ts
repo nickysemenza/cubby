@@ -5,17 +5,77 @@ import { describe, expect, it } from "vitest";
 import { createExpense } from "./expense/crud";
 import { getFilterOptions } from "./filter-options";
 import { createIngredient } from "./ingredient/crud";
+import { createInventoryEntry } from "./inventory/crud";
 import { createLedgerParty } from "./ledger-party";
+import { createLocation } from "./location/crud";
 import { createMealWithEntityId } from "./meal/crud";
 import { createProduct } from "./product/crud";
 import { createProject } from "./project/crud";
 import { createPurchase } from "./purchase";
 import { createRecipe } from "./recipe/crud";
 import { makeProductInput, makeRecipeInput } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("entity reference filter options", () => {
   const ctx = withTestDb();
+
+  // Computed relational titles have no stored label column. Reference rosters
+  // must still load, search, and hydrate selections for those entities.
+  it("uses the shortcode when an entity has no stored display column", async () => {
+    const item = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic storage bin" }),
+      TEST_ACTOR,
+    );
+    const place = await createLocation(
+      ctx.db,
+      buildEntity("location", { name: "Synthetic shelf" }),
+      TEST_ACTOR,
+    );
+    const productId = await resolveLiveShortcode(ctx.db, item.id, "product");
+    const locationId = await resolveLiveShortcode(ctx.db, place.id, "location");
+    if (!productId || !locationId)
+      throw new Error("Missing fixture references");
+    const entry = await createInventoryEntry(
+      ctx.db,
+      { productId, locationId, amount: { value: 1, unit: "each" } },
+      TEST_ACTOR,
+    );
+    const input = {
+      source: "entity" as const,
+      entity: "inventory" as const,
+      search: "",
+      selectedIds: [],
+      limit: 25,
+      include: [],
+    };
+    const expected = [{ id: entry.id, label: entry.id }];
+    expect(
+      await getFilterOptions(ctx.db, {
+        ...input,
+        entity: "ledgerTransfer" as const,
+        include: ["emoji" as const],
+      }),
+    ).toEqual({ items: [], nextCursor: null });
+    expect((await getFilterOptions(ctx.db, input)).items).toEqual(expected);
+    expect(
+      (await getFilterOptions(ctx.db, { ...input, search: entry.id })).items,
+    ).toEqual(expected);
+    expect(
+      (await getFilterOptions(ctx.db, { ...input, search: "no match" })).items,
+    ).toEqual([]);
+    expect(
+      (
+        await getFilterOptions(ctx.db, {
+          ...input,
+          search: "no match",
+          selectedIds: [entry.id],
+          include: ["emoji" as const],
+        })
+      ).items,
+    ).toEqual(expected);
+  });
 
   // Nullable stored titles must not break a roster, selected-value hydration,
   // or searching the fallback label that the picker actually displays.

@@ -555,8 +555,9 @@ not stored values: existing selections remain visible and can be removed even
 when another field changes and they no longer match the candidate query.
 
 Generic entity filter-option rosters use the shortcode when the stored display
-name is null. Page ordering, search, and selected-value hydration use that same
-label, without loading full entity records.
+name is null or the computed title has no stored display column. Page ordering,
+search, and selected-value hydration use that same label, without loading full
+entity records.
 
 `control.suggest: { basis, mode }` marks a field whose value the decision tier
 (Jev/Clef trial) infers from named sibling fields, so the browser editor can auto-fill it
