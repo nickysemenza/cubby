@@ -1,0 +1,229 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_119022ba161688::t_ac8eaede31ef1b 4-6,13-15,17-18,20-21,23-24,84-87
+apps/apple/App/Shared/Activity/BackgroundActivityCenter.swift
+  s_119022ba161688::t_5e8ff8bc368bf5 273-275
+apps/apple/App/Shared/Browse/DetailSlots.swift
+  s_119022ba161688::t_8512e3d7c97275 44
+apps/apple/App/Shared/Photo/ImageEntityDetailView.swift
+  s_119022ba161688::t_126a5b71dc0f3b 25-26,193-200
+apps/apple/App/Shared/Today/TodayView.swift
+  s_119022ba161688::t_94451874b37401 13,20,327-328,330-331,523-527,879
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_119022ba161688::t_88c370ec6d52ff 124
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityFilterState.swift
+  s_119022ba161688::t_f15c89fd8fee57 51-65
+apps/apple/CubbyKit/Sources/CubbyKit/Deeplink/CubbyLink.swift
+  s_119022ba161688::t_1e9862897ad298 15-16,96-97
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_119022ba161688::t_671945c3dc0b0f 252
+apps/apple/CubbyKit/Tests/CubbyKitTests/EntityFilterStateTests.swift
+  s_119022ba161688::t_073db2522afce4 28-38
+apps/web/drizzle/0061_image_job_entity.sql
+  s_119022ba161688::t_4558cea291cfee 1-64
+apps/web/drizzle/0062_image_job_drop_public_id.sql
+  s_119022ba161688::t_2e39b5d8d66af2 1
+apps/web/drizzle/0063_derived_ddl.sql
+  s_119022ba161688::t_7093fc1c0d1f69 1-741
+apps/web/drizzle/derived.lock
+  s_119022ba161688::t_d20e5bf6cc3a66 1
+apps/web/drizzle/meta/0061_snapshot.json
+  s_119022ba161688::t_bc86926836305e 1-20798
+apps/web/drizzle/meta/0062_snapshot.json
+  s_119022ba161688::t_3e10e5e2458d17 1-20792
+apps/web/drizzle/meta/0063_snapshot.json
+  s_119022ba161688::t_4669357506fc29 1-20792
+apps/web/drizzle/meta/_journal.json
+  s_119022ba161688::t_36074f4bc06068 431-451
+apps/web/src/app/images/image-processing-panel.tsx
+  s_119022ba161688::t_3743938630b578 41-42,270,272,277,372,458
+apps/web/src/app/images/image-processing-state.ts
+  s_119022ba161688::t_9b13f0e1a33146 1-22
+apps/web/src/app/problems/components/image-processing-maintenance.tsx
+  s_119022ba161688::t_18d1263422d0cf 35
+apps/web/src/app/product-categories/category-tree.ts
+  s_119022ba161688::t_df138a64c2cb48 3-28
+apps/web/src/app/product-categories/category-tree.unit.test.ts
+  s_119022ba161688::t_5aa511d2760205 3,35-66
+apps/web/src/entity/editing/types.ts
+  s_119022ba161688::t_c23db04a14c7e4 30,36
+apps/web/src/entity/entities.tsx
+  s_119022ba161688::t_b1eee9bd145f02 26,195,415-418
+apps/web/src/entity/entity-detail/detail-slots.tsx
+  s_119022ba161688::t_fbec1beaf9b0ce 81
+apps/web/src/entity/entity-detail/inspector-frame.tsx
+  s_119022ba161688::t_f8a8b19e6a4039 151
+apps/web/src/entity/entity-list-ssr.ts
+  s_119022ba161688::t_eae5171db98033 12,24-25,34-36,43-45,48,61,71
+apps/web/src/entity/entity-list.ts
+  s_119022ba161688::t_da7e9fb19c4d05 1,36-37,77
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_119022ba161688::t_9a70abe5b9d5ea 78,177,187,189,303,305-323,332,349-350,359-366,380-381
+apps/web/src/entity/entity-list/list-nesting.ts
+  s_119022ba161688::t_419b308aff03b5 5-7,10-11,13-21,24-25,27-31
+apps/web/src/entity/list-columns/product.tsx
+  s_119022ba161688::t_59501bfdbeee4e 513-514,539-540
+apps/web/src/entity/list-field-renderers.tsx
+  s_119022ba161688::t_95f3314042d439 277
+apps/web/src/integrations/tanstack-query/cursor-query-options.unit.test.ts
+  s_119022ba161688::t_5589362e283b03 11-14,22,40,44-51,54,64-65
+apps/web/src/server/db/entity-edge-owners.ts
+  s_119022ba161688::t_02e72dacaa3e2e 29-31,101-104
+apps/web/src/server/db/entity-edges.ts
+  s_119022ba161688::t_761a2e58c9ec9d 90-92,332-368,1571
+apps/web/src/server/db/entity-manifest-fk.unit.test.ts
+  s_119022ba161688::t_e5ebb42befbefe 377-387,389
+apps/web/src/server/entity-kernel/contracts.ts
+  s_119022ba161688::t_083635f586070f 10,82-86,119
+apps/web/src/server/entity-kernel/delete-policy.integration.test.ts
+  s_119022ba161688::t_4b4b697124fa23 1228
+apps/web/src/server/entity-kernel/entity-operations.ts
+  s_119022ba161688::t_b2f25e787673e8 15,74-79,86,89-104,371,381,398-401
+apps/web/src/server/entity-kernel/list-input.ts
+  s_119022ba161688::t_9f2d7ed0ab09b6 1-7,66-93
+apps/web/src/server/entity-kernel/list-nesting.integration.test.ts
+  s_119022ba161688::t_0ca180839b50e4 1-12,15-20,23-25,28-35,38,40-52,54-85,87-91,93-96,100-107,109-111,114-117,119-120,123-127,129-130,132-134,136-137,140-141,145-148,152-156,158-163,165-168,171-189,191-195,197,199-204
+apps/web/src/server/entity-kernel/list-read.ts
+  s_119022ba161688::t_72114480c044ec 25-30,44,72-79,165,197
+apps/web/src/server/http-api.unit.test.ts
+  s_119022ba161688::t_2a2a0f2f030aee 333-334,336-337,339-350
+apps/web/src/server/mcp/catalog-schema.unit.test.ts
+  s_119022ba161688::t_85acd61492a8ab 587-592
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_119022ba161688::t_f9a7f0143fdc70 8,465,1062
+apps/web/src/server/operations/image-processing.server.ts
+  s_119022ba161688::t_67b854bc3310c7 3
+apps/web/src/server/photo-import-run/lifecycle.integration.test.ts
+  s_119022ba161688::t_2bd7236538b2bb 182
+apps/web/src/server/photo-import-run/proposals.integration.test.ts
+  s_119022ba161688::t_8d409b9853d5cc 527,538,549,673,686
+apps/web/src/server/purchase-import/gmail/discovery.ts
+  s_119022ba161688::t_e609c70aa2e9c5 727-731
+apps/web/src/server/purchase-import/run-service.ts
+  s_119022ba161688::t_34b685d50169ea 493
+apps/web/src/server/repo/dashboard.ts
+  s_119022ba161688::t_3111f347eeb9ff 12,90
+apps/web/src/server/repo/entity-report/image-job.ts
+  s_119022ba161688::t_4679019571b1da 1-165
+apps/web/src/server/repo/entity-report/index.ts
+  s_119022ba161688::t_d94ff36ab6e71c 25,186
+apps/web/src/server/repo/image-analysis-history.ts
+  s_119022ba161688::t_b0dc739d833e1e 1,6,10,12,14,23,27-28,30
+apps/web/src/server/repo/image-job.ts
+  s_119022ba161688::t_6d752c84034452 1-12,14-26,28-31,33,35-53,55-107,109,111-117,123,129,131-238
+apps/web/src/server/repo/image-processing-history.integration.test.ts
+  s_119022ba161688::t_6b253c74667ebb 2,579,616,638
+apps/web/src/server/repo/image-processing-issues.ts
+  s_119022ba161688::t_cb9d4b722f85b4 30-31,33
+apps/web/src/server/repo/image-processing-maintenance.ts
+  s_119022ba161688::t_3aa2a4a1446627 1,3-4,6,9-10,120,122,125-130,174,179,184,221
+apps/web/src/server/repo/image-processing.integration.test.ts
+  s_119022ba161688::t_ab9a859aa6c515 78-102
+apps/web/src/server/repo/image-processing.ts
+  s_119022ba161688::t_fea96ec779254e 54,242-248,250-262,264-267,269,271,323-329,537,1111,1523-1528
+apps/web/src/server/repo/list.ts
+  s_119022ba161688::t_6068019b4da266 13,16-17,26,29,385-395,420-483,565,567-574,637-661
+apps/web/src/server/repo/problems/detectors-integrity.integration.test.ts
+  s_119022ba161688::t_715f74cd95c832 630
+apps/web/src/server/repo/shortcode-resolver.ts
+  s_119022ba161688::t_933c87d2089eb3 37,285-289
+apps/web/src/server/repo/work-attention.ts
+  s_119022ba161688::t_4bd4fa54badb80 1-8
+apps/web/src/server/services/image-processing.service.ts
+  s_119022ba161688::t_6cb664f34d533f 1-5,281
+apps/web/src/ui/data-table/ListWorkbench.tsx
+  s_119022ba161688::t_c565d35e66086a 11,47-48,200
+apps/web/src/ui/data-table/Table.tsx
+  s_119022ba161688::t_f1e322f39609fe 185-186,283,301,316-326,341-343,377-394,398-429,435-436,438,447-452,454-459,1008,1125
+apps/web/src/ui/data-table/columnHelpers.tsx
+  s_119022ba161688::t_8f3a1c4a64ea56 75,313-314,351-358
+apps/web/src/ui/data-table/useTableConfig.ts
+  s_119022ba161688::t_76e4b1fcb97de0 3,81-85,111-113,166-168,228-233,265-267
+apps/web/src/ui/hooks/useEntityList.tsx
+  s_119022ba161688::t_80d0d37caeb68f 5,7,67-71,97-102,205-211,376-377,384-387,395-408,516,612,705-716,718-720,722-723,730,736,751-762,851
+apps/web/src/ui/hooks/useInfiniteTableList.ts
+  s_119022ba161688::t_4164c1ccbb214b 1,39-40,84-93,117,143,146-158,361-362
+apps/web/src/ui/hooks/usePaginatedTableCore.ts
+  s_119022ba161688::t_9e0090384305e2 1,64-65
+apps/web/src/ui/hooks/useServerTreeChildren.ts
+  s_119022ba161688::t_e0dd93743ef61c 1-176
+apps/web/tests/e2e/activity.spec.ts
+  s_119022ba161688::t_9bc808aa296c3c 88-90,92,98-102,106-107,109,111-112,114-117,120,128-131,133-141,143
+apps/web/tests/e2e/fixtures-photos.ts
+  s_119022ba161688::t_6fdb755d3d9200 50,232,247,289-290,297,324,369
+apps/web/tests/e2e/image-understanding.spec.ts
+  s_119022ba161688::t_edb9d91d18e970 197,199-200,202-203
+apps/web/tests/e2e/list-nesting.spec.ts
+  s_119022ba161688::t_1a3d26b254cb5d 1-59
+apps/web/tests/e2e/run-presentation.spec.ts
+  s_119022ba161688::t_b86e77be68e77b 20,24-26,30-31
+apps/web/tooling/image-job-migration.integration.test.ts
+  s_119022ba161688::t_97b4da8d837b6a 1-96
+apps/web/tooling/scenarios/corpus.ts
+  s_119022ba161688::t_67929a0d8e24d3 859-870
+docs/entities.md
+  s_119022ba161688::t_387cd1125b8ad0 689-703,1050-1052
+docs/guide/terminology.md
+  s_119022ba161688::t_f4c39ab366ec82 469-472,474
+docs/runbooks/production-migrations.md
+  s_119022ba161688::t_f7e7ff2401c1b3 37-77
+docs/todos.md
+  s_119022ba161688::t_6bcbb46f31aa5b 434-435,596-600
+packages/schemas/package.json
+  s_119022ba161688::t_d96a8112ea8a09 173
+packages/schemas/src/activity-fields.ts
+  s_119022ba161688::t_046b727cb363ac 44-53
+packages/schemas/src/connected-view-definitions.ts
+  s_119022ba161688::t_b118e057a977c2 38
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_119022ba161688::t_c0fda5d512785f 173
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_119022ba161688::t_c752b1f065b103 1-446
+packages/schemas/src/entity-definitions/definition.ts
+  s_119022ba161688::t_96bb4d86302f19 1329-1333,1336-1340
+packages/schemas/src/entity-report.ts
+  s_119022ba161688::t_9c997c944e4417 54-55
+packages/schemas/src/identifier-fields.ts
+  s_119022ba161688::t_497b66bb0700de 93,121,175,251,280
+packages/schemas/src/image-job.ts
+  s_119022ba161688::t_53b575be3a4b2e 3-8,10,12-18,20
+packages/schemas/src/image-processing.ts
+  s_119022ba161688::t_af2b7cb085e59c 4-7,28-34,36-38,43-45,310-311
+packages/schemas/src/native-coverage.ts
+  s_119022ba161688::t_c35636d249347e 265
+packages/schemas/src/pagination.ts
+  s_119022ba161688::t_7ef37c10fddd98 254-270
+packages/schemas/src/related-view.ts
+  s_119022ba161688::t_c71b802c532617 546-547
+packages/shared/src/error-utils.ts
+  s_119022ba161688::t_78cfcce34f96e4 98
+packages/shared/src/shortcode.ts
+  s_119022ba161688::t_af824bb7ac8d9b 212
+scripts/generator/entities/presentation.ts
+  s_119022ba161688::t_fcea6d4101e482 241-244
+scripts/generator/entities/render/columns.ts
+  s_119022ba161688::t_faf483a768082d 80-81
+scripts/generator/entities/render/index.ts
+  s_119022ba161688::t_8d9b07e006bd9f 60-65,491,494-495,519-520,686-687,708-709,1404,1427,1443,1499
+scripts/generator/entities/render/schema-wrappers.ts
+  s_119022ba161688::t_33bd3f59d54157 38
+scripts/generator/entities/render/search.ts
+  s_119022ba161688::t_08f47c407b90b8 138-149,158-159,167
+scripts/generator/entities/render/swift-shared-constants.ts
+  s_119022ba161688::t_482e2b9d30869f 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a74fd5cf7ecf46f292a96ea53b4ecba2a7cf2261",
+  "prompts": {},
+  "sessions": {
+    "s_119022ba161688": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13bcb-f64a-7ef0-8d81-1aceaf52856d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
