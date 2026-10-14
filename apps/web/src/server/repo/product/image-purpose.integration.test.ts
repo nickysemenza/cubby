@@ -95,8 +95,7 @@ describe("pending Product image roles", () => {
     });
     expect(row?.purpose).toBe("label");
     const projected = await getProductByID(ctx.db, product.entityId);
-    expect(projected.labelReviewedRevision).toBeNull();
-    expect(projected.labelEvidenceRevision).toMatch(/^label-v1:/);
+    expect(projected.labelImages.map((image) => image.id)).toEqual([labelCode]);
     // Summary and project galleries use this lighter read instead of the
     // Product detail mapper; confirmed labels must be excluded here too.
     const galleries = await getProductImagesByProductIds(ctx.db, [

@@ -386,6 +386,20 @@
       "when": 1791931652567,
       "tag": "0054_ai_cost_accounting_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791941216811,
+      "tag": "0055_remove_label_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791941280814,
+      "tag": "0056_retire_label_review_metadata",
+      "breakpoints": true
     }
   ]
 }

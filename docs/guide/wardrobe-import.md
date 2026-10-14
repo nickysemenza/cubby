@@ -87,8 +87,9 @@ Either:
 The agent reads the photos in the order they were taken, checks each garment against existing
 Products (including ones from past orders), and proposes one group per garment:
 a name such as `Brand Model — Color, Size`, the tag text copied verbatim into
-notes, the owner, and a Location from your note. Where the owner or location is
-unclear it leaves inventory out and says why. Then it stops.
+notes, the owner, and a Location from your note. Unclear sizes or other
+identity details are called out in the proposal for you to resolve during review.
+Where the owner or location is unclear it leaves inventory out and says why. Then it stops.
 
 ## 4. Review and approve
 
@@ -103,9 +104,6 @@ the Product and photos only.
 
 ## 5. Afterwards
 
-- **Confirm tags.** New Products appear in the Research queue for label review;
-  ask the agent to work `product_label_review` so size and color match the tag
-  photos.
 - **Link orders.** Import the matching store orders with the purchase import
   workflow without receiving Inventory for garments already photographed, then
   confirm photo-to-order matches in the product match queue. Photos never

@@ -168,11 +168,6 @@ import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inher
 
 import { hydrateImageReadProjection } from "../image-read-projection";
 import { validateLiveInheritedPolicies } from "../inheritance-validation";
-import {
-  assertProductLabelReviewRevision,
-  labelEvidenceRevisionSql,
-  loadProductLabelEvidenceRevision,
-} from "../product-label-review";
 import { assertProductCategoryChange } from "./classification";
 import { getProductClassificationEvidence } from "./classification-evidence";
 import {
@@ -443,15 +438,6 @@ const productCategoryGroupOrder = (
 
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
 
-const loadLabelEvidenceRevisions = async (db: Database, ids: ProductId[]) => {
-  if (!ids.length) return new Map<ProductId, string | null>();
-  const rows = await getDb(db)
-    .select({ id: product.id, revision: labelEvidenceRevisionSql(product.id) })
-    .from(product)
-    .where(inArray(product.id, ids));
-  return new Map(rows.map((row) => [row.id, row.revision]));
-};
-
 const fetchProductById = async (
   db: Database,
   id: ProductId,
@@ -541,20 +527,17 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const [qualities, coverImageUrls, analysisSummaries, revisions] =
-      await Promise.all([
-        observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
-          loadProductDataQualities(db, [row.id]),
-        ),
-        getProductCoverImageUrlsByProductIds(db, [row.id]),
-        loadImageAnalysisSummaries(db, productImageShortcodesOf(row.images)),
-        loadLabelEvidenceRevisions(db, [row.id]),
-      ]);
+    const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
+      observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
+        loadProductDataQualities(db, [row.id]),
+      ),
+      getProductCoverImageUrlsByProductIds(db, [row.id]),
+      loadImageAnalysisSummaries(db, productImageShortcodesOf(row.images)),
+    ]);
     return dbProductToAPI(
       {
         ...row,
         coverImageUrl: coverImageUrls.get(row.id) ?? null,
-        labelEvidenceRevision: revisions.get(row.id) ?? null,
       },
       qualities.get(row.id)!,
       analysisSummaries,
@@ -637,25 +620,20 @@ export const getProductsByShortcodes = async (
     where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
     ...relations.product.full,
   });
-  const [qualities, coverImageUrls, analysisSummaries, revisions] =
-    await Promise.all([
-      loadProductDataQualities(
-        db,
-        results.map((row) => row.id),
-      ),
-      getProductCoverImageUrlsByProductIds(
-        db,
-        results.map((row) => row.id),
-      ),
-      loadImageAnalysisSummaries(
-        db,
-        results.flatMap((row) => productImageShortcodesOf(row.images)),
-      ),
-      loadLabelEvidenceRevisions(
-        db,
-        results.map((row) => row.id),
-      ),
-    ]);
+  const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
+    loadProductDataQualities(
+      db,
+      results.map((row) => row.id),
+    ),
+    getProductCoverImageUrlsByProductIds(
+      db,
+      results.map((row) => row.id),
+    ),
+    loadImageAnalysisSummaries(
+      db,
+      results.flatMap((row) => productImageShortcodesOf(row.images)),
+    ),
+  ]);
   const priced = await enrichProductRowsWithPricing(
     db,
     await enrichProductRowsWithInventoryValuations(db, results),
@@ -669,7 +647,6 @@ export const getProductsByShortcodes = async (
       {
         ...row,
         coverImageUrl: coverImageUrls.get(row.id) ?? null,
-        labelEvidenceRevision: revisions.get(row.id) ?? null,
       },
       qualities.get(row.id)!,
       analysisSummaries,
@@ -1279,7 +1256,7 @@ export const productList = async (
     readIntent === "page" ? loadProductListSums(db, whereClause) : undefined,
   ]);
   const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages, revisions] =
+  const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
       loadProductListRelations(
         db,
@@ -1294,7 +1271,6 @@ export const productList = async (
         db,
         ids.map((id) => ({ entityKind: "product", entityId: id })),
       ),
-      loadLabelEvidenceRevisions(db, ids),
     ]);
   const pricingById = new Map(priced.map((row) => [row.id, row.pricing]));
   const ledgerById = new Map(
@@ -1313,7 +1289,6 @@ export const productList = async (
           pricing: pricingById.get(row.id)!,
           quantityLedger: ledgerById.get(row.id)!,
           dataQuality: qualities.get(row.id)!,
-          labelEvidenceRevision: revisions.get(row.id) ?? null,
         } as ProductListDB,
         displayImages.get(entityRefKey("product", row.id)) ?? [],
       ),
@@ -1421,7 +1396,7 @@ export const listProductsRead = async (
   if (projection.kind === "base" || results.length === 0)
     return { ...metadata, data: projectListRows("product", rows, projection) };
   const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages, revisions] =
+  const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
       loadProductListRelations(
         db,
@@ -1445,9 +1420,6 @@ export const listProductsRead = async (
           db,
           ids.map((entityId) => ({ entityKind: "product", entityId })),
         ),
-      ),
-      loadListGroup(projection, "derived", () =>
-        loadLabelEvidenceRevisions(db, ids),
       ),
     ]);
   const pricingById = new Map(priced?.map((row) => [row.id, row.pricing]));
@@ -1517,7 +1489,6 @@ export const listProductsRead = async (
           expenseTotal: Number(row.expenseTotal),
           componentCount: Number(row.componentCount),
           purchaseDate: row.purchaseDate,
-          labelEvidenceRevision: revisions?.get(row.id) ?? null,
           ...quantity,
           ledgerExpectedQuantityLabel: expectedQuantityLabel(
             quantity.quantityLedger,
@@ -2134,10 +2105,6 @@ export const createProduct = async (
           newProduct.categoryId,
         ),
         ...created,
-        labelEvidenceRevision: await loadProductLabelEvidenceRevision(
-          tx,
-          created.id,
-        ),
         pricing: resolveProductPricing(created.price),
         dataQuality: qualities.get(created.id)!,
       });
@@ -2372,13 +2339,6 @@ export const updateProduct = async (
         removeImageIds,
         imageOrder,
       );
-      if (data.labelReviewedRevision != null)
-        await assertProductLabelReviewRevision(
-          tx,
-          id,
-          data.labelReviewedRevision,
-        );
-
       // Fetch all associated images (live only — just-removed ones must not
       // reappear in the response) in display order.
       const productImages = await tx.query.entityAttachment.findMany({
@@ -2437,10 +2397,6 @@ export const updateProduct = async (
           updated.categoryId,
         ),
         ...updated,
-        labelEvidenceRevision: await loadProductLabelEvidenceRevision(
-          tx,
-          updated.id,
-        ),
         pricing:
           pricing.get(updated.id) ?? resolveProductPricing(updated.price),
         dataQuality: qualities.get(updated.id)!,
@@ -2867,7 +2823,6 @@ export const quickCreateProduct = async (
       newProduct.categoryId,
     ),
     ...newProduct,
-    labelEvidenceRevision: null,
     pricing: resolveProductPricing(newProduct.price),
     dataQuality: qualities.get(newProduct.id)!,
     images: [],

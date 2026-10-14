@@ -13,7 +13,6 @@ import {
   photoRunImage,
   inventoryEntry,
   product,
-  image,
   dataExceptionRecord,
 } from "~/server/db/schema";
 import {
@@ -219,7 +218,7 @@ describe("commitPhotoGroup", () => {
     expect(updatedRun?.imported).toBe(1);
   });
 
-  it("keeps reused Product label transcription in Research despite existing notes", async () => {
+  it("retains reused Product label photos and source-backed tag notes", async () => {
     const party = await seedMember();
     const run = await seedRun(party);
     const images = await seedImages(1);
@@ -228,176 +227,6 @@ describe("commitPhotoGroup", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic Trail Shirt — Blue, Medium",
-        notes: "Existing notes describe an earlier catalog listing.",
-      }),
-      ctx.actor,
-    );
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "synthetic-label-handoff",
-        images: [{ id: images[0]!.shortcode, purpose: "label" }],
-        product: { kind: "existing", existingId: existing.id },
-      },
-      ctx.actor,
-    );
-    const enriched = await getProductByShortcode(ctx.db, existing.id);
-    expect(enriched?.notes).toBe(
-      "Existing notes describe an earlier catalog listing.",
-    );
-    expect(enriched?.dataQuality.gaps.map((gap) => gap.check)).toContain(
-      "product_label_review",
-    );
-  });
-
-  it("records unavailable label evidence and reopens Research when another label arrives", async () => {
-    const party = await seedMember();
-    const run = await seedRun(party);
-    const images = await seedImages(2);
-    await seedTargets(run.id, images);
-    const existing = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic Faded Label Shirt — Blue, Medium" }),
-      ctx.actor,
-    );
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "synthetic-unreadable-label",
-        images: [{ id: images[0]!.shortcode, purpose: "label" }],
-        product: { kind: "existing", existingId: existing.id },
-      },
-      ctx.actor,
-    );
-    const excepted = await setDataException(
-      ctx.db,
-      {
-        entityId: existing.id,
-        check: "product_label_review",
-        reason: "unavailable",
-        note: "The printed label is illegible in the available image.",
-      },
-      ctx.actor,
-    );
-    expect(excepted.exceptions).toContainEqual(
-      expect.objectContaining({
-        check: "product_label_review",
-        state: "active",
-      }),
-    );
-    expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
-      "product_label_review",
-    );
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "synthetic-new-label",
-        images: [{ id: images[1]!.shortcode, purpose: "label" }],
-        product: { kind: "existing", existingId: existing.id },
-      },
-      ctx.actor,
-    );
-    const changed = await getProductByShortcode(ctx.db, existing.id);
-    expect(changed?.dataQuality.exceptions).toContainEqual(
-      expect.objectContaining({
-        check: "product_label_review",
-        state: "stale",
-      }),
-    );
-    expect(changed?.dataQuality.gaps.map((gap) => gap.check)).toContain(
-      "product_label_review",
-    );
-  });
-
-  it("reopens label review when unknown image content gains a fingerprint", async () => {
-    const party = await seedMember();
-    const run = await seedRun(party);
-    const images = await seedImages(1);
-    await seedTargets(run.id, images);
-    const existing = await createProductFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Synthetic Label Shirt — Blue, Medium",
-      }),
-      ctx.actor,
-    );
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "synthetic-content-review",
-        images: [{ id: images[0]!.shortcode, purpose: "label" }],
-        product: { kind: "existing", existingId: existing.id },
-      },
-      ctx.actor,
-    );
-    const before = await getProductByShortcode(ctx.db, existing.id);
-    if (!before?.labelEvidenceRevision)
-      throw new Error("Label revision unavailable");
-    const revision = before.labelEvidenceRevision;
-    const context = entityKernelContextSchema.parse(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
-    await executeEntity(context, {
-      action: "update",
-      entity: "product",
-      id: existing.id,
-      data: {
-        notes: "Printed tag: SYNTHETIC WORKS / M / BLUE",
-        labelReviewedRevision: revision,
-      },
-      sources: [
-        {
-          fieldPath: "notes",
-          quote: "SYNTHETIC WORKS / M / BLUE",
-          selectedVariant: "Blue, Medium",
-        },
-      ],
-    });
-    const reviewed = await getProductByShortcode(ctx.db, existing.id);
-    expect(reviewed?.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
-      "product_label_review",
-    );
-    const detail = await executeEntityAs(context, "get", {
-      entity: "product",
-      id: existing.id,
-      missing: "error",
-    });
-    expect(
-      z.object({ sources: z.array(entitySourceRead) }).parse(detail.item)
-        .sources,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          quote: "SYNTHETIC WORKS / M / BLUE",
-          supportsCurrentValue: true,
-        }),
-      ]),
-    );
-    await getDb(ctx.db)
-      .update(image)
-      .set({ sha256: "a".repeat(64) })
-      .where(eq(image.id, images[0]!.id));
-    const changed = await getProductByShortcode(ctx.db, existing.id);
-    expect(changed?.labelEvidenceRevision).not.toBe(revision);
-    expect(changed?.labelReviewedRevision).toBe(revision);
-    expect(changed?.dataQuality.gaps.map((gap) => gap.check)).toContain(
-      "product_label_review",
-    );
-  });
-
-  it("refuses stale label review and its notes and Sources after another label arrives", async () => {
-    const party = await seedMember();
-    const run = await seedRun(party);
-    const images = await seedImages(2);
-    await seedTargets(run.id, images);
-    const existing = await createProductFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Synthetic Review Shirt — Red, Small",
         notes: "Earlier catalog notes.",
       }),
       ctx.actor,
@@ -406,59 +235,54 @@ describe("commitPhotoGroup", () => {
       ctx.db,
       {
         runId: run.shortcode,
-        groupKey: "synthetic-first-label",
+        groupKey: "synthetic-tag-transcription",
         images: [{ id: images[0]!.shortcode, purpose: "label" }],
         product: { kind: "existing", existingId: existing.id },
       },
       ctx.actor,
     );
-    const before = await getProductByShortcode(ctx.db, existing.id);
-    if (!before?.labelEvidenceRevision)
-      throw new Error("Label revision unavailable");
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "synthetic-second-label",
-        images: [{ id: images[1]!.shortcode, purpose: "label" }],
-        product: { kind: "existing", existingId: existing.id },
-      },
-      ctx.actor,
-    );
+    const attached = await getProductByShortcode(ctx.db, existing.id);
+    expect(attached?.notes).toBe("Earlier catalog notes.");
+    expect(attached?.labelImages.map((image) => image.id)).toEqual([
+      images[0]!.shortcode,
+    ]);
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    await expect(
-      executeEntity(context, {
-        action: "update",
-        entity: "product",
-        id: existing.id,
-        data: {
-          notes: "Stale tag transcription.",
-          labelReviewedRevision: before.labelEvidenceRevision,
+    await executeEntity(context, {
+      action: "update",
+      entity: "product",
+      id: existing.id,
+      data: { notes: "SYNTHETIC WORKS / M / BLUE" },
+      sources: [
+        {
+          fieldPath: "notes",
+          quote: "SYNTHETIC WORKS / M / BLUE",
+          selectedVariant: "Blue, Medium",
         },
-        sources: [{ fieldPath: "notes", quote: "STALE LABEL TEXT" }],
-      }),
-    ).rejects.toThrow(/Label evidence changed/);
-    const after = await getProductByShortcode(ctx.db, existing.id);
-    expect(after?.notes).toBe("Earlier catalog notes.");
-    expect(after?.labelReviewedRevision).toBeNull();
+      ],
+    });
     const detail = await executeEntityAs(context, "get", {
       entity: "product",
       id: existing.id,
       missing: "error",
     });
     expect(
-      z.object({ sources: z.array(entitySourceRead) }).parse(detail.item)
-        .sources,
-    ).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ quote: "STALE LABEL TEXT" }),
-      ]),
-    );
+      z
+        .object({ notes: z.string(), sources: z.array(entitySourceRead) })
+        .parse(detail.item),
+    ).toMatchObject({
+      notes: "SYNTHETIC WORKS / M / BLUE",
+      sources: [
+        expect.objectContaining({
+          quote: "SYNTHETIC WORKS / M / BLUE",
+          supportsCurrentValue: true,
+        }),
+      ],
+    });
   });
 
-  it("reopens a negative identity exception when label evidence arrives", async () => {
+  it("preserves an identifier exception when label photos arrive without changing identity", async () => {
     const party = await seedMember();
     const run = await seedRun(party);
     const images = await seedImages(1);
@@ -519,11 +343,17 @@ describe("commitPhotoGroup", () => {
       ctx.actor,
     );
     const after = await getProductByShortcode(ctx.db, existing.id);
-    expect(after?.dataQuality.gaps.map((gap) => gap.check)).toContain(
+    expect(after?.labelImages.map((image) => image.id)).toEqual([
+      images[0]!.shortcode,
+    ]);
+    expect(after?.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
       "product_external_id",
     );
     expect(after?.dataQuality.exceptions).toContainEqual(
-      expect.objectContaining({ check: "product_external_id", state: "stale" }),
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
     );
   });
 

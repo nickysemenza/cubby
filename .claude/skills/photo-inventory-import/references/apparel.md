@@ -12,11 +12,13 @@ unlisted item is a reported gap, not a taxonomy edit.
 
 ## Tag transcription
 
-Transcribe every garment tag's printed facts verbatim into the Product
+Transcribe legible garment tag facts verbatim into the Product
 `notes` — brand line, size, fit (e.g. "Slim", "Relaxed"), fabric/material
 composition, and country of origin — exactly as printed, not paraphrased or
-normalized. This is separate from the Product `name`: the tag is evidence
-retained for later reference, the name is the human-facing identity.
+normalized. Read the label before proposing approval and record unclear size or
+identity details in the group evidence for the reviewer. This is separate from
+the Product `name`: the tag is evidence retained for later reference, the name
+is the human-facing identity.
 
 ## Name and variant
 
