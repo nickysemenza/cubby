@@ -17,8 +17,8 @@ import { createUploadedImageRecord } from "~/server/repo/image";
 import { mergePurchases } from "~/server/repo/purchase";
 import {
   createProductFixture,
-  makeProductInput,
   insertEntityAttachments,
+  makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { mergeVendors } from "~/server/repo/vendor";
@@ -121,14 +121,12 @@ describe("photo product candidates", () => {
       }),
     );
     const otherReviewer = userId.parse(crypto.randomUUID());
-    await getDb(ctx.db)
-      .insert(user)
-      .values({
-        id: otherReviewer,
-        name: "Other reviewer",
-        email: "other-reviewer@synthetic.invalid",
-        emailVerified: true,
-      });
+    await getDb(ctx.db).insert(user).values({
+      id: otherReviewer,
+      name: "Other reviewer",
+      email: "other-reviewer@synthetic.invalid",
+      emailVerified: true,
+    });
     const [otherMember] = await findPhotoProductCandidates(ctx.db, input, {
       ...ctx.actor,
       userId: otherReviewer,
