@@ -115,6 +115,9 @@ export const renderFilterArtifacts = (
       ...(descriptor.nullable === null
         ? []
         : [`nullable:${compactLiteral(descriptor.nullable)}`]),
+      ...(descriptor.sentinels === null
+        ? []
+        : [`sentinels:${compactLiteral(descriptor.sentinels)}`]),
     ];
     return `{${properties.join(",")}}`;
   };

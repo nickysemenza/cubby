@@ -195,12 +195,7 @@ struct FieldsSectionView<Inline: View>: View {
     var inlineFieldKey: String? = nil
     @ViewBuilder let inline: Inline
     @Environment(AppModel.self) private var appModel
-    @State private var resetReview: ResetReview?
-
-    private struct ResetReview: Identifiable {
-        let field: String
-        var id: String { field }
-    }
+    @State private var resolutionReview: ResolutionActionRequest?
 
     var body: some View {
         let rows = rows
@@ -226,10 +221,10 @@ struct FieldsSectionView<Inline: View>: View {
                 }
             }
         }
-        .sheet(item: $resetReview) { review in
+        .sheet(item: $resolutionReview) { review in
             EntityEditorSheet(
                 key: descriptor.key, mode: .update(id: row.id), original: row.raw,
-                resolutionResetField: review.field,
+                resolutionAction: review,
                 onSaved: { _ in
                     appModel.recordEntityMutation(keys: [descriptor.key])
                 })
@@ -281,18 +276,23 @@ struct FieldsSectionView<Inline: View>: View {
     @ViewBuilder
     private func fieldSuffix(_ field: FieldDescriptor) -> some View {
         if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
-            EntityFieldResolutionLabel(resolved: resolved)
-            if resolved.resetPayload(field: field) != nil,
-                descriptor.key.nativeActions.contains(.update)
-            {
-                Button {
-                    resetReview = ResetReview(field: field.key)
-                } label: {
-                    Text("Review reset: \(resolved.resetLabel.lowercased())")
+            EntityFieldResolutionLabel(resolved: resolved, field: field)
+            let actions = resolved.actions(field: field)
+            if !actions.isEmpty, descriptor.key.nativeActions.contains(.update) {
+                // Each link opens the editor with its patch staged; Save is the only write.
+                HStack(spacing: FieldGuideTokens.Space.md) {
+                    ForEach(actions) { action in
+                        Button(action.label) {
+                            resolutionReview = ResolutionActionRequest(field: field.key, kind: action.kind)
+                        }
                         .font(.subheadline)
                         .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier(
+                            "detail.\(descriptor.key.rawValue).\(field.key).resolution.\(action.kind.rawValue)"
+                        )
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
         if field.key == inlineFieldKey { inline }
@@ -348,6 +348,9 @@ struct FieldsSectionView<Inline: View>: View {
             let source = RecipeSourcePresentation.parse(row.raw[field.key])
         {
             recipeSourceRow(field, source: source)
+        } else if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "detail") {
+            ResolvedListRows(
+                field: field, subject: EntityRef(entity: descriptor.key, id: row.id), items: items)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
@@ -355,6 +358,7 @@ struct FieldsSectionView<Inline: View>: View {
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
                 Spacer(minLength: FieldGuideTokens.Space.sm)
+                if isInherited(field) { InheritedMarker() }
                 NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
@@ -370,25 +374,29 @@ struct FieldsSectionView<Inline: View>: View {
             }
             .frame(maxWidth: .infinity)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
-            ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
+            ?? FieldResolutionPresentation(raw: row.raw, field: field)?.emptyLabel(field: field)
         {
             LabeledContent {
-                if let color = FieldGuideMetrics.optionColor(
-                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail"))
-                {
-                    StatusChip(text: value, color: color)
-                        .textSelection(.enabled)
-                } else if let date = EntityFieldValue.dateValue(in: row.raw, field: field, surface: "detail")
-                {
-                    DateDisplay(date).textSelection(.enabled).multilineTextAlignment(.trailing)
-                } else {
-                    Text(value)
-                        .font(
-                            field.kind == .identifier
-                                ? .fieldGuideCode : field.controlKind == .textarea ? .body : .subheadline
-                        )
-                        .textSelection(.enabled)
-                        .multilineTextAlignment(.trailing)
+                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
+                    if let color = FieldGuideMetrics.optionColor(
+                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail"))
+                    {
+                        StatusChip(text: value, color: color)
+                            .textSelection(.enabled)
+                    } else if let date = EntityFieldValue.dateValue(
+                        in: row.raw, field: field, surface: "detail")
+                    {
+                        DateDisplay(date).textSelection(.enabled).multilineTextAlignment(.trailing)
+                    } else {
+                        Text(value)
+                            .font(
+                                field.kind == .identifier
+                                    ? .fieldGuideCode : field.controlKind == .textarea ? .body : .subheadline
+                            )
+                            .textSelection(.enabled)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if isInherited(field) { InheritedMarker() }
                 }
             } label: {
                 FieldExplanationLabel(
@@ -396,6 +404,10 @@ struct FieldsSectionView<Inline: View>: View {
                     subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
+    }
+
+    private func isInherited(_ field: FieldDescriptor) -> Bool {
+        FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited ?? false
     }
 
     @ViewBuilder
@@ -548,11 +560,16 @@ struct FieldExplanationLabel: View {
                     }
                     if let resolution = resolved.resolution {
                         let hasFallback = display(resolution.fallbackValue) != nil
-                        let state = FieldResolutionState(resolution, hasFallback: hasFallback)
+                        let state = FieldResolutionState(
+                            resolution, hasFallback: hasFallback,
+                            intentional: field.resolution?.redundancy == "intentional")
                         HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                            Text(display(resolution.value) ?? "None")
-                                .font(.fieldGuideData.weight(.semibold))
-                                .accessibilityIdentifier("field.explanation.effective-value")
+                            Text(
+                                display(resolution.value)
+                                    ?? FieldResolutionPresentation.emptyLabel(resolution, field: field)
+                            )
+                            .font(.fieldGuideData.weight(.semibold))
+                            .accessibilityIdentifier("field.explanation.effective-value")
                             Spacer(minLength: FieldGuideTokens.Space.sm)
                             Label(state.label, systemImage: state.systemImage)
                                 .font(.caption.weight(.medium))
@@ -638,13 +655,11 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
-                    if let evidence = resolved.resolutionEvidence, !evidence.hierarchy.isEmpty {
+                    if let chain = resolved.resolutionEvidence?.chain, !chain.rows.isEmpty {
                         Divider()
-                        explanationSectionLabel("Resolution order")
-                        let winner = ladderWinner(resolved)
-                        ForEach(Array(evidence.hierarchy.enumerated()), id: \.offset) { _, source in
-                            ladderRow(source, winner: winner)
-                        }
+                        if chain.title == nil { explanationSectionLabel("Resolution order") }
+                        RecordsBlockView(records: ReportPresentation.records(chain), host: nil)
+                            .accessibilityIdentifier("field.explanation.chain")
                     }
                     if !resolved.verifications.isEmpty {
                         Divider()
@@ -756,61 +771,6 @@ struct FieldExplanationLabel: View {
             Text(label).font(.caption).foregroundStyle(FieldGuideTokens.graphiteSecondary)
             content()
         }
-    }
-
-    /// The ladder level that supplies the value: the inherited source, else the subject itself.
-    private func ladderWinner(_ resolved: FieldExplanationOutput) -> String? {
-        guard let resolution = resolved.resolution else { return nil }
-        switch resolution.mode {
-        case .inherit, .allocated: return resolution.sourceEntity?.entityId
-        case .explicit, .none: return subject.id
-        }
-    }
-
-    /// One level of the resolution ladder: its own assignment and whether it wins.
-    @ViewBuilder
-    private func ladderRow(_ source: FieldExplanationSource, winner: String?) -> some View {
-        let value = try? JSONValue(encoding: source.value)
-        let assigned = value?["assigned"]?.boolValue ?? (value != .null)
-        let wins = winner != nil && source.entity?.entityId == winner
-        let isSubject = source.entity?.entityId == subject.id
-        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-            if !isSubject, let reference = source.entity,
-                let entity = EntityKey(rawValue: reference.entityKind.rawValue)
-            {
-                NavigationLink(
-                    value?["name"]?.stringValue ?? reference.entityId,
-                    value: Route.entityDetail(entity, id: reference.entityId)
-                )
-                .font(.fieldGuideBody.weight(.medium))
-                .lineLimit(1)
-            } else {
-                Text(value?["name"]?.stringValue ?? source.label)
-                    .font(.fieldGuideBody.weight(.medium))
-                    .lineLimit(1)
-                if isSubject {
-                    Text("THIS").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            Text(
-                assigned
-                    ? (value?["value"].flatMap(displayJSON) ?? display(source.value) ?? "—")
-                    : "—"
-            )
-            .font(.fieldGuideData)
-            .strikethrough(assigned && !wins)
-            .lineLimit(1)
-            Text(wins ? "WINS" : assigned ? "SHADOWED" : "NOT SET")
-                .font(.caption2.weight(wins ? .semibold : .regular))
-                .foregroundStyle(wins ? FieldGuideTokens.interaction : .secondary)
-        }
-        .foregroundStyle(wins ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
-        .frame(minHeight: FieldGuideTokens.touchTarget)
-        .padding(.horizontal, FieldGuideTokens.Space.sm)
-        .background(
-            wins ? FieldGuideTokens.inset : .clear,
-            in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
     }
 
     @ViewBuilder
@@ -1335,6 +1295,45 @@ private struct DetailDisplayRows: View {
 }
 
 /// Bounded reference presentation and its scoped browse link share the declaration.
+/// A `resolvedList` value on a detail page (a Product's owners): each item opens the record it
+/// names, and an item that is only inherited carries the shared marker.
+private struct ResolvedListRows: View {
+    let field: FieldDescriptor
+    let subject: EntityRef
+    let items: [EntityFieldValue.ResolvedItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                if let reference = item.reference {
+                    NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                        HStack(spacing: FieldGuideTokens.Space.xs) {
+                            label(item)
+                            Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+                        }
+                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    label(item).frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func label(_ item: EntityFieldValue.ResolvedItem) -> some View {
+        HStack(spacing: FieldGuideTokens.Space.xs) {
+            Text(item.label).fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(
+                    item.inherited ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite)
+            if item.inherited { InheritedMarker() }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow

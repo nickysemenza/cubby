@@ -18,3 +18,8 @@ export const UNRESOLVABLE_ENTITY_FILTER =
  * unlinked actor matches nothing instead of losing the filter.
  */
 export const CURRENT_MEMBER_FILTER = "@me" as const;
+
+/** Owner filter states beside people: stock deliberately owned by nobody, and
+ * stock whose inheritance names nobody unambiguously. */
+export const OWNER_FILTER_HOUSEHOLD = "@household" as const;
+export const OWNER_FILTER_UNKNOWN = "@unknown" as const;

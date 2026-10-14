@@ -126,12 +126,6 @@ export const inventoryFilterFields = {
     .optional()
     .describe("Filter by a stable household location role."),
   verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
-  ownerPresenceFilter: z
-    .enum(["has", "none"])
-    .optional()
-    .describe(
-      "Entries that do / don't have an effective individual owner (explicit or inherited)",
-    ),
   /**
    * Derived valuation integrity. `missing_with_priced_product` is the precise
    * "the Product has a price, but this stored unit cannot reach it" state.
@@ -287,14 +281,14 @@ export const inventoryUpdatePayloadData = z
   .object(generatedInventoryItemFieldSchemas.update)
   .superRefine((value, context) => {
     if (
-      value.ownershipMode !== undefined &&
+      value.ownershipMode === "inherit" &&
       value.ownerLedgerPartyId !== undefined &&
-      (value.ownershipMode === "person") !== (value.ownerLedgerPartyId !== null)
+      value.ownerLedgerPartyId !== null
     ) {
       context.addIssue({
         code: "custom",
         path: ["ownerLedgerPartyId"],
-        message: "Person ownership requires an owner; other modes clear it",
+        message: "Inherited ownership cannot retain an owner",
       });
     }
   });
@@ -309,14 +303,11 @@ export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 export const inventoryCreatePayloadData = z
   .object(generatedInventoryItemFieldSchemas.create)
   .superRefine((value, context) => {
-    if (
-      (value.ownershipMode === "person") !==
-      (value.ownerLedgerPartyId !== null)
-    ) {
+    if (value.ownershipMode === "inherit" && value.ownerLedgerPartyId != null) {
       context.addIssue({
         code: "custom",
         path: ["ownerLedgerPartyId"],
-        message: "Person ownership requires an owner; other modes clear it",
+        message: "Inherited ownership cannot retain an owner",
       });
     }
   });

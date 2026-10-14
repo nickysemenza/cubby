@@ -14,6 +14,37 @@ nonisolated enum EntityFieldValue {
         var emoji: String? = nil
     }
 
+    /// One item of a `resolvedList` value (a Product's owners): what to show, the record it
+    /// names, and whether it is only inherited (drawn with the shared marker).
+    struct ResolvedItem: Hashable {
+        let label: String
+        let reference: Reference?
+        let inherited: Bool
+    }
+
+    /// The items of a `resolvedList` field; nil for any other format.
+    static func resolvedItems(in raw: JSONValue, field: FieldDescriptor, surface: String) -> [ResolvedItem]? {
+        guard field.format == "resolvedList" else { return nil }
+        return resolvedItems(FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface))
+    }
+
+    static func resolvedItems(_ value: JSONValue?) -> [ResolvedItem] {
+        guard let value, value != .null,
+            let items = try? JSONDecoder.cubby().decode(
+                ResolvedList.self, from: JSONEncoder.cubby().encode(value))
+        else { return [] }
+        return items.map { item in
+            ResolvedItem(
+                label: item.label,
+                reference: item.ref.flatMap { ref in
+                    EntityKey(rawValue: ref.entityKind).map {
+                        Reference(entity: $0, id: ref.entityId, name: item.label)
+                    }
+                },
+                inherited: item.inherited)
+        }
+    }
+
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
         if surface == "detail" {
             // A declared server-composed sentence is the whole answer: the structure behind it
@@ -33,6 +64,9 @@ nonisolated enum EntityFieldValue {
         case "plainDate": return value.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
         case "timestamp": return date(value)
         case "amount": return amount(value)
+        case "resolvedList":
+            let labels = resolvedItems(value).map(\.label)
+            return labels.isEmpty ? nil : labels.joined(separator: ", ")
         case "external-link":
             if let string = value.stringValue { return string.isEmpty ? nil : string }
             if let number = number(value) { return DisplayFormat.number(number) }

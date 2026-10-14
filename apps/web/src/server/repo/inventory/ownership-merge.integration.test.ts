@@ -64,7 +64,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
         productId: args.productId,
         locationId: args.locationId,
         amount: { value: args.value, unit: args.unit },
-        ownershipMode: "person",
+        ownershipMode: "explicit",
         ownerLedgerPartyId: args.ownerId,
       },
       ctx.actor,
@@ -113,7 +113,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
       productId: keeper.entityId,
       locationId: location.entityId,
       placement: "stock",
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: owner.entityId,
     });
     expect(amountFromColumns(rows[0]!)).toEqual({
@@ -164,12 +164,12 @@ describe("inventory ownership through product and ledger-party merges", () => {
       expect.arrayContaining([
         {
           ownerLedgerPartyId: firstOwner.entityId,
-          ownershipMode: "person",
+          ownershipMode: "explicit",
           amount: { value: 2, unit: "each" },
         },
         {
           ownerLedgerPartyId: secondOwner.entityId,
-          ownershipMode: "person",
+          ownershipMode: "explicit",
           amount: { value: 3, unit: "each" },
         },
       ]),
@@ -255,7 +255,7 @@ describe("inventory ownership through product and ledger-party merges", () => {
     const rows = await liveRows(product.entityId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: keeperOwner.entityId,
     });
     expect(amountFromColumns(rows[0]!)).toEqual({

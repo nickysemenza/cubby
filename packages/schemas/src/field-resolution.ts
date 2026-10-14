@@ -9,6 +9,9 @@ export const fieldResolutionSourceSchema = z.object({
     "productCategory",
     "spendingCategory",
     "vendor",
+    "expense",
+    "vendorAccount",
+    "financialAccount",
   ]),
   entityId: z.string(),
   name: z.string().nullable(),
@@ -33,6 +36,20 @@ export const fieldResolutionsSchema = z.record(
 export const optionalFieldResolutionsSchema = fieldResolutionsSchema.optional();
 export type FieldResolution = z.infer<typeof fieldResolutionSchema>;
 export type FieldResolutions = z.infer<typeof fieldResolutionsSchema>;
+
+/**
+ * One value of a rollup over several resolutions (a Product's owners across
+ * its Inventory): what to show, the record it names, and whether it is only
+ * inherited somewhere. The `resolvedList` display format renders it.
+ */
+export const resolvedListItemSchema = z.object({
+  label: z.string(),
+  /** The record the item names (entity key + shortcode), when it is one. */
+  ref: z.object({ entityKind: z.string(), entityId: z.string() }).nullable(),
+  inherited: z.boolean(),
+});
+export const resolvedListSchema = z.array(resolvedListItemSchema);
+export type ResolvedListItem = z.infer<typeof resolvedListItemSchema>;
 
 export const projectAllocationSchema = z.object({
   projectId: projectShortcode.nullable(),

@@ -181,6 +181,8 @@ export const listPresentationLabel = (id: string): string | null =>
  * - `join`: a string array, comma-joined (an empty list reads as none).
  * - `count`: a known non-negative count; `0` renders as `0`, never a dash.
  * - `arrayCount`: the length of an array value, rendered as a `count`.
+ * - `resolvedList`: `resolvedListSchema` items, comma-joined, each linking its
+ *   record and marked when only inherited.
  */
 export const displayFormats = [
   "currency",
@@ -194,6 +196,7 @@ export const displayFormats = [
   "join",
   "arrayCount",
   "count",
+  "resolvedList",
 ] as const;
 export type DisplayFormat = (typeof displayFormats)[number];
 
@@ -622,7 +625,6 @@ const buildMetadataSchemas = () => {
           resolver: z
             .enum([
               "field",
-              "inventoryOwnership",
               "productValuation",
               "imageRepresentation",
               "imageCapture",
@@ -648,9 +650,6 @@ const buildMetadataSchemas = () => {
               }),
             )
             .optional(),
-          actions: z
-            .array(z.enum(["confirmOwner", "inheritOwner", "editSource"]))
-            .optional(),
         })
         .nullable()
         .optional()
@@ -668,6 +667,23 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           redundancy: z.enum(["eligible", "intentional"]).default("eligible"),
+          /** "Confirm" pins the inherited value: this patch plus the field
+           * set to `fieldResolutions[key].fallbackValue`. Absent = no action. */
+          confirm: z
+            .record(z.string(), z.json())
+            .nullable()
+            .optional()
+            .default(null),
+          /** What a null value reads as, per resolution mode (`none` is a
+           * deliberate empty; `unresolved` an inherit with no fallback). */
+          labels: z
+            .strictObject({
+              none: nonEmptyString().optional(),
+              unresolved: nonEmptyString().optional(),
+            })
+            .nullable()
+            .optional()
+            .default(null),
         })
         .nullable()
         .optional()
@@ -2080,6 +2096,20 @@ const buildMetadataSchemas = () => {
       nullable: z
         .object({ field: nonEmptyString(), label: nonEmptyString() })
         .strict()
+        .nullable()
+        .optional(),
+      /**
+       * Named states an `idMulti` filter accepts beside entity codes (an
+       * Owner filter's `@household`). Clients offer each as a meta option;
+       * the derived schema accepts each literal; the repository owns meaning.
+       */
+      sentinels: z
+        .array(
+          z
+            .object({ value: nonEmptyString(), label: nonEmptyString() })
+            .strict(),
+        )
+        .min(1)
         .nullable()
         .optional(),
       /**

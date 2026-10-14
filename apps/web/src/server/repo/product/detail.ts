@@ -12,6 +12,7 @@ import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { externalIdsLabel } from "~/server/repo/detail-display-labels";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
+import { loadProductOwners } from "~/server/repo/inventory/ownership";
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import {
   getProductCoverImageUrlsByProductIds,
@@ -87,6 +88,7 @@ export async function readProductDetail(
     },
   );
   const ownershipPromise = loadProductOwnershipEvidence(context.db, row.id);
+  const ownersPromise = loadProductOwners(context.db, [row.id]);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "pricing",
@@ -165,6 +167,7 @@ export async function readProductDetail(
     recipe,
     food,
     ownership,
+    owners,
   ] = await Promise.all([
     pricingPromise,
     quantityPromise,
@@ -175,6 +178,7 @@ export async function readProductDetail(
     recipePromise,
     foodPromise,
     ownershipPromise,
+    ownersPromise,
   ]);
   const coverImageUrl = covers.get(row.id) ?? null;
 
@@ -191,6 +195,7 @@ export async function readProductDetail(
   return {
     ...mapped,
     ownershipEvidence: ownership,
+    owners: owners.get(row.id) ?? [],
     nutritionDisplay: buildNutritionDisplay({
       labelNutrition: mapped.labelNutrition,
       food,

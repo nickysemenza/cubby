@@ -216,6 +216,7 @@ const filterJSON = (
   placeholder: filter.placeholder,
   label: filter.label ?? null,
   options: options(filter.options),
+  sentinels: options(filter.sentinels),
   // Filter metadata steers web-only rendering.
   wire:
     filter.wire.kind === "param"
@@ -251,7 +252,6 @@ const explanationJSON = (explanation: Field["explanation"]) =>
         sourceDependencies: (explanation.sourceDependencies ?? []).map(
           ({ path, label }) => ({ path, label }),
         ),
-        actions: [...(explanation.actions ?? [])],
       };
 
 const referenceJSON = (
@@ -330,7 +330,17 @@ const fieldJSON = (
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
     explanation: explanationJSON(field.explanation),
-    resolution: field.resolution,
+    resolution: field.resolution
+      ? {
+          ...field.resolution,
+          labels: field.resolution.labels
+            ? {
+                none: field.resolution.labels.none ?? null,
+                unresolved: field.resolution.labels.unresolved ?? null,
+              }
+            : null,
+        }
+      : null,
     ...fieldControlJSON(field.control),
     ...fieldControlInputJSON(field.control),
     valueSchema: valueSchemaForField(context, field, where, entityForPrefix),

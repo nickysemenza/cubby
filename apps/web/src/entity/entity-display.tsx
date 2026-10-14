@@ -15,8 +15,9 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import prettyBytes from "pretty-bytes";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -32,7 +33,7 @@ import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
@@ -85,7 +86,12 @@ import {
   enumFieldSuggestSource,
 } from "./enum-field-display";
 import { FieldExplanationContents } from "./field-explanation";
-import { FieldResolutionBadge, fieldResolutionFor } from "./field-resolution";
+import {
+  FieldResolutionBadge,
+  fieldResolutionFor,
+  InheritedMarker,
+  resolutionPolicyFor,
+} from "./field-resolution";
 import { listRendererColumns } from "./list-field-renderers";
 import { readPathValue } from "./read-path";
 
@@ -314,9 +320,56 @@ function renderFormattedScalar(
         renderScalarValue(value, surface)
       );
     }
+    case "resolvedList": {
+      const parsed = resolvedListSchema.safeParse(value.raw);
+      if (!parsed.success) return renderScalarValue(value, surface);
+      return parsed.data.length === 0 ? (
+        <NoneValue />
+      ) : (
+        <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden whitespace-pre">
+          {parsed.data.map((item, index) => (
+            <Fragment key={item.ref?.entityId ?? item.label}>
+              {index > 0 ? <span aria-hidden="true">, </span> : null}
+              <span
+                className={cn(
+                  "inline-flex min-w-0 items-center gap-1",
+                  item.inherited && "text-muted-foreground",
+                )}
+              >
+                {item.ref ? (
+                  referenceLink(
+                    item.ref.entityKind,
+                    { id: item.ref.entityId, name: item.label },
+                    true,
+                  )
+                ) : (
+                  <span className="truncate">{item.label}</span>
+                )}
+                {item.inherited ? <InheritedMarker /> : null}
+              </span>
+            </Fragment>
+          ))}
+        </span>
+      );
+    }
     case null:
       return renderScalarValue(value, surface);
   }
+}
+
+/** A resolved field whose effective value is empty names what that means
+ * (an owner field reads Household or Unknown, not a dash). */
+function resolutionEmptyLabel(
+  entity: Entity,
+  record: unknown,
+  field: DisplayField,
+): ReactNode {
+  const resolution = fieldResolutionFor(record, field.key);
+  if (!resolution || resolution.value !== null) return null;
+  const labels = resolutionPolicyFor(entity, field.key)?.labels;
+  const label =
+    resolution.mode === "inherit" ? labels?.unresolved : labels?.none;
+  return label ? <span className="text-muted-foreground">{label}</span> : null;
 }
 
 /**
@@ -583,6 +636,8 @@ export function renderDetailFieldValue<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
+  const emptyLabel = resolutionEmptyLabel(entity, record, field);
+  if (emptyLabel) return emptyLabel;
   if (field.display.detailLabelPath) {
     const label = readLabel(record, field.display.detailLabelPath);
     return label === null ? (
@@ -655,6 +710,8 @@ export function renderCompactFieldValue<TRecord extends object>(
   const domainRenderer = compactFieldRendererFor(entity, field.key);
   const domainValue = domainRenderer?.(record);
   if (domainValue !== undefined) return domainValue;
+  const emptyLabel = resolutionEmptyLabel(entity, record, field);
+  if (emptyLabel) return emptyLabel;
   const reference = readDisplayReferenceField(record, field);
   if (reference !== null) {
     if (reference.items.length === 0)
@@ -1332,7 +1389,7 @@ function renderEditableField<TRecord extends object>(
               size="xs"
               onClick={() => void save(null)}
             >
-              Use inherited value
+              Use inherited
             </Button>
           ) : null}
         </span>

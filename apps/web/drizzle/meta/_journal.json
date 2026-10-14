@@ -470,6 +470,13 @@
       "when": 1792007874727,
       "tag": "0066_image_source_decision_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792019516481,
+      "tag": "0067_inventory_ownership_explicit",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ import { observeOperationPhase } from "~/server/observed-request";
 
 import type { UsdaFoodLookupPort } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient/search";
+import { loadProductOwners } from "../repo/inventory/ownership";
 import {
   createProduct as createProductRepo,
   getProductByID as getProductByIDRepo,
@@ -68,7 +69,7 @@ export const getProductWithFood = async (
 
   const lookupParam = foodLookupParamFromProduct(product);
   const operation = startOperationDefinition("entity.detail");
-  const [food, { recipeUsages }, ownership] = await Promise.all([
+  const [food, { recipeUsages }, ownership, owners] = await Promise.all([
     observeOperationPhase(operation, "food", () =>
       lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
     ),
@@ -84,11 +85,13 @@ export const getProductWithFood = async (
         : { recipeUsages: [], appearsInRecipes: [] };
     }),
     loadProductOwnershipEvidence(db, id),
+    loadProductOwners(db, [id]),
   ]);
 
   return {
     ...product,
     ownershipEvidence: ownership,
+    owners: owners.get(id) ?? [],
     nutritionDisplay: buildNutritionDisplay({
       labelNutrition: product.labelNutrition,
       food,

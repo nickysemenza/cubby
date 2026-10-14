@@ -80,14 +80,20 @@ export const inventoryRepository = defineRepository("inventory", {
         : undefined,
       resolveOptionalOwner(ctx.db, data.ownerLedgerPartyId),
     ]);
-    return {
-      output: await updateInventoryEntry(
-        ctx.db,
-        entityId,
-        { ...data, productId, locationId, ownerLedgerPartyId },
-        ctx.actorContext,
-      ),
+    const output = await updateInventoryEntry(
+      ctx.db,
       entityId,
+      { ...data, productId, locationId, ownerLedgerPartyId },
+      ctx.actorContext,
+    );
+    // An ownership change can fold this entry into the one already holding
+    // that slot; follow-up writes then address the survivor.
+    return {
+      output,
+      entityId:
+        output.id === shortcode
+          ? entityId
+          : await inventoryShortcodes.one(ctx.db, output.id),
     };
   },
   delete: async (ctx, shortcodes) => {

@@ -216,15 +216,12 @@ describe("derived field explanations against canonical records", () => {
     });
     expect(explanation.resolution?.value).toBe(explicit.shortcode);
     expect(explanation.resolution?.fallbackValue).toBe(mapped.shortcode);
+    expect(
+      explanation.resolutionEvidence?.chain.rows.flatMap((row) =>
+        row.id ? [row.id] : [],
+      ),
+    ).toEqual([child.shortcode, parent.shortcode]);
     expect(explanation.resolutionEvidence).toMatchObject({
-      hierarchy: [
-        {
-          entity: { entityKind: "productCategory", entityId: child.shortcode },
-        },
-        {
-          entity: { entityKind: "productCategory", entityId: parent.shortcode },
-        },
-      ],
       fallbackSource: {
         entityKind: "productCategory",
         entityId: parent.shortcode,
@@ -263,17 +260,14 @@ describe("derived field explanations against canonical records", () => {
       sourceEntity: { entityId: root.shortcode },
     });
     expect(
-      inherited.resolutionEvidence?.hierarchy.map((node) => [
-        node.entity?.entityId,
-        node.value,
+      inherited.resolutionEvidence?.chain.rows.map((row) => [
+        row.id,
+        row.state?.kind,
       ]),
     ).toEqual([
-      [leaf.shortcode, expect.objectContaining({ assigned: false })],
-      [middle.shortcode, expect.objectContaining({ assigned: false })],
-      [
-        root.shortcode,
-        expect.objectContaining({ value: "household", assigned: true }),
-      ],
+      [null, "skipped"],
+      [middle.shortcode, "skipped"],
+      [root.shortcode, "done"],
     ]);
     expect(inherited.actions).toEqual([
       expect.objectContaining({
@@ -403,7 +397,7 @@ describe("derived field explanations against canonical records", () => {
         productId: product.entityId,
         locationId: location.entityId,
         amount: { value: 1, unit: "each" },
-        ownershipMode: "person",
+        ownershipMode: "explicit",
         ownerLedgerPartyId: owner.entityId,
       },
       ctx.actor,
@@ -419,28 +413,24 @@ describe("derived field explanations against canonical records", () => {
     const explanation = await explainField(requestContext, {
       entityKind: "inventory",
       entityId: entry.id,
-      field: "effectiveOwnership",
+      field: "ownerLedgerPartyId",
       surface: "detail",
     });
     expect(record.item).toMatchObject({
-      effectiveOwnership: explanation.value,
+      ownerLedgerPartyId: owner.output.id,
+      fieldResolutions: {
+        ownerLedgerPartyId: { mode: "explicit", value: owner.output.id },
+      },
     });
-    expect(explanation.value).toMatchObject({
-      mode: "person",
-      effectiveOwner: { id: owner.output.id },
+    expect(explanation.resolution).toMatchObject({
+      mode: "explicit",
+      value: owner.output.id,
     });
-    expect(explanation.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Stored ownership",
-          value: {
-            mode: "person",
-            owner: { id: owner.output.id, name: "Test owner", kind: "member" },
-          },
-        }),
-      ]),
-    );
-    expect(explanation.evidenceFingerprint).toBeTypeOf("string");
+    expect(explanation.resolutionEvidence?.chain.rows[0]).toMatchObject({
+      title: expect.stringMatching(/^This /),
+      trailing: "Test owner",
+      state: { kind: "done" },
+    });
   });
 
   it("keeps aggregate values complete while bounding their record evidence", async () => {

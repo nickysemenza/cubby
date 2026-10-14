@@ -495,7 +495,7 @@ export async function convergenceProjection(
       (SELECT count(*)::int FROM "FinancialTransaction" WHERE "accountId" = ${cardId} AND "deletedAt" IS NULL) AS transactions,
       (SELECT round(sum(a.amount) * 100)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL) AS settlement,
       (SELECT count(*)::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS inventory,
-      (SELECT sum(i."amountValue")::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL AND i."ownershipMode" = 'person' AND i."ownerLedgerPartyId" = ${memberId}) AS "ownedQuantity",
+      (SELECT sum(i."amountValue")::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL AND i."ownershipMode" = 'explicit' AND i."ownerLedgerPartyId" = ${memberId}) AS "ownedQuantity",
       (SELECT count(*)::int FROM "StatementRow" WHERE "accountDescriptor" = ${statementAccount} AND "deletedAt" IS NULL) AS observations,
       (SELECT count(*)::int FROM "StatementRow" s JOIN "EntityExternalId" x ON x.source = s.source AND x."externalId" = s."externalId" AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t.id = x."entityId" AND t."deletedAt" IS NULL WHERE s."accountDescriptor" = ${statementAccount} AND s."deletedAt" IS NULL) AS "matchedObservations",
       (SELECT count(*)::int FROM "OrderMail" m JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL) AS mail,
@@ -578,7 +578,7 @@ export function shirtGroup(
     inventory: {
       locationId: owner.locationId,
       quantity: 1,
-      ownershipMode: "person" as const,
+      ownershipMode: "explicit" as const,
       ownerPartyId: owner.ownerPartyId,
     },
     evidence:

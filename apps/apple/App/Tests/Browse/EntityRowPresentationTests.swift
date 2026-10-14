@@ -27,6 +27,62 @@ struct EntityRowPresentationTests {
         #expect(unassessed.facts.first?.value == "Not assessed")
     }
 
+    /// A Product's owners read comma-joined; only the inherited item carries the marker.
+    @Test func resolvedListMarksEachInheritedItem() throws {
+        let row = EntityRow(
+            id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "PRD-1001", "name": "Synthetic skillet",
+                "owners": [
+                    [
+                        "label": "Alex", "ref": ["entityKind": "ledgerParty", "entityId": "LPY-4K7M"],
+                        "inherited": true,
+                    ],
+                    ["label": "Household", "ref": .null, "inherited": false],
+                ],
+            ])
+        let fact = try #require(
+            EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row, columns: ["owners"])
+                .facts.first { $0.id == "owners" })
+        #expect(fact.value == "Alex, Household")
+        #expect(fact.segments.map(\.inherited) == [true, false])
+        #expect(fact.spokenValue == "Alex, inherited, Household")
+        #expect(
+            EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row).facts.contains {
+                $0.id == "owners"
+            })
+    }
+
+    /// An inherited owner reads muted with the marker, not an "Inherited · …" caption; a null
+    /// owner reads in the declaration's words (Unknown under inherit, Household when explicit).
+    @Test func inheritedOwnerCarriesTheMarkerAndNullOwnerItsLabel() throws {
+        func fact(mode: String, value: JSONValue) throws -> EntityRowPresentation.Fact {
+            let row = EntityRow(
+                id: "INV-1001", title: "Synthetic entry", subtitle: nil, imageURL: nil,
+                raw: [
+                    "id": "INV-1001", "ownerLedgerPartyId": value,
+                    "fieldResolutions": [
+                        "ownerLedgerPartyId": [
+                            "mode": .string(mode), "storedValue": .null, "value": value,
+                            "fallbackValue": value,
+                            "source": "purchase", "sourceEntity": .null, "matchesFallback": false,
+                            "canReset": false,
+                        ]
+                    ],
+                ])
+            return try #require(
+                EntityRowPresentation.resolve(
+                    descriptor: EntityCatalog[.inventory], row: row, columns: ["ownerLedgerPartyId"]
+                ).facts.first { $0.id == "ownerLedgerPartyId" })
+        }
+        let inherited = try fact(mode: "inherit", value: "LPY-4K7M")
+        #expect(inherited.inherited)
+        #expect(!inherited.value.contains("Inherited"))
+        #expect(try fact(mode: "inherit", value: .null).value == "Unknown")
+        #expect(try fact(mode: "explicit", value: .null).value == "Household")
+        #expect(try !fact(mode: "explicit", value: .null).inherited)
+    }
+
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
     /// record must not read as a plain complete 100.
     @Test func qualityShowsNullScoresAndExceptionsOnlyCompleteness() {

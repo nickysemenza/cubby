@@ -543,7 +543,7 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  * `COLLECTION_ACTION_SCOPES` verbs: web fills each in `collection-actions.tsx`, native runs the
  * plan in `nativeCollectionActionPlans`.
  */
-const reportRecords = z.object({
+export const reportRecordsBlock = z.object({
   /**
    * Every block lays its rows out as one aligned line each (mark or thumbnail, title, text,
    * figure and time, commands). `timeline` is for ordered stages (a pipeline, run progress) and
@@ -590,7 +590,7 @@ export const reportBlock = z.discriminatedUnion("kind", [
   reportTable,
   reportSchedule,
   reportNote,
-  reportRecords,
+  reportRecordsBlock,
 ]);
 export type ReportBlock = z.infer<typeof reportBlock>;
 

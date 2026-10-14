@@ -1166,6 +1166,7 @@ const filterDescriptor = (
     range,
     urlOnly: value.urlOnly ?? false,
     nullable: value.nullable ?? null,
+    sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
 };
@@ -1834,6 +1835,7 @@ const suggestionFilterDescriptors = (
       range: null,
       urlOnly: false,
       nullable: null,
+      sentinels: null,
       wire: { kind: "param", name: "suggestionPresenceFilter" },
     },
   ];
@@ -1973,6 +1975,7 @@ export const compileEntity = (
           },
           urlOnly: false,
           nullable: null,
+          sentinels: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2003,6 +2006,7 @@ export const compileEntity = (
           },
           urlOnly: false,
           nullable: null,
+          sentinels: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

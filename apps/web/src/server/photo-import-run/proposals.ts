@@ -104,6 +104,8 @@ const storedInventory = z.object({
   quantity: z.number().int().positive(),
   mode: z.enum(["create", "add"]).optional(),
   existingEntryId: inventoryShortcode.optional(),
+  /** An explicit `ownerPartyId: null`: household stock, not a missing owner. */
+  household: z.literal(true).optional(),
 });
 
 /** A run that does not exist, or that this actor may not review; routes map it to 404. */
@@ -303,7 +305,9 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
     ownerPartyId: (row: ProposalRow) =>
       row.inventoryOwnerPartyId
         ? ownerById.get(row.inventoryOwnerPartyId)
-        : undefined,
+        : storedInventory.safeParse(row.inventory).data?.household
+          ? null
+          : undefined,
   };
 }
 
@@ -588,6 +592,8 @@ async function upsertProposal(
           ownershipMode: group.inventory.ownershipMode,
           mode: group.inventory.mode,
           existingEntryId: group.inventory.existingEntryId,
+          household:
+            group.inventory.ownerPartyId === null ? (true as const) : undefined,
         }
       : null,
     inventoryOwnerPartyId: entry.ownerPartyId,

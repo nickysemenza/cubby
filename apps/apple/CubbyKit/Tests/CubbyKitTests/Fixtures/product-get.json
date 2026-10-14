@@ -4,6 +4,7 @@
   "previousShortcodes": [],
   "name": "Sample Product",
   "acquisitionOrigin": "unknown",
+  "owners": [{ "label": "Household", "ref": null, "inherited": false }],
   "ownershipEvidence": {
     "state": "uncertain",
     "acquiredAt": null,

@@ -161,10 +161,11 @@ test("product table cells stay dense", async ({ page }) => {
   await page.mouse.move(0, 0);
   const cell = (id: string) => row.locator(`[data-cell-col="${id}"]`);
 
-  // A derived price reads muted; its ↳ waits for the active row.
+  // A derived price reads muted beside its inherited marker; its ↳ waits for
+  // the active row.
   await expect(cell("price")).toContainText("$12.00");
   await expect(cell("price").locator("[data-cell-rail]")).toHaveCount(0);
-  await expect.poll(() => width(header(page, "price"))).toBeLessThanOrEqual(72);
+  await expect.poll(() => width(header(page, "price"))).toBeLessThanOrEqual(80);
   await expect(cell("unitPrice")).toHaveText("$12.00/ea");
 
   // A code keeps both ends.

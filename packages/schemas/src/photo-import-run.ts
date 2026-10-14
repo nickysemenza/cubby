@@ -92,16 +92,17 @@ export type CommitPhotoGroupProduct = z.infer<typeof commitPhotoGroupProduct>;
 
 /**
  * `ownershipMode` and `ownerPartyId` are both optional so a caller can omit
- * ownership entirely and let the writer default to `person` ownership under
- * the run's own member. Naming `ownershipMode: "person"` WITHOUT `ownerPartyId`
- * is a distinct, deliberately refused shape — the caller said "a person owns
- * this" but not who, and the writer never silently guesses in that case; only
- * a fully omitted ownership selection defaults.
+ * ownership entirely and let the writer default to `explicit` ownership under
+ * the run's own member. Naming `ownershipMode: "explicit"` WITHOUT the
+ * `ownerPartyId` key is a distinct, deliberately refused shape — the caller
+ * chose an owner but not who, and the writer never silently guesses in that
+ * case; `ownerPartyId: null` names household stock. Only a fully omitted
+ * ownership selection defaults.
  */
 const commitPhotoGroupInventory = z.object({
   locationId: locationShortcode,
   ownershipMode: inventoryOwnershipMode.optional(),
-  ownerPartyId: ledgerPartyShortcode.optional(),
+  ownerPartyId: ledgerPartyShortcode.nullable().optional(),
   quantity: z.number().int().positive(),
   mode: z.enum(["create", "add"]).optional(),
   existingEntryId: inventoryShortcode.optional(),
@@ -325,7 +326,7 @@ export const photoGroupProposal = z.object({
       locationId: locationShortcode.nullable(),
       locationName: z.string().nullable(),
       ownershipMode: inventoryOwnershipMode.optional(),
-      ownerPartyId: ledgerPartyShortcode.optional(),
+      ownerPartyId: ledgerPartyShortcode.nullable().optional(),
       quantity: z.number().int().positive(),
       mode: z.enum(["create", "add"]).optional(),
       existingEntryId: inventoryShortcode.optional(),

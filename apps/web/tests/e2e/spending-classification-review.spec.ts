@@ -294,6 +294,7 @@ test("reviews historical item classification and preserves explicit purpose", as
     page.locator("#expenses"),
   );
   const principalLink = page.locator(`a[href="/expenses/${expense}"]`);
+  const openPopover = page.locator('[data-slot="popover-content"][data-open]');
   const expenseRow = page
     .locator("#expenses")
     .getByRole("row")
@@ -308,25 +309,18 @@ test("reviews historical item classification and preserves explicit purpose", as
     .first();
   await expect(tableExplanation).toBeVisible();
   await expect(async () => {
-    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
-      await tableExplanation.click();
+    if (!(await openPopover.isVisible())) await tableExplanation.click();
     // Short attempts: an early click can miss hydration, and the default
     // expect timeout would spend the whole budget before the retry click.
     await expect(
-      page.getByText("Resolution order", { exact: true }),
+      openPopover.getByText("Inherits from", { exact: true }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
-  const winningValue = page
-    .locator('[data-slot="popover-content"] [data-role="wins"]')
-    .getByRole("link", { name: toolsName, exact: true });
-  await expect(winningValue).toBeVisible();
-  await expect(
-    page
-      .locator('[data-slot="popover-content"] section')
-      .first()
-      .getByText(tools, { exact: true }),
-  ).toHaveCount(0);
-  const winningLabel = winningValue.locator("span").last();
+  // The timeline reads nearest source first; the category that supplies the
+  // value is marked Used and its value is never truncated.
+  await expect(openPopover.getByText("Used", { exact: true })).toBeVisible();
+  const winningLabel = openPopover.getByText(toolsName, { exact: true }).last();
+  await expect(winningLabel).toBeVisible();
   expect(
     await winningLabel.evaluate((label) => label.scrollWidth),
   ).toBeLessThanOrEqual(
@@ -347,12 +341,11 @@ test("reviews historical item classification and preserves explicit purpose", as
     })
     .first();
   await expect(async () => {
-    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
-      await phoneExplanation.click();
+    if (!(await openPopover.isVisible())) await phoneExplanation.click();
     // Short attempts: an early click can miss hydration, and the default
     // expect timeout would spend the whole budget before the retry click.
     await expect(
-      page.getByText("Resolution order", { exact: true }),
+      openPopover.getByText("Inherits from", { exact: true }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   expect(
@@ -373,10 +366,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   expect((await apply(blocked)).ok()).toBeTruthy();
   await page.reload();
   await expect(async () => {
-    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
-      await phoneExplanation.click();
+    if (!(await openPopover.isVisible())) await phoneExplanation.click();
     await expect(
-      page.getByText("Resolution order", { exact: true }),
+      openPopover.getByText("Inherits from", { exact: true }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   await expect(page.getByText("Blocked", { exact: true })).toBeVisible();

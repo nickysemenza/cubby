@@ -42,7 +42,7 @@ import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
-  loadEffectiveInventoryOwnership,
+  loadInventoryOwnershipTraces,
 } from "./ownership";
 import { stockOnly } from "./placement";
 import {
@@ -406,7 +406,7 @@ export const addInventoryEntries = async (
         db,
         processed.results.map((entry) => entry.product),
       ),
-      loadEffectiveInventoryOwnership(db, processed.results),
+      loadInventoryOwnershipTraces(db, processed.results),
       loadDataQualities(
         db,
         "inventory",
@@ -785,7 +785,7 @@ export const moveInventoryEntries = async (
         db,
         processedItems.map((entry) => entry.product),
       ),
-      loadEffectiveInventoryOwnership(db, processedItems),
+      loadInventoryOwnershipTraces(db, processedItems),
       loadDataQualities(
         db,
         "inventory",
@@ -1155,7 +1155,7 @@ export const reconcileLocationSession = async (
         db,
         processed.map((entry) => entry.product),
       ),
-      loadEffectiveInventoryOwnership(db, processed),
+      loadInventoryOwnershipTraces(db, processed),
       loadDataQualities(
         db,
         "inventory",

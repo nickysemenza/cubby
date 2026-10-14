@@ -459,7 +459,7 @@ async function seedConnectedHousehold(
       productId: product.id,
       locationId: wardrobe.id,
       amount: { value: 1, unit: "each" },
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: memberCode,
     });
 

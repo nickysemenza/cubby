@@ -1,7 +1,11 @@
 import { productChildren } from "../child-tables/product.js";
 import { defineEntity } from "./definition.js";
 import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
-import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+import {
+  CURRENT_MEMBER_FILTER,
+  OWNER_FILTER_HOUSEHOLD,
+  OWNER_FILTER_UNKNOWN,
+} from "@cubby/shared";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { valueCollectionPatch } from "@cubby/schemas/entity-collection";
@@ -20,7 +24,10 @@ import {
 } from "../identifier-fields.js";
 import { productAttachmentImageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
-import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import {
+  optionalFieldResolutionsSchema,
+  resolvedListSchema,
+} from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
   moneyNullable,
@@ -67,6 +74,7 @@ export default defineEntity({
         "ownership",
         "notes",
         "labels",
+        "owners",
         "stocked-at",
         "movements",
         "purchases",
@@ -91,6 +99,7 @@ export default defineEntity({
       },
       additionalSections: [
         { kind: "slot", id: "ownership", title: "Ownership & evidence" },
+        { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
         { kind: "slot", id: "runs", title: "Enrichment history" },
         {
           kind: "fields",
@@ -118,7 +127,7 @@ export default defineEntity({
           title: "Stocked at",
           relation: "inventory",
           filter: { descriptor: "productId" },
-          columns: ["amount", "placement", "verifiedAt"],
+          columns: ["amount", "placement", "ownerLedgerPartyId", "verifiedAt"],
         },
         {
           kind: "relation",
@@ -555,6 +564,7 @@ export default defineEntity({
           "price",
           "pricing",
           "fieldResolutions",
+          "owners",
           "usdaUnavailable",
           "unitPrice",
           "unitPriceMappings",
@@ -1081,7 +1091,6 @@ Rules:
             },
             { path: "pricing.partial", label: "Incomplete expense coverage" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: moneyNullable.describe(
@@ -1215,7 +1224,6 @@ Rules:
               label: "Source category",
             },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: z.boolean().nullable(),
@@ -1324,7 +1332,6 @@ Rules:
           sourceDependencies: [
             { path: "externalIds", label: "Product identifiers" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: gtin.nullable(),
@@ -1521,6 +1528,37 @@ Rules:
             "Notes present reports whether this product has non-empty notes.",
           projections: { list: "notesPresence", summary: "notesPresence" },
           sourceDependencies: [{ path: "notes", label: "Product notes" }],
+        },
+      },
+      {
+        key: "owners",
+        kind: "json",
+        labelOverride: "Owner",
+        display: {
+          columnLabel: "Owner",
+          list: true,
+          detail: true,
+          width: "md",
+          format: "resolvedList",
+          mobile: { slot: "meta", priority: 41 },
+        },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { entity: "inventory", relation: "inventory" },
+            { label: "Recorded acquisition evidence" },
+          ],
+        },
+        explanation: {
+          ruleId: "product.effective-owners",
+          description:
+            "Each live inventory entry's effective owner, Household or Unknown; a product with no inventory shows the owner its single acquisition would hand down.",
+          projections: { list: "owners", detail: "owners", summary: "owners" },
+        },
+        validation: {
+          read: resolvedListSchema,
+          create: null,
+          update: null,
         },
       },
       // Read-only, list-only computed values carried on `ProductListItem`
@@ -2218,6 +2256,14 @@ Rules:
         label: "Owner",
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
+        deriveSchema: true,
+        sentinels: [
+          { value: OWNER_FILTER_HOUSEHOLD, label: "Household" },
+          { value: OWNER_FILTER_UNKNOWN, label: "Unknown" },
+        ],
+        nullable: { field: "ownerPresenceFilter", label: "owner" },
+        schemaDescription:
+          "Products whose Owner includes any value: a live inventory entry's effective owner (Ledger Party code, @me, @household or @unknown), or for a product with no inventory the owner its single acquisition would hand down.",
       },
       {
         columnId: "categoryFeature",

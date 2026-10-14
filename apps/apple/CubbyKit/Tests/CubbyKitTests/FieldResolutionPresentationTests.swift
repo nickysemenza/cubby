@@ -81,11 +81,57 @@ struct FieldResolutionPresentationTests {
                     ]
                 ]
             ]
-            return try #require(FieldResolutionPresentation(raw: raw, field: field)).state
+            return try #require(FieldResolutionPresentation(raw: raw, field: field)).state(field: field)
         }
         #expect(try state(.null, matches: false).label == "Set here")
-        #expect(try state("not_expected", matches: false).label == "Overrides inherited")
+        #expect(try state("not_expected", matches: false).tone == .override)
+        #expect(try state("not_expected", matches: false).label == "Set here")
         #expect(try state("required", matches: true).tone == .redundant)
+    }
+
+    private func owner(mode: String, value: JSONValue, stored: JSONValue = .null, canReset: Bool = false)
+        throws -> (FieldDescriptor, FieldResolutionPresentation)
+    {
+        let field = try #require(EntityCatalog[.inventory].field("ownerLedgerPartyId"))
+        let raw: JSONValue = [
+            "fieldResolutions": [
+                "ownerLedgerPartyId": [
+                    "mode": .string(mode), "storedValue": stored, "value": value, "fallbackValue": value,
+                    "source": "purchase", "sourceEntity": .null,
+                    "matchesFallback": .bool(stored != .null && stored == value), "canReset": .bool(canReset),
+                ]
+            ]
+        ]
+        return (field, try #require(FieldResolutionPresentation(raw: raw, field: field)))
+    }
+
+    /// An inherited owner offers Confirm (pin it explicitly) and Set to Household; an explicit
+    /// owner offers only Use inherited, and a confirmed match reads Set here, never redundant.
+    @Test func ownershipActionsFollowTheDeclaration() throws {
+        let (field, inherited) = try owner(mode: "inherit", value: "LPY-4K7M")
+        #expect(inherited.isInherited)
+        #expect(inherited.state(field: field).systemImage == "list.bullet.indent")
+        #expect(inherited.actions(field: field).map(\.label) == ["Confirm", "Set to Household"])
+        #expect(
+            inherited.actions(field: field).first?.payload
+                == ["ownershipMode": "explicit", "ownerLedgerPartyId": "LPY-4K7M"])
+
+        let (_, confirmed) = try owner(
+            mode: "explicit", value: "LPY-4K7M", stored: "LPY-4K7M", canReset: true)
+        #expect(!confirmed.isInherited)
+        #expect(confirmed.state(field: field).label == "Set here")
+        #expect(confirmed.actions(field: field).map(\.label) == ["Use inherited"])
+        #expect(
+            confirmed.actions(field: field).first?.payload
+                == ["ownershipMode": "inherit", "ownerLedgerPartyId": .null])
+    }
+
+    @Test func nullOwnerReadsTheDeclaredLabels() throws {
+        let (field, household) = try owner(mode: "explicit", value: .null, canReset: true)
+        #expect(household.emptyLabel(field: field) == "Household")
+        let (_, unknown) = try owner(mode: "inherit", value: .null)
+        #expect(unknown.emptyLabel(field: field) == "Unknown")
+        #expect(unknown.actions(field: field).map(\.label) == ["Set to Household"])
     }
 
     @Test func ordinaryFieldWithoutServerResolutionKeepsItsOwnValue() throws {

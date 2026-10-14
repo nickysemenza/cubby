@@ -251,14 +251,14 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     productId: product.id,
     locationId: location.id,
     amount: { value: 3, unit: "each" },
-    ownershipMode: "person",
+    ownershipMode: "explicit",
     ownerLedgerPartyId: owner.id,
   });
   await createEntityFixture(page, "inventory", {
     productId: product.id,
     locationId: otherLocation.id,
     amount: { value: 7, unit: "each" },
-    ownershipMode: "person",
+    ownershipMode: "explicit",
     ownerLedgerPartyId: other.id,
   });
   return { owner, other, location, otherLocation, product, entry };

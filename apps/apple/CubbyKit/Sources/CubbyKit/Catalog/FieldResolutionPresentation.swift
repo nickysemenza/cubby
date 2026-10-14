@@ -20,26 +20,70 @@ public struct FieldResolutionPresentation: Sendable {
 
     public var sourceEntity: FieldResolutionSource? { resolution.sourceEntity }
 
+    /// The caption beside a resolved value, in the one vocabulary (Inherited / Set here / None).
     public var sourceText: String {
-        let mode: String
         switch resolution.mode {
-        case .inherit: mode = "Inherited"
-        case .explicit: mode = "Explicit"
-        case .none: mode = "No value"
-        case .allocated: mode = "Allocated"
+        case .inherit: "Inherited · \(resolution.source)"
+        case .allocated: "Allocated · \(resolution.source)"
+        case .explicit: "Set here"
+        case .none: "None"
         }
-        return "\(mode) · \(resolution.source)"
     }
 
-    public var resetLabel: String { fallbackValue == .null ? "Clear value" : "Use inherited value" }
+    /// Inherited and not confirmed or set here: the values the shared marker flags.
+    public var isInherited: Bool { resolution.mode == .inherit && effectiveValue != .null }
 
-    public var state: FieldResolutionState {
-        FieldResolutionState(resolution, hasFallback: fallbackValue != .null)
+    /// What a null effective value reads as: the declaration's words for a deliberate empty
+    /// (`labels.none`, "Household") or an inherit with nothing to inherit (`labels.unresolved`).
+    public func emptyLabel(field: FieldDescriptor) -> String {
+        Self.emptyLabel(resolution, field: field)
+    }
+
+    public static func emptyLabel(_ resolution: FieldResolution, field: FieldDescriptor) -> String {
+        let labels = field.resolution?.labels
+        switch resolution.mode {
+        case .inherit: return labels?.unresolved ?? "None"
+        case .explicit, .none: return labels?.none ?? "None"
+        case .allocated: return "None"
+        }
+    }
+
+    public func state(field: FieldDescriptor) -> FieldResolutionState {
+        FieldResolutionState(
+            resolution, hasFallback: fallbackValue != .null,
+            intentional: field.resolution?.redundancy == "intentional")
     }
 
     public func resetPayload(field: FieldDescriptor) -> [String: JSONValue]? {
         guard resolution.canReset else { return nil }
         return field.resolution?.reset
+    }
+
+    /// The declaration's resolution links in web order: Use inherited (reset), Confirm (pin the
+    /// inherited value: `confirm` plus the field set to it), and Set to <none label>.
+    public func actions(field: FieldDescriptor) -> [FieldResolutionAction] {
+        guard let policy = field.resolution else { return [] }
+        var actions: [FieldResolutionAction] = []
+        if resolution.canReset {
+            actions.append(
+                .init(
+                    kind: .useInherited,
+                    label: fallbackValue == .null && policy.labels?.unresolved == nil
+                        ? "Clear value" : "Use inherited",
+                    payload: policy.reset))
+        }
+        if let confirm = policy.confirm, isInherited {
+            var payload = confirm
+            payload[field.key] = effectiveValue
+            actions.append(.init(kind: .confirm, label: "Confirm", payload: payload))
+        }
+        if let none = policy.none, resolution.mode == .inherit,
+            effectiveValue != .null || policy.labels?.none != nil
+        {
+            actions.append(
+                .init(kind: .setNone, label: "Set to \(policy.labels?.none ?? "none")", payload: none))
+        }
+        return actions
     }
 
     /// A declared display projection wins when present; older rows keep their own stored field.
@@ -101,28 +145,43 @@ public struct FieldResolutionPresentation: Sendable {
     }
 }
 
+/// One resolution link a declaration offers, as the update patch it stages.
+public struct FieldResolutionAction: Sendable, Hashable, Identifiable {
+    public enum Kind: String, Sendable, Hashable { case useInherited, confirm, setNone }
+
+    public let kind: Kind
+    public let label: String
+    public let payload: [String: JSONValue]
+    public var id: Kind { kind }
+}
+
 /// One vocabulary for every resolution surface, matching the web popover. An explicit value with
-/// nothing above it is "Set here", never an override: there is nothing for it to override.
+/// nothing above it is "Set here", never an override: there is nothing for it to override. A
+/// field whose declaration pins a matching value on purpose (`redundancy: "intentional"`, the
+/// Confirm action) reads "Set here", never redundant.
 public struct FieldResolutionState: Sendable, Equatable {
     public enum Tone: Sendable, Equatable { case set, override, redundant, none, inherit, allocated }
+
+    /// The shared marker for a value inherited rather than set here (web `InheritedMarker`).
+    public static let inheritedSymbol = "list.bullet.indent"
 
     public let tone: Tone
     public let label: String
     public let systemImage: String
 
-    public init(_ resolution: FieldResolution, hasFallback: Bool) {
+    public init(_ resolution: FieldResolution, hasFallback: Bool, intentional: Bool = false) {
         switch resolution.mode {
         case .inherit:
-            (tone, label, systemImage) = (.inherit, "Inherited", "arrow.turn.down.right")
+            (tone, label, systemImage) = (.inherit, "Inherited", Self.inheritedSymbol)
         case .allocated:
             (tone, label, systemImage) = (.allocated, resolution.source, "chart.pie")
         case .none:
-            (tone, label, systemImage) = (.none, hasFallback ? "Blocks inherited" : "None", "nosign")
+            (tone, label, systemImage) = (.none, "None", "nosign")
         case .explicit:
-            if resolution.matchesFallback {
+            if resolution.matchesFallback && !intentional {
                 (tone, label, systemImage) = (.redundant, "Redundant", "exclamationmark.triangle")
-            } else if hasFallback {
-                (tone, label, systemImage) = (.override, "Overrides inherited", "arrow.counterclockwise")
+            } else if hasFallback && !resolution.matchesFallback {
+                (tone, label, systemImage) = (.override, "Set here", "arrow.counterclockwise")
             } else {
                 (tone, label, systemImage) = (.set, "Set here", "circle.fill")
             }

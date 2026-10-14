@@ -307,7 +307,7 @@ async function getSearchDocumentSources(
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
       WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)}`,
     financialAccount: sql`
-      SELECT 'financialAccount', fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
+      SELECT ${"financialAccount"}::text, fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
         ARRAY(
           SELECT term
           FROM jsonb_array_elements(fa."sourceAliases") alias,
@@ -316,7 +316,7 @@ async function getSearchDocumentSources(
         ) || ARRAY(
           SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
         )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND ${requested(sql`fa."id"`)}`,
+      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)}`,
     financialTransaction: sql`
       SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL

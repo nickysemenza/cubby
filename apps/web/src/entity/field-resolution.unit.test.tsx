@@ -51,7 +51,7 @@ describe("field resolution indicators", () => {
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", {
-          name: "Use inherited value",
+          name: "Use inherited",
         }),
       ).not.toBeInTheDocument();
     } finally {

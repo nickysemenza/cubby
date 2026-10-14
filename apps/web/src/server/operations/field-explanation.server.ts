@@ -17,7 +17,6 @@ import {
 } from "@cubby/schemas/field-resolution";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { imageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";
-import { effectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
@@ -55,7 +54,6 @@ const explanationMetadata = z.object({
   readPath: z.string().nullable().optional(),
   resolver: z.enum([
     "field",
-    "inventoryOwnership",
     "productValuation",
     "imageRepresentation",
     "imageCapture",
@@ -74,9 +72,6 @@ const explanationMetadata = z.object({
     .optional(),
   sourceDependencies: z
     .array(z.object({ path: z.string(), label: z.string() }))
-    .optional(),
-  actions: z
-    .array(z.enum(["confirmOwner", "inheritOwner", "editSource"]))
     .optional(),
 });
 type Explanation = z.infer<typeof explanationMetadata>;
@@ -483,7 +478,6 @@ export function explainProjectionSources(
     }
     case "field":
     case "imageRepresentation":
-    case "inventoryOwnership":
       return [];
   }
 }
@@ -562,19 +556,7 @@ async function loadProjection(
   return asJsonRecord(result.item);
 }
 
-const actionLabels = {
-  confirmOwner: "Confirm owner",
-  inheritOwner: "Use inherited owner",
-  editSource: "Edit source",
-} as const;
-
 type ExplainFieldInput = z.output<typeof fieldExplanationInput>;
-type Subject = NonNullable<Source["entity"]>;
-type Ownership = z.output<typeof effectiveInventoryOwnership>;
-type OwnershipTrace = {
-  sources: Source[];
-  evidenceFingerprint: string | null;
-};
 
 async function loadExplanationSnapshot(
   context: EntityKernelContext,
@@ -654,66 +636,24 @@ async function loadExplanationSnapshot(
   });
 }
 
-function ownershipTrace(
-  subject: Subject,
-  ownership: Ownership,
-): OwnershipTrace {
-  const sources: Source[] = [
-    {
-      label: "Stored ownership",
-      entity: subject,
-      value: { mode: ownership.mode, owner: ownership.explicitOwner },
-    },
-    {
-      label: ownership.basis,
-      entity: ownership.evidence?.purchaseId
-        ? {
-            entityKind: "purchase",
-            entityId: ownership.evidence.purchaseId,
-          }
-        : null,
-      value: ownership.evidence,
-    },
-  ];
-  for (const id of ownership.evidence?.expenseIds.slice(0, 25) ?? []) {
-    sources.push({
-      label: "Acquisition expense",
-      entity: { entityKind: "expense", entityId: id },
-      value: id,
-    });
-  }
-  return { sources, evidenceFingerprint: ownership.evidenceFingerprint };
-}
-
 /** `editSource` points at the record that supplies an inherited value; with
  * nothing inherited, the source is the subject itself. */
 function explanationActions(
-  explanation: Explanation,
-  subject: Subject,
-  ownership: Ownership | null,
+  subject: { entityKind: Entity; entityId: string },
   resolution: FieldResolution | null,
 ): z.input<typeof fieldExplanationOutput>["actions"] {
-  return (explanation.actions ?? ["editSource"]).flatMap((kind) => {
-    if (kind === "editSource" && resolution?.sourceEntity)
-      return [
-        {
-          kind,
-          label: actionLabels[kind],
-          target: {
+  return [
+    {
+      kind: "editSource",
+      label: "Edit source",
+      target: resolution?.sourceEntity
+        ? {
             entityKind: resolution.sourceEntity.entityKind,
             entityId: resolution.sourceEntity.entityId,
-          },
-        },
-      ];
-    if (
-      kind === "confirmOwner" &&
-      ownership &&
-      (ownership.mode !== "inherit" || !ownership.effectiveOwner)
-    )
-      return [];
-    if (kind === "inheritOwner" && ownership?.mode === "inherit") return [];
-    return [{ kind, label: actionLabels[kind], target: subject }];
-  });
+          }
+        : subject,
+    },
+  ];
 }
 
 function qualityGapSummary(
@@ -879,7 +819,7 @@ export async function explainField(
   const value = unscoredQuality ? "Not assessed" : resolved.value;
   const subject = { entityKind: entity, entityId: input.entityId };
   const resolution = explanationResolution(projection, field.key);
-  let sources = unscoredQuality
+  const sources = unscoredQuality
     ? []
     : [
         ...explainProjectionSources(
@@ -890,20 +830,7 @@ export async function explainField(
         ),
         ...(countEvidence?.sources ?? []),
       ];
-  const ownership =
-    explanation.resolver === "inventoryOwnership"
-      ? effectiveInventoryOwnership.parse(value)
-      : null;
-  const ownershipEvidence = ownership
-    ? ownershipTrace(subject, ownership)
-    : null;
-  if (ownershipEvidence) sources = ownershipEvidence.sources;
-  const actions = explanationActions(
-    explanation,
-    subject,
-    ownership,
-    resolution,
-  );
+  const actions = explanationActions(subject, resolution);
   const { interpretation, finalSources } = explainInterpretation(
     field,
     value,
@@ -953,7 +880,6 @@ export async function explainField(
       snapshot.resolutionEvidenceTruncated,
       snapshot.verifications.length >= 50,
     ].some(Boolean),
-    evidenceFingerprint: ownershipEvidence?.evidenceFingerprint ?? null,
     actions,
   });
 }

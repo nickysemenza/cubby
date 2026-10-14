@@ -7,6 +7,7 @@ import { formatCollectionLabel } from "@cubby/shared/collection-tag";
 import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -68,8 +69,13 @@ function CollectionMembership({
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1">
-        {direct && <Badge variant="outline">Direct</Badge>}
-        {inherited && <Badge variant="secondary">From location</Badge>}
+        {direct && <Badge variant="outline">Set here</Badge>}
+        {inherited && !direct && (
+          <Badge variant="secondary">
+            <TreeViewIcon aria-hidden="true" />
+            Inherited from location
+          </Badge>
+        )}
         {matches?.length ? <Badge variant="secondary">Dynamic</Badge> : null}
       </div>
       {matches?.length ? <SmartMatchEvidence matches={matches} /> : null}

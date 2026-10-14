@@ -530,8 +530,12 @@ An economic participant in household contribution accounting, and the identity b
 _Avoid_: payer, account owner, beneficiary
 
 **Owner**:
-The member or guest who owns an Inventory entry. An entry's own confirmed owner wins; otherwise it inherits one from acquisition evidence (the Expense beneficiary, then the account's default), and that inherited owner stays unconfirmed until a member confirms it. Only Inventory entries have an owner; a Product never does, so a thing nobody has recorded as Inventory belongs to no one yet. Household-owned stock has no owner.
+The member or guest who owns an Inventory entry. An owner set on the entry wins (Set here); Household is the entry set to no individual owner; otherwise the entry inherits one from acquisition evidence (the Expense beneficiary, then the vendor account default, then the payment account default), and Confirm pins that inherited owner as Set here. An entry that inherits nothing reads Unknown. A Product's Owner is a read-only rollup of its live entries' effective owners (people, Household, Unknown); a Product with no entries shows the owner its single purchase would supply, and is otherwise blank.
 _Avoid_: belongs to, assigned to, buyer
+
+**Inherited**:
+A value a record takes from another record rather than storing itself (a parent task, a category ancestor, purchase evidence). Every client marks it with the same tree icon until someone sets or confirms a value; the three states read Inherited, Set here, and None, and "Use inherited" returns a set value to inheriting.
+_Avoid_: derived, computed, default
 
 **My stuff**:
 The Inventory entries whose Owner is the viewing member. Wardrobe is My stuff narrowed to apparel, and other narrowed views (tools, books) work the same way; another member's stuff is the same view with that member as Owner.

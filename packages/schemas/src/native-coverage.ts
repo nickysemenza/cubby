@@ -166,7 +166,6 @@ export const nativeCoverage = {
     ...generic([
       "expense-project",
       "ownerLedgerPartyId",
-      "ownershipMode",
       "product-category",
       "product-fdc-id",
       "product-external-ids",
@@ -189,11 +188,7 @@ export const nativeCoverage = {
     // `ImageEntityDetailView` draws Image's Provenance map row (`image-capture-location`) and
     // "In libraries" rows (`image-sightings`) itself; Image never uses the generic detail view,
     // so these are reachable only defensively.
-    ...ownedElsewhere([
-      "effectiveOwnership",
-      "image-capture-location",
-      "image-sightings",
-    ]),
+    ...ownedElsewhere(["image-capture-location", "image-sightings"]),
   },
   /**
    * `implemented` verbs each have a plan in `nativeHeroActionPlans` that the one generic runner

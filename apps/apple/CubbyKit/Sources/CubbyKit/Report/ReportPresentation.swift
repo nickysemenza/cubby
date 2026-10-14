@@ -134,6 +134,8 @@ public struct ReportPresentation: Hashable, Sendable {
         public let key: String?
         /// Why the row cannot be checked; nil when it can.
         public let disabledReason: String?
+        /// A timeline row's state (`done`, `skipped`, `not_reached`, …), drawn as its rail dot.
+        public let stateKind: String?
         /// The row's state, then its toned chips (a run's approvals, findings and operations).
         public let badges: [Status]
         /// The row's text: an untoned line is its result, `muted` lines are evidence.
@@ -256,6 +258,8 @@ public struct ReportPresentation: Hashable, Sendable {
     /// Rows that are records of their own, with the verbs the slot offers (`CollectionActionID`).
     public struct Records: Hashable, Sendable {
         public var filmstrip = false
+        /// Ordered stages drawn on a rail with a state dot per row, nearest source first.
+        public var timeline = false
         public let title: String?
         public let rows: [RecordRow]
         public let empty: String
@@ -288,6 +292,7 @@ public struct ReportPresentation: Hashable, Sendable {
         /// These rows with `more` stacked after them (a later page).
         public func adding(_ more: [RecordRow]) -> Records {
             Records(
+                filmstrip: filmstrip, timeline: timeline,
                 title: title,
                 rows: rows
                     + more.enumerated().map { offset, row in
@@ -413,68 +418,73 @@ public struct ReportPresentation: Hashable, Sendable {
                 note.text, tone: note.tone.flatMap { Tone(rawValue: $0.rawValue) },
                 strong: note.strong ?? false)
         case .records(let records):
-            return .records(
-                Records(
-                    filmstrip: records.presentation == .filmstrip,
-                    title: records.title,
-                    rows: records.rows.enumerated().map { index, row in
-                        RecordRow(
-                            id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
-                            recordID: row.id, title: row.title,
-                            trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
-                            at: row.at.flatMap(instant),
-                            listLink: row.listLink.flatMap { link in
-                                EntityKey(rawValue: link.entity).map {
-                                    ListLink(entity: $0, filters: link.filters.additionalProperties)
-                                }
-                            },
-                            actions: (row.actions ?? []).compactMap {
-                                CollectionActionID(rawValue: $0.rawValue)
-                            },
-                            key: row.key, disabledReason: row.disabledReason,
-                            badges: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
-                                + (row.badges ?? []).map {
-                                    Status(
-                                        label: $0.label,
-                                        tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
-                                },
-                            lines: (row.lines ?? []).map {
-                                Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
-                            },
-                            detailLabel: row.detail?.label, detailText: row.detail?.text,
-                            externalLinkLabel: row.externalLink?.label,
-                            externalLinkURL: row.externalLink.flatMap { URL(string: $0.url) },
-                            externalLinkHint: row.externalLink?.hint,
-                            commands: row.commands ?? [], choice: row.choice.map(choice))
-                    },
-                    empty: records.empty,
-                    actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
-                    largeThumbnails: records.thumbnail == .large, footer: records.footer,
-                    verbs: (records.verbs ?? []).compactMap { verb in
-                        SectionActionID(rawValue: verb.id.rawValue).map {
-                            Records.Verb(
-                                verb: $0, label: verb.label, disabledReason: verb.disabledReason)
+            return .records(Self.records(records))
+        }
+    }
+
+    /// A records block as native draws it; a field explanation's resolution chain uses it too.
+    public static func records(_ records: ReportRecordsBlock) -> Records {
+        return Records(
+            filmstrip: records.presentation == .filmstrip,
+            timeline: records.presentation == .timeline,
+            title: records.title,
+            rows: records.rows.enumerated().map { index, row in
+                RecordRow(
+                    id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
+                    recordID: row.id, title: row.title,
+                    trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
+                    at: row.at.flatMap(instant),
+                    listLink: row.listLink.flatMap { link in
+                        EntityKey(rawValue: link.entity).map {
+                            ListLink(entity: $0, filters: link.filters.additionalProperties)
                         }
                     },
-                    commands: records.commands ?? [],
-                    form: records.form.map { form in
-                        Form(
-                            choices: form.choices.map(choice), note: form.note, noun: form.noun,
-                            completeText: form.completeText, disabledReason: form.disabledReason,
-                            command: Form.Command(
-                                id: form.command.id, label: form.command.label,
-                                prominent: form.command.prominent, confirm: form.command.confirm,
-                                runID: form.command.request.runId,
-                                prepareOperationID: form.command.request.prepareOperationId,
-                                tradeChoiceID: form.command.request.tradeChoiceId,
-                                lines: form.command.request.lines.map {
-                                    Form.Line(
-                                        choiceID: $0.choiceId, stableOrderID: $0.stableOrderId,
-                                        stableLineID: $0.stableLineId)
-                                }))
-                    })
-            )
-        }
+                    actions: (row.actions ?? []).compactMap {
+                        CollectionActionID(rawValue: $0.rawValue)
+                    },
+                    key: row.key, disabledReason: row.disabledReason,
+                    stateKind: records.presentation == .timeline ? row.state?.kind.rawValue : nil,
+                    badges: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
+                        + (row.badges ?? []).map {
+                            Status(
+                                label: $0.label,
+                                tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                        },
+                    lines: (row.lines ?? []).map {
+                        Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                    },
+                    detailLabel: row.detail?.label, detailText: row.detail?.text,
+                    externalLinkLabel: row.externalLink?.label,
+                    externalLinkURL: row.externalLink.flatMap { URL(string: $0.url) },
+                    externalLinkHint: row.externalLink?.hint,
+                    commands: row.commands ?? [], choice: row.choice.map(choice))
+            },
+            empty: records.empty,
+            actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
+            largeThumbnails: records.thumbnail == .large, footer: records.footer,
+            verbs: (records.verbs ?? []).compactMap { verb in
+                SectionActionID(rawValue: verb.id.rawValue).map {
+                    Records.Verb(
+                        verb: $0, label: verb.label, disabledReason: verb.disabledReason)
+                }
+            },
+            commands: records.commands ?? [],
+            form: records.form.map { form in
+                Form(
+                    choices: form.choices.map(choice), note: form.note, noun: form.noun,
+                    completeText: form.completeText, disabledReason: form.disabledReason,
+                    command: Form.Command(
+                        id: form.command.id, label: form.command.label,
+                        prominent: form.command.prominent, confirm: form.command.confirm,
+                        runID: form.command.request.runId,
+                        prepareOperationID: form.command.request.prepareOperationId,
+                        tradeChoiceID: form.command.request.tradeChoiceId,
+                        lines: form.command.request.lines.map {
+                            Form.Line(
+                                choiceID: $0.choiceId, stableOrderID: $0.stableOrderId,
+                                stableLineID: $0.stableLineId)
+                        }))
+            })
     }
 
     private static func choice(_ choice: Components.Schemas.ReportChoice) -> Choice {

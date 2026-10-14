@@ -42,6 +42,23 @@ struct EntityFilterSheetTests {
         #expect(draft.state.activeCount == 4)
     }
 
+    /// The Owner filter offers Me plus its declared sentinels, sent unbranded and kept apart
+    /// from the picked record codes.
+    @Test func ownerFilterOffersSentinelsBesideMe() throws {
+        let owner = try #require(inventory.filters.first { $0.sentinels != nil })
+        let tokens = EntityFilterDraft.tokens(owner)
+        #expect(tokens.map(\.value) == ["@me", "@household", "@unknown"])
+        #expect(EntityFilterDraft.displayName(forFilterValue: "@household", in: owner) == "Household")
+
+        var draft = EntityFilterDraft()
+        draft.setMany(["LPY-4K7M"], for: owner)
+        draft.set("@household", true, for: owner)
+        #expect(draft.many(owner) == ["@household", "LPY-4K7M"])
+        #expect(draft.selects("@household", in: owner))
+        draft.set("@household", false, for: owner)
+        #expect(draft.many(owner) == ["LPY-4K7M"])
+    }
+
     /// An emptied control removes its parameter rather than sending an empty value.
     @Test func emptyValueRemovesTheParameter() throws {
         var draft = EntityFilterDraft(EntityFilterState(["productNameFilter": .single("x")]))

@@ -188,7 +188,7 @@ describe("product match queue", () => {
         productId,
         locationId,
         amount: { value: 1, unit: "each" },
-        ownershipMode: ownerLedgerPartyId ? "person" : "inherit",
+        ownershipMode: ownerLedgerPartyId ? "explicit" : "inherit",
         ownerLedgerPartyId,
       },
       ctx.actor,

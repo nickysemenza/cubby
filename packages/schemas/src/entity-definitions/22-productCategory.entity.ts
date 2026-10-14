@@ -92,6 +92,26 @@ export default defineEntity({
           list: true,
           detail: true,
         },
+        explanation: {
+          ruleId: "productCategory.effective-spending-category",
+          description:
+            "A category's own mapping (or block) wins; otherwise the nearest mapped ancestor within three levels supplies it.",
+          projections: {
+            list: "fieldResolutions.effectiveSpendingCategory.value",
+            detail: "fieldResolutions.effectiveSpendingCategory.value",
+            summary: "fieldResolutions.effectiveSpendingCategory.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.effectiveSpendingCategory.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.effectiveSpendingCategory.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: categoryMappingSchema.shape.category.optional(),
           create: null,
@@ -352,7 +372,6 @@ Rules:
               label: "Source category",
             },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: productCategoryFeature.nullable(),
@@ -397,7 +416,6 @@ Rules:
               label: "Source category",
             },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: z.boolean().nullable(),

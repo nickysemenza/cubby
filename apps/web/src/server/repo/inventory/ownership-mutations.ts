@@ -76,7 +76,7 @@ const resolveRawOwnership = async (
   selection: InventoryOwnershipSelection,
 ): Promise<InventoryRawOwnership> => {
   const ownerLedgerPartyId =
-    selection.mode === "person"
+    selection.mode === "explicit" && selection.ownerId
       ? await resolveOrThrow(tx, "ledgerParty", selection.ownerId)
       : null;
   const ownership = {
@@ -318,7 +318,7 @@ export const confirmInventoryOwnership = async (
       tx,
       id,
       {
-        ownershipMode: "person",
+        ownershipMode: "explicit",
         ownerLedgerPartyId: ownerId,
       },
       quantity,

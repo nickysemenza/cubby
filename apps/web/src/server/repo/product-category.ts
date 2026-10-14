@@ -1,7 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { FieldResolutions } from "@cubby/schemas/field-resolution";
+import type {
+  FieldResolution,
+  FieldResolutions,
+} from "@cubby/schemas/field-resolution";
 import {
   type ProductCategoryId,
   type ProductCategoryShortcode,
@@ -223,6 +226,42 @@ const productCountsFor = async (
 };
 
 /** Keep stored decisions separate from the live ancestor fallback. */
+/** The nearest mapped ancestor (or this category) supplies the spending
+ * category; a direct mapping or a block is this category's own decision. */
+const spendingCategoryResolution = (
+  mapping: z.infer<typeof categoryMappingSchema> | undefined,
+): FieldResolution => {
+  const value = mapping?.category?.id ?? null;
+  const own = mapping?.state === "direct" || mapping?.state === "blocked";
+  return {
+    mode:
+      mapping?.state === "blocked"
+        ? "none"
+        : mapping?.state === "direct"
+          ? "explicit"
+          : "inherit",
+    storedValue: own ? value : null,
+    value,
+    fallbackValue: mapping?.state === "inherited" ? value : null,
+    source:
+      mapping?.state === "inherited" && mapping.source
+        ? mapping.source.name
+        : own
+          ? "Set on this category"
+          : "No mapped ancestor",
+    sourceEntity:
+      mapping?.state === "inherited" && mapping.source
+        ? {
+            entityKind: "productCategory",
+            entityId: mapping.source.id,
+            name: mapping.source.name,
+          }
+        : null,
+    matchesFallback: false,
+    canReset: false,
+  };
+};
+
 const categoryResolutions = (
   row: CategoryRow,
   path: CategoryPathRow["path"],
@@ -326,7 +365,12 @@ const hydrateRead = async (
         });
       if (wantsListGroup(projection, "derived"))
         Object.assign(result, {
-          fieldResolutions: categoryResolutions(row, path),
+          fieldResolutions: {
+            ...categoryResolutions(row, path),
+            effectiveSpendingCategory: spendingCategoryResolution(
+              mappings.get(row.id),
+            ),
+          },
           productCount: productCounts?.get(row.id) ?? 0,
         });
       return result;

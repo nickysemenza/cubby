@@ -8,11 +8,9 @@ import {
 } from "./identifier-fields";
 import { ledgerAttributionInput, ledgerPartyKind } from "./ledger-party-fields";
 
-export const inventoryOwnershipModeValues = [
-  "inherit",
-  "person",
-  "unassigned",
-] as const;
+/** The shared inheritance-mode vocabulary: `explicit` with a null owner is
+ * household stock (no individual owner). */
+export const inventoryOwnershipModeValues = ["inherit", "explicit"] as const;
 export const inventoryOwnershipMode = z.enum(inventoryOwnershipModeValues);
 export type InventoryOwnershipMode = z.infer<typeof inventoryOwnershipMode>;
 
@@ -25,7 +23,7 @@ export type InventoryOwner = z.infer<typeof inventoryOwner>;
 
 export const inventoryOwnershipSourceValues = [
   "explicit",
-  "unassigned",
+  "household",
   "inherited_beneficiary",
   "inherited_vendor_account",
   "inherited_payment_account",
@@ -48,10 +46,9 @@ export const effectiveInventoryOwnership = z.object({
   mode: inventoryOwnershipMode,
   explicitOwner: inventoryOwner.nullable(),
   effectiveOwner: inventoryOwner.nullable(),
+  /** What the acquisition evidence alone would hand an inherit-mode entry. */
+  inheritedOwner: inventoryOwner.nullable(),
   source: inventoryOwnershipSource,
-  /** The one human label for this ownership, e.g. "Inherited: Alex · purchase
-   * beneficiary". Clients render it verbatim instead of mapping mode/source. */
-  basis: z.string(),
   evidence: inventoryOwnershipEvidence.nullable(),
   evidenceFingerprint: z.string(),
   matchesInheritedOwner: z.boolean(),
@@ -62,8 +59,11 @@ export type EffectiveInventoryOwnership = z.infer<
 
 export const inventoryOwnershipSelection = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("inherit"), ownerId: z.null().optional() }),
-  z.object({ mode: z.literal("unassigned"), ownerId: z.null().optional() }),
-  z.object({ mode: z.literal("person"), ownerId: ledgerPartyShortcode }),
+  /** A null owner is household stock. */
+  z.object({
+    mode: z.literal("explicit"),
+    ownerId: ledgerPartyShortcode.nullable(),
+  }),
 ]);
 export type InventoryOwnershipSelection = z.infer<
   typeof inventoryOwnershipSelection

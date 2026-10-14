@@ -53,6 +53,7 @@ import {
   notDeleted,
   relations,
   updateLiveAndReturn,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 import {
   declaredFilterPredicates,
@@ -101,8 +102,9 @@ import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
   inventoryIdsByEffectiveOwner,
-  loadEffectiveInventoryOwnership,
+  loadInventoryOwnershipTraces,
 } from "./ownership";
+import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
 import {
   liveProductAndLocation,
   placementCondition,
@@ -184,7 +186,7 @@ const inventoryReader = createEntityReader({
     const [pricing, ownership, dataQualities, locationQualities, valuations] =
       await Promise.all([
         loadProductPricing(db, [row.product]),
-        loadEffectiveInventoryOwnership(db, [row]),
+        loadInventoryOwnershipTraces(db, [row]),
         loadDataQualities(db, "inventory", [row.id]),
         loadDataQualities(db, "location", [row.location.id]),
         loadInventoryValuations(db, [row]),
@@ -208,10 +210,7 @@ export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
 // published schema types (`@me` resolves in the kernel before this runs).
 type InventoryFilters = Pick<
   z.output<typeof inventoryFiltersSchema>,
-  | "ownerLedgerPartyId"
-  | "ownerPresenceFilter"
-  | "ownershipMode"
-  | "categoryFeatureFilter"
+  "ownerLedgerPartyId" | "ownershipMode" | "categoryFeatureFilter"
 > & {
   searchQuery?: string;
   createdFrom?: string;
@@ -340,12 +339,9 @@ export const buildInventoryWhere = async (
       resolveFilterIds(db, "location", filters.locationSubtreeFilter),
       resolveFilterIds(db, "product", filters.productIdFilter),
       resolveFilterIds(db, "productCategory", filters.categoryFilter),
-      ownerCodes === undefined && filters.ownerPresenceFilter === undefined
+      ownerCodes === undefined
         ? undefined
-        : inventoryIdsByEffectiveOwner(db, {
-            codes: ownerCodes,
-            presence: filters.ownerPresenceFilter,
-          }),
+        : inventoryIdsByEffectiveOwner(db, ownerCodes),
     ]);
   const categoryFeatures =
     filters.categoryFeatureFilter === undefined
@@ -512,7 +508,7 @@ const hydrateInventoryListRows = async (
   const entries = results.map((row) => row.inventoryEntry);
   const [ownership, dataQualities] = await Promise.all([
     loadListGroup(projection, ["relations", "derived"], () =>
-      loadEffectiveInventoryOwnership(db, entries),
+      loadInventoryOwnershipTraces(db, entries),
     ),
     loadListGroup(projection, "quality", () =>
       loadDataQualities(
@@ -628,11 +624,18 @@ const resolveUpdatedOwnership = (
   before: InventoryRow,
   data: UpdateInventoryEntryData,
 ): InventoryRawOwnership => ({
-  ownershipMode: data.ownershipMode ?? before.ownershipMode,
+  // Picking an owner sets it here; clearing one goes back to inheriting.
+  ownershipMode:
+    data.ownershipMode ??
+    (data.ownerLedgerPartyId === undefined
+      ? before.ownershipMode
+      : data.ownerLedgerPartyId === null
+        ? "inherit"
+        : "explicit"),
   ownerLedgerPartyId:
     data.ownerLedgerPartyId !== undefined
       ? data.ownerLedgerPartyId
-      : data.ownershipMode !== undefined && data.ownershipMode !== "person"
+      : data.ownershipMode === "inherit"
         ? null
         : before.ownerLedgerPartyId,
 });
@@ -646,7 +649,7 @@ const validateUpdatedOwnership = async (
   } catch {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Person ownership requires an individual owner; inherited and unassigned ownership cannot retain one.",
+      "Inherited ownership cannot retain an owner.",
     );
   }
   if (!ownership.ownerLedgerPartyId) return;
@@ -695,6 +698,47 @@ const assertUpdatedSlotAvailable = async (
   }
 };
 
+const isOwnershipOnlyUpdate = (data: UpdateInventoryEntryData) =>
+  Object.entries(data).every(
+    ([key, value]) =>
+      value === undefined ||
+      key === "ownershipMode" ||
+      key === "ownerLedgerPartyId",
+  ) &&
+  (data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined);
+
+const hydrateUpdatedInventoryEntry = async (db: Database, id: InventoryId) => {
+  const result = await getDb(db).query.inventoryEntry.findFirst({
+    where: eq(inventoryEntry.id, id),
+    ...relations.inventory.full,
+  });
+
+  if (!result) {
+    throw createAppError(
+      "INVENTORY_NOT_FOUND",
+      `Inventory entry ${id} not found after update`,
+    );
+  }
+
+  const [pricing, ownership, dataQualities, locationQualities, valuations] =
+    await Promise.all([
+      loadProductPricing(db, [result.product]),
+      loadInventoryOwnershipTraces(db, [result]),
+      loadDataQualities(db, "inventory", [result.id]),
+      loadDataQualities(db, "location", [result.location.id]),
+      loadInventoryValuations(db, [result]),
+    ]);
+  // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
+  return dbInventoryEntryToAPI(
+    result,
+    valuations.get(result.id) ?? null,
+    requireLoadedProductPricing(pricing, result.product.id),
+    dataQualities.get(result.id)!,
+    locationQualities.get(result.location.id)!,
+    ownership.get(result.id),
+  );
+};
+
 export const updateInventoryEntry = async (
   db: Database,
   id: InventoryId,
@@ -720,6 +764,27 @@ export const updateInventoryEntry = async (
   const rawOwnership = resolveUpdatedOwnership(before, data);
   await validateUpdatedOwnership(db, rawOwnership);
 
+  // An ownership-only patch (the shared Confirm / Use inherited / None
+  // actions) folds into an existing entry with that ownership instead of
+  // refusing the occupied slot, exactly as `setOwnership` does.
+  if (isOwnershipOnlyUpdate(data)) {
+    const [survivor] = await withTransaction(db, (tx) =>
+      applyInventoryOwnershipInTransaction(
+        tx,
+        id,
+        rawOwnership,
+        undefined,
+        actor,
+      ),
+    );
+    if (!survivor)
+      throw createAppError(
+        "INVENTORY_NOT_FOUND",
+        `Inventory entry ${id} not found after update`,
+      );
+    return await hydrateUpdatedInventoryEntry(db, survivor);
+  }
+
   // Pre-check the slot rather than letting the partial unique index raise a
   // raw 23505 — nothing maps that to an AppError, so it would surface as an
   // untranslated Postgres error. Same reasoning as the charge pre-check in
@@ -744,11 +809,12 @@ export const updateInventoryEntry = async (
     // It does NOT move the row — the dimmer stays in the kitchen, it just stops
     // being counted, audited, and browsed.
     placement: data.placement,
-    ownershipMode: data.ownershipMode,
-    ownerLedgerPartyId:
-      data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined
-        ? rawOwnership.ownerLedgerPartyId
-        : undefined,
+    // Either ownership field writes both, so an owner picked alongside other
+    // edits still implies explicit (and a cleared one, inherit).
+    ...(data.ownershipMode !== undefined ||
+    data.ownerLedgerPartyId !== undefined
+      ? rawOwnership
+      : {}),
   });
 
   const updated = await updateLiveAndReturn(
@@ -774,35 +840,7 @@ export const updateInventoryEntry = async (
     }
   }
 
-  const result = await getDb(db).query.inventoryEntry.findFirst({
-    where: eq(inventoryEntry.id, updated.id),
-    ...relations.inventory.full,
-  });
-
-  if (!result) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry ${id} not found after update`,
-    );
-  }
-
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(db, [result.product]),
-      loadEffectiveInventoryOwnership(db, [result]),
-      loadDataQualities(db, "inventory", [result.id]),
-      loadDataQualities(db, "location", [result.location.id]),
-      loadInventoryValuations(db, [result]),
-    ]);
-  // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
-  return dbInventoryEntryToAPI(
-    result,
-    valuations.get(result.id) ?? null,
-    requireLoadedProductPricing(pricing, result.product.id),
-    dataQualities.get(result.id)!,
-    locationQualities.get(result.location.id)!,
-    ownership.get(result.id),
-  );
+  return await hydrateUpdatedInventoryEntry(db, updated.id);
 };
 
 export const createInventoryEntry = async (
@@ -816,14 +854,15 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  const ownershipMode = data.ownershipMode ?? "inherit";
+  const ownershipMode =
+    data.ownershipMode ?? (data.ownerLedgerPartyId ? "explicit" : "inherit");
   const ownerLedgerPartyId = data.ownerLedgerPartyId ?? null;
   try {
     assertValidRawInventoryOwnership({ ownershipMode, ownerLedgerPartyId });
   } catch {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Person ownership requires an individual owner; inherited and unassigned ownership cannot retain one.",
+      "Inherited ownership cannot retain an owner.",
     );
   }
   if (ownerLedgerPartyId) {
@@ -890,7 +929,7 @@ export const createInventoryEntry = async (
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
       loadProductPricing(db, [result.product]),
-      loadEffectiveInventoryOwnership(db, [result]),
+      loadInventoryOwnershipTraces(db, [result]),
       loadDataQualities(db, "inventory", [result.id]),
       loadDataQualities(db, "location", [result.location.id]),
       loadInventoryValuations(db, [result]),
@@ -943,7 +982,7 @@ export const getInventoryByLocationIds = async (
         db,
         results.map((entry) => entry.product),
       ),
-      loadEffectiveInventoryOwnership(db, results),
+      loadInventoryOwnershipTraces(db, results),
       loadDataQualities(
         db,
         "inventory",

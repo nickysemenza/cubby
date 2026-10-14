@@ -60,7 +60,6 @@ const qualityField = (entityKey: string): EntityField => ({
       summary: "dataQuality.score",
     },
     sourceDependencies: [{ path: "dataQuality.gaps", label: "Detected gaps" }],
-    actions: ["editSource"],
   },
   resolution: null,
   control: null,
@@ -233,6 +232,7 @@ export const compileDataQuality = (
     range: null,
     urlOnly: false,
     nullable: null,
+    sentinels: null,
   } as const;
   const statusDescriptor: FilterDescriptor = {
     ...descriptorBase,

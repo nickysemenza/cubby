@@ -59,7 +59,7 @@ describe("planRelationSection", () => {
       target: "inventory",
       filterKey: "productIdFilter",
       urlKey: "productId",
-      columns: ["amount", "placement", "verifiedAt"],
+      columns: ["amount", "placement", "ownerLedgerPartyId", "verifiedAt"],
     });
     // The create button prefills the real field, not the filter alias.
     expect(plan.seed).toEqual({ intent: "capture", field: "productId" });

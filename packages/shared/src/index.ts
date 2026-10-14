@@ -7,7 +7,12 @@ export {
   type ScreamingSnake,
 } from "./text-case";
 
-export { CURRENT_MEMBER_FILTER, UNRESOLVABLE_ENTITY_FILTER } from "./filter";
+export {
+  CURRENT_MEMBER_FILTER,
+  OWNER_FILTER_HOUSEHOLD,
+  OWNER_FILTER_UNKNOWN,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "./filter";
 
 export { cents, dollars, round2 } from "./money";
 
