@@ -52,6 +52,7 @@ final class PhotoImportRunFlow {
 
     init(
         client: CubbyClient, activityCenter: BackgroundActivityCenter? = nil, checkpointURL: URL? = nil,
+        notificationPreferences: NotificationPreferences = .shared,
         waitForPreparationConditions: @escaping PhotoImportConditions.Wait = { changed in
             try await PhotoImportConditions.shared.wait(report: changed)
         },
@@ -77,6 +78,7 @@ final class PhotoImportRunFlow {
                         file: file, to: url, contentType: contentType)
                 }), reportDiagnostic: { error in Diagnostics.report(error, context: "photos.import.upload") })
         activityCenter?.register(self)
+        notifyWhenReady = notificationPreferences.importNotificationsEnabled
     }
 
     func setNotificationPreference(_ enabled: Bool) {
@@ -526,7 +528,7 @@ struct PhotoImportRunSheet: View {
                 }
                 .accessibilityIdentifier("photos.run.processor")
                 Toggle(
-                    "Notify me when ready or attention is needed",
+                    "Notify me for this import",
                     isOn: Binding(
                         get: { flow.notifyWhenReady }, set: { flow.setNotificationPreference($0) }))
                 if let error = flow.notificationError {

@@ -106,6 +106,11 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
 
 - Swift 6 strict concurrency (`swiftLanguageModes: [.v6]`). No unchecked `Sendable` escapes without
   a comment explaining why.
+- A view's `.task` still runs synchronous work on its inherited actor. Route blocking PhotoKit
+  lookups through `PhotoLibraryIO`, and use existing I/O actors or `@concurrent` helpers for
+  expensive file/CPU work. Preserve checkpoint write/cancellation ordering when moving durable
+  work. Profile waiting threads as well as running threads; a synchronous XPC wait can stall
+  navigation without appearing as a CPU hotspot.
 - Observation (`@Observable`), not Combine, for view state.
 - Swift Testing (`import Testing`, `@Test`, `#expect`) for all tests. Never XCTest. Suites run in
   parallel: a `URLProtocol` stub with a static handler must be per-suite (`.serialized` only

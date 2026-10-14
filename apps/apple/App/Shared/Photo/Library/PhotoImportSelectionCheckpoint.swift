@@ -68,8 +68,7 @@ nonisolated struct PhotoImportSelectionCheckpoint: Codable {
             do {
                 if let identifier = entry.assetIdentifier {
                     guard
-                        let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
-                            .firstObject
+                        let asset = await PhotoLibraryIO.shared.asset(identifier: identifier)
                     else {
                         throw PhotoLibraryFailure.cloudUnavailable
                     }

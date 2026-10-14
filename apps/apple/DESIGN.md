@@ -57,6 +57,10 @@ Every row reserves its thumbnail slot: use the server-selected direct/related di
 
 Today uses its real task, meal, activity, problem, and nutrition sources. Attention is identified by the data and a readable label; the citron mark is supporting emphasis. Loading is labelled (`LoadingIndicator`), and same-context refresh retains loaded data. A failed load offers Retry through one of two shared views: `LoadFailureView` when a screen or sheet body never loaded, `InlineLoadFailure` (warning symbol and tone) when a section or slot fails beside loaded content. A refused write (an editor save, an accepted suggestion) is not a failed load: `ActionFailureNotice` shows "Couldn't save" and the raw server message above the preserved input, with Retry only while that same mutation can still be resent; where the failed action's own control remains, it omits Retry. Determinate progress (photo preparation) and named write or check progress ("Checking booking…") keep their own `ProgressView`. In-flight writes keep their existing dismissal rules.
 
+Library's recent-photo preview loads through `PhotoLibraryIO`, never a synchronous PhotoKit fetch on the main actor. Cold Photos-library initialization can wait on its database and stall the tab transition. Keep the Library controls available with a labelled preview placeholder while the fetch runs, and ignore results after its view task is cancelled.
+
+iOS launch uses a static Cubby title on the system grouped background, matching the first runtime frame. Session restoration adds a labelled “Checking sign-in” indicator as soon as SwiftUI renders. Never add a timer or hold launch for branding; the system launch screen cannot animate while the process is starting or paused by a debugger.
+
 ## Acceptance
 
 Review iPhone and Mac, narrow Mac windows, iPad resizing, light/dark, accessibility text, VoiceOver, keyboard-only operation, Reduce Motion, and the actual photo and workbench journeys. Use synthetic fixtures and screenshots.
