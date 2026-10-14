@@ -51,17 +51,25 @@ struct RunPhotoReviewSections: View {
                 Section {
                     HStack {
                         if !workspace.selectedGroupKeys.isEmpty {
-                            Button("Approve selected · \(workspace.approvableSelectedKeys(session).count)") {
+                            Button {
                                 workspace.freezeApproval(
                                     workspace.approvableSelectedKeys(session), session: session, runID: runID)
                                 workspace.confirmingSelected = true
+                            } label: {
+                                Text("Approve selected · \(workspace.approvableSelectedKeys(session).count)")
+                                    .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                                    .contentShape(Rectangle())
                             }
                             .disabled(session.busy || workspace.approvableSelectedKeys(session).isEmpty)
                         }
-                        Button("Approve all") {
+                        Button {
                             workspace.freezeApproval(
                                 proposed.map(\.groupKey), session: session, runID: runID)
                             workspace.confirmingAll = true
+                        } label: {
+                            Text("Approve all")
+                                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                                .contentShape(Rectangle())
                         }
                         .disabled(
                             session.busy

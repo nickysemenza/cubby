@@ -230,6 +230,9 @@ the Run's shared contents navigation, ahead of the per-photo processing rows. Th
 initial target is a short approval-controls body row, separate from the tall
 evidence workspace and noninteractive count header. Centering that bounded row
 keeps its buttons clear of the navigation bar in a medium-height sheet. The
+primary approval labels fill their allocated row width with a 44-point minimum
+hit height and rectangular hit region, so accessibility row-center taps activate
+the same action as tapping its visible text. The
 review uses one confirmation presenter for individual, selected, all, and discard
 actions; approval keeps the reviewed document and group keys frozen until confirmation.
 The separate system-picker scripts retain the denied-library entry path. Fixture
