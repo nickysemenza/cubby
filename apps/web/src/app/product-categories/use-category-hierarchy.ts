@@ -2,32 +2,43 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { getFeatureColor } from "~/features/products/category-theme";
+import { compileEntityListInput } from "~/entity/entity-list";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { useServerTree } from "~/ui/hooks/useServerTree";
 
 import {
   buildCategoryHierarchy,
   type CategoryHierarchyNode,
 } from "./category-tree";
 
-/** Every category, joined with how many products sit directly in each. */
+// The list's own sibling order; the server nests every level.
+const CATEGORY_TREE_INPUT = compileEntityListInput(
+  "productCategory",
+  {},
+  { defaultSort: { orderBy: "sortOrder", direction: "asc" } },
+);
+
+/** The server-nested category tree, joined with each category's own products. */
 export function useCategoryHierarchy() {
-  const { categories, isLoading: categoriesLoading } = useProductCategories();
+  const categories = useServerTree("productCategory", CATEGORY_TREE_INPUT);
   const distribution = useQuery(product.categoryDistribution.queryOptions());
   const data = useMemo(() => {
-    if (categoriesLoading || !distribution.data) return null;
+    if (!categories.tree || !distribution.data) return null;
     const directCounts = new Map<string, number>();
     for (const { category, productCount } of distribution.data) {
       if (category) directCounts.set(category.id, productCount);
     }
-    return buildCategoryHierarchy(categories, directCounts);
-  }, [categories, categoriesLoading, distribution.data]);
+    return buildCategoryHierarchy(categories.tree, directCounts);
+  }, [categories.tree, distribution.data]);
   return {
     data,
-    isLoading: categoriesLoading || distribution.isLoading,
-    isError: distribution.isError,
-    error: distribution.error,
-    refetch: distribution.refetch,
+    isLoading: categories.isLoading || distribution.isLoading,
+    isError: Boolean(categories.error) || distribution.isError,
+    error: categories.error ?? distribution.error,
+    refetch: () => {
+      categories.refetch();
+      void distribution.refetch();
+    },
   };
 }
 

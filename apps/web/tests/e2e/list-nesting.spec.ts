@@ -1,3 +1,8 @@
+import type { Locator } from "@playwright/test";
+
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+
+import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { createFixture } from "./fixtures-core";
@@ -84,4 +89,99 @@ test("a category list renders nested from the server", async ({ page }) => {
   await rows.getByRole("button", { name: "Expand" }).click();
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(1)).toContainText(`${prefix} spices`);
+});
+
+// An expanded parent reads one children page at a time: a failed read shows
+// its error with Retry instead of an empty subtree, and a parent with more
+// matching children than a page offers Load more instead of paging silently.
+test("an expanded category retries a failed read and loads more children", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const prefix = `Nesting aisle ${Date.now()}`;
+  const parent = await createFixture(page, "productCategory", {
+    name: `${prefix} pantry`,
+  });
+  for (const leaf of ["grains", "spices"])
+    await createFixture(page, "productCategory", {
+      name: `${prefix} ${leaf}`,
+      parentId: parent.id,
+    });
+  let failChildren = true;
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["entity.listBase"])) return;
+    const childrenRead = dispatchesOperation(
+      route.request(),
+      "entity.listBase",
+      (item) => JSON.stringify(item.input).includes('"children"'),
+    );
+    if (!failChildren || !childrenRead) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 500,
+      headers: { "content-type": "text/plain" },
+      body: "Internal Server Error",
+    });
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/product-categories?q=${encodeURIComponent(prefix)}&pageSize=1`,
+  );
+  const table = page.getByRole("table");
+  const rows = table.getByRole("row").filter({ hasText: prefix });
+  await expect(rows).toHaveCount(1);
+
+  await rows.getByRole("button", { name: "Expand" }).click();
+  const failure = table
+    .getByRole("alert")
+    .filter({ hasText: "Couldn't load nested rows." });
+  await expect(failure).toBeVisible();
+  await expect(rows).toHaveCount(1);
+
+  failChildren = false;
+  await failure.getByRole("button", { name: "Retry" }).click();
+  await expect(failure).toHaveCount(0);
+  await expect(rows).toHaveCount(2);
+  const loadMore = table.getByRole("button", { name: "Load more" });
+  await expect(table.getByText("1 more", { exact: true })).toBeVisible();
+
+  await loadMore.click();
+  await expect(rows).toHaveCount(3);
+  await expect(loadMore).toHaveCount(0);
+});
+
+/** A tree chart node's distance from the root, from its laid-out position. */
+const treeDepthOffset = (node: Locator) =>
+  node.evaluate((element) => {
+    const transform = element.closest("g[transform]")?.getAttribute("transform");
+    return Number(/translate\(([-\d.]+)/.exec(transform ?? "")?.[1]);
+  });
+
+// The hierarchy chart draws the server's nesting: a child sits one level
+// below its parent, and the parent at the same level as another root.
+test("the category hierarchy chart nests categories as the server does", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const prefix = `Nesting chart ${Date.now()}`;
+  const parent = await createFixture(page, "productCategory", {
+    name: `${prefix} pantry`,
+  });
+  await createFixture(page, "productCategory", {
+    name: `${prefix} spices`,
+    parentId: parent.id,
+  });
+  await createFixture(page, "productCategory", { name: `${prefix} garage` });
+  await gotoAuthenticatedPage(page, "/product-categories?view=hierarchy");
+
+  const node = (name: string) =>
+    page.getByRole("link", { name: `${prefix} ${name}`, exact: true }).first();
+  await expect(node("spices")).toBeAttached();
+  const [pantry, spices, garage] = await Promise.all(
+    ["pantry", "spices", "garage"].map((name) => treeDepthOffset(node(name))),
+  );
+  expect(pantry).toBe(garage);
+  expect(spices).toBeGreaterThan(pantry ?? Number.POSITIVE_INFINITY);
 });
