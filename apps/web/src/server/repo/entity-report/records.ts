@@ -63,16 +63,8 @@ const records = (
   empty: string,
   actions: readonly CollectionActionId[] = [],
   thumbnail: Extract<ReportBlock, { kind: "records" }>["thumbnail"] = "small",
-  presentation?: Extract<ReportBlock, { kind: "records" }>["presentation"],
 ): ReportBlock[] => [
-  {
-    kind: "records",
-    rows,
-    empty,
-    actions: [...actions],
-    thumbnail,
-    ...(presentation ? { presentation } : {}),
-  },
+  { kind: "records", rows, empty, actions: [...actions], thumbnail },
 ];
 
 /**
@@ -215,7 +207,14 @@ const driftExtras = async (
   return {
     badgesOf: (usage: UsageForItems) => {
       const axes = byUsage.get(usage);
-      return axes ? [`Re-parse changes ${axes.join(", ")}`] : [];
+      return axes
+        ? [
+            {
+              label: `Re-parse changes ${axes.join(", ")}`,
+              tone: "warning" as const,
+            },
+          ]
+        : [];
     },
     commandsOf: (usage: UsageForItems): ReportCommand[] =>
       byUsage.has(usage)
@@ -315,10 +314,14 @@ export const imageIdentificationBlocks = (
             entity: "product",
             id: candidate.productId,
             title: candidate.name,
-            subtitle:
-              "Confirm identity before attaching or changing inventory.",
+            lines: [
+              {
+                text: "Confirm identity before attaching or changing inventory.",
+                tone: "muted",
+              },
+            ],
             trailing: `${Math.round(candidate.probability * 100)}%`,
-            statuses: [{ label: "Unconfirmed", tone: "warning" }],
+            badges: [{ label: "Unconfirmed", tone: "warning" }],
           })),
           empty: "No Product suggestions.",
         },
@@ -422,36 +425,38 @@ export const recordRunsReport =
             runs[index]?.vendorName ??
             runs[index]?.vendorAccountLabel ??
             (kind === "product" ? "Product enrichment" : row.title),
-          subtitle: [
-            kind === "product" ? row.subtitle?.split("\n")[0] : row.subtitle,
+          lines: [
+            ...(kind === "product"
+              ? (row.lines ?? []).slice(0, 1)
+              : (row.lines ?? [])),
             ...scoped.flatMap((target) =>
-              target.warning ? [target.warning] : [],
+              target.warning
+                ? [{ text: target.warning, tone: "warning" as const }]
+                : [],
             ),
-          ]
-            .filter(Boolean)
-            .join("\n"),
+          ],
           at: completed ?? row.at,
-          statuses: Array.from(
-            new Set(scoped.map((target) => target.outcome ?? target.state)),
-          ).map((outcome) => ({
-            label: phaseLabel(outcome),
-            tone:
-              outcome === "verified"
-                ? ("positive" as const)
-                : [
-                      "partially_verified",
-                      "ambiguous",
-                      "temporarily_blocked",
-                      "researched_with_gaps",
-                    ].includes(outcome)
-                  ? ("warning" as const)
-                  : undefined,
-          })),
+          badges: [
+            ...(row.badges ?? []),
+            ...Array.from(
+              new Set(scoped.map((target) => target.outcome ?? target.state)),
+            ).map((outcome) => ({
+              label: phaseLabel(outcome),
+              tone:
+                outcome === "verified"
+                  ? ("positive" as const)
+                  : [
+                        "partially_verified",
+                        "ambiguous",
+                        "temporarily_blocked",
+                        "researched_with_gaps",
+                      ].includes(outcome)
+                    ? ("warning" as const)
+                    : undefined,
+            })),
+          ],
         };
       }),
       `No research run has been recorded for this ${kind}.`,
-      [],
-      "small",
-      "ledger",
     );
   };

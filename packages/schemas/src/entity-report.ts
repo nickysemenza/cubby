@@ -479,13 +479,14 @@ const reportRecordRow = z.object({
   entity: z.string().nullable(),
   id: z.string().nullable(),
   title: z.string(),
-  /** Display text composed by the server; lines are joined with "\n". */
-  subtitle: z.string().nullable(),
+  /** One short figure after the text (a count, a cost), aligned with the time. */
   trailing: z.string().nullable(),
   /** A thumbnail the row leads with. */
   imageUrl: z.string().optional(),
-  /** Short chips worded by the server (a status, a failure code). */
-  badges: z.array(z.string()).optional(),
+  /** Short chips worded by the server (a status, a failure code), toned by what they mean. */
+  badges: z
+    .array(z.object({ label: z.string(), tone: reportTone.optional() }))
+    .optional(),
   /** An ISO instant each client prints in its own locale and zone. */
   at: z.string().optional(),
   /** The list of other records this row summarises, opened as the trailing link. */
@@ -504,16 +505,15 @@ const reportRecordRow = z.object({
   disabledReason: z.string().nullable().optional(),
   /**
    * Where the row stands (a pipeline stage, a run, a log event), worded for this row ("Ran",
-   * "Paused"). Clients draw `kind` as the row's mark; `statuses` are only further chips.
+   * "Paused"). Clients draw `kind` as the row's mark; `badges` are only further chips.
    */
   state: z
     .object({ kind: z.enum(reportRowStates), label: z.string() })
     .optional(),
-  /** Status chips with a tone (a run's approvals, findings and operations). */
-  statuses: z
-    .array(z.object({ label: z.string(), tone: reportTone.optional() }))
-    .optional(),
-  /** Lines under the title, each with its own tone. */
+  /**
+   * The row's text after its title. An untoned line is the row's result; `muted` lines are
+   * evidence; `warning` and `destructive` lines wrap in full instead of clipping.
+   */
   lines: z
     .array(z.object({ text: z.string(), tone: reportTone.optional() }))
     .optional(),
@@ -543,12 +543,11 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  */
 const reportRecords = z.object({
   /**
-   * `filmstrip` pages through photo captures. `ledger` lays read-mostly log rows out as one
-   * aligned line each (state, title, text, time, commands) for a client wide enough to align them;
-   * a row's first subtitle line is its result. `timeline` is a ledger of ordered stages, drawn
-   * with a rail through their states.
+   * Every block lays its rows out as one aligned line each (mark or thumbnail, title, text,
+   * figure and time, commands). `timeline` is for ordered stages (a pipeline, run progress) and
+   * draws a rail through their states; `filmstrip` pages through photo captures.
    */
-  presentation: z.enum(["filmstrip", "ledger", "timeline"]).optional(),
+  presentation: z.enum(["filmstrip", "timeline"]).optional(),
   kind: z.literal("records"),
   /** What the block stands for, for a client that picks it out of a report (`portions:<mealRecipeId>`). */
   key: z.string().optional(),

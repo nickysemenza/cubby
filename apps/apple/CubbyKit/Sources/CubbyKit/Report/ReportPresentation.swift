@@ -116,17 +116,15 @@ public struct ReportPresentation: Hashable, Sendable {
         }
     }
 
-    /// A record-bearing row: the server's words, a thumbnail, short badges, an instant the
+    /// A record-bearing row: the server's words, a thumbnail, toned badges, an instant the
     /// client prints in its own locale, and the record the row opens.
     public struct RecordRow: Hashable, Sendable, Identifiable {
         public var id: Int
         public let entity: EntityKey?
         public let recordID: String?
         public let title: String
-        public let subtitle: String?
         public let trailing: String?
         public let imageURL: URL?
-        public let badges: [String]
         public let at: Date?
         /// The list of other records this row summarises, opened from the trailing figure.
         public let listLink: ListLink?
@@ -136,9 +134,9 @@ public struct ReportPresentation: Hashable, Sendable {
         public let key: String?
         /// Why the row cannot be checked; nil when it can.
         public let disabledReason: String?
-        /// Toned status chips (a run's approvals, findings and operations).
-        public let statuses: [Status]
-        /// Lines under the title, each with its own tone.
+        /// The row's state, then its toned chips (a run's approvals, findings and operations).
+        public let badges: [Status]
+        /// The row's text: an untoned line is its result, `muted` lines are evidence.
         public let lines: [Line]
         /// Raw material kept out of the way (an operation's arguments).
         public let detailLabel: String?
@@ -430,9 +428,9 @@ public struct ReportPresentation: Hashable, Sendable {
                     rows: records.rows.enumerated().map { index, row in
                         RecordRow(
                             id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
-                            recordID: row.id, title: row.title, subtitle: row.subtitle,
+                            recordID: row.id, title: row.title,
                             trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
-                            badges: row.badges ?? [], at: row.at.flatMap(instant),
+                            at: row.at.flatMap(instant),
                             listLink: row.listLink.flatMap { link in
                                 EntityKey(rawValue: link.entity).map {
                                     ListLink(entity: $0, filters: link.filters.additionalProperties)
@@ -442,8 +440,8 @@ public struct ReportPresentation: Hashable, Sendable {
                                 CollectionActionID(rawValue: $0.rawValue)
                             },
                             key: row.key, disabledReason: row.disabledReason,
-                            statuses: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
-                                + (row.statuses ?? []).map {
+                            badges: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
+                                + (row.badges ?? []).map {
                                     Status(
                                         label: $0.label,
                                         tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })

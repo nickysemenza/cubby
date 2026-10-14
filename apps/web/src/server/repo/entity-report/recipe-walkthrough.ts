@@ -123,9 +123,8 @@ export async function recipeWalkthroughReport(
               entity: null,
               id: null,
               title: setup.label,
-              subtitle: null,
               trailing: null,
-              statuses: annotationChips(setup.annotations),
+              badges: annotationChips(setup.annotations),
               lines: instructionLines(setup.instructionRefs),
             })),
             empty: "",
@@ -141,17 +140,21 @@ export async function recipeWalkthroughReport(
               entity: null,
               id: null,
               title: stop.title,
-              subtitle: stop.explanation,
               trailing: null,
-              lines: stop.operationIds.flatMap((operationId) => {
-                const operation = operations.get(operationId);
-                return operation
-                  ? [
-                      { text: operation.label },
-                      ...instructionLines(operation.instructionRefs),
-                    ]
-                  : [];
-              }),
+              lines: [
+                ...(stop.explanation
+                  ? [{ text: stop.explanation, tone: "muted" as const }]
+                  : []),
+                ...stop.operationIds.flatMap((operationId) => {
+                  const operation = operations.get(operationId);
+                  return operation
+                    ? [
+                        { text: operation.label },
+                        ...instructionLines(operation.instructionRefs),
+                      ]
+                    : [];
+                }),
+              ],
             })),
             empty: "",
           },

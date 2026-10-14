@@ -129,7 +129,6 @@ beforeEach(() => {
                           entity: null,
                           id: null,
                           title: operation.kind,
-                          subtitle: null,
                           trailing: null,
                           key: operation.operationId,
                           at: operation.startedAt,

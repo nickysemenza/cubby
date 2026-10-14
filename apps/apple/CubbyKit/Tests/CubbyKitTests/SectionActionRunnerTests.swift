@@ -75,12 +75,12 @@ struct SectionActionRunnerTests {
     /// Three statement charges as the server words them; one carries the server's refusal.
     nonisolated private static let chargeRows = """
         {"blocks":[{"kind":"records","empty":"","actions":[],"rows":[
-          {"entity":null,"id":null,"title":"Example Hardware · 2026-03-03","subtitle":null,
+          {"entity":null,"id":null,"title":"Example Hardware · 2026-03-03",
            "trailing":"$42.50","key":"FTX-4K7M","disabledReason":null},
           {"entity":"run","id":"RUN-4K7M","title":"Example Garden · 2026-03-04",
-           "subtitle":"Already matched.","trailing":"$12.00",
-           "badges":["Matched"],"key":"FTX-5N8P","disabledReason":"Already matched."},
-          {"entity":null,"id":null,"title":"Example Lumber · 2026-03-05","subtitle":null,
+           "lines":[{"text":"Already matched.","tone":"muted"}],"trailing":"$12.00",
+           "badges":[{"label":"Matched","tone":"warning"}],"key":"FTX-5N8P","disabledReason":"Already matched."},
+          {"entity":null,"id":null,"title":"Example Lumber · 2026-03-05",
            "trailing":"$7.25","key":"FTX-6Q9R","disabledReason":null}
         ]}]}
         """

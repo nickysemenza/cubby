@@ -1,159 +1,30 @@
-import type {
-  ReportBlock,
-  ReportRecordRow,
-} from "@cubby/schemas/entity-report";
+import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { type ReactNode, Suspense, useState } from "react";
 
-import { FilterRefLink } from "~/entity/components/ref-link/leaf";
-import { entities } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
-import { RecordList } from "~/ui/common/record-list";
-import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import { Button, buttonVariants } from "~/ui/primitives/button";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
-import { collectionActions } from "./collection-actions";
 import {
   DetailAction,
   type ReportDetailActionPlacement,
 } from "./detail-action-bar";
-import { ledgerLayout, RecordLedger } from "./records-ledger";
 import {
-  routedEntity,
-  rowKeys,
-  RowTitle,
-  STATE_VARIANT,
-  STATUS_VARIANT,
-  TONE_TEXT,
-} from "./records-row-parts";
-import {
-  type ChoiceAnswerState,
-  ChoiceControl,
-  ChoiceFormFooter,
-  useChoiceAnswers,
-} from "./report-choices";
-import {
-  CommandButton,
-  type ReportCommands,
-  useReportCommands,
-} from "./report-commands";
+  ledgerDay,
+  type LedgerContext,
+  RecordLedger,
+  RowLinks,
+} from "./records-ledger";
+import { useChoiceAnswers, ChoiceFormFooter } from "./report-choices";
+import { CommandButton, useReportCommands } from "./report-commands";
 import { sectionActionsFor } from "./section-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
-type Action = NonNullable<ReportRecordRow["actions"]>[number];
-
-/**
- * One declared verb. The action registry is erased to `never` because each verb reads its own
- * entity's record; the slot only hands a verb the record of the entity whose slot declared it.
- */
-export function ReportVerb({
-  action,
-  record,
-  row = null,
-}: {
-  action: Action;
-  record: object;
-  row?: ReportRecordRow | null;
-}) {
-  const Verb = collectionActions[action];
-  // SAFETY: a report builder offers a verb only on the slot of the entity its plan names, and
-  // `record` is that entity's loaded detail record.
-  const typed = record as never;
-  return (
-    <Suspense fallback={null}>
-      <Verb record={typed} item={row} />
-    </Suspense>
-  );
-}
-
-/** The toned chips, lines, raw block and commands a row carries beyond its title and subtitle. */
-function RowExtras({
-  row,
-  commands,
-  inDetailBar = false,
-}: {
-  inDetailBar?: boolean;
-  row: ReportRecordRow;
-  commands: ReportCommands;
-}) {
-  return (
-    <>
-      {row.state || (row.statuses ?? []).length > 0 ? (
-        <Row gap="xs" className="flex-wrap">
-          {row.state ? (
-            <Badge variant={STATE_VARIANT[row.state.kind]}>
-              {row.state.label}
-            </Badge>
-          ) : null}
-          {(row.statuses ?? []).map((status) => (
-            <Badge
-              key={status.label}
-              variant={status.tone ? STATUS_VARIANT[status.tone] : "secondary"}
-            >
-              {status.label}
-            </Badge>
-          ))}
-        </Row>
-      ) : null}
-      {(row.lines ?? []).map((entry) => (
-        <span
-          key={`${entry.tone ?? ""}:${entry.text}`}
-          className={cn(
-            "text-xs break-words whitespace-pre-line",
-            entry.tone && TONE_TEXT[entry.tone],
-          )}
-        >
-          <ShortcodeProse>{entry.text}</ShortcodeProse>
-        </span>
-      ))}
-      {row.detail ? (
-        <details className="border border-border bg-muted/30 p-2 text-xs">
-          <summary className="cursor-pointer font-medium">
-            {row.detail.label}
-          </summary>
-          <pre className="mt-2 max-h-80 overflow-auto font-mono break-words whitespace-pre-wrap">
-            {row.detail.text}
-          </pre>
-        </details>
-      ) : null}
-      <RowActionPlacement inDetailBar={inDetailBar}>
-        {row.externalLink ? (
-          <a
-            href={row.externalLink.url}
-            title={row.externalLink.hint}
-            target="_blank"
-            rel="noreferrer"
-            className={buttonVariants({ variant: "outline" })}
-          >
-            {row.externalLink.label === "Open in Cloudflare" ? (
-              <CloudflareIcon />
-            ) : null}
-            {row.externalLink.label}
-          </a>
-        ) : null}
-        {(row.commands ?? []).length > 0 ? (
-          <Row wrap gap="sm">
-            {(row.commands ?? []).map((command) => (
-              <CommandButton
-                key={command.id}
-                command={command}
-                commands={commands}
-              />
-            ))}
-          </Row>
-        ) : null}
-      </RowActionPlacement>
-    </>
-  );
-}
 
 function RowActionPlacement({
   inDetailBar,
@@ -165,152 +36,12 @@ function RowActionPlacement({
   return inDetailBar ? <DetailAction>{children}</DetailAction> : children;
 }
 
-/** The decision a row asks for, answered in place; the block's form says what it unlocks. */
-function RowChoice({
-  row,
-  choices,
-  locked,
-}: {
-  row: ReportRecordRow;
-  choices: ChoiceAnswerState | null;
-  locked: boolean;
-}) {
-  const { choice } = row;
-  if (!choice || !choices) return null;
-  return (
-    <ChoiceControl
-      choice={choice}
-      answer={choices.answers[choice.id]}
-      disabled={locked}
-      onAnswer={(next) => choices.answer(choice.id, next)}
-    />
-  );
-}
-
-function rowHasEvidence(row: ReportRecordRow, hasRecord: boolean) {
-  return [
-    row.subtitle,
-    row.choice,
-    row.detail,
-    row.externalLink,
-    row.state,
-    row.statuses?.length,
-    row.lines?.length,
-    row.commands?.length,
-    row.badges?.length,
-    hasRecord ? row.actions?.length : 0,
-  ].some(Boolean);
-}
-
-function RecordRow({
-  row,
-  inDetailBar,
-  record,
-  large,
-  commands,
-  choices,
-  choicesLocked,
-}: {
-  inDetailBar: boolean;
-  commands: ReportCommands;
-  /** The answers to the block's choices, when the block has a form. */
-  choices: ChoiceAnswerState | null;
-  choicesLocked: boolean;
-  row: ReportRecordRow;
-  record: object | undefined;
-  large: boolean;
-}) {
-  const listEntity = routedEntity(row.listLink?.entity ?? null);
-  const hasSecondary = rowHasEvidence(row, record !== undefined);
-  return (
-    <LedgerRow className="items-start">
-      {row.imageUrl ? (
-        <LedgerCell slot="leading">
-          <a
-            href={row.imageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0"
-          >
-            <Image
-              src={row.imageUrl}
-              alt={row.title}
-              displayWidth={large ? 240 : 96}
-              className={
-                large
-                  ? "h-40 w-32 rounded-md border border-border object-contain"
-                  : "size-12 rounded-md border border-border object-contain"
-              }
-            />
-          </a>
-        </LedgerCell>
-      ) : null}
-      <LedgerCell slot="primary">
-        <RowTitle row={row} />
-      </LedgerCell>
-      {hasSecondary && (
-        <LedgerCell as="div" slot="secondary" className="grid gap-1">
-          {row.subtitle ? (
-            <span className="text-xs whitespace-pre-line text-muted-foreground">
-              <ShortcodeProse>{row.subtitle}</ShortcodeProse>
-            </span>
-          ) : null}
-          <RowExtras row={row} commands={commands} inDetailBar={inDetailBar} />
-          <RowChoice row={row} choices={choices} locked={choicesLocked} />
-          {(row.badges ?? []).length > 0 ? (
-            <Row gap="xs" className="flex-wrap">
-              {(row.badges ?? []).map((badge) => (
-                <Badge key={badge} variant="warning">
-                  {badge}
-                </Badge>
-              ))}
-            </Row>
-          ) : null}
-          {record !== undefined
-            ? (row.actions ?? []).map((action) => (
-                <ReportVerb
-                  key={action}
-                  action={action}
-                  record={record}
-                  row={row}
-                />
-              ))
-            : null}
-        </LedgerCell>
-      )}
-      {(row.trailing || row.at) && (
-        <LedgerCell slot="trailing" className="grid gap-1 text-xs">
-          {row.trailing && row.listLink && listEntity ? (
-            <FilterRefLink
-              variant="filter"
-              display="value"
-              to={entities[listEntity].routes.list}
-              // SAFETY: the server names the list's own URL keys.
-              search={row.listLink.filters as never}
-              label={`Show all ${row.trailing} from ${row.title}`}
-            >
-              {row.trailing}
-            </FilterRefLink>
-          ) : row.trailing ? (
-            <span>{row.trailing}</span>
-          ) : null}
-          {row.at ? (
-            <span className="text-muted-foreground">
-              <DateDisplay timestamp={row.at} />
-            </span>
-          ) : null}
-        </LedgerCell>
-      )}
-    </LedgerRow>
-  );
-}
-
 function RecordFilmstrip({
   block,
-  commands,
+  context,
 }: {
   block: RecordsBlock;
-  commands: ReportCommands;
+  context: LedgerContext;
 }) {
   const [selectedKey, setSelectedKey] = useState<string>();
   const [offset, setOffset] = useState(0);
@@ -383,17 +114,10 @@ function RecordFilmstrip({
             />
           </a>
         ) : null}
-        <Ledger>
-          <RecordRow
-            row={{ ...selected, imageUrl: undefined }}
-            commands={commands}
-            choices={null}
-            choicesLocked={false}
-            inDetailBar={false}
-            record={undefined}
-            large={false}
-          />
-        </Ledger>
+        <RecordLedger
+          rows={[{ ...selected, imageUrl: undefined }]}
+          context={{ ...context, choices: null, record: undefined }}
+        />
       </section>
     </Stack>
   );
@@ -402,74 +126,36 @@ function RecordFilmstrip({
 /** The block's rows in its presentation, or its empty copy. */
 function RecordsRows({
   block,
-  ledger,
-  day,
-  commands,
-  choices,
-  choicesLocked,
-  record,
-  detailRows,
+  context,
 }: {
   block: RecordsBlock;
-  ledger: boolean;
-  day: string | null;
-  commands: ReportCommands;
-  choices: ChoiceAnswerState | null;
-  choicesLocked: boolean;
-  record: object | undefined;
-  detailRows: readonly string[] | undefined;
+  context: LedgerContext;
 }) {
   if (block.presentation === "filmstrip")
-    return <RecordFilmstrip block={block} commands={commands} />;
+    return <RecordFilmstrip block={block} context={context} />;
   if (block.rows.length === 0)
     return block.empty ? <Description>{block.empty}</Description> : null;
-  if (ledger)
-    return (
-      <RecordLedger
-        rows={block.rows}
-        commands={commands}
-        timeline={block.presentation === "timeline"}
-        day={day}
-        dayHeading={!block.title}
-      />
-    );
-  const keys = rowKeys(block.rows);
   return (
-    <RecordList>
-      {block.rows.map((row, index) => (
-        <RecordRow
-          key={keys[index]}
-          commands={commands}
-          choices={choices}
-          choicesLocked={choicesLocked}
-          row={row}
-          inDetailBar={
-            row.key !== undefined && (detailRows?.includes(row.key) ?? false)
-          }
-          record={record}
-          large={block.thumbnail === "large"}
-        />
-      ))}
-    </RecordList>
+    <RecordLedger
+      rows={block.rows}
+      context={context}
+      timeline={block.presentation === "timeline"}
+      dayHeading={!block.title}
+    />
   );
 }
 
-/** The block's eyebrow; a ledger also carries its shared day and the block's commands. */
+/** The block's eyebrow with the day its timed rows share; an empty block shows only its copy. */
 function RecordsHeader({
-  title: declared,
-  hasRows,
+  title,
   day,
-  commands,
 }: {
   title: string | undefined;
-  /** An empty block shows only its empty copy, untitled. */
-  hasRows: boolean;
   day: string | null;
-  commands: ReactNode[] | null;
 }) {
-  const title = hasRows ? declared : undefined;
-  const heading = title ? (
-    <Eyebrow className={commands === null ? undefined : "my-0"}>
+  if (!title) return null;
+  return (
+    <Eyebrow>
       {title}
       {day ? (
         <>
@@ -478,15 +164,6 @@ function RecordsHeader({
         </>
       ) : null}
     </Eyebrow>
-  ) : null;
-  if (commands === null) return heading;
-  return (
-    <Row gap="sm" wrap align="center">
-      {heading}
-      <Row gap="sm" wrap className="ml-auto">
-        {commands}
-      </Row>
-    </Row>
   );
 }
 
@@ -521,33 +198,28 @@ export function RecordsBlockView({
       : sectionActionsFor(entity);
   // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
   const erasedRecord = record as never;
-  const { ledger, day, headerCommands } = ledgerLayout(
-    block,
-    detailActions?.commands ?? false,
-  );
+  const context: LedgerContext = {
+    commands,
+    day: ledgerDay(block.rows),
+    marks:
+      block.presentation === "timeline" ||
+      block.rows.some((row) => row.state !== undefined),
+    large: block.thumbnail === "large",
+    choices: form ? choices : null,
+    choicesLocked,
+    record,
+    detailRows: detailActions?.rows,
+  };
   const blockCommands = (block.commands ?? []).map((command) => (
     <CommandButton key={command.id} command={command} commands={commands} />
   ));
   return (
     <Stack as="section" aria-label={block.title} gap="sm" className="w-full">
       <RecordsHeader
-        title={block.title}
-        hasRows={block.rows.length > 0}
-        day={day}
-        commands={headerCommands ? blockCommands : null}
+        title={block.rows.length > 0 ? block.title : undefined}
+        day={context.day}
       />
-      {list ?? (
-        <RecordsRows
-          block={block}
-          ledger={ledger}
-          day={day}
-          commands={commands}
-          choices={form ? choices : null}
-          choicesLocked={choicesLocked}
-          record={record}
-          detailRows={detailActions?.rows}
-        />
-      )}
+      {list ?? <RecordsRows block={block} context={context} />}
       {block.footer && list === undefined ? (
         <p className="border-t border-border pt-2 text-sm text-muted-foreground">
           <ShortcodeProse>{block.footer}</ShortcodeProse>
@@ -571,15 +243,14 @@ export function RecordsBlockView({
           }
         />
       ) : null}
-      {headerCommands ? null : (
+      {blockCommands.length > 0 ? (
+        // The detail page's action bar carries them instead, when it has them.
         <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
-          {blockCommands.length > 0 ? (
-            <Row wrap gap="sm">
-              {blockCommands}
-            </Row>
-          ) : null}
+          <Row wrap gap="sm">
+            {blockCommands}
+          </Row>
         </RowActionPlacement>
-      )}
+      ) : null}
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">
           {verbs.map((verb) => {
@@ -631,11 +302,7 @@ export function RecordsDetailActions({
             row.key !== undefined && detailActions?.rows?.includes(row.key),
         )
         .map((row) => (
-          <RowExtras
-            key={row.key}
-            row={{ ...row, statuses: [], lines: [], detail: undefined }}
-            commands={commands}
-          />
+          <RowLinks key={row.key} row={row} commands={commands} />
         ))}
       {detailActions?.verbs && record
         ? (block.verbs ?? []).map((verb) => {

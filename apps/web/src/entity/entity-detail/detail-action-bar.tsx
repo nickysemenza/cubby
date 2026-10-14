@@ -13,7 +13,7 @@ import {
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import type { DetailSlotComponent } from "./detail-slots";
-import { ReportVerb } from "./records-block";
+import { ReportVerb } from "./records-ledger";
 
 const DetailActionContext = createContext(false);
 

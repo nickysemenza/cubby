@@ -271,11 +271,14 @@ export function RecordDot({
   state,
   color,
   label,
+  spoken = true,
 }: {
   tone?: RecordTone | undefined;
   state?: ReportRowState | undefined;
   color?: string | undefined;
   label?: string | undefined;
+  /** Off when the row already says the label in visible text, so it is announced once. */
+  spoken?: boolean;
 }) {
   if (!label) return <span aria-hidden data-record-dot="none" />;
   return (
@@ -301,7 +304,7 @@ export function RecordDot({
           color && !state && !tone ? { backgroundColor: color } : undefined
         }
       />
-      <span className="sr-only">{label}</span>
+      {spoken ? <span className="sr-only">{label}</span> : null}
     </span>
   );
 }

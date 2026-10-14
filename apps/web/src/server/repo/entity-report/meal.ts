@@ -142,7 +142,12 @@ export async function mealCompositionReport(
         entity: "recipe",
         id: entry.recipe.id,
         title: name,
-        subtitle: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, "cost")}`,
+        lines: [
+          {
+            text: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, "cost")}`,
+            tone: "muted",
+          },
+        ],
         trailing: null,
         key: entry.id,
         commands: [
@@ -262,7 +267,6 @@ function portionBlocks(
   const block: Records = {
     kind: "records",
     key: `${MEAL_PORTIONS_BLOCK_KEY}${mealRecipeId}`,
-    presentation: "ledger",
     title: `Portions · ${preparation.recipe.name}`,
     rows: preparation.portions.map((portion): Row => {
       const eaten = portion.confirmedAt !== null;
@@ -274,13 +278,17 @@ function portionBlocks(
         entity: null,
         id: null,
         title: portion.eater.name,
-        subtitle: [
-          amountText(portion.amount),
-          portionEstimate(portion),
-          ...(portion.servedHere
-            ? []
-            : [`for ${targetLabel(portion.targetMeal)}`]),
-        ].join(" · "),
+        lines: [
+          {
+            text: [
+              amountText(portion.amount),
+              portionEstimate(portion),
+              ...(portion.servedHere
+                ? []
+                : [`for ${targetLabel(portion.targetMeal)}`]),
+            ].join(" · "),
+          },
+        ],
         trailing: null,
         key: `${portion.targetMeal.id}:${portion.eater.id}`,
         state: eaten

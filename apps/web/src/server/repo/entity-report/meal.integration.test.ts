@@ -93,7 +93,7 @@ describe("meal.composition", () => {
       title: "Synthetic stew",
       key: mealRecipeId,
     });
-    expect(recipes.rows[0]?.subtitle).toMatch(/×2/);
+    expect(recipes.rows[0]?.lines?.[0]?.text).toMatch(/×2/);
     expect(recipes.rows[0]?.commands).toMatchObject([
       {
         label: "Change scale",
@@ -135,15 +135,14 @@ describe("meal.composition", () => {
     );
     if (portions?.kind !== "records") throw new Error("no portions block");
 
-    expect(portions.presentation).toBe("ledger");
     expect(portions.key).toMatch(/^portions:/u);
     expect(portions.rows).toHaveLength(1);
     expect(portions.rows[0]).toMatchObject({
       title: "Test eater",
       state: { kind: "not_reached", label: "Planned" },
     });
-    expect(portions.rows[0]?.statuses).toBeUndefined();
-    expect(portions.rows[0]?.subtitle).toMatch(/^1 serving · /);
+    expect(portions.rows[0]?.badges).toBeUndefined();
+    expect(portions.rows[0]?.lines?.[0]?.text).toMatch(/^1 serving · /);
     // The batch's yield and what its portions account for, which the web list used to compose.
     expect(portions.footer).toMatch(/assigned/);
     expect(portions.rows[0]?.commands).toMatchObject([

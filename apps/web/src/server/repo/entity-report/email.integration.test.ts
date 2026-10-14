@@ -261,7 +261,7 @@ describe("Email review report", () => {
         entity: "purchase",
         id: purchase.shortcode,
         state: { kind: "skipped", label: "Dismissed" },
-        statuses: [],
+        badges: [],
       }),
     ]);
     // Another member's Email reads as metadata: no pipeline, no review.
@@ -293,7 +293,11 @@ describe("Email review report", () => {
     ).toMatchObject({
       entity: null,
       id: null,
-      subtitle: expect.stringContaining("Deleted Purchase"),
+      lines: expect.arrayContaining([
+        expect.objectContaining({
+          text: expect.stringContaining("Deleted Purchase"),
+        }),
+      ]),
     });
   });
   it("offers checksum-fenced import only for retained related content and distinguishes an unknown cost", async () => {
@@ -351,7 +355,9 @@ describe("Email review report", () => {
     expect(
       blocks
         .flatMap((block) => (block.kind === "records" ? block.rows : []))
-        .find((row) => row.title === "Import Run")?.subtitle,
+        .find((row) => row.title === "Import Run")
+        ?.lines?.map((entry) => entry.text)
+        .join("\n"),
     ).toContain("Cost unknown");
     await getDb(ctx.db)
       .update(orderMail)
@@ -535,7 +541,7 @@ describe("Email review report", () => {
       entity: "run",
       id: selectedRun.publicId,
     });
-    const usage = importRow?.subtitle?.split("\n") ?? [];
+    const usage = importRow?.lines?.map((entry) => entry.text) ?? [];
     expect(usage).toEqual(
       expect.arrayContaining([
         expect.stringMatching(
@@ -550,6 +556,6 @@ describe("Email review report", () => {
       ]),
     );
     expect(usage.join("\n")).not.toContain("synthetic-unrelated");
-    expect(importRow?.subtitle).toMatch(/Est\. \$99\.00 per Email/u);
+    expect(usage.join("\n")).toMatch(/Est\. \$99\.00 per Email/u);
   });
 });

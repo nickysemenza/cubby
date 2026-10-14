@@ -43,7 +43,7 @@ type Block<Kind extends ReportBlock["kind"]> = Extract<
   { kind: Kind }
 >;
 type Row = Block<"records">["rows"][number];
-type Tone = NonNullable<NonNullable<Row["statuses"]>[number]["tone"]>;
+type Tone = NonNullable<NonNullable<Row["badges"]>[number]["tone"]>;
 type Line = NonNullable<Row["lines"]>[number];
 
 /** What a run builder says about one record row; `row` lays it out as the shared row shape. */
@@ -51,6 +51,7 @@ interface RowFields {
   state?: Row["state"];
   title?: string | undefined;
   body?: string | undefined;
+  trailing?: string | undefined;
   at?: string | undefined;
   badges?: Array<{ label: string; tone?: Tone | undefined }>;
   lines?: Line[];
@@ -94,13 +95,19 @@ const row = (id: string, fields: RowFields = {}): Row => ({
   entity: fields.ref?.entity ?? null,
   id: fields.ref?.id ?? null,
   title: fields.title ?? "",
-  subtitle: fields.body ?? null,
-  trailing: null,
+  trailing: fields.trailing ?? null,
   key: id,
   at: fields.at,
   ...(fields.state ? { state: fields.state } : {}),
-  statuses: fields.badges ?? [],
-  lines: fields.lines ?? [],
+  badges: fields.badges ?? [],
+  // The body's first line is the row's result; the rest is evidence.
+  lines: [
+    ...(fields.body ?? "")
+      .split("\n")
+      .filter((text) => text !== "")
+      .map((text, index) => line(text, index === 0 ? undefined : "muted")),
+    ...(fields.lines ?? []),
+  ],
   detail: fields.detail,
   commands: fields.actions ?? [],
   externalLink: fields.externalLink,
@@ -281,7 +288,7 @@ function importProgress(run: RunDetail): ReportBlock[] {
             at: event.createdAt,
           }),
         ),
-        { title: "Control history", presentation: "ledger" },
+        { title: "Control history" },
       ),
     );
   if (run.progress.length)
@@ -538,9 +545,6 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
       ];
 
 const importTimeline = (run: RunDetail): ReportBlock[] => [
-  note(
-    "Oldest first. System and agent events are retained as structured operation evidence; sensitive content and credentials are excluded.",
-  ),
   records(
     run.operations.map((operation) => {
       const state = statusState(operation.state, operation.state);
@@ -556,10 +560,7 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
         ],
       });
     }),
-    {
-      empty: "No durable operations have been recorded for this run.",
-      presentation: "timeline",
-    },
+    { empty: "No durable operations have been recorded for this run." },
   ),
 ];
 
@@ -969,21 +970,18 @@ export function runLogBlocks(log: {
   truncated: boolean;
 }): ReportBlock[] {
   return [
-    note(
-      "Structured server and browser-bridge events are retained when the agent conversation cannot explain a transition.",
-    ),
     records(
       log.entries.map((entry) =>
         row(entry.id, {
           title: entry.event,
           at: entry.occurredAt,
-          badges: [
-            badge(
-              entry.source,
-              entry.level === "error" ? "destructive" : "muted",
-            ),
+          ...(entry.level === "error"
+            ? { state: { kind: "failed" as const, label: "Error" } }
+            : {}),
+          lines: [
+            line(entry.source, "muted"),
+            ...(entry.error ? [line(entry.error, "destructive")] : []),
           ],
-          lines: entry.error ? [line(entry.error, "destructive")] : [],
         }),
       ),
       { empty: "No structured log entries were recorded." },
@@ -994,7 +992,6 @@ export function runLogBlocks(log: {
   ];
 }
 
-/** Every AI call the run grouped, for any run purpose. */
 /** A sweep Run's stored Suggestion outcomes; review happens on web `/ai` or over MCP. */
 export function suggestionBlocks(
   counts: Awaited<ReturnType<typeof suggestionCounts>>,
@@ -1019,51 +1016,128 @@ export function suggestionBlocks(
   ];
 }
 
+type AiCall = AiRunUsage["records"][number];
+
+const sum = (calls: readonly AiCall[], read: (call: AiCall) => number | null) =>
+  calls.reduce((total, call) => total + (read(call) ?? 0), 0);
+
+/** A token total; unknown when no call reported one, never zero. */
+const tokens = (
+  calls: readonly AiCall[],
+  read: (call: AiCall) => number | null,
+) =>
+  calls.every((call) => read(call) == null) ? "—" : String(sum(calls, read));
+
+/** One call's evidence, a line of a group's detail. */
+const aiCallText = (call: AiCall) =>
+  [
+    formatInstant(call.createdAt, "time"),
+    `attempt ${call.attempt}`,
+    `${call.inputTokens ?? "—"} in / ${call.outputTokens ?? "—"} out`,
+    call.applicationCacheStatus === "hit"
+      ? "Application hit · no model call"
+      : `Application ${call.applicationCacheStatus ?? "—"}`,
+    `Cache ${call.cacheStatus ?? "—"} · ${call.cacheReadTokens ?? "—"} read / ${call.cacheWriteTokens ?? "—"} write`,
+    call.durationMs == null ? "—" : formatDuration(call.durationMs),
+    `Charged ${formatAiCost(call.chargedCost)}`,
+    `Standard ${formatAiCost(call.standardCost)}`,
+    call.costEvidence?.billingReason ?? "unknown",
+    ...(call.gatewayLogId ? [call.gatewayLogId] : []),
+  ].join(" · ");
+
+/**
+ * Every AI call the run made, one row per operation, model, transport and outcome: a sweep makes
+ * the same call hundreds of times, so each call is a line of its group's detail.
+ */
 export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
+  const groups = new Map<string, AiCall[]>();
+  for (const call of usage.records) {
+    const key = [
+      call.operation,
+      call.feature,
+      call.provider,
+      call.model,
+      call.transport,
+      call.status,
+    ].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), call]);
+  }
+  const text = (label: string, value: string) => ({
+    label,
+    value: null,
+    format: "text" as const,
+    text: value,
+  });
   return [
-    note(
-      `Charged ${formatAiCostSubtotal(usage.chargedCost, usage.chargedUnpricedCount, usage.count, usage.chargedComplete)} · Standard ${formatAiCostSubtotal(usage.standardCost, usage.standardUnpricedCount, usage.count, usage.standardComplete)} · Savings ${usage.comparedCalls === 0 ? "unavailable" : formatAiCost(usage.savings)} (${usage.comparedCalls}/${usage.count} calls compared)`,
-      undefined,
-      true,
-    ),
-    records(
-      usage.records.map((call) =>
-        row(call.id, {
-          title: `${call.operation} · ${call.feature} · ${call.provider}`,
-          at: call.createdAt.toISOString(),
-          state: {
-            kind: call.status === "succeeded" ? "done" : "failed",
-            label: call.status,
+    // A run that made no calls has no totals to state, only its empty copy.
+    ...(usage.count === 0
+      ? []
+      : [
+          {
+            kind: "stats" as const,
+            figures: [
+              text(
+                "Charged",
+                formatAiCostSubtotal(
+                  usage.chargedCost,
+                  usage.chargedUnpricedCount,
+                  usage.count,
+                  usage.chargedComplete,
+                ),
+              ),
+              text(
+                "Standard",
+                formatAiCostSubtotal(
+                  usage.standardCost,
+                  usage.standardUnpricedCount,
+                  usage.count,
+                  usage.standardComplete,
+                ),
+              ),
+              text(
+                "Savings",
+                usage.comparedCalls === 0
+                  ? "unavailable"
+                  : `${formatAiCost(usage.savings)} · ${usage.comparedCalls}/${usage.count} compared`,
+              ),
+            ],
           },
-          badges: [badge(AI_USAGE_TRANSPORT_LABELS[call.transport])],
+        ]),
+    records(
+      [...groups].map(([key, calls]) => {
+        const [first] = calls;
+        if (!first) throw new Error("An AI usage group has no calls.");
+        const unpriced = calls.filter((call) => call.chargedCost == null);
+        return row(key, {
+          title: `${first.operation} · ${first.feature} · ${first.provider}`,
+          at: first.createdAt.toISOString(),
+          state: {
+            kind: first.status === "succeeded" ? "done" : "failed",
+            label: first.status,
+          },
+          trailing:
+            unpriced.length === calls.length
+              ? "unpriced"
+              : formatAiCostSubtotal(
+                  sum(calls, (call) => call.chargedCost),
+                  unpriced.length,
+                ),
           lines: [
-            line(`${call.model} · attempt ${call.attempt}`, "muted"),
             line(
-              `${call.inputTokens ?? "—"} in / ${call.outputTokens ?? "—"} out`,
+              `${tokens(calls, (call) => call.inputTokens)} in / ${tokens(calls, (call) => call.outputTokens)} out`,
             ),
             line(
-              `${
-                call.applicationCacheStatus === "hit"
-                  ? "Application hit · no model call"
-                  : `Application ${call.applicationCacheStatus ?? "—"}`
-              } · Cache ${call.cacheStatus ?? "—"} · ${call.cacheReadTokens ?? "—"} read / ${call.cacheWriteTokens ?? "—"} write`,
-              "muted",
-            ),
-            line(
-              `${call.durationMs == null ? "—" : formatDuration(call.durationMs)} · ${
-                call.chargedCost == null
-                  ? "unpriced"
-                  : `Charged ${formatAiCost(call.chargedCost)}`
-              } · Standard ${call.standardCost === null ? "unpriced" : formatAiCost(call.standardCost)} · ${call.costEvidence?.billingReason ?? "unknown"}${call.gatewayLogId ? ` · ${call.gatewayLogId}` : ""}`,
+              `${calls.length === 1 ? "1 call" : `${calls.length} calls`} · ${first.model} · ${AI_USAGE_TRANSPORT_LABELS[first.transport]}`,
               "muted",
             ),
           ],
-        }),
-      ),
-      {
-        empty: "No AI calls were recorded for this run.",
-        presentation: "ledger",
-      },
+          detail: {
+            label: calls.length === 1 ? "Call" : "Calls",
+            text: calls.map(aiCallText).join("\n"),
+          },
+        });
+      }),
+      { empty: "No AI calls were recorded for this run." },
     ),
   ];
 }

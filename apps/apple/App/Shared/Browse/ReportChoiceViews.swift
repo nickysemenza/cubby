@@ -151,8 +151,8 @@ struct ReportFormFooterView: View {
     private func previewRecords() -> ReportPresentation.Records? {
         let json = #"""
             {"blocks": [{"kind": "records", "empty": "", "rows": [
-              {"entity": null, "id": null, "title": "Sample item", "subtitle": null, "trailing": "$12.50",
-               "key": "line:1", "statuses": [], "lines": [], "commands": [],
+              {"entity": null, "id": null, "title": "Sample item", "trailing": "$12.50",
+               "key": "line:1", "badges": [], "lines": [], "commands": [],
                "choice": {"id": "o1/l1", "label": "Product decision for Sample item", "required": true,
                  "options": [
                    {"id": "existing", "label": "Use an existing Product",
