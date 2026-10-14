@@ -444,7 +444,7 @@ describe("Email Purchase links", () => {
         ? linksBlock.rows.find((row) => row.id === f.purchase.shortcode)
         : undefined;
     expect(linked?.state).toEqual({ kind: "done", label: "Linked" });
-    expect(linked?.statuses).toEqual([
+    expect(linked?.badges).toEqual([
       { label: "Imported from this Email", tone: "muted" },
     ]);
     // An import-accepted source offers no Dismiss.

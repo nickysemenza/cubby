@@ -62,10 +62,9 @@ const row = (id: string, title: string, commands: ReportCommand[] = []) => ({
   entity: null,
   id: null,
   title,
-  subtitle: null,
   trailing: null,
   key: id,
-  statuses: [],
+  badges: [],
   lines: [],
   commands,
 });
@@ -242,13 +241,18 @@ describe("EntityReportSlot records", () => {
       blocks: [
         {
           kind: "records",
-          presentation: "ledger",
           title: "Email pipeline",
           empty: "",
           rows: [
             {
               ...row("retrieved", "Retrieved"),
-              subtitle: "Failed\n503: upstream returned Service Unavailable",
+              lines: [
+                { text: "Failed" },
+                {
+                  text: "503: upstream returned Service Unavailable",
+                  tone: "muted",
+                },
+              ],
               state: { kind: "failed", label: "Failed" },
             },
             {

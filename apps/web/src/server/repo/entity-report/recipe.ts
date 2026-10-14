@@ -83,19 +83,24 @@ export async function recipeAvailabilityReport(
     entity: entry.ingredientId ? "ingredient" : null,
     id: entry.ingredientId,
     title: entry.name,
-    subtitle:
-      entry.needValue == null
-        ? "Quantity unresolved"
-        : [
-            `Required ${formatAmount({ value: entry.needValue, unit: entry.basisUnit || "whole" })}`,
-            ...(entry.haveValue == null
-              ? []
-              : [
-                  `Recorded ${formatAmount({ value: entry.haveValue, unit: entry.basisUnit || "whole" })}`,
-                ]),
-          ].join(" · "),
+    lines: [
+      {
+        text:
+          entry.needValue == null
+            ? "Quantity unresolved"
+            : [
+                `Required ${formatAmount({ value: entry.needValue, unit: entry.basisUnit || "whole" })}`,
+                ...(entry.haveValue == null
+                  ? []
+                  : [
+                      `Recorded ${formatAmount({ value: entry.haveValue, unit: entry.basisUnit || "whole" })}`,
+                    ]),
+              ].join(" · "),
+        tone: "muted",
+      },
+    ],
     trailing: null,
-    statuses: [
+    badges: [
       ...(entry.availabilitySource === "assumed"
         ? [{ label: "Assumed on hand", tone: "positive" as const }]
         : []),
@@ -256,11 +261,14 @@ export async function recipeCostingCoverageReport(
                       ? code
                       : gap.recipeShortcode,
                 title: gap.name,
-                subtitle: lead,
+                lines: lead ? [{ text: lead, tone: "muted" as const }] : [],
                 trailing: cta,
                 badges: TOTALS_MISSING_MEASURES.filter(
                   (measure) => gap.missing[measure.key],
-                ).map((measure) => measure.label),
+                ).map((measure) => ({
+                  label: measure.label,
+                  tone: "warning" as const,
+                })),
               };
             }),
             empty: "",

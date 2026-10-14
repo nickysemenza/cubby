@@ -73,7 +73,7 @@ function emailAssociationBlocks(
       entity: "email",
       id: row.shortcode,
       title: row.subject ?? "Email",
-      subtitle: row.sender,
+      lines: row.sender ? [{ text: row.sender }] : [],
       trailing: null,
       at: row.receivedAt?.toISOString(),
     }));
@@ -85,10 +85,9 @@ function emailAssociationBlocks(
         entity: row.transactionDeleted ? null : "financialTransaction",
         id: row.transactionDeleted ? null : row.transactionId,
         title: row.transactionId,
-        subtitle: row.reviewReason,
         trailing: row.sourceAccountLabel,
         at: row.reviewedAt,
-        statuses: [
+        badges: [
           { label: "Reviewed evidence", tone: "muted" },
           ...(row.transactionDeleted
             ? [{ label: "Transaction deleted", tone: "warning" as const }]
@@ -103,12 +102,13 @@ function emailAssociationBlocks(
             : []),
         ],
         lines: [
-          { text: `Reviewed account: ${row.reviewedAccountId}` },
+          ...(row.reviewReason ? [{ text: row.reviewReason }] : []),
+          { text: `Reviewed account: ${row.reviewedAccountId}`, tone: "muted" },
           {
             text: row.currentAccountId
               ? `Current account: ${row.currentAccountId}`
               : "No live current account",
-            tone: row.currentAccountId ? undefined : "warning",
+            tone: row.currentAccountId ? "muted" : "warning",
           },
         ],
         detail: {
@@ -124,10 +124,10 @@ function emailAssociationBlocks(
         entity: row.reviewedAccountDeleted ? null : "financialAccount",
         id: row.reviewedAccountDeleted ? null : row.reviewedAccountId,
         title: row.reviewedAccountId,
-        subtitle: row.sourceAccountLabel,
+        lines: row.sourceAccountLabel ? [{ text: row.sourceAccountLabel }] : [],
         trailing: row.transactionId,
         at: row.reviewedAt,
-        statuses: [
+        badges: [
           { label: "Account at review", tone: "muted" },
           ...(row.reviewedAccountDeleted
             ? [{ label: "Reviewed account deleted", tone: "warning" as const }]
@@ -150,7 +150,6 @@ function emailAssociationBlocks(
         entity: "expense",
         id: row.shortcode,
         title: row.name,
-        subtitle: null,
         trailing: null,
       })),
     ],
@@ -161,7 +160,6 @@ function emailAssociationBlocks(
         entity: "product",
         id: row.shortcode,
         title: row.name,
-        subtitle: null,
         trailing: null,
       })),
     ],
@@ -175,7 +173,7 @@ function emailAssociationBlocks(
       "Gmail thread context",
       emails(associations.threadEmails).map((row) => ({
         ...row,
-        statuses: [{ label: "Thread context only", tone: "muted" }],
+        badges: [{ label: "Thread context only", tone: "muted" }],
       })),
     ],
   ];
@@ -192,7 +190,6 @@ function emailAssociationBlocks(
     },
     ...sets.map(([, title, rows]): ReportBlock => ({
       kind: "records",
-      presentation: "ledger",
       title,
       rows,
       empty: "",
@@ -482,21 +479,17 @@ function pipelineRow(
   } = {},
 ): ReportRecordRow {
   const conflict = conflictText(input.conflict ?? null);
-  const statuses: NonNullable<ReportRecordRow["statuses"]> = conflict
-    ? [{ label: conflict, tone: "warning" }]
-    : [];
   const row: ReportRecordRow = {
     entity: input.entity ?? null,
     id: input.id ?? null,
     title: step,
     // A stage that did not run says so first: its state is the row's result.
-    subtitle:
-      [...(state === "Ran" ? [] : [state]), ...(input.lines ?? [])]
-        .filter((line): line is string => Boolean(line))
-        .join("\n") || null,
+    lines: [...(state === "Ran" ? [] : [state]), ...(input.lines ?? [])]
+      .filter((line): line is string => Boolean(line))
+      .map((text, index) => (index === 0 ? { text } : { text, tone: "muted" })),
     trailing: null,
     state: { kind: stateKind[state], label: state },
-    statuses,
+    badges: conflict ? [{ label: conflict, tone: "warning" }] : [],
   };
   if (input.at) row.at = input.at.toISOString();
   if (input.commands?.length) row.commands = input.commands;
@@ -968,7 +961,6 @@ async function purchaseLinksBlock(
   const shortcode = parseShortcodeFor("email", email.shortcode);
   return {
     kind: "records",
-    presentation: "ledger",
     title: "Purchase links",
     rows: links
       .map((link): ReportRecordRow => {
@@ -979,13 +971,12 @@ async function purchaseLinksBlock(
           entity: "purchase",
           id: link.purchaseId,
           title: target?.orderId ? `Order ${target.orderId}` : link.purchaseId,
-          subtitle: target?.date ?? null,
           trailing: null,
           state: {
             kind: LINK_STATE[link.state],
             label: EMAIL_LINK_STATE_LABEL[link.state],
           },
-          statuses: [
+          badges: [
             ...(link.accepted
               ? [{ label: "Imported from this Email", tone: "muted" as const }]
               : []),
@@ -994,8 +985,14 @@ async function purchaseLinksBlock(
               : []),
           ],
           lines: [
+            ...(target?.date ? [{ text: target.date }] : []),
             ...(link.proposedBy
-              ? [{ text: `Proposed by ${PROPOSER_LABEL[link.proposedBy]}` }]
+              ? [
+                  {
+                    text: `Proposed by ${PROPOSER_LABEL[link.proposedBy]}`,
+                    tone: "muted" as const,
+                  },
+                ]
               : []),
             ...(link.changedSinceReview
               ? [
@@ -1015,7 +1012,7 @@ async function purchaseLinksBlock(
           entity: null,
           id: null,
           title: row.orderId ? `Order ${row.orderId}` : row.shortcode,
-          subtitle: row.date,
+          lines: row.date ? [{ text: row.date }] : [],
           trailing: null,
           state: { kind: "warning", label: "Purchase deleted" },
         })),

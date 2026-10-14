@@ -167,7 +167,7 @@ describe("import report blocks", () => {
     );
     const [target] = recordsOf(blocks).rows;
     expect(target?.title).toBe("Fixture purchase");
-    expect(target?.statuses).toEqual([{ label: "unresolved" }]);
+    expect(target?.badges).toEqual([{ label: "unresolved" }]);
     expect(target?.lines).toEqual([
       { text: "browser order · fixture-order · Fixture vendor", tone: "muted" },
       { text: "Outcome: replayed" },
@@ -200,7 +200,7 @@ describe("import report blocks", () => {
       run({ purpose: "product_enrichment", targets: [target] }),
     );
     expect(recordsOf(blocks).rows[0]).toMatchObject({
-      statuses: [{ label: "Researched with gaps", tone: "warning" }],
+      badges: [{ label: "Researched with gaps", tone: "warning" }],
       detail: {
         label: "Recorded difference",
         text: JSON.stringify(target.diff, null, 2),
@@ -240,7 +240,7 @@ describe("import report blocks", () => {
       ],
     });
     const blocks = importReportBlocks("run.import-targets", detail);
-    expect(recordsOf(blocks).rows[0]?.statuses).toEqual([
+    expect(recordsOf(blocks).rows[0]?.badges).toEqual([
       { label: "Skipped", tone: "warning" },
     ]);
     expect(blocks).toContainEqual({
@@ -531,13 +531,16 @@ describe("import report blocks", () => {
           },
         },
       ]);
-      expect(row?.lines?.map((l) => l.text)).toEqual(["Probability 80%"]);
+      // The first line is the finding itself.
+      expect(row?.lines?.slice(1).map((l) => l.text)).toEqual([
+        "Probability 80%",
+      ]);
     });
 
     it("offers nothing once a finding is resolved", () => {
       const row = firstRow([{ ...finding, status: "dismissed" }]);
       expect(row?.commands).toEqual([]);
-      expect(row?.statuses).toEqual([{ label: "dismissed" }]);
+      expect(row?.badges).toEqual([{ label: "dismissed" }]);
     });
   });
 });
@@ -852,7 +855,7 @@ describe("liveProgressBlocks", () => {
       block.kind === "records" ? block.rows : [],
     );
     expect(
-      rows.find((row) => row.subtitle === "503 from upstream"),
+      rows.find((row) => row.lines?.[0]?.text === "503 from upstream"),
     ).toMatchObject({
       state: { kind: "failed" },
     });
@@ -908,7 +911,7 @@ describe("liveProgressBlocks", () => {
     const running = liveProgressBlocks(RUN_ID, progress);
     expect(recordsOf(running, "Workflow").rows[0]).toMatchObject({
       title: `Attempt 2 · ${RUN_ID}-2`,
-      subtitle: "Workflow instance waiting",
+      lines: [{ text: "Workflow instance waiting" }],
     });
     expect(actionsOf(running).map((action) => action.request)).toEqual([
       {
@@ -954,7 +957,7 @@ describe("liveProgressBlocks", () => {
 });
 
 describe("runLogBlocks", () => {
-  it("shows each event with its source and warns when the log was cut", () => {
+  it("marks a failed event and warns when the log was cut", () => {
     const blocks = runLogBlocks({
       truncated: true,
       entries: [
@@ -982,8 +985,11 @@ describe("runLogBlocks", () => {
     });
     expect(recordsOf(blocks).rows[0]).toMatchObject({
       title: "bridge.disconnected",
-      statuses: [{ label: "mac", tone: "destructive" }],
-      lines: [{ text: "socket closed", tone: "destructive" }],
+      state: { kind: "failed", label: "Error" },
+      lines: [
+        { text: "mac", tone: "muted" },
+        { text: "socket closed", tone: "destructive" },
+      ],
     });
     expect(blocks.at(-1)).toMatchObject({
       kind: "note",
@@ -1029,10 +1035,19 @@ describe("aiUsageBlocks", () => {
     ],
   };
 
-  it("flags an estimated subtotal", () => {
-    expect(notes(aiUsageBlocks(usage))[0]).toBe(
-      "Charged $0.0123 known · 2 unpriced · Standard $0.0300 known · 1 unpriced · Savings $0.0100 (1/3 calls compared)",
+  const figures = (blocks: ReportBlock[]) =>
+    blocks.flatMap((block) =>
+      block.kind === "stats"
+        ? block.figures.map((figure) => `${figure.label} ${figure.text}`)
+        : [],
     );
+
+  it("flags an estimated subtotal", () => {
+    expect(figures(aiUsageBlocks(usage))).toEqual([
+      "Charged $0.0123 known · 2 unpriced",
+      "Standard $0.0300 known · 1 unpriced",
+      "Savings $0.0100 · 1/3 compared",
+    ]);
   });
 
   it("keeps fully unknown cost totals unpriced", () => {
@@ -1045,14 +1060,16 @@ describe("aiUsageBlocks", () => {
       savings: 0,
       comparedCalls: 0,
     };
-    expect(notes(aiUsageBlocks(allUnknown))[0]).toBe(
-      "Charged 3 unpriced · Standard 3 unpriced · Savings unavailable (0/3 calls compared)",
-    );
+    expect(figures(aiUsageBlocks(allUnknown))).toEqual([
+      "Charged 3 unpriced",
+      "Standard 3 unpriced",
+      "Savings unavailable",
+    ]);
   });
 
   it("does not call an absent comparison zero savings", () => {
     expect(
-      notes(aiUsageBlocks({ ...usage, savings: 0, comparedCalls: 0 }))[0],
+      figures(aiUsageBlocks({ ...usage, savings: 0, comparedCalls: 0 })),
     ).toContain("Savings unavailable");
   });
 
@@ -1060,15 +1077,44 @@ describe("aiUsageBlocks", () => {
     const [call] = recordsOf(aiUsageBlocks(usage)).rows;
     expect(call?.title).toBe("extract · import · fixture-provider");
     expect(call?.state).toEqual({ kind: "done", label: "succeeded" });
-    expect(call?.statuses).toEqual([{ label: "ChatGPT plan" }]);
+    expect(call?.trailing).toBe("unpriced");
     expect(call?.lines?.map((l) => l.text)).toEqual([
-      "fixture-model · attempt 1",
       "100 in / — out",
-      // `cacheStatus` is the caller's cache (an analysis or prompt cache),
-      // never a claim that the Gateway carried the call.
-      "Application hit · no model call · Cache miss · 5 read / — write",
-      "1.5s · unpriced · Standard unpriced · unknown · log-1",
+      "1 call · fixture-model · ChatGPT plan",
     ]);
+    // `cacheStatus` is the caller's cache (an analysis or prompt cache),
+    // never a claim that the Gateway carried the call.
+    expect(call?.detail?.text).toBe(
+      "attempt 1 · 100 in / — out · Application hit · no model call · Cache miss · 5 read / — write · 1.5s · Charged unpriced · Standard unpriced · unknown · log-1",
+    );
+  });
+
+  // A sweep repeats one call hundreds of times; each is a line of one row, not a row of its own.
+  it("groups repeated calls into one row with their summed tokens and cost", () => {
+    const [first] = usage.records;
+    if (!first) throw new Error("fixture call missing");
+    const priced = { ...first, chargedCost: 0.002, outputTokens: 7 };
+    const rows = recordsOf(
+      aiUsageBlocks({
+        ...usage,
+        records: [
+          priced,
+          { ...priced, id: "call-2", attempt: 2, inputTokens: 50 },
+          { ...priced, id: "call-3", status: "failed" as const },
+        ],
+      }),
+    ).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      trailing: "$0.0040",
+      lines: [
+        { text: "150 in / 14 out" },
+        { text: "2 calls · fixture-model · ChatGPT plan", tone: "muted" },
+      ],
+      detail: { label: "Calls" },
+    });
+    expect(rows[0]?.detail?.text.split("\n")).toHaveLength(2);
+    expect(rows[1]?.state).toEqual({ kind: "failed", label: "failed" });
   });
 });
 

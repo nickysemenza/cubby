@@ -85,16 +85,16 @@ describe("records reports", () => {
       id: attempt.shortcode,
       at: completedAt.toISOString(),
     });
-    expect(block.presentation).toBe("ledger");
     expect(block.rows[0]?.state).toEqual({ kind: "done", label: "Completed" });
-    expect(block.rows[0]?.statuses).toEqual(
+    expect(block.rows[0]?.badges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: "Partially verified" }),
       ]),
     );
-    expect(block.rows[0]?.subtitle).toContain(
-      "Exact model remains unsupported",
-    );
+    expect(block.rows[0]?.lines).toContainEqual({
+      text: "Exact model remains unsupported",
+      tone: "warning",
+    });
     // Historical attempts stay readable; there is no unattended relaunch.
     expect(block.actions).not.toContain("enrichProduct");
     const receipt = await getDb(ctx.db).query.runOperation.findFirst();
@@ -180,7 +180,7 @@ describe("records reports", () => {
         entity: "product",
         id: product.id,
         title: "Sample canned tomatoes",
-        subtitle: "attachment",
+        lines: [{ text: "attachment", tone: "muted" }],
       },
     ]);
   });

@@ -86,7 +86,7 @@ const recordRow = (item: SectionItem): RecordRow => {
     entity: item.link?.entity ?? null,
     id: item.link?.id ?? null,
     title: item.title,
-    subtitle: item.lines.length > 0 ? item.lines.join("\n") : null,
+    lines: item.lines.map((text) => ({ text, tone: "muted" })),
     trailing:
       item.amount === null
         ? null
@@ -96,7 +96,7 @@ const recordRow = (item: SectionItem): RecordRow => {
     key: item.id,
     disabledReason: item.disabledReason,
   };
-  if (item.badge) row.badges = [item.badge];
+  if (item.badge) row.badges = [{ label: item.badge, tone: "warning" }];
   return row;
 };
 

@@ -30,7 +30,7 @@ describe("retained image identification report", () => {
         entity: "product",
         id: "PRD-4K7M",
         title: "Synthetic wrench",
-        statuses: [{ label: "Unconfirmed", tone: "warning" }],
+        badges: [{ label: "Unconfirmed", tone: "warning" }],
         trailing: "82%",
       },
     ]);
