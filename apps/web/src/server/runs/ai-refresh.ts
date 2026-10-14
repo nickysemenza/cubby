@@ -93,6 +93,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { emailMemberClassificationSql } from "~/server/repo/email-sql";
 import { canonicalJson } from "~/server/repo/entity-source";
+import { fieldReviewIdentity } from "~/server/repo/field-assessment-review";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
 
@@ -124,6 +125,7 @@ const fieldSnapshot = z.object({
   basis: z.record(z.string(), z.string().nullable()),
 });
 const fieldResult = z.object({
+  reviewKey: z.string().nullable().optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -797,6 +799,22 @@ export async function executeAiRefreshTarget(
       if (!source || source.fingerprint !== claimed.provenance.inputFingerprint)
         throw new Error("AI evaluation target changed during inference");
       const prepared = await prepareProductIdentityCatalog(db, productId);
+      const exactResults = new Map<
+        string,
+        Awaited<ReturnType<typeof evaluatePreparedProductIdentityPair>>
+      >();
+      for (const pair of prepared.pairs)
+        if (pair.exact) {
+          exactResults.set(
+            pair.fingerprint,
+            await evaluatePreparedProductIdentityPair(db, pair, claimed.runId, {
+              ...ports.productIdentityPorts,
+              model: claimed.provenance.model,
+              evaluationId: id,
+              provenance: claimed.provenance,
+            }),
+          );
+        }
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
         const latest = await productIdentitySnapshot(transactionDb, productId);
         if (!latest || latest.fingerprint !== source.fingerprint)
@@ -811,12 +829,11 @@ export async function executeAiRefreshTarget(
           if (!current || current.fingerprint !== pair.fingerprint)
             throw new Error("Product pair evidence changed during inference");
           if (pair.exact) {
-            const result = await evaluatePreparedProductIdentityPair(
-              transactionDb,
-              pair,
-              claimed.runId,
-              { evaluationId: id, provenance: claimed.provenance },
-            );
+            const result = exactResults.get(pair.fingerprint);
+            if (!result)
+              throw new Error(
+                "Prepared exact Product identity result is missing",
+              );
             await publishProductIdentity(transactionDb, { pairs: [result] });
             rulePairs++;
           } else {
@@ -873,7 +890,21 @@ export async function executeAiRefreshTarget(
         ...prepared.provenance,
         model: evaluated.inputs[0]?.model ?? snapshot.decisionModel,
       };
-      result = fieldResult.safeParse({ output: evaluated.result, provenance });
+      const reviewKey = await fieldReviewIdentity({
+        entity: snapshot.entity,
+        recordId: target.recordId,
+        field: snapshot.field,
+        currentValue: snapshot.currentValue,
+        proposal: evaluated.result.suggestions[snapshot.field],
+        model: provenance.model,
+        inputs: evaluated.inputs,
+        dependencies: provenance.dependencies,
+      });
+      result = fieldResult.safeParse({
+        output: evaluated.result,
+        provenance,
+        reviewKey,
+      });
       if (!result.success) throw result.error;
       const [saved] = await getDb(db)
         .update(aiEvaluation)
@@ -927,6 +958,7 @@ export async function executeAiRefreshTarget(
           ? [
               {
                 ...entry,
+                reviewKey: saved.reviewKey,
                 model: saved.provenance.model ?? entry.model,
                 status:
                   saved.provenance.model &&

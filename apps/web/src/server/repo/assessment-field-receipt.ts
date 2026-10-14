@@ -13,7 +13,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { recordFeedback } from "~/server/repo/assessment";
+import {
+  assertApplicationReceipt,
+  recordFeedback,
+} from "~/server/repo/assessment";
 import { latestFieldWrite } from "~/server/repo/audit-log";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
@@ -28,10 +31,11 @@ export async function acknowledgeSavedField(
     recordId: string;
     operationId: string;
     correction: AssessmentCorrection;
+    commandFeedback: typeof feedback.$inferSelect;
   },
 ) {
   const [previous] = await getDb(db)
-    .select({ receipt: feedback.receipt })
+    .select()
     .from(feedback)
     .where(
       and(
@@ -40,7 +44,10 @@ export async function acknowledgeSavedField(
       ),
     )
     .limit(1);
-  if (previous) return suggestionAcceptanceReceipt.parse(previous.receipt);
+  if (previous) {
+    assertApplicationReceipt(previous, input.commandFeedback, "saved_field");
+    return suggestionAcceptanceReceipt.parse(previous.receipt);
+  }
   const subject = assessmentSubjects.field.parse(prediction.subject);
   const judgment = assessmentJudgments.field.parse(prediction.judgment);
   const entity = fieldSuggestionsInput.shape.entity.parse(subject.entity);
@@ -115,6 +122,7 @@ export async function acknowledgeSavedField(
       receipt: z.json().parse(receipt),
       metadata: {
         kind: "saved_field",
+        commandFeedbackId: input.commandFeedback.id,
         entity,
         recordId: id,
         field: subject.field,

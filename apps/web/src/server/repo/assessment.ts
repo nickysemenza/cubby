@@ -12,6 +12,29 @@ import type { Database } from "~/server/db";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 
+/** A matching operation ID alone never proves that a domain mutation committed. */
+export function assertApplicationReceipt(
+  receipt: typeof feedback.$inferSelect,
+  command: typeof feedback.$inferSelect,
+  kind: string,
+) {
+  const metadata = z
+    .object({ kind: z.string(), commandFeedbackId: z.uuid() })
+    .safeParse(receipt.metadata);
+  if (
+    !metadata.success ||
+    metadata.data.kind !== kind ||
+    metadata.data.commandFeedbackId !== command.id ||
+    receipt.assessmentId !== command.assessmentId ||
+    receipt.authority !== "member" ||
+    receipt.intent !== "apply" ||
+    receipt.actorUserId !== command.actorUserId ||
+    receipt.suppression !== null ||
+    receipt.receipt === null
+  )
+    throw new Error("Invalid immutable application receipt for this command");
+}
+
 /** A publication key names exact immutable evidence, never a mutable slot. */
 export async function publishAssessment(
   db: Database,

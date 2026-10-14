@@ -269,9 +269,10 @@ export const findToolsUsedOutsideOwnership = async (
 export const findDuplicateProductIdentities = async (
   db: Database,
 ): Promise<ProblemItem<"duplicateProductIdentities">[]> => {
-  const pairs = (await listProductMatchRows(db)).filter(
-    (row) => row.state === "open" && row.actionable,
-  );
+  const pairs = await listProductMatchRows(db, undefined, {
+    reviewableOnly: true,
+    actionableOnly: true,
+  });
   const sides = await loadProductMatchSides(
     db,
     pairs.flatMap((row) => [row.productAId, row.productBId]),

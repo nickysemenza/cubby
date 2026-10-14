@@ -4,11 +4,14 @@ import {
   assessmentSubjects,
   assessmentJudgments,
   assessmentProjectionTargets,
+  assessmentReviewOut,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
+import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
+import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -21,7 +24,11 @@ import {
   image,
 } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { publishAssessment, recordFeedback } from "~/server/repo/assessment";
+import {
+  assertApplicationReceipt,
+  publishAssessment,
+  recordFeedback,
+} from "~/server/repo/assessment";
 import { acknowledgeSavedField } from "~/server/repo/assessment-field-receipt";
 import {
   getDb,
@@ -37,6 +44,21 @@ import {
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 
 type Review = z.infer<typeof assessmentReviewInput>;
+function emailRelevanceApplication(
+  subject: z.infer<typeof assessmentSubjects.email_relevance>,
+  input: Review,
+) {
+  if (!input.correction.present)
+    throw new Error(
+      "Email relevance application requires a current checksum and correction",
+    );
+  return correctEmailRelevanceInput.omit({ id: true }).parse({
+    expectedChecksum: subject.checksum,
+    reviewedChecksum: subject.checksum,
+    classification: input.correction.value,
+    reason: input.reason ?? "Member reviewed the Assessment",
+  });
+}
 type Handler = {
   subject: z.ZodType;
   target: z.ZodType;
@@ -50,7 +72,7 @@ type Handler = {
   ) => Promise<void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
-export const assessmentFamilies = {
+const assessmentFamilies = {
   field: {
     subject: assessmentSubjects.field,
     target: assessmentProjectionTargets.field,
@@ -84,13 +106,7 @@ export const assessmentFamilies = {
       const subject = assessmentSubjects.email_relevance.parse(
         prediction?.subject,
       );
-      if (!subject.checksum || !input.correction.present)
-        throw new Error(
-          "Email relevance application requires a current checksum and correction",
-        );
-      const classification = z
-        .enum(["related", "uncertain"])
-        .parse(input.correction.value);
+      const correction = emailRelevanceApplication(subject, input);
       const [source] = await getDb(db)
         .select({ code: email.shortcode })
         .from(email)
@@ -103,10 +119,7 @@ export const assessmentFamilies = {
         db,
         {
           id: parseShortcodeFor("email", source.code),
-          expectedChecksum: subject.checksum,
-          reviewedChecksum: subject.checksum,
-          classification,
-          reason: input.reason ?? "Member reviewed the Assessment",
+          ...correction,
         },
         context.actorContext,
       );
@@ -165,7 +178,11 @@ export const assessmentFamilies = {
           decision,
         },
         context.actorContext,
-        { eventId: subject.eventId, originalId: subject.originalId },
+        {
+          eventId: subject.eventId,
+          originalId: subject.originalId,
+          expectedAssessmentId: state.id,
+        },
       );
     },
   },
@@ -353,6 +370,12 @@ export async function reviewAssessment(
     throw new Error(
       "Product merge application requires a Product pair Assessment",
     );
+  if (input.intent === "apply" && prediction.family === "email_relevance") {
+    const subject = assessmentSubjects.email_relevance.parse(
+      prediction.subject,
+    );
+    emailRelevanceApplication(subject, input);
+  }
   if (input.correction.present) {
     if (prediction.family === "email_link")
       assessmentJudgments.email_link.parse(input.correction.value);
@@ -375,8 +398,6 @@ export async function reviewAssessment(
     },
   });
   if (input.intent === "draft") {
-    if (prediction.family !== "field")
-      throw new Error("Only field Assessments support draft acceptance");
     return {
       assessmentId: prediction.id,
       feedbackId: event.id,
@@ -410,12 +431,20 @@ export async function reviewAssessment(
           ),
         )
         .limit(1);
-      if (receipt) return outcome;
+      if (receipt) {
+        assertApplicationReceipt(receipt, event, "assessment_application");
+        if (!isEqual(assessmentReviewOut.parse(receipt.receipt), outcome))
+          throw new Error(
+            "Application receipt does not match this command outcome",
+          );
+        return outcome;
+      }
       if (input.application?.kind === "saved_field") {
         await acknowledgeSavedField(transactionDb, context, prediction, {
           recordId: input.application.recordId,
           operationId: input.operationId,
           correction: input.correction,
+          commandFeedback: event,
         });
       } else {
         const query = getDb(transactionDb)
@@ -500,15 +529,36 @@ export async function reviewAssessment(
       input.verdict !== "uncertain"
     ) {
       const nextStatus = input.verdict === "wrong" ? "rejected" : "resolved";
+      const reviewKey =
+        prediction.family === "field" && input.verdict === "wrong"
+          ? z.object({ reviewKey: z.string().nullable() }).safeParse(state.data)
+              .data?.reviewKey
+          : null;
       await getDb(transactionDb)
         .update(assessmentState)
         .set({
           status: nextStatus,
+          ...(reviewKey
+            ? {
+                data: sql`COALESCE(${assessmentState.data}, '{}'::jsonb) || jsonb_build_object('governingFeedbackId', ${event.id}::text)`,
+              }
+            : {}),
           ...(input.correction.present
             ? { correctValue: input.correction.value }
             : {}),
         })
-        .where(eq(assessmentState.id, state.id));
+        .where(
+          or(
+            eq(assessmentState.id, state.id),
+            reviewKey
+              ? and(
+                  eq(assessmentState.family, "field"),
+                  eq(assessmentState.status, "pending"),
+                  sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+                )
+              : undefined,
+          ),
+        );
       return nextStatus;
     }
     return state?.status ?? "historical";

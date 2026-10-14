@@ -143,7 +143,7 @@ function useMergeIngredientsEntityAction(): EntityActionHandles {
 }
 
 /** A kernel merge mutation behind the `{ keepId, mergeIds }` dialog shape. */
-export const kernelMerge = <TOutput,>(
+const kernelMerge = <TOutput,>(
   entity: MergeCommand["entity"],
   mutation: {
     mutate: (command: MergeCommand) => void;

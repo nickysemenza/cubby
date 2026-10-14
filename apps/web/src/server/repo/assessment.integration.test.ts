@@ -279,6 +279,89 @@ describe("shared Assessment history", () => {
     ).toEqual(confirmedAt);
   });
 
+  // Public history must never impersonate a private domain-application receipt.
+  it("refuses public receipt namespace collisions and forged application receipts", async () => {
+    const picture = await insertWithShortcode(ctx.db, "image", {
+      key: "synthetic/receipt-collision.jpg",
+      filename: "receipt-collision.jpg",
+      size: 1,
+      contentType: "image/jpeg",
+      sha256: "b".repeat(64),
+    });
+    const prediction = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic:receipt-collision",
+      family: "image_description",
+      subject: {
+        kind: "image_description",
+        entity: "image",
+        recordId: picture.id,
+        contentHash: picture.sha256,
+      },
+      judgment: "Synthetic image description",
+      fingerprint: picture.sha256,
+      producer: null,
+      evidence: null,
+    });
+    for (const operationId of [
+      "command-application:synthetic-command",
+      "receipt:synthetic-command",
+      "application:synthetic-command",
+      "merge:synthetic-command",
+      "email-accuracy:synthetic-command",
+      "decision",
+      "resolution",
+      "saved-application",
+      "saved-correction",
+    ]) {
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: prediction.id,
+          operationId,
+          verdict: "uncertain",
+          intent: "history",
+        }),
+      ).rejects.toThrow(/reserved/);
+    }
+    // Also fail closed for a pre-existing collision written before public validation.
+    await recordFeedback(ctx.db, {
+      assessmentId: prediction.id,
+      operationId: "command-application:synthetic-command",
+      verdict: "uncertain",
+      intent: "history",
+      authority: "member",
+      actorUserId: ctx.actor.userId,
+    });
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: prediction.id,
+        operationId: "synthetic-command",
+        verdict: "correct",
+        intent: "apply",
+      }),
+    ).rejects.toThrow(/receipt/);
+    expect(
+      await readConfirmedDescription(
+        ctx.db,
+        parseEntityId("image", picture.id),
+      ),
+    ).toBeNull();
+    const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: prediction.id,
+      operationId: "synthetic-genuine-command",
+      verdict: "correct",
+      intent: "apply",
+    });
+    expect(applied.applied).toBe(true);
+    expect(
+      (
+        await readConfirmedDescription(
+          ctx.db,
+          parseEntityId("image", picture.id),
+        )
+      )?.description,
+    ).toBe("Synthetic image description");
+  });
+
   it("retires a nonsearchable category projection while retaining immutable history", async () => {
     const category = await insertWithShortcode(ctx.db, "productCategory", {
       name: "Synthetic retired category",

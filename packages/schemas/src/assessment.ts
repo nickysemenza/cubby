@@ -197,6 +197,13 @@ export const assessmentReviewInput = feedbackEvent
     metadata: true,
   })
   .extend({
+    operationId: z
+      .string()
+      .min(1)
+      .regex(
+        /^(?!(?:command-application|receipt|application|merge|email-accuracy):)(?!(?:decision|resolution|saved-application|saved-correction)$)/,
+        "Operation ID uses a reserved internal receipt namespace",
+      ),
     assessmentId: z.uuid().optional(),
     standalone: z
       .object({ kind: z.literal("image_description"), id: imageShortcode })

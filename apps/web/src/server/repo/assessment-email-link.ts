@@ -30,6 +30,7 @@ export async function publishEmailLinkDecision(
     proposedBy: EmailLinkProposer | null;
   },
   authority: "member" | "automatic" = "member",
+  expected?: { assessmentId: string; emailId: string },
 ) {
   return withTransactionDatabase(db, async (transactionDb) => {
     db = transactionDb;
@@ -80,6 +81,25 @@ export async function publishEmailLinkDecision(
         ),
       )
       .orderBy(assessmentState.id);
+    if (expected) {
+      // Parent locks are already held by the member action; this event lock
+      // also serializes direct publishers before checking current authority.
+      const reviewed = current.find(
+        (row) => row.state.id === expected.assessmentId,
+      );
+      if (
+        !reviewed ||
+        reviewed.state.entity !== "email" ||
+        reviewed.state.recordId !== expected.emailId ||
+        reviewed.state.status === "superseded" ||
+        reviewed.state.status === "applied" ||
+        reviewed.purchaseId !== input.purchaseId ||
+        reviewed.state.fingerprint !== input.evidenceChecksum
+      )
+        throw new Error(
+          "Assessment evidence is stale; request a fresh assessment before applying",
+        );
+    }
     const previous = current.find((row) => row.purchaseId === input.purchaseId);
     if (
       previous &&

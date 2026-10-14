@@ -21,10 +21,15 @@ import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/refresh-policy";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { producingAiManifest } from "~/server/repo/ai-refresh";
 import {
   listAiUsageFilterOptions,
   listRecentAiUsage,
@@ -32,6 +37,7 @@ import {
 } from "~/server/repo/ai-usage";
 import { publishAssessment } from "~/server/repo/assessment";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
+import { fieldReviewIdentity } from "~/server/repo/field-assessment-review";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import {
   resolveAllOrThrow,
@@ -232,6 +238,7 @@ export const inferFieldAssessments = async (
   ports?: Parameters<typeof suggestFields>[3],
 ) => {
   const runId = await actorAiRun(context, { runKey: input.runKey });
+  const manifest = await producingAiManifest(context.db);
   const captured = await withAiInputs(false, () =>
     suggestFields(context.db, runId, input, {
       ...ports,
@@ -249,8 +256,28 @@ export const inferFieldAssessments = async (
       (value) => value.operation === `suggestFields.${input.entity}.${field}`,
     );
     const producer = inputs.at(-1);
+    const dependencies = dependencyStamps(manifest, [
+      ...fieldDependencyKeys(input.entity, field),
+      ...inputs.map((call) => call.feature),
+    ]);
+    const reviewKey = await fieldReviewIdentity({
+      entity: input.entity,
+      recordId,
+      field,
+      currentValue: input.basis[field],
+      proposal: suggestion,
+      model: producer?.model ?? null,
+      inputs,
+      dependencies,
+    });
     const fingerprint = await sha256Hex(
-      JSON.stringify({ basis: input.basis, inputs, field }),
+      JSON.stringify({
+        basis: input.basis,
+        inputs,
+        field,
+        dependencies,
+        reviewKey,
+      }),
     );
     const publicationKey = `field-inference:${input.entity}:${recordId}:${field}:${fingerprint}`;
     const prediction = await withTransactionDatabase(
@@ -297,13 +324,11 @@ export const inferFieldAssessments = async (
                   evaluationId: null,
                 }
               : null,
-            evidence: z
-              .json()
-              .parse({
-                basis: input.basis,
-                inputs,
-                proposal: suggestion ?? null,
-              }),
+            evidence: z.json().parse({
+              basis: input.basis,
+              inputs,
+              proposal: suggestion ?? null,
+            }),
           },
           {
             runId,
@@ -314,6 +339,7 @@ export const inferFieldAssessments = async (
               suggestion?.financeReview?.fingerprint ?? null,
             status: suggestion ? "pending" : "resolved",
             active: false,
+            data: { reviewKey },
           },
         );
       },
@@ -323,6 +349,19 @@ export const inferFieldAssessments = async (
       .from(assessmentState)
       .where(eq(assessmentState.id, prediction.id))
       .limit(1);
+    const matchingWrong = reviewKey
+      ? await getDb(context.db)
+          .select({ id: assessmentState.id })
+          .from(assessmentState)
+          .where(
+            and(
+              eq(assessmentState.family, "field"),
+              eq(assessmentState.status, "rejected"),
+              sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+            ),
+          )
+          .limit(1)
+      : [];
     const draftMiss =
       recordId === null
         ? await getDb(context.db)
@@ -337,7 +376,11 @@ export const inferFieldAssessments = async (
             )
             .limit(1)
         : [];
-    if (state?.status === "rejected" || draftMiss.length) {
+    if (
+      state?.status === "rejected" ||
+      draftMiss.length ||
+      matchingWrong.length
+    ) {
       output.suggestions[field] = null;
       if (output.outcomes) delete output.outcomes[field];
       continue;

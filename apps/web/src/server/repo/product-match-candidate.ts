@@ -8,7 +8,15 @@ import {
   type ProductId,
 } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, or, sql, getTableColumns } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNull,
+  or,
+  sql,
+  getTableColumns,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -23,6 +31,7 @@ import {
   getDb,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { variantVerification } from "~/server/repo/product-variant-evidence";
 
 const pairProjection = z.object({
   otherId: productId,
@@ -46,9 +55,10 @@ const pairRow = z.object({
   fingerprint: z.string().nullable(),
   actionable: z.boolean(),
   conflict: z.boolean(),
+  verification: variantVerification.default("unknown"),
 });
 export type ProductMatchCandidateRow = z.infer<typeof pairRow>;
-export const canonicalProductPair = (a: ProductId, b: ProductId) =>
+const canonicalProductPair = (a: ProductId, b: ProductId) =>
   a < b ? { productAId: a, productBId: b } : { productAId: b, productBId: a };
 export const productPairKey = (a: string, b: string): string =>
   a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -77,42 +87,111 @@ export async function publishProductPair(
   const pair = canonicalProductPair(...input.productIds);
   if (pair.productAId === pair.productBId)
     throw new Error("Cannot assess a Product against itself");
-  const data = pairProjection.parse({ otherId: pair.productBId, ...input });
-  const distinct =
-    !data.actionable &&
-    z
-      .object({ decision: z.object({ selectedIndex: z.number().nullable() }) })
-      .safeParse(data.signals).data?.decision.selectedIndex === 1;
-  const digest = await sha256Hex(
-    JSON.stringify([
-      pair.productAId,
-      pair.productBId,
-      data,
-      input.fingerprint ?? null,
-      input.producer
-        ? [input.producer.kind, input.producer.model, input.producer.revision]
-        : null,
-    ]),
-  );
+  const proposedData = pairProjection.parse({
+    otherId: pair.productBId,
+    ...input,
+  });
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
-    // Requesting Runs share one immutable publication for unchanged evidence.
-    // Preserve the first actual producer when opposite scans race or retry.
-    const publicationKey = `product-pair:${digest}`;
     await client.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey}, 0))`,
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
     );
+    const { prepareProductIdentityPair } =
+      await import("~/server/ai/product-identity");
+    const suppliedSignals =
+      z.record(z.string(), z.json()).safeParse(proposedData.signals).data ?? {};
+    const guard = await prepareProductIdentityPair(
+      transactionDb,
+      [pair.productAId, pair.productBId],
+      { variantEvidence: suppliedSignals.variantEvidence },
+    );
+    if (!guard) throw new Error("Product identity target no longer exists");
+    let data = pairProjection.parse({
+      ...proposedData,
+      conflict: proposedData.conflict || guard.conflict,
+      evidence:
+        guard.verification === "pending_verification"
+          ? "A historical variant conflict requires fresh current verification before merging"
+          : proposedData.evidence,
+      signals: {
+        ...suppliedSignals,
+        verification: guard.verification,
+        variantEvidence: guard.variantEvidence,
+        conflictLineage: guard.priorConflictIds,
+      },
+    });
+    const proof = guard.variantEvidence;
+    const semanticProof = z
+      .object({ producer: assessmentProducer })
+      .passthrough()
+      .safeParse(proof);
+    const identityData = {
+      ...data,
+      signals: {
+        ...suppliedSignals,
+        conflictLineage: null,
+        verification: guard.verification,
+        variantEvidence: semanticProof.success
+          ? {
+              ...semanticProof.data,
+              producer: {
+                ...semanticProof.data.producer,
+                runId: null,
+                evaluationId: null,
+              },
+            }
+          : null,
+      },
+    };
+    const digest = await sha256Hex(
+      JSON.stringify([
+        pair.productAId,
+        pair.productBId,
+        identityData,
+        input.fingerprint ?? null,
+        input.producer
+          ? [input.producer.kind, input.producer.model, input.producer.revision]
+          : null,
+      ]),
+    );
+    const publicationKey = `product-pair:${digest}`;
     const [published] = await client
       .select()
       .from(assessment)
       .where(eq(assessment.publicationKey, publicationKey))
       .limit(1);
-    const previous = await listProductMatchRows(
-      transactionDb,
-      pair.productAId,
-      { includeObsolete: true },
-    );
-    const old = previous.find((row) => row.productBId === pair.productBId);
+    if (published) data = pairProjection.parse(published.evidence);
+    const distinct =
+      !data.actionable &&
+      z
+        .object({
+          decision: z.object({ selectedIndex: z.number().nullable() }),
+        })
+        .safeParse(data.signals).data?.decision.selectedIndex === 1;
+    // Exact suppression lookup is independent of queue limits and served policy.
+    const [previous] = await client
+      .select()
+      .from(assessmentState)
+      .where(
+        and(
+          eq(assessmentState.family, "product_pair"),
+          eq(assessmentState.active, true),
+          eq(assessmentState.recordId, pair.productAId),
+          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+          or(
+            eq(assessmentState.status, "pending"),
+            sql`${assessmentState.suppression} IS NOT NULL`,
+          ),
+        ),
+      )
+      .limit(1);
+    const old = previous
+      ? {
+          state: previous.suppression
+            ? ("dismissed" as const)
+            : ("open" as const),
+        }
+      : undefined;
     const prediction = await publishAssessment(
       transactionDb,
       {
@@ -181,6 +260,10 @@ export async function publishProductPair(
       fingerprint: input.fingerprint ?? null,
       actionable: data.actionable,
       conflict: data.conflict,
+      verification:
+        z
+          .object({ verification: variantVerification.optional() })
+          .safeParse(data.signals).data?.verification ?? "unknown",
       created: !old,
     };
   });
@@ -204,19 +287,22 @@ export async function upsertAgentProductMatch(
     fingerprint: prepared.fingerprint,
     conflict: prepared.conflict,
     actionable: prepared.exact,
-    signals: z
-      .json()
-      .parse({
-        snapshots: [prepared.first, prepared.second],
-        exact: prepared.exact,
-        admissionRevision: PRODUCT_IDENTITY_RULE_REVISION,
-      }),
+    signals: z.json().parse({
+      snapshots: [prepared.first, prepared.second],
+      exact: prepared.exact,
+      admissionRevision: PRODUCT_IDENTITY_RULE_REVISION,
+    }),
   });
 }
 export async function listProductMatchRows(
   db: Database,
   productId?: ProductId,
-  options: { includeObsolete?: boolean } = {},
+  options: {
+    reviewableOnly?: boolean;
+    actionableOnly?: boolean;
+    candidateId?: ProductId;
+    limit?: number;
+  } = {},
 ): Promise<ProductMatchCandidateRow[]> {
   const rows = await getDb(db)
     .select(getTableColumns(assessmentState))
@@ -226,13 +312,25 @@ export async function listProductMatchRows(
       and(
         eq(assessmentState.family, "product_pair"),
         eq(assessmentState.active, true),
-        options.includeObsolete
-          ? undefined
-          : sql`(${assessment.producer} IS NULL OR ${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`,
-        or(
-          eq(assessmentState.status, "pending"),
-          sql`${assessmentState.suppression} IS NOT NULL`,
-        ),
+        sql`(${assessment.producer} IS NULL OR ${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`,
+        options.reviewableOnly
+          ? and(
+              eq(assessmentState.status, "pending"),
+              isNull(assessmentState.suppression),
+            )
+          : or(
+              eq(assessmentState.status, "pending"),
+              sql`${assessmentState.suppression} IS NOT NULL`,
+            ),
+        options.actionableOnly
+          ? sql`${assessmentState.data}->>'actionable' = 'true'`
+          : undefined,
+        options.candidateId
+          ? or(
+              eq(assessmentState.recordId, options.candidateId),
+              sql`${assessmentState.data}->>'otherId' = ${options.candidateId}`,
+            )
+          : undefined,
         productId
           ? or(
               eq(assessmentState.recordId, productId),
@@ -242,10 +340,11 @@ export async function listProductMatchRows(
       ),
     )
     .orderBy(
+      sql`(${assessmentState.data}->>${pairProjection.keyof().enum.source} = ${pairProjection.shape.source.enum.agent}) DESC`,
       sql`(${assessmentState.data}->>'actionable')::boolean DESC`,
       assessmentState.id,
     )
-    .limit(options.includeObsolete ? 2147483647 : 200);
+    .limit(options.limit ?? 2147483647);
   return rows.map((row) => {
     const data = pairProjection.parse(row.data);
     return pairRow.parse({
@@ -258,6 +357,10 @@ export async function listProductMatchRows(
       sourceUrls: data.sourceUrls,
       actionable: data.actionable,
       conflict: data.conflict,
+      verification:
+        z
+          .object({ verification: variantVerification.optional() })
+          .safeParse(data.signals).data?.verification ?? "unknown",
     });
   });
 }

@@ -11,6 +11,8 @@ import { testServiceConfig } from "./test-service-config";
 // Failure modes: expansion mistaken for preservation; intervening old writes
 // lost; ambiguous labels invented; corrected null erased; frozen roster,
 // suppression scope or application receipts changed; retired work refs survive.
+// The latest predecessor's unclassified Expense role and Image Decision evidence
+// must survive both online expansion and the quiesced copy/trigger cutover.
 it("reconciles every legacy review family after an intervening writer without losing immutable history", async () => {
   const service = testServiceConfig();
   const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
@@ -65,6 +67,27 @@ it("reconciles every legacy review family after an intervening writer without lo
           `INSERT INTO "Image" (shortcode,key,filename,size,"contentType") VALUES ('${SHORTCODE_PREFIX.image}-4K7M','synthetic/image.jpg','synthetic.jpg',1,'image/jpeg') RETURNING id`,
         )
       ).rows[0].id;
+      const sourceEvidence = {
+        basis: "decision",
+        feature: "image-provenance-classification",
+        promptVersion: "synthetic-source-policy",
+        model: "typesafe/jev",
+        runId: "RUN-4K7M",
+        confidence: "high",
+        probability: 0.98,
+        evidenceFingerprint: "e".repeat(64),
+        value: "catalog",
+      };
+      await client.query(`UPDATE "Image" SET "sourceEvidence"=$1 WHERE id=$2`, [
+        sourceEvidence,
+        picture,
+      ]);
+      const expense = (
+        await client.query(
+          `INSERT INTO "Expense" (shortcode,name,"costType",trade,cost,date) VALUES ('EXP-4K7M','Synthetic unresolved line','materials','other',-2.13,'2026-01-02') RETURNING id,"lineKind"`,
+        )
+      ).rows[0];
+      expect(expense.lineKind).toBe("unclassified");
       const original = (
         await client.query(
           `INSERT INTO "OrderMail" ("ledgerPartyId","rawChecksum") VALUES ($1,'synthetic-checksum') RETURNING id`,
@@ -213,7 +236,7 @@ it("reconciles every legacy review family after an intervening writer without lo
         )
       ).rows[0].id;
       expect(journal.entries[index].tag).toBe(
-        "0064_shared_assessment_expansion",
+        "0067_shared_assessment_expansion",
       );
       await migrateDatabase(drizzle(client), {
         through: journal.entries[index].tag,
@@ -239,6 +262,28 @@ it("reconciles every legacy review family after an intervening writer without lo
         [suggestion],
       );
       await migrateDatabase(drizzle(client));
+      expect(
+        (
+          await client.query(
+            `SELECT "sourceEvidence" FROM "Image" WHERE id=$1`,
+            [picture],
+          )
+        ).rows[0].sourceEvidence,
+      ).toEqual(sourceEvidence);
+      expect(
+        (
+          await client.query(`SELECT "lineKind" FROM "Expense" WHERE id=$1`, [
+            expense.id,
+          ])
+        ).rows[0].lineKind,
+      ).toBe("unclassified");
+      expect(
+        (
+          await client.query(
+            `INSERT INTO "Expense" (shortcode,name,"costType") VALUES ('EXP-4K7N','Synthetic later unresolved line','materials') RETURNING "lineKind"`,
+          )
+        ).rows[0].lineKind,
+      ).toBe("unclassified");
       const originTables = [
         "Suggestion",
         "EmailClassificationObservation",

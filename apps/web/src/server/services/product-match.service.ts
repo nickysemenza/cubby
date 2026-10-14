@@ -21,6 +21,7 @@ import {
   productPairKey,
   upsertAgentProductMatch,
 } from "~/server/repo/product-match-candidate";
+import { unknownProductVariantComparison } from "~/server/repo/product-variant-comparison";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 const BOTH_STOCKED_WARNING =
   "Both Products have stock. Identity merging combines quantities; any duplicate receiving requires a separate reviewed inventory correction.";
@@ -56,10 +57,7 @@ function candidate(
   >,
 ): ProductMatchCandidate {
   const [keeper, other] = orient(a, b);
-  const variant = {
-    color: { first: null, second: null, relation: "unknown" as const },
-    size: { first: null, second: null, relation: "unknown" as const },
-  };
+  const variant = unknownProductVariantComparison(keeper.name, other.name);
   return {
     source,
     keeper: publicSide(keeper),
@@ -85,13 +83,13 @@ export async function getProductMatchQueue(
   const other = input.candidateId
     ? await resolveOrThrow(db, "product", input.candidateId)
     : undefined;
-  const rows = (await listProductMatchRows(db, focus))
-    .sort((a, b) => Number(b.source === "agent") - Number(a.source === "agent"))
-    .filter(
-      (row) =>
-        row.state === "open" &&
-        (!other || row.productAId === other || row.productBId === other),
-    );
+  const rows = (
+    await listProductMatchRows(db, focus, {
+      reviewableOnly: true,
+      candidateId: other,
+      limit: 200,
+    })
+  ).sort((a, b) => Number(b.source === "agent") - Number(a.source === "agent"));
   const sides = await loadProductMatchSides(
     db,
     rows.flatMap((row) => [row.productAId, row.productBId]),
@@ -110,7 +108,12 @@ export async function getProductMatchQueue(
                 identityConflict: row.conflict,
                 evidence: row.evidence,
                 sourceUrls: row.sourceUrls,
-                signals: row.conflict ? ["Identity conflict"] : [],
+                signals:
+                  row.verification === "pending_verification"
+                    ? ["Variant verification pending"]
+                    : row.conflict
+                      ? ["Identity conflict"]
+                      : [],
               }),
               review: {
                 assessmentId: row.id,

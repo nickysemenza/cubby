@@ -14,10 +14,6 @@ import {
 import { amazonAsin } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { lookupProductIdentifierSource } from "~/server/repo/product-identifier-source";
-import {
-  extractRetainedVariantFacts,
-  verifiedVariantFacts,
-} from "~/server/repo/product-variant-comparison";
 
 export const retainedProductIdentifierClaim = z.object({
   productId: z.uuid(),
@@ -33,7 +29,14 @@ export const retainedProductIdentifierClaim = z.object({
   originalExternalKey: z.string(),
   productUrl: z.string().nullable(),
   exactVariant: z.boolean().default(false),
-  variant: verifiedVariantFacts.nullable().default(null),
+  variant: z
+    .object({
+      color: z.string().nullable(),
+      size: z.string().nullable(),
+      pack: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 /** Only an accepted original line and its durable Product binding establish a claim. */
 export async function loadProductIdentifierClaims(
@@ -100,7 +103,7 @@ export async function loadProductIdentifierClaims(
           originalChecksum: original.data.checksum,
           productUrl: line.productUrl ?? null,
           exactVariant: identifier.exactVariant,
-          variant: extractRetainedVariantFacts(line.title),
+          variant: null,
         }),
       );
   }

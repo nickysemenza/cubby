@@ -7,7 +7,9 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
+  assessment,
   expense as expenseTable,
   assessmentState as suggestionTable,
   vendor as vendorTable,
@@ -167,6 +169,157 @@ describe("Suggestion review", () => {
     expect(revised.suggestions.categoryId?.assessmentId).toBeDefined();
     expect(revised.suggestions.categoryId?.assessmentId).not.toBe(id);
   });
+  it.each([false, true])(
+    "keeps identical served decision evidence wrong across live and stored inference, different candidate=%s",
+    async (differentCandidate) => {
+      const record = await productFixture(ctx, "Synthetic cross-path wrong", {
+        categoryId: taxonomyId("tools"),
+      });
+      const listed = await executeEntity(kernelCtx(ctx), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [record.id] },
+      });
+      if (listed.action !== "list" || !listed.items[0])
+        throw new Error("Synthetic field basis missing");
+      const basis = Object.fromEntries(
+        Object.entries(listed.items[0]).flatMap(([key, value]) =>
+          typeof value === "string" || value === null ? [[key, value]] : [],
+        ),
+      );
+      const basePorts = categoryPorts(0.8).suggestPorts;
+      let chooseOther = false;
+      const ports = {
+        ...basePorts,
+        registry: {
+          "product.categoryId": {
+            ...basePorts.registry["product.categoryId"],
+            roster: async () => [
+              { id: taxonomyShortcode("food"), title: "Synthetic food" },
+              { id: taxonomyShortcode("books"), title: "Synthetic books" },
+            ],
+          },
+        },
+        decisionPort: async (
+          request: Parameters<typeof basePorts.decisionPort>[0],
+        ) => {
+          const result = await basePorts.decisionPort(request);
+          const keys = Object.keys(request.questions.selection.criteria);
+          const choice = keys[chooseOther ? 1 : 0]!;
+          return {
+            ...result,
+            answers: {
+              selection: {
+                type: "choice" as const,
+                choice,
+                confidence: 0.8,
+                probabilities: Object.fromEntries(
+                  keys.map((key) => [key, key === choice ? 0.8 : 0.1]),
+                ),
+              },
+            },
+          };
+        },
+      };
+      const live = await withAiInputs(false, () =>
+        inferFieldAssessments(
+          kernelCtx(ctx),
+          {
+            entity: "product",
+            entityId: record.id,
+            basisMode: "suggested",
+            basis,
+            targets: ["categoryId"],
+          },
+          { ...ports, decisionModel: PRIMARY_MODEL },
+        ),
+      );
+      const id = live.result.suggestions.categoryId?.assessmentId;
+      if (!id) throw new Error("Synthetic live assessment missing");
+      const [livePrediction] = await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.id, id));
+      const [liveState] = await getDb(ctx.db)
+        .select()
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, id));
+      if (!livePrediction || !liveState)
+        throw new Error("Synthetic live history missing");
+      const siblingId = crypto.randomUUID();
+      await getDb(ctx.db)
+        .insert(assessment)
+        .values({
+          ...livePrediction,
+          id: siblingId,
+          publicationKey: `synthetic-sibling:${siblingId}`,
+        });
+      await getDb(ctx.db)
+        .insert(suggestionTable)
+        .values({
+          ...liveState,
+          id: siblingId,
+          active: true,
+          status: "pending",
+        });
+      const reviewed = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: id,
+        operationId: "synthetic-cross-path-wrong",
+        verdict: "wrong",
+        intent: "history",
+      });
+      const [sibling] = await getDb(ctx.db)
+        .select()
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, siblingId));
+      expect(sibling).toMatchObject({
+        status: "rejected",
+        data: { governingFeedbackId: reviewed.feedbackId },
+      });
+      chooseOther = differentCandidate;
+      const changed = await inferFieldAssessments(
+        kernelCtx(ctx),
+        {
+          entity: "product",
+          entityId: record.id,
+          basisMode: "suggested",
+          basis,
+          targets: ["categoryId"],
+        },
+        { ...ports, decisionModel: PRIMARY_MODEL },
+      );
+      expect(changed.suggestions.categoryId === null).toBe(!differentCandidate);
+      expect(changed.suggestions.categoryId?.value).toBe(
+        differentCandidate ? taxonomyShortcode("books") : undefined,
+      );
+      expect(changed.suggestions.categoryId?.assessmentId).not.toBe(id);
+      const stored = await withAiInputs(false, () =>
+        startSuggestionSweep(
+          ctx.db,
+          {
+            entity: "product",
+            fields: ["categoryId"],
+            filters: { ids: [record.id] },
+          },
+          {
+            context: kernelCtx(ctx),
+            suggestPorts: ports,
+            samplePair: () => false,
+          },
+        ),
+      );
+      expect(stored.inputs).toEqual(live.inputs);
+      expect(
+        (
+          await listSuggestions(ctx.db, {
+            entity: "product",
+            recordIds: [record.id],
+            minConfidence: 0,
+          })
+        ).map((row) => row.suggestedValue),
+      ).toEqual(differentCandidate ? [taxonomyShortcode("books")] : []);
+    },
+  );
   it("does not repropose a wrong field for unchanged evidence and policy, but permits a genuine evidence revision", async () => {
     const record = await productFixture(ctx, "Synthetic unchanged field", {
       categoryId: taxonomyId("tools"),

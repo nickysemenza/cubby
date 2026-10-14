@@ -226,12 +226,12 @@ export const INGREDIENT_MERGE_FEATURE = defineFeature({
  * `FIELD_SUGGEST_REGISTRY` (`field-suggest/registry.ts`) needs no new entry
  * here.
  */
-export const PRODUCT_IDENTITY_RULE_REVISION = "identity-v5";
+export const PRODUCT_IDENTITY_RULE_REVISION = "identity-v6";
 export const PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-identity",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-10-14.5",
+  promptVersion: "2026-10-14.6",
 }) satisfies AiDecisionFeature;
 
 export const FIELD_SUGGESTION_FEATURE = defineFeature({

@@ -18,6 +18,7 @@ import {
   PRODUCT_IDENTITY_FEATURE,
   PRODUCT_IDENTITY_RULE_REVISION,
 } from "~/server/ai/features";
+import { groundProductIdentityVariants } from "~/server/ai/product-identity-grounding";
 import type { Database } from "~/server/db";
 import {
   product,
@@ -37,9 +38,10 @@ import {
 } from "~/server/repo/product-identity-claims";
 import { publishProductPair } from "~/server/repo/product-match-candidate";
 import {
-  sourceConfirmedVariantFacts,
-  verifiedVariantFacts,
-} from "~/server/repo/product-variant-comparison";
+  readVariantVerification,
+  variantVerification,
+  variantSourceSide,
+} from "~/server/repo/product-variant-evidence";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { productionVectorStore } from "~/server/semantic/vector-store";
 
@@ -137,21 +139,8 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     (source) =>
       source.field === "model" && source.valueFingerprint === modelFingerprint,
   );
-  const nameFingerprint = await sha256Hex(canonicalJson(row.name));
   const manufacturerFingerprint = await sha256Hex(
     canonicalJson(row.manufacturer),
-  );
-  const verifiedVariant = sourceConfirmedVariantFacts(
-    row.name,
-    sources
-      .filter(
-        (source) =>
-          source.field === "name" &&
-          source.valueFingerprint === nameFingerprint,
-      )
-      .map((source) =>
-        [source.quote, source.selectedVariant].filter(Boolean).join(" · "),
-      ),
   );
   const claims = await loadProductIdentifierClaims(db, id);
   const snapshot = {
@@ -168,7 +157,6 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     )
       ? row.manufacturer
       : null,
-    verifiedVariant,
   };
   return {
     snapshot: z.json().parse(snapshot),
@@ -198,6 +186,7 @@ export async function retrieveProductIdentityCandidates(
         or(
           exact,
           sql`EXISTS (SELECT 1 FROM "EntitySource" own JOIN "EntitySource" other ON other.url=own.url WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND own.url <> '' AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id)`,
+          sql`EXISTS (SELECT 1 FROM "EntitySource" own JOIN "EntitySource" other ON lower(btrim(other."selectedVariant"))=lower(btrim(own."selectedVariant")) WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND btrim(own."selectedVariant") <> '' AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id)`,
           and(
             eq(product.manufacturer, seed.manufacturer),
             eq(product.model, seed.model ?? ""),
@@ -263,7 +252,6 @@ const identityFacts = z
     ),
     verifiedModel: z.string().nullable(),
     verifiedManufacturer: z.string().nullable(),
-    verifiedVariant: verifiedVariantFacts,
     claims: z.array(retainedProductIdentifierClaim),
   })
   .passthrough();
@@ -274,10 +262,14 @@ export const preparedProductIdentityPair = z.object({
   fingerprint: z.string(),
   exact: z.boolean(),
   conflict: z.boolean(),
+  priorConflictIds: z.array(z.uuid()).default([]),
+  verification: variantVerification.default("unknown"),
+  variantEvidence: z.json().nullable().default(null),
 });
 export async function prepareProductIdentityPair(
   db: Database,
   ids: readonly [ProductId, ProductId],
+  options: { variantEvidence?: z.infer<ReturnType<typeof z.json>> } = {},
 ) {
   const [aId, bId] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
   if (aId === bId)
@@ -300,7 +292,6 @@ export async function prepareProductIdentityPair(
     }));
   const aClaims = [...registeredClaims(a), ...a.claims],
     bClaims = [...registeredClaims(b), ...b.claims];
-  const variantDimensions = verifiedVariantFacts.keyof().options;
   const exact = aClaims.some((one) =>
     bClaims.some(
       (other) =>
@@ -311,6 +302,15 @@ export async function prepareProductIdentityPair(
         other.exactVariant,
     ),
   );
+  const guard = await readVariantVerification(
+    db,
+    [
+      variantSourceSide.parse(first.snapshot),
+      variantSourceSide.parse(second.snapshot),
+    ],
+    PRODUCT_IDENTITY_FEATURE.promptVersion,
+    options.variantEvidence,
+  );
   return preparedProductIdentityPair.parse({
     productIds: [aId, bId],
     first: first.snapshot,
@@ -319,16 +319,12 @@ export async function prepareProductIdentityPair(
       canonicalJson([first.fingerprint, second.fingerprint].sort()),
     ),
     exact,
+    ...guard,
     conflict:
       (a.verifiedModel !== null &&
         b.verifiedModel !== null &&
         a.verifiedModel !== b.verifiedModel) ||
-      variantDimensions.some(
-        (key) =>
-          a.verifiedVariant[key] !== null &&
-          b.verifiedVariant[key] !== null &&
-          a.verifiedVariant[key] !== b.verifiedVariant[key],
-      ),
+      guard.conflict,
   });
 }
 export async function prepareProductIdentityCatalog(
@@ -359,6 +355,29 @@ export async function evaluatePreparedProductIdentityPair(
   const model = supportedDecisionModelSchema.parse(
     options.model ?? selectDecisionModel(),
   );
+  let proposedGrounding = pair.variantEvidence;
+  if (pair.verification !== "current") {
+    try {
+      proposedGrounding = await groundProductIdentityVariants({
+        db,
+        runId,
+        evaluationId: options.evaluationId,
+        model,
+        first: variantSourceSide.parse(pair.first),
+        second: variantSourceSide.parse(pair.second),
+        priorConflictIds: pair.priorConflictIds,
+        decisionPort: options.decisionPort,
+        provenance: options.provenance,
+      });
+    } catch {
+      // SILENT: Exact identifier admission survives model outage; the historical conflict guard remains enforced.
+    }
+  }
+  const current = await prepareProductIdentityPair(db, pair.productIds, {
+    variantEvidence: proposedGrounding,
+  });
+  if (!current || current.fingerprint !== pair.fingerprint)
+    throw new Error("Product identity evidence changed during evaluation");
   const decision = pair.exact
     ? null
     : await runDecisionChoice({
@@ -371,15 +390,20 @@ export async function evaluatePreparedProductIdentityPair(
   return {
     productIds: pair.productIds,
     source: "detector" as const,
-    evidence: pair.exact
-      ? pair.conflict
-        ? "An exact identifier conflicts with source-confirmed variants"
-        : "Retained source evidence binds both records to the same exact identifier"
-      : "Candidate similarity requires member investigation",
+    evidence:
+      current.verification === "pending_verification"
+        ? "A historical source-grounded conflict requires fresh current verification before merging"
+        : pair.exact
+          ? current.conflict
+            ? "An exact identifier conflicts with source-grounded variant judgments"
+            : "Retained source evidence binds both records to the same exact identifier"
+          : "Candidate similarity requires member investigation",
     sourceUrls: [],
     fingerprint: pair.fingerprint,
     signals: z.json().parse({
       exact: pair.exact,
+      verification: current.verification,
+      variantEvidence: current.variantEvidence,
       decision,
       servedModel: pair.exact ? null : model,
       policy: options.provenance
@@ -391,7 +415,7 @@ export async function evaluatePreparedProductIdentityPair(
       snapshots: [pair.first, pair.second],
     }),
     actionable: pair.exact,
-    conflict: pair.conflict,
+    conflict: current.conflict,
     producer: pair.exact
       ? {
           kind: "rule" as const,
@@ -446,7 +470,9 @@ export async function evaluateProductIdentity(
   db: Database,
   id: ProductId,
   runId: RunId,
-  ports: { decisionPort?: DecisionPort } = {},
+  ports: NonNullable<
+    Parameters<typeof evaluatePreparedProductIdentityPair>[3]
+  > = {},
 ) {
   const prepared = await prepareProductIdentityCatalog(db, id);
   const pairs = [];

@@ -19,7 +19,10 @@ import {
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import { recordFeedback } from "~/server/repo/assessment";
+import {
+  assertApplicationReceipt,
+  recordFeedback,
+} from "~/server/repo/assessment";
 import { withAuditReceipts } from "~/server/repo/audit-receipts";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { canonicalJson } from "~/server/repo/entity-source";
@@ -33,9 +36,24 @@ export async function mergeReviewedProductPair(
   input: z.output<typeof mergeProductMatchInput>,
 ) {
   const operationId = `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`;
-  const previousReceipt = async (db: EntityKernelContext["db"]) =>
-    getDb(db)
-      .select({ id: feedback.id })
+  const [prediction] = await getDb(context.db)
+    .select()
+    .from(assessment)
+    .where(eq(assessment.id, input.assessmentId))
+    .limit(1);
+  if (!prediction || prediction.family !== "product_pair")
+    throw new Error("Product pair Assessment not found");
+  const command = await recordFeedback(context.db, {
+    assessmentId: input.assessmentId,
+    operationId,
+    verdict: "correct",
+    intent: "apply",
+    authority: "member",
+    actorUserId: context.actorContext.userId,
+  });
+  const previousReceipt = async (db: EntityKernelContext["db"]) => {
+    const [receipt] = await getDb(db)
+      .select()
       .from(feedback)
       .where(
         and(
@@ -44,26 +62,23 @@ export async function mergeReviewedProductPair(
         ),
       )
       .limit(1);
-  if ((await previousReceipt(context.db)).length) return { ok: true as const };
+    if (!receipt) return false;
+    assertApplicationReceipt(receipt, command, "product_merge");
+    z.object({
+      kind: z.literal("product_merge"),
+      auditIds: z.array(z.uuid()),
+      appliedAt: z.iso.datetime(),
+      keepId: z.uuid(),
+      mergeId: z.uuid(),
+      expectedFingerprint: z.literal(input.expectedFingerprint),
+    }).parse(receipt.receipt);
+    return true;
+  };
+  if (await previousReceipt(context.db)) return { ok: true as const };
   const [keepId, mergeId] = await Promise.all([
     resolveOrThrow(context.db, "product", input.keepId),
     resolveOrThrow(context.db, "product", input.mergeId),
   ]);
-  const [prediction] = await getDb(context.db)
-    .select()
-    .from(assessment)
-    .where(eq(assessment.id, input.assessmentId))
-    .limit(1);
-  if (!prediction || prediction.family !== "product_pair")
-    throw new Error("Product pair Assessment not found");
-  await recordFeedback(context.db, {
-    assessmentId: prediction.id,
-    operationId,
-    verdict: "correct",
-    intent: "apply",
-    authority: "member",
-    actorUserId: context.actorContext.userId,
-  });
   return withTransactionDatabase(context.db, async (transactionDb) => {
     await getDb(transactionDb)
       .select({ id: product.id })
@@ -77,8 +92,7 @@ export async function mergeReviewedProductPair(
       .where(eq(assessmentState.id, prediction.id))
       .for("update")
       .limit(1);
-    if ((await previousReceipt(transactionDb)).length)
-      return { ok: true as const };
+    if (await previousReceipt(transactionDb)) return { ok: true as const };
     if (!currentProductPairPolicy(prediction.producer))
       throw new Error(
         "Product identity policy is obsolete; request a fresh assessment",
@@ -93,6 +107,10 @@ export async function mergeReviewedProductPair(
     )
       throw new Error(
         "Current evidence does not support Product identity admission",
+      );
+    if (currentPair.verification === "pending_verification")
+      throw new Error(
+        "Historical variant conflict requires fresh current verification before merging",
       );
     if (currentPair.conflict)
       throw new Error("Confirmed variant conflict prevents Product merging");
@@ -157,7 +175,9 @@ export async function mergeReviewedProductPair(
         appliedAt: new Date().toISOString(),
         keepId,
         mergeId,
+        expectedFingerprint: input.expectedFingerprint,
       },
+      metadata: { kind: "product_merge", commandFeedbackId: command.id },
     });
     return { ok: true as const };
   });

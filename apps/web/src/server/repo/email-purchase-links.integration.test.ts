@@ -17,7 +17,7 @@ import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
  * Link that replaces another Purchase's link keeps who proposed that link;
  * only the Email's owner decides; and none of it changes spend.
  */
-import { withTestDb } from "tooling/test-setup";
+import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -512,6 +512,75 @@ describe("Email Purchase links", () => {
       ),
     ).toEqual(before);
   });
+  // A queued review may wait on Purchase while a newer member decision takes authority.
+  it("refuses an obsolete Email review after waiting for parent locks", async () => {
+    const f = await retainedReviewFixture();
+    const prediction = await seedEmailLinkDecision(ctx.db, {
+      eventId: f.event.id,
+      purchaseId: f.purchase.id,
+      decision: "linked",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: "cubby-system",
+      proposedBy: "agent",
+    });
+    const raced = await raceUniqueInsert(ctx, {
+      winner: ({ markWinnerReady, releaseSignal }) =>
+        withTransaction(ctx.db, async (tx) => {
+          await tx
+            .select({ id: purchaseTable.id })
+            .from(purchaseTable)
+            .where(eq(purchaseTable.id, f.purchase.id))
+            .for("update");
+          markWinnerReady();
+          await releaseSignal;
+          return decideEmailPurchase(
+            databaseForTransaction(tx),
+            {
+              id: f.email,
+              purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+              expectedChecksum: f.checksum,
+              decision: "dismissed",
+            },
+            ctx.actor,
+          );
+        }),
+      loser: () =>
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: prediction.id,
+          operationId: "synthetic-waiting-link",
+          verdict: "correct",
+          intent: "apply",
+        }).then(
+          (result) => ({ ok: true as const, result }),
+          (error: unknown) => ({
+            ok: false as const,
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+    });
+    expect(raced.winner.state).toBe("dismissed");
+    expect(raced.loser).toEqual({
+      ok: false,
+      message: expect.stringMatching(/Assessment.*stale/),
+    });
+    const links = await getDb(ctx.db)
+      .select()
+      .from(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.eventId, f.event.id));
+    expect(links).toMatchObject([
+      { decision: "dismissed", purchaseId: f.purchase.id },
+    ]);
+    const reviews = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, prediction.id));
+    expect(reviews.map((row) => row.operationId)).toContain(
+      "synthetic-waiting-link",
+    );
+    expect(reviews.map((row) => row.operationId)).not.toContain(
+      "command-application:synthetic-waiting-link",
+    );
+  });
   it("applies an Email review to its repointed Purchase without rewriting the historical subject", async () => {
     const f = await retainedReviewFixture();
     const keeper = await insertWithShortcode(ctx.db, "purchase", {
@@ -598,6 +667,56 @@ describe("Email Purchase links", () => {
       .from(feedback)
       .where(eq(feedback.assessmentId, prediction.id));
     expect(review?.actorUserId).toBe(ctx.actor.userId);
+  });
+  // Unsupported domain corrections must be refused before immutable member Feedback exists.
+  it("prevalidates Email relevance applications before recording public Feedback", async () => {
+    const f = await retainedReviewFixture();
+    const [mail] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, f.source.id));
+    const observation = await recordEmailClassificationObservation(ctx.db, {
+      emailId: mail!.id,
+      checksum: f.checksum,
+      classification: "related",
+      stage: "decision",
+      reason: "Synthetic relevance prevalidation",
+      classificationVersion: "synthetic",
+      model: "typesafe/jev",
+    });
+    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    for (const [index, command] of [
+      { correction: { present: false as const }, reason: null },
+      {
+        correction: { present: true as const, value: "unrelated" },
+        reason: null,
+      },
+      {
+        correction: { present: true as const, value: "uncertain" },
+        reason: "",
+      },
+    ].entries()) {
+      const result = await callMcpTool(
+        createMcpServer(),
+        "entity",
+        {
+          action: "review_assessment",
+          assessmentId: prediction.id,
+          operationId: `synthetic-invalid-relevance-${index}`,
+          verdict: "correct",
+          intent: "apply",
+          ...command,
+        },
+        kernelRequestContext(kernelCtx(ctx)),
+      );
+      expect(result.isError).toBe(true);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(feedback)
+          .where(eq(feedback.assessmentId, prediction.id)),
+      ).toEqual([]);
+    }
   });
   it("records the real member actor on link resolution Feedback", async () => {
     const f = await retainedReviewFixture();

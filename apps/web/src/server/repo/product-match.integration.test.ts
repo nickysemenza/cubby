@@ -257,6 +257,10 @@ describe("product match queue", () => {
       },
     };
     const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const appliedHistory = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, pair.id));
     expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
       applied,
     );
@@ -285,13 +289,23 @@ describe("product match queue", () => {
       .select()
       .from(feedback)
       .where(eq(feedback.assessmentId, pair.id));
-    expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(1);
-    expect(receipts.find((row) => row.receipt !== null)?.receipt).toEqual(
+    expect(receipts).toEqual(appliedHistory);
+    expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(2);
+    expect(
+      receipts.find((row) => row.operationId.startsWith("application:merge:"))
+        ?.receipt,
+    ).toEqual(
       expect.objectContaining({
         kind: "product_merge",
         auditIds: expect.any(Array),
       }),
     );
+    expect(
+      receipts.find(
+        (row) =>
+          row.operationId === `command-application:${command.operationId}`,
+      )?.receipt,
+    ).toEqual(applied);
     const stock = await getDb(ctx.db)
       .select({ quantity: inventoryEntry.amountValue })
       .from(inventoryEntry)

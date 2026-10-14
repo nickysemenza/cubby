@@ -52,7 +52,11 @@ export async function decideEmailPurchase(
   db: Database,
   rawInput: EmailPurchaseDecisionInput,
   actor: ActorContext,
-  options: { eventId?: string; originalId?: string } = {},
+  options: {
+    eventId?: string;
+    originalId?: string;
+    expectedAssessmentId?: string;
+  } = {},
 ) {
   const input = emailPurchaseDecisionInput.parse(rawInput);
   try {
@@ -76,7 +80,7 @@ async function decideOnce(
   db: Database,
   input: EmailPurchaseDecisionInput,
   actor: ActorContext,
-  options: { eventId?: string; originalId?: string },
+  options: NonNullable<Parameters<typeof decideEmailPurchase>[3]>,
 ) {
   if (actor.runId)
     throw new Error(
@@ -219,14 +223,21 @@ async function decideOnce(
       });
     }
     for (const [eventId, row] of events)
-      await publishEmailLinkDecision(databaseForTransaction(tx), {
-        eventId,
-        purchaseId: parseEntityId("purchase", purchaseId),
-        decision: input.decision,
-        evidenceChecksum: input.expectedChecksum,
-        decidedByUserId: actor.userId,
-        proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
-      });
+      await publishEmailLinkDecision(
+        databaseForTransaction(tx),
+        {
+          eventId,
+          purchaseId: parseEntityId("purchase", purchaseId),
+          decision: input.decision,
+          evidenceChecksum: input.expectedChecksum,
+          decidedByUserId: actor.userId,
+          proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
+        },
+        "member",
+        options.expectedAssessmentId
+          ? { assessmentId: options.expectedAssessmentId, emailId: email.id }
+          : undefined,
+      );
 
     // A member's link is relevance evidence (ADR 0011): it resolves the Email
     // related, even when a rule or model already said so, so a rerun cannot
