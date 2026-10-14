@@ -334,7 +334,7 @@ function selectedLabelOf(value: ComboboxItem | undefined) {
 
 const fieldFrameClass = (compact: boolean | undefined) =>
   cn(
-    "@container/picker flex w-full min-w-0 items-center gap-1.5 rounded-sm border border-border bg-card pl-2 transition-colors",
+    "flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm border border-border bg-card pl-2 transition-colors",
     "focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
     "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 data-[hydrating]:has-[:disabled]:opacity-100",
     compact
@@ -503,12 +503,12 @@ function SelectedLead({ value }: { value: ComboboxItem | undefined }) {
   return <PickerVisual item={value} size={20} />;
 }
 
-/** The closed field's first data chip, when the field has room for it. */
+/** The closed field's first data chip, yielding width to the name. */
 function SelectedTrailing({ value }: { value: ComboboxItem | undefined }) {
   const chip = value?.pending ? undefined : value?.presentation?.trailing?.[0];
   if (!chip) return null;
   return (
-    <span className="hidden shrink-0 font-mono text-xs text-muted-foreground tabular-nums @min-[16rem]/picker:inline">
+    <span className="max-w-[40%] min-w-0 shrink truncate font-mono text-xs text-muted-foreground tabular-nums max-sm:hidden">
       {chip.node ?? chip.text}
     </span>
   );
@@ -894,7 +894,9 @@ function SearchPicker<TId extends string>({
               : (placeholder ?? placeholderDefault)
         }
         className={cn(
-          "h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+          // A floor so a field squeezed into a narrow cell (a recipe
+          // ingredient row) keeps its text; the caret and clear give way.
+          "h-full min-w-12 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
           multiple && "min-w-16",
         )}
       />
@@ -902,9 +904,8 @@ function SearchPicker<TId extends string>({
       {clearable && values.length > 0 ? (
         <ComboboxPrimitive.Clear
           aria-label={clearLabel}
-          // Hidden in a field squeezed narrower than 9rem (a recipe ingredient
-          // row) so the text keeps the width; the popup keeps its Clear row.
-          className="hidden h-full shrink-0 items-center justify-center px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11 @min-[9rem]/picker:flex"
+          // Shrinks away in a squeezed field; the popup keeps its Clear row.
+          className="flex h-full min-w-0 shrink items-center justify-center overflow-hidden px-1 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
             event.stopPropagation();
@@ -917,7 +918,7 @@ function SearchPicker<TId extends string>({
       ) : null}
       <ComboboxPrimitive.Trigger
         aria-label={`Show ${noun} options`}
-        className="hidden h-full min-w-6 shrink-0 items-center justify-center max-sm:min-w-11 @min-[9rem]/picker:flex"
+        className="flex h-full w-6 min-w-0 shrink items-center justify-center overflow-hidden max-sm:w-11"
       >
         <CaretGlyph open={open} />
       </ComboboxPrimitive.Trigger>
