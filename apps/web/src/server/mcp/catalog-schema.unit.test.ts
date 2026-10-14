@@ -644,6 +644,7 @@ describe("MCP catalog schemas", () => {
           leaf !== "ids" &&
           stringSchemas(node, definitions).some(
             ({ pattern }) =>
+              pattern !== undefined &&
               isString(pattern) &&
               pattern.includes("LPY-") &&
               !pattern.includes("@me"),

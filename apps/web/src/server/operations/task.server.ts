@@ -1,14 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import {
-  taskBulkReorderInput,
-  taskFiltersSchema,
-} from "@cubby/schemas/project";
+import { taskBulkReorderInput } from "@cubby/schemas/project";
 import type { z } from "zod";
 
 import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
-import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listAll } from "~/server/repo/list-all";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
@@ -69,47 +65,24 @@ export const taskBulkReorderWorkflow = Object.assign(
 );
 
 export const taskHandlers = implementOperationDomain(taskContract, {
-  listActionable: async (context, input) =>
-    listActionableTasks(
-      context.db,
-      await resolveCurrentMemberFilters(
-        context,
-        taskFiltersSchema,
-        input ?? {},
-      ),
-    ),
-  chartData: async (context, input) => {
-    const filters = await resolveCurrentMemberFilters(
-      context,
-      taskFiltersSchema,
-      input,
-    );
-    return (
+  listActionable: (context, input) =>
+    listActionableTasks(context.db, input ?? {}),
+  chartData: async (context, input) =>
+    (
       await listAll((pagination) =>
         taskList(
           context.db,
-          filters,
+          input,
           [{ orderBy: "createdAt", direction: "desc" }],
           pagination,
           "page",
         ),
       )
-    ).data;
-  },
+    ).data,
   summary: (context) => getTaskSummary(context.db),
   todayBriefing: (context) => getTaskTodayBriefing(context.db),
-  // Board and timeline read outside the entity kernel, so they resolve `@me`
-  // themselves.
-  board: async (context, input) =>
-    getTaskBoard(
-      context.db,
-      await resolveCurrentMemberFilters(context, taskFiltersSchema, input),
-    ),
-  timeline: async (context, input) =>
-    getTaskTimeline(
-      context.db,
-      await resolveCurrentMemberFilters(context, taskFiltersSchema, input),
-    ),
+  board: (context, input) => getTaskBoard(context.db, input),
+  timeline: (context, input) => getTaskTimeline(context.db, input),
   bulkReorder: (context, input) =>
     taskBulkReorderWorkflow(context.db, input, context.actorContext),
 });
