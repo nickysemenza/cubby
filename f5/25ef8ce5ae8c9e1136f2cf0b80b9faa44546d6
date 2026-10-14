@@ -1,0 +1,25 @@
+apps/web/tests/e2e/activity.spec.ts
+  s_119022ba161688::t_b802e9049e4441 143-147
+apps/web/tests/e2e/work-queue.spec.ts
+  s_119022ba161688::t_de9e832b17eede 69-70,80-85
+docs/agents/validation-tests.md
+  s_119022ba161688::t_c8c5f034282af6 21-22
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_119022ba161688::t_7955040a5145b7 1498-1499,1501
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f525ef8ce5ae8c9e1136f2cf0b80b9faa44546d6",
+  "prompts": {},
+  "sessions": {
+    "s_119022ba161688": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13bcb-f64a-7ef0-8d81-1aceaf52856d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
