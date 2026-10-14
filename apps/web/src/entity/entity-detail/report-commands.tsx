@@ -35,7 +35,6 @@ import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 const sameSelection = (
@@ -480,7 +479,7 @@ function CommandOperand({
       />
     );
   return (
-    <label
+    <div
       className={cn(
         "flex text-xs",
         compact ? "min-w-40 flex-1" : "flex-col gap-1",
@@ -511,21 +510,20 @@ function CommandOperand({
           }
         />
       ) : (
-        <NativeSelect
-          aria-label={input.label}
-          value={value ?? ""}
+        <Picker
+          mode="choose"
+          clearable
+          compact={compact}
+          className={cn(compact && "flex-1")}
+          label={input.label}
+          placeholder="Choose…"
+          options={input.options}
+          value={value == null ? null : String(value)}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value || undefined)}
-        >
-          <option value="">Choose…</option>
-          {input.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
+          onValueChange={(next) => onChange(next || undefined)}
+        />
       )}
-    </label>
+    </div>
   );
 }
 

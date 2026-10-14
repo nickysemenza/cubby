@@ -5,10 +5,11 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import superjson from "superjson";
 import { z } from "zod";
 import {
-  inlineExplanation,
-  gotoAuthenticatedPage,
-  reloadAuthenticatedPage,
+  chooseOption,
   expectViewportBounded,
+  gotoAuthenticatedPage,
+  inlineExplanation,
+  reloadAuthenticatedPage,
 } from "./e2e-helpers";
 import {
   seedProductPrerequisite,
@@ -415,7 +416,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
     await expect(check).toContainText("Missing data");
   }).toPass();
   await check.getByRole("button", { name: "Accept as…" }).click();
-  await check.getByLabel("Reason").selectOption({ label: "Not applicable" });
+  await chooseOption(page, check.getByLabel("Reason"), "Not applicable");
   await check.getByLabel("Note").fill("Synthetic unbranded product.");
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");

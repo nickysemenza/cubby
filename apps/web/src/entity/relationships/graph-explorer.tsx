@@ -23,13 +23,14 @@ import {
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Sheet,
   SheetContent,
@@ -131,6 +132,15 @@ export function GraphExplorer({
   const highlightedEdges = useMemo(
     () => new Set(destination ? path?.edgeIds : []),
     [destination, path],
+  );
+  const kindOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All types" },
+      ...[...new Set(displayed.nodes.map((node) => node.entityKind))]
+        .sort()
+        .map((type) => ({ value: type, label: entityLabel(type) })),
+    ],
+    [displayed.nodes],
   );
   const edge = displayed.edges.find(
     (candidate) => candidate.id === selectedEdge,
@@ -249,23 +259,18 @@ export function GraphExplorer({
           onChange={(event) => setQuery(event.target.value)}
           className="order-first w-full min-w-0 basis-full md:order-none md:w-auto md:flex-1 md:basis-auto"
         />
-        <NativeSelect
-          aria-label="Filter map records"
+        <Picker
+          mode="choose"
+          label="Filter map records"
+          widthMode="intrinsic"
+          className="w-40"
+          options={kindOptions}
           value={kind}
-          onChange={(event) => {
-            setKind(event.target.value);
+          onValueChange={(value) => {
+            setKind(value ?? "");
             setShowList(true);
           }}
-        >
-          <option value="">All types</option>
-          {[...new Set(displayed.nodes.map((node) => node.entityKind))]
-            .sort()
-            .map((type) => (
-              <option value={type} key={type}>
-                {entityLabel(type)}
-              </option>
-            ))}
-        </NativeSelect>
+        />
         <Button
           variant="outline"
           size="icon"

@@ -10,10 +10,48 @@ import { entityListFor } from "~/entity/entity-list";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
 import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
+
+const ENTITY_OPTIONS: readonly PickerOption[] =
+  fieldSuggestionsInput.shape.entity.options.map((option) => ({
+    value: option,
+    label: option,
+  }));
+
+const BASIS_MODE_OPTIONS: readonly PickerOption[] =
+  fieldSuggestionsInput.shape.basisMode.options.map((option) => ({
+    value: option,
+    label: option,
+  }));
+
+/** A captioned choose-mode picker; the caption doubles as its accessible name. */
+function SmokeChoice({
+  caption,
+  options,
+  value,
+  onValueChange,
+}: {
+  caption: string;
+  options: readonly PickerOption[];
+  value: string;
+  onValueChange: (value: string | null) => void;
+}) {
+  return (
+    <div className="grid gap-1 text-sm font-medium">
+      <span>{caption}</span>
+      <Picker
+        mode="choose"
+        label={caption}
+        options={options}
+        value={value}
+        onValueChange={onValueChange}
+      />
+    </div>
+  );
+}
 
 const smokePropertySchema = z.object({
   type: z.string().optional(),
@@ -296,41 +334,28 @@ function FieldSuggestionFields({
     .parse(value.basis);
   return (
     <div className="grid gap-3">
-      <label className="grid gap-1 text-sm font-medium">
-        Entity
-        <NativeSelect
-          value={entity}
-          onChange={(event) =>
-            onChange({
-              entity: event.target.value,
-              basisMode: value.basisMode ?? "provided",
-              targets: [],
-              basis: {},
-            })
-          }
-        >
-          {fieldSuggestionsInput.shape.entity.options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
-      <label className="grid gap-1 text-sm font-medium">
-        Basis mode
-        <NativeSelect
-          value={String(value.basisMode ?? "provided")}
-          onChange={(event) =>
-            onChange({ ...value, basisMode: event.target.value })
-          }
-        >
-          {fieldSuggestionsInput.shape.basisMode.options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
+      <SmokeChoice
+        caption="Entity"
+        options={ENTITY_OPTIONS}
+        value={entity}
+        onValueChange={(next) => {
+          if (next == null) return;
+          onChange({
+            entity: next,
+            basisMode: value.basisMode ?? "provided",
+            targets: [],
+            basis: {},
+          });
+        }}
+      />
+      <SmokeChoice
+        caption="Basis mode"
+        options={BASIS_MODE_OPTIONS}
+        value={String(value.basisMode ?? "provided")}
+        onValueChange={(next) => {
+          if (next != null) onChange({ ...value, basisMode: next });
+        }}
+      />
       <fieldset className="grid gap-1">
         <legend className="text-sm font-medium">Targets</legend>
         <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border border-border p-2 sm:grid-cols-2">
@@ -391,25 +416,24 @@ function FieldSuggestionFields({
             />
           </div>
         ) : options ? (
-          <label key={key} className="grid gap-1 text-sm font-medium">
-            Basis · {key}
-            <NativeSelect
-              value={basis[key] ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  basis: { ...basis, [key]: event.target.value || null },
-                })
-              }
-            >
-              <option value="">Unspecified</option>
-              {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
+          <SmokeChoice
+            key={key}
+            caption={`Basis · ${key}`}
+            options={[
+              { value: "", label: "Unspecified" },
+              ...options.map((option) => ({
+                value: option.value,
+                label: option.label,
+              })),
+            ]}
+            value={basis[key] ?? ""}
+            onValueChange={(next) =>
+              onChange({
+                ...value,
+                basis: { ...basis, [key]: next || null },
+              })
+            }
+          />
         ) : (
           <label key={key} className="grid gap-1 text-sm font-medium">
             Basis · {key}
@@ -464,21 +488,18 @@ export function AiSmokeForm({
           );
         if (control === "select" && field.enum)
           return (
-            <label key={name} className="grid gap-1 text-sm font-medium">
-              {name.replace(/([A-Z])/g, " $1")}
-              <NativeSelect
-                value={String(value[name] ?? field.enum[0])}
-                onChange={(event) =>
-                  onChange({ ...value, [name]: event.target.value })
-                }
-              >
-                {field.enum.map((option) => (
-                  <option key={option} value={option}>
-                    {option.replaceAll("_", " ")}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
+            <SmokeChoice
+              key={name}
+              caption={name.replace(/([A-Z])/g, " $1")}
+              options={field.enum.map((option) => ({
+                value: option,
+                label: option.replaceAll("_", " "),
+              }))}
+              value={String(value[name] ?? field.enum[0])}
+              onValueChange={(next) => {
+                if (next != null) onChange({ ...value, [name]: next });
+              }}
+            />
           );
         if (control === "checkbox")
           return (

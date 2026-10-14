@@ -2,7 +2,11 @@ import {
   clearNutritionCachePrerequisite,
   seedNutritionPrerequisite,
 } from "./fixtures-recipes";
-import { waitForAppHydration, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+  waitForAppHydration,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("nutrition matrix shares URL basis, preserves partial ranges and zero, and exposes the catalog", async ({
@@ -18,7 +22,7 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
   await expect(
     table.getByRole("columnheader", { name: /Calcium/ }),
   ).toHaveCount(0);
-  await focus.selectOption("protein");
+  await selectComboboxItem(page, focus, "Protein");
   await expect(contributions).toContainText("10–20 g known · partial");
   await expect(
     contributions.getByRole("link", {
@@ -37,9 +41,9 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
     page.getByRole("button", { name: "Per serving", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(contributions).toContainText("75–125 kcal");
-  await focus.selectOption("sodium");
+  await selectComboboxItem(page, focus, "Sodium");
   await expect(contributions).toContainText("0 mg known · partial");
-  await focus.selectOption("calcium");
+  await selectComboboxItem(page, focus, "Calcium");
   await expect(
     table.getByRole("columnheader", { name: /Calcium/ }),
   ).toBeVisible();

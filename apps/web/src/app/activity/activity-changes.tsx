@@ -8,9 +8,23 @@ import { auditableEntities } from "@cubby/schemas/entity-manifest";
 
 import { entityPluralLabel } from "~/entity/entities";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
+
+const ENTITY_KIND_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All entities" },
+  ...auditableEntities.map((entity) => ({
+    value: entity,
+    label: entityPluralLabel(entity),
+  })),
+];
+
+const CHANNEL_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All channels" },
+  ...AUDIT_CHANNELS.map((channel) => ({ value: channel, label: channel })),
+];
 
 export function ActivityChanges({
   entityKind,
@@ -54,21 +68,17 @@ function EntityKindFilter({
   onChange: (entityKind: AuditEntityKind | undefined) => void;
 }) {
   return (
-    <Row as="label" align="center" gap="sm" className="w-fit text-sm">
+    <Row align="center" gap="sm" className="w-fit text-sm">
       <span className="text-muted-foreground">Entity</span>
-      <NativeSelect
+      <Picker
+        label="Entity"
+        options={ENTITY_KIND_OPTIONS}
         value={value ?? ""}
-        onChange={(event) =>
-          onChange(auditEntitySchema.safeParse(event.target.value).data)
+        onValueChange={(next) =>
+          onChange(auditEntitySchema.safeParse(next ?? "").data)
         }
-      >
-        <option value="">All entities</option>
-        {auditableEntities.map((entity) => (
-          <option key={entity} value={entity}>
-            {entityPluralLabel(entity)}
-          </option>
-        ))}
-      </NativeSelect>
+        className="w-44"
+      />
     </Row>
   );
 }
@@ -81,21 +91,18 @@ function ChannelFilter({
   onChange: (channel: AuditChannel | undefined) => void;
 }) {
   return (
-    <Row as="label" align="center" gap="sm" className="w-fit text-sm">
+    <Row align="center" gap="sm" className="w-fit text-sm">
       <span className="text-muted-foreground">Channel</span>
-      <NativeSelect
+      <Picker
+        mode="choose"
+        label="Channel"
+        options={CHANNEL_OPTIONS}
         value={value ?? ""}
-        onChange={(event) =>
-          onChange(auditChannelSchema.safeParse(event.target.value).data)
+        onValueChange={(next) =>
+          onChange(auditChannelSchema.safeParse(next ?? "").data)
         }
-      >
-        <option value="">All channels</option>
-        {AUDIT_CHANNELS.map((next) => (
-          <option key={next} value={next}>
-            {next}
-          </option>
-        ))}
-      </NativeSelect>
+        className="w-36"
+      />
     </Row>
   );
 }

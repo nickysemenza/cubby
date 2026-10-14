@@ -3,9 +3,10 @@ import {
   seedStaplePlanningPrerequisite,
 } from "./fixtures-recipes";
 import {
-  openDetailActions,
   gotoAuthenticatedPage,
+  openDetailActions,
   uniqueName,
+  selectComboboxItem,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -48,9 +49,11 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   // Re-point: pick the other cookbook in the recipe editor; the recipe's
   // source now links to it.
   await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?edit=true`);
-  await page
-    .getByLabel("Cookbook (Optional)")
-    .selectOption({ label: `${name} other` });
+  await selectComboboxItem(
+    page,
+    page.getByLabel("Cookbook (Optional)"),
+    `${name} other`,
+  );
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
     page.getByRole("link", { name: `${name} other`, exact: true }).first(),

@@ -17,6 +17,7 @@ import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { statusTone } from "~/lib/status-tone";
 import { formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -25,7 +26,6 @@ import { usePageCount } from "~/ui/page/Page";
 import { badgeVariantColor } from "~/ui/primitives/badge";
 import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,
@@ -81,6 +81,15 @@ const DISPOSITION_OPTIONS: PickerOption[] = DISPOSITION_VALUES.map((value) => ({
   label: capitalize(value),
   color: badgeVariantColor[statusTone("statementDisposition", value)],
 }));
+
+const MATCH_STATE_FILTER_OPTIONS: PickerOption[] = [
+  ...MATCH_STATE_OPTIONS,
+  { value: "all", label: "All" },
+];
+const DISPOSITION_FILTER_OPTIONS: PickerOption[] = [
+  { value: "", label: "Any disposition" },
+  ...DISPOSITION_OPTIONS,
+];
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
@@ -220,11 +229,14 @@ function StatementRowFilterBar({
   ) => void;
 }) {
   const importsQuery = useQuery(statementRow.imports.queryOptions({}));
-  const sourceOptions = useMemo(
-    () =>
-      importsQuery.data
+  const sourcePickerOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "All sources" },
+      ...(importsQuery.data
         ? uniq(importsQuery.data.data.map((imp) => imp.source)).sort()
-        : NO_SOURCES,
+        : NO_SOURCES
+      ).map((source) => ({ value: source, label: source })),
+    ],
     [importsQuery.data],
   );
 
@@ -234,47 +246,38 @@ function StatementRowFilterBar({
         value={search.q ?? ""}
         onChange={(q) => onUpdate({ q: q || undefined })}
       />
-      <NativeSelect
-        aria-label="Match state"
+      <Picker
+        mode="choose"
+        label="Match state"
+        widthMode="intrinsic"
+        options={MATCH_STATE_FILTER_OPTIONS}
         value={search.matchState ?? "unmatched"}
-        onChange={(e) =>
-          onUpdate({ matchState: matchStateSearchSchema.parse(e.target.value) })
+        onValueChange={(next) =>
+          onUpdate({ matchState: matchStateSearchSchema.parse(next) })
         }
-      >
-        <option value="unmatched">Unmatched</option>
-        <option value="matched">Matched</option>
-        <option value="superseded">Superseded</option>
-        <option value="ignored">Ignored</option>
-        <option value="all">All</option>
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Disposition"
+      />
+      <Picker
+        mode="choose"
+        label="Disposition"
+        widthMode="intrinsic"
+        options={DISPOSITION_FILTER_OPTIONS}
         value={search.disposition ?? ""}
-        onChange={(e) =>
+        onValueChange={(next) =>
           onUpdate({
-            disposition: e.target.value
-              ? (DISPOSITION_VALUES.find((value) => value === e.target.value) ??
+            disposition: next
+              ? (DISPOSITION_VALUES.find((value) => value === next) ??
                 undefined)
               : undefined,
           })
         }
-      >
-        <option value="">Any disposition</option>
-        <option value="open">Open</option>
-        <option value="ignored">Ignored</option>
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Source"
+      />
+      <Picker
+        label="Source"
+        className="w-48"
+        options={sourcePickerOptions}
         value={search.source ?? ""}
-        onChange={(e) => onUpdate({ source: e.target.value || undefined })}
-      >
-        <option value="">All sources</option>
-        {sourceOptions.map((source) => (
-          <option key={source} value={source}>
-            {source}
-          </option>
-        ))}
-      </NativeSelect>
+        onValueChange={(next) => onUpdate({ source: next || undefined })}
+      />
       <Row align="center" gap="xs" className="text-sm text-muted-foreground">
         <span>From</span>
         <DatePickerInput

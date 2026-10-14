@@ -12,7 +12,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { dispatchesOperation } from "./dispatch-wire";
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import {
   createEntityFixture,
@@ -319,9 +319,9 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
   // Leaving and returning to the same filters starts a fresh visit: the
   // earlier failure does not reappear without another settlement.
   const status = page.getByRole("combobox", { name: "Status" });
-  await status.selectOption("rejected");
+  await chooseOption(page, status, "Rejected");
   await expect(page.getByText("could not be settled")).toHaveCount(0);
-  await status.selectOption("pending");
+  await chooseOption(page, status, "Pending");
   await expect(
     page.getByText("No suggestions match these filters."),
   ).toBeVisible();

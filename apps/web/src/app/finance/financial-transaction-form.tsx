@@ -226,7 +226,7 @@ export function FinancialTransactionFormFields({
         // are a `FieldValues`-compatible shape, just not the literal generic
         // parameter RHF's invariant-ish method signatures expect here — the
         // same single-assertion escape `financial-form-fields.tsx`'s own
-        // `TextField`/`SelectField` use for a caller-owned dynamic path.
+        // `TextField`/`PickerField` use for a caller-owned dynamic path.
         form: form as never,
         idPrefix,
         mode,

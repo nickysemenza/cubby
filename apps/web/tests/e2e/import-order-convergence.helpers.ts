@@ -51,7 +51,7 @@ import {
   syntheticOrderIds,
   wardrobePhotos,
 } from "../../tooling/convergence-harness";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 
 type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
@@ -425,11 +425,13 @@ export async function createConvergenceHarness(
         exact: true,
       })
       .check();
-    await page
-      .getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
+    await chooseOption(
+      page,
+      page.getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
         exact: true,
-      })
-      .selectOption("purchase");
+      }),
+      "purchase",
+    );
     await page
       .getByRole("button", {
         name: "Save rows and create 1 reviewed transactions",

@@ -5,12 +5,14 @@ import {
 } from "@cubby/schemas/identifiers";
 import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityListFor } from "~/entity/entity-list";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";
@@ -23,7 +25,7 @@ export function InventoryExpenseActions({
 }: {
   record: DetailRecordOf<"inventory">;
 }) {
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
   const inventoryEntryId = inventoryShortcode.parse(record.id);
   const productId = productShortcode.parse(record.product.id);
   const context = useQuery(
@@ -39,6 +41,16 @@ export function InventoryExpenseActions({
     mutationFn: expense.confirmInventoryBeneficiary.mutationOptions,
     success: "Expense beneficiary saved",
   });
+  const expenseItems = expenses.data?.items;
+  const expenseOptions = useMemo<PickerOption[]>(
+    () =>
+      (expenseItems ?? []).map((item) => ({
+        value: item.id,
+        label: item.name,
+        detail: `${item.date} · ${item.cost}`,
+      })),
+    [expenseItems],
+  );
   const owner = context.data?.effectiveOwnership.effectiveOwner;
   return (
     <div className="space-y-2 border-t pt-3">
@@ -56,19 +68,14 @@ export function InventoryExpenseActions({
       </DetailAction>
       {owner && expenses.data?.items.length ? (
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Existing expense to attribute"
-            className="rounded border bg-background p-2 text-sm"
+          <Picker
+            className="w-72"
+            label="Existing expense to attribute"
+            placeholder="Choose existing expense"
+            options={expenseOptions}
             value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-          >
-            <option value="">Choose existing expense</option>
-            {expenses.data.items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} · {item.date} · {item.cost}
-              </option>
-            ))}
-          </select>
+            onValueChange={setSelected}
+          />
           <Button
             size="sm"
             variant="outline"

@@ -223,6 +223,27 @@ export const noRawTableRule = defineRule({
   },
 });
 
+/** Native `<select>`: every value choice renders through the one `Picker`. */
+export const noNativeSelectRule = defineRule({
+  meta: {
+    type: "suggestion",
+    docs: {
+      description: "Choose values through Picker instead of a native select.",
+    },
+    messages: {
+      nativeSelect: `Use Picker (mode="choose" for a short fixed list) or PickerField instead of a native <select>; it shows option icons and record pictures. ${CATALOG}`,
+    },
+  },
+  createOnce(context) {
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type === "JSXIdentifier" && node.name.name === "select")
+          context.report({ node, messageId: "nativeSelect" });
+      },
+    };
+  },
+});
+
 /** A static class string on a JSX attribute: `className="…"` or `className={"…"}`. */
 function classNameText(node: ESTree.JSXOpeningElement): string | undefined {
   for (const attribute of node.attributes) {

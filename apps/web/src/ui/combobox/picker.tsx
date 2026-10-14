@@ -139,11 +139,26 @@ type ResolvedPickerProps<TId extends string> = RecordPickerProps<TId>;
  */
 export function Picker<TId extends string = string>(props: PickerProps<TId>) {
   const resolved = useResolvedPickerProps(props);
-  const value = useSelectedValue(resolved);
-  return resolved.mode === "choose" ? (
-    <ChoosePicker {...resolved} value={value} />
+  // A picker's `entity` is fixed for its lifetime, so this branch never
+  // remounts the control; only record pickers read records.
+  return resolved.entity ? (
+    <RecordValuePicker {...resolved} />
   ) : (
-    <SearchPicker {...resolved} value={value} />
+    <PickerBody {...resolved} />
+  );
+}
+
+function RecordValuePicker<TId extends string>(
+  props: ResolvedPickerProps<TId>,
+) {
+  return <PickerBody {...props} value={useSelectedValue(props)} />;
+}
+
+function PickerBody<TId extends string>(props: ResolvedPickerProps<TId>) {
+  return props.mode === "choose" ? (
+    <ChoosePicker {...props} />
+  ) : (
+    <SearchPicker {...props} />
   );
 }
 
@@ -270,8 +285,8 @@ const rowClass = (meta: boolean, custom: boolean) =>
     custom && "items-start whitespace-normal",
   );
 
-/** The row's leading visual: a record's row-sized `icon` node, or the shared
- * `PickerVisual` for options (tinted glyph or swatch). */
+/** The row's leading marks: a categorical swatch and/or the row's glyph or
+ * record picture, built at row size by its builder. */
 function PickerRowVisual({
   item,
   custom,
@@ -279,19 +294,28 @@ function PickerRowVisual({
   item: ComboboxItem;
   custom: boolean;
 }) {
-  if (item.thumb && item.icon) {
-    return (
-      <span
-        className={cn(
-          "flex shrink-0",
-          !custom && "-my-2 items-center self-stretch",
-        )}
-      >
-        {item.icon}
-      </span>
-    );
-  }
-  return <PickerVisual item={item} size={24} />;
+  return (
+    <>
+      {item.color ? (
+        <span
+          aria-hidden
+          data-enum-option-swatch=""
+          className="size-2 shrink-0"
+          style={{ backgroundColor: item.color }}
+        />
+      ) : null}
+      {item.icon ? (
+        <span
+          className={cn(
+            "flex shrink-0",
+            !custom && "-my-2 items-center self-stretch",
+          )}
+        >
+          {item.icon}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 function PickerRowContent<TId extends string>({

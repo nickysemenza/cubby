@@ -10,18 +10,19 @@ import type {
 } from "@cubby/schemas/statement-row";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { statusTone } from "~/lib/status-tone";
 import { formatCount, formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrationGate } from "~/ui/hooks/useHydrated";
 import { Page } from "~/ui/page/Page";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 type FilePreview = Awaited<ReturnType<typeof statementRow.previewCsv.call>>;
 type Review = {
@@ -74,10 +75,97 @@ function confirmationLabel(
   return `Save ${formatCount(rows)} source rows`;
 }
 
+const REQUIRED_MAPPING_FIELDS: ReadonlySet<string> = new Set([
+  "date",
+  "amount",
+  "description",
+]);
+/** Above this many CSV headers a typed filter beats scanning the list. */
+const CHOOSE_MODE_MAX = 12;
+
+const mappingFieldName = (field: string) =>
+  field === "accountColumn"
+    ? "Account"
+    : field[0]!.toUpperCase() + field.slice(1);
+
+const AMOUNT_CONVENTION_OPTIONS: PickerOption[] = [
+  { value: "charges-negative", label: "Charges are negative" },
+  { value: "charges-positive", label: "Charges are positive" },
+  {
+    value: "direction-column",
+    label: "Direction column says charge or credit",
+  },
+];
+
+const TRANSACTION_KIND_OPTIONS: PickerOption[] =
+  financialTransactionKind.options.map((kind) => ({
+    value: kind,
+    label: kind.replaceAll("_", " "),
+  }));
+
+type ExistingTransaction =
+  FinancialStatementImportPreviewOut["rows"][number]["existingTransactions"][number];
+
+/** Picks which existing transaction a possible-duplicate row attaches to,
+ * or none (`""`); the value is the transaction id, never shown. */
+function AttachTransactionPicker({
+  label,
+  candidates,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  candidates: readonly ExistingTransaction[];
+  value: string;
+  disabled: boolean;
+  onChange: (id: string) => void;
+}) {
+  const options = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "Keep unresolved; save evidence only" },
+      ...candidates.map((candidate) => ({
+        value: candidate.id,
+        label: candidate.rawDescription ?? candidate.merchant ?? "Transaction",
+        detail: [
+          candidate.postedDate ?? candidate.transactionDate,
+          formatCurrency(candidate.amount),
+          candidate.status,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    ],
+    [candidates],
+  );
+  return (
+    <Picker
+      mode="choose"
+      label={label}
+      className="mt-2 w-full max-w-sm"
+      options={options}
+      value={value}
+      disabled={disabled}
+      onValueChange={(next) => onChange(next ?? "")}
+    />
+  );
+}
+
 function StatementImportPage() {
   const [review, setReview] = useState<Review | null>(null);
   const [mappingFile, setMappingFile] = useState<MappingDraft | null>(null);
   const mapping = mappingFile?.mapping;
+  const headers = mappingFile?.headers;
+  const headerOptions = useMemo(() => {
+    const columns = (headers ?? []).map((header): PickerOption => ({
+      value: header,
+      label: header,
+    }));
+    return {
+      required: [{ value: "", label: "Choose column" }, ...columns],
+      optional: [{ value: "", label: "None" }, ...columns],
+    };
+  }, [headers]);
   const updateMapping = (patch: Partial<StatementCsvColumnMapping>) =>
     setMappingFile(
       (before) =>
@@ -282,44 +370,43 @@ function StatementImportPage() {
                   "status",
                 ] as const
               ).map((field) => (
-                <label key={field} className="text-sm">
-                  {field === "accountColumn"
-                    ? "Account"
-                    : field[0]!.toUpperCase() + field.slice(1)}{" "}
-                  column
-                  {["date", "amount", "description"].includes(field)
-                    ? " *"
-                    : ""}
-                  <NativeSelect
-                    aria-label={`${field === "accountColumn" ? "Account" : field[0]!.toUpperCase() + field.slice(1)} column`}
-                    className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
-                    value={mapping[field]}
-                    onChange={(event) =>
-                      updateMapping({ [field]: event.target.value })
+                <div key={field} className="text-sm">
+                  <span>
+                    {mappingFieldName(field)} column
+                    {REQUIRED_MAPPING_FIELDS.has(field) ? " *" : ""}
+                  </span>
+                  <Picker
+                    mode={
+                      headerOptions.required.length > CHOOSE_MODE_MAX
+                        ? "search"
+                        : "choose"
                     }
-                  >
-                    <option value="">
-                      {["date", "amount", "description"].includes(field)
-                        ? "Choose column"
-                        : "None"}
-                    </option>
-                    {mappingFile.headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </label>
+                    label={`${mappingFieldName(field)} column`}
+                    className="mt-1 w-full"
+                    options={
+                      REQUIRED_MAPPING_FIELDS.has(field)
+                        ? headerOptions.required
+                        : headerOptions.optional
+                    }
+                    value={mapping[field]}
+                    onValueChange={(next) =>
+                      updateMapping({ [field]: next ?? "" })
+                    }
+                  />
+                </div>
               ))}
-              <label className="text-sm" htmlFor="statement-amount-convention">
-                Amount convention
-                <NativeSelect
-                  id="statement-amount-convention"
-                  aria-label="Amount convention"
-                  className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+              <div className="text-sm">
+                <label htmlFor="statement-amount-convention">
+                  Amount convention
+                </label>
+                <Picker
+                  mode="choose"
+                  inputId="statement-amount-convention"
+                  label="Amount convention"
+                  className="mt-1 w-full"
+                  options={AMOUNT_CONVENTION_OPTIONS}
                   value={mapping.sign}
-                  onChange={(event) => {
-                    const sign = event.target.value;
+                  onValueChange={(sign) => {
                     if (
                       sign === "charges-negative" ||
                       sign === "charges-positive" ||
@@ -327,14 +414,8 @@ function StatementImportPage() {
                     )
                       updateMapping({ sign });
                   }}
-                >
-                  <option value="charges-negative">Charges are negative</option>
-                  <option value="charges-positive">Charges are positive</option>
-                  <option value="direction-column">
-                    Direction column says charge or credit
-                  </option>
-                </NativeSelect>
-              </label>
+                />
+              </div>
               {mapping.sign === "direction-column" && (
                 <div className="flex gap-2">
                   <label className="text-sm">
@@ -494,60 +575,51 @@ function StatementImportPage() {
                         {row.proposed.sourceCategory || "Uncategorized"}
                       </span>
                       {ready && (
-                        <NativeSelect
-                          aria-label={`Transaction kind for ${row.proposed.rawDescription ?? row.key}`}
-                          value={kinds[row.key] ?? ""}
+                        <Picker
+                          mode="choose"
+                          compact
+                          widthMode="intrinsic"
+                          label={`Transaction kind for ${row.proposed.rawDescription ?? row.key}`}
+                          placeholder="Choose transaction kind"
+                          className="mt-1 min-w-40"
+                          options={TRANSACTION_KIND_OPTIONS}
+                          value={kinds[row.key] ?? null}
                           disabled={busy || !selected.includes(row.key)}
-                          onChange={(event) =>
+                          onValueChange={(next) => {
+                            if (!next) return;
                             setKinds((before) => ({
                               ...before,
-                              [row.key]: financialTransactionKind.parse(
-                                event.target.value,
-                              ),
-                            }))
-                          }
-                          className="mt-1 h-8 min-w-40 rounded-sm border border-border bg-background px-2 text-sm"
-                        >
-                          <option value="">Choose transaction kind</option>
-                          {financialTransactionKind.options.map((kind) => (
-                            <option key={kind} value={kind}>
-                              {kind.replaceAll("_", " ")}
-                            </option>
-                          ))}
-                        </NativeSelect>
+                              [row.key]: financialTransactionKind.parse(next),
+                            }));
+                          }}
+                        />
                       )}
                       {row.status === "possible_existing" &&
                         row.existingTransactionIds.length > 0 && (
-                          <NativeSelect
-                            aria-label={`Attach existing transaction for ${row.proposed.rawDescription ?? row.key}`}
+                          <AttachTransactionPicker
+                            label={`Attach existing transaction for ${row.proposed.rawDescription ?? row.key}`}
+                            candidates={row.existingTransactions}
                             value={attachments[row.key] ?? ""}
                             disabled={busy}
-                            onChange={(event) =>
+                            onChange={(next) =>
                               setAttachments((before) => ({
                                 ...before,
-                                [row.key]: event.target.value,
+                                [row.key]: next,
                               }))
                             }
-                            className="mt-2 w-full max-w-sm"
-                          >
-                            <option value="">
-                              Keep unresolved; save evidence only
-                            </option>
-                            {row.existingTransactions.map((candidate) => (
-                              <option key={candidate.id} value={candidate.id}>
-                                {candidate.id} ·{" "}
-                                {candidate.postedDate ??
-                                  candidate.transactionDate}{" "}
-                                · {formatCurrency(candidate.amount)} ·{" "}
-                                {candidate.status}
-                              </option>
-                            ))}
-                          </NativeSelect>
+                          />
                         )}
-                      {!ready && row.existingTransactionIds.length > 0 && (
+                      {!ready && row.existingTransactions.length > 0 && (
                         <span className="block text-xs text-muted-foreground">
                           Possible transaction:{" "}
-                          {row.existingTransactionIds.join(", ")}
+                          {row.existingTransactions
+                            .map(
+                              (candidate) =>
+                                candidate.rawDescription ??
+                                candidate.merchant ??
+                                "Transaction",
+                            )
+                            .join(", ")}
                         </span>
                       )}
                     </span>

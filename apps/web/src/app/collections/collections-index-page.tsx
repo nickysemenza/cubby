@@ -11,11 +11,12 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
 import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { useSmartCollections } from "./smart-collection-state";
 
@@ -30,6 +31,11 @@ const SMART_SOURCE_LABELS = {
   locationNameContains: "location",
   historicalExpenseTrade: "Trade",
 } as const;
+
+const SUBJECT_OPTIONS: readonly PickerOption[] = [
+  { value: "product", label: "Product" },
+  { value: "location", label: "Location" },
+];
 
 const SMART_SOURCE_KINDS = [
   "productTagEquals",
@@ -108,22 +114,21 @@ export function CollectionsIndexPage({
               ref={focusOnMount}
             />
           </label>
-          <label className="space-y-1" htmlFor={subjectId}>
+          <div className="space-y-1">
             <span className="eyebrow">First member</span>
-            <NativeSelect
-              id={subjectId}
+            <Picker
+              mode="choose"
+              inputId={subjectId}
+              label="First member"
+              options={SUBJECT_OPTIONS}
               value={subject}
-              onChange={(event) => {
-                const nextSubject = event.target.value;
+              onValueChange={(nextSubject) => {
                 if (nextSubject === "product" || nextSubject === "location") {
                   setSubject(nextSubject);
                 }
               }}
-            >
-              <option value="product">Product</option>
-              <option value="location">Location</option>
-            </NativeSelect>
-          </label>
+            />
+          </div>
           <label className="space-y-1" htmlFor={memberId}>
             <span className="eyebrow">Shortcode</span>
             <Input

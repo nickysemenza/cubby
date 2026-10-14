@@ -14,6 +14,8 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   AiCost,
   formatAiCost as formatUsageCost,
@@ -34,7 +36,6 @@ import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 const supportedEntityKinds = [
   "product",
@@ -78,6 +79,19 @@ function isTransport(value: string): value is AiUsageTransport {
 function isStatus(value: string): value is AiUsageStatus {
   return Object.hasOwn(statusLabels, value);
 }
+
+const TRANSPORT_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All transports" },
+  ...Object.entries(transportLabels).map(([value, label]) => ({
+    value,
+    label,
+  })),
+];
+
+const STATUS_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All statuses" },
+  ...Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+];
 
 function formatTokens(value: number | null | undefined): string {
   return formatCount(value ?? 0);
@@ -568,19 +582,21 @@ function DimensionSelect({
   value: string | undefined;
   onChange: (value: string | undefined) => void;
 }) {
+  const choices = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: allLabel },
+      ...options.map((option) => ({ value: option, label: option })),
+    ],
+    [allLabel, options],
+  );
   return (
-    <NativeSelect
-      aria-label={label}
+    <Picker
+      label={label}
+      className="w-44"
+      options={choices}
       value={value ?? ""}
-      onChange={(event) => onChange(event.target.value || undefined)}
-    >
-      <option value="">{allLabel}</option>
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </NativeSelect>
+      onValueChange={(next) => onChange(next || undefined)}
+    />
   );
 }
 
@@ -635,36 +651,34 @@ export function AiUsagePage() {
         value={queryText}
         onChange={(event) => setQueryText(event.target.value)}
       />
-      <NativeSelect
-        aria-label="Transport"
+      <Picker
+        mode="choose"
+        label="Transport"
+        widthMode="intrinsic"
+        className="w-40"
+        options={TRANSPORT_OPTIONS}
         value={filters.transport ?? ""}
-        onChange={(event) => {
-          const value = event.target.value;
-          setFilter("transport", isTransport(value) ? value : undefined);
-        }}
-      >
-        <option value="">All transports</option>
-        {Object.entries(transportLabels).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Status"
+        onValueChange={(value) =>
+          setFilter(
+            "transport",
+            value != null && isTransport(value) ? value : undefined,
+          )
+        }
+      />
+      <Picker
+        mode="choose"
+        label="Status"
+        widthMode="intrinsic"
+        className="w-36"
+        options={STATUS_OPTIONS}
         value={filters.status ?? ""}
-        onChange={(event) => {
-          const value = event.target.value;
-          setFilter("status", isStatus(value) ? value : undefined);
-        }}
-      >
-        <option value="">All statuses</option>
-        {Object.entries(statusLabels).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </NativeSelect>
+        onValueChange={(value) =>
+          setFilter(
+            "status",
+            value != null && isStatus(value) ? value : undefined,
+          )
+        }
+      />
       <DimensionSelect
         label="Provider"
         allLabel="All providers"

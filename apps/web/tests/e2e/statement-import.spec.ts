@@ -1,7 +1,7 @@
 import { entityApi } from "./entity-api";
 import { z } from "zod";
 import { createEntityFixture } from "./fixtures-core";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("a no-ID posted tip requires reviewed attachment to the pending charge", async ({
@@ -43,10 +43,18 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
     exact: true,
   });
   await expect(candidate).toBeVisible();
-  await expect(
-    candidate.locator("option", { hasText: /20.00.+pending/ }),
-  ).toHaveCount(1);
-  await candidate.selectOption(transactionId);
+  await expect(async () => {
+    if ((await candidate.getAttribute("aria-expanded")) !== "true")
+      await candidate.click();
+    await expect(candidate).toHaveAttribute("aria-expanded", "true", {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 5000 });
+  // The pending charge is offered by its date, amount, and status — never its id.
+  const pendingOption = page.getByRole("option", { name: /20\.00.+pending/ });
+  await expect(pendingOption).toHaveCount(1);
+  await pendingOption.click();
+  await expect(candidate).toHaveText(new RegExp(tag));
   await page
     .getByRole("button", {
       name: "Save rows and attach 1 reviewed observations",
@@ -133,13 +141,15 @@ test("unfamiliar statement CSV requires reviewed column and sign mapping", async
     .getByLabel("Account name (for a single-account file)")
     .fill("Fixture checking (...4242)");
   // The server suggests the columns; both clients prefill from it.
-  await expect(mapping.getByLabel("Date column")).toHaveValue("When");
-  await expect(mapping.getByLabel("Amount column")).toHaveValue("Total");
-  await expect(mapping.getByLabel("Description column")).toHaveValue("Details");
-  await mapping.getByLabel("Direction column").selectOption("Flow");
-  await mapping
-    .getByLabel("Amount convention")
-    .selectOption("direction-column");
+  await expect(mapping.getByLabel("Date column")).toHaveText(/When/);
+  await expect(mapping.getByLabel("Amount column")).toHaveText(/Total/);
+  await expect(mapping.getByLabel("Description column")).toHaveText(/Details/);
+  await chooseOption(page, mapping.getByLabel("Direction column"), "Flow");
+  await chooseOption(
+    page,
+    mapping.getByLabel("Amount convention"),
+    "Direction column says charge or credit",
+  );
   await mapping.getByLabel("Charge value").fill("out");
   await mapping.getByLabel("Credit value").fill("in");
   await mapping.getByRole("button", { name: "Preview mapped rows" }).click();
@@ -189,8 +199,8 @@ test("identical purchases stay distinct and a changed provider date attaches rev
   const kinds = page.getByLabel(`Transaction kind for ${descriptor}`, {
     exact: true,
   });
-  await kinds.nth(0).selectOption("purchase");
-  await kinds.nth(1).selectOption("purchase");
+  await chooseOption(page, kinds.nth(0), "purchase");
+  await chooseOption(page, kinds.nth(1), "purchase");
   await page
     .getByRole("button", {
       name: "Save rows and create 2 reviewed transactions",
@@ -205,9 +215,17 @@ test("identical purchases stay distinct and a changed provider date attaches rev
     { exact: true },
   );
   await expect(attach).toBeVisible();
-  const candidate = await attach.locator("option").nth(1).getAttribute("value");
-  if (!candidate) throw new Error("Expected reviewed candidate");
-  await attach.selectOption(candidate);
+  // Both reviewed candidates share a descriptor; take the first real one
+  // after the "Keep unresolved" option.
+  await expect(async () => {
+    if ((await attach.getAttribute("aria-expanded")) !== "true")
+      await attach.click();
+    await expect(attach).toHaveAttribute("aria-expanded", "true", {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 5000 });
+  await page.getByRole("option").nth(1).click();
+  await expect(attach).toHaveText(new RegExp(descriptor));
   await page
     .getByRole("button", {
       name: "Save rows and attach 1 reviewed observations",

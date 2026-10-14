@@ -6,7 +6,7 @@ import type { ComboboxItem } from "./combobox-types";
 /**
  * The leading visual for a chosen value — the closed field and selection
  * chips. A record shows its `thumb` (photo, else its fallback glyph) in a
- * fixed box; an option shows its `icon` tinted by `color`, or a `color`
+ * fixed box; an option shows its (already tinted) `icon`, or its `color`
  * swatch. Decorative: the field's text carries the name.
  */
 export function PickerVisual({
@@ -48,7 +48,6 @@ export function PickerVisual({
         aria-hidden
         data-picker-visual=""
         className="flex shrink-0 items-center [&>svg]:size-3.5!"
-        style={{ color: item.color }}
       >
         {item.icon}
       </span>

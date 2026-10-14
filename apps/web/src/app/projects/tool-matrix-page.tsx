@@ -53,6 +53,8 @@ import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
 import { Badge } from "~/ui/primitives/badge";
@@ -63,7 +65,6 @@ import {
   EmptyTitle,
 } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 /**
@@ -421,6 +422,14 @@ export function ToolMatrixPage({
     }
     return index;
   }, [data?.cells]);
+  const completionYears = data?.filterOptions.completionYears;
+  const completionYearOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All" },
+      ...(completionYears ?? []).map((year) => ({ value: year, label: year })),
+    ],
+    [completionYears],
+  );
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (!data) return null;
@@ -489,24 +498,21 @@ export function ToolMatrixPage({
           />
           <Row align="center" gap="sm">
             <span className="eyebrow">Completed</span>
-            <NativeSelect
-              aria-label="Filter projects by completion year"
+            <Picker
+              mode="choose"
+              compact
+              widthMode="intrinsic"
+              label="Filter projects by completion year"
+              options={completionYearOptions}
               value={search.completed ?? ""}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 onSearchChange({
-                  completed: event.target.value || undefined,
+                  completed: value || undefined,
                   page: undefined,
                 })
               }
-              className="font-mono text-2xs"
-            >
-              <option value="">All</option>
-              {data.filterOptions.completionYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </NativeSelect>
+              className="w-24 font-mono text-2xs"
+            />
           </Row>
           <Row align="center" gap="xs" className="ml-auto">
             <button

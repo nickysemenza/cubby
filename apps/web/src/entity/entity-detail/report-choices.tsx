@@ -13,6 +13,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities } from "~/entity/entities";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
@@ -20,7 +21,6 @@ import {
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { StatusText } from "~/ui/primitives/status-text";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -55,6 +55,11 @@ export function ChoiceControl({
   onAnswer: (next: ChoiceAnswer | undefined) => void;
 }) {
   const option = choice.options.find((entry) => entry.id === answer?.optionId);
+  const choiceOptions = useMemo<PickerOption[]>(
+    () =>
+      choice.options.map((entry) => ({ value: entry.id, label: entry.label })),
+    [choice.options],
+  );
   // The picker shows a name; an answer made from a suggestion carries only the code.
   const [picked, setPicked] = useState<ComboboxItem | null>(null);
   const pickEntity = option?.pick?.entity;
@@ -98,16 +103,18 @@ export function ChoiceControl({
           </Button>
         </Row>
       ))}
-      <label className="flex flex-col gap-1 text-xs">
+      <div className="flex flex-col gap-1 text-xs">
         <span>{choice.label}</span>
-        <NativeSelect
-          aria-label={choice.label}
-          value={answer?.optionId ?? ""}
+        <Picker
+          mode="choose"
+          clearable
+          label={choice.label}
+          placeholder="Choose…"
+          options={choiceOptions}
+          value={answer?.optionId ?? null}
           disabled={disabled}
-          onChange={(event) => {
-            const next = choice.options.find(
-              (entry) => entry.id === event.target.value,
-            );
+          onValueChange={(value) => {
+            const next = choice.options.find((entry) => entry.id === value);
             if (!next) return onAnswer(undefined);
             // A pick or reason already given survives while the new option still asks for it.
             const kept: ChoiceAnswer = { optionId: next.id };
@@ -115,15 +122,8 @@ export function ChoiceControl({
             if (next.text && answer?.text) kept.text = answer.text;
             onAnswer(kept);
           }}
-        >
-          <option value="">Choose…</option>
-          {choice.options.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
+        />
+      </div>
       {option?.pick && picker ? (
         <picker.Search>
           {({ items, onSearchChange, onOpenChange, isLoading }) => (

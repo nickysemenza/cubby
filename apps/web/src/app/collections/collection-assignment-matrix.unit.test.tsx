@@ -98,7 +98,7 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
     const collectionTarget = screen.getByRole("combobox", {
       name: "Assign to Collection",
     });
-    expect(collectionTarget).toHaveValue("painting");
+    expect(collectionTarget).toHaveValue("Painting");
     const mobile = await mobileRows();
     expect(
       mobile.getByRole("button", {
@@ -106,9 +106,11 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
       }),
     ).toBeVisible();
 
-    fireEvent.change(collectionTarget, { target: { value: "kitchen" } });
+    collectionTarget.focus();
+    fireEvent.keyDown(collectionTarget, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: /Kitchen/ }));
 
-    expect(collectionTarget).toHaveValue("kitchen");
+    await waitFor(() => expect(collectionTarget).toHaveValue("Kitchen"));
     expect(
       mobile.getByRole("button", {
         name: "Add direct Kitchen assignment for Primer; inherited membership remains",
@@ -146,7 +148,7 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
 
     expect(
       await screen.findByRole("combobox", { name: "Assignment subject" }),
-    ).toHaveValue("product");
+    ).toHaveTextContent("Products");
     expect(screen.getByText("No Collections yet")).toBeVisible();
     expect(
       screen

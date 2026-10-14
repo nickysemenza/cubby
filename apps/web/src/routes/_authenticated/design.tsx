@@ -31,7 +31,6 @@ import {
 } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
@@ -76,6 +75,7 @@ const SAMPLE_FILTERS = [
 function DesignSmokeTest() {
   const projectNameId = useId();
   const stateSelectId = useId();
+  const [sampleState, setSampleState] = useState("current");
   const selectedCheckboxId = useId();
   const unselectedCheckboxId = useId();
   const disabledCheckboxId = useId();
@@ -216,11 +216,17 @@ function DesignSmokeTest() {
                     value="Disabled"
                   />
                   <div>
-                    <Label htmlFor={stateSelectId}>Native select</Label>
-                    <NativeSelect id={stateSelectId} defaultValue="current">
-                      <option value="current">Current</option>
-                      <option value="archived">Archived</option>
-                    </NativeSelect>
+                    <Label htmlFor={stateSelectId}>Choose picker</Label>
+                    <Picker
+                      mode="choose"
+                      inputId={stateSelectId}
+                      label="Choose picker"
+                      options={SAMPLE_FILTERS}
+                      value={sampleState}
+                      onValueChange={(next) =>
+                        setSampleState(next ?? "current")
+                      }
+                    />
                   </div>
                 </div>
                 <FormFieldGroup

@@ -47,6 +47,26 @@ function ControlsHarness({ recipes = false }: { recipes?: boolean }) {
   );
 }
 
+function openPicker(name: string) {
+  const control = screen.getByRole("combobox", { name });
+  control.focus();
+  fireEvent.keyDown(control, { key: "ArrowDown" });
+  return control;
+}
+
+function pick(option: string | RegExp) {
+  // A real click starts on the option; choose-mode pickers ignore a click
+  // whose pointer went down on the trigger.
+  const item = screen.getByRole("option", { name: option });
+  fireEvent.pointerDown(item);
+  fireEvent.click(item);
+}
+
+function choose(name: string, option: string) {
+  openPicker(name);
+  pick(option);
+}
+
 afterEach(() => {
   cleanup();
   onChange.mockClear();
@@ -55,13 +75,12 @@ afterEach(() => {
 describe("EntityGraphControls", () => {
   it("can scope unassigned work and restore all locations", () => {
     render(<ControlsHarness />);
-    const location = screen.getByRole("combobox", { name: "Location" });
-    fireEvent.change(location, { target: { value: "location:" } });
+    choose("Location", "No location");
     expect(onChange).toHaveBeenLastCalledWith({
       location: "",
       focus: undefined,
     });
-    fireEvent.change(location, { target: { value: "all" } });
+    choose("Location", "All locations");
     expect(onChange).toHaveBeenLastCalledWith({
       location: undefined,
       focus: undefined,
@@ -70,9 +89,13 @@ describe("EntityGraphControls", () => {
 
   it("switches work grouping between location, hierarchy, and none", () => {
     render(<ControlsHarness />);
-    const grouping = screen.getByRole("combobox", { name: "Group by" });
-    for (const value of ["location", "hierarchy", "both", "none"]) {
-      fireEvent.change(grouping, { target: { value } });
+    for (const [value, label] of [
+      ["location", "Location"],
+      ["both", "Location & hierarchy"],
+      ["none", "None"],
+      ["hierarchy", "Hierarchy"],
+    ] as const) {
+      choose("Group by", label);
       expect(onChange).toHaveBeenLastCalledWith({
         grouped: value === "hierarchy" || value === "both",
         groupByLocation: value === "location" || value === "both",
@@ -83,10 +106,13 @@ describe("EntityGraphControls", () => {
   it("filters focus choices and emits work-specific graph filters", () => {
     render(<ControlsHarness />);
 
-    const focus = screen.getByRole("combobox", { name: "Focus record" });
+    openPicker("Focus record");
     expect(
       screen.getByRole("option", { name: /Kitchen refresh/ }),
-    ).toBeVisible();
+    ).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Focus record" }), {
+      key: "Escape",
+    });
 
     fireEvent.change(
       screen.getByRole("textbox", { name: "Find graph record" }),
@@ -95,18 +121,14 @@ describe("EntityGraphControls", () => {
       },
     );
 
-    expect(
-      screen.getByRole("option", { name: "Write proposal (TSK-CD34)" }),
-    ).toBeVisible();
+    openPicker("Focus record");
     expect(
       screen.queryByRole("option", { name: /Kitchen refresh/ }),
     ).not.toBeInTheDocument();
-
-    fireEvent.change(focus, { target: { value: "TSK-CD34" } });
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Dependency direction" }),
-      { target: { value: "upstream" } },
-    );
+    // Record codes stay searchable but are never shown.
+    expect(screen.queryByText(/TSK-CD34/)).not.toBeInTheDocument();
+    pick(/Write proposal/);
+    choose("Dependency direction", "Blockers");
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Hide completed work" }),
     );
@@ -120,17 +142,22 @@ describe("EntityGraphControls", () => {
     expect(onChange).toHaveBeenNthCalledWith(2, { direction: "upstream" });
     expect(onChange).toHaveBeenNthCalledWith(3, { hideCompleted: false });
     expect(onChange).toHaveBeenNthCalledWith(4, { reduceEdges: true });
-    expect(screen.getByRole("option", { name: "Blockers" })).toBeVisible();
-    expect(screen.getByRole("option", { name: "Blocked work" })).toBeVisible();
+    openPicker("Dependency direction");
+    expect(
+      screen.getByRole("option", { name: "Blocked work" }),
+    ).toBeInTheDocument();
   });
 
   it("uses recipe-specific relationship labels", () => {
     render(<ControlsHarness recipes />);
+    openPicker("Dependency direction");
 
     expect(
       screen.getByRole("option", { name: "Recipes using this" }),
-    ).toBeVisible();
-    expect(screen.getByRole("option", { name: "Used recipes" })).toBeVisible();
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Used recipes" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", { name: "Hide unconnected recipes" }),
     ).toBeChecked();

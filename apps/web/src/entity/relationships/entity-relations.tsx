@@ -41,6 +41,8 @@ import {
   entityGraph,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -48,7 +50,6 @@ import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ChoiceSwitcher, ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
@@ -75,6 +76,13 @@ export function supportsEntityGraph(entity: Entity) {
     "shortcodePrefix" in entityManifest[entity]
   );
 }
+
+const ENTITY_KIND_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All entity types" },
+  ...allEntities
+    .filter(supportsEntityGraph)
+    .map((entity) => ({ value: entity, label: entityLabel(entity) })),
+];
 
 export interface EntityRelationsState {
   view?: "list" | "graph";
@@ -541,6 +549,15 @@ function EntityRelationsContent(
     recommendationActionOperations,
     selectedRef,
   } = model;
+  const relationshipOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All relationships" },
+      ...[
+        ...new Map(data.branches.map((b) => [b.relationshipKey, b.label])),
+      ].map(([key, label]) => ({ value: key, label })),
+    ],
+    [data.branches],
+  );
   if (loading)
     return (
       <Stack gap="md">
@@ -634,40 +651,28 @@ function EntityRelationsContent(
           }
           className="min-w-0 flex-1"
         />
-        <NativeSelect
-          aria-label="Filter entity type"
+        <Picker
+          label="Filter entity type"
+          widthMode="intrinsic"
+          className="w-44"
+          options={ENTITY_KIND_OPTIONS}
           value={current.entityKind ?? ""}
-          onChange={(event) =>
+          onValueChange={(value) =>
             change({
-              entityKind: allEntities.find(
-                (entity) => entity === event.target.value,
-              ),
+              entityKind: allEntities.find((entity) => entity === value),
             })
           }
-        >
-          <option value="">All entity types</option>
-          {allEntities.filter(supportsEntityGraph).map((entity) => (
-            <option key={entity} value={entity}>
-              {entityLabel(entity)}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          aria-label="Filter relationship"
+        />
+        <Picker
+          label="Filter relationship"
+          widthMode="intrinsic"
+          className="w-44"
+          options={relationshipOptions}
           value={current.relationship ?? ""}
-          onChange={(event) =>
-            change({ relationship: event.target.value || undefined })
+          onValueChange={(value) =>
+            change({ relationship: value || undefined })
           }
-        >
-          <option value="">All relationships</option>
-          {[
-            ...new Map(data.branches.map((b) => [b.relationshipKey, b.label])),
-          ].map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </NativeSelect>
+        />
       </Row>
       <VisitedRecords model={model} />
       <GraphPathPanel

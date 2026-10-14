@@ -1,10 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { type Control, Controller } from "react-hook-form";
 
-import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { NativeSelect } from "~/ui/primitives/native-select";
+import { Picker } from "~/ui/combobox/picker";
 
 import { FormFieldGroup } from "../../../ui/forms/form-field-group";
+import { useCookbookOptions } from "../cookbook-select";
 import type { RecipeFormValues } from "./types";
 
 /**
@@ -16,26 +15,22 @@ export function RecipeCookbookField({
 }: {
   control: Control<RecipeFormValues>;
 }) {
-  const { data: cookbooks } = useQuery(cookbook.list.queryOptions(null));
+  const options = useCookbookOptions("No cookbook");
   return (
     <Controller
       control={control}
       name="cookbookId"
       render={({ field }) => (
         <FormFieldGroup htmlFor="recipe-cookbook" label="Cookbook (Optional)">
-          <NativeSelect
-            id="recipe-cookbook"
+          <Picker
+            inputId="recipe-cookbook"
+            inputRef={field.ref}
+            label="Cookbook (Optional)"
             className="w-full"
+            options={options}
             value={field.value ?? ""}
-            onChange={(event) => field.onChange(event.target.value || null)}
-          >
-            <option value="">No cookbook</option>
-            {cookbooks?.map((book) => (
-              <option key={book.id} value={book.id}>
-                {book.name}
-              </option>
-            ))}
-          </NativeSelect>
+            onValueChange={(next) => field.onChange(next || null)}
+          />
         </FormFieldGroup>
       )}
     />

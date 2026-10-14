@@ -11,10 +11,26 @@ import { financialTransaction } from "~/integrations/tanstack-query/generated/ca
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
+
+const CONVERT_TO_TRANSFER_OPTION: PickerOption = {
+  value: "convert_to_transfer",
+  label: "Convert booked spending to transfer evidence",
+};
+const OUTFLOW_CORRECTION_OPTIONS: readonly PickerOption[] = [
+  CONVERT_TO_TRANSFER_OPTION,
+];
+const CREDIT_CORRECTION_OPTIONS: readonly PickerOption[] = [
+  {
+    value: "attach_reimbursement",
+    label: "Attach reimbursement to original purchase",
+  },
+  CONVERT_TO_TRANSFER_OPTION,
+];
 
 export function FinancialBookingCorrectionReview({
   transaction,
@@ -47,28 +63,25 @@ export function FinancialBookingCorrectionReview({
   const busy = preview.isPending || commit.isPending;
   return (
     <Stack gap="sm">
-      <NativeSelect
-        aria-label="Booking correction"
+      <Picker
+        mode="choose"
+        label="Booking correction"
+        options={
+          transaction.amount < 0
+            ? CREDIT_CORRECTION_OPTIONS
+            : OUTFLOW_CORRECTION_OPTIONS
+        }
         value={kind}
-        onChange={(event) => {
+        onValueChange={(next) => {
           setKind(
-            event.target.value === "attach_reimbursement"
+            next === "attach_reimbursement"
               ? "attach_reimbursement"
               : "convert_to_transfer",
           );
           setReview(null);
         }}
         disabled={busy}
-      >
-        {transaction.amount < 0 ? (
-          <option value="attach_reimbursement">
-            Attach reimbursement to original purchase
-          </option>
-        ) : null}
-        <option value="convert_to_transfer">
-          Convert booked spending to transfer evidence
-        </option>
-      </NativeSelect>
+      />
       {kind === "attach_reimbursement" ? (
         <EntityReferencePicker
           entity="purchase"

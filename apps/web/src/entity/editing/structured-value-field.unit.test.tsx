@@ -48,11 +48,15 @@ function Harness({
   );
 }
 
+/** A choose-mode pick: open from the keyboard, hover, then click (Base UI
+ * Select ignores a click whose pointer went down on the trigger). */
 const choose = (name: string, option: string) => {
-  fireEvent.keyDown(screen.getByRole("combobox", { name }), {
-    key: "ArrowDown",
-  });
-  fireEvent.click(screen.getByRole("option", { name: option }));
+  const picker = screen.getByRole("combobox", { name });
+  picker.focus();
+  fireEvent.keyDown(picker, { key: "ArrowDown" });
+  const item = screen.getByRole("option", { name: option });
+  fireEvent.mouseMove(item);
+  fireEvent.click(item);
 };
 
 describe("StructuredValueField", () => {

@@ -2,12 +2,19 @@ import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useImageUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+
+const SOURCE_OPTIONS: readonly PickerOption[] = [
+  { value: "own", label: "Our photo" },
+  { value: "catalog", label: "Catalog" },
+  { value: "unknown", label: "Unknown" },
+];
 
 /**
  * Image has no kernel update contract, so its Edit action renames through
@@ -73,22 +80,19 @@ export function ImageEditDialog({
         />
         <div className="space-y-2">
           <Label htmlFor="image-source">Source</Label>
-          <NativeSelect
+          <Picker
+            mode="choose"
             className="w-full"
-            id="image-source"
+            inputId="image-source"
+            label="Source"
+            options={SOURCE_OPTIONS}
             value={source}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setSource(
-                event.target.value === "own" || event.target.value === "catalog"
-                  ? event.target.value
-                  : "unknown",
+                value === "own" || value === "catalog" ? value : "unknown",
               )
             }
-          >
-            <option value="own">Our photo</option>
-            <option value="catalog">Catalog</option>
-            <option value="unknown">Unknown</option>
-          </NativeSelect>
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="image-source-name">Source name</Label>

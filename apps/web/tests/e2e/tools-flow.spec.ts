@@ -1,5 +1,9 @@
 import { seedToolFlowPrerequisite } from "./fixtures-catalog";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  chooseOption,
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("tool Flow keeps group order across pagination, jumps to unloaded groups, and reflows around inspection", async ({
@@ -153,9 +157,11 @@ test("tool Flow keeps group order across pagination, jumps to unloaded groups, a
     .getByRole("textbox", { name: "Search inventoried tools", exact: true })
     .fill(`${prefix} gamma 00`);
   await expect(flow.getByRole("button")).toHaveCount(1);
-  await page
-    .getByRole("combobox", { name: "Group by", exact: true })
-    .selectOption("manufacturer");
+  await chooseOption(
+    page,
+    page.getByRole("combobox", { name: "Group by", exact: true }),
+    "Manufacturer",
+  );
   await expect(
     flow.getByRole("heading", { name: "Flow fixture maker", exact: true }),
   ).toBeVisible();

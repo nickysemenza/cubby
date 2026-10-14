@@ -9,7 +9,11 @@ import { getDb } from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  chooseOption,
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { createEvidenceHarnessContext } from "./fixtures-core";
 
@@ -62,12 +66,11 @@ test("recent AI calls filter transport and status before limiting rows", async (
     ["Model", "synthetic-legacy-model"],
     ["Feature", "synthetic-legacy-feature"],
   ] as const) {
-    await expect(
-      recent
-        .getByRole("combobox", { name: label })
-        .locator("option", { hasText: value }),
-    ).toHaveCount(1);
-    await recent.getByRole("combobox", { name: label }).selectOption(value);
+    await selectComboboxItem(
+      page,
+      recent.getByRole("combobox", { name: label }),
+      value,
+    );
     await expect(
       recent.getByText("synthetic.older-subscription"),
     ).toBeVisible();
@@ -80,9 +83,11 @@ test("recent AI calls filter transport and status before limiting rows", async (
       JSON.stringify(input).includes('"transport":"chatgpt"'),
     ),
   );
-  await recent
-    .getByRole("combobox", { name: "Transport" })
-    .selectOption("chatgpt");
+  await chooseOption(
+    page,
+    recent.getByRole("combobox", { name: "Transport" }),
+    "ChatGPT plan",
+  );
   const rows = await operationResult(
     await filtered,
     "ai.usageRecent",
@@ -103,22 +108,28 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(coveredRow.getByText(/Plan covered/)).toBeVisible();
   await expect(recent.getByText("synthetic.older-subscription")).toBeVisible();
   await expect(recent.getByText("synthetic.newer-gateway")).toHaveCount(0);
-  await recent
-    .getByRole("combobox", { name: "Status" })
-    .selectOption("succeeded");
+  await chooseOption(
+    page,
+    recent.getByRole("combobox", { name: "Status" }),
+    "Succeeded",
+  );
   await expect(recent.getByText(/No recent calls/u)).toBeVisible();
-  await recent.getByRole("combobox", { name: "Status" }).selectOption("failed");
+  await chooseOption(
+    page,
+    recent.getByRole("combobox", { name: "Status" }),
+    "Failed",
+  );
   await expect(recent.getByText("synthetic.older-subscription")).toBeVisible();
   await recent
     .getByRole("textbox", { name: "Search recent calls" })
     .fill("no-matching-call");
   await expect(recent.getByText(/No recent calls/u)).toBeVisible();
   await recent.getByRole("button", { name: "Clear", exact: true }).click();
-  await expect(recent.getByRole("combobox", { name: "Transport" })).toHaveValue(
-    "",
+  await expect(recent.getByRole("combobox", { name: "Transport" })).toHaveText(
+    /All transports/,
   );
-  await expect(recent.getByRole("combobox", { name: "Status" })).toHaveValue(
-    "",
+  await expect(recent.getByRole("combobox", { name: "Status" })).toHaveText(
+    /All statuses/,
   );
   await expect(
     recent.getByText("synthetic.newer-gateway").first(),
@@ -131,14 +142,11 @@ test("recent AI calls filter transport and status before limiting rows", async (
       'synthetic-new-model', 'synthetic.after-load', ${aiUsageTransport.enum.gateway}, ${aiUsageEntrySchema.shape.status.enum.succeeded}, 10, NULL, NULL, NULL)
   `);
   await recent.getByRole("button", { name: "Refresh recent calls" }).click();
-  await expect(
-    recent
-      .getByRole("combobox", { name: "Provider" })
-      .locator("option", { hasText: "synthetic-new-provider" }),
-  ).toHaveCount(1);
-  await recent
-    .getByRole("combobox", { name: "Provider" })
-    .selectOption("synthetic-new-provider");
+  await selectComboboxItem(
+    page,
+    recent.getByRole("combobox", { name: "Provider" }),
+    "synthetic-new-provider",
+  );
   await expect(recent.getByText("synthetic.after-load")).toBeVisible();
   const unknownRow = recent
     .getByRole("row")

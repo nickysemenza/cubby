@@ -28,20 +28,31 @@ afterEach(() => {
   harness.dispose();
 });
 
-describe("image dialog native selects", () => {
-  it("accepts a valid source and maps an unknown value back to unknown", async () => {
+function choose(control: HTMLElement, option: string) {
+  control.focus();
+  fireEvent.keyDown(control, { key: "ArrowDown" });
+  // A real click starts on the option; choose-mode pickers ignore a click
+  // whose pointer went down on the trigger.
+  const item = screen.getByRole("option", { name: option });
+  fireEvent.pointerDown(item);
+  fireEvent.click(item);
+}
+
+describe("image dialog pickers", () => {
+  it("keeps the chosen image source", async () => {
     render(<ImageEditDialog record={image} onClose={vi.fn()} />, {
       wrapper: harness.wrapper,
     });
 
     const source = await screen.findByRole("combobox", { name: "Source" });
-    fireEvent.change(source, { target: { value: "catalog" } });
-    expect(source).toHaveValue("catalog");
-    fireEvent.change(source, { target: { value: "unsupported" } });
-    expect(source).toHaveValue("unknown");
+    expect(source).toHaveTextContent("Unknown");
+    choose(source, "Catalog");
+    expect(source).toHaveTextContent("Catalog");
+    choose(source, "Our photo");
+    expect(source).toHaveTextContent("Our photo");
   });
 
-  it("keeps the product image purpose as a controlled native selection", async () => {
+  it("keeps the product image purpose as a controlled selection", async () => {
     render(<AttachExistingImageDialog image={image} onClose={vi.fn()} />, {
       wrapper: harness.wrapper,
     });
@@ -55,7 +66,7 @@ describe("image dialog native selects", () => {
     const purpose = await screen.findByRole("combobox", {
       name: "Product image use",
     });
-    fireEvent.change(purpose, { target: { value: "label" } });
-    expect(purpose).toHaveValue("label");
+    choose(purpose, "Label or tag");
+    expect(purpose).toHaveTextContent("Label or tag");
   });
 });

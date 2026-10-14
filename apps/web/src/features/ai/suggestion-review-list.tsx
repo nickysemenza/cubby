@@ -21,6 +21,8 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
@@ -36,7 +38,6 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useBulkActions } from "~/ui/data-table/useBulkActions";
 import { Row, Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Popover,
   PopoverContent,
@@ -65,6 +66,17 @@ const emptyReview = (key: string, generation: number): ReviewState => ({
 const helper = createCubbyColumnHelper<SuggestionReviewRow>();
 const MIN_CONFIDENCE_DEFAULT = 0.5;
 const KIND_OPTIONS = ["correction", "addition"] as const;
+
+const KIND_PICKER_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "Any kind" },
+  ...KIND_OPTIONS.map((kind) => ({ value: kind, label: humanize(kind) })),
+];
+
+const STATUS_PICKER_OPTIONS: readonly PickerOption[] =
+  suggestionStatus.options.map((status) => ({
+    value: status,
+    label: humanize(status),
+  }));
 
 const fieldLabel = (entity: ShortcodeEntity, field: string) =>
   entityFieldByKey(entity, field)?.label ?? field;
@@ -380,27 +392,33 @@ function ReviewFilters({
   onChange: (patch: Partial<SuggestionReviewFilters>) => void;
   entities: readonly ShortcodeEntity[];
 }) {
+  const entityOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All entities" },
+      ...entities.map((entity) => ({
+        value: entity,
+        label: entitySummary[entity].singular,
+      })),
+    ],
+    [entities],
+  );
   return (
     <Row gap="sm" wrap align="center">
-      <NativeSelect
-        aria-label="Entity"
+      <Picker
+        label="Entity"
+        widthMode="intrinsic"
+        className="w-40"
+        options={entityOptions}
         value={filters.entity ?? ""}
-        onChange={(event) =>
+        onValueChange={(value) =>
           onChange({
             entity: suggestionReviewFiltersSchema.shape.entity.parse(
-              event.target.value || undefined,
+              value || undefined,
             ),
             field: undefined,
           })
         }
-      >
-        <option value="">All entities</option>
-        {entities.map((entity) => (
-          <option key={entity} value={entity}>
-            {entitySummary[entity].singular}
-          </option>
-        ))}
-      </NativeSelect>
+      />
       <Input
         aria-label="Field"
         placeholder="Field"
@@ -410,37 +428,33 @@ function ReviewFilters({
           onChange({ field: event.target.value || undefined })
         }
       />
-      <NativeSelect
-        aria-label="Status"
+      <Picker
+        mode="choose"
+        label="Status"
+        widthMode="intrinsic"
+        className="w-36"
+        options={STATUS_PICKER_OPTIONS}
         value={filters.status ?? "pending"}
-        onChange={(event) =>
-          onChange({ status: suggestionStatus.parse(event.target.value) })
-        }
-      >
-        {suggestionStatus.options.map((status) => (
-          <option key={status} value={status}>
-            {humanize(status)}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Kind"
+        onValueChange={(value) => {
+          if (value != null)
+            onChange({ status: suggestionStatus.parse(value) });
+        }}
+      />
+      <Picker
+        mode="choose"
+        label="Kind"
+        widthMode="intrinsic"
+        className="w-36"
+        options={KIND_PICKER_OPTIONS}
         value={filters.kind ?? ""}
-        onChange={(event) =>
+        onValueChange={(value) =>
           onChange({
             kind: suggestionReviewFiltersSchema.shape.kind.parse(
-              event.target.value || undefined,
+              value || undefined,
             ),
           })
         }
-      >
-        <option value="">Any kind</option>
-        {KIND_OPTIONS.map((kind) => (
-          <option key={kind} value={kind}>
-            {humanize(kind)}
-          </option>
-        ))}
-      </NativeSelect>
+      />
       <label
         htmlFor="suggestion-review-min-confidence"
         className="inline-flex items-center gap-1 text-xs text-muted-foreground"

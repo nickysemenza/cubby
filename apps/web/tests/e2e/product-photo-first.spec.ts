@@ -1,8 +1,9 @@
 import { fileURLToPath } from "node:url";
 
 import {
-  gotoAuthenticatedPage,
+  chooseOption,
   expectViewportBounded,
+  gotoAuthenticatedPage,
   openProductFromPalette,
   waitForFormHydration,
 } from "./e2e-helpers";
@@ -30,7 +31,7 @@ test("a member creates a Product from own item and label photos without an impor
   ).toBeVisible();
   await expect(editor.getByText("New images")).toBeVisible();
   await expect(editor.getByText("Uploading images")).toHaveCount(0);
-  await editor.getByLabel("Attach as").selectOption("label");
+  await chooseOption(page, editor.getByLabel("Attach as"), "Label photo");
   await editor.getByLabel("Choose image").setInputFiles(labelPhoto);
   await expect(
     editor.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),

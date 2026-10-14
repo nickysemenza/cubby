@@ -124,6 +124,15 @@ function renderAddToMeal() {
   );
 }
 
+/** A choose-mode pick: open from the keyboard, hover, then click. */
+async function chooseMeal(picker: HTMLElement, name: string) {
+  picker.focus();
+  fireEvent.keyDown(picker, { key: "ArrowDown" });
+  const option = await screen.findByRole("option", { name });
+  fireEvent.mouseMove(option);
+  fireEvent.click(option);
+}
+
 async function openMealPicker() {
   fireEvent.click(await screen.findByRole("button", { name: "Add to meal" }));
   const picker = await screen.findByRole("combobox", { name: "meal" });
@@ -137,10 +146,7 @@ describe("AddToMeal", () => {
     const picker = await openMealPicker();
 
     expect(mealRequests).toBe(1);
-    fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(
-      screen.getByRole("option", { name: "Tuesday dinner (0 recipes)" }),
-    );
+    await chooseMeal(picker, "Tuesday dinner (0 recipes)");
     fireEvent.click(
       screen.getByRole("button", { name: "Add to selected meal" }),
     );
@@ -178,10 +184,7 @@ describe("AddToMeal", () => {
     renderAddToMeal();
     const picker = await openMealPicker();
 
-    fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(
-      screen.getByRole("option", { name: "Corner Deli — Eating out" }),
-    );
+    await chooseMeal(picker, "Corner Deli — Eating out");
     expect(
       screen.getByText(/aren't added to the shopping list/i),
     ).toBeVisible();

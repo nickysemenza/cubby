@@ -4,13 +4,14 @@ import {
   setDataExceptionInput,
 } from "@cubby/schemas/data-quality";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 type ExplainedCheck = NonNullable<
   FieldExplanationOutput["qualityBreakdown"]
@@ -33,6 +34,14 @@ export function ExceptionControls({
   const [accepting, setAccepting] = useState(false);
   const [reason, setReason] = useState(check.exceptionReasons[0]?.reason);
   const [note, setNote] = useState("");
+  const reasonOptions = useMemo<PickerOption[]>(
+    () =>
+      check.exceptionReasons.map((option) => ({
+        value: option.reason,
+        label: option.label,
+      })),
+    [check.exceptionReasons],
+  );
   const set = useActionMutation({
     mutationFn: dataQuality.setException.mutationOptions,
     success: "Exception recorded",
@@ -99,22 +108,19 @@ export function ExceptionControls({
     >
       <div className="grid gap-1 text-xs">
         <label htmlFor={`${fieldId}-reason`}>Reason</label>
-        <NativeSelect
-          id={`${fieldId}-reason`}
+        <Picker
+          mode="choose"
+          label="Reason"
+          inputId={`${fieldId}-reason`}
+          options={reasonOptions}
           value={reason}
-          onChange={(event) => {
+          onValueChange={(value) => {
             const next = check.exceptionReasons.find(
-              (option) => option.reason === event.target.value,
+              (option) => option.reason === value,
             );
             if (next) setReason(next.reason);
           }}
-        >
-          {check.exceptionReasons.map((option) => (
-            <option key={option.reason} value={option.reason}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
+        />
       </div>
       <div className="grid gap-1 text-xs">
         <label htmlFor={`${fieldId}-note`}>Note</label>

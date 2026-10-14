@@ -631,7 +631,7 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
 }
 
 /**
- * `expense.vendor`: a roster-backed **name** (see `VendorField`'s own doc
+ * `expense.vendor`: a roster-backed **name** (see `PickerField`'s `store="name"` doc
  * comment for why this isn't a plain text box), wired to its `suggest` field
  * the same way every other suggestable control is.
  */

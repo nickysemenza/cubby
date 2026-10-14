@@ -6,13 +6,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useEntityOptions } from "~/ui/hooks/useEntityOptions";
 import { Row, Stack } from "~/ui/layout";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
 import { DependencyGraphViewer } from "./dependency-graph-viewer";
@@ -38,6 +40,20 @@ export function WorkDependencyGraph({
     project.getDependencyGraph.queryOptions({ projectId }),
   );
   const { items: projects } = useEntityOptions("project");
+  const projectOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "All projects and tasks" },
+      ...projects.map((item) => ({
+        value: item.id,
+        label: item.label,
+        ...(item.detail && { detail: item.detail }),
+        ...(item.emoji && {
+          icon: <RecordEmoji entity="project" emoji={item.emoji} />,
+        }),
+      })),
+    ],
+    [projects],
+  );
   const today = householdLocalDate();
   const graph = useMemo<GraphData>(
     () => ({
@@ -72,26 +88,18 @@ export function WorkDependencyGraph({
   );
   return (
     <Stack gap="md">
-      <Row as="label" align="center" gap="sm">
+      <Row align="center" gap="sm">
         <span>Project</span>
-        <NativeSelect
-          className="max-w-full min-w-0"
+        <Picker
+          compact
+          label="Project"
+          className="w-64 max-w-full min-w-0"
+          options={projectOptions}
           value={projectId ?? ""}
-          onChange={(event) =>
-            onScopeChange(
-              event.target.value
-                ? projectShortcode.parse(event.target.value)
-                : undefined,
-            )
+          onValueChange={(value) =>
+            onScopeChange(value ? projectShortcode.parse(value) : undefined)
           }
-        >
-          <option value="">All projects and tasks</option>
-          {projects.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </NativeSelect>
+        />
       </Row>
       {isLoading ? (
         <output>Loading work graph…</output>

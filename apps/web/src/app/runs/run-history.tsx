@@ -31,6 +31,8 @@ import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { AiCost } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordDetail, RecordList, RecordRow } from "~/ui/common/record-list";
@@ -47,7 +49,6 @@ import { usePageCount } from "~/ui/page/Page";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
 const combineChildPages = (
@@ -77,7 +78,38 @@ type HistoryRow = ActivityRun & {
   groupSummary?: string;
   loadingChildren?: boolean;
 };
-const kinds = activityKind.options;
+const RECORD_TYPE_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All records" },
+  { value: "run", label: "Runs" },
+  { value: "image_job", label: "Image jobs" },
+];
+const KIND_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "All work" },
+  ...activityKind.options.map((kind) => ({
+    value: kind,
+    label: ACTIVITY_KIND_LABEL[kind],
+  })),
+];
+const SORT_OPTIONS: readonly PickerOption[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+];
+const EXECUTOR_OPTIONS: readonly PickerOption[] = [
+  { value: "all", label: "All executors" },
+  { value: "cloud", label: "Cloud" },
+  { value: "device", label: "Device" },
+  { value: "unknown", label: "Unknown" },
+];
+const TRIGGER_OPTIONS: readonly PickerOption[] = [
+  { value: "", label: "Hide ephemeral and routine runs" },
+  { value: "all", label: "All triggers" },
+  { value: "foreground", label: "Foreground" },
+  { value: "discovery", label: "Discovery" },
+  { value: "manual", label: "Manual" },
+  { value: "backfill", label: "Backfill" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "ephemeral", label: "Ephemeral" },
+];
 const duration = (value: number | null) =>
   value == null ? "—" : `${(value / 1_000).toFixed(1)} s`;
 const localDateTime = (value?: string) =>
@@ -139,6 +171,16 @@ export function RunHistory({
   const [more, setMore] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const devices = useQuery(activity.devices.queryOptions({}));
+  const deviceItems = devices.data?.items;
+  const deviceOptions = useMemo<PickerOption[]>(
+    () => [
+      { value: "", label: "All devices" },
+      ...(deviceItems ?? []).flatMap((device) =>
+        device.deviceId ? [{ value: device.deviceId, label: device.name }] : [],
+      ),
+    ],
+    [deviceItems],
+  );
   const input = useMemo<ActivityListInput>(
     () => ({
       limit: 20,
@@ -675,35 +717,34 @@ export function RunHistory({
         </output>
       ) : null}
       <Row gap="sm" align="center" wrap>
-        <NativeSelect
-          aria-label="Record type"
+        <Picker
+          mode="choose"
+          compact
+          widthMode="intrinsic"
+          className="w-32"
+          label="Record type"
+          options={RECORD_TYPE_OPTIONS}
           value={filters.recordType ?? ""}
-          onChange={(event) => selectFilter("recordType", event.target.value)}
-        >
-          <option value="">All records</option>
-          <option value="run">Runs</option>
-          <option value="image_job">Image jobs</option>
-        </NativeSelect>
-        <NativeSelect
-          aria-label="Work type"
+          onValueChange={(value) => selectFilter("recordType", value ?? "")}
+        />
+        <Picker
+          compact
+          className="w-48"
+          label="Work type"
+          options={KIND_OPTIONS}
           value={filters.kind ?? ""}
-          onChange={(event) => selectFilter("kind", event.target.value)}
-        >
-          <option value="">All work</option>
-          {kinds.map((kind) => (
-            <option key={kind} value={kind}>
-              {ACTIVITY_KIND_LABEL[kind]}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          aria-label="Run order"
+          onValueChange={(value) => selectFilter("kind", value ?? "")}
+        />
+        <Picker
+          mode="choose"
+          compact
+          widthMode="intrinsic"
+          className="w-32"
+          label="Run order"
+          options={SORT_OPTIONS}
           value={filters.sort ?? "newest"}
-          onChange={(event) => selectFilter("sort", event.target.value)}
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </NativeSelect>
+          onValueChange={(value) => selectFilter("sort", value ?? "")}
+        />
         <Button
           type="button"
           variant={grouped ? "secondary" : "outline"}
@@ -737,30 +778,26 @@ export function RunHistory({
       </Row>
       {more ? (
         <Row gap="sm" wrap>
-          <NativeSelect
-            aria-label="Execution location"
+          <Picker
+            mode="choose"
+            compact
+            widthMode="intrinsic"
+            className="w-36"
+            label="Execution location"
+            options={EXECUTOR_OPTIONS}
             value={filters.executor ?? "all"}
-            onChange={(event) => selectFilter("executor", event.target.value)}
-          >
-            <option value="all">All executors</option>
-            <option value="cloud">Cloud</option>
-            <option value="device">Device</option>
-            <option value="unknown">Unknown</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label="Execution device"
+            onValueChange={(value) => selectFilter("executor", value ?? "")}
+          />
+          <Picker
+            mode="choose"
+            compact
+            widthMode="intrinsic"
+            className="w-40"
+            label="Execution device"
+            options={deviceOptions}
             value={filters.deviceId ?? ""}
-            onChange={(event) => selectFilter("deviceId", event.target.value)}
-          >
-            <option value="">All devices</option>
-            {devices.data?.items.map((device) =>
-              device.deviceId ? (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.name}
-                </option>
-              ) : null,
-            )}
-          </NativeSelect>
+            onValueChange={(value) => selectFilter("deviceId", value ?? "")}
+          />
           <Input
             aria-label="Filter state"
             placeholder="State"
@@ -809,33 +846,29 @@ export function RunHistory({
               selectFilter("ledgerPartyId", event.target.value)
             }
           />
-          <NativeSelect
-            aria-label="Trigger"
+          <Picker
+            mode="choose"
+            compact
+            widthMode="intrinsic"
+            className="w-60"
+            label="Trigger"
+            options={TRIGGER_OPTIONS}
             value={
               filters.trigger ??
               (filters.hasDefaultFilter && filters.filters !== "none"
                 ? ""
                 : "all")
             }
-            onChange={(event) =>
+            onValueChange={(value) =>
               onFilterChange({
                 trigger:
-                  event.target.value === "" || event.target.value === "all"
+                  !value || value === "all"
                     ? undefined
-                    : runTrigger.parse(event.target.value),
-                filters: event.target.value === "all" ? "none" : undefined,
+                    : runTrigger.parse(value),
+                filters: value === "all" ? "none" : undefined,
               })
             }
-          >
-            <option value="">Hide ephemeral and routine runs</option>
-            <option value="all">All triggers</option>
-            <option value="foreground">Foreground</option>
-            <option value="discovery">Discovery</option>
-            <option value="manual">Manual</option>
-            <option value="backfill">Backfill</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="ephemeral">Ephemeral</option>
-          </NativeSelect>
+          />
           <Input
             type="datetime-local"
             aria-label="Runs from"

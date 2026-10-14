@@ -1,4 +1,5 @@
 import type React from "react";
+import { createElement } from "react";
 
 import type { ComboboxItem } from "./combobox-types";
 
@@ -63,8 +64,24 @@ export function pickerOptionItem(option: PickerOption): ComboboxItem {
   return {
     id: option.value,
     name: option.label,
-    ...(option.icon != null && { icon: option.icon }),
-    ...(option.color && { color: option.color }),
+    // An option's colour tints its glyph; only a glyph-less option shows the
+    // colour as a swatch, so a row never carries both marks.
+    ...(option.icon != null
+      ? {
+          icon: createElement(
+            "span",
+            {
+              "aria-hidden": true,
+              "data-enum-option-icon": "",
+              className: "flex items-center [&>svg]:size-3.5!",
+              style: { color: option.color },
+            },
+            option.icon,
+          ),
+        }
+      : option.color
+        ? { color: option.color }
+        : {}),
     ...(option.detail && { detail: option.detail }),
     ...(Object.keys(presentation).length > 0 && { presentation }),
   };

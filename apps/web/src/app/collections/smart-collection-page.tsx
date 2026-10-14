@@ -14,6 +14,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
 import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -23,7 +25,6 @@ import {
   CollapsibleTrigger,
 } from "~/ui/primitives/collapsible";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { CollectionProductsTable } from "./collection-detail-page";
@@ -52,6 +53,16 @@ const RULE_KINDS = [
   "locationNameContains",
   "historicalExpenseTrade",
 ] as const satisfies readonly SmartCollectionRule["kind"][];
+
+const RULE_KIND_OPTIONS: readonly PickerOption[] = RULE_KINDS.map((kind) => ({
+  value: kind,
+  label: RULE_KIND_LABELS[kind],
+}));
+
+const TRADE_OPTIONS: readonly PickerOption[] = tradeValues.map((trade) => ({
+  value: trade,
+  label: TRADE_LABELS[trade],
+}));
 
 function isRuleKind(value: string): value is SmartCollectionRule["kind"] {
   return RULE_KINDS.some((kind) => kind === value);
@@ -208,12 +219,13 @@ function SmartRuleEditor({
                         key={rule.id}
                         className="grid gap-2 py-2 md:grid-cols-[14rem_minmax(12rem,1fr)_auto] md:items-start"
                       >
-                        <NativeSelect
-                          aria-label={`Condition ${index + 1} type`}
+                        <Picker
+                          mode="choose"
+                          label={`Condition ${index + 1} type`}
+                          options={RULE_KIND_OPTIONS}
                           value={rule.kind}
-                          onChange={(event) => {
-                            const kind = event.target.value;
-                            if (!isRuleKind(kind)) return;
+                          onValueChange={(kind) => {
+                            if (kind == null || !isRuleKind(kind)) return;
                             const rules = draft.rules.slice();
                             rules[index] = {
                               id: rule.id,
@@ -222,22 +234,15 @@ function SmartRuleEditor({
                             };
                             updateDraft({ ...draft, rules });
                           }}
-                        >
-                          {RULE_KINDS.map((kind) => (
-                            <option key={kind} value={kind}>
-                              {RULE_KIND_LABELS[kind]}
-                            </option>
-                          ))}
-                        </NativeSelect>
+                        />
                         <div>
                           {rule.kind === "historicalExpenseTrade" ? (
-                            <NativeSelect
-                              aria-label={`Condition ${index + 1} value`}
+                            <Picker
+                              label={`Condition ${index + 1} value`}
+                              options={TRADE_OPTIONS}
                               value={rule.value}
-                              onChange={(event) => {
-                                const trade = tradeSchema.safeParse(
-                                  event.target.value,
-                                );
+                              onValueChange={(next) => {
+                                const trade = tradeSchema.safeParse(next);
                                 if (!trade.success) return;
                                 const rules = draft.rules.slice();
                                 rules[index] = {
@@ -246,13 +251,7 @@ function SmartRuleEditor({
                                 };
                                 updateDraft({ ...draft, rules });
                               }}
-                            >
-                              {tradeValues.map((trade) => (
-                                <option key={trade} value={trade}>
-                                  {TRADE_LABELS[trade]}
-                                </option>
-                              ))}
-                            </NativeSelect>
+                            />
                           ) : (
                             <Input
                               aria-label={`Condition ${index + 1} value`}
@@ -297,21 +296,16 @@ function SmartRuleEditor({
               )}
 
               <div className="flex flex-wrap items-center gap-2">
-                <NativeSelect
-                  className="w-auto min-w-56"
-                  aria-label="New condition type"
+                <Picker
+                  mode="choose"
+                  className="min-w-56"
+                  label="New condition type"
+                  options={RULE_KIND_OPTIONS}
                   value={newKind}
-                  onChange={(event) =>
-                    isRuleKind(event.target.value) &&
-                    setNewKind(event.target.value)
-                  }
-                >
-                  {RULE_KINDS.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {RULE_KIND_LABELS[kind]}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  onValueChange={(kind) => {
+                    if (kind != null && isRuleKind(kind)) setNewKind(kind);
+                  }}
+                />
                 <Button
                   type="button"
                   variant="outline"

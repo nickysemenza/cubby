@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { appendGraphImages, type GraphImage } from "./dependency-graph-images";
 import { bindGraphInteractions } from "./dependency-graph-interactions";
@@ -161,6 +162,11 @@ export function DependencyGraphCanvas({
   const scaleRef = useRef(1);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [group, setGroup] = useState("");
+  const groupOptions = useMemo(
+    () =>
+      groups.map(({ id, name }): PickerOption => ({ value: id, label: name })),
+    [groups],
+  );
   useEffect(() => {
     const { dot, componentDots, images, hierarchyEdges, edges } =
       renderInput.current;
@@ -405,31 +411,28 @@ export function DependencyGraphCanvas({
           {Math.round(scale * 100)}%
         </span>
         {groups.length > 0 && (
-          <Row as="label" align="center" gap="sm">
+          <Row align="center" gap="sm">
             <span className="text-sm">Jump to group</span>
-            <NativeSelect
+            <Picker
+              compact
+              mode={groupOptions.length > 12 ? "search" : "choose"}
+              widthMode="intrinsic"
+              label="Jump to group"
+              placeholder="Choose a group…"
               className="max-w-full"
-              value={group}
-              onChange={(event) => {
-                const id = event.target.value;
+              options={groupOptions}
+              value={group || null}
+              onValueChange={(next) => {
+                const id = next ?? "";
                 setGroup(id);
                 const container = host.current;
-                const target = container?.querySelector(`#${id}`);
+                const target = id ? container?.querySelector(`#${id}`) : null;
                 if (container && target) {
                   changeScale(1);
                   reveal(container, target);
                 }
               }}
-            >
-              <option value="" disabled>
-                Choose a group…
-              </option>
-              {groups.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </NativeSelect>
+            />
           </Row>
         )}
       </Row>

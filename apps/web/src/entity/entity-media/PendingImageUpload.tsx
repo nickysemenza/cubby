@@ -15,12 +15,13 @@ import { z } from "zod";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/FileDropField";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 import {
   PhotoGrid,
@@ -29,6 +30,17 @@ import {
 import { PhotoViewer } from "../../features/photos/photo-viewer";
 
 const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
+
+const SOURCE_OPTIONS: readonly PickerOption[] = [
+  { value: "own", label: "Our photo" },
+  { value: "catalog", label: "Catalog image" },
+  { value: "unknown", label: "Unknown" },
+];
+
+const PURPOSE_OPTIONS: readonly PickerOption[] = [
+  { value: "item", label: "Item photo" },
+  { value: "label", label: "Label photo" },
+];
 
 export interface PendingImage {
   id: string;
@@ -530,34 +542,31 @@ export function PendingImageUpload({
           <LinkIcon className="mr-2 size-4" />
           Import
         </Button>
-        <NativeSelect
-          aria-label="Photo source"
+        <Picker
+          mode="choose"
+          label="Photo source"
+          widthMode="intrinsic"
           className="w-auto"
+          options={SOURCE_OPTIONS}
           value={source}
-          onChange={(event) =>
+          onValueChange={(value) =>
             setSource(
-              event.target.value === "own" || event.target.value === "catalog"
-                ? event.target.value
-                : "unknown",
+              value === "own" || value === "catalog" ? value : "unknown",
             )
           }
-        >
-          <option value="own">Our photo</option>
-          <option value="catalog">Catalog image</option>
-          <option value="unknown">Unknown</option>
-        </NativeSelect>
+        />
         {entityKind === "PRODUCT" && (
-          <NativeSelect
-            aria-label="Attach as"
+          <Picker
+            mode="choose"
+            label="Attach as"
+            widthMode="intrinsic"
             className="w-auto"
+            options={PURPOSE_OPTIONS}
             value={purpose}
-            onChange={(event) =>
-              setPurpose(event.target.value === "label" ? "label" : "item")
+            onValueChange={(value) =>
+              setPurpose(value === "label" ? "label" : "item")
             }
-          >
-            <option value="item">Item photo</option>
-            <option value="label">Label photo</option>
-          </NativeSelect>
+          />
         )}
       </div>
 
@@ -671,20 +680,20 @@ export function PendingImageUpload({
                   </span>
                 )}
                 {entityKind === "PRODUCT" && (
-                  <select
-                    aria-label={`Attachment role for ${image.filename}`}
-                    className="absolute inset-x-1 bottom-1 z-20 h-7 rounded-sm border border-input bg-background/90 px-1 text-xs"
+                  <Picker
+                    mode="choose"
+                    compact
+                    label={`Attachment role for ${image.filename}`}
+                    className="absolute inset-x-1 bottom-1 z-20 bg-background/90"
+                    options={PURPOSE_OPTIONS}
                     value={image.purpose ?? "item"}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setExistingImagePurpose(
                         image.id,
-                        event.target.value === "label" ? "label" : "item",
+                        value === "label" ? "label" : "item",
                       )
                     }
-                  >
-                    <option value="item">Item photo</option>
-                    <option value="label">Label photo</option>
-                  </select>
+                  />
                 )}
                 {onExistingImagesReorder && index > 0 && (
                   <div className="absolute bottom-1 left-1 z-20 flex gap-1">
