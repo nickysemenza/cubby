@@ -221,6 +221,13 @@ See also the image operational passes at the end of this file.
 
 ## Purchases, finance & household ledger
 
+- 🟢 🐛 **Distinguish UPC refresh deferral from a disabled provider.** Carry the
+  unresolved cause through the freshness contract so cached proposals do not
+  imply that a disabled lookup will retry on the next pass, or that an empty
+  budget-deferred cache means lookup is disabled. Cover both causes with and
+  without cached hits (`upc-lookup-cache.ts`, `problems-overview.tsx`). Provider
+  failures still reject the workflow.
+
 ### Import and resume orders reliably
 
 - 🤔 🐛 **Expose actionable child-row integrity diagnostics.** A live outside
@@ -1132,6 +1139,22 @@ consume the declarations.
 ---
 
 ## AI & search
+
+- 🟢 🧪 **Validate semantic Decisions on retained evidence.** Follow
+  `.claude/skills/decision-grading` to grade Expense roles, UPC offer
+  comparability, weak image provenance and Product variants against independent
+  labels. Adjudicate vague adjustment rows before scoring; distinguish safe
+  abstention from wrong confident classifications. Test shipping-role wording
+  and compare accuracy, coverage, latency and cost on fresh held-out evidence
+  before changing thresholds or Jev/Clef traffic. Preserve authoritative facts
+  and future-runs-only behavior; historical reclassification needs its own scope.
+
+- 🤔 🧪 **Preserve known variant dimensions when another is uncertain.** Measure
+  whether independent color/size Decisions improve useful coverage over the
+  current joint-choice confidence gate, which can discard a clear color when
+  size systems cannot be compared. Compare against the existing bounded prompt
+  on held-out evidence, including extra latency and inference cost; retain
+  abstention for unsupported dimensions (`ai/semantic-decisions.ts`).
 
 - 🤔 🧪 **Assess Agents SDK capabilities for Pi.** Pi now runs only Mail import
   and photo inventory on generic agent tools and mounted MCP actions. Adopt an
