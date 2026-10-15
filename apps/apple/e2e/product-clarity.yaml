@@ -36,7 +36,9 @@ appId: com.nickysemenza.cubby
 - assertVisible:
     id: "field.explanation.effective-value"
 - assertVisible: "\\$40\\.00"
-- assertVisible: "Overrides inherited"
+- assertVisible:
+    id: "field.explanation.state"
+    text: "Set here"
 - scrollUntilVisible:
     element:
       id: "field.explanation.fallback-value"
