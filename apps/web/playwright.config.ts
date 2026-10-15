@@ -49,7 +49,7 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   forbidOnly: !!process.env.CI,
   /* One CI retry turns a flake into a seconds-long "flaky" report instead of a
      whole-job rerun. A test reported flaky twice is quarantined with
-     `test.fixme` and a docs/todos.md entry; local runs keep failing fast. */
+     `test.fixme` and a GitHub issue; local runs keep failing fast. */
   retries: isCI ? 1 : 0,
   /* Each worker owns an isolated database and harness. Three local macOS
      workers made iPhone WebKit flake across four unrelated specs under host

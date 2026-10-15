@@ -32,6 +32,12 @@
 - A correction becomes a rule in the doc that owns it. A repeated mistake means
   that rule is unclear: rewrite it in place.
 
+## Work tracking
+
+[GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the canonical
+backlog. Follow the [issue workflow](docs/agents/issues.md) when selecting,
+creating, updating, or completing work; read Project fields and the issue body.
+
 ## Breaking changes
 
 Ask before deleting a database or resetting data.

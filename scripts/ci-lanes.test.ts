@@ -107,7 +107,7 @@ test("changes route to the lanes whose tasks read them", () => {
   );
   assert.deepEqual(lanesFor("apps/apple/README.md"), ["docs"]);
   // Backlog prose does not participate in generation.
-  assert.deepEqual(lanesFor("docs/todos.md"), ["docs"]);
+  assert.deepEqual(lanesFor("docs/agents/issues.md"), ["docs"]);
   // The Worker bundles purchase-import prompts.
   assert.deepEqual(
     lanesFor(".claude/skills/purchase-import/references/vendor.md"),

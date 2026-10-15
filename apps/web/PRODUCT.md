@@ -34,7 +34,7 @@ benchmarks; use synthetic content under [agent rules](../../AGENTS.md).
   [native design](../apple/DESIGN.md) owns the Apple experience.
 - [Terminology](../../docs/guide/terminology.md) owns domain language.
 - [Compiled entities](../../docs/entities.md) owns generic presentation.
-- [Work list](../../docs/todos.md) owns future work; existing routes are evidence
+- [GitHub Issues](https://github.com/nickysemenza/cubby/issues) owns future work; existing routes are evidence
   of implementation, not of installed-client acceptance.
 
 ## Product principles

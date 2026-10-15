@@ -81,4 +81,4 @@ domains between `src/app/` and `src/features/` under different names.
   restructure's squash commit goes in `.git-blame-ignore-revs` right after it
   merges.
 - Remaining burn-down work (oversized files, remaining barrels) is tracked in
-  `docs/todos.md`.
+  [GitHub Issues](https://github.com/nickysemenza/cubby/issues?q=is%3Aissue%20is%3Aopen%20label%3Aarea%3Atooling).

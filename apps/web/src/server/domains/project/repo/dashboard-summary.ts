@@ -381,7 +381,7 @@ export async function projectDashboardSummary(
   // estimate, and the covered/total counts let the UI disclose the population
   // ("across N of M projects") instead of silently presenting a partial sum as
   // if it were complete. Same "footnote, don't exclude" convention as the
-  // allocation-estimate caveat in docs/todos.md.
+  // allocation-estimate caveat: https://github.com/nickysemenza/cubby/issues/2356.
   // Same population as actual/committed above, or the "across N of M projects"
   // caption stops describing the number printed beside it.
   const projectsWithEstimate = scopeRoots.filter(

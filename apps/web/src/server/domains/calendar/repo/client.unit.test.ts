@@ -15,10 +15,8 @@ afterEach(() => {
 
 /**
  * `markDirty` only sets a flag on the target Durable Object, so retrying it
- * inside the same `waitUntil` task is safe — this closes the "CalDAV feed
- * dirty-mark can fail silently" easy fix (docs/todos.md): a transient RPC
- * failure is now absorbed by a couple of retries instead of leaving the feed
- * stale after the very first failure.
+ * inside the same `waitUntil` task is safe. Transient RPC failures must not
+ * leave the feed stale after the first failure.
  */
 describe("scheduleCalendarFeedDirty", () => {
   it("retries a failed dirty-mark before giving up", async () => {

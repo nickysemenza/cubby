@@ -290,7 +290,7 @@ targets compile neither the cookbook crate nor `page.rs`. The `rust` target
 also lints `recipebridge --no-default-features`, the browser build.
 The unused local Rust model-pricing export is removed; Cubby usage pricing
 reads `models.dev` in TypeScript. Cookbook's upstream pricing table remains
-transitive until the [pricing consolidation](todos.md#ai--search) is completed.
+transitive until the [pricing consolidation](https://github.com/nickysemenza/cubby/issues/2297) is completed.
 
 `apps/apple/project.yml`'s `Cubby-iOS` scheme also lists CubbyKit's own tests
 as a local package test target (`package: CubbyKit/CubbyKitTests`), so

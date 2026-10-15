@@ -39,7 +39,7 @@ per-entity code as possible.
   than fork it.
 - **Finish migrations.** A change that introduces a generic path moves every
   caller in the same change. Only a migration too large for one PR records its
-  remainder in a shrink-only baseline and a `docs/todos.md` entry. Lint rules in `tools/oxlint/cubby/` and shrink-only
+  remainder in a shrink-only baseline and a GitHub issue. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
 ## Declaration contracts
@@ -961,6 +961,28 @@ data and type-only imports, never server bindings or executable schema modules.
 
 The declaration is authoritative only for declared mechanical behavior. A spec
 does not replace a repository's transactions, locking, SQL, or workflow rules.
+
+## Dormant storage inventory
+
+These fields and workflows were flagged for low usage, not approved for removal.
+Recheck current readers and usage before retiring any storage; empty queues and
+null values alone do not establish that a contract is unnecessary.
+
+- **Historical Run machinery.** `ImportPreparedOrder` and `ImportPreparedLine`
+  are active contracts. Audit legacy approval/control storage only after
+  checking current readers.
+- **Review queues.** `MerchantVendorRule`. Shared Assessment/Feedback history
+  and current projections have active review readers. `MailboxCursor` is active in
+  Gmail pagination/replay and must be preserved. Recheck against Product match
+  recall, collision review, and [purchase correction work](https://github.com/nickysemenza/cubby/issues?q=is%3Aissue%20is%3Aopen%20label%3Aarea%3Afinance);
+  an empty queue alone does not establish that its workflow is unnecessary.
+- **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
+  `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
+  `Run.historyCursorUrl`, `Task.sortOrder`,
+  `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+  Image `captureDeviceLabel`, `capturePlaceName`, and
+  `capturedAtOffsetMinutes` fill once the library path sends them (Images &
+  photos).
 
 ## Runtime interface
 
