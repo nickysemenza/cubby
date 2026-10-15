@@ -1,0 +1,31 @@
+apps/web/generator/entities/render/columns.ts
+  s_2a22d2c73c07e5::t_2aa774b020b211 146
+apps/web/src/server/domains/project/repo/tree.ts
+  s_2a22d2c73c07e5::t_992705f5992044 12
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_2a22d2c73c07e5::t_bc591b06850a72 250
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_51c06c5a5f18e8 41
+docs/development.md
+  s_2a22d2c73c07e5::t_ce922849993b2b 24-35,39
+docs/todos.md
+  s_2a22d2c73c07e5::t_8c90518d24e19c 1631-1679
+docs/adr/0019-domain-first-server-layout.md
+  s_2a22d2c73c07e5::t_b9e3eb3dd83a24 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "39ab7a07975456d240198d608c4419e031ce1be5",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
