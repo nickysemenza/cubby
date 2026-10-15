@@ -48,6 +48,7 @@ const transport = () => ({ headers: {} });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -121,18 +122,24 @@ describe("browser operation transport", () => {
     );
   });
 
-  it.each(["pool", "disconnect"])(
+  it.each(["pool", "pool punctuation", "disconnect", "context disconnect"])(
     "recovers a transient %s failure on a fresh read request",
     async (kind) => {
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       let attempts = 0;
-      const failure =
-        kind === "pool"
-          ? poolFailure()
-          : poolFailure("synthetic-request", {
-              name: "Error",
-              message: "Connection terminated unexpectedly",
-            });
+      const failure = kind.startsWith("pool")
+        ? poolFailure()
+        : poolFailure("synthetic-request", {
+            name: "Error",
+            message: "Connection terminated unexpectedly",
+          });
+      if (kind === "pool punctuation")
+        failure.error.diagnostics.causes[0]!.message =
+          "Timed out while waiting for an open slot in the pool";
+      if (kind === "context disconnect") {
+        failure.error.diagnostics.stage = "context";
+        failure.error.diagnostics.causes[0]!.code = "08006";
+      }
       const { sent } = stubDispatch(() =>
         Response.json(
           superjson.serialize(
@@ -150,6 +157,72 @@ describe("browser operation transport", () => {
       expect(sent).toHaveLength(2);
     },
   );
+
+  // Independent per-item jitter splits a failed batch into cold singleton
+  // requests instead of letting its siblings share their recovery request.
+  it("coalesces transiently failed batch siblings on their retry", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValue(0.99);
+    let batches = 0;
+    const { sent } = stubDispatch((body) => {
+      if (!body.batch)
+        return Response.json(
+          superjson.serialize({ ok: true, data: "singleton" }),
+        );
+      batches += 1;
+      return ndjson(
+        body.batch.map((item, i) => ({
+          i,
+          r: superjson.serialize({
+            ok: true,
+            value:
+              batches === 1
+                ? poolFailure()
+                : { ok: true, data: item.operation },
+          }),
+        })),
+      );
+    });
+    const results = Promise.all([
+      dispatchBrowserOperation("dashboard.counts", {}, transport()),
+      dispatchBrowserOperation("entity.connectedRecords", {}, transport()),
+    ]);
+    await vi.runAllTimersAsync();
+    expect(await results).toEqual([
+      { ok: true, data: "dashboard.counts" },
+      { ok: true, data: "entity.connectedRecords" },
+    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent.every((body) => body.batch?.length === 2)).toBe(true);
+  });
+
+  it("does not retry hidden authentication causes or thrown transport failures", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const failure = poolFailure();
+    failure.error.message = "Unable to complete request";
+    failure.error.diagnostics.stage = "context";
+    failure.error.diagnostics.causes = [];
+    const { fetchMock } = stubDispatch(() =>
+      Response.json(superjson.serialize(failure)),
+    );
+    const hidden = dispatchBrowserOperation(
+      "dashboard.counts",
+      {},
+      transport(),
+    );
+    await vi.runAllTimersAsync();
+    expect(await hidden).toEqual(failure);
+    const transportError = new Error("Synthetic transport failure");
+    fetchMock.mockRejectedValue(transportError);
+    const thrown = dispatchBrowserOperation(
+      "dashboard.counts",
+      {},
+      transport(),
+    ).catch((error) => error);
+    await vi.runAllTimersAsync();
+    expect(await thrown).toBe(transportError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 
   it("retries only a failed streamed read without replaying its successful sibling", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

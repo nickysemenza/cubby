@@ -17,9 +17,7 @@ export function createConcurrencyLimiter(limit: number) {
         const abort = () => {
           const index = queued.indexOf(start);
           if (index !== -1) queued.splice(index, 1);
-          reject(
-            new DOMException("Suggestion request cancelled", "AbortError"),
-          );
+          reject(new DOMException("Request cancelled", "AbortError"));
         };
         const start = () => {
           signal.removeEventListener("abort", abort);

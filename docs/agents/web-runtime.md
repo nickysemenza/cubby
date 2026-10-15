@@ -11,6 +11,7 @@ Pass the displayed selection as mutation variables at the action boundary.
 Queries stay passive on remount. When a write closes an editor, await
 `invalidateOperationTags` with `removeInactive` so navigation cannot reuse that
 editor's stale detail cache.
+
 Browser query HTTP requests share one admission budget across batches, header
 groups, singleton reads and batch fallbacks, owned by
 `integrations/tanstack-query/browser-operation-transport.ts`. That transport
@@ -19,6 +20,14 @@ request scopes; cancellation stops queued requests and retry waits. Successful
 batch siblings are not replayed. Mutations are outside this read recovery
 policy, and exhausted retries retain the last raw diagnostics. Keep passive
 mount/focus/reconnect defaults separate from recovery of an active read.
+
+This bounds HTTP requests, not origin database connections: each server batch
+can run several operations using its request-scoped pool. It does not reserve
+origin capacity or guarantee that pool-slot errors cannot occur. Recovery needs
+an exposed transient database cause; failures before session verification have
+no public causes and do not qualify. Jitter is shared within a browser tab so
+siblings from a failed batch can coalesce again.
+
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
 Resolve table selection updaters at the event boundary: they look up live rows

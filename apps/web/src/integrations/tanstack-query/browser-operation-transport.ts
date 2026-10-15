@@ -29,6 +29,9 @@ type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
 // One page can flush reads in separate tasks or header groups. Every query
 // HTTP request, including singletons and fallback, shares the same budget.
 const queryRequests = createConcurrencyLimiter(4);
+// Jitter across browser tabs, while siblings in one failed stream keep the
+// same delay so their retries can coalesce into another batch.
+const databaseRetryJitterMs = Math.floor(Math.random() * 250);
 
 function isTransientDatabaseFailure(result: DispatchResult): boolean {
   if (result.ok || result.error.code !== "INTERNAL_SERVER_ERROR") return false;
@@ -37,8 +40,7 @@ function isTransientDatabaseFailure(result: DispatchResult): boolean {
     return false;
   return diagnostics.causes.some(
     ({ code, message }) =>
-      (code === "58000" &&
-        message === "Timed out while waiting for an open slot in the pool.") ||
+      (code === "58000" && message.includes("open slot in the pool")) ||
       ["08000", "08003", "08006", "57P01", "57P02", "57P03"].includes(
         code ?? "",
       ) ||
@@ -219,7 +221,7 @@ export async function dispatchBrowserOperation(
         signal,
         delayFor: (outcome, attempt) =>
           attempt < 2 && outcome.ok && isTransientDatabaseFailure(outcome.value)
-            ? 250 * 2 ** attempt + Math.floor(Math.random() * 250)
+            ? 250 * 2 ** attempt + databaseRetryJitterMs
             : null,
       },
     );
