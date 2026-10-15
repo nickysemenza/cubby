@@ -1541,6 +1541,30 @@ function InventoryFields({
               {entryError}
             </StatusText>
           ) : null}
+          {inventory?.locationId && (inventory.mode === "add" || entryError) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || entryPending}
+              onClick={() =>
+                saveStock(() => {
+                  const input = toGroupInput(proposal);
+                  return {
+                    ...input,
+                    inventory: input.inventory
+                      ? {
+                          ...input.inventory,
+                          mode: "create",
+                          existingEntryId: undefined,
+                        }
+                      : undefined,
+                  };
+                })
+              }
+            >
+              Create a fresh count here
+            </Button>
+          ) : null}
           {inventory?.locationId ? (
             <Stack gap="xs">
               <p className="text-xs text-muted-foreground">

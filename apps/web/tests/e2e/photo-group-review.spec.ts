@@ -130,10 +130,7 @@ test("resolves identity, validates counts, and applies selected fields without r
     group.getByText("Retry the stock-entry selection before applying"),
   ).toBeVisible();
   await group
-    .getByRole("combobox", { name: "location", exact: true })
-    .fill(`${name} location`);
-  await page
-    .getByRole("option", { name: new RegExp(`${name} location`) })
+    .getByRole("button", { name: "Create a fresh count here", exact: true })
     .click();
   await expect(
     group.getByText("Retry the stock-entry selection before applying"),

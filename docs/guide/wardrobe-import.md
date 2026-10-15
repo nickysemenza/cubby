@@ -127,6 +127,8 @@ sold all attach without changing Inventory. **Receive newly counted stock**
 requires a real location, positive whole-number quantity and owner; create a
 count or explicitly choose a compatible existing entry to add to. Historical
 intent does not record a sale. Applying a group creates no Purchase or Expense.
+**Create a fresh count here** replaces an existing-entry choice, including a
+rejected selection, while keeping the chosen location, quantity and owner.
 
 Select resolved groups to apply a batch. Applying waits for saved edits and
 checks each saved revision. Failed groups remain selected for retry, and applied
