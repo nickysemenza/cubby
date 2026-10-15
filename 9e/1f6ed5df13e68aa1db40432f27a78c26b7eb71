@@ -1,0 +1,55 @@
+apps/web/src/server/domains/expense/repo/crud.ts
+  s_2a22d2c73c07e5::t_dcf2ebf166d7dc 87-90,925,940
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_2a22d2c73c07e5::t_f3414e18bc8c0a 68,232,248,268,300,319,333,436
+apps/web/src/server/domains/expense/repo/repository.ts
+  s_2a22d2c73c07e5::t_e4858178a935ed 27-32
+apps/web/src/server/domains/expense/service/expense-line-role.ts
+  s_2a22d2c73c07e5::t_4aaa4d05391199 15-18,39,63-68
+apps/web/src/server/domains/purchase-import/operations/import-orders.ts
+  s_2a22d2c73c07e5::t_3bc4110d7c9ef6 54
+apps/web/src/server/domains/purchase/operations/purchase.server.ts
+  s_2a22d2c73c07e5::t_bdcfd7b8476dc7 15,81-86,225-230
+apps/web/src/server/domains/purchase/repo/purchase-finance-actions.integration.test.ts
+  s_2a22d2c73c07e5::t_4b4608cd9f6c0b 24,207,214,420
+apps/web/src/server/domains/purchase/repo/purchase-finance-actions.ts
+  s_2a22d2c73c07e5::t_08785dfc1d5df7 30-33,206,237-241
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_2a22d2c73c07e5::t_0c36d4958a9c0e 100-103,1387,1424-1428
+apps/web/src/server/entity-kernel/adapter.ts
+  s_2a22d2c73c07e5::t_5e5443ee6e231a 11,43-44
+apps/web/src/server/entity-kernel/write-transaction.integration.test.ts
+  s_2a22d2c73c07e5::t_cd3008ee33afa8 110
+apps/web/src/server/http/request-context.ts
+  s_2a22d2c73c07e5::t_ec9d16bf94b0c7 39,79-84
+apps/web/src/server/http/request-services.ts
+  s_2a22d2c73c07e5::t_1ee853ed9eea5e 3,31
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_2a22d2c73c07e5::t_c74d5cf621ee46 57
+apps/web/src/server/domains/expense/repo/line-role-classifier.ts
+  s_dcc51378bc2bcb::t_f1c3163f85b1c7 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9e1f6ed5df13e68aa1db40432f27a78c26b7eb71",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_dcc51378bc2bcb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae54d3eaa22d594bb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
