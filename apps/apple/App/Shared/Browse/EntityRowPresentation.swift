@@ -216,12 +216,16 @@ struct EntityRowPresentation: Sendable, Hashable {
             imageURL: row.imageURL)
     }
 
-    private static func defaultKeys(descriptor: EntityDescriptor) -> [String] {
-        let contextKeys = Set(
+    static func listContextKeys(descriptor: EntityDescriptor) -> Set<String> {
+        Set(
             descriptor.presentation.detailSections.flatMap { section -> [String] in
                 if case .relation(let spec) = section.kind { return spec.contextFields }
                 return []
             })
+    }
+
+    private static func defaultKeys(descriptor: EntityDescriptor) -> [String] {
+        let contextKeys = listContextKeys(descriptor: descriptor)
         // Relation context can replace a separate web column while remaining a native list fact.
         return descriptor.fields
             .filter {
