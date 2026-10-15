@@ -4,6 +4,7 @@ import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatSmallCurrency } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
@@ -152,7 +153,14 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                     {result.usage.accountingPending && " (accounting pending)"}
                   </dd>
                   <dt>Diagnostic Run</dt>
-                  <dd>{result.runId}</dd>
+                  <dd>
+                    <EntityRefLink
+                      variant="chip"
+                      entity="run"
+                      id={result.runId}
+                      name={result.runId}
+                    />
+                  </dd>
                 </dl>
               </details>
             </div>
