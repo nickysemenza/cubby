@@ -335,9 +335,11 @@ unattended Mail import / interactive Burn-down boundary.
 
 - 🤔 ✨ **Layer public web research into Worker / pi-durable tools.** Evaluate
   filling logged-out gaps an Email leaves (manufacturer, model, identifiers,
-  representative images) within the existing paid-inference caps. Use scoped
-  Run services and the existing Pi tool registration; keep writes on the public
-  MCP contracts with Sources. Proposed layers and their purpose:
+  representative images) with explicit budgets and admission for search,
+  retrieval and browser time alongside model inference. Existing inference
+  admission does not bound those additional service costs. Use scoped Run
+  services and the existing Pi tool registration; keep writes on the public MCP
+  contracts with Sources. Proposed layers and their purpose:
   - **Discover sources with the
     [Cloudflare Web Search API](https://developers.cloudflare.com/web-search/).**
     Expose an explicit search tool using the
