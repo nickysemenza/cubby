@@ -1559,7 +1559,9 @@ quantity history and inventory in each units. The variance column, SQL filters/s
 picker/recount summaries, and location captions share that comparability rule. No status implies automatic consumption or
 disposal, and disabled tracking never removes manual inventory. Declared relation sections
 may place unique detail `contextFields` above their table; Stocked at uses this for the same
-inventory status and its expandable evidence.
+inventory status and its expandable evidence. Native default list rows also include
+relation context fields marked for list display, even when the separate web column
+is hidden because another column embeds that context.
 
 Resolution order uses the shared records block's `timeline` presentation for
 precedence, not chronological history. Every nonempty chain remains visible,
