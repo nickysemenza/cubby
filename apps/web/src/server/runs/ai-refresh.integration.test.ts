@@ -1,7 +1,10 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
+import {
+  aiRefreshRunInput,
+  aiEvaluationTarget,
+} from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -41,6 +44,7 @@ import {
 } from "./ai-refresh";
 import {
   categoryPorts,
+  PRIMARY_MODEL,
   kernelCtx,
   productCategoryId,
   productFixture,
@@ -52,6 +56,25 @@ import {
 // Real database/publication boundaries; only the external decision model is scripted.
 describe("targeted prompt refresh", () => {
   const ctx = withTestDb();
+  const fieldTarget = aiEvaluationTarget.options.find(
+    (target) => target.shape.kind.value === "field",
+  )!;
+  const fieldRefreshTarget = and(
+    eq(aiEvaluation.executionKind, "ai_refresh"),
+    sql`${aiEvaluation.target}->>${fieldTarget.keyof().enum.kind} = ${fieldTarget.shape.kind.value}`,
+  );
+  async function discoverFieldRefresh(
+    ports: Parameters<typeof discoverAiRefresh>[1],
+  ) {
+    const discovered = await discoverAiRefresh(ctx.db, ports);
+    const targets = await getDb(ctx.db)
+      .select({ runId: aiEvaluation.runId })
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    return discovered.filter((id) =>
+      targets.some((target) => target.runId === id),
+    );
+  }
   it("spends its relaunch budget on failed or unstarted Runs instead of healthy instances", async () => {
     const item = await productFixture(ctx, "Synthetic recovery backlog");
     await startSuggestionSweep(
@@ -73,7 +96,7 @@ describe("targeted prompt refresh", () => {
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -89,7 +112,7 @@ describe("targeted prompt refresh", () => {
           failed: 0,
         },
       })
-      .where(eq(run.id, owner!.id));
+      .where(eq(run.purpose, "ai_refresh"));
     const siblings = Array.from({ length: 30 }, () => ({
       ...owner!,
       id: runEntityId.parse(crypto.randomUUID()),
@@ -161,7 +184,7 @@ describe("targeted prompt refresh", () => {
     });
     const base = categoryPorts(0.6).suggestPorts;
     const spec = base.registry["product.categoryId"];
-    const runs = await discoverAiRefresh(ctx.db, {
+    const runs = await discoverFieldRefresh({
       context: kernelCtx(ctx),
       suggestPorts: {
         ...base,
@@ -181,7 +204,7 @@ describe("targeted prompt refresh", () => {
     const rows = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     expect(rows).toHaveLength(1);
     const [stored] = await getDb(ctx.db)
       .select({ id: product.id })
@@ -211,7 +234,7 @@ describe("targeted prompt refresh", () => {
     const evaluations = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     expect(evaluations).toHaveLength(1);
     const [pending] = await getDb(ctx.db)
       .select()
@@ -261,7 +284,7 @@ describe("targeted prompt refresh", () => {
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
     const history = await getDb(ctx.db).select().from(suggestion);
     expect(history.map((row) => row.status).sort()).toEqual([
@@ -276,12 +299,9 @@ describe("targeted prompt refresh", () => {
     });
     expect(applied.acceptanceReceipt!.auditIds.length).toBeGreaterThan(0);
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
-    expect(await discoverAiRefresh(ctx.db, ports)).toEqual([]);
+    expect(await discoverFieldRefresh(ports)).toEqual([]);
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(1);
   });
 
@@ -309,7 +329,7 @@ describe("targeted prompt refresh", () => {
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
     const changed = {
       ...manifest,
@@ -362,7 +382,7 @@ describe("targeted prompt refresh", () => {
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     const otherIds = [crypto.randomUUID(), crypto.randomUUID()];
     for (const id of otherIds)
       await getDb(ctx.db)
@@ -510,14 +530,14 @@ describe("targeted prompt refresh", () => {
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     await executeAiRefreshTarget(ctx.db, first!.id, ports);
     expect(
       (
         await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
-          .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+          .where(fieldRefreshTarget)
       )[0]?.state,
     ).toBe("completed");
     expect(
@@ -526,25 +546,20 @@ describe("targeted prompt refresh", () => {
     ).toBe("no_proposal");
     await discoverAiRefresh(ctx.db, ports);
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(1);
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Synthetic changed evidence" });
     await discoverAiRefresh(ctx.db, ports);
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(2);
   });
 
   it("bounds transient reinference and preserves the same rejected semantic proposal", async () => {
     const item = await productFixture(ctx, "Synthetic retry product");
+    await activateAiRefresh(ctx.db, "synthetic-retry", { enabled: true });
     await startSuggestionSweep(
       ctx.db,
       {
@@ -572,13 +587,19 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-retry", { enabled: true });
     const ports = {
       context: kernelCtx(ctx),
-      suggestPorts: categoryPorts(0.6).suggestPorts,
+      suggestPorts: {
+        ...categoryPorts(0.6).suggestPorts,
+        decisionModel: PRIMARY_MODEL,
+      },
     };
     await discoverAiRefresh(ctx.db, ports);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
+    expect(first?.provenance.dependencies).toEqual(
+      original?.provenance?.dependencies,
+    );
     let physicalCalls = 0;
     const failing = {
       ...ports,
@@ -602,7 +623,7 @@ describe("targeted prompt refresh", () => {
         await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
-          .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+          .where(fieldRefreshTarget)
       )[0]?.state,
     ).toBe("failed");
     await executeAiRefreshTarget(ctx.db, first!.id, failing);
@@ -624,10 +645,7 @@ describe("targeted prompt refresh", () => {
       },
     );
     const replacement = (
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget)
     ).find((row) => row.id !== first!.id)!;
     await executeAiRefreshTarget(ctx.db, replacement.id, ports);
     expect(
@@ -683,7 +701,7 @@ describe("targeted prompt refresh", () => {
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.executionKind, "ai_refresh"));
+      .where(fieldRefreshTarget);
     await executeAiRefreshTarget(ctx.db, first!.id, empty);
     await getDb(ctx.db)
       .update(product)
@@ -705,10 +723,7 @@ describe("targeted prompt refresh", () => {
     };
     await discoverAiRefresh(ctx.db, ports);
     const second = (
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh"))
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget)
     ).find((row) => row.id !== first!.id)!;
     const outstanding = executeAiRefreshTarget(ctx.db, second.id, ports);
     await started.promise;
@@ -739,7 +754,7 @@ describe("targeted prompt refresh", () => {
         .from(suggestion)
         .where(eq(suggestion.status, "applied")),
     ).toHaveLength(0);
-    expect(await discoverAiRefresh(ctx.db, ports)).toEqual([]);
+    expect(await discoverFieldRefresh(ports)).toEqual([]);
   });
   it("does not restart a finished field scan while the Email stream still has pages", async () => {
     const item = await productFixture(ctx, "Synthetic completed scan stream");
@@ -763,7 +778,7 @@ describe("targeted prompt refresh", () => {
       emailDone: false,
     });
     expect(
-      await discoverAiRefresh(ctx.db, {
+      await discoverFieldRefresh({
         context: kernelCtx(ctx),
         suggestPorts: categoryPorts(0.6).suggestPorts,
       }),
@@ -773,10 +788,7 @@ describe("targeted prompt refresh", () => {
       emailDone: true,
     });
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.executionKind, "ai_refresh")),
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(0);
   });
 });

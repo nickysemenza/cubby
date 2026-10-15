@@ -101,7 +101,7 @@ An unchanged accepted item identity replays even when its original resolution
 was `new`, when money is incomplete, or after its Product merges. A changed
 choice or missing accepted binding requires reconciliation review. Equivalent
 second sources retain their observations without duplicating canonical Product
-association rows; binding an unbound manual item creates the association once.
+association rows; binding an unbound manual item creates the association once. Identifier-collision review proposals publish after the import has retained its Product bindings and finished learning identifiers, so those evidence writes cannot supersede a fresh proposal before commit. The registered identifier remains with its actual owner.
 
 A member-reviewed refund reference from an Email is an
 `EmailFinancialAssociation`. It retains the exact Email checksum, the original

@@ -58,6 +58,7 @@ import {
   retainedMailFixture,
   sourceOrderObservationFixture,
 } from "~/server/purchase-import/order-import.fixtures";
+import { publishAssessment } from "~/server/repo/assessment";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
@@ -1568,20 +1569,6 @@ const SOURCE_FACTORIES = {
   "PhotoRunImage.runId": (db, targetId) =>
     mkPhotoRunImage(db, { runId: parseEntityId("run", targetId) }),
 
-  "AssessmentState.runId": async (db, targetId) => {
-    const product = await mkProduct(db);
-    return insertAndReturn(db, suggestion, {
-      runId: parseEntityId("run", targetId),
-      entity: "product",
-      recordId: product.id,
-      field: "categoryId",
-      suggestedValue: "CAT-4K7M",
-      confidence: 0.5,
-      model: "typesafe/jev",
-      kind: "addition",
-    });
-  },
-
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {
       runId: parseEntityId("run", targetId),
@@ -1796,6 +1783,37 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
+
+  it("retains historical Assessment execution provenance when its Run is soft-deleted", async () => {
+    const target = await mkRun(ctx.db);
+    const product = await mkProduct(ctx.db);
+    const prediction = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: uniq("historical-field"),
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "product",
+          recordId: product.id,
+          field: "categoryId",
+        },
+        judgment: { value: null },
+        producer: null,
+        fingerprint: null,
+        evidence: null,
+      },
+      { runId: target.id },
+    );
+    await softDelete(ctx.db, "Run", target.id);
+    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(suggestion)
+        .where(eq(suggestion.id, prediction.id)),
+    ).toMatchObject([{ runId: target.id }]);
+  });
 
   it("reports every derived edge when a live source points at a soft-deleted target", async () => {
     // The real persisted matrix also owns exact fixture coverage, so a new

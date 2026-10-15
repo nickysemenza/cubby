@@ -1268,6 +1268,13 @@ export async function saveImageDescriptionAnalysis(
       runtime: input.runtime ?? null,
     })
     .onConflictDoNothing();
+  // The analysis identity retains the first response, including on provider retries.
+  const result = await findCachedImageDescriptionAnalysis(db, {
+    ...input,
+    promptVersion: String(input.promptRevision),
+  });
+  if (!result)
+    throw new Error("Persisted image description analysis is unavailable");
   const fingerprint = parseImageDescriptionInputFingerprint(
     input.inputFingerprint,
   );
@@ -1282,7 +1289,7 @@ export async function saveImageDescriptionAnalysis(
         recordId: input.imageId,
         contentHash: fingerprint?.sourceContentHash ?? null,
       },
-      judgment: input.result.description,
+      judgment: result.description,
       producer: {
         kind: "model",
         model: input.model,
@@ -1291,14 +1298,12 @@ export async function saveImageDescriptionAnalysis(
         evaluationId: null,
       },
       fingerprint: fingerprint?.sourceContentHash ?? null,
-      evidence: z
-        .json()
-        .parse({
-          inputFingerprint: input.inputFingerprint,
-          result: input.result,
-        }),
+      evidence: z.json().parse({
+        inputFingerprint: input.inputFingerprint,
+        result,
+      }),
     },
-    { suggestedValue: input.result.description },
+    { suggestedValue: result.description },
   );
   await runMutationSideEffects(db, {
     entity: { entity: "image", id: input.imageId },
