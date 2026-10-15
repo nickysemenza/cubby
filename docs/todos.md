@@ -1303,11 +1303,11 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   Sentry: `CUBBY-16H`, `CUBBY-17G`.
 
 - 🤔 🐛 🟡 **Keep bounded MCP reads usable under real workloads.**
-  Photo candidates, entity lists and the activity work queue can exceed the 18-second
+  Photo candidates and entity lists can exceed the 18-second
   budget. Attribute query, pool, hydration and serialization time separately; use
   bounded continuation or a narrower read only after preserving completeness and
   ownership semantics.
-  Sentry: `CUBBY-188`, `CUBBY-18V`, `CUBBY-19B`, `CUBBY-1BF`, `CUBBY-1BK`.
+  Sentry: `CUBBY-19B`, `CUBBY-1BF`, `CUBBY-1BK`.
 
 - 🤔 🐛 🔴 **Repair identity and read-back boundaries without repeating committed writes.**
   Trace shortcode-to-UUID conversion in image/reference hydration and distinguish a
