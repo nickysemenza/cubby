@@ -32,6 +32,8 @@ or tender evidence stays unresolved; never change an amount to force a match.
 Settlement queue work waits through two complete Monday–Friday days after its
 start date, in America/Los_Angeles, without a holiday calendar. Friday evidence
 is awaiting posting on Tuesday and becomes investigation work on Wednesday.
+The grace ends at household midnight after the second following weekday;
+calculating that deadline takes the same work for recent and historical evidence.
 Use the effective transaction date, then Purchase date when no transaction
 exists, then first observation (`createdAt`) only for undated evidence. A
 reimport never resets dated age; an old dated record imported today is already
