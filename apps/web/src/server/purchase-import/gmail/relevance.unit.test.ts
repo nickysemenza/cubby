@@ -212,8 +212,14 @@ describe("transient original attachment relevance", () => {
             mail: { ...original.mail, bodyText: "", bodyHtml },
           },
           async () => ({ classification: "unrelated" }),
+          true,
+          undefined,
+          {
+            fetcher: async () =>
+              new Response("Synthetic unavailable image", { status: 404 }),
+          },
         ),
-      ).resolves.toEqual({ classification: "uncertain" });
+      ).resolves.toMatchObject({ classification: "uncertain" });
     }
   });
 

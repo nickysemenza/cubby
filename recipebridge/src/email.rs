@@ -148,11 +148,16 @@ fn is_email_hidden(element: &ElementRef) -> bool {
             && (value("max-height").is_some_and(is_zero) || value("height").is_some_and(is_zero)))
 }
 
-fn has_hidden_ancestor(element: &ElementRef) -> bool {
+fn has_noncontent_ancestor(element: &ElementRef) -> bool {
     element
         .ancestors()
         .filter_map(ElementRef::wrap)
-        .any(|ancestor| is_email_hidden(&ancestor))
+        .any(|ancestor| {
+            matches!(
+                ancestor.value().name(),
+                "script" | "style" | "noscript" | "template" | "svg" | "head"
+            )
+        })
 }
 
 fn is_footer(element: &ElementRef) -> bool {
@@ -333,7 +338,24 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
                         // A fixed one-pixel picture cannot carry readable pixels;
                         // its label and surrounding links can still carry evidence.
                         .filter(|name| {
-                            (**name != "src" || !is_fixed_tracking_pixel(&node))
+                            // Responsive images are retained below even inside
+                            // hidden containers; failed sources and overflow have
+                            // their own omission counters.
+                            (!matches!(**name, "alt" | "src")
+                                || node.value().name() != "img"
+                                || is_tracking_pixel(&node)
+                                || (**name == "src"
+                                    && node.value().attr("src").is_some_and(|raw| {
+                                        image_source(&node)
+                                            .and_then(|source| resolve(None, source))
+                                            .is_none_or(|resolved| {
+                                                let retained = url_purchase_cues(&resolved);
+                                                url_purchase_cues(raw)
+                                                    .iter()
+                                                    .any(|cue| !retained.contains(cue))
+                                            })
+                                    })))
+                                && (**name != "src" || !is_fixed_tracking_pixel(&node))
                                 && (**name != "alt"
                                     || !is_fixed_tracking_pixel(&node)
                                     || !state
@@ -932,7 +954,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
     let mut unresolved_image_sources = Vec::new();
     let images: Vec<WEmailImage> = select(&document, "img")
         .into_iter()
-        .filter(|image| !is_tracking_pixel(image) && !has_hidden_ancestor(image))
+        .filter(|image| !is_tracking_pixel(image) && !has_noncontent_ancestor(image))
         .filter_map(|image| {
             let Some(src) = image_source(&image).and_then(|source| resolve(None, source)) else {
                 unresolved_images = unresolved_images.saturating_add(1);
@@ -1002,6 +1024,34 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retains_responsive_hidden_image_evidence() {
+        for label in [
+            "Seasonal sale: shipping offers",
+            "Receipt for order #SYN-12345 paid $42",
+            "",
+        ] {
+            let email = compact_email_html(&format!(
+                r#"<p>Account updates.</p><div style="display:none"><img src="https://example.test/receipt-mobile.png" alt="{label}" width="600" height="300"></div>"#,
+            ));
+            assert!(!email.truncated);
+            assert_eq!(email.images.len(), 1);
+            assert_eq!(email.images[0].alt, label);
+            assert!(email.images[0].cue);
+        }
+
+        let unresolved = compact_email_html(
+            r#"<p>Account updates.</p><div hidden><img src="cid:receipt" alt="Receipt"></div>"#,
+        );
+        assert_eq!(unresolved.unresolved_images, 1);
+        assert_eq!(unresolved.unresolved_image_sources, vec!["cid:receipt"]);
+
+        let normalized_away = compact_email_html(
+            r#"<p>Community gardening news with seasonal tips and upcoming neighborhood events.</p><div hidden><img src="https://example.test/picture?amount=USD 42" alt="Garden tips" width="600" height="300"></div>"#,
+        );
+        assert!(normalized_away.truncated);
+    }
 
     // Accessibility exclusion must not erase visually rendered Email evidence.
     #[test]
@@ -1135,7 +1185,15 @@ mod tests {
             let receipt = compact_email_html(&format!(
                 r#"<p>Community updates.</p><div style="display:none"><img {dimensions} src="https://example.test/receipt.png"></div>"#,
             ));
-            assert!(receipt.truncated, "receipt dimensions: {dimensions}");
+            // Either retain the actual picture or report that its purchase
+            // evidence was lost; CSS conflicts must never silently erase it.
+            assert!(
+                receipt.truncated
+                    || receipt.images.iter().any(|image| {
+                        image.src == "https://example.test/receipt.png" && image.cue
+                    }),
+                "receipt dimensions: {dimensions}"
+            );
         }
         let labeled_pixel = compact_email_html(
             r#"<p>Community updates.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Receipt total $24"></div>"#,
