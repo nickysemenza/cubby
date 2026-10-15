@@ -1,0 +1,75 @@
+apps/web-worker-tests/vitest.config.ts
+  s_2a22d2c73c07e5::t_e6fdf218e64794 60
+apps/web/src/cf-server.ts
+  s_2a22d2c73c07e5::t_820ca9dd635c18 677,868
+apps/web/src/server/domains/image-processing/repo/image-processing-history.integration.test.ts
+  s_2a22d2c73c07e5::t_27c7ee6a7a5d32 53-55
+apps/web/src/server/domains/image-processing/repo/image-processing-identification.integration.test.ts
+  s_2a22d2c73c07e5::t_2de07e0c795cf7 32-34
+apps/web/src/server/domains/image-processing/repo/image-processing-maintenance.integration.test.ts
+  s_2a22d2c73c07e5::t_2e75c96becce2c 14
+apps/web/src/server/domains/image-processing/repo/image-processing-maintenance.ts
+  s_2a22d2c73c07e5::t_780834559064ad 33,71,125-126,128-130,149,151-154
+apps/web/src/server/domains/image-processing/repo/image-processing-pull.integration.test.ts
+  s_2a22d2c73c07e5::t_715b4501741a50 24-26
+apps/web/src/server/domains/image-processing/repo/image-processing-subject-lift.integration.test.ts
+  s_2a22d2c73c07e5::t_548491f2a6d496 18-20
+apps/web/src/server/domains/image-processing/repo/image-processing-waiting.integration.test.ts
+  s_2a22d2c73c07e5::t_1a3efb836d58de 24-26
+apps/web/src/server/domains/image-processing/repo/image-processing.integration.test.ts
+  s_2a22d2c73c07e5::t_96998822ca24a4 51-53
+apps/web/src/server/domains/image-processing/service/cloud-queue.integration.test.ts
+  s_2a22d2c73c07e5::t_24c215ea91a24d 15-17
+apps/web/src/server/domains/image-processing/service/image-processing-maintenance.ts
+  s_2a22d2c73c07e5::t_cb210dcf72bc75 1-98
+apps/web/src/server/domains/image/repo/image.integration.test.ts
+  s_2a22d2c73c07e5::t_cde5d39f384651 41-43
+apps/web/src/server/domains/ingredient/repo/ingredient.integration.test.ts
+  s_2a22d2c73c07e5::t_f847f1ccd0ca48 7
+apps/web/src/server/domains/purchase-import/repo/import-order-convergence.integration.test.ts
+  s_2a22d2c73c07e5::t_72ea31aa2485ec 35-37
+apps/web/src/server/domains/purchase-import/repo/photo-inventory-run.integration.test.ts
+  s_2a22d2c73c07e5::t_a8f69675c74609 23-25
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_2a22d2c73c07e5::t_269e75277c7c66 57-59,67
+apps/web/src/server/domains/run/operations/gateway-egress-durable-object.ts
+  s_2a22d2c73c07e5::t_5038a058f15a5d 9,13,84,115,152,157
+apps/web/src/server/domains/run/service/suggestion-review.integration.test.ts
+  s_2a22d2c73c07e5::t_f524b0bf5c3be5 10
+apps/web/src/server/http/maintenance.server.ts
+  s_2a22d2c73c07e5::t_8ec28fa551f329 5-8,17
+apps/web/src/server/workflows/background-tasks/handle.ts
+  s_2a22d2c73c07e5::t_ff99db7755666e 168,179
+apps/web/src/server/workflows/catch-up.ts
+  s_2a22d2c73c07e5::t_e0955fbaaa42a2 57
+apps/web/tests/e2e/companion-analysis.spec.ts
+  s_2a22d2c73c07e5::t_c0d77ebdefdf67 24-26
+apps/web/tests/e2e/companion-socket.spec.ts
+  s_2a22d2c73c07e5::t_a40492eddce85a 15-17
+apps/web/tests/e2e/support/import-order-convergence.helpers.ts
+  s_2a22d2c73c07e5::t_8d296204cd357a 25-27
+apps/web/tooling/calendar-test-worker.ts
+  s_2a22d2c73c07e5::t_ac036ec8491574 31
+apps/web/tooling/scenarios/simulator-input-journey.ts
+  s_2a22d2c73c07e5::t_a28eaaea3db110 20-22
+apps/web/tooling/scenarios/tester-army-coupled.ts
+  s_2a22d2c73c07e5::t_6af1023ead7842 29-31
+apps/web/tooling/sim-e2e.ts
+  s_2a22d2c73c07e5::t_1559499fe1e8e1 918
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "525605ebdf0fc0c6f6b1ad545250c21dd5914d6f",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
