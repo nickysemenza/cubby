@@ -41,7 +41,6 @@ import {
   ensureRun,
   aiCallRunInput,
 } from "~/server/domains/run/repo/ensure-run";
-import { traceAllBounded } from "~/server/observability/tracing";
 
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 5;
@@ -298,14 +297,13 @@ export function rankPhotoProductCandidates(
 
 /**
  * The color/size variant Decision between a source title and a candidate's;
- * supplied by the caller (`decideProductVariantComparison`) so this read never
+ * supplied by the caller (`decideProductVariantComparisons`) so this read never
  * calls a model itself.
  */
 export type ProductVariantComparator = (args: {
-  firstTitle: string;
-  secondTitle: string;
+  comparisons: readonly { firstTitle: string; secondTitle: string }[];
   usage: AiRunContext;
-}) => Promise<ProductVariantComparison>;
+}) => Promise<ProductVariantComparison[]>;
 
 /** Bounded, read-only suggestions for one review group; every choice stays human-approved. */
 export async function photoProductCandidates(
@@ -475,29 +473,22 @@ export async function findPhotoProductCandidates(
       runId,
       operation: "photo-import.product-variant-comparison",
     };
-    const tasks: Record<string, () => Promise<ProductVariantComparison>> =
-      Object.fromEntries(
-        preliminary.map((candidate) => [
-          candidate.id,
-          () =>
-            compareVariants({
-              firstTitle: sourceTitle,
-              secondTitle: [
-                candidate.name,
-                candidate.model,
-                ...(candidate.aliases ?? []),
-              ]
-                .filter(Boolean)
-                .join("\n"),
-              usage,
-            }),
-        ]),
-      );
-    const comparisons = await traceAllBounded(tasks, 3, {
-      spanName: "photo-import.product-variant-comparison",
+    const comparisons = await compareVariants({
+      comparisons: preliminary.map((candidate) => ({
+        firstTitle: sourceTitle,
+        secondTitle: [
+          candidate.name,
+          candidate.model,
+          ...(candidate.aliases ?? []),
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      })),
+      usage,
     });
-    for (const candidate of preliminary)
-      variantComparisons.set(candidate.id, comparisons[candidate.id]!);
+    preliminary.forEach((candidate, index) =>
+      variantComparisons.set(candidate.id, comparisons[index]!),
+    );
   }
   const ranked = rankPhotoProductCandidates(
     name,

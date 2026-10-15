@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
+import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { getDb } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -58,7 +58,7 @@ describe("photo product candidates", () => {
     port: DecisionPort = unknownVariant,
   ) =>
     queryPhotoProductCandidates(db, input, actor, (args) =>
-      decideProductVariantComparison({ ...args, port }),
+      decideProductVariantComparisons({ ...args, port }),
     );
 
   it("exposes only known accepted line selectors owned by the reviewing member", async () => {

@@ -92,6 +92,11 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Before/after a change
 
+For request packaging or concurrency comparisons, repeat identical baseline and
+candidate calls to distinguish ordinary model variation from an observed change.
+Score the confidence-gated values the consumer actually uses as well as raw
+labels; a small unpaired disagreement count alone does not establish regression.
+
 Measure the baseline, make the change, deploy, re-measure the same sample,
 then confirm on a fresh held-out sample. Ship a prompt or option change only
 when it improves the held-out numbers and the disagreements were

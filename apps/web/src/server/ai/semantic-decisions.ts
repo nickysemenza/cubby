@@ -10,6 +10,7 @@ import {
   type DecisionPort,
   decisionChoiceFitsContext,
   runDecisionChoice,
+  runDecisionChoices,
 } from "~/server/ai/decision-model";
 import {
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
@@ -167,6 +168,20 @@ const RELATIONS_BY_CHOICE = {
   }
 >;
 
+function variantComparison(
+  input: { firstTitle: string; secondTitle: string },
+  value: ProductVariantRelationChoice | null | undefined,
+): ProductVariantComparison {
+  const relations = value
+    ? RELATIONS_BY_CHOICE[value]
+    : { color: "unknown" as const, size: "unknown" as const };
+  return {
+    color: { relation: relations.color },
+    size: { relation: relations.size },
+    evidence: { firstTitle: input.firstTitle, secondTitle: input.secondTitle },
+  };
+}
+
 export async function decideProductVariantComparison(args: {
   firstTitle: string;
   secondTitle: string;
@@ -174,11 +189,7 @@ export async function decideProductVariantComparison(args: {
   port?: DecisionPort;
 }) {
   if (args.firstTitle.length > 500 || args.secondTitle.length > 500)
-    return {
-      color: { relation: "unknown" as const },
-      size: { relation: "unknown" as const },
-      evidence: { firstTitle: args.firstTitle, secondTitle: args.secondTitle },
-    };
+    return variantComparison(args, null);
   const result = await choice({
     feature: PRODUCT_VARIANT_RELATION_FEATURE,
     prompt: productVariantRelationPrompt(args),
@@ -186,12 +197,40 @@ export async function decideProductVariantComparison(args: {
     usage: args.usage,
     port: args.port,
   });
-  const relations = result.value
-    ? RELATIONS_BY_CHOICE[result.value]
-    : { color: "unknown" as const, size: "unknown" as const };
-  return {
-    color: { relation: relations.color },
-    size: { relation: relations.size },
-    evidence: { firstTitle: args.firstTitle, secondTitle: args.secondTitle },
-  };
+  return variantComparison(args, result.value);
+}
+
+/** Each pair remains an independent question and an independently cached decision. */
+export async function decideProductVariantComparisons(args: {
+  comparisons: readonly { firstTitle: string; secondTitle: string }[];
+  usage: AiRunContext;
+  port?: DecisionPort;
+}): Promise<ProductVariantComparison[]> {
+  const eligible = args.comparisons.flatMap((comparison, index) =>
+    comparison.firstTitle.length <= 500 && comparison.secondTitle.length <= 500
+      ? [{ comparison, index }]
+      : [],
+  );
+  const results = await runDecisionChoices(
+    eligible.map(({ comparison }) => ({
+      feature: PRODUCT_VARIANT_RELATION_FEATURE,
+      ...productVariantRelationPrompt(comparison),
+      choices: PRODUCT_VARIANT_RELATION_CHOICES,
+      allowNone: false,
+      usage: args.usage,
+      port: args.port,
+      decisionModel: selectDecisionModel(),
+    })),
+  );
+  const byIndex = new Map(
+    eligible.map(({ index }, offset) => [index, results[offset]!]),
+  );
+  return args.comparisons.map((comparison, index) => {
+    const result = byIndex.get(index);
+    const value =
+      result?.confidence === "high" && result.selectedIndex !== null
+        ? PRODUCT_VARIANT_RELATION_CHOICES[result.selectedIndex]
+        : undefined;
+    return variantComparison(comparison, value);
+  });
 }
