@@ -200,6 +200,9 @@ The household project tracker (migrated from Notion) is a self-contained module:
   Images attach through `EntityAttachment` rows to the shared `Image` entity.
   Spend/progress rollups (`spent`, task counts) are SQL aggregates, never
   denormalized.
+  Kind follows the work: standalone home maintenance, repair, and replacement
+  are Household; remodeling a room or structure is Renovation. A room name
+  alone does not make maintenance a renovation.
 - **Task** — `task.projectId` is nullable by design; project-less top-level
   open tasks are the Inbox saved filter on `/tasks?view=list` (plus
   promote-to-project).

@@ -249,8 +249,8 @@ export default defineEntity({
 
 Rules:
 1. Match the primary subject of the project, not incidental tasks within it.
-2. A room or structure name (kitchen, deck, garage) usually indicates "renovation".
-3. A single object being built or fixed usually indicates "furniture", except shop fixtures such as workbenches, jigs, and tool storage, which are "workshop".
+2. Remodeling a room or structure is "renovation". Standalone home maintenance, repair, or replacement, such as replacing a ceiling light or furnace, is "household", even when the name mentions a room.
+3. Building or restoring furniture is "furniture", except shop fixtures such as workbenches, jigs, and tool storage, which are "workshop".
 4. Growing plants and caring for them is "garden". Permanent outdoor construction, including paving, retaining walls, and irrigation infrastructure, is "renovation".`,
             ],
           },
