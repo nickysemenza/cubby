@@ -6,15 +6,20 @@ import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import { MIGRATIONS_FOLDER } from "tooling/db-migrate";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import { z } from "zod";
 
+import { Database } from "~/server/db/database";
 import {
   aiUsage,
   imageProcessingJob,
   imageProcessingAttempt,
 } from "~/server/db/schema";
+import * as schema from "~/server/db/schema";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -97,6 +102,83 @@ describe("listAiUsageForRun", () => {
     if (!job) throw new Error("fixture: image job not created");
     return job;
   };
+
+  // Unrelated usage must not re-scan the Run's jobs once per usage row. This
+  // executes the repository's real statements and inspects executor loops,
+  // avoiding machine-dependent latency assertions for a pool-starving query.
+  it("keeps Run job membership work independent of unrelated usage volume", async () => {
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const unrelated = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    for (let index = 0; index < 8; index += 1) await imageJob(root);
+    await getDb(ctx.db).execute(sql`INSERT INTO "AiUsage"
+      ("feature", "provider", "model", "operation", "runId", "durationMs", "standardCost", "chargedCost")
+      SELECT 'synthetic-cost', 'test', 'test-model', 'suggest', ${unrelated}, 1, 1, 1
+      FROM generate_series(1, 1000)`);
+    await getDb(ctx.db).insert(aiUsage).values({
+      runId: root,
+      feature: "synthetic-cost",
+      provider: "test",
+      model: "test-model",
+      operation: "suggest",
+      durationMs: 1,
+      standardCost: 2,
+      chargedCost: 1,
+    });
+    await getDb(ctx.db).execute(
+      sql`ANALYZE "AiUsage", "ImageProcessingJob", "ImageProcessingAttempt", "Run"`,
+    );
+    const statements: { text: string; params: unknown[] }[] = [];
+    const pool = new pg.Pool({ connectionString: ctx.databaseUrl, max: 1 });
+    const client = drizzle({
+      client: pool,
+      schema,
+      logger: {
+        logQuery: (text, params) => statements.push({ text, params }),
+      },
+    });
+    const db = new Database(() => ({
+      client,
+      withConnection: (fn) => fn(client),
+    }));
+    const planNode = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Loops": z.number().optional(),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    const planRow = z.object({
+      "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })),
+    });
+    let maxRelationLoops = 0;
+    const visit = (value: unknown) => {
+      const node = planNode.parse(value);
+      if (node["Relation Name"])
+        maxRelationLoops = Math.max(
+          maxRelationLoops,
+          node["Actual Loops"] ?? 0,
+        );
+      node.Plans?.forEach(visit);
+    };
+    try {
+      expect(await listAiUsageForRun(db, root)).toMatchObject({
+        count: 1,
+        chargedCost: 1,
+        standardCost: 2,
+      });
+      for (const statement of statements) {
+        const result = await pool.query(
+          `EXPLAIN (ANALYZE, FORMAT JSON) ${statement.text}`,
+          statement.params,
+        );
+        for (const row of result.rows)
+          planRow.parse(row)["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+      }
+      expect(maxRelationLoops).toBeLessThan(100);
+    } finally {
+      await pool.end();
+    }
+  });
 
   // An AI run has no member party; the run detail page must still read its
   // usage (the import-run loader only ever served member-scoped runs).
