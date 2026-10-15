@@ -15,6 +15,8 @@ committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
 `src/server/db/derived-ddl.ts` changes), and `pnpm --filter @cubby/web
 db:migrate --target=production` applies them with
 `PRODUCTION_DIRECT_DATABASE_URL`.
+Run `db:generate` with a TTY and unredirected stdout when Drizzle asks create/rename questions. An interactive-prompt diagnostic can still leave a derived-only journal entry; inspect the journal and schema SQL before treating generation as complete.
+
 Migrations are the one committed generated artifact and are immutable once
 merged — the runner refuses bookkeeping that is not a prefix of the journal.
 A stored-shape transform accompanying schema work is a custom migration

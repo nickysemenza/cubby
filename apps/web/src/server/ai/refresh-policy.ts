@@ -17,6 +17,7 @@ import {
 
 const automaticFeatures = new Set([
   "field-suggestion",
+  "product-identity",
   "selection-overflow",
   "mailbox-triage",
   "mailbox-relevance",

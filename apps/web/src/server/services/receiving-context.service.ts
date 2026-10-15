@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   inventoryReceivingContextInput,
@@ -13,33 +12,23 @@ import {
 } from "~/server/repo/inventory/product-stock";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
-import {
-  getProductMatchQueue,
-  type ProductMatchDependencies,
-} from "./product-match.service";
+import { getProductMatchQueue } from "./product-match.service";
 import { deriveReceivingGuidance } from "./receiving-guidance";
 
 /**
  * Read-only: what already counts for a Product before an Expense is received.
- * Reuses the focused Product match read (one vector lookup, dismissed pairs
+ * Reuses the focused Product match read (stored assessments, dismissed pairs
  * excluded) so a photo-created stocked Product that may be the same item
  * surfaces before the operator adds units. Never writes stock.
  */
 export async function getReceivingContext(
   db: Database,
   input: z.output<typeof inventoryReceivingContextInput>,
-  actorContext: ActorContext,
-  deps?: ProductMatchDependencies,
 ): Promise<InventoryReceivingContextOut> {
   const productId = await resolveOrThrow(db, "product", input.productId);
   const [stockRows, queue, expectedQuantity] = await Promise.all([
     listProductStock(db, productId),
-    getProductMatchQueue(
-      db,
-      { productId: input.productId },
-      deps,
-      actorContext,
-    ),
+    getProductMatchQueue(db, { productId: input.productId }),
     getProductExpectedQuantity(db, productId),
   ]);
   const stock = stockRows.map((row) => ({

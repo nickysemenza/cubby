@@ -1,6 +1,8 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { useContext } from "react";
 
+import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
+
 import {
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
@@ -63,9 +65,27 @@ function StandaloneSuggestion({
       onApply={
         suggestion
           ? async () => {
+              if (!suggestion.assessmentId)
+                throw new Error("Suggestion Assessment is missing");
+              await assessment.review.call({
+                assessmentId: suggestion.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "correct",
+                intent: "draft",
+              });
               if (!suggestion.financeReview) return onApply(suggestion);
               try {
                 await financeApply.apply(suggestion);
+                await assessment.review.call({
+                  assessmentId: suggestion.assessmentId,
+                  operationId: crypto.randomUUID(),
+                  verdict: "correct",
+                  intent: "apply",
+                  application: {
+                    kind: "saved_field",
+                    recordId: suggestion.financeReview.entityId,
+                  },
+                });
               } catch (error) {
                 await refetch();
                 throw error;

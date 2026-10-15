@@ -1,21 +1,27 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import {
+  listFeedbackByKind,
+  seedEmailClassificationFeedback,
+  seedEmailLinkDecision,
+} from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   emailClassificationObservation,
-  emailClassificationLabel,
+  feedback,
   email as emailTable,
   importSourceClaim,
   importSourceOrder,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
   orderMailEvent,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
+import { ensureEmailAssessment } from "~/server/repo/assessment-email";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getConnectedRecords } from "~/server/repo/connected-records";
 import { getDb } from "~/server/repo/database-helpers";
 import {
@@ -256,22 +262,21 @@ describe("Email generic persisted reads", () => {
           orderMailId: content.id,
           event: "shipment",
           sourceKey: `synthetic:${messageId}`,
-          supersededAt:
-            messageId === "superseded"
-              ? new Date("2026-09-04T18:00:00Z")
-              : null,
         })
         .returning();
       if (!event) throw new Error("Synthetic event did not persist");
-      await getDb(ctx.db)
-        .insert(orderMailCandidateDecision)
-        .values({
-          eventId: event.id,
-          purchaseId: purchase.id,
-          decision: messageId === "dismissed" ? "dismissed" : "linked",
-          evidenceChecksum: content.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        });
+      await seedEmailLinkDecision(ctx.db, {
+        eventId: event.id,
+        purchaseId: purchase.id,
+        decision: messageId === "dismissed" ? "dismissed" : "linked",
+        evidenceChecksum: content.rawChecksum,
+        decidedByUserId: ctx.actor.userId,
+      });
+      if (messageId === "superseded")
+        await getDb(ctx.db)
+          .update(orderMailEvent)
+          .set({ supersededAt: new Date("2026-09-04T18:00:00Z") })
+          .where(eq(orderMailEvent.id, event.id));
     }
     // Retention removes bodies, not accepted source identity or association.
     await getDb(ctx.db).execute(
@@ -360,7 +365,7 @@ describe("Email generic persisted reads", () => {
       })
       .returning();
     if (!prediction) throw new Error("Synthetic prediction missing");
-    await getDb(ctx.db).insert(emailClassificationLabel).values({
+    await seedEmailClassificationFeedback(ctx.db, {
       predictionId: prediction.id,
       classification: "related",
       reason: "Synthetic independent message review",
@@ -492,6 +497,30 @@ describe("Email generic persisted reads", () => {
       (item) => item.headers?.subject === "Synthetic false positives",
     );
     if (!selected?.emailId) throw new Error("Synthetic selected Email missing");
+    const evaluationOnly = await emailReviewReport(
+      ctx.db,
+      selected.emailId,
+      null,
+      ctx.actor,
+    );
+    expect(
+      evaluationOnly.find(
+        (block) => block.kind === "table" && block.title === "Member reviews",
+      ),
+    ).toMatchObject({ rows: [] });
+    // An evaluation grade never becomes member routing authority or review history.
+    const selectedAssessment = await ensureEmailAssessment(
+      ctx.db,
+      selected.predictionId,
+    );
+    await reviewAssessment(ctx.db, buildKernelContext(ctx.db), {
+      assessmentId: selectedAssessment.id,
+      operationId: "synthetic:independent-member-history",
+      verdict: "wrong",
+      correction: { present: true, value: "unrelated" },
+      reason: "Synthetic independent member history review",
+      intent: "history",
+    });
     // Member-wide accuracy lives in the list's Accuracy view, not each Email.
     const { blocks } = await emailAccuracyViewReport(ctx.db, ctx.actor);
     const detail = await emailReviewReport(
@@ -603,8 +632,12 @@ describe("Email generic persisted reads", () => {
       classification: "related",
       checksum: "b".repeat(64),
     });
+    expect(await listFeedbackByKind(ctx.db, "email_accuracy")).toHaveLength(3);
     expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
-    ).toHaveLength(3);
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.authority, "member")),
+    ).toMatchObject([{ actorUserId: ctx.actor.userId, intent: "history" }]);
   });
 });

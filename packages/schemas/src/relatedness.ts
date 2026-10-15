@@ -1,3 +1,4 @@
+import { assessmentReviewReference } from "./assessment-reference";
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity-core";
 import type { RelationshipPathStep } from "./entity-integrity";
@@ -160,6 +161,7 @@ export const relatednessEvidenceSchema = z.object({
 });
 
 export const relatednessItemSchema = z.object({
+  review: assessmentReviewReference.optional(),
   entity: entitySchema,
   shortcode: z.string(),
   title: z.string(),

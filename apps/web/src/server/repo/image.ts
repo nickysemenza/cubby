@@ -106,6 +106,7 @@ import {
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { retireAssessmentTargetsTx } from "~/server/repo/assessment-state";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { correlated } from "~/server/repo/database-helpers";
@@ -1203,7 +1204,6 @@ const imageReferenceCondition = (
     // delete path below clears them after it locks the original image.
     "ImageProcessingJob.imageId": sql`FALSE`,
     "ImageDerivative.imageId": sql`FALSE`,
-    "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
     "PhotoRunImage.imageId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
@@ -1816,12 +1816,6 @@ export const IMAGE_HARD_DELETE = {
     description:
       "Non-gallery derivative records are removed with their original image.",
   },
-  "ImageDescriptionCorrection.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "A confirmed description cannot outlive the image it describes.",
-  },
   "ImageSighting.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1869,7 +1863,6 @@ const PROCESSING_EDGES: ReadonlySet<string> = new Set([
   "PhotoRunImage.imageId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
-  "ImageDescriptionCorrection.imageId",
   "ImageSighting.imageId",
 ]);
 
@@ -2113,6 +2106,7 @@ const deleteImagesTx = async (
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
+  await retireAssessmentTargetsTx(tx, "image", ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
   await touchUpdatedAt(

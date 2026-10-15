@@ -33,7 +33,7 @@ import type { Database } from "~/server/db";
 import {
   aiEvaluation,
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -45,6 +45,7 @@ import { latestFieldWrite } from "~/server/repo/audit-log";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { canonicalJson } from "~/server/repo/entity-source";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
+import { fieldReviewIdentity } from "~/server/repo/field-assessment-review";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { acceptSuggestion } from "~/server/repo/suggestion-review";
 import { type WorkflowLauncher } from "~/server/workflow-runs/launcher";
@@ -102,6 +103,7 @@ const sweepRunInputSchema = suggestionSweepRunInput.transform((input) => ({
   entity: fieldSuggestionsInput.shape.entity.parse(input.entity),
 }));
 const sweepSuggestionSchema = z.object({
+  reviewKey: z.string().nullable().optional(),
   kind: z.enum(["addition", "correction"]),
   status: z.enum(["applied", "pending"]),
   currentValue: suggestionValueSchema,
@@ -165,6 +167,7 @@ async function suggestTarget(
       decisionModel: input.decisionModel,
     }),
   );
+  const manifest = await producingAiManifest(db);
   const decisions = primaryCall.result;
   const decision = decisions.suggestions[input.field];
   if (!decision) {
@@ -189,6 +192,19 @@ async function suggestTarget(
   if (primary) {
     primary.model = primaryCall.inputs[0]?.model ?? input.decisionModel;
     if (primary.model !== input.decisionModel) primary.status = "pending";
+    primary.reviewKey = await fieldReviewIdentity({
+      entity: input.entity,
+      recordId: target.entityId,
+      field: input.field,
+      currentValue: target.currentValue,
+      proposal: decision,
+      model: primary.model,
+      inputs: primaryCall.inputs,
+      dependencies: dependencyStamps(manifest, [
+        ...fieldDependencyKeys(input.entity, input.field),
+        ...primaryCall.inputs.map((call) => call.feature),
+      ]),
+    });
   }
   const entries = primary ? [primary] : [];
   const diagnostics: {
@@ -263,6 +279,7 @@ export async function publishSweepSuggestions(
             eq(suggestionTable.runId, runId),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
+            eq(suggestionTable.active, true),
           ),
         );
       if (saved.length)
@@ -312,6 +329,7 @@ export async function publishSweepSuggestions(
             eq(suggestionTable.entity, input.entity),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
+            eq(suggestionTable.active, true),
           ),
         )
         .for("update");
@@ -339,7 +357,22 @@ export async function publishSweepSuggestions(
         )
       )
         throw new Error("Suggestion target changed during inference");
-      const rejected = predecessors.filter((row) => row.status === "rejected");
+      const rejected = predecessors.filter(
+        (row) =>
+          row.status === "rejected" && row.suppression?.scope === "field_value",
+      );
+      const reviewedWrong = await getDb(tx)
+        .select({ data: suggestionTable.data })
+        .from(suggestionTable)
+        .where(
+          and(
+            eq(suggestionTable.family, "field"),
+            eq(suggestionTable.entity, input.entity),
+            eq(suggestionTable.recordId, typedRecordId),
+            eq(suggestionTable.field, input.field),
+            eq(suggestionTable.status, "rejected"),
+          ),
+        );
       const unordered =
         decisionCatalogRows().find(
           (row) => row.entity === input.entity && row.field === input.field,
@@ -354,10 +387,28 @@ export async function publishSweepSuggestions(
         );
       const admissible = entries.filter(
         (entry) =>
+          !reviewedWrong.some(
+            (row) =>
+              entry.reviewKey &&
+              z.object({ reviewKey: z.string().nullable() }).safeParse(row.data)
+                .data?.reviewKey === entry.reviewKey,
+          ) &&
           !rejected.some(
             (row) =>
               proposalKey(jsonValue(row.suggestedValue)) ===
               proposalKey(entry.suggestedValue),
+          ) &&
+          !predecessors.some(
+            (row) =>
+              row.status === "rejected" &&
+              input.provenance &&
+              row.provenance &&
+              proposalKey(jsonValue(row.suggestedValue)) ===
+                proposalKey(entry.suggestedValue) &&
+              canonicalJson(z.json().parse(row.provenance)) ===
+                canonicalJson(
+                  z.json().parse({ ...input.provenance, model: entry.model }),
+                ),
           ),
       );
       for (const previous of predecessors) {
@@ -409,6 +460,7 @@ export async function publishSweepSuggestions(
             model: entry.model,
             pairKey: entry.pairKey,
             kind: entry.kind,
+            data: { reviewKey: entry.reviewKey ?? null },
             status: "pending",
           })
           .returning();
@@ -570,7 +622,7 @@ export async function prepareSuggestionSweep(
           entity: input.entity,
           recordId: target.entityId,
           field: target.field,
-          suggestionIds: [],
+          assessmentIds: [],
         },
         provenance: {
           dependencies: dependencyStamps(

@@ -59,6 +59,7 @@ import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   amountToColumns,
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
@@ -186,18 +187,6 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
-  },
-  "ProductMatchCandidate.productAId": {
-    code: "repoint-match-review",
-    effect: "repoint",
-    description:
-      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
-  },
-  "ProductMatchCandidate.productBId": {
-    code: "repoint-match-review",
-    effect: "repoint",
-    description:
-      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
   },
   "Planting.sourceProductId": {
     code: "preserve-garden-source",
@@ -1383,6 +1372,36 @@ export const mergeProducts = async (
       })),
     );
 
+    // Parent locks precede evidence reads; all combined pairs include loser–loser conflicts.
+    const { prepareProductIdentityPair } =
+      await import("~/server/ai/product-identity");
+    const transactionDb = databaseForTransaction(tx);
+    const combinedIds = [keepId, ...loserIds].sort();
+    for (let first = 0; first < combinedIds.length; first++) {
+      for (let second = first + 1; second < combinedIds.length; second++) {
+        const pair = await prepareProductIdentityPair(
+          transactionDb,
+          [combinedIds[first]!, combinedIds[second]!],
+          { includeExcluded: true },
+        );
+        if (!pair)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Product identity evidence is unavailable for merge targets",
+          );
+        if (pair.conflict)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Confirmed variant conflict prevents Product merging",
+          );
+        if (pair.verification === "pending_verification")
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Historical variant conflict requires fresh current verification before merging",
+          );
+      }
+    }
+
     // Rebuild after the locks: preview is advisory, while this is the plan the
     // executor is allowed to trust.
     const plan = await buildProductMergePlan(tx, { keepId, loserIds });
@@ -1732,9 +1751,6 @@ export const mergeProducts = async (
         },
         // Pair endpoints are re-canonicalised together, so both edges are
         // folded by one call keyed on the first.
-        "ProductMatchCandidate.productAId": () =>
-          repointProductMatchCandidatesTx(tx, keepId, plan.loserIds),
-        "ProductMatchCandidate.productBId": async () => {},
       },
     });
     summary.tasksMoved = repointed["Task.subjectProductId"] ?? 0;
@@ -1766,6 +1782,7 @@ export const mergeProducts = async (
       discardedUnitMappings,
     );
 
+    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
     const { removed } = await finalizeMerge(tx, {
       entity: "product",
       table: product,

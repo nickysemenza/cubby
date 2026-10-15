@@ -20,7 +20,10 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
-import type { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type {
+  assessment,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -29,7 +32,7 @@ import { Image } from "~/ui/primitives/image";
 
 export interface ProductMatchQueueOperations {
   readonly productMatches: typeof recommendations.productMatches;
-  readonly dismissProductMatch: typeof recommendations.dismissProductMatch;
+  readonly reviewAssessment: typeof assessment.review;
   readonly mergeProductMatch: typeof recommendations.mergeProductMatch;
   readonly displayImages: EntityDisplayImagesQueryOptions;
 }
@@ -126,7 +129,7 @@ function ProductMatchCard({
 }) {
   const [merging, setMerging] = useState(false);
   const navigate = useNavigate();
-  const dismiss = useMutation(operations.dismissProductMatch.mutationOptions());
+  const dismiss = useMutation(operations.reviewAssessment.mutationOptions());
   const merge = useActionMutation({
     mutationFn: () => operations.mergeProductMatch.mutationOptions(),
     success: "Products merged",
@@ -158,9 +161,7 @@ function ProductMatchCard({
           <MatchSide side={item.other} caption="Merge in" />
         </div>
         <div className="border-t border-border pt-2">
-          <p className="mb-1 text-xs font-medium">
-            Variant words in Product titles
-          </p>
+          <p className="mb-1 text-xs font-medium">Verified variant evidence</p>
           <ProductVariantEvidence
             comparison={item.variant}
             firstLabel="Keep"
@@ -198,7 +199,11 @@ function ProductMatchCard({
           </Row>
         ))}
         <Row gap="sm">
-          <Button type="button" onClick={() => setMerging(true)}>
+          <Button
+            type="button"
+            disabled={item.identityConflict || !item.fingerprint}
+            onClick={() => setMerging(true)}
+          >
             <GitMergeIcon className="size-3.5" />
             Review merge
           </Button>
@@ -207,11 +212,47 @@ function ProductMatchCard({
             variant="outline"
             disabled={dismiss.isPending}
             onClick={() =>
-              dismiss.mutate({ productIds: [item.keeper.id, item.other.id] })
+              dismiss.mutate({
+                assessmentId: item.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "wrong",
+                intent: "history",
+              })
+            }
+          >
+            Wrong match
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={dismiss.isPending}
+            onClick={() =>
+              dismiss.mutate({
+                assessmentId: item.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "uncertain",
+                intent: "history",
+              })
+            }
+          >
+            Unsure
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={dismiss.isPending}
+            onClick={() =>
+              dismiss.mutate({
+                assessmentId: item.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "dismissed",
+                intent: "history",
+                suppression: item.review?.suppression,
+              })
             }
           >
             <XIcon className="size-3.5" />
-            Not the same
+            Hide pair
           </Button>
         </Row>
       </Stack>
@@ -232,7 +273,12 @@ function ProductMatchCard({
               (side) => side.id !== keepId && aliasIds.includes(side.id),
             );
             if (keep && mergeInto)
-              merge.mutate({ keepId: keep.id, mergeId: mergeInto.id });
+              merge.mutate({
+                keepId: keep.id,
+                mergeId: mergeInto.id,
+                assessmentId: item.assessmentId,
+                expectedFingerprint: item.fingerprint!,
+              });
           }}
           isPending={merge.isPending}
         />

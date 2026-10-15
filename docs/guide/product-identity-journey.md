@@ -56,6 +56,13 @@ flowchart LR
     P --> I[Optional explicit inventory receive]
 ```
 
+A registered identifier has one Product owner. Accepted order lines retain
+their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs can support exact identity. A raw SKU stays a ranking clue even when current Sources corroborate matching size, color and pack: other relevant dimensions can differ. A shared model/style identifier stays a ranking clue. The existing durable Product identity Decision selects literal color, size and pack spans from retained Sources, then judges each relation as same, different or unknown. Each side carries its actual Source and Product IDs, current field fingerprint, exact quote and UTF-16 span offsets. Stored receipts retain the exact Decision requests and outcomes, actual model and policy dependencies. Validation checks those bindings and currentness; the semantic relation remains a source-grounded model judgment. A quote containing several possible variants stays unknown unless selected-variant evidence explicitly binds the chosen literal. There is no title keyword classifier or inferred pack default.
+
+Preparation, review reads, Problems, proposals and merges consume stored evidence without model calls. Every Product merge entry point checks all pairs among the combined Products, including loser-to-loser pairs, after acquiring Product and identifier parent locks and before mutation. Inference exclusions never bypass merge safety. Source or Product edits retire current pair actions. A historical grounded contradiction remains a verification guard after its support changes or disappears: a new agent proposal or exact-identifier outage fallback cannot clear it. Fresh current grounded evidence must address the conflicting dimensions and acknowledge the prior conflict lineage before merging can proceed. Partial or uncertain grounding leaves that guard pending. A recorded contradiction between structured model values also stays pending when a supporting Source disappears; current Source-bound agreeing model values clear only that model-specific reason. Exact identifier admission remains separate from semantic variant evidence. A confirmed variant contradiction under an exact claim exposes a conflict
+without assigning the identifier twice. Shared URLs and partial variant words
+remain clues for review.
+
 The statement does not identify an item, and a photo does not prove where it
 was bought. A delivered email and a card charge do not receive inventory.
 
@@ -88,7 +95,7 @@ Cards load as they approach the viewport and retain unfinished edits after
 scrolling away. Approved and discarded details stay collapsed until opened.
 
 Proposal values name their last recorded writer. They are not Jev/Clef field
-suggestions; catalogue match rankings are deterministic. Older proposals whose
+suggestions. Product identity detection reads every live Product through durable AI refresh work; the review queue reads at most 200 open stored pair Assessments after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Migrated pair records with unknown fingerprints remain immutable history. Those with unknown producers or agent provenance can remain visible read-only; rows carrying obsolete rule or model policies stay outside current queues until reassessed under the current policy. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
 writer was not recorded say so. Manufacturer is text on a Product, not a
 separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative

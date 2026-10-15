@@ -389,14 +389,6 @@ export const evaluateAppleImageDescriptionOutput = z.object({
   jobId: z.uuid().nullable(),
 });
 
-export const imageDescriptionCorrectionInput = z.object({
-  id: imageShortcode,
-  description: z.string().trim().min(1).max(4_000),
-});
-export const imageDescriptionCorrectionOutput = z.object({
-  saved: z.literal(true),
-});
-
 /** A finite background window pulls the same capabilities as a socket hello. */
 export const pullCompanionImageProcessingInput = z.object({
   hello: imageProcessingHello,

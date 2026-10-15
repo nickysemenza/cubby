@@ -1,4 +1,3 @@
-import { suggestionReviewBatchOut } from "@cubby/schemas/ai";
 import { inventoryMcpBulkMoveOut } from "@cubby/schemas/inventory";
 import {
   mcpUsdaFoodListItemOut,
@@ -76,6 +75,8 @@ import {
 import { vendorContract } from "~/contracts/vendor.contract";
 import { workQueueContract } from "~/contracts/work-queue.contract";
 
+import { assessmentContract } from "./assessment.contract";
+
 /**
  * The Cubby MCP surface: 24 tools, each a group of actions called as
  * `{ action, ...input }`. Read-only tools hold only queries, so an MCP client
@@ -111,7 +112,7 @@ export const MCP_TOOLS = defineMcpTools({
           items: aiContract.ops.listSuggestionReviewQueue.output,
         }),
         description:
-          "Stored field suggestions; every filter composes: entity, field or fields, kind, minConfidence, runId, and recordIds (with entity). status defaults to pending (the review queue; each id feeds entity.accept_suggestion(s) or reject_suggestion); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
+          "Stored field suggestions; every filter composes: entity, field or fields, kind, minConfidence, runId, and recordIds (with entity). status defaults to pending (the review queue; each Assessment id feeds entity.review_assessment); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,
@@ -245,33 +246,17 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Stock one item detected in a location photo, reusing productId or creating its Product.",
       }),
-      accept_suggestion: mcpAction({
-        op: aiContract.ops.acceptSuggestion,
-        description: "Apply one pending field suggestion by id.",
-      }),
-      accept_suggestions: mcpAction({
-        op: aiContract.ops.acceptSuggestions,
-        project: (results) => ({ results }),
-        output: z.object({ results: suggestionReviewBatchOut }),
+      review_assessment: mcpAction({
+        op: assessmentContract.ops.review,
         description:
-          "Apply several pending field suggestions by id; each result is ok with its status or carries its own error.",
+          "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated.",
       }),
-      reject_suggestion: mcpAction({
-        op: aiContract.ops.rejectSuggestion,
+      review_assessments: mcpAction({
+        op: assessmentContract.ops.reviewBatch,
+        project: (items) => ({ items }),
+        output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
         description:
-          "Reject one pending field suggestion, optionally recording correctValue (written to the record and kept as the Miss label).",
-      }),
-      reject_suggestions: mcpAction({
-        op: aiContract.ops.rejectSuggestions,
-        project: (results) => ({ results }),
-        output: z.object({ results: suggestionReviewBatchOut }),
-        description:
-          "Reject several pending field suggestions by id as Misses without a correction; each result is ok or carries its own error.",
-      }),
-      record_suggestion_miss: mcpAction({
-        op: aiContract.ops.recordFieldSuggestionMiss,
-        description:
-          "Record that a field suggestion missed the value a person chose, for suggestion quality.",
+          "Review Assessments independently; each item returns its own outcome.",
       }),
     },
   },
@@ -707,7 +692,7 @@ export const MCP_TOOLS = defineMcpTools({
       product_matches: mcpAction({
         op: recommendationsContract.ops.productMatches,
         description:
-          "The product match review queue: proposed and detected same-item Product pairs, optionally for one productId or candidateId. Settle with product_enrichment.merge_match or dismiss_match.",
+          "Stored same-item Product pair Assessments, optionally for one productId or candidateId. Apply a reviewed pair with product_enrichment.merge_match; record wrong, uncertain or scoped presentation dismissal with entity.review_assessment.",
       }),
     },
   },
@@ -871,32 +856,13 @@ export const MCP_TOOLS = defineMcpTools({
       propose_match: mcpAction({
         op: recommendationsContract.ops.proposeProductMatch,
         description:
-          'Propose that two Products are the same real item, for a person to review and merge in the product match queue. Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. Never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) replaces the evidence; a pair the person dismissed stays dismissed and comes back with state "dismissed".',
+          'Propose that two Products are the same real item, for a person to review and merge in the product match queue. Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. Never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) records new immutable evidence; a pair the person dismissed stays dismissed and comes back with state "dismissed".',
       }),
       merge_match: mcpAction({
         op: recommendationsContract.ops.mergeProductMatch,
         destructive: true,
         description:
           "Merge a queued match: mergeId folds into keepId, whose covers then lead with its own photos. Only for a pair the member agreed is one item.",
-      }),
-      dismiss_match: mcpAction({
-        op: recommendationsContract.ops.dismissProductMatch,
-        description:
-          "Dismiss a queued match pair; it stays dismissed when proposed again.",
-      }),
-      dismiss_duplicate: mcpAction({
-        op: recommendationsContract.ops.dismissDuplicateProduct,
-        description:
-          "Dismiss the duplicate-Product recommendation for sourceId.",
-      }),
-      dismiss_related: mcpAction({
-        op: recommendationsContract.ops.dismissProduct,
-        description:
-          "Dismiss targetId as a related-Product recommendation for sourceId.",
-      }),
-      dismiss_tag: mcpAction({
-        op: recommendationsContract.ops.dismissTagPropagation,
-        description: "Dismiss one proposed tag for sourceId.",
       }),
     },
   },
@@ -1080,10 +1046,7 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Attach an existing uploaded image to a live gallery record without re-uploading it; the target shortcode's prefix names the record. Repeated requests are idempotent and restore a previously soft-deleted link.",
       }),
-      correct_description: mcpAction({
-        op: imageProcessingContract.ops.correctDescription,
-        description: "Save a confirmed correction for an image description.",
-      }),
+
       schedule_processing: mcpAction({
         op: imageProcessingContract.ops.schedule,
         description:

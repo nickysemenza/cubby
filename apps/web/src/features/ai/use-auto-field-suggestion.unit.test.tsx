@@ -4,6 +4,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { sleep } from "@cubby/shared/retry";
 import {
   act,
@@ -24,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -35,7 +37,13 @@ import { FormFieldResolution } from "./form-field-resolution";
 import { useAutoFieldSuggestion } from "./use-auto-field-suggestion";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
+let restoreDispatch: () => void;
 let calls: FieldSuggestionsInput[];
+let reviewCalls: {
+  assessmentId?: string;
+  intent: string;
+  application?: unknown;
+}[];
 
 beforeEach(() => {
   // Real timers: TanStack Query's notify path schedules a zero-delay
@@ -46,9 +54,28 @@ beforeEach(() => {
   // instead of advancing a clock.
   harness = createBrowserTestHarness();
   calls = [];
+  reviewCalls = [];
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation !== "assessment.review")
+      throw new Error(`Unexpected operation: ${operation}`);
+    const { assessmentId, intent, application } =
+      assessmentReviewInput.parse(input);
+    if (!assessmentId) throw new Error("Review requires an assessment ID.");
+    reviewCalls.push({ assessmentId, intent, application });
+    return {
+      ok: true,
+      data: {
+        assessmentId,
+        feedbackId: crypto.randomUUID(),
+        status: "recorded",
+        applied: intent === "apply",
+      },
+    };
+  });
 });
 
 afterEach(() => {
+  restoreDispatch();
   harness.dispose();
 });
 
@@ -165,6 +192,7 @@ function Harness({
 }
 
 const tradeSuggestion: FieldSuggestion = {
+  assessmentId: "77777777-7777-4777-8777-777777777777",
   value: "cabinetry",
   label: "Cabinetry",
   detail: null,
@@ -749,6 +777,7 @@ describe("useAutoFieldSuggestion", () => {
   it("preserves a newer category draft when explicit finance Apply finishes later, while acknowledging its saved default", async () => {
     let form!: UseFormReturn<FieldValues>;
     const proposal: FieldSuggestion = {
+      assessmentId: "88888888-8888-4888-8888-888888888888",
       value: "SPC-4K7M",
       label: "Fixture clothing",
       detail: null,
@@ -820,6 +849,13 @@ describe("useAutoFieldSuggestion", () => {
     );
     expect(isDirtyText("spendingCategoryId")).toBe("true");
     expect(form.getValues("name")).toBe("Unsaved sibling note");
+    expect(reviewCalls).toContainEqual(
+      expect.objectContaining({
+        assessmentId: proposal.assessmentId,
+        intent: "apply",
+        application: { kind: "saved_field", recordId: "EXP-4K7M" },
+      }),
+    );
     act(() => form.resetField("spendingCategoryId"));
     expect(form.getValues("spendingCategoryId")).toBe("SPC-4K7M");
   });
@@ -829,6 +865,7 @@ describe("useAutoFieldSuggestion", () => {
     async (change) => {
       let form!: UseFormReturn<FieldValues>;
       const proposal: FieldSuggestion = {
+        assessmentId: "99999999-9999-4999-8999-999999999999",
         value: "SPC-4K7M",
         label: "Fixture clothing",
         detail: null,
@@ -941,8 +978,16 @@ describe("useAutoFieldSuggestion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply trade" }));
 
-    expect(form.getValues("trade")).toBe("cabinetry");
+    await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
     expect(isDirtyText("trade")).toBe("true");
+    await waitFor(() =>
+      expect(reviewCalls).toContainEqual(
+        expect.objectContaining({
+          assessmentId: tradeSuggestion.assessmentId,
+          intent: "draft",
+        }),
+      ),
+    );
   });
 
   it.each([

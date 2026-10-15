@@ -558,9 +558,12 @@ export async function resolveLineProduct(
     /** Records a Distinct-from decision's Source on the created Product. */
     recorder: ActorContext;
     onCreated?: (productId: ProductId) => void;
+    onIdentifierCollision?: (
+      proposal: Parameters<typeof upsertAgentProductMatch>[1],
+    ) => void;
   },
 ) {
-  const { recorder, onCreated } = options;
+  const { recorder, onCreated, onIdentifierCollision } = options;
   // A line decided to carry no Product (expense-only, or coarse-only) keeps
   // none, even when an earlier line with the same SKU resolved one.
   if (!decision.productId && !decision.promote && !decision.unresolvedReason)
@@ -582,7 +585,13 @@ export async function resolveLineProduct(
       where: and(eq(product.id, productId), notDeleted(product)),
     });
     if (!liveProduct) throw new Error("The reviewed Product no longer exists.");
-    await learnLineIdentifiers(tx, productId, line, source);
+    await learnLineIdentifiers(
+      tx,
+      productId,
+      line,
+      source,
+      onIdentifierCollision,
+    );
     if (externalIdentity)
       productsByExternalIdentity.set(externalIdentity, productId);
     return productId;
@@ -612,7 +621,13 @@ export async function resolveLineProduct(
       recorder,
     });
   }
-  await learnLineIdentifiers(tx, created.id, line, source);
+  await learnLineIdentifiers(
+    tx,
+    created.id,
+    line,
+    source,
+    onIdentifierCollision,
+  );
   if (externalIdentity)
     productsByExternalIdentity.set(externalIdentity, created.id);
   productsByExternalIdentity.set(titleKey, created.id);
@@ -630,7 +645,11 @@ async function learnLineIdentifiers(
   productId: ProductId,
   line: ExtractedPurchaseLine,
   source: string,
+  onCollision?: (
+    proposal: Parameters<typeof upsertAgentProductMatch>[1],
+  ) => void,
 ) {
+  const proposals: Parameters<typeof upsertAgentProductMatch>[1][] = [];
   for (const identifier of lineIdentifiers(line)) {
     try {
       await learnPurchaseProductExternalId(tx, {
@@ -643,12 +662,16 @@ async function learnLineIdentifiers(
     } catch (error) {
       if (!(error instanceof PurchaseProductExternalIdCollisionError))
         throw error;
-      await upsertAgentProductMatch(tx, {
+      proposals.push({
         productIds: [productId, error.ownerProductId],
         evidence: `Order line "${line.title}" carries ${error.source}/${error.kind} ${error.externalId}, which already identifies the other Product. Confirm whether both are the same exact variant before merging.`,
         sourceUrls: line.productUrl ? [line.productUrl] : [],
       });
     }
+  }
+  for (const proposal of proposals) {
+    if (onCollision) onCollision(proposal);
+    else await upsertAgentProductMatch(tx, proposal);
   }
 }
 
@@ -1082,6 +1105,13 @@ export async function importVendorOrder(
   // would hide the all-or-nothing write boundary.
   // eslint-disable-next-line complexity
   return withTransaction(db, async (tx) => {
+    const identityProposals: Parameters<typeof upsertAgentProductMatch>[1][] =
+      [];
+    const onIdentifierCollision = (
+      proposal: Parameters<typeof upsertAgentProductMatch>[1],
+    ) => {
+      identityProposals.push(proposal);
+    };
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
     // First, before any row lock: a settlement pass holds this lock while it
     // waits on Purchase rows, so taking it after writing the Purchase would
@@ -1655,6 +1685,7 @@ export async function importVendorOrder(
           productsByExternalIdentity,
           {
             recorder: importActor,
+            onIdentifierCollision,
             onCreated: (createdId) =>
               rowMutations.push({
                 targetKind: "product",
@@ -1802,6 +1833,7 @@ export async function importVendorOrder(
             productsByExternalIdentity,
             {
               recorder: importActor,
+              onIdentifierCollision,
               onCreated: (createdId) =>
                 rowMutations.push({
                   targetKind: "product",
@@ -1860,6 +1892,7 @@ export async function importVendorOrder(
             // list know which Products the import created.
             {
               recorder: importActor,
+              onIdentifierCollision,
               onCreated: (createdId) =>
                 rowMutations.push({
                   targetKind: "product",
@@ -2044,6 +2077,10 @@ export async function importVendorOrder(
       claimFingerprint,
       recordCanonicalProductBindings,
     );
+    // Publish after retained bindings and identifiers settle, so their invalidation triggers
+    // cannot retire this import's fresh collision evidence before commit.
+    for (const proposal of identityProposals)
+      await upsertAgentProductMatch(tx, proposal);
     if (identityOnly && productLines.length)
       await attachPurchaseProducts(
         databaseForTransaction(tx),

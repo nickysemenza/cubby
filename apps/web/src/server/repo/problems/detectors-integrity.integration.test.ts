@@ -21,7 +21,6 @@ import {
   externalSource,
   financialTransactionAllocation,
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
   importPreparedOrder,
@@ -38,11 +37,10 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
-  suggestion,
+  assessmentState as suggestion,
   photoGroupProposal,
   runPushRegistration,
   productConversionCoverage,
-  productMatchCandidate,
   productUnitMappings,
   purchasePaymentEvidence,
   recipeSection,
@@ -60,6 +58,7 @@ import {
   retainedMailFixture,
   sourceOrderObservationFixture,
 } from "~/server/purchase-import/order-import.fixtures";
+import { publishAssessment } from "~/server/repo/assessment";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
@@ -151,17 +150,6 @@ const mkProduct = (db: Database) =>
   });
 
 /** The pair table stores `productAId < productBId`; mint until the uuid lands on the requested side. */
-const mkProductOrderedAgainst = async (
-  db: Database,
-  target: string,
-  side: "before" | "after",
-) => {
-  for (;;) {
-    const candidate = await mkProduct(db);
-    if (side === "after" ? candidate.id > target : candidate.id < target)
-      return candidate;
-  }
-};
 
 const mkLocation = (db: Database) =>
   insertWithShortcode(db, "location", {
@@ -635,12 +623,6 @@ const SOURCE_FACTORIES = {
       state: "pending",
       sourceContentHash: uniq("source-hash"),
       processorRevision: 1,
-    }),
-
-  "ImageDescriptionCorrection.imageId": (db, targetId) =>
-    insertAndReturn(db, imageDescriptionCorrection, {
-      imageId: parseEntityId("image", targetId),
-      description: "Confirmed liveness fixture description",
     }),
 
   "SourceOrderObservation.primaryDocumentImageId": (db, targetId) =>
@@ -1537,28 +1519,6 @@ const SOURCE_FACTORIES = {
     return { id: targetId };
   },
 
-  "ProductMatchCandidate.productAId": async (db, targetId) => {
-    const target = parseEntityId("product", targetId);
-    const other = await mkProductOrderedAgainst(db, target, "after");
-    return insertAndReturn(db, productMatchCandidate, {
-      productAId: target,
-      productBId: other.id,
-      source: "agent",
-      state: "open",
-    });
-  },
-
-  "ProductMatchCandidate.productBId": async (db, targetId) => {
-    const target = parseEntityId("product", targetId);
-    const other = await mkProductOrderedAgainst(db, target, "before");
-    return insertAndReturn(db, productMatchCandidate, {
-      productAId: other.id,
-      productBId: target,
-      source: "agent",
-      state: "open",
-    });
-  },
-
   "Purchase.runId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "purchase", {
@@ -1608,20 +1568,6 @@ const SOURCE_FACTORIES = {
 
   "PhotoRunImage.runId": (db, targetId) =>
     mkPhotoRunImage(db, { runId: parseEntityId("run", targetId) }),
-
-  "Suggestion.runId": async (db, targetId) => {
-    const product = await mkProduct(db);
-    return insertAndReturn(db, suggestion, {
-      runId: parseEntityId("run", targetId),
-      entity: "product",
-      recordId: product.id,
-      field: "categoryId",
-      suggestedValue: "CAT-4K7M",
-      confidence: 0.5,
-      model: "typesafe/jev",
-      kind: "addition",
-    });
-  },
 
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {
@@ -1837,6 +1783,37 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
+
+  it("retains historical Assessment execution provenance when its Run is soft-deleted", async () => {
+    const target = await mkRun(ctx.db);
+    const product = await mkProduct(ctx.db);
+    const prediction = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: uniq("historical-field"),
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "product",
+          recordId: product.id,
+          field: "categoryId",
+        },
+        judgment: { value: null },
+        producer: null,
+        fingerprint: null,
+        evidence: null,
+      },
+      { runId: target.id },
+    );
+    await softDelete(ctx.db, "Run", target.id);
+    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(suggestion)
+        .where(eq(suggestion.id, prediction.id)),
+    ).toMatchObject([{ runId: target.id }]);
+  });
 
   it("reports every derived edge when a live source points at a soft-deleted target", async () => {
     // The real persisted matrix also owns exact fixture coverage, so a new

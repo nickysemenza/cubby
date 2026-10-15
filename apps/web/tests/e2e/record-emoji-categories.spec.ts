@@ -1,3 +1,5 @@
+import { publishAssessment } from "~/server/repo/assessment";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { entityApi } from "./entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
@@ -6,7 +8,10 @@ import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
+import {
+  createEntityFixture,
+  createEvidenceHarnessContext,
+} from "./fixtures-core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
@@ -67,6 +72,26 @@ test("edits compound emoji, clears it, and browses inherited category membership
     page.getByRole("link", { name: /Synthetic emoji groceries/ }).first(),
   ).toBeVisible();
   await gotoAuthenticatedPage(page, `/product-categories/${root}`);
+  const { db } = await createEvidenceHarnessContext(page);
+  const categoryId = await resolveOrThrow(db, "productCategory", root);
+  const prediction = await publishAssessment(
+    db,
+    {
+      publicationKey: `synthetic:category-emoji:${categoryId}`,
+      family: "field",
+      subject: {
+        kind: "field",
+        entity: "productCategory",
+        recordId: categoryId,
+        field: "emoji",
+      },
+      judgment: { value: "🥕", operation: "set", removals: [] },
+      fingerprint: null,
+      producer: null,
+      evidence: null,
+    },
+    { active: false },
+  );
   await page.route("**/api/browser/dispatch", async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields"])) return;
     if (!dispatchesOperation(route.request(), "ai.suggestFields"))
@@ -79,6 +104,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
           data: fieldSuggestionsOut.parse({
             suggestions: {
               emoji: {
+                assessmentId: prediction.id,
                 value: "🥕",
                 label: "🥕",
                 detail: null,

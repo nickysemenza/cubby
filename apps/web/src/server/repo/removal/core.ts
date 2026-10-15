@@ -62,10 +62,10 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { dataExceptionRecord, runFinding } from "~/server/db/schema";
+import { retireAssessmentTargetsTx } from "~/server/repo/assessment-state";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
-import { softDeleteSuggestionDismissalsTx } from "~/server/repo/suggestion-dismissal";
 
 /**
  * An entity a removal path can operate on: it writes audit rows and it has a
@@ -170,8 +170,8 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
 
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
-    await softDeleteSuggestionDismissalsTx(tx, entity, [...ids]);
   }
+  await retireAssessmentTargetsTx(tx, entity, [...ids]);
 
   // An exception is a decision about one entity's evidence (ADR 0006); it
   // goes with the entity rather than carrying onto a merge survivor.

@@ -5,7 +5,6 @@ import type { ActorContext } from "@cubby/schemas/context";
  * session call the same functions; Pi's calls are additionally bound to the
  * Emails its Mail import Run admitted.
  */
-import { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -34,20 +33,21 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
-  emailClassificationObservation,
   entityAttachment,
   ledgerParty,
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink,
   orderMailEvent,
   purchase,
   runOperation,
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
 import {
+  databaseForTransaction,
   getDb,
   withTransaction,
   notDeleted,
@@ -73,7 +73,7 @@ import {
 } from "./gmail/attachment-storage";
 import { ingestGmailMessages } from "./gmail/ingest";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
-import { snapshotStoredEmailPrediction } from "./gmail/observations";
+import { recordEmailClassificationObservation } from "./gmail/observations";
 import { clearUnrelatedOriginal } from "./gmail/persistence";
 import { gmailProviderForUser } from "./gmail/provider";
 import { GMAIL_PAGE_SIZE } from "./gmail/sync";
@@ -453,17 +453,17 @@ export async function linkOrderMail(
   // A member's dismissal of this Email for this Purchase, on any of its
   // events, wins over a later automatic or session link.
   const [dismissed] = await tx
-    .select({ id: orderMailCandidateDecision.id })
-    .from(orderMailCandidateDecision)
+    .select({ id: assessmentEmailLink.id })
+    .from(assessmentEmailLink)
     .innerJoin(
       orderMailEvent,
-      eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+      eq(orderMailEvent.id, assessmentEmailLink.eventId),
     )
     .where(
       and(
         eq(orderMailEvent.orderMailId, input.mail.id),
-        eq(orderMailCandidateDecision.purchaseId, chosen.id),
-        eq(orderMailCandidateDecision.decision, "dismissed"),
+        eq(assessmentEmailLink.purchaseId, chosen.id),
+        eq(assessmentEmailLink.decision, "dismissed"),
       ),
     )
     .limit(1);
@@ -474,12 +474,12 @@ export async function linkOrderMail(
   // One accepted Purchase per event: an existing link elsewhere stays the
   // member's to change through review.
   const [other] = await tx
-    .select({ purchaseId: orderMailCandidateDecision.purchaseId })
-    .from(orderMailCandidateDecision)
+    .select({ purchaseId: assessmentEmailLink.purchaseId })
+    .from(assessmentEmailLink)
     .where(
       and(
-        eq(orderMailCandidateDecision.eventId, event.id),
-        eq(orderMailCandidateDecision.decision, "linked"),
+        eq(assessmentEmailLink.eventId, event.id),
+        eq(assessmentEmailLink.decision, "linked"),
       ),
     )
     .limit(1);
@@ -488,14 +488,18 @@ export async function linkOrderMail(
       "This Email event is already linked to another Purchase; review it before relinking.",
     );
   if (!other)
-    await tx.insert(orderMailCandidateDecision).values({
-      eventId: event.id,
-      purchaseId: chosen.id,
-      decision: "linked",
-      evidenceChecksum: input.mail.rawChecksum,
-      decidedByUserId: input.actorUserId,
-      proposedBy: input.proposedBy,
-    });
+    await publishEmailLinkDecision(
+      db,
+      {
+        eventId: event.id,
+        purchaseId: chosen.id,
+        decision: "linked",
+        evidenceChecksum: input.mail.rawChecksum,
+        decidedByUserId: input.actorUserId,
+        proposedBy: input.proposedBy,
+      },
+      "automatic",
+    );
   await ensureMailVendorAccount(db, {
     vendorId: chosen.vendorId,
     ledgerPartyId: input.mail.ledgerPartyId,
@@ -537,6 +541,7 @@ export async function settleMail(
     /** What settled the Email: an import, a link, or the member-facing gap. */
     detail: string;
   },
+  actor?: ActorContext,
 ) {
   if (input.importRunId && !input.mail.id)
     throw new Error(
@@ -580,9 +585,6 @@ export async function settleMail(
       throw new Error(
         "This disposed Email changed; read it again before resolving.",
       );
-    const previous = input.classification
-      ? await snapshotStoredEmailPrediction(tx, originalEmail)
-      : null;
     const settled: Partial<typeof emailTable.$inferInsert> = {
       status: input.status,
       updatedAt: new Date(),
@@ -592,11 +594,6 @@ export async function settleMail(
       settled.classificationStage = "resolution";
       settled.classificationReason = input.detail;
     }
-    const settledEmails = await tx
-      .update(emailTable)
-      .set(settled)
-      .where(identity)
-      .returning({ id: emailTable.id });
     if (
       input.classification &&
       needsResolutionObservation(
@@ -604,9 +601,10 @@ export async function settleMail(
         input.classification,
         input.detail,
       )
-    ) {
-      await tx.insert(emailClassificationObservation).values({
-        ...emailClassificationObservationInput.parse({
+    )
+      await recordEmailClassificationObservation(
+        databaseForTransaction(tx),
+        {
           emailId: originalEmail.id,
           runId:
             ownerRun?.ledgerPartyId === originalEmail.ledgerPartyId
@@ -617,12 +615,14 @@ export async function settleMail(
           stage: "resolution",
           reason: input.detail,
           classificationVersion: originalEmail.classificationVersion,
-        }),
-        createdAt: new Date(
-          Math.max(Date.now(), (previous?.createdAt.getTime() ?? 0) + 1),
-        ),
-      });
-    }
+        },
+        actor,
+      );
+    const settledEmails = await tx
+      .update(emailTable)
+      .set(settled)
+      .where(identity)
+      .returning({ id: emailTable.id });
     if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)
         throw new Error("Email assignment changed before settlement.");
@@ -732,13 +732,17 @@ export async function resolveMail(
       if (disposed) {
         // A model's disposed negative is not yet the member's reviewed decision.
         if (!actor.runId)
-          await settleMail(tdb, {
-            mail: disposed,
-            importRunId: null,
-            status: "completed",
-            classification: "unrelated",
-            detail: `unrelated: ${disposition.reason}`,
-          });
+          await settleMail(
+            tdb,
+            {
+              mail: disposed,
+              importRunId: null,
+              status: "completed",
+              classification: "unrelated",
+              detail: `unrelated: ${disposition.reason}`,
+            },
+            actor,
+          );
         return {
           mail: disposed,
           purchaseIds: [],
@@ -793,17 +797,17 @@ export async function resolveMail(
           "The Email and a Purchase belong to different members.",
         );
       const [dismissed] = await getDb(tdb)
-        .select({ id: orderMailCandidateDecision.id })
-        .from(orderMailCandidateDecision)
+        .select({ id: assessmentEmailLink.id })
+        .from(assessmentEmailLink)
         .innerJoin(
           orderMailEvent,
-          eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+          eq(orderMailEvent.id, assessmentEmailLink.eventId),
         )
         .where(
           and(
             eq(orderMailEvent.orderMailId, mail.id),
-            inArray(orderMailCandidateDecision.purchaseId, ids),
-            eq(orderMailCandidateDecision.decision, "dismissed"),
+            inArray(assessmentEmailLink.purchaseId, ids),
+            eq(assessmentEmailLink.decision, "dismissed"),
           ),
         )
         .limit(1);
@@ -837,12 +841,16 @@ export async function resolveMail(
           actor,
         );
       }
-      await settleMail(tdb, {
-        mail,
-        importRunId,
-        status: "completed",
-        detail: `linked:${disposition.event}`,
-      });
+      await settleMail(
+        tdb,
+        {
+          mail,
+          importRunId,
+          status: "completed",
+          detail: `linked:${disposition.event}`,
+        },
+        actor,
+      );
       return {
         mail,
         purchaseIds: chosen.map((row) => row.shortcode),
@@ -850,21 +858,29 @@ export async function resolveMail(
       };
     }
     if (disposition.kind === "unresolved") {
-      await settleMail(tdb, {
-        mail,
-        importRunId,
-        status: "blocked",
-        detail: disposition.reason,
-      });
+      await settleMail(
+        tdb,
+        {
+          mail,
+          importRunId,
+          status: "blocked",
+          detail: disposition.reason,
+        },
+        actor,
+      );
       return { mail, purchaseIds: [], status: "blocked" as const };
     }
-    await settleMail(tdb, {
-      mail,
-      importRunId,
-      status: "completed",
-      classification: "unrelated",
-      detail: `unrelated: ${disposition.reason}`,
-    });
+    await settleMail(
+      tdb,
+      {
+        mail,
+        importRunId,
+        status: "completed",
+        classification: "unrelated",
+        detail: `unrelated: ${disposition.reason}`,
+      },
+      actor,
+    );
     return { mail, purchaseIds: [], status: "completed" as const };
   });
   // Disposal runs after the disposition commits; a protected original (one a

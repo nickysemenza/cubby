@@ -7,13 +7,13 @@ import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
 import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
+import {
+  getActiveAssessmentSuppressionKeys,
+  assessmentCandidateKey,
+} from "~/server/repo/assessment-state";
 import { getProductsSharingTags } from "~/server/repo/product/analytics";
 import { getProductsByShortcodes } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  getActiveSuggestionDismissalKeys,
-  suggestionCandidateKey,
-} from "~/server/repo/suggestion-dismissal";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
@@ -38,9 +38,9 @@ export interface RelatednessDependencies {
   ) => Promise<Array<{ id: string; tags: string[] }>>;
   getActiveDismissalKeys: (
     db: Database,
-    input: Parameters<typeof getActiveSuggestionDismissalKeys>[1],
+    input: Parameters<typeof getActiveAssessmentSuppressionKeys>[1],
   ) => Promise<Set<string>>;
-  makeCandidateKey: typeof suggestionCandidateKey;
+  makeCandidateKey: typeof assessmentCandidateKey;
 }
 
 const productionRelatednessDependencies: RelatednessDependencies = {
@@ -48,8 +48,8 @@ const productionRelatednessDependencies: RelatednessDependencies = {
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
   getProductsByShortcodes,
-  getActiveDismissalKeys: getActiveSuggestionDismissalKeys,
-  makeCandidateKey: suggestionCandidateKey,
+  getActiveDismissalKeys: getActiveAssessmentSuppressionKeys,
+  makeCandidateKey: assessmentCandidateKey,
 };
 
 /**

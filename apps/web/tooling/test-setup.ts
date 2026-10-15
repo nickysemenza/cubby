@@ -279,14 +279,15 @@ async function getFileDb() {
 async function resetTestDb() {
   const { rawDb, pool } = await getFileDb();
 
-  // Evict every other connection to this database first. TRUNCATE needs
+  // Evict the selected owned sessions first; an unowned runtime must drain
+  // before reset and fails with a lifecycle diagnostic. TRUNCATE needs
   // ACCESS EXCLUSIVE on all 40 tables, and the file's pool is now shared across
   // tests — so a fire-and-forget background job still writing from the previous
   // test holds a lock and TRUNCATE waits behind it until the hook times out.
   // (That failure is self-propagating: the blocked reset never clears `user`,
   // so the *next* test dies on `duplicate key ... "user_pkey"` instead.)
-  // Nothing legitimate is in flight between tests, so killing those backends is
-  // exactly right — and it is what the per-test database used to do implicitly
+  // Nothing legitimate is in flight between tests, so terminating that fixed
+  // owned set is what the per-test database used to do implicitly
   // by simply never reusing a connection.
   await terminateOtherPostgresConnections(pool);
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);

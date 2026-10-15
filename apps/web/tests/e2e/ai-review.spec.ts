@@ -1,17 +1,22 @@
 import type { Route } from "@playwright/test";
+import superjson from "superjson";
+import { fieldSuggestionsOut } from "@cubby/schemas/ai";
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { eq, inArray } from "drizzle-orm";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   product as productTable,
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
+  feedback,
 } from "~/server/db/schema";
+import { publishAssessment } from "~/server/repo/assessment";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 
-import { dispatchesOperation } from "./dispatch-wire";
+import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 import { chooseOption, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import {
@@ -62,7 +67,14 @@ test("list pills accept immediately without unloading another row's suggestion",
     );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (!dispatchesOperation(route.request(), "ai.acceptSuggestion")) {
+    if (
+      !dispatchesOperation(
+        route.request(),
+        "assessment.review",
+        (item) =>
+          assessmentReviewInput.safeParse(item.input).data?.intent === "apply",
+      )
+    ) {
       await route.continue();
       return;
     }
@@ -171,7 +183,7 @@ test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", 
   // before completion/refetch can clear it. No timer-dependent race setup.
   const acceptance = Promise.withResolvers<void>();
   const holdAcceptance = async (route: Route) => {
-    if (!dispatchesOperation(route.request(), "ai.acceptSuggestions")) {
+    if (!dispatchesOperation(route.request(), "assessment.reviewBatch")) {
       await route.continue();
       return;
     }
@@ -305,7 +317,7 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
     .toEqual(["applied", "superseded"]);
   await expect(rows).toHaveCount(1);
   await expect(rows.getByRole("alert")).toContainText(
-    "Pending Suggestion not found",
+    "Assessment evidence is stale",
   );
   await expect(page.getByText("1 could not be settled")).toBeVisible();
   // The superseded row can no longer settle, so it offers no selection.
@@ -327,4 +339,122 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
   ).toBeVisible();
   await expect(rows).toHaveCount(0);
   await expect(page.getByText("could not be settled")).toHaveCount(0);
+});
+
+// Prune acceptance acknowledges the remaining saved tags, not the removed token.
+test("prunes real Product tags and records saved Feedback and its receipt", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const name = uniqueName(testInfo, "Prune receipt");
+  const product = await createEntityFixture(page, "product", {
+    name,
+    manufacturer: "Synthetic brand",
+    tags: ["synthetic-brand", "collection:favorites", "mount"],
+  });
+  const id = await resolveOrThrow(db, "product", product.id);
+  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  const removals = [
+    {
+      value: "synthetic-brand",
+      probability: 0.99,
+      reason: "Restates manufacturer",
+    },
+  ];
+  const prediction = await publishAssessment(
+    db,
+    {
+      publicationKey: `synthetic:prune:${id}`,
+      family: "field",
+      subject: {
+        kind: "field",
+        entity: "product",
+        recordId: id,
+        field: "tags",
+      },
+      judgment: { value: "synthetic-brand", operation: "remove", removals },
+      fingerprint: null,
+      producer: null,
+      evidence: null,
+    },
+    { active: false, runId },
+  );
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["ai.suggestFields"])) return;
+    if (!dispatchesOperation(route.request(), "ai.suggestFields"))
+      return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        superjson.serialize({
+          ok: true,
+          data: fieldSuggestionsOut.parse({
+            suggestions: {
+              tags: {
+                assessmentId: prediction.id,
+                value: "synthetic-brand",
+                label: "Remove synthetic-brand",
+                confidence: "high",
+                probability: 0.99,
+                detail: "Restates manufacturer",
+                reasoning: "Synthetic retained pruning",
+                alternatives: [],
+                operation: "remove",
+                removals,
+              },
+            },
+          }),
+        }),
+      ),
+    });
+  });
+  await gotoAuthenticatedPage(page, `/products?q=${encodeURIComponent(name)}`);
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Columns…", exact: true }).click();
+  await page.getByRole("button", { name: "Show Tags", exact: true }).click();
+  await page.keyboard.press("Escape");
+  const row = page
+    .getByRole("table", { name: /Products table/i })
+    .getByRole("row")
+    .filter({ hasText: name });
+  await row.getByRole("button", { name: /Remove synthetic-brand/ }).click();
+  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await getDb(db)
+            .select({ tags: productTable.tags })
+            .from(productTable)
+            .where(eq(productTable.id, id))
+        )[0]?.tags,
+    )
+    .toEqual(["collection:favorites", "mount"]);
+  await expect
+    .poll(
+      async () =>
+        (
+          await getDb(db)
+            .select()
+            .from(feedback)
+            .where(eq(feedback.assessmentId, prediction.id))
+        ).filter((event) => event.operationId.startsWith("receipt:")).length,
+    )
+    .toBe(1);
+  const events = await getDb(db)
+    .select()
+    .from(feedback)
+    .where(eq(feedback.assessmentId, prediction.id));
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      verdict: "correct",
+      intent: "apply",
+      authority: "member",
+    }),
+  );
+  expect(
+    events.find((event) => event.operationId.startsWith("receipt:"))?.receipt,
+  ).toEqual(
+    expect.objectContaining({ mode: "member", reason: "member_acceptance" }),
+  );
 });

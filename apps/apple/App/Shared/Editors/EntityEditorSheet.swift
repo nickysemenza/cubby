@@ -41,6 +41,7 @@ struct EntityEditorSheet: View {
     @State private var selections: [PhotoSelectionItem] = []
     @State private var pickedTitles: [String: String] = [:]
     @State private var uploadStatus: String?
+    @State private var suggestionFeedbackError: String?
     @State private var isUploading = false
     @State private var draftDismissal = DraftDismissalState()
     @State private var saveTask: Task<Void, Never>?
@@ -149,6 +150,11 @@ struct EntityEditorSheet: View {
 
     private func form(_ model: GenericEntityEditModel) -> some View {
         Form {
+            if let suggestionFeedbackError {
+                Text(suggestionFeedbackError)
+                    .foregroundStyle(FieldGuideTokens.destructive)
+                    .accessibilityIdentifier("editor.suggestions.feedback-error")
+            }
             if let context {
                 Section { Text(context.description).foregroundStyle(.secondary) }
             }
@@ -287,7 +293,8 @@ struct EntityEditorSheet: View {
         let client = appModel.client
         return FieldSuggestionReviewModel(
             editor: model, fetch: { try await client.suggestFieldsReview($0) },
-            saveCategory: { try await client.applyFinanceCategorySuggestion($0) })
+            saveCategory: { try await client.applyFinanceCategorySuggestion($0) },
+            reviewAssessment: { try await client.reviewAssessment($0) })
     }
 
     /// Names the server projected beside reference ids (`<stem>Name` / `<stem>.name`), so an
@@ -330,6 +337,15 @@ struct EntityEditorSheet: View {
         var keys: Set<EntityKey> = [key]
         for relation in descriptor.relations { keys.insert(relation.target) }
         appModel.recordEntityMutation(keys: keys)
+        do {
+            try await suggestions?.recordSavedApplications(recordId: id)
+            suggestionFeedbackError = nil
+        } catch {
+            suggestionFeedbackError =
+                "Saved, but suggestion feedback could not be recorded: \(error.localizedDescription)"
+            Diagnostics.report(error, context: "editor.suggestion-feedback")
+            return
+        }
         onSaved(id)
         guard !Task.isCancelled else { return }
         dismiss()

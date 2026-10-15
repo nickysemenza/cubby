@@ -24,13 +24,14 @@ import { tradeSchema } from "@cubby/schemas/task-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { type FC, useEffect, useId, useMemo } from "react";
+import { type FC, useEffect, useId, useMemo, useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -135,6 +136,9 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   onComplete,
 }) => {
   const adjustInventoryId = useId();
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
   const entries = product.inventoryEntry;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
 
@@ -164,7 +168,12 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
         result.inventory?.removed ? " — shelf entry removed" : ""
       }`,
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      try {
+        await receiptHandler.current?.(result.expenseId);
+      } catch (error) {
+        showErrorToast(error);
+      }
       close(false);
       onComplete?.();
     },
@@ -246,6 +255,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
           fraction
         />
         <DiscardLineFields
+          receiptHandler={receiptHandler}
           form={form}
           productId={product.id}
           productName={product.name}

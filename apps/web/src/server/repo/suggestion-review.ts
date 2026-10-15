@@ -3,29 +3,26 @@ import {
   financeCategoryApplyInput,
   suggestionCountsInput,
   suggestionCountsOut,
-  suggestionReviewBatchInput,
   suggestionReviewListInput,
   suggestionStatus,
-  type SuggestionReviewBatchOut,
 } from "@cubby/schemas/ai";
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { entityRefKey } from "@cubby/schemas/entity";
-import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
-import { getErrorMessage } from "@cubby/shared";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
   run as runTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { recordFeedback } from "~/server/repo/assessment";
 import { withAuditReceipts } from "~/server/repo/audit-receipts";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
@@ -33,7 +30,6 @@ import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
 import {
   lookupShortcodes,
-  resolveLiveShortcode,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 
@@ -50,7 +46,7 @@ const rowIdInput = z.object({ id: z.string().uuid() });
 const jsonSchema = z.json();
 const suggestionRowSchema = z.object({
   id: z.string().uuid(),
-  runId: z.string().uuid(),
+  runId: z.string().uuid().nullable(),
   entity: fieldSuggestionsInput.shape.entity,
   recordId: z.string().uuid(),
   field: z.string(),
@@ -68,27 +64,16 @@ const suggestionRowSchema = z.object({
   createdAt: z.date().transform((value) => value.toISOString()),
 });
 
-const runDecisionModel = (runInput: unknown) =>
-  z
-    .object({ decisionModel: z.string().optional() })
-    .passthrough()
-    .safeParse(runInput).data?.decisionModel;
-
 /** A paired trial row is reviewable only when it is the model its Run
  * served; public rows name their Run by shortcode. */
 function reviewableRow(
   suggestion: typeof suggestionTable.$inferSelect,
-  runInput: unknown,
-  runCode: string,
+  runCode: string | null,
 ) {
-  return !suggestion.pairKey || runDecisionModel(runInput) === suggestion.model
-    ? [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }]
-    : [];
+  return [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }];
 }
-
-/** Paired trial rows count only for the model their Run served (the
- * `reviewableRow` rule in SQL). */
-export const reviewableSuggestionSql = sql`(${suggestionTable.pairKey} IS NULL OR ${suggestionTable.model} = ${runTable.input}->>'decisionModel')`;
+/** Served-trial authority outlives nullable Run provenance. */
+export const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
@@ -119,6 +104,8 @@ export async function listSuggestions(
     if (!recordUuids.length) return [];
   }
   const conditions = [
+    eq(suggestionTable.family, "field"),
+    eq(suggestionTable.active, true),
     eq(suggestionTable.status, input.status),
     gte(suggestionTable.confidence, input.minConfidence),
   ];
@@ -139,7 +126,7 @@ export async function listSuggestions(
       runCode: runTable.shortcode,
     })
     .from(suggestionTable)
-    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
     .orderBy(
       input.status === "pending"
@@ -148,8 +135,8 @@ export async function listSuggestions(
       suggestionTable.id,
     )
     .limit(input.limit);
-  const reviewable = rows.flatMap(({ suggestion, runInput, runCode }) =>
-    reviewableRow(suggestion, runInput, runCode),
+  const reviewable = rows.flatMap(({ suggestion, runCode }) =>
+    reviewableRow(suggestion, runCode),
   );
   // Stored rows key records by uuid; the public queue names them by shortcode.
   const refs = reviewable.map((row) =>
@@ -186,6 +173,7 @@ export async function listSuggestions(
       ? [
           {
             ...row,
+            assessmentId: row.id,
             recordId,
             provenance: stored?.provenance ?? null,
             acceptanceReceipt,
@@ -214,10 +202,11 @@ export async function suggestionCounts(
       superseded: count(suggestionStatus.enum.superseded),
     })
     .from(suggestionTable)
-    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(
       and(
         reviewableSuggestionSql,
+        eq(suggestionTable.family, "field"),
         runId ? requestedSuggestionRun(runId) : undefined,
       ),
     )
@@ -349,54 +338,26 @@ export async function acceptSuggestion(
       .update(suggestionTable)
       .set({ acceptanceReceipt: receipt })
       .where(eq(suggestionTable.id, id));
+    await recordFeedback(transactionDb, {
+      assessmentId: id,
+      operationId: "saved-application",
+      verdict: "correct",
+      authority: automatic ? "automatic" : "member",
+      actorUserId: context.actorContext.userId,
+      intent: "apply",
+      receipt: z.json().parse(receipt),
+    });
     return { id, status: "applied" as const };
   });
 }
 
-export async function acceptSuggestions(
+export async function applyFieldCorrection(
   db: Database,
   context: EntityKernelContext,
-  input: { ids: string[] },
-) {
-  return settleEach(input, (id) => acceptSuggestion(db, context, { id }));
-}
-
-/** Rejects each pending id as a Miss with no correction. */
-export async function rejectSuggestions(
-  db: Database,
-  context: EntityKernelContext,
-  input: { ids: string[] },
-) {
-  return settleEach(input, (id) => rejectSuggestion(db, context, { id }));
-}
-
-/** Sequential on purpose: accepting one Suggestion can supersede a sibling
- * later in the batch, which then reports its own failure. */
-async function settleEach(
-  input: { ids: string[] },
-  settle: (
-    id: string,
-  ) => Promise<{ id: string; status: "applied" | "rejected" }>,
-): Promise<SuggestionReviewBatchOut> {
-  const { ids } = suggestionReviewBatchInput.parse(input);
-  const results: SuggestionReviewBatchOut = [];
-  for (const id of ids) {
-    try {
-      results.push({ ...(await settle(id)), ok: true });
-    } catch (error) {
-      results.push({ id, ok: false, error: getErrorMessage(error) });
-    }
-  }
-  return results;
-}
-
-export async function rejectSuggestion(
-  db: Database,
-  context: EntityKernelContext | undefined,
-  input: z.infer<typeof rowIdInput> & { correctValue?: unknown },
+  input: z.infer<typeof rowIdInput> & { correctValue: unknown },
 ) {
   const parsedInput = rowIdInput
-    .extend({ correctValue: jsonSchema.optional() })
+    .extend({ correctValue: jsonSchema })
     .parse(input);
   if (parsedInput.correctValue !== undefined) {
     if (!context)
@@ -433,75 +394,23 @@ export async function rejectSuggestion(
         .update(suggestionTable)
         .set({ acceptanceReceipt: receipt })
         .where(eq(suggestionTable.id, parsedInput.id));
+      await recordFeedback(transactionDb, {
+        assessmentId: parsedInput.id,
+        operationId: "saved-correction",
+        verdict: "wrong",
+        authority: "member",
+        actorUserId: context.actorContext.userId,
+        intent: "apply",
+        correction: {
+          present: true,
+          value: z.json().parse(parsedInput.correctValue),
+        },
+        receipt: z.json().parse(receipt),
+      });
       return { id: parsedInput.id, status: "rejected" as const };
     });
   }
-  const [row] = await getDb(db)
-    .select()
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.id, parsedInput.id),
-        eq(suggestionTable.status, "pending"),
-      ),
-    )
-    .limit(1);
-  if (!row) throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
-  const decided = await getDb(db)
-    .update(suggestionTable)
-    .set({ status: "rejected", correctValue: parsedInput.correctValue ?? null })
-    .where(
-      and(
-        eq(suggestionTable.id, parsedInput.id),
-        eq(suggestionTable.status, "pending"),
-      ),
-    )
-    .returning({ id: suggestionTable.id });
-  if (!decided.length)
-    throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
-  return { id: parsedInput.id, status: "rejected" as const };
-}
-
-export async function recordFieldSuggestionMiss(
-  db: Database,
-  runId: RunId,
-  input: {
-    entity: string;
-    entityId: string;
-    field: string;
-    currentValue: unknown;
-    suggestedValue: string;
-    confidence: number;
-  },
-) {
-  const entity = fieldSuggestionsInput.shape.entity.parse(input.entity);
-  const recordId = await resolveLiveShortcode(db, input.entityId, entity);
-  if (!recordId)
-    throw new Error(`Suggestion record not found: ${input.entityId}`);
-  const [row] = await getDb(db)
-    .insert(suggestionTable)
-    .values({
-      runId,
-      entity,
-      recordId,
-      field: input.field,
-      currentValue: input.currentValue,
-      suggestedValue: input.suggestedValue,
-      confidence: input.confidence,
-      runnerUpValue: null,
-      runnerUpConfidence: null,
-      model: "field-suggest",
-      pairKey: null,
-      kind:
-        input.currentValue == null || input.currentValue === ""
-          ? "addition"
-          : "correction",
-      status: "pending",
-    })
-    .returning({ id: suggestionTable.id });
-  if (!row) throw new Error("Suggestion miss was not persisted");
-  await rejectSuggestion(db, undefined, { id: row.id });
-  return { recorded: true as const };
+  throw new Error("Field correction requires an explicit corrected value");
 }
 
 export async function latestSuggestionSweepStatus(db: Database) {

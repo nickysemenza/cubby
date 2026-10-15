@@ -40,6 +40,7 @@ const baseRecord = {
   categoryId: null,
 };
 const proposal = {
+  assessmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   value: categoryId,
   label: "Synthetic food",
   detail: null,
@@ -52,9 +53,13 @@ const proposal = {
 };
 const stored: StoredSuggestionOperations = {
   list: async () => [],
-  accept: async ({ id }) => ({ id, status: "applied" }),
-  acceptMany: async () => [],
-  reject: async ({ id }) => ({ id, status: "rejected" }),
+  review: async ({ assessmentId, intent }) => ({
+    assessmentId,
+    feedbackId: "55555555-5555-4555-8555-555555555555",
+    status: "recorded",
+    applied: intent === "apply",
+  }),
+  reviewBatch: async () => [],
 };
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -344,13 +349,15 @@ describe("suggestion lifecycle", () => {
   });
 
   it("shows the accepted value immediately, retains it through refresh, and leaves sibling proposals usable", async () => {
-    const read = Promise.withResolvers<typeof baseRecord>();
+    const read = Promise.withResolvers<PageRecord>();
     const write = Promise.withResolvers<void>();
     const calls: FieldSuggestionsInput[] = [];
     const record = { ...baseRecord, ingredient: null };
+    let persistedRecord: PageRecord | null = null;
     const operations = operationsReturning(calls);
     const execute = vi.fn(async () => {
       await write.promise;
+      persistedRecord = { ...record, categoryId };
       return {
         action: "update" as const,
         entity: "product" as const,
@@ -362,7 +369,7 @@ describe("suggestion lifecycle", () => {
       <Page
         record={record}
         operations={operations}
-        readRecord={() => read.promise}
+        readRecord={async () => persistedRecord ?? (await read.promise)}
         mutationPort={createEntityMutationPort({ execute })}
       />,
       { wrapper: harness.wrapper },

@@ -3,6 +3,7 @@
  * identities collide; provider/auth failures become negative classifications;
  * persisted classification-only retries escalate uncertainty to Luna or lose headers. */
 import { eq } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,7 +13,7 @@ import {
   orderMail,
   orderMailAttachment,
   orderMailEvent,
-  orderMailCandidateDecision,
+  assessmentEmailLink as orderMailCandidateDecision,
   importSourceClaim,
   importSourceOrder,
   emailClassificationObservation,
@@ -769,7 +770,7 @@ describe("Gmail acquisition retention and replay", () => {
       })
       .returning();
     if (!event) throw new Error("Synthetic event missing");
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+    await seedEmailLinkDecision(ctx.db, {
       eventId: event.id,
       purchaseId: purchase.id,
       decision: "dismissed",

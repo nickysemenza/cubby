@@ -1,13 +1,15 @@
-import { emailClassificationLabelInput } from "@cubby/schemas/email-observations";
 /** Predictions remain immutable after member labels; accepted content survives
  * contradictory predictions, and retrieval failures never invent classifications. */
 import { eq } from "drizzle-orm";
+import {
+  listFeedbackByKind,
+  seedEmailClassificationFeedback,
+} from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   emailClassificationObservation,
-  emailClassificationLabel,
   emailRetrievalFailure,
   email as emailTable,
   importSourceClaim,
@@ -73,22 +75,18 @@ describe("immutable Email observations", () => {
       usageId: null,
       conflict: null,
     });
-    await getDb(ctx.db)
-      .insert(emailClassificationLabel)
-      .values(
-        emailClassificationLabelInput.parse({
-          predictionId: prediction.id,
-          classification: "related",
-          reason: "Synthetic member correction",
-          actorUserId: ctx.actor.userId,
-        }),
-      );
+    await seedEmailClassificationFeedback(ctx.db, {
+      predictionId: prediction.id,
+      classification: "related",
+      reason: "Synthetic member correction",
+      actorUserId: ctx.actor.userId,
+    });
     await ingestGmailMessages(ctx.db, gmail, input);
     expect(
       await getDb(ctx.db).select().from(emailClassificationObservation),
     ).toEqual(predictions);
     expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
+      await listFeedbackByKind(ctx.db, "email_classification_review"),
     ).toHaveLength(1);
     const raw = "404 Not Found: Synthetic upstream response";
     await ingestGmailMessages(

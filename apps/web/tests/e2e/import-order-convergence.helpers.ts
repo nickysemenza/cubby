@@ -521,7 +521,7 @@ export async function createConvergenceHarness(
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
     const { rows: links } = await database.execute(sql`
       SELECT p.shortcode AS "purchaseCode"
-      FROM "OrderMailCandidateDecision" d
+      FROM "AssessmentEmailLink" d
       JOIN "OrderMailEvent" e ON e.id = d."eventId"
       JOIN "OrderMail" m ON m.id = e."orderMailId"
       JOIN "Email" email ON email."orderMailId" = m.id
@@ -529,6 +529,7 @@ export async function createConvergenceHarness(
       JOIN "Purchase" p ON p.id = d."purchaseId"
       WHERE email."messageId" = ${names.messageId}
         AND email."deletedAt" IS NULL
+        AND e."supersededAt" IS NULL
         AND d.decision = 'linked'
     `);
     expect(links).toEqual([{ purchaseCode: purchase.shortcode }]);

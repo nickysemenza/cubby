@@ -19,15 +19,8 @@ import {
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   fieldSuggestionsReviewOut,
-  fieldSuggestionMissInput,
-  fieldSuggestionMissOut,
-  suggestionReviewActionInput,
-  suggestionReviewActionOut,
-  suggestionReviewBatchInput,
-  suggestionReviewBatchOut,
   suggestionReviewListInput,
   suggestionReviewListOut,
-  suggestionReviewRejectInput,
   suggestionCountsInput,
   suggestionCountsOut,
   decisionCatalogOut,
@@ -166,26 +159,6 @@ export const aiContract = defineContract("ai", {
     transport: "post",
     cache: { profile: "stable" },
   }),
-  acceptSuggestion: mutation({
-    input: suggestionReviewActionInput,
-    output: suggestionReviewActionOut,
-    invalidates: ["product", "expense", "purchase", "vendor"],
-  }),
-  acceptSuggestions: mutation({
-    input: suggestionReviewBatchInput,
-    output: suggestionReviewBatchOut,
-    invalidates: ["product", "expense", "purchase", "vendor"],
-  }),
-  rejectSuggestion: mutation({
-    input: suggestionReviewRejectInput,
-    output: suggestionReviewActionOut,
-    invalidates: ["product", "expense", "purchase", "vendor"],
-  }),
-  rejectSuggestions: mutation({
-    input: suggestionReviewBatchInput,
-    output: suggestionReviewBatchOut,
-    invalidates: ["product", "expense", "purchase", "vendor"],
-  }),
   suggestionCounts: query({
     mcp: {
       omit: "client_view",
@@ -204,11 +177,6 @@ export const aiContract = defineContract("ai", {
     input: zod.undefined(),
     output: decisionCatalogOut,
     cache: { profile: "stable" },
-  }),
-  recordFieldSuggestionMiss: mutation({
-    input: fieldSuggestionMissInput,
-    output: fieldSuggestionMissOut,
-    invalidates: [],
   }),
   startSuggestionSweep: mutation({
     mcp: { omit: "operator_maintenance" },

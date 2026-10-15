@@ -20,6 +20,7 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +29,8 @@ import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
   emailClassificationObservation,
+  feedback,
+  assessment,
   importSourceClaim,
   importSourceOrder,
   mailboxCursor,
@@ -35,7 +38,7 @@ import {
   orderMail,
   purchase,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink as orderMailCandidateDecision,
   orderMailEvent,
   run,
   financialAccount,
@@ -173,6 +176,20 @@ describe("public mail tool", () => {
         }),
       ]),
     );
+    const memberResolution = await getDb(ctx.db)
+      .select({ actor: feedback.actorUserId, authority: feedback.authority })
+      .from(feedback)
+      .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+      .where(
+        and(
+          eq(assessment.family, "email_relevance"),
+          eq(feedback.authority, "member"),
+        ),
+      );
+    expect(memberResolution).toContainEqual({
+      actor: ctx.actor.userId,
+      authority: "member",
+    });
     const beforeReplay = await history();
     await resolveMail(ctx.db, input, ctx.actor);
     expect(await history()).toEqual(beforeReplay);
@@ -419,24 +436,22 @@ describe("public mail tool", () => {
     await expect(
       resolveMail(ctx.db, { ...input, checksum: "f".repeat(64) }, ctx.actor),
     ).rejects.toThrow("changed");
-    await getDb(ctx.db)
+    const [dismissalEvent] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
         orderMailId: source.id,
         event: "refunded",
         sourceKey: "synthetic-dismissal",
       })
-      .returning()
-      .then(async ([event]) => {
-        if (!event) throw new Error("Synthetic event missing");
-        await getDb(ctx.db).insert(orderMailCandidateDecision).values({
-          eventId: event.id,
-          purchaseId: secondPurchase.id,
-          decision: "dismissed",
-          evidenceChecksum: source.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        });
-      });
+      .returning();
+    if (!dismissalEvent) throw new Error("Synthetic event missing");
+    await seedEmailLinkDecision(ctx.db, {
+      eventId: dismissalEvent.id,
+      purchaseId: secondPurchase.id,
+      decision: "dismissed",
+      evidenceChecksum: source.rawChecksum,
+      decidedByUserId: ctx.actor.userId,
+    });
     await expect(resolve()).rejects.toThrow("dismissed");
     expect(
       await getDb(ctx.db)
@@ -444,12 +459,14 @@ describe("public mail tool", () => {
         .from(orderMailEvent)
         .where(eq(orderMailEvent.orderMailId, source.id)),
     ).toHaveLength(1);
-    await getDb(ctx.db)
-      .delete(orderMailCandidateDecision)
-      .where(eq(orderMailCandidateDecision.purchaseId, secondPurchase.id));
-    await getDb(ctx.db)
-      .delete(orderMailEvent)
-      .where(eq(orderMailEvent.sourceKey, "synthetic-dismissal"));
+    // A new member decision supersedes the dismissal; shared review history is immutable.
+    await seedEmailLinkDecision(ctx.db, {
+      eventId: dismissalEvent.id,
+      purchaseId: secondPurchase.id,
+      decision: "linked",
+      evidenceChecksum: source.rawChecksum,
+      decidedByUserId: ctx.actor.userId,
+    });
     await expect(resolve()).resolves.toMatchObject({
       status: "completed",
       purchaseIds: expect.arrayContaining(
@@ -461,7 +478,7 @@ describe("public mail tool", () => {
       .select()
       .from(orderMailEvent)
       .where(eq(orderMailEvent.orderMailId, source.id));
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     const decisions = await getDb(ctx.db)
       .select()
       .from(orderMailCandidateDecision)
@@ -474,7 +491,7 @@ describe("public mail tool", () => {
     expect(new Set(decisions.map((row) => row.purchaseId))).toEqual(
       new Set(purchases.map((row) => row.id)),
     );
-    expect(decisions).toHaveLength(2);
+    expect(decisions).toHaveLength(3);
     const account = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Synthetic refund account",
       identity: {
@@ -1590,7 +1607,7 @@ describe("public mail tool", () => {
         })
         .returning();
       if (!event) throw new Error("Synthetic event unavailable");
-      await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+      await seedEmailLinkDecision(ctx.db, {
         eventId: event.id,
         purchaseId: f.positive.id,
         decision: "linked",

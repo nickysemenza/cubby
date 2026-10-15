@@ -624,6 +624,27 @@ What a classification value implies about another field on the classified
 record: the field is required, not expected, unknown, or not allowed.
 _Avoid_: field rule, expectation (when meaning the whole policy)
 
+**Assessment**:
+A computed judgment about a record, field or relationship, based on specified
+evidence. It may support a Suggestion or a Problem; it is not a confirmed
+household fact.
+
+**Feedback**:
+The household's review of an Assessment, including its verdict and any
+corrected value, reason or supporting evidence. Feedback supplies evidence for
+improving detection and evaluating future judgments.
+
+**Dismissal**:
+A preference to stop presenting a candidate, without asserting whether the
+underlying judgment is correct. Confirming distinct Products is Feedback,
+not a Dismissal.
+
+**Identity conflict**:
+Evidence that assigns incompatible identities to the same supposed variant,
+such as a shared exact identifier with conflicting verified sizes or colors.
+The contradictory facts need resolving before deciding whether records are
+duplicates.
+
 **Suggestion**:
 A classification or field value that has been computed for a record but not
 yet accepted by the household, with a confidence.
@@ -642,11 +663,11 @@ A Suggestion whose value differs from the record's current value.
 A Suggestion for a field that is currently blank.
 
 **Miss**:
-A Suggestion the household rejected (the Reject verb; "Use a different
-value…" records the chosen value with it). A Miss is evidence that a prompt or
-the taxonomy needs fixing, not a standing instruction to hide that value.
-_Avoid_: dismissal (dismissals record durable household facts, such as two
-Products not being duplicates)
+An Assessment the household reports as wrong. A corrected value or verdict and
+its evidence distinguish a confirmed Miss from uncertainty or a preference to
+hide a candidate. A Miss is evidence for improving rules, prompts or
+classification choices, not a standing instruction to hide the result.
+_Avoid_: dismissal (a presentation preference, not a correctness verdict)
 
 **Sweep**:
 A bulk pass that computes Suggestions across a filtered set of records.

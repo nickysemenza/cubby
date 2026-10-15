@@ -351,6 +351,19 @@ test("suggests an existing variant and previews every merge decision for a creat
     })
     .toBeTruthy();
 
+  expect(createdId).toBeTruthy();
+  const evidence =
+    "Synthetic photo and retained retailer page show the same crew shirt and size.";
+  const match = await startOperation(
+    page.request,
+    "recommendations.proposeProductMatch",
+    {
+      productIds: [existing.id, createdId!],
+      evidence,
+      sourceUrls: ["https://retailer.example/crew-shirt"],
+    },
+  );
+  expect(match.ok(), await match.text()).toBeTruthy();
   await page
     .getByRole("heading", { name: `Approved · ${createdName}` })
     .click();
@@ -358,7 +371,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
   await expect(page.getByText(candidateName).first()).toBeVisible();
-  await expect(page.getByText("Variant words in Product titles")).toBeVisible();
+  await expect(page.getByText(evidence)).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();
   const dialog = page.getByRole("dialog");
   await expect(

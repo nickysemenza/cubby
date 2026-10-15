@@ -11,19 +11,19 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
   email as emailTable,
   ledgerParty,
   orderMail,
-  orderMailCandidateDecision,
   orderMailEvent,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
+import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
 import {
   databaseForTransaction,
   getDb,
@@ -52,17 +52,22 @@ export async function decideEmailPurchase(
   db: Database,
   rawInput: EmailPurchaseDecisionInput,
   actor: ActorContext,
+  options: {
+    eventId?: string;
+    originalId?: string;
+    expectedAssessmentId?: string;
+  } = {},
 ) {
   const input = emailPurchaseDecisionInput.parse(rawInput);
   try {
-    return await decideOnce(db, input, actor);
+    return await decideOnce(db, input, actor, options);
   } catch (error) {
     if (
       input.decision !== "linked" ||
-      !isUniqueViolation(error, "OrderMailCandidateDecision_one_link_key")
+      !isUniqueViolation(error, "AssessmentState_email_one_link_key")
     )
       throw error;
-    return decideOnce(db, input, actor);
+    return decideOnce(db, input, actor, options);
   }
 }
 
@@ -75,6 +80,7 @@ async function decideOnce(
   db: Database,
   input: EmailPurchaseDecisionInput,
   actor: ActorContext,
+  options: NonNullable<Parameters<typeof decideEmailPurchase>[3]>,
 ) {
   if (actor.runId)
     throw new Error(
@@ -112,6 +118,8 @@ async function decideOnce(
         "Only the Email's owner can link or dismiss it for a Purchase.",
       );
     const orderMailId = found.email.orderMailId;
+    if (options.originalId && orderMailId !== options.originalId)
+      throw new Error("Email original changed; request a fresh Assessment");
     if (!orderMailId)
       throw new Error(
         "This Email has no retained order events to link; retrieve its original first.",
@@ -178,7 +186,11 @@ async function decideOnce(
     // and an Email with several events needs mail.resolve to name them.
     const events = new Map<string, EventChoice>();
     for (const row of evidence)
-      if (row.eventId && row.kind !== "accepted")
+      if (
+        row.eventId &&
+        row.kind !== "accepted" &&
+        (!options.eventId || row.eventId === options.eventId)
+      )
         events.set(row.eventId, { proposedBy: row.proposedBy, kind: row.kind });
     if (events.size === 0 && input.decision === "linked") {
       const active = await tx
@@ -188,6 +200,9 @@ async function decideOnce(
           and(
             eq(orderMailEvent.orderMailId, orderMailId),
             isNull(orderMailEvent.supersededAt),
+            options.eventId
+              ? eq(orderMailEvent.id, options.eventId)
+              : undefined,
           ),
         )
         .limit(2);
@@ -200,51 +215,29 @@ async function decideOnce(
     }
     if (events.size === 0)
       throw new Error(`Nothing links this Email to ${input.purchaseId}.`);
-    const eventIds = [...events.keys()];
 
     if (input.decision === "linked") {
       await ensureMailVendorAccount(tx, {
         vendorId: target.vendorId,
         ledgerPartyId: email.ledgerPartyId,
       });
-      // One linked Purchase per event: this member's link replaces another.
-      await tx
-        .update(orderMailCandidateDecision)
-        .set({ decision: "dismissed", updatedAt: new Date() })
-        .where(
-          and(
-            inArray(orderMailCandidateDecision.eventId, eventIds),
-            eq(orderMailCandidateDecision.decision, "linked"),
-            ne(orderMailCandidateDecision.purchaseId, purchaseId),
-          ),
-        );
     }
     for (const [eventId, row] of events)
-      await tx
-        .insert(orderMailCandidateDecision)
-        .values({
+      await publishEmailLinkDecision(
+        databaseForTransaction(tx),
+        {
           eventId,
           purchaseId: parseEntityId("purchase", purchaseId),
           decision: input.decision,
           evidenceChecksum: input.expectedChecksum,
           decidedByUserId: actor.userId,
-          // A suggestion the member acted on was the heuristic's proposal.
           proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
-        })
-        .onConflictDoUpdate({
-          target: [
-            orderMailCandidateDecision.eventId,
-            orderMailCandidateDecision.purchaseId,
-          ],
-          // An existing decision keeps its proposer: a dismissed agent link
-          // stays an agent proposal the member rejected.
-          set: {
-            decision: input.decision,
-            evidenceChecksum: input.expectedChecksum,
-            decidedByUserId: actor.userId,
-            updatedAt: new Date(),
-          },
-        });
+        },
+        "member",
+        options.expectedAssessmentId
+          ? { assessmentId: options.expectedAssessmentId, emailId: email.id }
+          : undefined,
+      );
 
     // A member's link is relevance evidence (ADR 0011): it resolves the Email
     // related, even when a rule or model already said so, so a rerun cannot
@@ -258,14 +251,18 @@ async function decideOnce(
     ) {
       const reason = `Linked to ${input.purchaseId} by the member.`;
       await snapshotStoredEmailPrediction(tx, email);
-      await recordEmailClassificationObservation(databaseForTransaction(tx), {
-        emailId: email.id,
-        checksum: email.checksum,
-        classification: "related",
-        stage: "resolution",
-        reason,
-        classificationVersion: MAILBOX_RESEARCH_VERSION,
-      });
+      await recordEmailClassificationObservation(
+        databaseForTransaction(tx),
+        {
+          emailId: email.id,
+          checksum: email.checksum,
+          classification: "related",
+          stage: "resolution",
+          reason,
+          classificationVersion: MAILBOX_RESEARCH_VERSION,
+        },
+        actor,
+      );
       await getDb(databaseForTransaction(tx))
         .update(emailTable)
         .set({

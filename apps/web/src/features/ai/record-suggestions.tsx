@@ -2,10 +2,13 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
   FieldSuggestionsOut,
-  SuggestionReviewBatchOut,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
 import { SUGGESTION_LIST_LIMIT_MAX } from "@cubby/schemas/ai";
+import type {
+  AssessmentReviewBatchOut,
+  AssessmentReviewOut,
+} from "@cubby/schemas/assessment";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -15,7 +18,6 @@ import { parseShortcode } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import {
-  useMutation,
   useQueries,
   useQueryClient,
   type UseQueryResult,
@@ -50,7 +52,10 @@ import { readReferenceField } from "~/entity/entity-references";
 import { enumFieldLabel } from "~/entity/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  ai,
+  assessment,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
@@ -112,6 +117,7 @@ type JsonValue = z.infer<ReturnType<typeof z.json>>;
 type SuggestionRow = {
   record: SuggestionRecord;
   sourceByField: ReadonlyMap<string, FieldSuggestionSource>;
+  assessmentIdByField: ReadonlyMap<string, string>;
   suggestions: Record<string, FieldSuggestion | null>;
   outcomes: Record<string, FieldSuggestionOutcome>;
   pendingByField: ReadonlyMap<string, boolean>;
@@ -130,10 +136,17 @@ function mergeSuggestionRow(
   },
 ): SuggestionRow {
   const sourceByField = new Map(previous?.sourceByField);
+  const assessmentIdByField = new Map(previous?.assessmentIdByField);
   const pendingByField = new Map(previous?.pendingByField);
   const errorByField = new Map(previous?.errorByField);
   for (const field of source.targets) {
     sourceByField.set(field, source);
+    const assessmentId =
+      query.data?.suggestions[field]?.assessmentId ??
+      (query.data?.outcomes?.[field]?.kind === "evaluated"
+        ? query.data.outcomes[field].assessmentId
+        : undefined);
+    if (assessmentId) assessmentIdByField.set(field, assessmentId);
     pendingByField.set(
       field,
       query.data === undefined && (query.isFetching || query.isPending),
@@ -143,6 +156,7 @@ function mergeSuggestionRow(
   return {
     record,
     sourceByField,
+    assessmentIdByField,
     suggestions: {
       ...previous?.suggestions,
       ...query.data?.suggestions,
@@ -168,12 +182,7 @@ const RecordSuggestionsContext = createContext<{
     source: FieldSuggestionSource,
     expectedCurrent: string | null,
   ) => Promise<void>;
-  recordMiss: (
-    id: string,
-    field: string,
-    suggestion: FieldSuggestion,
-    currentValue: string | null,
-  ) => Promise<void>;
+  recordMiss: (suggestion: FieldSuggestion) => Promise<void>;
   stored: ReadonlyMap<string, SuggestionReviewRow>;
   accepted: ReadonlyMap<string, AcceptedSuggestion>;
   acceptValue: (
@@ -181,10 +190,11 @@ const RecordSuggestionsContext = createContext<{
     field: string,
     value: JsonValue,
     label: string | undefined,
+    assessmentId: string | undefined,
     accept: () => Promise<void>,
   ) => Promise<void>;
   acceptStored: (id: string) => Promise<void>;
-  acceptStoredMany: (ids: string[]) => Promise<SuggestionReviewBatchOut>;
+  acceptStoredMany: (ids: string[]) => Promise<AssessmentReviewBatchOut>;
   rejectStored: (id: string, correctValue?: JsonValue) => Promise<void>;
   storedCountFor: (records: readonly unknown[]) => number;
 } | null>(null);
@@ -195,14 +205,19 @@ export interface StoredSuggestionOperations {
     recordIds: string[];
     fields: string[];
   }) => Promise<SuggestionReviewRow[]>;
-  accept: (input: {
-    id: string;
-  }) => Promise<{ id: string; status: "applied" | "rejected" }>;
-  acceptMany: (input: { ids: string[] }) => Promise<SuggestionReviewBatchOut>;
-  reject: (input: {
-    id: string;
-    correctValue?: JsonValue;
-  }) => Promise<{ id: string; status: "applied" | "rejected" }>;
+  review: (input: {
+    assessmentId: string;
+    operationId: string;
+    verdict: "correct" | "wrong";
+    correction: { present: false } | { present: true; value: JsonValue };
+    intent: "history" | "draft" | "apply";
+    reason: null;
+    evidence: null;
+    application?: { kind: "saved_field"; recordId: string };
+  }) => Promise<AssessmentReviewOut>;
+  reviewBatch: (input: {
+    items: Parameters<StoredSuggestionOperations["review"]>[0][];
+  }) => Promise<AssessmentReviewBatchOut>;
 }
 
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
@@ -239,9 +254,8 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   list: everyPendingSuggestion((input) =>
     ai.listSuggestionReviewQueue.call(input),
   ),
-  accept: (input) => ai.acceptSuggestion.call(input),
-  acceptMany: (input) => ai.acceptSuggestions.call(input),
-  reject: (input) => ai.rejectSuggestion.call(input),
+  review: (input) => assessment.review.call(input),
+  reviewBatch: (input) => assessment.reviewBatch.call(input),
 };
 
 const recordPublicId = (record: unknown) => {
@@ -914,22 +928,29 @@ function BoundRecordSuggestions({
           }
         : previous,
     );
-    void Promise.all([
-      invalidateOperationTags(
-        queryClient,
-        ai.acceptSuggestions.invalidates({ ids }),
-      ),
-      invalidateOperationTags(queryClient, entityRipple(entity)),
-    ]);
+    void invalidateOperationTags(queryClient, entityRipple(entity));
   };
-  const acceptStoredMutation = useMutation({
-    mutationFn: storedSuggestionOperations.accept,
-    onSuccess: (_result, input) => afterStoredReview(input.id),
-  });
-  const rejectStoredMutation = useMutation({
-    mutationFn: storedSuggestionOperations.reject,
-    onSuccess: (_result, input) => afterStoredReview(input.id),
-  });
+  const assessmentIdBySuggestionId = new Map(
+    (storedData?.rows ?? []).map((row) => [row.id, row.assessmentId]),
+  );
+  const reviewStored = async (
+    id: string,
+    verdict: "correct" | "wrong",
+    intent: "history" | "apply",
+    correction: { present: false } | { present: true; value: JsonValue },
+  ) => {
+    const result = await storedSuggestionOperations.review({
+      assessmentId: assessmentIdBySuggestionId.get(id)!,
+      operationId: crypto.randomUUID(),
+      verdict,
+      correction,
+      intent,
+      reason: null,
+      evidence: null,
+    });
+    afterStoredReview(id);
+    return result;
+  };
   const stored = storedSuggestionIndex(storedData?.rows, entity, records);
   for (const key of accepted.keys()) stored.delete(key);
   const readyRecords =
@@ -994,6 +1015,7 @@ function BoundRecordSuggestions({
       field: string,
       value: JsonValue,
       label: string | undefined,
+      assessmentId: string | undefined,
       accept: () => Promise<void>,
     ) => {
       const key = storedSuggestionKey(record.id, field);
@@ -1010,6 +1032,16 @@ function BoundRecordSuggestions({
       };
       setAcceptedValues((previous) => new Map(previous).set(key, entry));
       try {
+        if (!assessmentId) throw new Error("Suggestion assessment is missing.");
+        await storedSuggestionOperations.review({
+          assessmentId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "draft",
+          reason: null,
+          evidence: null,
+        });
         await accept();
         setAcceptedValues((previous) => {
           const current = previous.get(key);
@@ -1027,17 +1059,41 @@ function BoundRecordSuggestions({
       }
     },
     acceptStored: async (id: string) => {
-      await acceptStoredMutation.mutateAsync({ id });
+      await reviewStored(id, "correct", "apply", { present: false });
     },
     acceptStoredMany: async (ids: string[]) => {
-      const results = await storedSuggestionOperations.acceptMany({ ids });
+      const results = await storedSuggestionOperations.reviewBatch({
+        items: ids.map((id) => ({
+          assessmentId: assessmentIdBySuggestionId.get(id)!,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          reason: null,
+          evidence: null,
+        })),
+      });
       afterStoredReview(
-        ...results.flatMap((result) => (result.ok ? [result.id] : [])),
+        ...results.flatMap((result) => {
+          if (!result.ok) return [];
+          const suggestionId = [...assessmentIdBySuggestionId].find(
+            ([, assessmentId]) => assessmentId === result.assessmentId,
+          )?.[0];
+          if (!suggestionId) return [];
+          return [suggestionId];
+        }),
       );
       return results;
     },
     rejectStored: async (id: string, correctValue?: JsonValue) => {
-      await rejectStoredMutation.mutateAsync({ id, correctValue });
+      if (correctValue === undefined) {
+        await reviewStored(id, "wrong", "history", { present: false });
+      } else {
+        await reviewStored(id, "wrong", "apply", {
+          present: true,
+          value: correctValue,
+        });
+      }
     },
     storedCountFor: (items: readonly unknown[]) => {
       const ids = new Set(
@@ -1046,21 +1102,18 @@ function BoundRecordSuggestions({
       return [...stored.values()].filter((item) => ids.has(item.recordId))
         .length;
     },
-    recordMiss: async (
-      id: string,
-      field: string,
-      suggestion: FieldSuggestion,
-      currentValue: string | null,
-    ) => {
+    recordMiss: async (suggestion: FieldSuggestion) => {
+      const assessmentId = suggestion.assessmentId;
       if (!suggestion.value) return;
-      await operations.recordFieldSuggestionMiss?.call({
-        entity,
-        entityId: id,
-        field,
-        runKey,
-        currentValue,
-        suggestedValue: suggestion.value,
-        confidence: suggestion.probability ?? 0,
+      if (!assessmentId) throw new Error("Suggestion assessment is missing.");
+      await storedSuggestionOperations.review({
+        assessmentId,
+        operationId: crypto.randomUUID(),
+        verdict: "wrong",
+        correction: { present: false },
+        intent: "history",
+        reason: null,
+        evidence: null,
       });
     },
     save: async (
@@ -1073,6 +1126,21 @@ function BoundRecordSuggestions({
       if (suggestion.financeReview) {
         try {
           await financeApply.apply(suggestion);
+          const assessmentId = suggestion.assessmentId;
+          if (!assessmentId)
+            throw new Error("Suggestion assessment is missing.");
+          const receipt = await storedSuggestionOperations.review({
+            assessmentId,
+            operationId: crypto.randomUUID(),
+            verdict: "correct",
+            correction: { present: false },
+            intent: "apply",
+            reason: null,
+            evidence: null,
+            application: { kind: "saved_field", recordId: id },
+          });
+          if (!receipt.applied)
+            throw new Error("Saved suggestion feedback was not recorded.");
         } catch (error) {
           await bySource.get(JSON.stringify(source))?.refetch();
           throw error;
@@ -1129,6 +1197,31 @@ function BoundRecordSuggestions({
         setCorrectionRecord(freshRecord);
         throw error;
       }
+      const saved = await readRecord(entity, id);
+      if (!saved)
+        throw new Error(
+          "Suggestion saved, but the updated record could not be verified.",
+        );
+      const savedRecord = recordSchema.parse(saved);
+      const expectedSaved = isRemove
+        ? basisValueOf(patch[field])
+        : suggestion.value;
+      if (recordValue(entity, savedRecord, field).value !== expectedSaved)
+        throw new Error("The saved field changed from the reviewed value");
+      const assessmentId = suggestion.assessmentId;
+      if (!assessmentId) throw new Error("Suggestion assessment is missing.");
+      const receipt = await storedSuggestionOperations.review({
+        assessmentId,
+        operationId: crypto.randomUUID(),
+        verdict: "correct",
+        correction: { present: false },
+        intent: "apply",
+        reason: null,
+        evidence: null,
+        application: { kind: "saved_field", recordId: id },
+      });
+      if (!receipt.applied)
+        throw new Error("Saved suggestion feedback was not recorded.");
     },
   };
   const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);
@@ -1326,8 +1419,7 @@ function ResolvedFieldSuggestion({
     await context.save(row.record.id, field, suggestion, source, current.value);
   };
   const dismiss = async () => {
-    if (suggestion)
-      await context.recordMiss(row.record.id, field, suggestion, current.value);
+    if (suggestion) await context.recordMiss(suggestion);
   };
   if (surface === "cell" && !row.errorByField.get(field)) {
     // Prune proposals keep the popover review: removing chips has no pill.
@@ -1519,6 +1611,7 @@ function StoredSuggestionField({
   const runnerUp = suggestion.runnerUpValue;
   return (
     <GhostSuggestionCell
+      assessmentId={suggestion.assessmentId}
       context={context}
       record={record}
       field={field}
@@ -1593,6 +1686,7 @@ function LiveSuggestionCell({
   const runnerUp = suggestion.alternatives[0];
   return (
     <GhostSuggestionCell
+      assessmentId={suggestion.assessmentId}
       context={context}
       record={record}
       field={field}
@@ -1703,7 +1797,9 @@ function GhostSuggestionCell({
   correct,
   onCorrected,
   children,
+  assessmentId,
 }: {
+  assessmentId?: string;
   context: RecordSuggestionsCtx;
   record: SuggestionRecord;
   field: string;
@@ -1746,7 +1842,7 @@ function GhostSuggestionCell({
     }
   };
   const acceptImmediately = () =>
-    context.acceptValue(record, field, value, label, accept);
+    context.acceptValue(record, field, value, label, assessmentId, accept);
   const valueText = useRenderedText();
   const proposed =
     renderValue?.(value) ??
@@ -1888,7 +1984,9 @@ export function RecordSuggestionsBulkAction({
     ids.has(item.recordId),
   );
   if (suggestions.length === 0) return null;
-  const recordById = new Map(suggestions.map((item) => [item.id, item]));
+  const recordById = new Map(
+    suggestions.map((item) => [item.assessmentId, item]),
+  );
   return (
     <span className="inline-flex items-center gap-2">
       <Button
@@ -1905,7 +2003,7 @@ export function RecordSuggestionsBulkAction({
                 result.ok
                   ? []
                   : [
-                      `${recordById.get(result.id)?.recordId ?? result.id}: ${result.error}`,
+                      `${(result.assessmentId ? recordById.get(result.assessmentId)?.recordId : null) ?? result.assessmentId}: ${result.error}`,
                     ],
               ),
             );

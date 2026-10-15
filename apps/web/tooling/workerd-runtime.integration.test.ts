@@ -1,6 +1,10 @@
 import { execFileSync } from "node:child_process";
 
 import { pollUntil } from "@cubby/shared/retry";
+import {
+  createPostgresPool,
+  terminateOtherPostgresConnections,
+} from "./postgres-pool";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createE2EDatabase } from "../tests/e2e/e2e-database";
@@ -68,8 +72,18 @@ describe("workerd test runtime lifecycle", () => {
           expect(env.R2_PUBLIC_URL).toBe("https://objects.example.test");
         },
       );
+      await expectWriteLands(runtime);
       await runtime.close();
       await runtime.close();
+      const resetPool = createPostgresPool({
+        connectionString: ctx.databaseUrl,
+      });
+      try {
+        // Borrowing transfers no right to kill a still-running workerd session.
+        await terminateOtherPostgresConnections(resetPool);
+      } finally {
+        await resetPool.end();
+      }
       await storage.bucket.put("survives-close", "synthetic object");
       expect(await (await storage.bucket.get("survives-close"))?.text()).toBe(
         "synthetic object",

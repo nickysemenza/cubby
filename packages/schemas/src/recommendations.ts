@@ -1,3 +1,4 @@
+import { assessmentReviewReference } from "./assessment-reference";
 import { z } from "zod";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
@@ -34,11 +35,6 @@ export const recommendationWorkbenchSearch = z
   })
   .strict();
 
-export const dismissProductRecommendationInput = z.object({
-  sourceId: productShortcode,
-  targetId: productShortcode,
-});
-
 export const recommendationOkSchema = z.object({ ok: z.literal(true) });
 
 export const recommendationWorkbenchOut = relatednessOutSchema;
@@ -46,24 +42,19 @@ export const recommendationWorkbenchOut = relatednessOutSchema;
 export const duplicateProductRecommendationInput = z.object({
   sourceId: productShortcode,
 });
-export const duplicateProductRecommendationOut =
-  duplicateProductIdentitySchema.nullable();
-export const dismissDuplicateProductRecommendationInput = z.object({
-  sourceId: productShortcode,
-});
+export const duplicateProductRecommendationOut = duplicateProductIdentitySchema
+  .extend({ review: assessmentReviewReference.optional() })
+  .nullable();
 
 export const tagPropagationRecommendationInput = z.object({
   sourceId: productShortcode,
-});
-export const dismissTagPropagationInput = z.object({
-  sourceId: productShortcode,
-  tag: z.string().min(1),
 });
 export const tagPropagationRecommendationOut = z.object({
   status: embeddingReadinessSchema,
   currentTags: z.array(z.string()),
   proposals: z.array(
     z.object({
+      review: assessmentReviewReference.optional(),
       tag: z.string(),
       supportingProductCount: z.number().int().positive(),
     }),
@@ -138,6 +129,10 @@ export const productMatchSide = z.object({
 export type ProductMatchSide = z.infer<typeof productMatchSide>;
 
 export const productMatchCandidate = z.object({
+  review: assessmentReviewReference.optional(),
+  assessmentId: z.uuid(),
+  fingerprint: z.string().nullable(),
+  identityConflict: z.boolean(),
   source: productMatchSource,
   /** Merge survivor by default: the purchase side carries the spend history. */
   keeper: productMatchSide,
@@ -147,7 +142,7 @@ export const productMatchCandidate = z.object({
   signals: z.array(z.string()),
   /** Things to fix before merging, e.g. both sides stocked (merge sums them). */
   warnings: z.array(z.string()),
-  /** A comparison of explicit title words, not a visual or model conclusion. */
+  /** Variant facts with retained evidence; unknown facts remain unknown. */
   variant: productVariantComparison,
 });
 export type ProductMatchCandidate = z.infer<typeof productMatchCandidate>;
@@ -163,12 +158,10 @@ export const productMatchQueueOut = z.object({
 });
 export type ProductMatchQueueOut = z.infer<typeof productMatchQueueOut>;
 
-export const dismissProductMatchInput = z.object({
-  productIds: productMatchPair,
-});
-
 /** Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos. */
 export const mergeProductMatchInput = z.object({
+  assessmentId: z.uuid(),
+  expectedFingerprint: z.string().min(1),
   keepId: productShortcode,
   mergeId: productShortcode,
 });

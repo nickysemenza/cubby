@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 import {
@@ -20,7 +21,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
-import { suggestion as suggestionTable } from "~/server/db/schema";
+import { assessmentState as suggestionTable } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
@@ -554,6 +555,32 @@ export const defineEntityOperations = <
             const changedFields = Object.keys(
               z.record(z.string(), z.unknown()).parse(validated.data),
             );
+            const dependentFields = entityFieldModels[binding.entity].fields
+              .filter((field) =>
+                field.control?.suggest?.basis?.some((input) =>
+                  changedFields.includes(input),
+                ),
+              )
+              .map((field) => field.key);
+            if (dependentFields.length)
+              await getDb(writeContext.db)
+                .update(suggestionTable)
+                .set({
+                  status: "superseded",
+                  supersessionReceipt: {
+                    reason: "input_changed",
+                    evaluationId: null,
+                    at: new Date().toISOString(),
+                  },
+                })
+                .where(
+                  and(
+                    eq(suggestionTable.entity, binding.entity),
+                    eq(suggestionTable.recordId, updated.entityId),
+                    inArray(suggestionTable.field, dependentFields),
+                    eq(suggestionTable.status, "pending"),
+                  ),
+                );
             if (changedFields.length) {
               await getDb(writeContext.db)
                 .update(suggestionTable)

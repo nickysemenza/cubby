@@ -4,14 +4,10 @@ import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { kernelMerge } from "~/entity/actions/merge-entity-actions";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
-import {
-  type EntityMergeResult,
-  entityMergeMutationOptions,
-} from "~/entity/entity-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
+import { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -163,13 +159,10 @@ export function DuplicateProductMergeFix({
   close: () => void;
 }) {
   const mutation = useActionMutation({
-    mutationFn: entityMergeMutationOptions("product"),
-    success: (result: EntityMergeResult<"product">) =>
-      `Merged into ${result.item.name}`,
+    mutationFn: () => recommendations.mergeProductMatch.mutationOptions(),
+    success: "Merged Product identity",
     onSuccess: close,
   });
-  const merge = kernelMerge("product", mutation);
-
   return (
     <EntityMergeDialog
       entity="product"
@@ -178,8 +171,31 @@ export function DuplicateProductMergeFix({
       onOpenChange={(open) => {
         if (!open) close();
       }}
-      onConfirm={(keepId, mergeIds) => merge.mutate({ keepId, mergeIds })}
-      isPending={merge.isPending}
+      onConfirm={(keepId, mergeIds) => {
+        const mergeId = mergeIds[0];
+        const pair = variant.pairs.find(
+          (candidate) =>
+            candidate.productIds.some((id) => id === keepId) &&
+            mergeId &&
+            candidate.productIds.some((id) => id === mergeId),
+        );
+        if (
+          mergeIds.length !== 1 ||
+          !mergeId ||
+          !pair?.fingerprint ||
+          pair.identityConflict
+        )
+          throw new Error(
+            "Choose one independently assessed pair with current identity evidence",
+          );
+        mutation.mutate({
+          keepId,
+          mergeId,
+          assessmentId: pair.assessmentId,
+          expectedFingerprint: pair.fingerprint,
+        });
+      }}
+      isPending={mutation.isPending}
     />
   );
 }

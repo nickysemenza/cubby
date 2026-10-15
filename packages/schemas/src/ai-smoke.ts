@@ -32,6 +32,7 @@ export const aiSmokeInputs = {
     offerTitle: z.string().min(1).max(1000),
   }),
   imageProvenance: z.object({ fixture }),
+  productIdentity: z.object({ fixture }),
   productVariantRelation: z.object({
     firstTitle: z.string().min(1).max(1000),
     secondTitle: z.string().min(1).max(1000),

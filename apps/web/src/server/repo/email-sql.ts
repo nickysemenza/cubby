@@ -1,6 +1,12 @@
+import {
+  feedbackAuthority,
+  assessmentFamily,
+  feedbackVerdict,
+} from "@cubby/schemas/assessment";
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,
+  mailboxClassification,
   type MailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
@@ -10,6 +16,23 @@ import { sql, type SQL } from "drizzle-orm";
 // repository imports the list scaffold that imports those bindings.
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
+/** Assessment subjects own observation lineage; caller metadata is not a second join key. */
+export const emailFeedbackObservationIdSql = (label: SQL) => sql<
+  string | null
+>`(
+ SELECT a.subject->>'observationId' FROM "Assessment" a
+ WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
+)`;
+export const emailFeedbackClassificationSql = (
+  label: SQL,
+) => sql<MailboxClassification | null>`
+ CASE WHEN ${label}.correction @> ${JSON.stringify({ present: true })}::jsonb THEN ${label}.correction->>'value'
+ WHEN ${label}.verdict = ${feedbackVerdict.enum.correct} THEN (
+   SELECT a.judgment->>'classification' FROM "Assessment" a
+   WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
+ ) END`;
+export const emailFeedbackHasClassificationSql = (label: SQL) => sql`
+ (${emailFeedbackClassificationSql(label)}) IN (${mailboxClassification.enum.related},${mailboxClassification.enum.unrelated},${mailboxClassification.enum.uncertain})`;
 /** The stages a member's review can disagree with. */
 export const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
@@ -65,7 +88,7 @@ const emailLinkedDecisionPurchasesSql = (includeDeleted = false): SQL => sql`
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "OrderMailCandidateDecision" decision ON decision."eventId" = event."id"
+  INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
@@ -109,7 +132,7 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
       )
     UNION
     SELECT candidate."id"
-    FROM "OrderMailCandidateDecision" decision
+    FROM "AssessmentEmailLink" decision
     JOIN "OrderMailEvent" event ON event."id" = decision."eventId"
     JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND candidate."deletedAt" IS NULL
     WHERE decision."purchaseId" = ${purchaseId}
@@ -131,13 +154,14 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
 export const emailMemberClassificationSql =
   () => sql<MailboxClassification | null>`
   CASE WHEN "Email"."classificationStage" = ${resolution} THEN "Email"."classification" ELSE (
-    SELECT label."classification"
-    FROM "EmailClassificationLabel" label
-    INNER JOIN "EmailClassificationObservation" prediction ON prediction."id" = label."predictionId"
+    SELECT ${emailFeedbackClassificationSql(sql`label`)}
+    FROM "Feedback" label
+    INNER JOIN "EmailClassificationObservation" prediction ON prediction."id"::text = ${emailFeedbackObservationIdSql(sql`label`)}
     INNER JOIN "LedgerParty" owner ON owner."id" = "Email"."ledgerPartyId"
     WHERE prediction."emailId" = "Email"."id"
       AND prediction."checksum" = "Email"."checksum"
-      AND label."actorUserId" = owner."userId"
+      AND label."actorUserId" = owner."userId" AND label.authority = ${feedbackAuthority.enum.member}
+      AND ${emailFeedbackHasClassificationSql(sql`label`)}
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
   ) END

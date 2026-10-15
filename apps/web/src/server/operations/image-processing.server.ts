@@ -3,7 +3,6 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { imageAnalysisHistory } from "~/server/repo/image-analysis-history";
 import {
   getImageProcessingReadProjection,
-  saveImageDescriptionCorrection,
   releaseAssignedImageProcessingJob,
 } from "~/server/repo/image-processing";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -54,12 +53,5 @@ export const imageProcessingHandlers = implementOperationDomain(
       scheduleImageProcessingJobs(context.db, input),
     evaluateAppleDescription: async (context, input) =>
       scheduleAppleImageDescriptionEvaluation(context.db, input),
-    correctDescription: async (context, input) => {
-      await saveImageDescriptionCorrection(context.db, {
-        imageId: await resolveOrThrow(context.db, "image", input.id),
-        description: input.description,
-      });
-      return { saved: true as const };
-    },
   },
 );

@@ -532,6 +532,7 @@ const suggestionRecordId = anyShortcodeSchema([
   ...otherShortcodeEntities,
 ]);
 export const suggestionReviewRowSchema = z.object({
+  assessmentId: z.uuid(),
   provenance: aiProvenance.nullable().optional(),
   acceptanceReceipt: suggestionAcceptanceReceipt
     .omit({ runId: true })
@@ -544,7 +545,7 @@ export const suggestionReviewRowSchema = z.object({
     .optional(),
   id: z.string().uuid(),
   /** The sweep or page Run that produced it, opened from its provenance. */
-  runId: runShortcode,
+  runId: runShortcode.nullable(),
   entity: z.enum(shortcodeEntities),
   recordId: suggestionRecordId,
   field: z.string(),
@@ -561,31 +562,6 @@ export const suggestionReviewRowSchema = z.object({
 });
 export const suggestionReviewListOut = z.array(suggestionReviewRowSchema);
 export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
-export const suggestionReviewActionInput = z.object({ id: z.string().uuid() });
-export const suggestionReviewBatchInput = z.object({
-  ids: z.array(z.string().uuid()).min(1),
-});
-export const suggestionReviewRejectInput = suggestionReviewActionInput.extend({
-  correctValue: z.json().optional(),
-});
-export const suggestionReviewActionOut = z.object({
-  id: z.string().uuid(),
-  status: z.enum(["applied", "rejected"]),
-});
-/** Each id settles independently: one failure never rolls back or hides the
- * others, and carries its raw diagnostic. */
-export const suggestionReviewBatchOut = z.array(
-  z.discriminatedUnion("ok", [
-    suggestionReviewActionOut.extend({ ok: z.literal(true) }),
-    z.object({
-      id: z.string().uuid(),
-      ok: z.literal(false),
-      error: z.string(),
-    }),
-  ]),
-);
-export type SuggestionReviewBatchOut = z.infer<typeof suggestionReviewBatchOut>;
-
 /** Pending, applied, rejected and superseded counts per (entity, field),
  * optionally for one Run; paired trial rows never count. */
 export const suggestionCountsInput = z.object({
@@ -646,16 +622,6 @@ export const decisionCatalogRowSchema = z.object({
 });
 export const decisionCatalogOut = z.array(decisionCatalogRowSchema);
 export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
-export const fieldSuggestionMissInput = z.object({
-  entity: z.enum(shortcodeEntities),
-  entityId: z.string().min(1),
-  field: z.string().min(1),
-  runKey: z.string().uuid(),
-  currentValue: z.json().nullable(),
-  suggestedValue: z.string(),
-  confidence: z.number().min(0).max(1),
-});
-export const fieldSuggestionMissOut = z.object({ recorded: z.literal(true) });
 export const suggestionSweepStartInput = z.object({
   entity: z.enum(shortcodeEntities),
   fields: z.array(z.string().min(1)).min(1),
@@ -709,6 +675,7 @@ export type FieldSuggestionRemoval = z.infer<
 >;
 
 export const fieldSuggestionSchema = z.object({
+  assessmentId: z.uuid().optional(),
   financeReview: financeCategoryReviewSchema.optional(),
   value: z.string().nullable(),
   label: z.string().nullable(),
@@ -747,6 +714,7 @@ export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("evaluated"),
+    assessmentId: z.uuid().optional(),
     answer: z.enum(["pick", "none"]),
     confidence,
     /** Calibrated probability of `answer` — the winner's for a pick, `none`'s

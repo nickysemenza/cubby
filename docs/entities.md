@@ -602,7 +602,7 @@ value is an array. The resulting `FieldSuggestion` carries
 `operation: "remove"` and a `removals[]` list instead of a plain `value`; the
 generic review surfaces render it as a removal proposal, never an auto-apply,
 and a form-mode `FieldSuggestionProvider` skips prune targets by default
-(record surfaces — list/detail — request them).
+(record surfaces — list/detail — request them). Prune acceptance verifies the saved remaining array and records the same saved-field Feedback receipt as a set proposal; removed tokens are not compared with the remaining value.
 
 The generated `suggestFieldKeys` tuple
 (`packages/schemas/src/generated/entity-field-model.gen.ts`) lists every
@@ -610,33 +610,22 @@ declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
 union type-enforces that the server's field-suggest registry carries exactly
 one entry per key.
 
-Reviewable field suggestions are stored against their `ai_suggest` or sweep
-Run. A human acceptance writes through the entity update path (finance
-categories use the reviewed finance apply so linked Expense reach is checked);
-a rejection records a Miss on that Run. "Use a different value…" writes the
-member's value to the record and keeps it as that Miss's `correctValue`.
-Rejected Suggestions suppress the same semantic proposal on that field across
-prompt/input changes; a different proposal remains eligible. Misses and all
-applied, rejected and superseded rows remain grading and audit evidence. Batch accept and reject
-(`ai.acceptSuggestions`, `ai.rejectSuggestions`; MCP `accept_suggestions`,
-`reject_suggestions`) settle each id through the same single-id handler and
-return a per-id result, so one failure never hides or rolls back the rest.
-Bulk sweeps retain paired model rows for evaluation, while review exposes only
-the pinned model's candidate. The response cache includes the active
-classification revision, which each sweep also records for later comparison.
+Assessments store immutable typed subjects, judgments, evidence and nullable original producer metadata. Successful applications commit an immutable command-bound Feedback receipt with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current projection checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command Feedback binding and recorded outcome. Feedback records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. AssessmentState holds rebuildable current targets, field supersession, confirmed values and exactly scoped suppression. Merges and deletes change these projections, never historical subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It retains history with an inactive projection; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current projection targets. Email link authority can target the real retained `orderMailEvent` internally when its Email is absent; that target is never a public entity, shortcode, search, or HTTP resource. Email removal repoints link authority to the event and retires relevance projections. Event deletion or supersession retires current link authority while immutable history survives.
 
-Automatic acceptance and member acceptance/correction retain an acceptance
-receipt with the accepting Run, reason, confidence/threshold and the actual
-field-write AuditLog ids, in the same transaction as applying the value.
-Legacy acceptance receipts remain unknown. Supersession appends its reason and
-replacement evaluation without rewriting earlier predictions or Misses.
+All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `entity.review_assessment` and `entity.review_assessments`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
+
+A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
+
+Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace immutable Assessment evidence or confirmed text. Live description authority disappears with the Image; history and inactive confirmation times survive. Current field targets and declared inputs supersede pending Assessments through both generated Postgres triggers and kernel invalidation. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
+
+Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Source-confirmed model, size, color and pack conflicts block pair application, including weak recommendations. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
 The deployed AI refresh manifest compares exact per-feature prompt/policy
 versions, including rollbacks. Its Run-backed AiEvaluation ledger deduplicates
 feature-specific evidence/option fingerprints and fences publication against
 the active generation, Workflow attempt and target-field audit revision. A
 member edit returning the field to its earlier value still invalidates the
-outstanding result. Discovery refreshes uncertain
+outstanding result. Discovery refreshes the live Product catalog, uncertain
 unresolved Emails and pending Suggestions; it also revisits input-invalidated
 or no-proposal field work when the relevant fingerprint changes. Settled
 confident Emails, member resolutions, applied values and rejected history remain
@@ -1481,8 +1470,7 @@ return no prose, so those facts are the suggestion's reasoning; a branch
 roll-up's note is shown inline, never in a `title`. Weaker live proposals stay
 behind the cell's mark. Percentages describe model or branch confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
-enrichment stays visible throughout same-query refreshes. A changed target or declared
-backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
+enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review. The `/ai` page's Review tab lists stored Suggestions on the shared
 table, filtered by entity, field, status, kind, minimum confidence and Run,
@@ -1513,6 +1501,14 @@ Pause and resume use Run status; transient failures retry within a bound and
 terminal failures remain visible. Paired trials and finance acceptance rules
 remain part of the workload. Identical pending targets can share execution while
 each requesting Run can inspect the published Suggestions and keeps its own receipt.
+Product identity scans enumerate the full live catalog under AI-refresh activation.
+Canonical pair work shares frozen evidence and the actual served producer through
+existing durable evaluations; a completed catalog enumeration does not claim that
+queued model comparisons have completed. Exact retained source claims publish rule
+Problems independently of model availability. Registered identifiers retain their
+single owner: only accepted originals with actual Product bindings establish
+additional claims. Shared model/style names, URLs and partial variant text remain
+retrieval or recommendation evidence.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

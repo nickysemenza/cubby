@@ -11,8 +11,6 @@ import {
   completeCompanionImageProcessingOutput,
   releaseCompanionImageProcessingInput,
   releaseCompanionImageProcessingOutput,
-  imageDescriptionCorrectionInput,
-  imageDescriptionCorrectionOutput,
   evaluateAppleImageDescriptionInput,
   evaluateAppleImageDescriptionOutput,
   imageProcessingStatusInput,
@@ -94,12 +92,6 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     native: "Evaluate image description on Apple device",
     input: evaluateAppleImageDescriptionInput,
     output: evaluateAppleImageDescriptionOutput,
-    invalidates: ["image"],
-  }),
-  correctDescription: mutation({
-    native: "Confirm image description correction",
-    input: imageDescriptionCorrectionInput,
-    output: imageDescriptionCorrectionOutput,
     invalidates: ["image"],
   }),
 });

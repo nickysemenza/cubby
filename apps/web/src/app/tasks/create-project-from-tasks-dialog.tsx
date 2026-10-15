@@ -3,13 +3,14 @@ import { plainDate, projectKindSchema } from "@cubby/schemas/project";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   FormWrapper,
   NullableNumericField,
@@ -57,10 +58,20 @@ export function CreateProjectFromTasksDialog({
     resolver: zodResolver(quickAddSchema),
     defaultValues,
   });
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
   const mutation = useActionMutation({
     mutationFn: project.createFromTasks.mutationOptions,
     success: (data) => `Created "${data.project.name}"`,
-    onSuccess: () => onOpenChange(false),
+    onSuccess: async (data) => {
+      try {
+        await receiptHandler.current?.(data.project.id);
+      } catch (error) {
+        showErrorToast(error, "Created, but suggestion receipt failed");
+      }
+      onOpenChange(false);
+    },
   });
 
   useEffect(() => {
@@ -106,6 +117,7 @@ export function CreateProjectFromTasksDialog({
         <FieldSuggestionProvider
           entity="project"
           mode="create"
+          receiptHandler={receiptHandler}
           staticBasis={{ notes: null }}
           fieldKeys={["kind"]}
         >

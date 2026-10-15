@@ -72,12 +72,19 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "imports_read.items[].predictionId",
   "mail.evaluationId",
   "mail.predictionId",
-  // Field suggestions and Run findings have no shortcode; each echoes the
-  // row handle its review action took.
-  "entity.id",
-  "entity.results[].id",
   // The producing read: entity_read.suggestion_queue row ids.
   "entity_read.items[].id",
+  // Assessments and Feedback are child-row review/receipt handles without
+  // shortcodes; review and batch review return those exact handles.
+  "entity_read.items[].assessmentId",
+  "entity.assessmentId",
+  "entity.feedbackId",
+  "entity.items[].assessmentId",
+  "entity.items[].feedbackId",
+  "activity.duplicateProductIdentities[].assessmentId",
+  "activity.duplicateProductIdentities[].pairs[].assessmentId",
+  "activity.items[].review.assessmentId",
+  "activity.items[].assessmentId",
   // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
   "entity_read.items[].acceptanceReceipt.auditIds[]",
   "run.id",

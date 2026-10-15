@@ -1,31 +1,273 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
-import { eq, getTableColumns, inArray, or, sql } from "drizzle-orm";
+import {
+  assessmentProducer,
+  type AssessmentProducer,
+} from "@cubby/schemas/assessment";
+import {
+  parseEntityId,
+  productId,
+  type ProductId,
+} from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
+import {
+  and,
+  eq,
+  inArray,
+  isNull,
+  or,
+  sql,
+  getTableColumns,
+} from "drizzle-orm";
+import { z } from "zod";
 
+import {
+  PRODUCT_IDENTITY_FEATURE,
+  PRODUCT_IDENTITY_RULE_REVISION,
+} from "~/server/ai/features";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { productMatchCandidate } from "~/server/db/schema";
-import { getDb, unwrapDb } from "~/server/repo/database-helpers";
+import { assessment, assessmentState } from "~/server/db/schema";
+import { publishAssessment } from "~/server/repo/assessment";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
+import { variantVerification } from "~/server/repo/product-variant-evidence";
 
-/**
- * Persistence for the product match queue's durable half: agent proposals
- * (with their evidence) and dismissals of any pair. Detector pairs are never
- * stored while open — they are recomputed from live data on every read.
- */
-export type ProductMatchCandidateRow =
-  typeof productMatchCandidate.$inferSelect;
-
-/** The table's canonical storage order (`productAId < productBId`). */
+const pairProjection = z.object({
+  otherId: productId,
+  source: z.enum(["agent", "detector"]),
+  evidence: z.string().nullable(),
+  sourceUrls: z.array(z.string()),
+  signals: z.json().optional(),
+  actionable: z.boolean().default(false),
+  conflict: z.boolean().default(false),
+});
+const pairRow = z.object({
+  id: z.uuid(),
+  productAId: productId,
+  productBId: productId,
+  source: z.enum(["agent", "detector"]),
+  state: z.enum(["open", "dismissed"]),
+  evidence: z.string().nullable(),
+  sourceUrls: z.array(z.string()),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  fingerprint: z.string().nullable(),
+  actionable: z.boolean(),
+  conflict: z.boolean(),
+  verification: variantVerification.default("unknown"),
+});
+export type ProductMatchCandidateRow = z.infer<typeof pairRow>;
 const canonicalProductPair = (a: ProductId, b: ProductId) =>
   a < b ? { productAId: a, productBId: b } : { productAId: b, productBId: a };
-
-/** Order-free identity for a pair, for in-memory joins against stored rows. */
 export const productPairKey = (a: string, b: string): string =>
   a < b ? `${a}|${b}` : `${b}|${a}`;
+export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
+  !producer ||
+  producer.kind === "agent" ||
+  (producer.kind === "rule" &&
+    producer.revision === PRODUCT_IDENTITY_RULE_REVISION) ||
+  (producer.kind === "model" &&
+    producer.revision === PRODUCT_IDENTITY_FEATURE.promptVersion);
 
-/**
- * Record (or refresh) an agent's proposal. Re-proposing replaces the evidence
- * and sources but never reopens a dismissed pair: the person's decision
- * stands, and the returned `state` tells the agent so.
- */
+export async function publishProductPair(
+  db: Database,
+  input: {
+    productIds: readonly [ProductId, ProductId];
+    source: "agent" | "detector";
+    evidence: string | null;
+    sourceUrls: string[];
+    signals?: z.infer<typeof pairProjection>["signals"];
+    actionable?: boolean;
+    conflict?: boolean;
+    fingerprint?: string | null;
+    producer?: AssessmentProducer;
+  },
+): Promise<ProductMatchCandidateRow & { created: boolean }> {
+  const pair = canonicalProductPair(...input.productIds);
+  if (pair.productAId === pair.productBId)
+    throw new Error("Cannot assess a Product against itself");
+  const proposedData = pairProjection.parse({
+    otherId: pair.productBId,
+    ...input,
+  });
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const client = getDb(transactionDb);
+    await client.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
+    );
+    const { prepareProductIdentityPair } =
+      await import("~/server/ai/product-identity");
+    const suppliedSignals =
+      z.record(z.string(), z.json()).safeParse(proposedData.signals).data ?? {};
+    const guard = await prepareProductIdentityPair(
+      transactionDb,
+      [pair.productAId, pair.productBId],
+      { variantEvidence: suppliedSignals.variantEvidence },
+    );
+    if (!guard) throw new Error("Product identity target no longer exists");
+    let data = pairProjection.parse({
+      ...proposedData,
+      conflict: proposedData.conflict || guard.conflict,
+      evidence:
+        guard.verification === "pending_verification"
+          ? "A historical variant conflict requires fresh current verification before merging"
+          : proposedData.evidence,
+      signals: {
+        ...suppliedSignals,
+        verification: guard.verification,
+        variantEvidence: guard.variantEvidence,
+        conflictLineage: guard.priorConflictIds,
+      },
+    });
+    const proof = guard.variantEvidence;
+    const semanticProof = z
+      .object({ producer: assessmentProducer })
+      .passthrough()
+      .safeParse(proof);
+    const identityData = {
+      ...data,
+      signals: {
+        ...suppliedSignals,
+        conflictLineage: null,
+        verification: guard.verification,
+        variantEvidence: semanticProof.success
+          ? {
+              ...semanticProof.data,
+              producer: {
+                ...semanticProof.data.producer,
+                runId: null,
+                evaluationId: null,
+              },
+            }
+          : null,
+      },
+    };
+    const digest = await sha256Hex(
+      JSON.stringify([
+        pair.productAId,
+        pair.productBId,
+        identityData,
+        input.fingerprint ?? null,
+        input.producer
+          ? [input.producer.kind, input.producer.model, input.producer.revision]
+          : null,
+      ]),
+    );
+    const publicationKey = `product-pair:${digest}`;
+    const [published] = await client
+      .select()
+      .from(assessment)
+      .where(eq(assessment.publicationKey, publicationKey))
+      .limit(1);
+    if (published) data = pairProjection.parse(published.evidence);
+    const distinct =
+      !data.actionable &&
+      z
+        .object({
+          decision: z.object({ selectedIndex: z.number().nullable() }),
+        })
+        .safeParse(data.signals).data?.decision.selectedIndex === 1;
+    // Exact suppression lookup is independent of queue limits and served policy.
+    const [previous] = await client
+      .select()
+      .from(assessmentState)
+      .where(
+        and(
+          eq(assessmentState.family, "product_pair"),
+          eq(assessmentState.active, true),
+          eq(assessmentState.recordId, pair.productAId),
+          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+          or(
+            eq(assessmentState.status, "pending"),
+            sql`${assessmentState.suppression} IS NOT NULL`,
+          ),
+        ),
+      )
+      .limit(1);
+    const old = previous
+      ? {
+          state: previous.suppression
+            ? ("dismissed" as const)
+            : ("open" as const),
+        }
+      : undefined;
+    const prediction = await publishAssessment(
+      transactionDb,
+      {
+        publicationKey,
+        family: "product_pair",
+        subject: {
+          kind: "product_pair",
+          entity: "product",
+          recordId: pair.productAId,
+          otherId: pair.productBId,
+        },
+        judgment: { actionable: data.actionable, conflict: data.conflict },
+        producer:
+          published?.producer ??
+          input.producer ??
+          (input.source === "agent"
+            ? {
+                kind: "agent",
+                model: null,
+                revision: null,
+                runId: null,
+                evaluationId: null,
+              }
+            : null),
+        evidence: data,
+        fingerprint: input.fingerprint ?? null,
+      },
+      { data, ...(distinct ? { status: "resolved" } : {}) },
+    );
+    await client
+      .update(assessmentState)
+      .set({ active: false })
+      .where(
+        and(
+          eq(assessmentState.family, "product_pair"),
+          eq(assessmentState.recordId, pair.productAId),
+          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+          sql`${assessmentState.id} <> ${prediction.id}`,
+        ),
+      );
+    await client
+      .update(assessmentState)
+      .set({
+        active: true,
+        ...(old?.state === "dismissed"
+          ? {
+              suppression: {
+                scope: "product_pair",
+                candidateKey: productPairKey(pair.productAId, pair.productBId),
+                fingerprint: null,
+              },
+              status: "resolved",
+            }
+          : {}),
+      })
+      .where(eq(assessmentState.id, prediction.id));
+    return {
+      ...pair,
+      id: prediction.id,
+      source: data.source,
+      state: old?.state ?? "open",
+      evidence: data.evidence,
+      sourceUrls: data.sourceUrls,
+      createdAt: prediction.createdAt,
+      updatedAt: new Date(),
+      fingerprint: input.fingerprint ?? null,
+      actionable: data.actionable,
+      conflict: data.conflict,
+      verification:
+        z
+          .object({ verification: variantVerification.optional() })
+          .safeParse(data.signals).data?.verification ?? "unknown",
+      created: !old,
+    };
+  });
+}
 export async function upsertAgentProductMatch(
   db: Database | DrizzleTransaction,
   input: {
@@ -33,129 +275,137 @@ export async function upsertAgentProductMatch(
     evidence: string;
     sourceUrls: string[];
   },
-): Promise<ProductMatchCandidateRow & { created: boolean }> {
-  const [row] = await unwrapDb(db)
-    .insert(productMatchCandidate)
-    .values({
-      ...canonicalProductPair(...input.productIds),
-      source: "agent",
-      state: "open",
-      evidence: input.evidence,
-      sourceUrls: input.sourceUrls,
-    })
-    .onConflictDoUpdate({
-      target: [
-        productMatchCandidate.productAId,
-        productMatchCandidate.productBId,
-      ],
-      set: {
-        source: "agent",
-        evidence: input.evidence,
-        sourceUrls: input.sourceUrls,
-        updatedAt: new Date(),
-      },
-    })
-    .returning({
-      ...getTableColumns(productMatchCandidate),
-      // Postgres marks a freshly inserted tuple with xmax = 0; an ON CONFLICT
-      // update leaves the locking transaction id there instead.
-      created: sql<boolean>`(xmax = 0)`,
-    });
-  if (!row) throw new Error("Product match upsert returned no row");
-  return row;
+) {
+  const database = "select" in db ? databaseForTransaction(db) : db;
+  const { prepareProductIdentityPair } =
+    await import("~/server/ai/product-identity");
+  const prepared = await prepareProductIdentityPair(database, input.productIds);
+  if (!prepared) throw new Error("Product identity target no longer exists");
+  return publishProductPair(database, {
+    ...input,
+    source: "agent",
+    fingerprint: prepared.fingerprint,
+    conflict: prepared.conflict,
+    actionable: prepared.exact,
+    signals: z.json().parse({
+      snapshots: [prepared.first, prepared.second],
+      exact: prepared.exact,
+      admissionRevision: PRODUCT_IDENTITY_RULE_REVISION,
+    }),
+  });
 }
-
-/** Hide a pair from the queue for good, whichever source proposed it. */
-export async function dismissProductMatch(
-  db: Database,
-  productIds: readonly [ProductId, ProductId],
-): Promise<void> {
-  await getDb(db)
-    .insert(productMatchCandidate)
-    .values({
-      ...canonicalProductPair(...productIds),
-      source: "detector",
-      state: "dismissed",
-    })
-    .onConflictDoUpdate({
-      target: [
-        productMatchCandidate.productAId,
-        productMatchCandidate.productBId,
-      ],
-      set: { state: "dismissed", updatedAt: new Date() },
-    });
-}
-
-/** Every stored pair; small by construction (proposals plus dismissals). */
 export async function listProductMatchRows(
   db: Database,
   productId?: ProductId,
+  options: {
+    reviewableOnly?: boolean;
+    actionableOnly?: boolean;
+    candidateId?: ProductId;
+    limit?: number;
+  } = {},
 ): Promise<ProductMatchCandidateRow[]> {
-  return await getDb(db)
-    .select()
-    .from(productMatchCandidate)
+  const rows = await getDb(db)
+    .select(getTableColumns(assessmentState))
+    .from(assessmentState)
+    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
     .where(
-      productId
-        ? or(
-            eq(productMatchCandidate.productAId, productId),
-            eq(productMatchCandidate.productBId, productId),
-          )
-        : undefined,
-    );
+      and(
+        eq(assessmentState.family, "product_pair"),
+        eq(assessmentState.active, true),
+        sql`(${assessment.producer} IS NULL OR ${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${assessment.producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${assessment.producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`,
+        options.reviewableOnly
+          ? and(
+              eq(assessmentState.status, "pending"),
+              isNull(assessmentState.suppression),
+            )
+          : or(
+              eq(assessmentState.status, "pending"),
+              sql`${assessmentState.suppression} IS NOT NULL`,
+            ),
+        options.actionableOnly
+          ? sql`${assessmentState.data}->>'actionable' = 'true'`
+          : undefined,
+        options.candidateId
+          ? or(
+              eq(assessmentState.recordId, options.candidateId),
+              sql`${assessmentState.data}->>'otherId' = ${options.candidateId}`,
+            )
+          : undefined,
+        productId
+          ? or(
+              eq(assessmentState.recordId, productId),
+              sql`${assessmentState.data}->>'otherId' = ${productId}`,
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(
+      sql`(${assessmentState.data}->>${pairProjection.keyof().enum.source} = ${pairProjection.shape.source.enum.agent}) DESC`,
+      sql`(${assessmentState.data}->>'actionable')::boolean DESC`,
+      assessmentState.id,
+    )
+    .limit(options.limit ?? 2147483647);
+  return rows.map((row) => {
+    const data = pairProjection.parse(row.data);
+    return pairRow.parse({
+      ...row,
+      productAId: row.recordId,
+      productBId: data.otherId,
+      source: data.source,
+      state: row.suppression ? "dismissed" : "open",
+      evidence: data.evidence,
+      sourceUrls: data.sourceUrls,
+      actionable: data.actionable,
+      conflict: data.conflict,
+      verification:
+        z
+          .object({ verification: variantVerification.optional() })
+          .safeParse(data.signals).data?.verification ?? "unknown",
+    });
+  });
 }
-
-/**
- * The merge edge policy for both product columns: every review naming a loser
- * moves onto the survivor so an agent's evidence and source links outlive the
- * merge. The merged pair itself would become a self-pair and is dropped. When
- * the repointed pair already exists, the rows fold: a dismissal still stands,
- * agent evidence outranks a bare detector dismissal, and source links union.
- */
+/** Repoint only current projections. Self-pair actions retire; original subjects never change. */
 export async function repointProductMatchCandidatesTx(
   tx: DrizzleTransaction,
   keepId: ProductId,
   loserIds: readonly ProductId[],
-): Promise<void> {
-  if (loserIds.length === 0) return;
-  const losers = new Set<string>(loserIds);
-  const moved = await tx
-    .delete(productMatchCandidate)
+) {
+  if (!loserIds.length) return;
+  const rows = await tx
+    .select()
+    .from(assessmentState)
     .where(
-      or(
-        inArray(productMatchCandidate.productAId, [...loserIds]),
-        inArray(productMatchCandidate.productBId, [...loserIds]),
+      and(
+        eq(assessmentState.family, "product_pair"),
+        eq(assessmentState.active, true),
+        or(
+          inArray(assessmentState.recordId, [...loserIds]),
+          inArray(sql`${assessmentState.data}->>'otherId'`, [...loserIds]),
+        ),
       ),
-    )
-    .returning();
-  const survivorOf = (id: ProductId): ProductId =>
-    losers.has(id) ? keepId : id;
-  for (const row of moved) {
-    const a = survivorOf(row.productAId);
-    const b = survivorOf(row.productBId);
-    if (a === b) continue;
-    const existing = productMatchCandidate;
-    await tx
-      .insert(productMatchCandidate)
-      .values({
-        ...canonicalProductPair(a, b),
-        source: row.source,
-        state: row.state,
-        evidence: row.evidence,
-        sourceUrls: row.sourceUrls,
-        createdAt: row.createdAt,
-      })
-      .onConflictDoUpdate({
-        target: [
-          productMatchCandidate.productAId,
-          productMatchCandidate.productBId,
-        ],
-        set: {
-          state: sql`CASE WHEN ${existing.state} = 'dismissed' OR excluded."state" = 'dismissed' THEN 'dismissed' ELSE 'open' END`,
-          source: sql`CASE WHEN ${existing.source} = 'agent' OR excluded."source" = 'agent' THEN 'agent' ELSE 'detector' END`,
-          evidence: sql`CASE WHEN ${existing.source} = 'agent' THEN COALESCE(${existing.evidence}, excluded."evidence") ELSE COALESCE(excluded."evidence", ${existing.evidence}) END`,
-          sourceUrls: sql`ARRAY(SELECT DISTINCT unnest(${existing.sourceUrls} || excluded."sourceUrls"))`,
-          updatedAt: new Date(),
-        },
-      });
+    );
+  for (const row of rows) {
+    const data = pairProjection.parse(row.data);
+    const a = loserIds.some((id) => id === row.recordId)
+      ? keepId
+      : parseEntityId("product", row.recordId);
+    const b = loserIds.includes(data.otherId) ? keepId : data.otherId;
+    if (a === b)
+      await tx
+        .update(assessmentState)
+        .set({ active: false, status: "superseded", suppression: null })
+        .where(eq(assessmentState.id, row.id));
+    else {
+      const pair = canonicalProductPair(a, b);
+      await tx
+        .update(assessmentState)
+        .set({
+          recordId: pair.productAId,
+          data: { ...data, otherId: pair.productBId },
+          status: "superseded",
+          fingerprint: null,
+        })
+        .where(eq(assessmentState.id, row.id));
+    }
   }
 }

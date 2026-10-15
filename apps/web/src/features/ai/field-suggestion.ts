@@ -245,6 +245,8 @@ export function financeSuggestionEntityId(
 
 export interface FieldSuggestionSource {
   readonly entityId?: string;
+  /** Assessment UUID backing live inference, when the server publishes it. */
+  readonly assessmentId?: string;
   basisMode: "provided" | "suggested";
   readonly entity: ShortcodeEntity;
   /** Bare manifest field keys of `entity` being requested this call. */
@@ -261,14 +263,12 @@ export interface FieldSuggestionSource {
 export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
   applyFinanceCategorySuggestion?: typeof ai.applyFinanceCategorySuggestion;
-  recordFieldSuggestionMiss?: typeof ai.recordFieldSuggestionMiss;
 }
 
 export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
   {
     suggestFields: ai.suggestFields,
     applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
-    recordFieldSuggestionMiss: ai.recordFieldSuggestionMiss,
   };
 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially

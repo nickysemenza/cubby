@@ -6,14 +6,13 @@ import { emailClassificationObservationInput } from "@cubby/schemas/email-observ
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
+import { listFeedbackByKind } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
   emailAccuracyEvaluation,
-  emailAccuracyGrade,
-  emailClassificationLabel,
   emailClassificationObservation,
   email as emailTable,
   user,
@@ -470,9 +469,22 @@ describe("member-owned blind Email accuracy", () => {
     expect(report.warnings).toContain(
       "Binary metrics are conditional on determinate predictions and reviewed labels; excluded items do not establish total-population recall.",
     );
+    const grades = await listFeedbackByKind(ctx.db, "email_accuracy");
+    expect(grades).toHaveLength(4);
     expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
-    ).toHaveLength(3);
+      grades.every(
+        (event) =>
+          event.authority === "evaluation" && event.intent === "history",
+      ),
+    ).toBe(true);
+    expect(
+      grades.filter(
+        (event) =>
+          event.correction.present &&
+          (event.correction.value === "related" ||
+            event.correction.value === "unrelated"),
+      ),
+    ).toHaveLength(2);
   });
 
   it("replays an exact grade once, refuses conflicting grades or foreign selectors, and leaves routing untouched", async () => {
@@ -522,12 +534,13 @@ describe("member-owned blind Email accuracy", () => {
     await expect(
       gradeEmailAccuracyItem(ctx.db, input, otherActor),
     ).rejects.toThrow(/member/);
-    expect(await getDb(ctx.db).select().from(emailAccuracyGrade)).toHaveLength(
-      1,
-    );
-    expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
-    ).toHaveLength(1);
+    const grades = await listFeedbackByKind(ctx.db, "email_accuracy");
+    expect(grades).toHaveLength(1);
+    expect(grades[0]).toMatchObject({
+      authority: "evaluation",
+      intent: "history",
+    });
+    expect(grades[0]?.correction).toEqual({ present: true, value: "related" });
     const [email] = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -616,7 +629,12 @@ describe("member-owned blind Email accuracy", () => {
       ownershipChanged: 1,
     });
     expect(
-      await getDb(ctx.db).select().from(emailClassificationLabel),
+      (await listFeedbackByKind(ctx.db, "email_accuracy")).filter(
+        (event) =>
+          event.correction.present &&
+          (event.correction.value === "related" ||
+            event.correction.value === "unrelated"),
+      ),
     ).toHaveLength(0);
   });
 

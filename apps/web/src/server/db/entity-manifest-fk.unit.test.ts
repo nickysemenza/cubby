@@ -61,6 +61,8 @@ for (const entity of entities) {
 // internal edges (session -> user, oauth_refresh_token -> oauth_client, etc.)
 // all need an entry here as well, since none of them are app-domain entities.
 const NON_ENTITY_FK_TARGETS = {
+  Assessment:
+    "immutable typed judgment history shared by current projections and Feedback",
   AiEvaluation:
     "durable per-target inference and publication bookkeeping owned by a Run",
   // Durable identity (ADR 0006): every payload binds to its own row, and an
@@ -96,8 +98,6 @@ const NON_ENTITY_FK_TARGETS = {
   AiUsage: "append-only model accounting, not a domain entity",
   EmailClassificationObservation:
     "immutable Email prediction evidence, not a domain entity",
-  EmailClassificationLabel:
-    "member review of a prediction, not a domain entity",
   EmailAccuracyEvaluation:
     "frozen prediction evaluation roster, not a domain entity",
   ImportPreparedOrder:
@@ -210,11 +210,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "the Vendor named during import preparation; the committed Purchase carries the navigable Vendor edge",
   },
-  "OrderMailCandidateDecision.purchaseId": {
-    classification: "metadata",
-    reason:
-      "a reviewed mail candidate is surfaced in the Purchase mail timeline",
-  },
   // Caller attribution. AuditLog and AiUsage are append-only telemetry, not
   // entities, so the device/run they name is recorded provenance, not a
   // navigable relationship.
@@ -238,7 +233,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "the native install that registered for pushes",
   },
-  "Suggestion.runId": {
+  "AssessmentState.runId": {
     classification: "metadata",
     reason: "records the Sweep or suggestion Run that computed a Suggestion",
   },
@@ -388,10 +383,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records which submissions scheduled or retried an Image job",
   },
-  "ImageDescriptionCorrection.imageId": {
-    classification: "metadata",
-    reason: "a user-confirmed description is owned by the image it describes",
-  },
   "PurchasePaymentEvidence.purchaseId": {
     classification: "metadata",
     reason: "payment matching evidence owned by a purchase",
@@ -407,14 +398,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "ProductConversionCoverage.productId": {
     classification: "ownership",
     reason: "derived conversion-coverage state owned by the product",
-  },
-  "ProductMatchCandidate.productAId": {
-    classification: "metadata",
-    reason: "review queue state for a candidate same-item pair",
-  },
-  "ProductMatchCandidate.productBId": {
-    classification: "metadata",
-    reason: "review queue state for a candidate same-item pair",
   },
   "ExternalSource.vendorId": {
     classification: "metadata",

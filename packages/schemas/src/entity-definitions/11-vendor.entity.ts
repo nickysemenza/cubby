@@ -991,11 +991,7 @@ export default defineEntity({
       provenance: {
         kind: "derived",
         filter: "vendorId",
-        evidence: [
-          "ImportSourceOrder",
-          "OrderMailCandidateDecision",
-          "OrderMailEvent",
-        ],
+        evidence: ["ImportSourceOrder", "AssessmentState", "OrderMailEvent"],
       },
     },
     {

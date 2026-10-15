@@ -44,14 +44,6 @@ export const emailClassificationObservationInput = z
     conflict: emailClassificationConflict.nullable().default(null),
   })
   .strict();
-export const emailClassificationLabelInput = z
-  .object({
-    predictionId: z.uuid(),
-    classification: mailboxClassification,
-    reason: z.string(),
-    actorUserId: z.string().min(1),
-  })
-  .strict();
 export const emailRetrievalFailureInput = z
   .object({
     emailId: z.uuid(),

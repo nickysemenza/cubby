@@ -21,7 +21,7 @@ import {
   photoGroupProposal,
   runFinding,
   statementRow,
-  suggestion,
+  assessmentState as suggestion,
   vendorAccount,
 } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";

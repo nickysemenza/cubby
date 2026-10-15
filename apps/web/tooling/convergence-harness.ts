@@ -499,7 +499,7 @@ export async function convergenceProjection(
       (SELECT count(*)::int FROM "StatementRow" WHERE "accountDescriptor" = ${statementAccount} AND "deletedAt" IS NULL) AS observations,
       (SELECT count(*)::int FROM "StatementRow" s JOIN "EntityExternalId" x ON x.source = s.source AND x."externalId" = s."externalId" AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t.id = x."entityId" AND t."deletedAt" IS NULL WHERE s."accountDescriptor" = ${statementAccount} AND s."deletedAt" IS NULL) AS "matchedObservations",
       (SELECT count(*)::int FROM "OrderMail" m JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL) AS mail,
-      (SELECT count(*)::int FROM "OrderMailCandidateDecision" d JOIN "OrderMailEvent" e ON e.id = d."eventId" JOIN "OrderMail" m ON m.id = e."orderMailId" JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL AND d.decision = 'linked') AS "linkedMail"
+      (SELECT count(*)::int FROM "AssessmentEmailLink" d JOIN "OrderMailEvent" e ON e.id = d."eventId" JOIN "OrderMail" m ON m.id = e."orderMailId" JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL AND e."supersededAt" IS NULL AND d.decision = 'linked') AS "linkedMail"
   `);
   return rows[0];
 }

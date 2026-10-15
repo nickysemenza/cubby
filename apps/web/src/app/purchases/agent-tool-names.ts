@@ -16,7 +16,6 @@ const LEGACY_TOOL_ACTIONS = {
   commit_photo_group: "photo_run.commit_group",
   commit_purchase_import: "purchase_import.commit",
   confirm_purchase_merchant_vendor: "purchase_import.confirm_vendor",
-  correct_image_description: "image.correct_description",
   create_file_uploads: "image.create_uploads",
   create_recipe_from_text: "recipe_import.from_text",
   delete_statement_rows: "statement_rows.delete",

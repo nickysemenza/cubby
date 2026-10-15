@@ -9,8 +9,7 @@ import type {
   ProductMatchSide,
   productMatchSideRole,
 } from "@cubby/schemas/recommendations";
-import { isMiscProduct } from "@cubby/shared";
-import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
@@ -34,92 +33,6 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { loadInheritedProductOwners } from "~/server/repo/inventory/ownership";
-
-/*
- * Raw, hand-qualified EXISTS predicates: an interpolated column renders
- * unqualified on a single-table select, which would silently correlate these
- * subqueries against their own tables.
- */
-const HAS_LIVE_INVENTORY = sql.raw(`EXISTS (
-  SELECT 1 FROM "InventoryEntry" pm_inv
-  WHERE pm_inv."productId" = "Product"."id" AND pm_inv."deletedAt" IS NULL
-)`);
-const HAS_LIVE_PURCHASE_LINK = sql.raw(`(EXISTS (
-  SELECT 1 FROM "EntityLink" pm_pp
-  JOIN "Purchase" pm_pu ON pm_pu."id" = pm_pp."fromEntityId" AND pm_pu."deletedAt" IS NULL
-  WHERE pm_pp."toEntityId" = "Product"."id" AND pm_pp."deletedAt" IS NULL AND pm_pp."kind" = 'purchaseProduct'
-) OR EXISTS (
-  SELECT 1 FROM "Expense" pm_e
-  JOIN "Purchase" pm_pu ON pm_pu."id" = pm_e."purchaseId" AND pm_pu."deletedAt" IS NULL
-  WHERE pm_e."productId" = "Product"."id"
-    AND pm_e."deletedAt" IS NULL AND pm_e."future" = false
-    AND ${expenseAcquisitionSql("pm_e")}
-))`);
-const HAS_LIVE_EXPENSE = sql.raw(`EXISTS (
-  SELECT 1 FROM "Expense" pm_e
-  WHERE pm_e."productId" = "Product"."id" AND pm_e."deletedAt" IS NULL
-)`);
-
-export interface ProductMatchPoolEntry {
-  id: ProductId;
-  name: string;
-  rootCategoryId: string | null;
-  manufacturer: string;
-  model: string | null;
-  createdAt: Date;
-}
-
-/**
- * The two sides of the match queue. `photo`: stocked, never bought (no
- * purchase line, no spend). `purchase`: on a live purchase — with or without
- * stock, since receiving the order may already have stocked it.
- */
-export async function loadProductMatchPools(db: Database): Promise<{
-  photo: ProductMatchPoolEntry[];
-  purchase: ProductMatchPoolEntry[];
-}> {
-  const client = getDb(db);
-  const [rows, categories] = await Promise.all([
-    client
-      .select({
-        id: product.id,
-        name: product.name,
-        categoryId: product.categoryId,
-        manufacturer: product.manufacturer,
-        model: product.model,
-        createdAt: product.createdAt,
-        hasInventory: sql<boolean>`${HAS_LIVE_INVENTORY}`,
-        hasPurchase: sql<boolean>`${HAS_LIVE_PURCHASE_LINK}`,
-        hasExpense: sql<boolean>`${HAS_LIVE_EXPENSE}`,
-      })
-      .from(product)
-      .where(
-        and(
-          notDeleted(product),
-          or(sql`${HAS_LIVE_INVENTORY}`, sql`${HAS_LIVE_PURCHASE_LINK}`),
-        ),
-      ),
-    loadCategoryRoots(db),
-  ]);
-  const photo: ProductMatchPoolEntry[] = [];
-  const purchasePool: ProductMatchPoolEntry[] = [];
-  for (const row of rows) {
-    if (isMiscProduct(row.name)) continue;
-    const entry = {
-      id: row.id,
-      name: row.name,
-      rootCategoryId: row.categoryId
-        ? (categories.get(row.categoryId) ?? null)
-        : null,
-      manufacturer: row.manufacturer,
-      model: row.model,
-      createdAt: row.createdAt,
-    };
-    if (row.hasPurchase) purchasePool.push(entry);
-    else if (row.hasInventory && !row.hasExpense) photo.push(entry);
-  }
-  return { photo, purchase: purchasePool };
-}
 
 /** category id -> its top-level ancestor id (cycle- and depth-safe). */
 async function loadCategoryRoots(db: Database): Promise<Map<string, string>> {

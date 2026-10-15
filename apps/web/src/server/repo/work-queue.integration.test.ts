@@ -9,7 +9,7 @@ import type { z } from "zod";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
-import { runFinding, suggestion } from "~/server/db/schema";
+import { runFinding, assessmentState as suggestion } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createProductFixture,

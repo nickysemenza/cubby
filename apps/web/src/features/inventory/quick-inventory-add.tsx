@@ -15,7 +15,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -208,6 +208,9 @@ export function QuickInventoryAdd({
   );
 
   const [isCreating, setIsCreating] = useState(false);
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
 
   const onCreateSubmit = async (values: CreateFormValues) => {
     setIsCreating(true);
@@ -236,6 +239,11 @@ export function QuickInventoryAdd({
         },
         inventory: { locationId, placement: "stock", amount: values.amount },
       });
+      try {
+        await receiptHandler.current?.(created.product.id);
+      } catch (error) {
+        showErrorToast(error, "Created, but suggestion receipt failed");
+      }
       toast.success(
         savedWithBackgroundWork(
           created.sideEffects,
@@ -404,6 +412,7 @@ export function QuickInventoryAdd({
               <FieldSuggestionProvider
                 entity="product"
                 mode="create"
+                receiptHandler={receiptHandler}
                 fieldKeys={["categoryId"]}
               >
                 <EntityIntentFields

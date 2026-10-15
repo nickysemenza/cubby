@@ -27,7 +27,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState, type FC } from "react";
+import { useRef, useState, type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -38,6 +38,7 @@ import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -151,11 +152,21 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
   });
   const locationId = locationShortcode.safeParse(form.watch("location")).data;
   const addQuantity = form.watch("addQuantity");
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
 
   const receive = useActionMutation({
     mutationFn: inventoryOperations.receiveExpense.mutationOptions,
     success: "Received into Inventory",
-    onSuccess: onDone,
+    onSuccess: async (data) => {
+      try {
+        await receiptHandler.current?.(data.item.id);
+      } catch (error) {
+        showErrorToast(error, "Received, but suggestion receipt failed");
+      }
+      onDone();
+    },
   });
   const receiveAction = (action: InventoryReceiveExpenseInput["action"]) => {
     if (!locationId) return;
@@ -366,6 +377,7 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       <FieldSuggestionProvider
         entity="inventory"
         mode="create"
+        receiptHandler={receiptHandler}
         staticBasis={{ productId }}
         fieldKeys={["locationId"]}
         paths={{ locationId: "location" }}

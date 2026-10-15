@@ -98,7 +98,7 @@ export async function recordDiscoveryEmailReceipt(
       entity: "email",
       recordId: handled.id,
       field: null,
-      suggestionIds: [],
+      assessmentIds: [],
     },
     provenance: {
       dependencies: [],

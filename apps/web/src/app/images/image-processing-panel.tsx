@@ -21,6 +21,7 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import {
   image as imageOperations,
   imageProcessing,
+  assessment,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
@@ -277,7 +278,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   }, [id, queryClient, status.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
-    mutationFn: imageProcessing.correctDescription.mutationOptions,
+    mutationFn: assessment.review.mutationOptions,
     success: "Description correction saved",
   });
   if (image.status !== "UPLOADED") return null;
@@ -333,7 +334,17 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
         <Button
           size="sm"
           disabled={save.isPending || !correction.trim()}
-          onClick={() => save.mutate({ id, description: correction.trim() })}
+          onClick={() =>
+            save.mutate({
+              standalone: { kind: "image_description", id },
+              operationId: crypto.randomUUID(),
+              verdict: "correct",
+              correction: { present: true, value: correction.trim() },
+              intent: "apply",
+              reason: null,
+              evidence: null,
+            })
+          }
         >
           Save correction
         </Button>

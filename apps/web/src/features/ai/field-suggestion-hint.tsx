@@ -4,6 +4,8 @@ import type {
 } from "@cubby/schemas/ai";
 import type { ReactNode } from "react";
 
+import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
+
 import { stringLabelOf } from "./field-suggestion";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
 import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
@@ -62,6 +64,18 @@ export function FieldSuggestionHint({
       questionKey={questionKey}
       pending={pending}
       onApply={onApply}
+      onDismiss={async () => {
+        const assessmentId =
+          suggestion?.assessmentId ??
+          (outcome?.kind === "evaluated" ? outcome.assessmentId : undefined);
+        if (!assessmentId) throw new Error("Suggestion Assessment is missing");
+        await assessment.review.call({
+          assessmentId,
+          operationId: crypto.randomUUID(),
+          verdict: "wrong",
+          intent: "history",
+        });
+      }}
       alternative={alternative}
       outcome={outcome}
       surface={surface}

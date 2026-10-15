@@ -182,7 +182,8 @@
     "./classification-field-policy": "./src/classification-field-policy.ts",
     "./emoji": "./src/emoji.ts",
     "./email-actions": "./src/email-actions.ts",
-    "./ai-evaluation": "./src/ai-evaluation.ts"
+    "./ai-evaluation": "./src/ai-evaluation.ts",
+    "./assessment": "./src/assessment.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",

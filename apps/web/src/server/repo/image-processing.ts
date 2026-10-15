@@ -27,11 +27,11 @@ import type {
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
 import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   imageDerivative,
-  imageDescriptionCorrection,
   imageProcessingOrphan,
   imageProcessingJob,
   imageProcessingAttempt,
@@ -43,6 +43,8 @@ import {
   parseImageDescriptionInputFingerprint,
   preferredImageDescriptionPolicy,
 } from "~/server/image-processing/description-policy";
+import { publishAssessment } from "~/server/repo/assessment";
+import { readConfirmedDescription } from "~/server/repo/assessment-image";
 import {
   getDb,
   unwrapDb,
@@ -50,8 +52,8 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/repo/mail-attachment-uploads";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   generateImageKey,
@@ -1266,26 +1268,48 @@ export async function saveImageDescriptionAnalysis(
       runtime: input.runtime ?? null,
     })
     .onConflictDoNothing();
-  await refreshDirectImageOwnerSearchDocuments(db, input.imageId);
-}
-
-export async function saveImageDescriptionCorrection(
-  db: Database,
-  input: { imageId: ImageId; description: string },
-): Promise<void> {
-  await withTransaction(db, async (tx) => {
-    await tx
-      .update(imageDescriptionCorrection)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(imageDescriptionCorrection.imageId, input.imageId),
-          notDeleted(imageDescriptionCorrection),
-        ),
-      );
-    await tx.insert(imageDescriptionCorrection).values(input);
+  // The analysis identity retains the first response, including on provider retries.
+  const result = await findCachedImageDescriptionAnalysis(db, {
+    ...input,
+    promptVersion: String(input.promptRevision),
   });
-  await refreshDirectImageOwnerSearchDocuments(db, input.imageId);
+  if (!result)
+    throw new Error("Persisted image description analysis is unavailable");
+  const fingerprint = parseImageDescriptionInputFingerprint(
+    input.inputFingerprint,
+  );
+  await publishAssessment(
+    db,
+    {
+      publicationKey: `image-description:${input.imageId}:${input.inputFingerprint}:${input.provider}:${input.model}:${input.promptRevision}`,
+      family: "image_description",
+      subject: {
+        kind: "image_description",
+        entity: "image",
+        recordId: input.imageId,
+        contentHash: fingerprint?.sourceContentHash ?? null,
+      },
+      judgment: result.description,
+      producer: {
+        kind: "model",
+        model: input.model,
+        revision: String(input.promptRevision),
+        runId: null,
+        evaluationId: null,
+      },
+      fingerprint: fingerprint?.sourceContentHash ?? null,
+      evidence: z.json().parse({
+        inputFingerprint: input.inputFingerprint,
+        result,
+      }),
+    },
+    { suggestedValue: result.description },
+  );
+  await runMutationSideEffects(db, {
+    entity: { entity: "image", id: input.imageId },
+    action: "updated",
+    source: "image-description",
+  });
 }
 
 /**
@@ -1501,15 +1525,7 @@ export async function getImageProcessingReadProjection(
   }
   const preferred = analyses.findIndex(isPreferred);
   if (preferred >= 0) analyses[preferred]!.preferred = true;
-  const correction = await getDb(db).query.imageDescriptionCorrection.findFirst(
-    {
-      where: and(
-        eq(imageDescriptionCorrection.imageId, imageId),
-        notDeleted(imageDescriptionCorrection),
-      ),
-      columns: { description: true, confirmedAt: true },
-    },
-  );
+  const correction = await readConfirmedDescription(db, imageId);
   return {
     representations,
     status: {

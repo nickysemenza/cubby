@@ -12,6 +12,7 @@ import {
 import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,7 +32,7 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  orderMailCandidateDecision,
+  assessmentEmailLink as orderMailCandidateDecision,
   orderMailEvent,
   product,
   productCategory,
@@ -1227,7 +1228,7 @@ describe("caller-driven purchase import writes", () => {
     const existing = await existingServiceOrder(vendor.id);
     const mail = await retainedOrderMail(party.id, "dismissed-refund");
     const event = await historicalEvent(mail.id);
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+    await seedEmailLinkDecision(ctx.db, {
       eventId: event.id,
       purchaseId: existing.id,
       decision: "dismissed",
@@ -1273,7 +1274,7 @@ describe("caller-driven purchase import writes", () => {
     });
     const mail = await retainedOrderMail(party.id, "dismissed-order");
     const event = await historicalEvent(mail.id);
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+    await seedEmailLinkDecision(ctx.db, {
       eventId: event.id,
       purchaseId: existing.id,
       decision: "dismissed",

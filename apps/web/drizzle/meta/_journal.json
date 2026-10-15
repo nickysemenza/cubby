@@ -477,6 +477,27 @@
       "when": 1792019516481,
       "tag": "0067_inventory_ownership_explicit",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792021807131,
+      "tag": "0068_shared_assessment_expansion",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792021822140,
+      "tag": "0069_shared_assessment_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1792021860638,
+      "tag": "0070_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

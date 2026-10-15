@@ -1,3 +1,4 @@
+export { assessmentContract } from "./assessment.contract";
 export { chatgptContract } from "./chatgpt.contract";
 export { workQueueContract } from "./work-queue.contract";
 /**

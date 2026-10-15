@@ -97,43 +97,6 @@ export const imageProcessingChildren = [
     ],
   }),
   /** User-confirmed text remains separate from model output and backfills. */
-  defineChildTable({
-    name: "ImageDescriptionCorrection",
-    exportName: "imageDescriptionCorrection",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "imageId",
-        kind: "uuid",
-        notNull: true,
-        type: "ImageId",
-        reference: { table: "image", column: "id" },
-      },
-      { key: "description", kind: "text", notNull: true },
-      {
-        key: "confirmedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      { key: "deletedAt", kind: "timestamp" },
-    ],
-    types: [{ module: "@cubby/schemas/identifiers", exports: ["ImageId"] }],
-    indexes: [
-      { name: "ImageDescriptionCorrection_image_idx", on: ["imageId"] },
-      {
-        name: "ImageDescriptionCorrection_active_image_key",
-        unique: true,
-        on: ["imageId"],
-        where: "{deletedAt} IS NULL",
-      },
-    ],
-  }),
   /**
    * A deleted derivative's server-chosen key remains here until storage cleanup
    * observes it. A companion that PUTs after deletion therefore leaves a known,

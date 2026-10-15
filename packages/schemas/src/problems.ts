@@ -150,6 +150,17 @@ export const toolUsedOutsideOwnershipSchema = z.object({
 });
 
 export const duplicateProductIdentitySchema = z.object({
+  assessmentId: z.uuid(),
+  fingerprint: z.string().nullable(),
+  identityConflict: z.boolean(),
+  pairs: z.array(
+    z.object({
+      assessmentId: z.uuid(),
+      fingerprint: z.string().nullable(),
+      identityConflict: z.boolean(),
+      productIds: z.tuple([productShortcode, productShortcode]),
+    }),
+  ),
   manufacturer: z.string(),
   model: z.string(),
   products: z.array(

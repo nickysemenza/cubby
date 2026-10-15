@@ -20,13 +20,17 @@ import {
   run,
   image,
 } from "~/server/db/schema";
+import { ensureEmailAssessment } from "~/server/repo/assessment-email";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
+import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
+import { recordEmailClassificationObservation } from "./observations";
 import * as providers from "./provider";
 import { correctEmailRelevance } from "./relevance-correction";
 import { GmailApiError, type GmailMessage, type GmailProvider } from "./types";
@@ -146,6 +150,43 @@ describe("member-only exact original relevance correction", () => {
       },
     };
   }
+  it("applies a domain-supported relevance correction through shared review", async () => {
+    const f = await fixture();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ checksum: f.input.reviewedChecksum })
+      .where(eq(emailTable.id, f.email.id));
+    const observation = await recordEmailClassificationObservation(ctx.db, {
+      emailId: f.email.id,
+      checksum: f.input.reviewedChecksum,
+      classification: "related",
+      stage: "decision",
+      reason: "Synthetic reviewed prediction",
+      classificationVersion: "synthetic",
+      model: "typesafe/jev",
+    });
+    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    expect(
+      await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: prediction.id,
+        operationId: "synthetic-valid-relevance",
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: "uncertain" },
+      }),
+    ).toMatchObject({ applied: true });
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.id, f.email.id));
+    expect(stored).toMatchObject({
+      checksum: f.input.reviewedChecksum,
+      classification: "uncertain",
+      classificationStage: "resolution",
+    });
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.model).not.toHaveBeenCalled();
+  });
   async function configureContentFailure(
     f: Awaited<ReturnType<typeof fixture>>,
     input: Awaited<ReturnType<typeof fixture>>["input"],

@@ -25,7 +25,7 @@ import type { Database } from "~/server/db";
 import {
   expense as expenseTable,
   product as productTable,
-  suggestion as suggestionTable,
+  assessmentState as suggestionTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
@@ -119,6 +119,8 @@ export const productFixture = (
   name: string,
   input: {
     manufacturer?: string;
+    model?: ReturnType<typeof makeProductInput>["model"];
+    notes?: string;
     categoryId?: ReturnType<typeof taxonomyId>;
   } = {},
 ) =>

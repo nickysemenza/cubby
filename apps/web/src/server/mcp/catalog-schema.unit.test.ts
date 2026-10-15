@@ -563,11 +563,13 @@ describe("MCP catalog schemas", () => {
       "mail.messageId",
       "run.mailboxId",
       "run.scope.mailboxId",
-      // Field suggestions have no shortcode; their row id is the review
-      // handle. `entityId` beside an `entity` kind is that
-      // kind's shortcode, resolved by the handler.
-      "entity.id",
-      "entity.entityId",
+      // Assessment child handles and caller-generated idempotency keys do
+      // not address shortcode entities. Batch review uses the same contract.
+      "entity.assessmentId",
+      "product_enrichment.assessmentId",
+      "entity.operationId",
+      "entity.items[].assessmentId",
+      "entity.items[].operationId",
       // suggest_fields' entityId and suggestion_queue's recordIds are
       // shortcodes of the kind `entity` names, so no single prefix pattern
       // fits.

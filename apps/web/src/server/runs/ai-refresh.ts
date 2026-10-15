@@ -5,6 +5,7 @@ import {
   aiEvaluationTarget,
   aiProvenance,
   aiRefreshRunInput,
+  aiRefreshActivation,
   type AiEvaluationTarget,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
@@ -12,6 +13,7 @@ import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   parseEntityRef,
+  parseEntityId,
   runEntityId,
   userId,
 } from "@cubby/schemas/identifiers";
@@ -44,6 +46,16 @@ import {
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
 import {
+  productIdentitySnapshot,
+  evaluateProductIdentity,
+  publishProductIdentity,
+  prepareProductIdentityCatalog,
+  prepareProductIdentityPair,
+  evaluatePreparedProductIdentityPair,
+  enqueueProductIdentityPair,
+  preparedProductIdentityPair,
+} from "~/server/ai/product-identity";
+import {
   compiledRefreshManifest,
   dependencyStamps,
   fieldDependencyKeys,
@@ -53,11 +65,12 @@ import {
 import type { Database } from "~/server/db";
 import {
   aiEvaluation,
+  product,
   email,
   emailClassificationObservation,
   ledgerParty,
   run,
-  suggestion,
+  assessmentState as suggestion,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -80,6 +93,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { emailMemberClassificationSql } from "~/server/repo/email-sql";
 import { canonicalJson } from "~/server/repo/entity-source";
+import { fieldReviewIdentity } from "~/server/repo/field-assessment-review";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
 
@@ -92,6 +106,7 @@ import {
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
   suggestPorts?: SuggestFieldsPorts;
+  productIdentityPorts?: Parameters<typeof evaluateProductIdentity>[3];
   emailPorts?: Pick<
     Parameters<
       typeof import("~/server/purchase-import/gmail/ingest").ingestGmailMessages
@@ -110,6 +125,7 @@ const fieldSnapshot = z.object({
   basis: z.record(z.string(), z.string().nullable()),
 });
 const fieldResult = z.object({
+  reviewKey: z.string().nullable().optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -254,7 +270,12 @@ async function insertTarget(
     .insert(aiEvaluation)
     .values({
       runId: runEntityId.parse(runId),
-      feature: target.kind === "field" ? "field-suggestion" : "mailbox-triage",
+      feature:
+        target.kind === "field"
+          ? "field-suggestion"
+          : target.kind === "product"
+            ? "product-identity"
+            : "mailbox-triage",
       workKey,
       target,
       provenance,
@@ -316,6 +337,77 @@ async function scheduleEvaluationRun(
   });
 }
 
+async function scheduleProductIdentityDiscovery(
+  db: Database,
+  activation: z.infer<typeof aiRefreshActivation>,
+  cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
+  ports: AiRefreshPorts,
+) {
+  const scheduledRuns = new Set<string>();
+  const products = cursor.productDone
+    ? []
+    : await getDb(db)
+        .select({ id: product.id })
+        .from(product)
+        .where(
+          and(
+            notDeleted(product),
+            cursor.product
+              ? gt(product.id, parseEntityId("product", cursor.product))
+              : undefined,
+          ),
+        )
+        .orderBy(product.id)
+        .limit(EMAIL_RECLASSIFY_LIMIT);
+  for (const item of products) {
+    const prepared = await productIdentitySnapshot(db, item.id);
+    if (!prepared) continue;
+    const provenance = aiProvenance.parse({
+      dependencies: dependencyStamps(activation.manifest, ["product-identity"]),
+      inputFingerprint: prepared.fingerprint,
+      optionFingerprint: "canonical-product-pairs-v1",
+      model: null,
+    });
+    const target = aiEvaluationTarget.parse({
+      kind: "product",
+      entity: "product",
+      recordId: item.id,
+      field: null,
+      assessmentIds: [],
+    });
+    const key = await sha256Hex(JSON.stringify([item.id, provenance]));
+    const productRun = await scheduleEvaluationRun(
+      db,
+      ports.context?.actorContext ?? systemActor(),
+      {
+        purpose: "ai_refresh",
+        trigger: "scheduled",
+        status: "running",
+        clientKey: `ai-refresh:product:${key}`,
+        input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+      },
+      [{ target, provenance, snapshot: prepared.snapshot }],
+    );
+    if (productRun) scheduledRuns.add(productRun);
+  }
+  return {
+    runs: [...scheduledRuns],
+    productDone: cursor.productDone || products.length < EMAIL_RECLASSIFY_LIMIT,
+    product:
+      products.length === EMAIL_RECLASSIFY_LIMIT ? products.at(-1)!.id : null,
+  };
+}
+
+const fieldCursorFor = (
+  pending: readonly Pick<
+    typeof suggestion.$inferSelect,
+    "entity" | "recordId" | "field"
+  >[],
+) =>
+  pending.length === EMAIL_RECLASSIFY_LIMIT ? (pending.at(-1) ?? null) : null;
+const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
+  rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
+
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
 export async function discoverAiRefresh(
   db: Database,
@@ -327,7 +419,7 @@ export async function discoverAiRefresh(
   let cursor = await readAiDiscoveryCursor(db);
   if (
     cursor.revision !== activation.revision ||
-    (cursor.fieldDone && cursor.emailDone)
+    (cursor.fieldDone && cursor.emailDone && cursor.productDone)
   )
     cursor = {
       revision: activation.revision,
@@ -335,6 +427,8 @@ export async function discoverAiRefresh(
       email: null,
       fieldDone: false,
       emailDone: false,
+      productDone: false,
+      product: null,
     };
   const eligibleSuggestions = or(
     eq(suggestion.status, "pending"),
@@ -355,6 +449,8 @@ export async function discoverAiRefresh(
         .where(
           and(
             eligibleSuggestions,
+            eq(suggestion.family, "field"),
+            eq(suggestion.active, true),
             cursor.field
               ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${cursor.field.entity}, ${cursor.field.recordId}::uuid, ${cursor.field.field})`
               : undefined,
@@ -391,7 +487,7 @@ export async function discoverAiRefresh(
         entity: first.entity,
         recordId: first.recordId,
         field: first.field,
-        suggestionIds: rows.map((row) => row.id),
+        assessmentIds: rows.map((row) => row.id),
       });
       if (target.kind !== "field") continue;
       const prepared = await prepareField(db, target, ports);
@@ -552,7 +648,7 @@ export async function discoverAiRefresh(
               entity: "email",
               recordId: item.id,
               field: null,
-              suggestionIds: [],
+              assessmentIds: [],
             }),
             provenance: aiProvenance.parse({
               dependencies,
@@ -606,24 +702,22 @@ export async function discoverAiRefresh(
         });
       }
     }
-  const lastField = pending.at(-1);
+  const productDiscovery = await scheduleProductIdentityDiscovery(
+    db,
+    activation,
+    cursor,
+    ports,
+  );
+  for (const productRun of productDiscovery.runs) runs.add(productRun);
   await saveAiDiscoveryCursor(db, {
     revision: activation.revision,
+    productDone: productDiscovery.productDone,
+    product: productDiscovery.product,
     fieldDone: cursor.fieldDone || pending.length < EMAIL_RECLASSIFY_LIMIT,
     emailDone:
       cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2,
-    field:
-      pending.length === EMAIL_RECLASSIFY_LIMIT && lastField
-        ? {
-            entity: lastField.entity,
-            recordId: lastField.recordId,
-            field: lastField.field,
-          }
-        : null,
-    email:
-      candidates.length === EMAIL_RECLASSIFY_LIMIT * 2
-        ? candidates.at(-1)!.item.id
-        : null,
+    field: fieldCursorFor(pending),
+    email: emailCursorFor(candidates),
   });
   return [...runs];
 }
@@ -659,6 +753,109 @@ export async function executeAiRefreshTarget(
       await refreshEmailEvaluation(db, claimed, ports.emailPorts);
       return true;
     }
+    if (target.kind === "product_pair") {
+      const prepared = preparedProductIdentityPair.parse(claimed.snapshot);
+      const current = await prepareProductIdentityPair(db, [
+        parseEntityId("product", target.recordId),
+        parseEntityId("product", target.otherId),
+      ]);
+      if (
+        !current ||
+        current.fingerprint !== claimed.provenance.inputFingerprint
+      )
+        throw new Error("Product pair evidence changed during inference");
+      const result = await evaluatePreparedProductIdentityPair(
+        db,
+        prepared,
+        claimed.runId,
+        {
+          ...ports.productIdentityPorts,
+          model: claimed.provenance.model,
+          evaluationId: id,
+          provenance: claimed.provenance,
+        },
+      );
+      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+        const latest = await prepareProductIdentityPair(
+          transactionDb,
+          prepared.productIds,
+        );
+        if (!latest || latest.fingerprint !== prepared.fingerprint)
+          throw new Error("Product pair evidence changed during inference");
+        await publishProductIdentity(transactionDb, { pairs: [result] });
+        return {
+          pair: prepared.productIds,
+          fingerprint: prepared.fingerprint,
+          model: result.producer.model,
+          actionable: result.actionable,
+          conflict: result.conflict,
+        };
+      });
+      return true;
+    }
+    if (target.kind === "product") {
+      const productId = parseEntityId("product", target.recordId);
+      const source = await productIdentitySnapshot(db, productId);
+      if (!source || source.fingerprint !== claimed.provenance.inputFingerprint)
+        throw new Error("AI evaluation target changed during inference");
+      const prepared = await prepareProductIdentityCatalog(db, productId);
+      const exactResults = new Map<
+        string,
+        Awaited<ReturnType<typeof evaluatePreparedProductIdentityPair>>
+      >();
+      for (const pair of prepared.pairs)
+        if (pair.exact) {
+          exactResults.set(
+            pair.fingerprint,
+            await evaluatePreparedProductIdentityPair(db, pair, claimed.runId, {
+              ...ports.productIdentityPorts,
+              model: claimed.provenance.model,
+              evaluationId: id,
+              provenance: claimed.provenance,
+            }),
+          );
+        }
+      await publishAiEvaluation(db, id, token, async (transactionDb) => {
+        const latest = await productIdentitySnapshot(transactionDb, productId);
+        if (!latest || latest.fingerprint !== source.fingerprint)
+          throw new Error("Product identity evidence changed during inference");
+        let rulePairs = 0,
+          requestedPairs = 0;
+        for (const pair of prepared.pairs) {
+          const current = await prepareProductIdentityPair(
+            transactionDb,
+            pair.productIds,
+          );
+          if (!current || current.fingerprint !== pair.fingerprint)
+            throw new Error("Product pair evidence changed during inference");
+          if (pair.exact) {
+            const result = exactResults.get(pair.fingerprint);
+            if (!result)
+              throw new Error(
+                "Prepared exact Product identity result is missing",
+              );
+            await publishProductIdentity(transactionDb, { pairs: [result] });
+            rulePairs++;
+          } else {
+            await enqueueProductIdentityPair(
+              transactionDb,
+              pair.productIds,
+              claimed.runId,
+              claimed.provenance,
+            );
+            requestedPairs++;
+          }
+        }
+        return {
+          eligible: prepared.eligible,
+          excluded: !prepared.eligible ? "misc_or_deleted" : null,
+          rulePairs,
+          requestedPairs,
+          catalogEnumeration: true,
+        };
+      });
+      return true;
+    }
     const prepared = await prepareField(db, target, ports);
     if (
       !prepared ||
@@ -670,7 +867,7 @@ export async function executeAiRefreshTarget(
     const previous = await getDb(db)
       .select()
       .from(suggestion)
-      .where(inArray(suggestion.id, target.suggestionIds));
+      .where(inArray(suggestion.id, target.assessmentIds));
     if (previous.some((row) => !["pending", "superseded"].includes(row.status)))
       throw new Error("AI evaluation member decision is obsolete");
     let result = fieldResult.safeParse(claimed.result);
@@ -693,7 +890,21 @@ export async function executeAiRefreshTarget(
         ...prepared.provenance,
         model: evaluated.inputs[0]?.model ?? snapshot.decisionModel,
       };
-      result = fieldResult.safeParse({ output: evaluated.result, provenance });
+      const reviewKey = await fieldReviewIdentity({
+        entity: snapshot.entity,
+        recordId: target.recordId,
+        field: snapshot.field,
+        currentValue: snapshot.currentValue,
+        proposal: evaluated.result.suggestions[snapshot.field],
+        model: provenance.model,
+        inputs: evaluated.inputs,
+        dependencies: provenance.dependencies,
+      });
+      result = fieldResult.safeParse({
+        output: evaluated.result,
+        provenance,
+        reviewKey,
+      });
       if (!result.success) throw result.error;
       const [saved] = await getDb(db)
         .update(aiEvaluation)
@@ -739,7 +950,7 @@ export async function executeAiRefreshTarget(
           recordId: target.recordId,
           currentValue: snapshot.currentValue,
           fieldDecisionId: snapshot.fieldDecisionId,
-          predecessorIds: target.suggestionIds,
+          predecessorIds: target.assessmentIds,
           evaluationId: id,
           provenance: saved.provenance,
         },
@@ -747,6 +958,7 @@ export async function executeAiRefreshTarget(
           ? [
               {
                 ...entry,
+                reviewKey: saved.reviewKey,
                 model: saved.provenance.model ?? entry.model,
                 status:
                   saved.provenance.model &&

@@ -12,7 +12,7 @@ const capturedInput = z.object({
   model: z.string(),
   fingerprint: z.string(),
 });
-type CapturedInput = z.infer<typeof capturedInput>;
+export type CapturedInput = z.infer<typeof capturedInput>;
 const scope = new AsyncLocalStorage<{
   prepareOnly: boolean;
   inputs: CapturedInput[];
