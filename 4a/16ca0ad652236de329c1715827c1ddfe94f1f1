@@ -1,0 +1,171 @@
+apps/web-worker-tests/vitest.config.ts
+  s_2a22d2c73c07e5::t_e85ab686b0d4c3 57
+apps/web/src/cf-server.ts
+  s_2a22d2c73c07e5::t_261110f4193b46 859
+apps/web/src/features/ai/server-functions/ai-smoke.ts
+  s_2a22d2c73c07e5::t_b5e5ef87a312f2 25
+apps/web/src/server/db/computed/location-ai-description.ts
+  s_2a22d2c73c07e5::t_b8bdd0c77fc8f6 1-35
+apps/web/src/server/db/computed/product-classification-evidence.integration.test.ts
+  s_2a22d2c73c07e5::t_6944db69d43b46 21
+apps/web/src/server/db/helpers/query.ts
+  s_2a22d2c73c07e5::t_33d6c8656439c5 44
+apps/web/src/server/db/helpers/relations.ts
+  s_2a22d2c73c07e5::t_c73025fcfee35d 43-47,51-52
+apps/web/src/server/domains/expense/repo/analytics.ts
+  s_2a22d2c73c07e5::t_d8c81c07ad2aa4 17,42
+apps/web/src/server/domains/expense/repo/analyze.ts
+  s_2a22d2c73c07e5::t_71f3f03b5baa71 48
+apps/web/src/server/domains/expense/repo/expense-derived-read.ts
+  s_2a22d2c73c07e5::t_86c3f7e6e0c936 10
+apps/web/src/server/domains/expense/repo/expense-inheritance.ts
+  s_2a22d2c73c07e5::t_7d092eaa2e6644 23
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_2a22d2c73c07e5::t_844271e49bb014 56-58
+apps/web/src/server/domains/image/repo/entity-image-sync.ts
+  s_2a22d2c73c07e5::t_d894632b35b85b 1-89
+apps/web/src/server/domains/ingredient/repo/internal-types.ts
+  s_2a22d2c73c07e5::t_112cebb525b15a 33
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_2a22d2c73c07e5::t_83f800946cc403 56-57
+apps/web/src/server/domains/inventory/repo/bulk.ts
+  s_2a22d2c73c07e5::t_1bfed4d56795f6 47
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_2a22d2c73c07e5::t_9e7510328571d3 54,115
+apps/web/src/server/domains/inventory/repo/ownership.ts
+  s_2a22d2c73c07e5::t_d103b49135e815 35
+apps/web/src/server/domains/inventory/repo/scan.ts
+  s_2a22d2c73c07e5::t_7426701f8df825 27
+apps/web/src/server/domains/inventory/repo/stock-tracking.ts
+  s_2a22d2c73c07e5::t_93918036591c5f 12
+apps/web/src/server/domains/location/repo/ai-description.ts
+  s_2a22d2c73c07e5::t_fc561cad2f8400 1,3,5
+apps/web/src/server/domains/location/repo/crud.ts
+  s_2a22d2c73c07e5::t_c659bbca1da13b 61-63,74,111
+apps/web/src/server/domains/location/repo/lookup.ts
+  s_2a22d2c73c07e5::t_dca251aaefe5ee 33-34
+apps/web/src/server/domains/location/repo/stock-items.ts
+  s_2a22d2c73c07e5::t_f30163268bc3f8 10
+apps/web/src/server/domains/location/repo/tree.ts
+  s_2a22d2c73c07e5::t_42ff735321ced8 38,40,43-45
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_2a22d2c73c07e5::t_cd28202b36e266 32-34
+apps/web/src/server/domains/product-category/repo/product-category-feature-query.integration.test.ts
+  s_2a22d2c73c07e5::t_1a8bbd59e26863 13
+apps/web/src/server/domains/product-category/repo/product-category.integration.test.ts
+  s_2a22d2c73c07e5::t_d7f1be7804d519 29
+apps/web/src/server/domains/product-category/repo/product-category.ts
+  s_2a22d2c73c07e5::t_a8ac5634932724 67
+apps/web/src/server/domains/product/repo/analytics.ts
+  s_2a22d2c73c07e5::t_d0c07fa1e0bd6e 14
+apps/web/src/server/domains/product/repo/book-title-match.ts
+  s_2a22d2c73c07e5::t_3ea4a0d646bb06 7
+apps/web/src/server/domains/product/repo/crud.ts
+  s_2a22d2c73c07e5::t_45b97a98b4ee20 111,134-135,180
+apps/web/src/server/domains/product/repo/lookup.ts
+  s_2a22d2c73c07e5::t_1dab8fd39cb85e 27,30
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_2a22d2c73c07e5::t_7f5feb07e3dc01 43
+apps/web/src/server/domains/product/repo/match/product-match.ts
+  s_2a22d2c73c07e5::t_4770dcb84d6749 33
+apps/web/src/server/domains/product/repo/types.ts
+  s_2a22d2c73c07e5::t_029e8a5a7e08e0 17
+apps/web/src/server/domains/project/repo/analytics.ts
+  s_2a22d2c73c07e5::t_9da0f0f697b35a 20-22
+apps/web/src/server/domains/project/repo/crud.ts
+  s_2a22d2c73c07e5::t_138511932eeae7 23-25
+apps/web/src/server/domains/project/repo/portfolio-analytics.ts
+  s_2a22d2c73c07e5::t_8ff26141aea776 36
+apps/web/src/server/domains/project/repo/tool-gallery.ts
+  s_2a22d2c73c07e5::t_b98b41dda1494e 22
+apps/web/src/server/domains/project/repo/tool-matrix.ts
+  s_2a22d2c73c07e5::t_5212186903697e 82
+apps/web/src/server/domains/project/repo/tool-trades.ts
+  s_2a22d2c73c07e5::t_a042dd0660092d 9
+apps/web/src/server/domains/project/repo/tools.ts
+  s_2a22d2c73c07e5::t_4ec014b59c75e6 67
+apps/web/src/server/domains/purchase/repo/purchase-products.ts
+  s_2a22d2c73c07e5::t_19bf49f8c548dc 32
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_2a22d2c73c07e5::t_c4e2491d592daf 76-78
+apps/web/src/server/domains/recipe/repo/update-helpers.ts
+  s_2a22d2c73c07e5::t_227590060bd00f 28-30
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_2a22d2c73c07e5::t_e481e62aebbbb8 50
+apps/web/src/server/domains/spending-category/repo/classification-field-policy.ts
+  s_2a22d2c73c07e5::t_c26eb299fc00ca 19
+apps/web/src/server/domains/task/repo/crud.ts
+  s_2a22d2c73c07e5::t_b74ff1ac4ab8c6 37-43
+apps/web/src/server/entity-kernel/list-read.ts
+  s_2a22d2c73c07e5::t_cf66d9b94cb2fb 18
+apps/web/src/server/entity-kernel/repo/relation-preflight.ts
+  s_2a22d2c73c07e5::t_1bcd0cc9f6cb52 43
+apps/web/src/server/generic/collection/repo/collection.ts
+  s_2a22d2c73c07e5::t_2c74fbb6182ea6 47
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_2a22d2c73c07e5::t_bcb5d0f42a7714 6-8
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_2a22d2c73c07e5::t_7d336314b373ff 5
+apps/web/src/server/generic/embedding/repo/entity-embedding-cleanup.ts
+  s_2a22d2c73c07e5::t_b0391fc2c13f59 51
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_2a22d2c73c07e5::t_6bc0de165d76dd 44-46,51
+apps/web/src/server/generic/entity-links/repo/dependency-edges.ts
+  s_2a22d2c73c07e5::t_60e56e82476158 28-29
+apps/web/src/server/generic/entity-report/repo/location.ts
+  s_2a22d2c73c07e5::t_e67a333df8023f 12
+apps/web/src/server/generic/list/repo/filter-options.ts
+  s_2a22d2c73c07e5::t_e69686cee56093 41
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_2a22d2c73c07e5::t_c98fa9651f6e63 19
+apps/web/src/server/generic/list/repo/list.ts
+  s_2a22d2c73c07e5::t_9ac4328fabbdea 73
+apps/web/src/server/generic/problems/operations/database-freshness-durable-object.ts
+  s_2a22d2c73c07e5::t_ae2c1e87dfd875 14
+apps/web/src/server/generic/problems/operations/database-freshness-durable-object.workers.test.ts
+  s_2a22d2c73c07e5::t_48e987a3cb01ac 8
+apps/web/src/server/generic/problems/repo/detectors-coverage.ts
+  s_2a22d2c73c07e5::t_0ab2c41f61db2c 26
+apps/web/src/server/generic/problems/repo/detectors-product.ts
+  s_2a22d2c73c07e5::t_b6da9ead938ab2 56
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_2a22d2c73c07e5::t_09caee9721ffcc 19
+apps/web/src/server/generic/suggestions/repo/field-resolution-evidence.ts
+  s_2a22d2c73c07e5::t_ba6b051cbc1e27 41
+apps/web/src/server/observability/list-read-tracing.ts
+  s_2a22d2c73c07e5::t_7d7958eec9c556 7
+apps/web/src/server/workflows/ai-smoke-run.integration.test.ts
+  s_2a22d2c73c07e5::t_1e131e962efdbc 23-25
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_2a22d2c73c07e5::t_b0d927f5598e0d 86-87
+apps/web/tooling/calendar-test-worker.ts
+  s_2a22d2c73c07e5::t_f262884633d84f 26
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_2a22d2c73c07e5::t_9536c6d37c8cc6 63
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_dcc51378bc2bcb::t_d2a5e30cd606d0 108-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4a16ca0ad652236de329c1715827c1ddfe94f1f1",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_dcc51378bc2bcb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae54d3eaa22d594bb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
