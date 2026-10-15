@@ -1,8 +1,8 @@
 import type { NutrientSummary, NutritionInfo } from "@cubby/usda";
 import { useMemo } from "react";
 
+import RTable from "../../entity/table/table";
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
-import RTable from "../../ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

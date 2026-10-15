@@ -28,7 +28,7 @@ export default defineEntity({
   names: { singular: "Inventory Item", plural: "Inventory" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/inventory",
+      module: "~/features/inventory/list-columns",
       export: "inventoryListOverride",
     },
     basePath: "inventory",

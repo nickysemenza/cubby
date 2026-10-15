@@ -1,10 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityEditDialog } from "./entity-edit-dialog";
 import { entityEditBannerIssues } from "./entity-edit-dialog-content";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 

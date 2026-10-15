@@ -9,8 +9,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 
 import {
   BulkEditDialogBody,

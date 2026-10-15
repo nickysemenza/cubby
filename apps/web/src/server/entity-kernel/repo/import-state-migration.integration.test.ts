@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { photoRunImage, runOperation } from "~/server/db/schema";
-import { startAgentRunFixture } from "~/server/domains/purchase-import/import-run.fixtures";
+import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,

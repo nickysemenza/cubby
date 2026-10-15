@@ -2,9 +2,9 @@ import { type ProductId, parseEntityId } from "@cubby/schemas/identifiers";
 import { and, not, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/product-category-sql";
 
 import { productHasAnyGtin } from "./gtin";
 

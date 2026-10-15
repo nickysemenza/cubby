@@ -45,12 +45,26 @@ import {
   useDeferredEntityRosters,
 } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
+import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
+import { Page, usePageCount } from "~/entity/page/page";
+import {
+  createCurrencyColumn,
+  createImageColumn,
+  createPlainDateColumn,
+  createSelectColumn,
+  renderOptionCell,
+} from "~/entity/table/column-helpers";
+import RTable from "~/entity/table/table";
+import {
+  useTableState,
+  type TableStateReturn,
+} from "~/entity/table/use-table-state";
 import {
   GapChipCluster,
   memberOptionsOf,
   WaitingForPill,
   waitingForLabel,
-} from "~/features/work-queue/work-queue-display";
+} from "~/entity/work-queue/work-queue-display";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
@@ -61,17 +75,9 @@ import {
 } from "~/ui/data-table/bulk-actions.types";
 import { numberCellData, textCellData } from "~/ui/data-table/cell-data";
 import {
-  createCurrencyColumn,
-  createImageColumn,
-  createPlainDateColumn,
-  createSelectColumn,
-  renderOptionCell,
-} from "~/ui/data-table/column-helpers";
-import {
   buildSelectColumn,
   reconcileRowSelection,
 } from "~/ui/data-table/row-selection";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -81,17 +87,11 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import {
-  useTableState,
-  type TableStateReturn,
-} from "~/ui/data-table/use-table-state";
-import {
   deferredFilterOptionSource,
   type RuntimeFilterOptionSource,
 } from "~/ui/hooks/filter-option-types";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { useInfiniteTableList } from "~/ui/hooks/use-infinite-table-list";
 import { type ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
-import { Page, usePageCount } from "~/ui/layout/page";
 import {
   domainForEntity,
   domainWayfinding,

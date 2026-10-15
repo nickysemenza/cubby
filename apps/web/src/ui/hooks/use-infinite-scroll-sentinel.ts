@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import type { InfiniteScrollControls } from "./use-infinite-table-list";
+import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
 
 export function useInfiniteScrollSentinel(
   controls: InfiniteScrollControls | undefined,

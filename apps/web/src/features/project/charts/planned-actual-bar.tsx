@@ -1,8 +1,8 @@
 import { formatCurrency } from "~/lib/number-format";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { HorizontalBarChart } from "~/ui/charts/kit";
 
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
-import { ChartTooltip } from "./chart-tooltip";
 
 export type PlannedActualDatum = {
   category: string;

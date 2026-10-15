@@ -10,13 +10,13 @@ import { requestedAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests"
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, run } from "~/server/db/schema";
-import { prepareReclassification } from "~/server/domains/purchase-import/gmail/reclassification-work";
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/mail-source-identity";
+import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { workflowInstanceId } from "~/server/workflows/runs/contract";
 
-import { ensureRun } from "./ensure-run";
-import { issueExecutionAuthorization } from "./execution-authorization";
+import { ensureRun } from "../repo/ensure-run";
+import { issueExecutionAuthorization } from "../repo/execution-authorization";
 
 const ctx = withTestDb();
 

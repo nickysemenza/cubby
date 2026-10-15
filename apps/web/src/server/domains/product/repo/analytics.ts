@@ -8,10 +8,10 @@ import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
 import { activeExceptionSql } from "~/server/generic/data-quality/repo/sql";
 
 import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";

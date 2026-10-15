@@ -8,7 +8,7 @@ import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,
-} from "~/server/domains/purchase-import/agent-auth";
+} from "~/server/domains/purchase-import/repo/agent-auth";
 
 import {
   createMcpTokenVerifier,

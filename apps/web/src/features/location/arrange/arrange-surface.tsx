@@ -4,8 +4,8 @@ import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { ProductImageSummariesProvider } from "~/entity/presentation/product-image-summaries";
 import { collectTreeProductIds } from "~/features/location/location-gallery-data";
-import { ProductImageSummariesProvider } from "~/features/product/product-image-summaries";
 import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

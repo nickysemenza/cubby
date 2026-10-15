@@ -3,7 +3,7 @@ import type { FoodSearchArgs } from "@cubby/usda/release";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 
 import { USDAClient } from "./usda";
 

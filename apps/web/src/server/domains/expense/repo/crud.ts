@@ -28,7 +28,6 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -42,6 +41,10 @@ import {
 } from "~/server/db/helpers";
 import { expense, product, purchase } from "~/server/db/schema";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
+import {
+  requireLineRoleClassifier,
+  type ExpenseLineRoleClassifier,
+} from "~/server/domains/expense/repo/line-role-classifier";
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
@@ -85,7 +88,6 @@ import {
   expenseInheritanceReadExtras,
   validateExpenseInheritance,
 } from "./expense-inheritance";
-import { classifyExpenseLineRole } from "./expense-line-role";
 import { loadExpenseProjectAllocations } from "./expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
 import {
@@ -920,7 +922,7 @@ export const createExpense = async (
   db: Database,
   data: ExpenseCreateInput,
   actor: ActorContext,
-  decisionPort?: DecisionPort,
+  classifyLineRole?: ExpenseLineRoleClassifier,
 ): Promise<{
   output: ExpenseOut;
   entityId: ExpenseId;
@@ -935,7 +937,7 @@ export const createExpense = async (
           lineKind: data.lineKind,
           productId: preflightProductId,
         })
-      : await classifyExpenseLineRole(db, actor, data, decisionPort);
+      : await requireLineRoleClassifier(classifyLineRole)(db, actor, data);
   const result = await withTransaction(db, async (tx) => {
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.

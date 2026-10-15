@@ -2,9 +2,9 @@ import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
 import { Link } from "@tanstack/react-router";
 
+import { AuditLogList } from "~/entity/audit-log/audit-log-list";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { AuditLogList } from "~/features/audit-log/audit-log-list";
 import { Stack } from "~/ui/layout";
 
 /**

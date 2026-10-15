@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getRunByShortcode, listRuns } from "./run";

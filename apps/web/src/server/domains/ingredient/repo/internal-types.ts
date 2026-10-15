@@ -16,6 +16,7 @@ import type { RecipeRef } from "@cubby/schemas/recipe";
 import { inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -30,7 +31,6 @@ import {
   type recipeSection,
   type recipeSectionIngredient,
 } from "~/server/db/schema";
-import type { CategoryStockTracking } from "~/server/domains/product-category/repo/product-category-sql";
 import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 import {
   dbProductToTopLevelAPI,

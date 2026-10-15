@@ -23,11 +23,8 @@ import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
-import {
-  PhotoGrid,
-  type PhotoGridImage,
-} from "../../features/image/photo-grid";
-import { PhotoViewer } from "../../features/image/photo-viewer";
+import { PhotoGrid, type PhotoGridImage } from "./photo-grid";
+import { PhotoViewer } from "./photo-viewer";
 
 const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
 

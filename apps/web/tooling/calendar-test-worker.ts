@@ -1,4 +1,4 @@
-import { CalendarFeedDurableObject } from "~/server/domains/calendar/durable-object";
+import { CalendarFeedDurableObject } from "~/server/domains/calendar/operations/durable-object";
 
 export { CalendarFeedDurableObject };
 
@@ -23,9 +23,9 @@ export default {
   },
 };
 
-export { DatabaseFreshnessDurableObject } from "~/server/db/freshness/durable-object";
+export { DatabaseFreshnessDurableObject } from "~/server/generic/problems/operations/database-freshness-durable-object";
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
-export { UsdaReleaseDurableObject } from "~/server/domains/usda-release/durable-object";
+export { UsdaReleaseDurableObject } from "~/server/domains/usda-release/operations/durable-object";
 
-export { AiGatewayEgressDurableObject } from "~/server/ai/gateway-egress-durable-object";
+export { AiGatewayEgressDurableObject } from "~/server/domains/run/operations/gateway-egress-durable-object";

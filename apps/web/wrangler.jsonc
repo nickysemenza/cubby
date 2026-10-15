@@ -107,7 +107,7 @@
       },
       // The purchase agent: one import Run's coordinator per object, named by
       // `importRunAgentIdentity`; pi-durable keeps its transcript in the
-      // object's SQLite (src/server/domains/purchase-import/agent-host.ts).
+      // object's SQLite (src/server/domains/purchase-import/operations/agent-host.ts).
       {
         "name": "PURCHASE_IMPORT_RUN",
         "class_name": "PurchaseImportRunAgent"

@@ -1750,7 +1750,7 @@ acceptance still rechecks authoritative saved inputs before writing; changed
 declared dependencies require a new question. A refused finance fingerprint
 refreshes only the affected question. Stored acceptance completes after
 its write, without awaiting unrelated list refreshes. Every field-suggestion
-surface opens the same suggestion body (`features/ai/suggestion-body.tsx`):
+surface opens the same suggestion body (`entity/suggestions/suggestion-body.tsx`):
 Accept / Reject (with "Use a different value…"), confidence as "92% · high"
 (`formatConfidence`), the runner-up and its probability, the basis fields the
 model read, and a provenance caption (model, Run, time, AI usage). Jev and Clef

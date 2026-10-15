@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, useWatch } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -12,6 +13,8 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "./financial-transaction-form";
+
+installFeatures();
 
 const suggestion = (
   vendorId: VendorShortcode,

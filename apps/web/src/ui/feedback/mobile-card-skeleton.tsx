@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import {
   MOBILE_SPEC_GRID_CLASS,
   MobileRowShell,
-} from "~/entity/components/mobile-card";
+} from "~/ui/data-table/mobile-card";
 import { Stack } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 

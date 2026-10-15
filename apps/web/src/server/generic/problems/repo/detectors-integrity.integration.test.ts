@@ -58,7 +58,7 @@ import {
 import {
   retainedMailFixture,
   sourceOrderObservationFixture,
-} from "~/server/domains/purchase-import/order-import.fixtures";
+} from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";

@@ -29,6 +29,10 @@ import type { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
+import {
+  categoryDescendantsSql,
+  categoryFeatureInSql,
+} from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
@@ -48,10 +52,6 @@ import {
 } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { locationDescendantsSql } from "~/server/domains/location/repo/descendants-sql";
-import {
-  categoryDescendantsSql,
-  categoryFeatureInSql,
-} from "~/server/domains/product-category/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -98,6 +98,11 @@ import {
 export const INVENTORY_DELETE_EDGE_POLICY =
   {} as const satisfies IncomingEdgePolicy<"inventory", OperationDisposition>;
 
+import {
+  liveProductAndLocation,
+  placementCondition,
+  stockOnly,
+} from "~/server/db/computed/inventory-placement";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";
@@ -108,11 +113,6 @@ import {
   loadInventoryOwnershipTraces,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-import {
-  liveProductAndLocation,
-  placementCondition,
-  stockOnly,
-} from "./placement";
 import {
   assertValidRawInventoryOwnership,
   inventoryOwnershipSlotCondition,

@@ -19,6 +19,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import type { FilterPatch } from "~/entity/filters";
+import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -28,7 +29,6 @@ import {
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
-import { useLoadAllPages } from "~/ui/hooks/use-all-entity-records";
 import { Button } from "~/ui/primitives/button";
 
 import {

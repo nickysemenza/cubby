@@ -1,9 +1,9 @@
 import { recommendationWorkbenchSearch } from "@cubby/schemas/recommendations";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { Page } from "~/entity/page/page";
 import { RecommendationWorkbench } from "~/features/recommendation/recommendation-workbench";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute(
   "/_authenticated/recommendations/workbench",

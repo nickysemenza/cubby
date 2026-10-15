@@ -22,8 +22,8 @@ import { readRecordField } from "~/entity/entity-references";
 import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
-} from "~/features/ai/field-suggestion";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+} from "~/entity/suggestions/field-suggestion";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import type { UnparsedError } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { FormWrapper } from "~/ui/forms/form-utils";

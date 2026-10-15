@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
+import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -11,6 +12,8 @@ import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contra
 
 import { EntityEditDialog } from "./entity-edit-dialog";
 import { createEntityMutationPort } from "./use-entity-commands";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

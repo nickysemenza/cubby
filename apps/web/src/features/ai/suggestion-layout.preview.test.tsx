@@ -24,12 +24,12 @@ import { page } from "vitest/browser";
 
 import { mock } from "~/lib/test/mock-schema";
 
-import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
-import { SuggestionReview } from "./suggestion-review";
+import { SuggestionOutcomeMark } from "../../entity/suggestions/suggestion-outcome-mark";
+import { SuggestionReview } from "../../entity/suggestions/suggestion-review";
 import {
   SuggestionStatus,
   type SuggestionStatusField,
-} from "./suggestion-status";
+} from "../../entity/suggestions/suggestion-status";
 
 const PHONE = { width: 402, height: 874 } as const;
 const DESKTOP = { width: 1440, height: 900 } as const;

@@ -36,7 +36,12 @@ import { toast } from "sonner";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { PhotoGrid } from "~/features/image/photo-grid";
+import { PhotoGrid } from "~/entity/entity-media/photo-grid";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { Picker } from "~/entity/picker/picker";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { useOptimisticDisplayValue } from "~/entity/table/editable-cell";
 import { ProductVariantEvidence } from "~/features/product/product-variant-evidence";
 import {
   RUN_TARGET_STATE_LABEL,
@@ -50,12 +55,8 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
-import { Picker } from "~/ui/combobox/picker";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { useOptimisticDisplayValue } from "~/ui/data-table/editable-cell";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { CollapsibleSection, Row, Section, Stack } from "~/ui/layout";
@@ -88,7 +89,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import {
   LIVE_RUN_STATUSES,

@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -59,20 +58,12 @@ const ROLE_ENTRY = /^(repo|service|operations)(\.[a-z0-9.-]+)?$/;
 const MAX_DIRECT_SOURCE_FILES = 40;
 const CROWDED_FOLDERS = {
   "apps/web/src/contracts": 60,
-  "apps/web/src/features/recipe": 53,
+  "apps/web/src/features/recipe": 51,
   "apps/web/src/lib": 89,
-  "apps/web/src/server/domains/product/repo": 46,
-  "apps/web/src/server/domains/purchase-import": 46,
-  "apps/web/src/ui/data-table": 74,
+  "apps/web/src/server/domains/product/repo": 43,
+  "apps/web/src/ui/data-table": 52,
   "apps/web/src/ui/primitives": 54,
 } satisfies Record<string, number>;
-
-function entityFolderNames(): string[] {
-  return readdirSync(join(repoRoot, "packages/schemas/src/entity-definitions"))
-    .map((name) => /^\d+-(.+)\.entity\.ts$/.exec(name)?.[1])
-    .filter((name): name is string => name !== undefined)
-    .map((name) => name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase());
-}
 
 describe("repository layout", () => {
   it("names TS/TSX files and folders in kebab-case", () => {
@@ -111,18 +102,15 @@ describe("repository layout", () => {
     ).toEqual([]);
   });
 
-  it("gives every entity domain folder only role entries", () => {
-    const entities = new Set(entityFolderNames());
-    expect(entities.size).toBeGreaterThan(20);
+  it("gives every domain and generic capability folder only role entries", () => {
     const offenders = tracked
-      .filter((path) => path.startsWith("apps/web/src/server/domains/"))
       .map((path) =>
-        path.slice("apps/web/src/server/domains/".length).split("/"),
+        /^apps\/web\/src\/server\/(domains|generic)\/([^/]+)\/([^/]+)/.exec(
+          path,
+        ),
       )
-      .filter(
-        ([domain, entry]) => entities.has(domain!) && !ROLE_ENTRY.test(entry!),
-      )
-      .map((parts) => parts.slice(0, 2).join("/"));
+      .filter((match) => match !== null && !ROLE_ENTRY.test(match[3]!))
+      .map((match) => `${match![1]}/${match![2]}/${match![3]}`);
     expect([...new Set(offenders)]).toEqual([]);
   });
 

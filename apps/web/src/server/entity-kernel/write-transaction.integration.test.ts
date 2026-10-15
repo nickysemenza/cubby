@@ -107,6 +107,7 @@ describe("entity kernel write transaction", () => {
     const failing = {
       ...base,
       services: {
+        ...base.services,
         recipeCosting: fromPartial<typeof base.services.recipeCosting>({
           bindTo: () =>
             fromPartial<typeof base.services.recipeCosting>({

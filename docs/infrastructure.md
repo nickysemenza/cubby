@@ -52,7 +52,7 @@ name predates `entityKind` and must remain when recreating the index.
 ### Workflow-backed Runs
 
 Mailbox discovery is a Workflow-backed Run. Its page/retention/admission
-contract lives in the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/README.md#mail-import-end-to-end).
+contract lives in the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
 Workflow instances are attempts, not the durable record; retries must resume
 persisted progress without depending on provider retention. Instance diagnostics
 expire independently of Run history. The Run's Cloudflare dashboard link requires
@@ -92,7 +92,7 @@ checked-in configuration is part of `apps/web/wrangler.jsonc`:
   `photo-inventory:<Run.id>` per run (`importRunAgentIdentity`); pi keeps the
   transcript, inbox, and tasks in the object's SQLite, and Lifecycle jobs wake
   it through its alarm after eviction;
-- the `cubby-purchase-agent` queue consumer (`server/domains/purchase-agent/queue.ts`),
+- the `cubby-purchase-agent` queue consumer (`server/domains/purchase-agent/service/queue.ts`),
   which fences duplicate and late `start_or_resume` deliveries with the Run's
   dispatch generation (`canDispatchCoordinator` / `acknowledgeCoordinator`),
   retries a transient failure, and fails the Run after three attempts;
@@ -114,15 +114,15 @@ It was a separate Worker with no database credential for that reason; it now
 runs in this Worker behind an in-process boundary enforced by construction:
 
 - The agent's code (`apps/web/src/server/domains/purchase-agent/`) receives no `env`.
-  Its host (`server/domains/purchase-import/agent-host.ts`) builds a narrowed
-  environment (`server/domains/purchase-agent/environment.ts`): the AI Gateway, the
+  Its host (`server/domains/purchase-import/operations/agent-host.ts`) builds a narrowed
+  environment (`server/domains/purchase-agent/service/environment.ts`): the AI Gateway, the
   scripted test model in the workerd harness, the purpose's MCP tool
   definitions, and the services of the one Run the object's name identifies
   (`importRunIdFromAgentIdentity`), so a coordinator cannot address another
   Run. The queue consumer gets a separate environment that resolves any Run's
   services and coordinator. The Agents SDK base class gets an empty
   environment.
-- Every Cubby effect is a Run service (`server/domains/purchase-import/agent-services.ts`):
+- Every Cubby effect is a Run service (`server/domains/purchase-import/operations/agent-services.ts`):
   bound to one Run when created, it parses its input
   (`@cubby/schemas/purchase-agent-services`), opens its own database scope,
   and resolves every target from that Run. No input names a Run, party,
@@ -163,7 +163,7 @@ linted instead of a deployment topology.
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
-`server/domains/purchase-agent/run-agent.ts` on its first event, and the queue handler
+`server/domains/purchase-agent/service/run-agent.ts` on its first event, and the queue handler
 loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/tooling/checks/check-server-closure.ts` budgets the static entry, browser
 API bootstrap, combined page path, and total output). The API bootstrap includes
@@ -176,7 +176,7 @@ an API operation or page needs.
 
 Run purposes and MCP authority are declared in
 `packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
-retirement follow the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/README.md).
+retirement follow the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md).
 The shared host records model usage in `AiUsage`; transport attribution follows
 [ChatGPT-plan usage attribution](runbooks/chatgpt-plan.md#usage-attribution).
 Model/tool content stays out of Sentry and Workers traces.

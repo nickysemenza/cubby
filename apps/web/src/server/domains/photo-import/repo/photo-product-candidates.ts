@@ -16,9 +16,7 @@ import type { ProductVariantComparison } from "@cubby/schemas/product-variant-co
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
-import type { DecisionPort } from "~/server/ai/decision-model";
 import type { AiRunContext } from "~/server/ai/run-feature";
-import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains, notDeleted } from "~/server/db/helpers";
 import {
@@ -38,11 +36,11 @@ import {
 import { loadProductInventoryEntries } from "~/server/domains/product/repo/lookup";
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
-import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/reconciliation-observations";
+import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
 import {
   ensureRun,
   aiCallRunInput,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import { traceAllBounded } from "~/server/observability/tracing";
 
 const CANDIDATE_POOL_LIMIT = 240;
@@ -298,12 +296,24 @@ export function rankPhotoProductCandidates(
     );
 }
 
+/**
+ * The color/size variant Decision between a source title and a candidate's;
+ * supplied by the caller (`decideProductVariantComparison`) so this read never
+ * calls a model itself.
+ */
+export type ProductVariantComparator = (args: {
+  firstTitle: string;
+  secondTitle: string;
+  usage: AiRunContext;
+}) => Promise<ProductVariantComparison>;
+
 /** Bounded, read-only suggestions for one review group; every choice stays human-approved. */
 export async function photoProductCandidates(
   db: Database,
   proposal: PhotoGroupProposal,
   images: readonly PhotoRunImage[] = [],
   actor: ActorContext,
+  compareVariants: ProductVariantComparator,
 ): Promise<PhotoProductCandidate[]> {
   const name =
     proposal.review?.observedName ??
@@ -335,6 +345,7 @@ export async function photoProductCandidates(
       evidenceTexts,
     },
     actor,
+    compareVariants,
   );
 }
 
@@ -350,7 +361,7 @@ export async function findPhotoProductCandidates(
     }[];
   },
   actor: ActorContext,
-  decisionPort?: DecisionPort,
+  compareVariants: ProductVariantComparator,
 ): Promise<PhotoProductCandidate[]> {
   const { name, manufacturer } = input;
   const words = [...productIdentityWords(name)];
@@ -469,7 +480,7 @@ export async function findPhotoProductCandidates(
         preliminary.map((candidate) => [
           candidate.id,
           () =>
-            decideProductVariantComparison({
+            compareVariants({
               firstTitle: sourceTitle,
               secondTitle: [
                 candidate.name,
@@ -479,7 +490,6 @@ export async function findPhotoProductCandidates(
                 .filter(Boolean)
                 .join("\n"),
               usage,
-              port: decisionPort,
             }),
         ]),
       );

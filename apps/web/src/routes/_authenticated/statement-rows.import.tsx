@@ -12,6 +12,7 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
+import { Page } from "~/entity/page/page";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { pageTitle } from "~/lib/page-title";
@@ -20,7 +21,6 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
-import { Page } from "~/ui/layout/page";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 

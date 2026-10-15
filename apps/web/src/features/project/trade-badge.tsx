@@ -4,7 +4,7 @@ import type { Trade } from "@cubby/schemas/project";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
-import { TradeIcon } from "./trade-options";
+import { TradeIcon } from "../../entity/presentation/trade-options";
 
 // Separate from the options module: the enum registry imports that module during initialization.
 export function TradeBadge({ trade }: { trade: Trade }) {

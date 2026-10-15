@@ -2,10 +2,13 @@ import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RecordsBlockView } from "./records-block";
 import { sectionActionsFor } from "./section-actions";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 

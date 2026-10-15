@@ -1,8 +1,8 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { entitySearch } from "~/entity/generated/entity-search.gen";
-import { imageListOverride } from "~/entity/list-columns/image";
 import { listPage } from "~/entity/routing/list-page";
+import { imageListOverride } from "~/features/image/list-columns";
 import { UploadImageDialog } from "~/features/image/upload-image-dialog";
 import { pageTitle } from "~/lib/page-title";
 

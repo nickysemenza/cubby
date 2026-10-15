@@ -18,8 +18,8 @@ import {
   purchase as purchaseTable,
   run,
 } from "~/server/db/schema";
-import { startAgentRunFixture } from "~/server/domains/purchase-import/import-run.fixtures";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,

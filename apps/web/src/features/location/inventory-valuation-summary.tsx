@@ -11,7 +11,7 @@ import {
   calculateInventoryValuation,
   formatPricingStatusSummary,
   type InventoryItem,
-} from "./calculate-inventory-valuation";
+} from "../../entity/presentation/calculate-inventory-valuation";
 
 type Variant = "compact" | "full";
 

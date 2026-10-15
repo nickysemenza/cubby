@@ -25,7 +25,7 @@ export default defineEntity({
   names: { singular: "Task", plural: "Tasks" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/task",
+      module: "~/features/task/list-columns",
       export: "taskListOverride",
     },
     basePath: "tasks",
@@ -937,7 +937,7 @@ export default defineEntity({
           export: "tradeSchema",
         },
         optionsRef: {
-          module: "~/features/project/trade-options",
+          module: "~/entity/presentation/trade-options",
           export: "tradeOptions",
         },
       },

@@ -1,4 +1,4 @@
-import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   isMailReclassifyRun,
   isAiRefreshMailRun,
@@ -13,7 +13,6 @@ import {
   supportedDecisionModelSchema,
   providerFor,
 } from "@cubby/shared/ai/models";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -21,53 +20,26 @@ import {
   quoteAiChatRequestUsd,
 } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { ledgerParty, run } from "~/server/db/schema";
-import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { readMailRunSources } from "~/server/domains/purchase-import/mail-run-membership";
-import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/mail-source-identity";
 
 import {
   assertExecutionAuthorization,
   reserveExecutionAuthorization,
   ExecutionBudgetError,
-} from "./execution-authorization";
-import { executionRequestForRun, pauseExecutionRun } from "./execution-context";
+} from "../repo/execution-authorization";
+import {
+  executionRequestForRun,
+  pauseExecutionRun,
+} from "../repo/execution-context";
+import {
+  assertSelectedMailSources,
+  readLiveRunOwner,
+  readMailImportLineage,
+  type RunExecutionIdentity,
+} from "../repo/execution-lineage";
 
 const decisionQuestions = z.object({
   questions: z.record(z.string(), z.unknown()),
 });
-
-async function assertSelectedMailSources(
-  db: Database,
-  runId: RunId,
-  ledgerPartyId: LedgerPartyId,
-): Promise<void> {
-  const sources = await readMailRunSources(getDb(db), runId);
-  const originals = await readRetainedMail(db, {
-    ledgerPartyIds: [ledgerPartyId],
-    orderMailIds: sources.map((source) => source.orderMailId),
-  });
-  for (const source of sources) {
-    const original = originals.find((item) => item.id === source.orderMailId);
-    if (
-      !source.owned ||
-      !source.unchanged ||
-      source.email.ledgerPartyId !== ledgerPartyId ||
-      source.email.deletedAt ||
-      ["excluded", "deleted"].includes(source.email.status) ||
-      !original ||
-      original.rawChecksum !== source.checksum
-    )
-      throw new Error("Selected Email source evidence or ownership changed.");
-    await assertMailSourceIdentityReady(getDb(db), original);
-  }
-}
-
-type RunExecutionIdentity = Pick<
-  typeof run.$inferSelect,
-  "status" | "retiredAt" | "actorUserId" | "ledgerPartyId"
->;
 
 function runningOwnerMatches(
   live: RunExecutionIdentity | undefined,
@@ -88,35 +60,7 @@ async function selectedLunaExecution(
 ): Promise<boolean> {
   const body = await request.query();
   if (request.endpoint === "responses" && body.model === "gpt-6-luna") {
-    const readLineage = (id: RunId) =>
-      getDb(db)
-        .select({
-          actorUserId: run.actorUserId,
-          ledgerPartyId: run.ledgerPartyId,
-          status: run.status,
-          retiredAt: run.retiredAt,
-          purpose: run.purpose,
-          trigger: run.trigger,
-          cause: run.cause,
-          parentRunId: run.parentRunId,
-          predecessorRunId: run.predecessorRunId,
-          input: run.input,
-        })
-        .from(run)
-        .innerJoin(
-          ledgerParty,
-          and(
-            eq(ledgerParty.id, run.ledgerPartyId),
-            eq(ledgerParty.userId, run.actorUserId),
-            eq(ledgerParty.kind, "member"),
-            notDeleted(ledgerParty),
-          ),
-        )
-        .where(
-          and(eq(run.id, id), eq(run.purpose, "mail_import"), notDeleted(run)),
-        )
-        .limit(1);
-    const [selected] = await readLineage(runId);
+    const selected = await readMailImportLineage(db, runId);
     if (!selected?.ledgerPartyId) return false;
     if (!runningOwnerMatches(selected, selected))
       throw new Error("Selected Email Run is no longer executable.");
@@ -136,7 +80,10 @@ async function selectedLunaExecution(
       }
       if (visited.has(current.predecessorRunId)) return false;
       visited.add(current.predecessorRunId);
-      const [predecessor] = await readLineage(current.predecessorRunId);
+      const predecessor = await readMailImportLineage(
+        db,
+        current.predecessorRunId,
+      );
       if (!predecessor) return false;
       const previousInput = mailResearchRunInput.safeParse(predecessor.input);
       // A retry inherits only its owning member's exact frozen source subset.
@@ -156,7 +103,7 @@ async function selectedLunaExecution(
       current = predecessor;
     }
     await assertSelectedMailSources(db, runId, selected.ledgerPartyId);
-    const [live] = await readLineage(runId);
+    const live = await readMailImportLineage(db, runId);
     if (!runningOwnerMatches(live, selected))
       throw new Error("Selected Email Run is no longer executable.");
     return true;
@@ -181,18 +128,7 @@ export function paidResearchPreflight(
     }
     await assertExecutionAuthorization(db, authority);
     const assertCurrentRun = async () => {
-      const [current] = await getDb(db)
-        .select({
-          status: run.status,
-          purpose: run.purpose,
-          retiredAt: run.retiredAt,
-          input: run.input,
-          actorUserId: run.actorUserId,
-          ledgerPartyId: run.ledgerPartyId,
-        })
-        .from(run)
-        .where(and(eq(run.id, runId), notDeleted(run)))
-        .limit(1);
+      const current = await readLiveRunOwner(db, runId);
       const binding = await executionRequestForRun(db, runId, {
         requireRunning: true,
       });

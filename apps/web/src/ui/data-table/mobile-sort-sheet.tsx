@@ -11,7 +11,7 @@ import type {
   CubbyColumn as Column,
   CubbyTable as ITable,
 } from "./table-features";
-import { mobileColumnLabel } from "./use-mobile-list-model";
+import { mobileColumnLabel } from "./table-meta";
 
 /** The columns a phone may sort by — the same set the desktop headers expose. */
 export function sortableColumns<TItem extends RowData>(

@@ -8,9 +8,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import { typeSupportsQrCode } from "~/features/location/location-type-theme";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { typeSupportsQrCode } from "~/entity/presentation/location-type-theme";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {

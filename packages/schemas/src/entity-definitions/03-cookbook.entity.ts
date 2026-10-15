@@ -9,7 +9,7 @@ export default defineEntity({
   names: { singular: "Cookbook", plural: "Cookbooks" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/cookbook",
+      module: "~/features/cookbook/list-columns",
       export: "cookbookListOverride",
     },
     basePath: "cookbooks",

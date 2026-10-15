@@ -4,10 +4,6 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  productIdentitySnapshot,
-  prepareProductIdentityPair,
-} from "~/server/ai/product-identity";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   assessment,
@@ -15,9 +11,13 @@ import {
   feedback,
   product,
 } from "~/server/db/schema";
-import { loadProductImageOrderFacts } from "~/server/domains/product/repo/product-match";
-import { currentProductPairPolicy } from "~/server/domains/product/repo/product-match-candidate";
-import { matchSurvivorImageOrder } from "~/server/domains/product/service/product-match-ranking";
+import {
+  productIdentitySnapshot,
+  prepareProductIdentityPair,
+} from "~/server/domains/product/repo/match/product-identity-snapshot";
+import { loadProductImageOrderFacts } from "~/server/domains/product/repo/match/product-match";
+import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
+import { matchSurvivorImageOrder } from "~/server/domains/product/repo/match/product-match-ranking";
 import {
   type EntityKernelContext,
   executeEntity,

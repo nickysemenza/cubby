@@ -18,10 +18,10 @@ import {
   useState,
 } from "react";
 
-import { MobileCard } from "~/entity/components/mobile-card";
 import { entities } from "~/entity/entities";
 import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
+import { MobileCard } from "~/ui/data-table/mobile-card";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
@@ -34,6 +34,13 @@ import {
   useEntityPreview,
 } from "../../entity/hooks/use-entity-preview";
 import {
+  entityKindMap,
+  getSearchMatchText,
+  getSearchResultHref,
+  getSearchResultRoute,
+  SearchResultMedia,
+} from "../../entity/presentation/search-utils";
+import {
   ProductFamilyChildContent,
   productFamilyChildren,
   productFamilyHasChildren,
@@ -43,13 +50,6 @@ import {
   ProductFamilyToggle,
   useExpandedFamilies,
 } from "./product-family";
-import {
-  entityKindMap,
-  getSearchMatchText,
-  getSearchResultHref,
-  getSearchResultRoute,
-  SearchResultMedia,
-} from "./search-utils";
 
 interface SearchPageProps {
   query?: string;

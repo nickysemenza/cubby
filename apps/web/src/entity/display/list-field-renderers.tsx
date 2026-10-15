@@ -6,10 +6,14 @@ import type { SpendingCategorySummary } from "@cubby/schemas/spending-classifica
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { z } from "zod";
 
+import { featureRegistry } from "~/entity/feature-registry";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
-import { RecipeSourceLink, sourceLabel } from "~/features/recipe/recipe-source";
+import {
+  RecipeSourceLink,
+  sourceLabel,
+} from "~/entity/presentation/recipe-source";
+import { createImageColumn } from "~/entity/table/column-helpers";
 import { numberCellData } from "~/ui/data-table/cell-data";
-import { createImageColumn } from "~/ui/data-table/column-helpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -26,11 +30,8 @@ import { DataQualityValue } from "./data-quality-value";
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
 import type { ListRenderer, ListRowOf } from "./list-renderer-types";
 import { emailListRenderers } from "./list-renderers/email";
-import { financialTransactionListRenderers } from "./list-renderers/finance";
-import { locationListRenderers } from "./list-renderers/location";
 import { mealListRenderers } from "./list-renderers/meal";
 import { productListRenderers } from "./list-renderers/product";
-import { purchaseListRenderers } from "./list-renderers/purchase";
 import { recipeListRenderers } from "./list-renderers/recipe";
 
 /**
@@ -194,92 +195,105 @@ const categorySummaryRenderer = <
     );
   });
 
-export const listRendererCoverage = {
-  recipe: {
-    "recipe-source": implemented(recipeSourceRenderer),
-    ...scoredCoverage<"recipe">(),
-    "estimate-cost": implemented(recipeListRenderers["estimate-cost"]),
-    "estimate-kcal": implemented(recipeListRenderers["estimate-kcal"]),
-  },
-  product: {
-    ...scoredCoverage<"product">(),
-    "tag-links": implemented(productListRenderers["tag-links"]),
-    "usda-food-link": implemented(productListRenderers["usda-food-link"]),
-  },
-  purchase: {
-    ...scoredCoverage<"purchase">(),
-    "spending-category-summary": implemented<ListRenderer<"purchase">>(
-      (helper) => categorySummaryRenderer(helper),
-    ),
-    "vendor-cell": implemented(purchaseListRenderers["vendor-cell"]),
-    "order-link": implemented(purchaseListRenderers["order-link"]),
-    "financial-settlement": implemented(
-      purchaseListRenderers["financial-settlement"],
-    ),
-    "reconciliation-status": implemented(
-      purchaseListRenderers["reconciliation-status"],
-    ),
-  },
-  // pantry and garden entities
-  ingredient: scoredCoverage<"ingredient">(),
-  cookbook: scoredCoverage<"cookbook">(),
-  image: {
-    "data-quality": implemented<ListRenderer<"image">>((helper) =>
-      dataQualityRenderer(helper),
-    ),
-    "uploaded-image": implemented(uploadedImageRenderer),
-  },
-  location: {
-    ...scoredCoverage<"location">(),
-    "product-link": implemented(locationListRenderers["product-link"]),
-    "valuation-summary": implemented(
-      locationListRenderers["valuation-summary"],
-    ),
-  },
-  inventory: scoredCoverage<"inventory">(),
-  meal: {
-    ...scoredCoverage<"meal">(),
-    "recipe-links": implemented(mealListRenderers["recipe-links"]),
-  },
-  productCategory: scoredCoverage<"productCategory">(),
-  // finance and project entities
-  project: scoredCoverage<"project">(),
-  task: scoredCoverage<"task">(),
-  vendor: scoredCoverage<"vendor">(),
-  financialAccount: scoredCoverage<"financialAccount">(),
-  financialTransaction: {
-    ...scoredCoverage<"financialTransaction">(),
-    "possible-vendor": implemented(
-      financialTransactionListRenderers["possible-vendor"],
-    ),
-    "spending-category-summary": implemented<
-      ListRenderer<"financialTransaction">
-    >((helper) => categorySummaryRenderer(helper)),
-  },
-  expense: scoredCoverage<"expense">(),
-  wish: scoredCoverage<"wish">(),
-  plant: scoredCoverage<"plant">(),
-  planting: scoredCoverage<"planting">(),
-  gardenEntry: scoredCoverage<"gardenEntry">(),
-  ledgerParty: scoredCoverage<"ledgerParty">(),
-  ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
-  device: scoredCoverage<"device">(),
-  spendingCategory: scoredCoverage<"spendingCategory">(),
-  vendorAccount: unscoredCoverage<"vendorAccount">(),
-  email: {
-    ...scoredCoverage<"email">(),
-    "purchase-links": implemented(emailListRenderers["purchase-links"]),
-  },
-  run: scoredCoverage<"run">(),
-  imageJob: scoredCoverage<"imageJob">(),
-  "usda-food": {
-    "data-quality": implemented<
-      ClientListRenderer<ClientListRows["usda-food"]>
-    >((helper) => dataQualityRenderer(helper, false)),
-  },
-} satisfies {
-  [E in ListRendererEntity]: EntityListRendererCoverage<E>;
+const buildListRendererCoverage = () => {
+  const {
+    financialTransaction: financialTransactionListRenderers,
+    location: locationListRenderers,
+    purchase: purchaseListRenderers,
+  } = featureRegistry().listRenderers;
+  return {
+    recipe: {
+      "recipe-source": implemented(recipeSourceRenderer),
+      ...scoredCoverage<"recipe">(),
+      "estimate-cost": implemented(recipeListRenderers["estimate-cost"]),
+      "estimate-kcal": implemented(recipeListRenderers["estimate-kcal"]),
+    },
+    product: {
+      ...scoredCoverage<"product">(),
+      "tag-links": implemented(productListRenderers["tag-links"]),
+      "usda-food-link": implemented(productListRenderers["usda-food-link"]),
+    },
+    purchase: {
+      ...scoredCoverage<"purchase">(),
+      "spending-category-summary": implemented<ListRenderer<"purchase">>(
+        (helper) => categorySummaryRenderer(helper),
+      ),
+      "vendor-cell": implemented(purchaseListRenderers["vendor-cell"]),
+      "order-link": implemented(purchaseListRenderers["order-link"]),
+      "financial-settlement": implemented(
+        purchaseListRenderers["financial-settlement"],
+      ),
+      "reconciliation-status": implemented(
+        purchaseListRenderers["reconciliation-status"],
+      ),
+    },
+    // pantry and garden entities
+    ingredient: scoredCoverage<"ingredient">(),
+    cookbook: scoredCoverage<"cookbook">(),
+    image: {
+      "data-quality": implemented<ListRenderer<"image">>((helper) =>
+        dataQualityRenderer(helper),
+      ),
+      "uploaded-image": implemented(uploadedImageRenderer),
+    },
+    location: {
+      ...scoredCoverage<"location">(),
+      "product-link": implemented(locationListRenderers["product-link"]),
+      "valuation-summary": implemented(
+        locationListRenderers["valuation-summary"],
+      ),
+    },
+    inventory: scoredCoverage<"inventory">(),
+    meal: {
+      ...scoredCoverage<"meal">(),
+      "recipe-links": implemented(mealListRenderers["recipe-links"]),
+    },
+    productCategory: scoredCoverage<"productCategory">(),
+    // finance and project entities
+    project: scoredCoverage<"project">(),
+    task: scoredCoverage<"task">(),
+    vendor: scoredCoverage<"vendor">(),
+    financialAccount: scoredCoverage<"financialAccount">(),
+    financialTransaction: {
+      ...scoredCoverage<"financialTransaction">(),
+      "possible-vendor": implemented(
+        financialTransactionListRenderers["possible-vendor"],
+      ),
+      "spending-category-summary": implemented<
+        ListRenderer<"financialTransaction">
+      >((helper) => categorySummaryRenderer(helper)),
+    },
+    expense: scoredCoverage<"expense">(),
+    wish: scoredCoverage<"wish">(),
+    plant: scoredCoverage<"plant">(),
+    planting: scoredCoverage<"planting">(),
+    gardenEntry: scoredCoverage<"gardenEntry">(),
+    ledgerParty: scoredCoverage<"ledgerParty">(),
+    ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
+    device: scoredCoverage<"device">(),
+    spendingCategory: scoredCoverage<"spendingCategory">(),
+    vendorAccount: unscoredCoverage<"vendorAccount">(),
+    email: {
+      ...scoredCoverage<"email">(),
+      "purchase-links": implemented(emailListRenderers["purchase-links"]),
+    },
+    run: scoredCoverage<"run">(),
+    imageJob: scoredCoverage<"imageJob">(),
+    "usda-food": {
+      "data-quality": implemented<
+        ClientListRenderer<ClientListRows["usda-food"]>
+      >((helper) => dataQualityRenderer(helper, false)),
+    },
+  } satisfies {
+    [E in ListRendererEntity]: EntityListRendererCoverage<E>;
+  };
 };
+
+let listCoverage: ReturnType<typeof buildListRendererCoverage> | undefined;
+
+/** Every list renderer disposition; transaction, location and purchase fills come from the feature registry. */
+export const listRendererCoverage = () =>
+  (listCoverage ??= buildListRendererCoverage());
 
 /**
  * Resolves one named list renderer through a single audited erasure boundary.
@@ -291,7 +305,7 @@ export function listRendererColumns<TRecord extends object>(
   renderer: string,
   helper: CubbyColumnHelper<TRecord>,
 ): CubbyColumnCollection<TRecord> {
-  const entry = Object.entries(listRendererCoverage).find(
+  const entry = Object.entries(listRendererCoverage()).find(
     ([key]) => key === entity,
   )?.[1];
   const disposition:

@@ -1,13 +1,10 @@
 import { fieldSuggestionsInput, fieldSuggestionsOut } from "@cubby/schemas/ai";
 import {
-  aiEvaluationState,
-  suggestionSupersessionReceipt,
   aiEvaluationTarget,
   aiProvenance,
   aiRefreshRunInput,
   aiRefreshActivation,
   type AiEvaluationTarget,
-  type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
@@ -24,18 +21,6 @@ import {
 } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -46,25 +31,13 @@ import {
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
 import {
-  productIdentitySnapshot,
   evaluateProductIdentity,
   publishProductIdentity,
   prepareProductIdentityCatalog,
-  prepareProductIdentityPair,
   evaluatePreparedProductIdentityPair,
-  enqueueProductIdentityPair,
-  preparedProductIdentityPair,
 } from "~/server/ai/product-identity";
 import {
-  compiledRefreshManifest,
-  dependencyStamps,
-  fieldDependencyKeys,
-  dependenciesCurrent,
-  fieldPolicyKey,
-} from "~/server/ai/refresh-policy";
-import {
   claimAiEvaluation,
-  guardAiEvaluation,
   publishAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
@@ -72,22 +45,20 @@ import {
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
+import {
+  compiledRefreshManifest,
+  dependencyStamps,
+  fieldDependencyKeys,
+  dependenciesCurrent,
+  fieldPolicyKey,
+} from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
 import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
-import {
-  aiEvaluation,
-  product,
-  email,
-  emailClassificationObservation,
-  ledgerParty,
-  run,
-  assessmentState as suggestion,
-} from "~/server/db/schema";
-import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+  productIdentitySnapshot,
+  prepareProductIdentityPair,
+  enqueueProductIdentityPair,
+  preparedProductIdentityPair,
+} from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -97,7 +68,25 @@ import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 
-import { ensureRun, systemActor } from "./ensure-run";
+import {
+  aiRefreshRelaunchCandidates,
+  assessmentStatesById,
+  emailClassificationObservations,
+  fieldRefreshHistory,
+  hasRunnableAiEvaluation,
+  liveProductIdsAfter,
+  pendingFieldRefreshes,
+  recordAiRefreshAttemptFailure,
+  scheduleEvaluationRun,
+  uncertainEmailRefreshCandidates,
+  type FieldRefreshCursor,
+} from "../repo/ai-refresh-state";
+import {
+  guardAiEvaluationAttempt,
+  readRun,
+  storeAiEvaluationResult,
+} from "../repo/ai-work-state";
+import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
   publishSweepSuggestions,
@@ -109,12 +98,14 @@ export type AiRefreshPorts = {
   productIdentityPorts?: Parameters<typeof evaluateProductIdentity>[3];
   emailPorts?: Pick<
     Parameters<
-      typeof import("~/server/domains/purchase-import/gmail/ingest").ingestGmailMessages
+      typeof import("~/server/domains/purchase-import/service/gmail/ingest").ingestGmailMessages
     >[2],
     "triage" | "relevance" | "storage"
   >;
 };
 const log = createLogger("ai-refresh");
+const jsonSnapshot = (value: unknown) =>
+  z.json().parse(JSON.parse(JSON.stringify(value)));
 const fieldSnapshot = z.object({
   publicId: z.string(),
   entity: fieldSuggestionsInput.shape.entity,
@@ -129,8 +120,6 @@ const fieldResult = z.object({
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
-const jsonSnapshot = (value: unknown) =>
-  z.json().parse(JSON.parse(JSON.stringify(value)));
 
 function kernel(
   db: Database,
@@ -250,93 +239,6 @@ async function prepareField(
   return { snapshot, provenance, lastWrite };
 }
 
-async function insertTarget(
-  db: Database,
-  runId: string,
-  target: AiEvaluationTarget,
-  provenance: AiProvenance,
-  snapshot: unknown,
-  blockedReason?: string,
-) {
-  const workKey = await sha256Hex(
-    JSON.stringify({
-      entity: target.entity,
-      recordId: target.recordId,
-      field: target.field,
-      provenance: { ...provenance, model: null },
-    }),
-  );
-  const inserted = await getDb(db)
-    .insert(aiEvaluation)
-    .values({
-      runId: runEntityId.parse(runId),
-      feature:
-        target.kind === "field"
-          ? "field-suggestion"
-          : target.kind === "product"
-            ? "product-identity"
-            : "mailbox-triage",
-      workKey,
-      target,
-      provenance,
-      snapshot: jsonSnapshot(snapshot),
-      ...(blockedReason
-        ? {
-            state: "blocked" as const,
-            error: blockedReason,
-            receipt: { reason: "mailbox_authorization_unavailable" },
-          }
-        : {}),
-    })
-    .onConflictDoNothing()
-    .returning({ id: aiEvaluation.id });
-  return inserted.length;
-}
-
-async function scheduleEvaluationRun(
-  db: Database,
-  actor: Parameters<typeof ensureRun>[1],
-  input: Parameters<typeof ensureRun>[2],
-  targets: {
-    target: AiEvaluationTarget;
-    provenance: AiProvenance;
-    snapshot: unknown;
-    blockedReason?: string;
-  }[],
-) {
-  return withTransactionDatabase(db, async (tx) => {
-    const runId = await ensureRun(tx, actor, input);
-    // Work and its owner become visible together, before recovery can launch a Workflow.
-    await getDb(tx)
-      .select({ id: run.id })
-      .from(run)
-      .where(eq(run.id, runId))
-      .for("no key update");
-    let inserted = 0;
-    for (const item of targets)
-      inserted += await insertTarget(
-        tx,
-        runId,
-        item.target,
-        item.provenance,
-        item.snapshot,
-        item.blockedReason,
-      );
-    if (!inserted)
-      await getDb(tx)
-        .update(run)
-        .set({ status: "completed", endedAt: new Date() })
-        .where(
-          and(
-            eq(run.id, runId),
-            eq(run.status, "running"),
-            sql`NOT EXISTS (SELECT 1 FROM "AiEvaluation" WHERE "runId" = ${run.id})`,
-          ),
-        );
-    return inserted && input.status !== "completed" ? runId : null;
-  });
-}
-
 async function scheduleProductIdentityDiscovery(
   db: Database,
   activation: z.infer<typeof aiRefreshActivation>,
@@ -346,19 +248,7 @@ async function scheduleProductIdentityDiscovery(
   const scheduledRuns = new Set<string>();
   const products = cursor.productDone
     ? []
-    : await getDb(db)
-        .select({ id: product.id })
-        .from(product)
-        .where(
-          and(
-            notDeleted(product),
-            cursor.product
-              ? gt(product.id, parseEntityId("product", cursor.product))
-              : undefined,
-          ),
-        )
-        .orderBy(product.id)
-        .limit(EMAIL_RECLASSIFY_LIMIT);
+    : await liveProductIdsAfter(db, cursor.product, EMAIL_RECLASSIFY_LIMIT);
   for (const item of products) {
     const prepared = await productIdentitySnapshot(db, item.id);
     if (!prepared) continue;
@@ -398,12 +288,7 @@ async function scheduleProductIdentityDiscovery(
   };
 }
 
-const fieldCursorFor = (
-  pending: readonly Pick<
-    typeof suggestion.$inferSelect,
-    "entity" | "recordId" | "field"
-  >[],
-) =>
+const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
   pending.length === EMAIL_RECLASSIFY_LIMIT ? (pending.at(-1) ?? null) : null;
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
@@ -430,53 +315,12 @@ export async function discoverAiRefresh(
       productDone: false,
       product: null,
     };
-  const eligibleSuggestions = or(
-    eq(suggestion.status, "pending"),
-    and(
-      eq(suggestion.status, "superseded"),
-      sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
-    ),
-  );
   const pending = cursor.fieldDone
     ? []
-    : await getDb(db)
-        .selectDistinctOn([
-          suggestion.entity,
-          suggestion.recordId,
-          suggestion.field,
-        ])
-        .from(suggestion)
-        .where(
-          and(
-            eligibleSuggestions,
-            eq(suggestion.family, "field"),
-            eq(suggestion.active, true),
-            cursor.field
-              ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${cursor.field.entity}, ${cursor.field.recordId}::uuid, ${cursor.field.field})`
-              : undefined,
-          ),
-        )
-        .orderBy(
-          asc(suggestion.entity),
-          asc(suggestion.recordId),
-          asc(suggestion.field),
-          desc(suggestion.createdAt),
-        )
-        .limit(EMAIL_RECLASSIFY_LIMIT);
+    : await pendingFieldRefreshes(db, cursor.field, EMAIL_RECLASSIFY_LIMIT);
   const grouped = new Map<string, typeof pending>();
   for (const row of pending) {
-    const history = await getDb(db)
-      .select()
-      .from(suggestion)
-      .where(
-        and(
-          eq(suggestion.entity, row.entity),
-          eq(suggestion.recordId, row.recordId),
-          eq(suggestion.field, row.field),
-          eligibleSuggestions,
-        ),
-      )
-      .orderBy(desc(suggestion.createdAt));
+    const history = await fieldRefreshHistory(db, row);
     grouped.set(`${row.entity}:${row.recordId}:${row.field}`, history);
   }
   for (const rows of grouped.values()) {
@@ -545,41 +389,15 @@ export async function discoverAiRefresh(
   }
   const candidates = cursor.emailDone
     ? []
-    : await getDb(db)
-        .select({ item: email, ownerUserId: ledgerParty.userId })
-        .from(email)
-        .innerJoin(
-          ledgerParty,
-          and(eq(email.ledgerPartyId, ledgerParty.id), notDeleted(ledgerParty)),
-        )
-        .where(
-          and(
-            cursor.email ? gt(email.id, cursor.email) : undefined,
-            notDeleted(email),
-            eq(email.classification, "uncertain"),
-            notInArray(email.status, [
-              "completed",
-              "deleted",
-              "excluded",
-              "researching",
-            ]),
-            isNull(emailMemberClassificationSql()),
-          ),
-        )
-        .orderBy(asc(email.id))
-        .limit(EMAIL_RECLASSIFY_LIMIT * 2);
-  const observations = candidates.length
-    ? await getDb(db)
-        .select()
-        .from(emailClassificationObservation)
-        .where(
-          inArray(
-            emailClassificationObservation.emailId,
-            candidates.map(({ item }) => item.id),
-          ),
-        )
-        .orderBy(desc(emailClassificationObservation.createdAt))
-    : [];
+    : await uncertainEmailRefreshCandidates(
+        db,
+        cursor.email,
+        EMAIL_RECLASSIFY_LIMIT * 2,
+      );
+  const observations = await emailClassificationObservations(
+    db,
+    candidates.map(({ item }) => item.id),
+  );
   const latest = new Map<string, (typeof observations)[number]>();
   for (const observation of observations)
     if (!latest.has(observation.emailId))
@@ -612,7 +430,7 @@ export async function discoverAiRefresh(
         const first = batch[0]!;
         if (!first.ownerUserId) continue;
         const { mailboxApproval } =
-          await import("~/server/domains/purchase-import/gmail/reclassify");
+          await import("~/server/domains/purchase-import/service/gmail/reclassify");
         const owner = {
           userId: userId.parse(first.ownerUserId),
           ledgerPartyId: first.item.ledgerPartyId,
@@ -731,7 +549,7 @@ export async function executeAiRefreshTarget(
   if (!claimed?.attemptToken) return false;
   const token = claimed.attemptToken;
   try {
-    await withTransactionDatabase(db, (tx) => guardAiEvaluation(tx, id, token));
+    await guardAiEvaluationAttempt(db, id, token);
     const compiled = await compiledRefreshManifest();
     if (
       !dependenciesCurrent(
@@ -749,7 +567,7 @@ export async function executeAiRefreshTarget(
     const target = aiEvaluationTarget.parse(claimed.target);
     if (target.kind === "email") {
       const { refreshEmailEvaluation } =
-        await import("~/server/domains/purchase-import/gmail/refresh-evaluation");
+        await import("~/server/domains/purchase-import/service/gmail/refresh-evaluation");
       await refreshEmailEvaluation(db, claimed, ports.emailPorts);
       return true;
     }
@@ -864,10 +682,7 @@ export async function executeAiRefreshTarget(
     )
       throw new Error("AI evaluation target changed during inference");
     const snapshot = fieldSnapshot.parse(claimed.snapshot);
-    const previous = await getDb(db)
-      .select()
-      .from(suggestion)
-      .where(inArray(suggestion.id, target.assessmentIds));
+    const previous = await assessmentStatesById(db, target.assessmentIds);
     if (previous.some((row) => !["pending", "superseded"].includes(row.status)))
       throw new Error("AI evaluation member decision is obsolete");
     let result = fieldResult.safeParse(claimed.result);
@@ -906,18 +721,14 @@ export async function executeAiRefreshTarget(
         reviewKey,
       });
       if (!result.success) throw result.error;
-      const [saved] = await getDb(db)
-        .update(aiEvaluation)
-        .set({ state: "result_ready", result: jsonSnapshot(result.data) })
-        .where(
-          and(
-            eq(aiEvaluation.id, id),
-            eq(aiEvaluation.attemptToken, token),
-            eq(aiEvaluation.state, "running"),
-          ),
-        )
-        .returning({ id: aiEvaluation.id });
-      if (!saved) throw new Error("AI evaluation attempt is obsolete");
+      if (
+        !(await storeAiEvaluationResult(
+          db,
+          { id, attemptToken: token },
+          jsonSnapshot(result.data),
+        ))
+      )
+        throw new Error("AI evaluation attempt is obsolete");
     }
     const saved = result.data;
     await publishAiEvaluation(db, id, token, async (tx) => {
@@ -987,62 +798,20 @@ export async function executeAiRefreshTarget(
         message,
       );
     const admissionWait = message.includes("AI Gateway admission is waiting");
-    await getDb(db)
-      .update(aiEvaluation)
-      .set({
-        state: obsolete
-          ? "obsolete"
-          : !admissionWait && claimed.attempts >= 3
-            ? "failed"
-            : "retry_wait",
-        attempts: admissionWait ? claimed.attempts - 1 : claimed.attempts,
-        error: message,
-        nextAttemptAt: new Date(
-          Date.now() + 60_000 * Math.max(1, claimed.attempts),
-        ),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(aiEvaluation.id, id),
-          eq(aiEvaluation.attemptToken, token),
-          inArray(aiEvaluation.state, ["running", "result_ready"]),
-        ),
-      );
+    await recordAiRefreshAttemptFailure(db, id, token, {
+      state: obsolete
+        ? "obsolete"
+        : !admissionWait && claimed.attempts >= 3
+          ? "failed"
+          : "retry_wait",
+      attempts: admissionWait ? claimed.attempts - 1 : claimed.attempts,
+      error: message,
+      nextAttemptAt: new Date(
+        Date.now() + 60_000 * Math.max(1, claimed.attempts),
+      ),
+    });
   }
   return true;
-}
-
-export async function aiRefreshRelaunchCandidates(db: Database) {
-  const current = await readAiRefreshActivation(db);
-  return getDb(db)
-    .select({ id: run.id })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "ai_refresh"),
-        notDeleted(run),
-        or(
-          eq(run.status, "failed"),
-          and(
-            eq(run.status, "running"),
-            sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = 0`,
-          ),
-        ),
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        or(
-          and(
-            sql`${run.input}->>${aiRefreshRunInput.keyof().enum.discovery} = 'true'`,
-            current?.discoveryRunId
-              ? eq(run.id, runEntityId.parse(current.discoveryRunId))
-              : sql`false`,
-          ),
-          sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
-        ),
-      ),
-    )
-    .orderBy(asc(run.updatedAt), asc(run.id))
-    .limit(10);
 }
 
 export async function recoverAiRefresh(db: Database) {
@@ -1072,10 +841,7 @@ export async function recoverAiRefresh(db: Database) {
   const launch = async (ids: Iterable<string>) => {
     for (const id of ids) {
       try {
-        const [row] = await getDb(db)
-          .select()
-          .from(run)
-          .where(eq(run.id, runEntityId.parse(id)));
+        const row = await readRun(db, runEntityId.parse(id));
         if (
           !row ||
           (row.status === "running" &&
@@ -1085,21 +851,7 @@ export async function recoverAiRefresh(db: Database) {
             ) > 0)
         )
           continue;
-        const [runnable] = await getDb(db)
-          .select({ id: aiEvaluation.id })
-          .from(aiEvaluation)
-          .where(
-            and(
-              eq(aiEvaluation.runId, runEntityId.parse(id)),
-              inArray(aiEvaluation.state, [
-                "queued",
-                "running",
-                "result_ready",
-                "retry_wait",
-              ]),
-            ),
-          )
-          .limit(1);
+        const runnable = await hasRunnableAiEvaluation(db, id);
         if (!runnable && !aiRefreshRunInput.parse(row.input).discovery)
           continue;
         await launchWorkflowRun(db, {

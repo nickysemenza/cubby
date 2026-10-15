@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 import { actionVerbs } from "~/entity/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/entity/actions/entity-actions";
 import type { GenericDetailEntity } from "~/entity/entity-detail/detail-record";
-import { detailSlots } from "~/entity/entity-detail/detail-slots";
-import { listSlotCoverage } from "~/entity/entity-list/list-slots";
+import { featureRegistry } from "~/entity/feature-registry";
 import { detailEntities } from "~/entity/generated/entity-details.gen";
 import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
+import { installFeatures } from "~/features/registry";
 
 import {
   detailFieldRenderersFor,
@@ -16,6 +16,9 @@ import {
 } from "./display/detail-field-renderers";
 import { listRendererCoverage } from "./display/list-field-renderers";
 import { controlRendererCoverage } from "./editing/entity-primitive-fields";
+
+installFeatures();
+const { detailSlots, listSlots: listSlotCoverage } = featureRegistry();
 
 const entities = Object.keys(entitySummary) as Array<
   keyof typeof entitySummary
@@ -30,7 +33,7 @@ const PAGE_OWNED_DETAIL_VERBS = new Set(["edit"]);
 const LIST_CONTRACT_VERBS = new Set(["delete"]);
 
 const covers = (verb: string, entity: string, surfaces: readonly string[]) =>
-  entityActionCatalogDescriptors.some(
+  entityActionCatalogDescriptors().some(
     (definition) =>
       definition.verb === verb &&
       definition.entities.some((candidate) => candidate === entity) &&
@@ -46,7 +49,7 @@ describe("manifest registries", () => {
       Record<string, Readonly<Record<string, Disposition>> | undefined>
     >;
     const controls: Readonly<Record<string, Disposition>> =
-      controlRendererCoverage;
+      controlRendererCoverage();
     const nested = (
       registry: NestedDispositionRegistry,
       entity: string,
@@ -71,14 +74,14 @@ describe("manifest registries", () => {
         if (list) {
           inspect(
             `list:${entity}.${field.key}:${list}`,
-            nested(listRendererCoverage, entity, list),
+            nested(listRendererCoverage(), entity, list),
           );
         }
         const detail = field.display.renderer?.detail;
         if (detail) {
           inspect(
             `detail:${entity}.${field.key}:${detail}`,
-            nested(detailRendererCoverage, entity, detail),
+            nested(detailRendererCoverage(), entity, detail),
           );
         }
       }

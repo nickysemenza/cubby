@@ -12,11 +12,11 @@ import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
 import {
   effectiveProjectLocationsSql,
   effectiveTaskProjectSql,
@@ -27,8 +27,8 @@ import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
-import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { normalizeSearchText } from "~/server/generic/embedding/semantic/text";
+import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
+import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;

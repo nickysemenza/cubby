@@ -11,7 +11,7 @@ export default defineEntity({
   names: { singular: "Wish", plural: "Wishlist" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/wish",
+      module: "~/features/wish/list-columns",
       export: "wishListOverride",
     },
     basePath: "wishes",

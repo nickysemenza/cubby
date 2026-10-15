@@ -15,19 +15,19 @@ import { match } from "ts-pattern";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
+import {
+  categoryStockTrackingSql,
+  categorySummarySql,
+} from "~/server/db/computed/product-category-sql";
+import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import { escapeLike, getDb, imageOrder, notDeleted } from "~/server/db/helpers";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import {
   attachInventoryValuations,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
-import {
-  categoryStockTrackingSql,
-  categorySummarySql,
-} from "~/server/domains/product-category/repo/product-category-sql";
 import { attachDataQuality } from "~/server/generic/data-quality/repo/hydrate";
 
-import { productClassificationEvidenceSql } from "./classification-evidence";
 import { getProductCoverImageUrlsByProductIds } from "./crud";
 import { loadPrimaryGtins, productHasGtin } from "./gtin";
 import { foodLookupParamFromProduct } from "./helpers";

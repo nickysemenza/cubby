@@ -4,10 +4,10 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { getProductByID } from "~/server/domains/product/repo/crud";
 import { listProductFdcLinks } from "~/server/domains/product/repo/lookup";
-import { updateProductWithSideEffects } from "~/server/domains/product/service/product-orchestration.service";
-import { createProductWriteActions } from "~/server/domains/product/service/product.service";
-import { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { updateProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
+import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 // Bounds each lookupBatch response; a full FoodSummary is a few KB.
 const LOOKUP_CHUNK = 200;

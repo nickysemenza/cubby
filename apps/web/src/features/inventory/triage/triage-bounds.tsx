@@ -4,8 +4,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 
-import { Picker } from "~/ui/combobox/picker";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { Picker } from "~/entity/picker/picker";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { Input } from "~/ui/primitives/input";
 
 const CategorySearch = referenceEntitySearch("productCategory");

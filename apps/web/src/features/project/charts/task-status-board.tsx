@@ -11,10 +11,10 @@ import { useMemo } from "react";
 import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import { TASK_STATUS_LABELS } from "../shared";
-import { ChartEmpty } from "./chart-empty";
 
 /** `breakdown` -> per-status count lookup, in column order. */
 function counts(row: ProjectTaskStatusBreakdown, status: TaskStatus): number {

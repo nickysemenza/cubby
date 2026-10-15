@@ -23,6 +23,7 @@ import { z } from "zod";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -42,7 +43,6 @@ import {
 } from "~/ui/primitives/dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Textarea } from "~/ui/primitives/textarea";
-import { MarkdownText } from "~/ui/text/markdown";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./recipe-flow-renderers";

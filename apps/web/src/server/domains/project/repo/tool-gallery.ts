@@ -15,11 +15,11 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/product-category-sql";
 import { getProductImagesByProductIds } from "~/server/domains/product/repo/crud";
 
 import { deriveToolTrades } from "./tool-trades";

@@ -6,9 +6,9 @@ import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { useEffect, useRef } from "react";
 
-import { LocationIcon } from "~/features/location/location-icons";
+import { LocationIcon } from "~/entity/presentation/location-icons";
+import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { LocationTreeRow } from "~/features/location/location-tree-row";
-import { resolveLocationPrimaryVisual } from "~/features/location/location-visual-resolver";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import {

@@ -67,7 +67,7 @@ import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
-import { repointProductMatchCandidatesTx } from "~/server/domains/product/repo/product-match-candidate";
+import { repointProductMatchCandidatesTx } from "~/server/domains/product/repo/match/product-match-candidate";
 import { unitMappingSides } from "~/server/domains/product/repo/unit-mappings";
 import {
   impact,
@@ -1384,7 +1384,7 @@ export const mergeProducts = async (
 
     // Parent locks precede evidence reads; all combined pairs include loser–loser conflicts.
     const { prepareProductIdentityPair } =
-      await import("~/server/ai/product-identity");
+      await import("~/server/domains/product/repo/match/product-identity-snapshot");
     const transactionDb = databaseForTransaction(tx);
     const combinedIds = [keepId, ...loserIds].sort();
     for (let first = 0; first < combinedIds.length; first++) {

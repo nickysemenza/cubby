@@ -39,7 +39,7 @@ import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { getIngredientsByIDs } from "~/server/domains/ingredient/service";
+import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getInventoryForProducts } from "~/server/domains/inventory/repo/crud";
 import {
   getRecipesByIDs,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ProgressiveListSession } from "../../ui/hooks/progressive-list";
+import { ProgressiveListSession } from "../hooks/progressive-list";
 import { listColumnReadFields } from "./list-column-read-fields";
 
 // A synthetic display column can read a nested object absent from the core row.

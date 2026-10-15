@@ -85,7 +85,7 @@ import { assessmentContract } from "./assessment.contract";
  *
  * The purchase agent mounts tools by name, so its allowlists and capability
  * gate key on `${tool}.${action}` (`@cubby/schemas/mcp-tools`,
- * `server/domains/purchase-import/capabilities.ts`): authorizing
+ * `server/domains/purchase-import/repo/capabilities.ts`): authorizing
  * `purchase_import.prepare` never authorizes `purchase_import.commit`.
  */
 

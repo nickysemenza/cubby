@@ -59,9 +59,9 @@ import {
 import { formatCurrency } from "~/lib/number-format";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import { type Database, withConnection } from "~/server/db";
+import { deleteStoredObjects } from "~/server/clients/s3";
+import type { Database } from "~/server/db";
 import { countCullablePendingImages } from "~/server/domains/image/repo/image";
-import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { deleteIngredients } from "~/server/domains/ingredient/repo/deletion";
 import { countProductsWithNoImagesWithGtin } from "~/server/domains/product/repo/analytics";
@@ -76,11 +76,11 @@ import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { countStaleRecipeTotals } from "~/server/domains/recipe/repo/totals";
-import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/service/usda-helpers";
-import { batchEnrichWithFood } from "~/server/domains/usda-food/service/usda-helpers";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/semantic/embeddings";
-import { findCoverageTotals as findCoverageTotalsRepo } from "~/server/generic/problems/repo/detectors-coverage";
+import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
+import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
+import { findCoverageTotalsOnConnection } from "~/server/generic/problems/repo/detectors-coverage";
 import { countEntitiesMissingEmbeddings } from "~/server/generic/problems/repo/detectors-embedding";
 import { loadAllocationDefectPresenters } from "~/server/generic/problems/repo/detectors-financial";
 import {
@@ -1286,7 +1286,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
 };
 
 export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
-  withConnection(db, (scoped) => findCoverageTotalsRepo(scoped));
+  findCoverageTotalsOnConnection(db);
 
 /**
  * Conversion coverage's hot path is projection-first. Rebuilding remains the

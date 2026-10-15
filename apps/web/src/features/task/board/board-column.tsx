@@ -6,13 +6,13 @@ import { match } from "ts-pattern";
 
 import { RecordMarkById } from "~/entity/components/record-mark";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 import { getTradeColor } from "~/features/project/trade-colors";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
-import { TASK_STATUS_LABELS } from "../task-options";
 import { cellTasks, DONE_COLUMN_CAP } from "./board-model";
 import {
   type BoardColumnKey,

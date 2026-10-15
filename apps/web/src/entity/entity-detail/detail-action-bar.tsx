@@ -5,11 +5,12 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   createContext,
   useContext,
-  lazy,
   Suspense,
   type ReactNode,
   type LazyExoticComponent,
 } from "react";
+
+import { featureRegistry } from "~/entity/feature-registry";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import type { DetailSlotComponent } from "./detail-slots";
@@ -31,53 +32,10 @@ export function DetailAction({ children }: { children: ReactNode }) {
   return useContext(DetailActionContext) ? null : children;
 }
 
-const action = <E extends GenericDetailEntity>(
-  load: () => Promise<{ default: DetailSlotComponent<E> }>,
-) => lazy(load);
-type HeaderActionRegistry = Partial<{
+/** Each entity's own header controls, lazy; `features/registry.tsx` fills it. */
+export type HeaderActionTable = Partial<{
   [E in GenericDetailEntity]: LazyExoticComponent<DetailSlotComponent<E>>;
 }>;
-const headerActions: HeaderActionRegistry = {
-  purchase: action<"purchase">(() =>
-    import("./report-slot").then((m) => ({ default: m.PurchaseDetailActions })),
-  ),
-  expense: action<"expense">(() =>
-    import("./report-slot").then((m) => ({ default: m.ExpenseDetailActions })),
-  ),
-  product: action<"product">(() =>
-    import("~/features/product/product-runs").then((m) => ({
-      default: m.ProductDetailActions,
-    })),
-  ),
-  image: action<"image">(() =>
-    import("~/features/image/image-processing-panel").then((m) => ({
-      default: m.ImageDetailActions,
-    })),
-  ),
-  run: action<"run">(() =>
-    import("./report-slot").then((m) => ({ default: m.RunDetailActions })),
-  ),
-  inventory: action<"inventory">(() =>
-    import("~/entity/display/detail-field-renderers/inventory-expense").then(
-      (m) => ({
-        default: m.InventoryRecordExpenseAction,
-      }),
-    ),
-  ),
-  recipe: action<"recipe">(() =>
-    import("~/features/recipe/slots").then((m) => ({
-      default: m.RecipeActions,
-    })),
-  ),
-  cookbook: action<"cookbook">(() =>
-    import("~/features/cookbook/slots").then((m) => ({
-      default: m.CookbookActions,
-    })),
-  ),
-  meal: action<"meal">(() =>
-    import("~/features/meal/slots").then((m) => ({ default: m.MealActions })),
-  ),
-};
 
 export function DetailActionTarget<E extends GenericDetailEntity>({
   entity,
@@ -88,7 +46,7 @@ export function DetailActionTarget<E extends GenericDetailEntity>({
 }) {
   // SAFETY: declarations pair each component with its entity; this render passes the
   // record loaded for that same entity, matching the detail-slot registry boundary.
-  const Custom = headerActions[entity] as
+  const Custom = featureRegistry().headerActions[entity] as
     | LazyExoticComponent<DetailSlotComponent<never>>
     | undefined;
   // SAFETY: the typed registry correlates each component with this entity's detail record.

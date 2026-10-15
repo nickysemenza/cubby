@@ -8,18 +8,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { defaultSortDirectionFor, defaultSortFor } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
+import type { RowLinkResolver } from "~/entity/table/column-helpers";
+import {
+  type TableStateReturn,
+  useTableState,
+} from "~/entity/table/use-table-state";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import type { RowLinkResolver } from "~/ui/data-table/column-helpers";
 import { useRevealTableColumnsOnce } from "~/ui/data-table/column-layout";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import {
-  type TableStateReturn,
-  useTableState,
-} from "~/ui/data-table/use-table-state";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 import type { EntityActionSubject } from "../actions/entity-actions";

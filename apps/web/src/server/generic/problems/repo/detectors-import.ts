@@ -4,7 +4,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityIdentity, runFinding } from "~/server/db/schema";
-import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/run-retirement";
+import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 
 export async function findOpenRunFindings(db: Database) {
   const database = getDb(db);

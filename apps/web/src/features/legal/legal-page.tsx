@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Page } from "~/ui/layout/page";
+import { Page } from "~/entity/page/page";
 
 /**
  * Shell for the two consent-screen pages. Deliberately plain: these render for

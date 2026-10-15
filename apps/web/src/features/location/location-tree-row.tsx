@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 
-import { LocationIcon } from "./location-icons";
+import { LocationIcon } from "../../entity/presentation/location-icons";
 
 interface LocationTreeRowProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;

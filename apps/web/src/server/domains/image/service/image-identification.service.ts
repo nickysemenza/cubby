@@ -18,19 +18,19 @@ import { IMAGE_IDENTIFICATION_FEATURE } from "~/server/ai/features";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { imageAnalysisKey, uploadToS3 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
-import { MAX_IDENTIFICATION_RENDITION_BYTES } from "~/server/domains/image-processing/cloud-limits";
 import {
   getImageProcessingReadProjection,
   getUploadedImageProcessingSource,
 } from "~/server/domains/image-processing/repo/image-processing";
+import { MAX_IDENTIFICATION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
 import {
   imageIdentificationCandidates,
   imageIdentificationCategories,
   readImageIdentification,
   getVerifiedImageRenditionKey,
 } from "~/server/domains/image/repo/image-identification";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { fetchAnalysisRendition } from "~/server/domains/image/service/image-description.service";
-import { inspectImageFile } from "~/server/domains/image/service/image-integrity";
 import {
   recordImageDescriptionInput,
   reserveImageAnalysisInput,

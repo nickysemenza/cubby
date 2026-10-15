@@ -5,6 +5,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   product as productTable,
@@ -26,7 +27,6 @@ import {
   listProductCategoryTreeOptions,
   updateProductCategory,
 } from "./product-category";
-import { categoryDescendantsSql } from "./product-category-sql";
 
 const ctx = withTestDb();
 

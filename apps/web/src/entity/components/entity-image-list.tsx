@@ -12,8 +12,8 @@ import {
   EmptyTitle,
 } from "~/ui/primitives/empty";
 
-import { PhotoGrid } from "../../features/image/photo-grid";
-import { PhotoViewer } from "../../features/image/photo-viewer";
+import { PhotoGrid } from "../entity-media/photo-grid";
+import { PhotoViewer } from "../entity-media/photo-viewer";
 
 /** Minimal image type for display - only the fields we actually use */
 interface MinimalImage {

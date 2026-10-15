@@ -4,9 +4,9 @@ import { Suspense } from "react";
 import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
 import LocationTreeView from "~/features/inventory/location-tree-view";
 import { LocationGallery } from "~/features/location/location-gallery";
+import { HierarchyView } from "~/features/product-category/hierarchy-view";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";
-import { HierarchyView } from "~/ui/visualizations/hierarchy-view";
 import { VisualizationPanel } from "~/ui/visualizations/visualization-panel";
 
 const LocationGallerySlot: ListSlotComponent = () => (

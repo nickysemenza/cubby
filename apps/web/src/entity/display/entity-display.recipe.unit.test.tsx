@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -13,6 +14,8 @@ import {
 
 import { detailFieldRenderersFor } from "./detail-field-renderers";
 import { createEntityDisplayColumns } from "./entity-display";
+
+installFeatures();
 
 /**
  * The recipe list (`routes/_authenticated/recipes.index.tsx`) is the one page

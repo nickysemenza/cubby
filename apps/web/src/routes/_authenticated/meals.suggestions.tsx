@@ -4,13 +4,13 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 
+import { Page } from "~/entity/page/page";
 import {
   mealSuggestionsSearchDefaults,
   mealSuggestionsSearchSchema,
 } from "~/features/meal/meal-search";
 import { MealSuggestionsPage } from "~/features/meal/suggestions-page";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/meals/suggestions")({
   validateSearch: mealSuggestionsSearchSchema,

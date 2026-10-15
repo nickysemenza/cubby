@@ -11,7 +11,7 @@ import {
   updateProduct,
   deleteProducts,
 } from "~/server/domains/product/repo/crud";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,

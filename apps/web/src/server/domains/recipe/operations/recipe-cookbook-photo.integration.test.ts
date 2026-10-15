@@ -9,7 +9,7 @@ import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   createImageStorageService,
   productionImageStoragePorts,
-} from "~/server/domains/image/service/image-storage.service";
+} from "~/server/domains/image/repo/image-storage";
 import { upsertCookbookRecipeFromCookbook } from "~/server/domains/recipe/repo/import-recipe-convert";
 import {
   makeCookbookExtraction,

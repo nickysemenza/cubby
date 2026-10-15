@@ -1,42 +1,31 @@
-import { readFileSync } from "node:fs";
 import { dirname, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRule } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
-import { z } from "zod";
 
 /**
  * Layer direction for the domain-first layout (docs/adr/0019-domain-first-server-layout.md).
  *
  * Server: a role is the path segment after `domains/<x>/` or `generic/<x>/`
- * (`repo`, `service`, `operations`, as a folder or a `<role>.ts` file). Roles
+ * (`repo`, `service`, `operations`, as a folder or a `<role>.ts` file). The
+ * entry points `http/`, `mcp/`, and `workflows/` import like `operations` but
+ * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
- * `db`), in any domain; `repo` never imports `ai/`; `service` reaches the
- * database only through a repo; platform folders and `generic/*` never import a
- * domain's `service` or `operations`.
+ * `db`), in any domain; `repo` never imports `ai/` (except `ai/repo/`); a
+ * `service` value-imports nothing from `db/` but `db/freshness/` and never
+ * imports a schema or `db/helpers`; other platform code and `generic/*` never
+ * import a domain's `service` or `operations`.
  *
  * Client: `ui/` imports neither `features/` nor `entity/`; `entity/` does not
  * import `features/`.
  *
- * Tests, fixtures, and live evals are exempt. Existing violations are counted
- * per file in `domain-layers-baseline.json`; a file may only shrink its count.
+ * Tests, fixtures, and live evals are exempt.
  */
 
 const repoRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../../..",
 );
-const baseline = z
-  .record(z.string(), z.number().int().positive())
-  .parse(
-    JSON.parse(
-      readFileSync(
-        resolve(repoRoot, "tools/oxlint/cubby/domain-layers-baseline.json"),
-        "utf8",
-      ),
-    ),
-  );
-
 const SRC = "apps/web/src/";
 const SERVER = `${SRC}server/`;
 const RANK = { repo: 1, service: 2, operations: 3 } as const;
@@ -44,6 +33,8 @@ type Role = keyof typeof RANK;
 const ROLE_PATH =
   /^apps\/web\/src\/server\/(domains|generic)\/([^/]+)\/(repo|service|operations)(?:[./]|$)/u;
 const EXEMPT = /\.(?:test|spec)\.tsx?$|\.fixtures\.tsx?$|\.live-eval\.ts$/u;
+
+const ENTRY_PATH = /^apps\/web\/src\/server\/(?:http|mcp|workflows)(?:[./]|$)/u;
 
 const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";
@@ -58,9 +49,14 @@ function roleOf(path: string): { area: string; role: Role } | undefined {
 const isDb = (path: string) =>
   /^apps\/web\/src\/server\/db(?:[./]|$)/u.test(path);
 const isDbInternals = (path: string) =>
-  /^apps\/web\/src\/server\/db\/(?:schema|helpers)(?:[./]|$)/u.test(path);
+  /^apps\/web\/src\/server\/db\/(?:schema|helpers|[^/]*schema[^/]*$)(?:[./]|$)/u.test(
+    path,
+  );
+const isDbFreshness = (path: string) =>
+  /^apps\/web\/src\/server\/db\/freshness(?:[./]|$)/u.test(path);
 const isAi = (path: string) =>
-  /^apps\/web\/src\/server\/ai(?:[./]|$)/u.test(path);
+  /^apps\/web\/src\/server\/ai(?:[./]|$)/u.test(path) &&
+  !/^apps\/web\/src\/server\/ai\/repo(?:[./]|$)/u.test(path);
 const isDomainUpper = (path: string) => {
   const role = roleOf(path);
   return role?.area === "domains" && role.role !== "repo";
@@ -89,16 +85,21 @@ export function violation(
   to: string,
   typeOnly: boolean,
 ): LayerMessage | undefined {
-  const fromRole = roleOf(from);
+  // Entry points compose services like operations, but stay importable
+  // platform infrastructure (`workflows/runtime`, `http/request-context`).
+  const fromRole: ReturnType<typeof roleOf> = ENTRY_PATH.test(from)
+    ? { area: "entry", role: "operations" }
+    : roleOf(from);
   const toRole = roleOf(to);
   if (from.startsWith(SERVER)) {
     if (fromRole?.role === "service" && isDbInternals(to)) return "serviceDb";
     if (typeOnly) return;
+    if (fromRole?.role === "service" && isDb(to) && !isDbFreshness(to))
+      return "serviceDb";
     if (fromRole?.role === "repo" && isAi(to)) return "repoAi";
     if (fromRole && toRole && RANK[toRole.role] > RANK[fromRole.role])
       return "upward";
-    if (!fromRole && !from.startsWith(`${SERVER}domains/`) && isDomainUpper(to))
-      return "platformUpward";
+    if (!fromRole && isDomainUpper(to)) return "platformUpward";
     if (fromRole?.area === "generic" && isDomainUpper(to))
       return "platformUpward";
     if (isDb(from) && toRole) return "upward";
@@ -134,19 +135,11 @@ export const domainLayersRule = defineRule({
         'ui/ may not import "{{source}}": shared UI stays independent of entity and feature code.',
       entityUpward:
         'entity/ may not import "{{source}}": the entity platform stays independent of feature folders.',
-      staleBaseline:
-        "This file has {{actual}} layer violations, below its baseline of {{allowed}}; lower tools/oxlint/cubby/domain-layers-baseline.json.",
     },
   },
   create(context) {
     const filename = relative(repoRoot, context.filename).split("\\").join("/");
     const skip = !filename.startsWith(SRC) || EXEMPT.test(filename);
-    let program: ESTree.Program | undefined;
-    const found: {
-      node: ESTree.Node;
-      messageId: LayerMessage;
-      data: Record<string, string>;
-    }[] = [];
     const check = (
       node: ESTree.Node,
       sourceNode: ESTree.Node | null | undefined,
@@ -163,20 +156,19 @@ export const domainLayersRule = defineRule({
       if (!to) return;
       const messageId = violation(filename, to, typeOnly);
       if (!messageId) return;
-      found.push({
+      context.report({
         node,
         messageId,
         data: {
           source,
-          from: roleOf(filename)?.role ?? "platform",
+          from: ENTRY_PATH.test(filename)
+            ? "operations"
+            : (roleOf(filename)?.role ?? "platform"),
           to: roleOf(to)?.role ?? (isDb(to) ? "db" : "platform"),
         },
       });
     };
     return {
-      Program(node) {
-        program = node;
-      },
       ImportDeclaration(node) {
         const typeOnly =
           node.importKind === "type" ||
@@ -194,21 +186,6 @@ export const domainLayersRule = defineRule({
       },
       ImportExpression(node) {
         check(node, node.source, false);
-      },
-      "Program:exit"() {
-        if (skip || !program) return;
-        const allowed = baseline[filename] ?? 0;
-        if (found.length < allowed) {
-          context.report({
-            node: program,
-            messageId: "staleBaseline",
-            data: { actual: String(found.length), allowed: String(allowed) },
-          });
-          return;
-        }
-        if (found.length <= allowed) return;
-        for (const { node, messageId, data } of found)
-          context.report({ node, messageId, data });
       },
     };
   },

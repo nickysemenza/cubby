@@ -15,9 +15,9 @@ import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   proposePhotoGroups,
-} from "~/server/domains/photo-import/run/proposals";
+} from "~/server/domains/photo-import/repo/run/proposals";
 import { listImageSightings } from "~/server/domains/image/repo/image";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   completeDescribeImageJobs,
   listDescribeImageJobs,

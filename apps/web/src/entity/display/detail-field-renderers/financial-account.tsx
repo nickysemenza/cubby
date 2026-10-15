@@ -1,6 +1,6 @@
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
-import { renderOptionCell } from "~/ui/data-table/column-helpers";
+import { renderOptionCell } from "~/entity/table/column-helpers";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

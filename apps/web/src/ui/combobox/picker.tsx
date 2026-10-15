@@ -2,7 +2,6 @@ import {
   Combobox as ComboboxPrimitive,
   Select as SelectPrimitive,
 } from "@base-ui/react";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -10,21 +9,14 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import * as React from "react";
 
-import { entityLabel } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 
-import type {
-  ComboboxItem,
-  PickerChip,
-  PickerEntity,
-  PickerTone,
-} from "./combobox-types";
+import type { ComboboxItem, PickerChip, PickerTone } from "./combobox-types";
 import { type PickerOption, pickerOptionItem } from "./picker-option";
 import { PickerVisual } from "./picker-visual";
-import { useSelectedPickerItems } from "./selected-items";
 
 export function matchesPickerItem(
   item: ComboboxItem,
@@ -50,11 +42,12 @@ interface PickerCommonProps<TId extends string> {
    * trigger, or the first segment) so a form can focus it on an error. */
   inputRef?: (element: HTMLElement | null) => void;
   "aria-describedby"?: string;
-  entity?: PickerEntity;
+  /** Record pickers: what is picked. `entity/picker/picker.tsx` supplies it from an entity key. */
+  records?: PickerRecordSource;
   /**
-   * Accessible name (falls back to the entity's noun). Not used for the
-   * placeholder, "Clear …", or "Create …" strings when an entity is given —
-   * those name the entity, never a caller's sentence-length caption.
+   * Accessible name (falls back to the records' noun). Not used for the
+   * placeholder, "Clear …", or "Create …" strings when records are given —
+   * those name the records' noun, never a caller's sentence-length caption.
    */
   label?: string;
   /**
@@ -82,6 +75,21 @@ interface PickerCommonProps<TId extends string> {
   footer?: React.ReactNode;
   /** Segmented mode: icon-only segments on phones, labels kept accessible. */
   iconOnlyOnPhone?: boolean;
+}
+
+/**
+ * What a record picker picks: the noun its strings use, the shortcode type and
+ * prefix a typed code is checked against, and the hook that resolves selected
+ * codes to their rows. Fixed for a picker's lifetime.
+ */
+export interface PickerRecordSource {
+  noun: string;
+  codeType: string;
+  codePrefix: string;
+  useSelectedItems(
+    ids: readonly string[],
+    known: readonly ComboboxItem[],
+  ): ComboboxItem[];
 }
 
 /** A record-valued picker: the value is the whole selected row. */
@@ -166,17 +174,17 @@ type ResolvedPickerProps<TId extends string> = PickerCommonProps<TId> & {
  */
 export function Picker<TId extends string = string>(props: PickerProps<TId>) {
   const resolved = useResolvedPickerProps(props);
-  // A picker's `entity` is fixed for its lifetime, so this branch never
+  // A picker's `records` is fixed for its lifetime, so this branch never
   // remounts the control; only record pickers read records.
-  return resolved.entity ? (
-    <RecordValuePicker {...resolved} />
+  return resolved.records ? (
+    <RecordValuePicker {...resolved} records={resolved.records} />
   ) : (
     <PickerBody {...resolved} />
   );
 }
 
 function RecordValuePicker<TId extends string>(
-  props: ResolvedPickerProps<TId>,
+  props: ResolvedPickerProps<TId> & { records: PickerRecordSource },
 ) {
   return <PickerBody {...props} values={useSelectedValues(props)} />;
 }
@@ -194,14 +202,15 @@ function PickerBody<TId extends string>(props: ResolvedPickerProps<TId>) {
  * field always shows names and pictures.
  */
 function useSelectedValues<TId extends string>({
-  entity,
+  records,
   values,
   items,
-}: ResolvedPickerProps<TId>): ComboboxItem<TId>[] {
+}: ResolvedPickerProps<TId> & {
+  records: PickerRecordSource;
+}): ComboboxItem<TId>[] {
   const held = React.useMemo(() => [...values, ...items], [values, items]);
   // SAFETY: each resolved row is built for the same id the caller selected.
-  return useSelectedPickerItems(
-    entity,
+  return records.useSelectedItems(
     values.map((value) => value.id),
     held,
   ) as ComboboxItem<TId>[];
@@ -302,15 +311,15 @@ function useResolvedPickerProps<TId extends string>(
 /**
  * The visible caption (e.g. "Location where this happened") is only ever an
  * accessible name. Every string that names the *thing being picked* —
- * placeholder, "Clear …", "Create …", "No … found." — uses the entity's own
+ * placeholder, "Clear …", "Create …", "No … found." — uses the records' own
  * noun, or a caption like that renders as "Select Location where this
- * happened…". Callers with no entity key keep using `label` as that noun.
+ * happened…". Callers with no records keep using `label` as that noun.
  */
 function pickerNaming(
-  entity: PickerEntity | undefined,
+  records: PickerRecordSource | undefined,
   label: string | undefined,
 ) {
-  const entityName = entity ? entityLabel(entity) : null;
+  const entityName = records?.noun ?? null;
   const entityNoun = entityName?.toLowerCase() ?? null;
   const noun = entityNoun ?? label?.toLowerCase() ?? "item";
   return {
@@ -733,7 +742,7 @@ function SearchPicker<TId extends string>({
   inputId,
   inputRef: fieldRef,
   "aria-describedby": ariaDescribedBy,
-  entity,
+  records,
   label,
   multiple,
   items,
@@ -769,7 +778,7 @@ function SearchPicker<TId extends string>({
   const single = multiple ? undefined : values[0];
 
   const { ariaLabel, noun, clearLabel, placeholderDefault } = pickerNaming(
-    entity,
+    records,
     label,
   );
 
@@ -803,11 +812,11 @@ function SearchPicker<TId extends string>({
   );
   const parsedCode = parseShortcode(normalizedQuery);
   // The manifest prefix carries its dash ("PRD-").
-  const entityPrefix = entity
-    ? entityManifest[entity].shortcodePrefix.replace(/-$/u, "")
-    : null;
+  const entityPrefix = records ? records.codePrefix.replace(/-$/u, "") : null;
   const wrongPrefix =
-    entity != null && parsedCode != null && parsedCode.type !== entity;
+    records != null &&
+    parsedCode != null &&
+    parsedCode.type !== records.codeType;
   const searchingForCode =
     normalizedQuery !== "" &&
     (parsedCode != null ||
@@ -1013,7 +1022,7 @@ function ChoosePicker<TId extends string>({
   inputId,
   inputRef,
   "aria-describedby": ariaDescribedBy,
-  entity,
+  records,
   label,
   items,
   values,
@@ -1033,7 +1042,7 @@ function ChoosePicker<TId extends string>({
   const gate = useHydrationGate(disabled);
   const value = values[0];
   const { ariaLabel, clearLabel, placeholderDefault } = pickerNaming(
-    entity,
+    records,
     label,
   );
   const labels = React.useMemo(
@@ -1164,7 +1173,7 @@ function ChoosePicker<TId extends string>({
  */
 function SegmentedPicker<TId extends string>({
   inputRef,
-  entity,
+  records,
   label,
   items,
   values,
@@ -1174,7 +1183,7 @@ function SegmentedPicker<TId extends string>({
   className,
 }: ResolvedPickerProps<TId>) {
   const gate = useHydrationGate(disabled);
-  const { ariaLabel } = pickerNaming(entity, label);
+  const { ariaLabel } = pickerNaming(records, label);
   const value = values[0];
   return (
     <ToggleGroup

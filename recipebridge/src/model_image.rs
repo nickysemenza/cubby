@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn photographic_receipt_fits_both_detail_levels() {
         let bytes = include_bytes!(
-            "../../apps/web/src/server/domains/purchase-import/gmail/fixtures/synthetic-photographic-receipt.jpg"
+            "../../apps/web/src/server/domains/purchase-import/service/gmail/fixtures/synthetic-photographic-receipt.jpg"
         );
         for detail in [false, true] {
             assert!(

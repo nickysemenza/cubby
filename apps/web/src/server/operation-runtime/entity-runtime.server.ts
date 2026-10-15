@@ -33,8 +33,8 @@ import {
   getConnectedRecordsPreview,
 } from "~/server/generic/entity-links/repo/connected-records";
 import { getEntityConnections } from "~/server/generic/entity-links/repo/entity-edge-source";
-import { runEntityTimeline } from "~/server/generic/entity-timeline";
-import { buildIntegrityCatalog } from "~/server/generic/integrity/service/entity-integrity.service";
+import { runEntityTimeline } from "~/server/generic/entity-timeline/service/entity-timeline.ts";
+import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";

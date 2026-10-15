@@ -3,7 +3,7 @@ import {
   parseShortcodeFor,
   type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
-import { lazy, Suspense, useState } from "react";
+import { type ComponentProps, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { entityPluralLabel } from "~/entity/entities";
@@ -11,6 +11,10 @@ import {
   entityMergeMutationOptions,
   type MergeCommand,
 } from "~/entity/entity-mutation";
+import {
+  type FeatureRegistry,
+  featureRegistry,
+} from "~/entity/feature-registry";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import {
   ingredient,
@@ -32,11 +36,14 @@ import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 import { useStagedDialogAction } from "./use-staged-dialog-action";
 
-const SpendingCategoryMergeReview = lazy(() =>
-  import("~/features/finance/spending-classification-review").then((m) => ({
-    default: m.SpendingCategoryMergeReview,
-  })),
-);
+function SpendingCategoryMergeReviewFill(
+  props: ComponentProps<
+    FeatureRegistry["components"]["SpendingCategoryMergeReview"]
+  >,
+) {
+  const { SpendingCategoryMergeReview } = featureRegistry().components;
+  return <SpendingCategoryMergeReview {...props} />;
+}
 
 type MergeEntity = MergeCommand["entity"] | "ingredient" | "vendor";
 
@@ -200,7 +207,7 @@ function useMergeSpendingCategoriesEntityAction(): EntityActionHandles {
                 </DialogDescription>
               </DialogHeader>
               <Suspense fallback={null}>
-                <SpendingCategoryMergeReview {...review} />
+                <SpendingCategoryMergeReviewFill {...review} />
               </Suspense>
             </DialogContent>
           </Dialog>

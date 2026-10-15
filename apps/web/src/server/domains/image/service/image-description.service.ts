@@ -22,13 +22,13 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { imageAnalysisKey, uploadToS3 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
-import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/cloud-limits";
-import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/domains/image-processing/description-policy";
+import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/domains/image-processing/repo/description-policy";
 import {
   findCachedImageDescriptionAnalysis,
   getUploadedImageProcessingSource,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { inspectImageFile } from "~/server/domains/image/service/image-integrity";
+import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import {
   recordImageDescriptionInput,
   reserveImageAnalysisInput,

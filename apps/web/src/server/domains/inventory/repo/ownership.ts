@@ -18,6 +18,7 @@ import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -32,7 +33,6 @@ import {
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
-import { expenseAcquisitionSql } from "~/server/domains/expense/repo/expense-aggregate-sql";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 import {

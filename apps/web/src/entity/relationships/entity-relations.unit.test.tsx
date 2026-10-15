@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import {
   inventory,
   entityGraph,
@@ -24,6 +25,8 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
 import { EntityRelations, type EntityRelationsState } from "./entity-relations";
+
+installFeatures();
 
 const root = { entityKind: "cookbook", entityId: "CKB-4K7M" } as const;
 const recipe = { entityKind: "recipe", entityId: "RCP-4K7M" } as const;

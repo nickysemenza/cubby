@@ -5,8 +5,8 @@ import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 
-import { getIngredientName } from "./recipe-utils";
-import { formatYield } from "./recipe-yield";
+import { getIngredientName } from "../../entity/presentation/recipe-utils";
+import { formatYield } from "../../entity/presentation/recipe-yield";
 
 /**
  * One ingredient's raw import line alongside how cubby parsed it, as a plain

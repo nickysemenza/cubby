@@ -33,6 +33,11 @@ import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import {
+  categoryStockTrackingSql,
+  categorySummarySql,
+} from "~/server/db/computed/product-category-sql";
+import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import {
   buildSearchConditions,
   getDb,
   idSetPresence,
@@ -50,11 +55,6 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import {
-  categoryStockTrackingSql,
-  categorySummarySql,
-} from "~/server/domains/product-category/repo/product-category-sql";
-import { productClassificationEvidenceSql } from "~/server/domains/product/repo/classification-evidence";
 import { currentProductConversionCoverageCondition } from "~/server/domains/product/repo/conversion-coverage";
 import {
   enrichProductRowsWithPricing,

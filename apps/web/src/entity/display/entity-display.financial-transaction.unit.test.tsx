@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -10,6 +11,8 @@ import {
 } from "~/ui/data-table/table-features";
 
 import { createEntityDisplayColumns } from "./entity-display";
+
+installFeatures();
 
 /**
  * The financial transaction list (`routes/_authenticated/financial-transactions.index.tsx`)

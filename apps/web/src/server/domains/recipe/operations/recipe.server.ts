@@ -27,7 +27,7 @@ import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
-import { getIngredientsByIDs } from "~/server/domains/ingredient/service";
+import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getMultiMeasureRecipeIngredients } from "~/server/domains/product/repo/equivalences";
 import {
   duplicateRecipe,
@@ -40,14 +40,12 @@ import {
   getIngredientUsage,
   getRecipeDependencyGraph,
 } from "~/server/domains/recipe/repo/queries";
-import {
-  generateRecipeFlow,
-  getRecipeFlowState,
-} from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
+import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
+import { generateRecipeFlow } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
 import {
   aiCallRunInput,
   ensureRun,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import {
   type EntityKernelContext,
   executeEntityAs,

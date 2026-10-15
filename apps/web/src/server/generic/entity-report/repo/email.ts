@@ -57,7 +57,7 @@ import {
   emailFeedbackObservationIdSql,
   emailFeedbackHasClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
-import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/email-content";
+import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { runRowState } from "~/server/generic/collection/repo/collection-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

@@ -15,14 +15,14 @@ import { ingredientContract } from "~/contracts/ingredient.contract";
 import type { Database } from "~/server/db";
 import { findUnlinkedProductCandidates } from "~/server/domains/ingredient/repo/crud";
 import {
-  getIngredientMatches,
-  getRecipeUsagesForIngredient,
-} from "~/server/domains/ingredient/repo/search";
-import {
   enrichmentWorkbench,
   getIngredientByName,
   getIngredientsByIDs,
-} from "~/server/domains/ingredient/service";
+} from "~/server/domains/ingredient/repo/ingredient-with-food";
+import {
+  getIngredientMatches,
+  getRecipeUsagesForIngredient,
+} from "~/server/domains/ingredient/repo/search";
 import {
   type EntityKernelContext,
   executeEntity,

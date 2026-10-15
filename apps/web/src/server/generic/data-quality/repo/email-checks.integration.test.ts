@@ -13,10 +13,10 @@ import {
   run as runTable,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
-import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
+import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/repo/work-queue";
+import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 
 import { loadDataQualities } from "./hydrate";
 import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";

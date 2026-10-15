@@ -22,7 +22,7 @@ import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
-import { runHasCapability } from "~/server/domains/purchase-import/capabilities";
+import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import type { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
 import {

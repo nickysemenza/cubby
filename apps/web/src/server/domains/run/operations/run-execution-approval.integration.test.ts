@@ -17,9 +17,9 @@ import { run, user } from "~/server/db/schema";
 import {
   startMailDiscovery,
   listMailDiscovery,
-} from "~/server/domains/purchase-import/gmail/discovery";
-import type { GmailProvider } from "~/server/domains/purchase-import/gmail/types";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/purchase-import/operations/gmail/discovery";
+import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";

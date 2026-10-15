@@ -24,6 +24,8 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { ImageThumbnail } from "~/entity/table/image-thumbnail";
+import RTable from "~/entity/table/table";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import {
@@ -37,8 +39,6 @@ import {
   filterStateToBarFilters,
   type FilterBarField,
 } from "~/ui/data-table/filter-bar-core";
-import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

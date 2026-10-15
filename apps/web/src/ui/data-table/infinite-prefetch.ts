@@ -1,7 +1,7 @@
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { useEffect } from "react";
 
-import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
 
 /**
  * Whether an infinite list should request its next page now. Driven by the

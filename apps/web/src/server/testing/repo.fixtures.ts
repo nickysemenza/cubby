@@ -41,7 +41,7 @@ import {
   recipe,
   user,
 } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 import { getDb } from "../db/helpers";
 import {

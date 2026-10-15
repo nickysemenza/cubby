@@ -10,6 +10,7 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { TreeStructureIcon } from "@phosphor-icons/react/dist/csr/TreeStructure";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { Page } from "~/entity/page/page";
 import { ComponentsLine } from "~/features/design/components/design-section";
 import {
   ControlsSection,
@@ -29,7 +30,6 @@ import {
   IndexedSections,
   type IndexedSectionGroup,
 } from "~/ui/data-table/indexed-sections";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/_authenticated/design")({
@@ -181,7 +181,7 @@ const GROUPS: IndexedSectionGroup[] = [
             source={[
               "ui/common/date-display.tsx",
               "ui/primitives/enum-pill.tsx",
-              "features/work-queue/work-queue-display.tsx",
+              "entity/work-queue/work-queue-display.tsx",
               "ui/data-table/filter-bar.tsx",
             ]}
           />

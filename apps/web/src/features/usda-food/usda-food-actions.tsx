@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { productCreateRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {

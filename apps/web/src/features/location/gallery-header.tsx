@@ -12,16 +12,16 @@ import { z } from "zod";
 import { captureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { EntityIcon } from "~/entity/entities";
+import { Picker } from "~/entity/picker/picker";
 import { cn } from "~/lib/utils";
-import { Picker } from "~/ui/combobox/picker";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
-import { LocationBreadcrumb } from "./location-breadcrumb";
-import { locationTypeOptionsWithTheme } from "./location-icons";
+import { LocationBreadcrumb } from "../../entity/presentation/location-breadcrumb";
+import { locationTypeOptionsWithTheme } from "../../entity/presentation/location-icons";
 
 const EMPTY_BREADCRUMB: InfLocation[] = [];
 const emptyFilterSchema = z.enum(["all", "withItems", "empty"]);

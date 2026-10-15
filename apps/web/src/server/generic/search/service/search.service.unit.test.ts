@@ -3,7 +3,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { Database, type DrizzleClient } from "~/server/db";
-import type { VectorStorePort } from "~/server/generic/embedding/semantic/vector-store";
+import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 
 import {
   buildPrefixTsQuery,

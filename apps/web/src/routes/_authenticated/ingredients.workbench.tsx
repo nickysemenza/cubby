@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Page } from "~/entity/page/page";
 import { EnrichmentWorkbench } from "~/features/ingredient/enrichment-workbench";
 import { equivalenceDraftFromSearch } from "~/features/ingredient/equivalence-workbench-link";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/layout/page";
 
 // `focus` is an ingredient id to scroll to + auto-expand on load — set by the
 // Problems page's "Fix in workbench" links so a click lands on the exact row.

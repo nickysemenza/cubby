@@ -1,6 +1,6 @@
 /**
  * The input contract of the run-scoped services the purchase agent calls
- * (`apps/web/src/server/domains/purchase-import/agent-services.ts`). The agent reads
+ * (`apps/web/src/server/domains/purchase-import/operations/agent-services.ts`). The agent reads
  * untrusted vendor pages, mail, and photos, so the host parses every input
  * with these schemas before it reaches the database. No input names a Run:
  * each service is bound to one Run when the host creates it, and none accepts

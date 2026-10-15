@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
 import type { ImageProvenanceCandidateRow } from "~/server/domains/image/repo/image";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 import {
   classifyImageProvenance,

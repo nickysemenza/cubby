@@ -15,7 +15,7 @@ import {
   image,
   orderMailAttachment,
 } from "~/server/db/schema";
-import type { OrderMailAttachmentStorage } from "~/server/domains/purchase-import/gmail/attachment-storage";
+import type { OrderMailAttachmentStorage } from "~/server/domains/purchase-import/repo/gmail/attachment-storage";
 
 export const MAIL_ATTACHMENT_UPLOAD_REASON = "mail_attachment_upload";
 

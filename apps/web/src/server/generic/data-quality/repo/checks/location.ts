@@ -1,9 +1,9 @@
 import type { LocationType } from "@cubby/shared/location-type-theme";
 import { sql } from "drizzle-orm";
 
+import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
 import { location } from "~/server/db/schema";
 import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
-import { locationAiDescriptionSql } from "~/server/domains/location/repo/ai-description";
 
 import { defineEntityChecks } from "../registry";
 

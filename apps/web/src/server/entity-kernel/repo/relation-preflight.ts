@@ -39,8 +39,8 @@ import type { AppErrorReason } from "@cubby/shared";
 import { inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
 import { product } from "~/server/db/schema";
-import { categoryFeatureInSql } from "~/server/domains/product-category/repo/product-category-sql";
 import { createBlockedError } from "~/server/errors/app-error";
 
 /**

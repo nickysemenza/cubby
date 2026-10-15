@@ -7,13 +7,13 @@ import type { LocationType } from "@cubby/schemas/location";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
-import { buildLocationComboboxItem } from "~/ui/combobox/combobox-builders";
+import { buildLocationComboboxItem } from "~/entity/picker/combobox-builders";
 import {
   useEntityListSource,
   type SearchProviderProps,
-} from "~/ui/combobox/with-search-hook";
-import { EditableAmountCell } from "~/ui/data-table/editable-cell";
-import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
+} from "~/entity/picker/with-search-hook";
+import { EditableAmountCell } from "~/entity/table/editable-cell";
+import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";

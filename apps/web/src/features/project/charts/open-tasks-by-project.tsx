@@ -10,9 +10,8 @@ import {
   useRecordEmojiById,
 } from "~/entity/components/record-mark";
 import { entityDetailLink } from "~/entity/entities";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
-
-import { ChartTooltip } from "./chart-tooltip";
 
 /**
  * The Analytics tab's "Open Tasks by Project" — `data` is

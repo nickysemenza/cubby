@@ -5,9 +5,9 @@ import { entities, entityDetailParams } from "~/entity/entities";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
-} from "~/features/product/product-image-summaries";
+} from "~/entity/presentation/product-image-summaries";
+import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { formatCurrency } from "~/lib/number-format";
-import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 

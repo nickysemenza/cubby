@@ -8,11 +8,14 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 
 import { useEntityList } from "./use-entity-list";
+
+installFeatures();
 
 interface TestRow {
   id: string;

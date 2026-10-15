@@ -8,12 +8,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
+import { installFeatures } from "~/features/registry";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;

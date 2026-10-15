@@ -47,6 +47,10 @@ import {
   UNKNOWN_OWNERSHIP,
 } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import {
+  categoryFeatureInSql,
+  categoryFeatureSql,
+} from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -61,10 +65,6 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
-import {
-  categoryFeatureInSql,
-  categoryFeatureSql,
-} from "~/server/domains/product-category/repo/product-category-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
 import {

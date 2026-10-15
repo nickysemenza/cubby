@@ -26,14 +26,14 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
-import { proposePhotoGroups } from "~/server/domains/photo-import/run/proposals";
-import { resolveRunFinding } from "~/server/domains/purchase-import/findings";
-import { stopRunForReview } from "~/server/domains/purchase-import/run-service";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { proposePhotoGroups } from "~/server/domains/photo-import/repo/run/proposals";
+import { stopRunForReview } from "~/server/domains/purchase-import/operations/run-review";
+import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/repo/work-queue";
+import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";

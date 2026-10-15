@@ -10,8 +10,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
-import { ChartEmpty } from "~/features/project/charts/chart-empty";
-import { ChartTooltip } from "~/features/project/charts/chart-tooltip";
 import { HorizontalBarChart } from "~/features/project/charts/horizontal-bar-chart";
 import {
   nivoBarChrome,
@@ -21,6 +19,8 @@ import {
 import { formatCurrency } from "~/lib/number-format";
 import { getCostTypeColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";

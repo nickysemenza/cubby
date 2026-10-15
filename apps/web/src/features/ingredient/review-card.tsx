@@ -7,12 +7,15 @@ import pluralize from "pluralize";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { verbDef } from "~/entity/actions/action-verbs";
-import { AiProposalCard, AiProvenance } from "~/features/ai/ai-proposal-card";
-import { UsdaFoodResultRow } from "~/features/usda-food/usda-food-result-row";
+import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
+import { UsdaFoodResultRow } from "~/entity/presentation/usda-food-result-row";
+import {
+  AiProposalCard,
+  AiProvenance,
+} from "~/entity/suggestions/ai-proposal-card";
 import { QueuePassPosition } from "~/features/work-queue/queue-pass-progress";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { EnrichmentProposal } from "~/server/ai/enrichment/proposals";
-import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Kbd, KbdGroup } from "~/ui/primitives/kbd";

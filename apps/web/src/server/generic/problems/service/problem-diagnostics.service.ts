@@ -19,8 +19,8 @@ import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
 import { readCachedUpcLookups } from "~/server/domains/product/repo/upc-lookup-cache";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/semantic/embeddings";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { findOrphanEntities } from "~/server/generic/entity-links/repo/entity-edge-source";
 import { findPartiallyImportedCookbooks } from "~/server/generic/problems/repo/detectors-cookbook";
 import {

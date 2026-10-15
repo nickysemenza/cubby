@@ -9,7 +9,7 @@ import {
 import { type JSONType, z } from "zod";
 
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
-import { purchaseAgentRunActions } from "~/server/domains/purchase-import/capabilities";
+import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 

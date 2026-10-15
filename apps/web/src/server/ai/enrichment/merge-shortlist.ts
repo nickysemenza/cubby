@@ -20,8 +20,8 @@ import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/en
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
-} from "~/server/generic/embedding/semantic/embeddings";
-import { productionVectorStore } from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/embeddings";
+import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
 
 export interface MergeShortlistEntry {
   id: IngredientId;

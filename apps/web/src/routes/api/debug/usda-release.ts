@@ -5,8 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "~/lib/auth";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
-import { activeUsdaRelease } from "~/server/domains/usda-release/client";
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
+import { activeUsdaRelease } from "~/server/domains/usda-release/service/client";
 import {
   hasExplicitCredential,
   verifyHttpApiKeyActor,

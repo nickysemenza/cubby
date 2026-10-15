@@ -12,7 +12,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   readRecordWorkQueue,
   readWorkQueue,
-} from "~/server/generic/work-queue/repo/work-queue";
+} from "~/server/generic/work-queue/service/work-queue-read";
 import {
   createImageFixture,
   insertEntityAttachments,

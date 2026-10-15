@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { upsertCookbookRecipeFromCookbook } from "~/server/domains/recipe/repo/import-recipe-convert";
-import { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { requireActor } from "~/server/http/request-context";
 import {
   makeCookbookExtraction,

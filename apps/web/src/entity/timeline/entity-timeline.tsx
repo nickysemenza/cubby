@@ -27,13 +27,14 @@ import {
   type EntityTimelineWindowByEntity,
 } from "~/entity/entity-timeline";
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
-import { ChartEmpty } from "~/features/project/charts/chart-empty";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn } from "~/lib/utils";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -57,7 +58,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 type EntityTimelineMode = "events" | "lifecycles";
 

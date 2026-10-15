@@ -14,7 +14,7 @@ import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
 import { entityDetailLink } from "~/entity/entities";
-import { RunAgentActions } from "~/features/purchase/purchase-import-run-detail";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -39,7 +39,6 @@ import {
   TableRow,
   Table as UiTable,
 } from "~/ui/primitives/table";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";
@@ -538,19 +537,6 @@ export function ReportDetailActions({
   );
 }
 
-export const RunDetailActions: import("./detail-slots").DetailSlotComponent<
-  "run"
-> = ({ record }) => (
-  <>
-    <ReportDetailActions
-      slot="run.live-progress"
-      id={record.id}
-      status={record.status}
-    />
-    <RunAgentActions record={record} />
-    <RunSentryAction error={record.dispatchError} />
-  </>
-);
 export function RunSentryAction({
   error,
 }: {

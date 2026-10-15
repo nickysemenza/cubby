@@ -21,10 +21,8 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
-import {
-  FinancialTransactionFormFields,
-  type FinancialTransactionFormValues,
-} from "~/features/finance/financial-transaction-form";
+import { featureRegistry } from "~/entity/feature-registry";
+import type { FinancialTransactionFormValues } from "~/features/finance/financial-transaction-form";
 import { formatDateSpan } from "~/lib/date-span";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";
@@ -43,7 +41,6 @@ import {
   requiredFieldModel,
 } from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
-import { productMedia } from "./product-editor-fields";
 import type {
   EntityEditContext,
   EntityEditOperation,
@@ -86,6 +83,10 @@ export interface EntityEditorMediaOutput {
   documents?: ReactNode;
 }
 
+export type EntityEditorMediaHook = (
+  input: EntityEditorMediaInput,
+) => EntityEditorMediaOutput;
+
 export interface EntityEditorPresentation<E extends EditableEntity> {
   title(input: {
     context: EntityEditContext;
@@ -106,7 +107,7 @@ export interface EntityEditorPresentation<E extends EditableEntity> {
    * the `pendingImageIds`/`pendingImagePurposes`/`removeImageIds`/
    * `imageOrder` form values; the hook only adds to what is drawn.
    */
-  media?(input: EntityEditorMediaInput): EntityEditorMediaOutput;
+  media?: EntityEditorMediaHook;
   successMessage(result: EntityEditResultFor<E>): string;
 }
 
@@ -309,6 +310,7 @@ function FinancialTransactionFields({ form, record }: EntityEditorFieldsProps) {
   const transactionForm = z
     .custom<UseFormReturn<FinancialTransactionFormValues>>()
     .parse(form);
+  const { FinancialTransactionFormFields } = featureRegistry().components;
   return (
     <FinancialTransactionFormFields
       form={transactionForm}
@@ -572,7 +574,7 @@ const presentations = {
       "Add the thing you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
     size: "lg",
     Fields: ProductFields,
-    media: productMedia,
+    media: (input) => featureRegistry().productMedia(input),
     successMessage: (result) => `Added "${resultName(result, "product")}"`,
   },
   "product:update:full": {
@@ -582,7 +584,7 @@ const presentations = {
     submitLabel: "Save changes",
     size: "lg",
     Fields: ProductFields,
-    media: productMedia,
+    media: (input) => featureRegistry().productMedia(input),
     successMessage: () => "Product updated",
   },
   "financialAccount:create:capture": {

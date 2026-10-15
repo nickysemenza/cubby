@@ -2,7 +2,7 @@ import type { VendorId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import type { InspectedImageFile } from "~/server/domains/image/service/image-integrity";
+import type { InspectedImageFile } from "~/server/domains/image/repo/image-integrity";
 
 import {
   createVendorLogoService,

@@ -10,7 +10,6 @@ import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 
-import { getHoverableMeasureUnitIcon } from "~/features/inventory/format-amount";
 import { isDisplayMapping } from "~/features/units/unit-mapping-graph";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
@@ -19,6 +18,7 @@ import {
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
 import { Input } from "~/ui/primitives/input";
+import { getHoverableMeasureUnitIcon } from "~/ui/text/format-amount";
 
 // Shared core for the two enrichment surfaces — the dense Browse table editor
 // (`WorkbenchEditor`) and the focused Review-queue card — so price parsing,

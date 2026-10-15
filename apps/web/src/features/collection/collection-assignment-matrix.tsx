@@ -22,13 +22,13 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EntityIcon, entityDetailLink } from "~/entity/entities";
+import { Picker } from "~/entity/picker/picker";
 import { type CollectionMatrixRow } from "~/features/collection/collection-types";
 import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";

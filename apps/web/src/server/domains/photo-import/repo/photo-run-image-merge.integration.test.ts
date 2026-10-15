@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { photoRunImage } from "~/server/db/schema";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { mergePhotoRunImages } from "~/server/domains/run/repo/run-target-merge";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";

@@ -10,10 +10,10 @@ import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
 import type { DatabaseFreshnessRpc } from "./db/freshness/rpc";
-import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/rpc";
-import type { ImageProcessingCompanionRpc } from "./domains/image-processing/contracts";
-import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/environment";
-import type { UsdaReleaseRpc } from "./domains/usda-release/rpc";
+import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/operations/rpc";
+import type { ImageProcessingCompanionRpc } from "./domains/image-processing/service/contracts";
+import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/service/environment";
+import type { UsdaReleaseRpc } from "./domains/usda-release/operations/rpc";
 import type { WorkflowRunParams } from "./workflows/runs/contract";
 
 // Its implementation imports nothing from the app.

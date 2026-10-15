@@ -23,10 +23,10 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { DetailPagePending } from "~/entity/navigation/route-pending";
+import { Page } from "~/entity/page/page";
 import { shortcodeHead } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { DetailPagePending } from "~/ui/feedback/route-pending";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import {
   Empty,

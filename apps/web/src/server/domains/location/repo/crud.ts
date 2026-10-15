@@ -37,6 +37,11 @@ import { uniq } from "es-toolkit";
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
+import {
+  LOCATION_DESCRIPTION_FEATURE_ID,
+  locationAiDescriptionSql,
+} from "~/server/db/computed/location-ai-description";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
@@ -54,7 +59,6 @@ import {
   notDeleted,
   rangeConditions,
   relations,
-  syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -67,9 +71,9 @@ import {
   location,
   product,
 } from "~/server/db/schema";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
 import {
   attachInventoryValuations,
   loadLiveInventoryValuations,
@@ -103,10 +107,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import {
-  LOCATION_DESCRIPTION_FEATURE_ID,
-  locationAiDescriptionSql,
-} from "./ai-description";
 import {
   buildLocationWithChildren,
   dbLocationToAPI,

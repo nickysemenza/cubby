@@ -1,18 +1,18 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
 
+import { buildRecipeKicker } from "~/entity/presentation/recipe-utils";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { MarkdownText } from "~/ui/text/markdown";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
-import { tryFormatAmount } from "../../inventory/format-amount";
 import {
   type DisplayQuantity,
   IngredientQuantities,
   ingredientRowGridNarrow,
 } from "../ingredient-quantities";
-import { buildRecipeKicker } from "../recipe-utils";
 import { SectionHeading } from "../section-heading";
 import type { RecipeFormValues } from "./types";
 

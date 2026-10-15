@@ -13,7 +13,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
-import { amazonAsin } from "~/server/domains/purchase-import/writer";
+import { amazonAsin } from "~/server/domains/purchase-import/repo/writer";
 
 export const retainedProductIdentifierClaim = z.object({
   productId: z.uuid(),

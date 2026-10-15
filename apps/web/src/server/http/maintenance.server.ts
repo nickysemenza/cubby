@@ -1,9 +1,9 @@
 import { maintenanceContract } from "~/contracts/maintenance.contract";
+import { imageProcessingMaintenanceSummary } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   backfillImageProcessing,
-  imageProcessingMaintenanceSummary,
   updateImageProcessingSettings,
-} from "~/server/domains/image-processing/repo/image-processing-maintenance";
+} from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { repairImageDimensions } from "~/server/domains/image/service/image-dimension-repair.service";
 import { backfillImageMetadata } from "~/server/domains/image/service/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/domains/image/service/image-provenance-classify.service";
@@ -12,8 +12,8 @@ import {
   countAwaitingWork,
   settleAwaitingWork,
 } from "~/server/generic/work-queue/service/awaiting-work.service";
-import { requestCatchUp } from "~/server/generic/work-queue/service/catch-up.service";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
+import { requestCatchUp } from "~/server/workflows/catch-up";
 
 /** Counts read the authoritative handle: this is the truth the badge and the cron agree on. */
 export const maintenanceHandlers = implementOperationDomain(

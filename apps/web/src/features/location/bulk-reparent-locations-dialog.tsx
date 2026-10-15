@@ -11,11 +11,11 @@ import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { PickerField } from "~/entity/forms/picker-field";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 

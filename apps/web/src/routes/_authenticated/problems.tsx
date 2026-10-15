@@ -2,13 +2,13 @@ import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
+import { RoutePending } from "~/entity/navigation/route-pending";
+import { Page } from "~/entity/page/page";
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { RoutePending } from "~/ui/feedback/route-pending";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 // The overview pulls in all five independently loaded Problems lanes plus the

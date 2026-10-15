@@ -5,7 +5,7 @@ import type { ReadonlyDeep } from "type-fest";
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 import { wasm } from "~/lib/wasm";
 
-import { tryFormatAmount } from "../inventory/format-amount";
+import { tryFormatAmount } from "../../ui/text/format-amount";
 
 /**
  * Rich-text tokens for one instruction line, or the line as plain text when

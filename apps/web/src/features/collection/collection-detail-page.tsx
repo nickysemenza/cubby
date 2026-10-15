@@ -18,15 +18,14 @@ import {
 import { useCallback, useEffect, useId, useMemo } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import {
   createImageColumn,
   createNameColumn,
-} from "~/ui/data-table/column-helpers";
+} from "~/entity/table/column-helpers";
+import RTable from "~/entity/table/table";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -44,6 +43,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import {
   CopyableShortcode,

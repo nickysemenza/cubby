@@ -41,7 +41,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   traceListPage,
   traceListCount,
-} from "~/server/generic/list/repo/list-read-tracing";
+} from "~/server/observability/list-read-tracing";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { unwrapDb } from "./core";

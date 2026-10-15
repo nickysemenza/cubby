@@ -33,14 +33,14 @@ import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";

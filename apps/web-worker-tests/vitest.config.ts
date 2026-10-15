@@ -54,9 +54,10 @@ export default defineConfig({
     fsModuleCache: false,
     include: [
       "../web/src/server/domains/calendar/**/*.workers.test.ts",
-      "../web/src/server/db/freshness/**/*.workers.test.ts",
+      "../web/src/server/generic/problems/**/*.workers.test.ts",
       "../web/src/server/domains/purchase-import/**/*.workers.test.ts",
       "../web/src/server/ai/**/*.workers.test.ts",
+      "../web/src/server/domains/run/**/*.workers.test.ts",
       "../web/src/server/domains/usda-release/**/*.workers.test.ts",
     ],
     testTimeout: 30_000,

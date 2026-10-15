@@ -10,7 +10,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
-import { createGmailApiClient } from "~/server/domains/purchase-import/gmail/client";
+import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
 import {
   convergenceNames,
   createConvergenceFixtures,

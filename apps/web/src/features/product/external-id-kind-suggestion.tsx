@@ -1,10 +1,10 @@
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 
-import { basisValueOf } from "~/features/ai/field-suggestion";
-import { FieldSuggestionHint } from "~/features/ai/field-suggestion-hint";
-import { useFieldSuggestionContext } from "~/features/ai/field-suggestion-provider";
-import { useRowEnumSuggestion } from "~/features/ai/use-row-enum-suggestion";
+import { basisValueOf } from "~/entity/suggestions/field-suggestion";
+import { FieldSuggestionHint } from "~/entity/suggestions/field-suggestion-hint";
+import { useFieldSuggestionContext } from "~/entity/suggestions/field-suggestion-provider";
+import { useRowEnumSuggestion } from "~/entity/suggestions/use-row-enum-suggestion";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** A blank select — `ProductExternalIdsField`'s `emptyValue` — means "no kind

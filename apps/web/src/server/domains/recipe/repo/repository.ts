@@ -1,4 +1,4 @@
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/service/repair-stale-recipes-for-read";
+import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,

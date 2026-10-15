@@ -22,6 +22,7 @@ import {
   purchaseListItem,
   taskListItem,
 } from "~/entity/generated/entity-lists.gen";
+import { installFeatures } from "~/features/registry";
 import {
   entityList,
   purchase as purchaseOperations,
@@ -36,6 +37,8 @@ import {
   planRelationSection,
   RelationSectionActions,
 } from "./entity-relation-table";
+
+installFeatures();
 
 const relationSection = (entity: keyof typeof entitySummary, id: string) => {
   const section = entitySummary[entity].detail.sections.find(

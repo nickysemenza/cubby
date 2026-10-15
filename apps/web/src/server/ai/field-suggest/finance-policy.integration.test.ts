@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { spendingCategory, vendor } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
   executeEntity,

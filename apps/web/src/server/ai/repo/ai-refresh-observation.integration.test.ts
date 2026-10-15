@@ -7,10 +7,10 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
+import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import { getDb } from "~/server/db/helpers";
 import { run, user } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 

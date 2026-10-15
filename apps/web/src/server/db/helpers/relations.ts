@@ -1,21 +1,5 @@
 import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
 
-import {
-  cookbook,
-  entityAttachment,
-  entityExternalId,
-  expenseAttribution,
-  image,
-  inventoryEntry,
-  ledgerSourceClaim,
-  location,
-  mealRecipe,
-  product,
-  productUnitMappings,
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
-} from "~/server/db/schema";
 /**
  * Predefined relation loaders for common query patterns.
  * Reduces verbosity when fetching entities with their related data.
@@ -40,14 +24,30 @@ import {
   productAcquisitionDateSql,
   productExpenseCountSql,
   productExpenseTotalSql,
-} from "~/server/domains/expense/repo/expense-aggregate-sql";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
-import { locationAiDescriptionExtras } from "~/server/domains/location/repo/ai-description";
+} from "~/server/db/computed/expense-aggregate-sql";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
+import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
 import {
   categoryStockTrackingSql,
   categorySummarySql,
-} from "~/server/domains/product-category/repo/product-category-sql";
-import { productClassificationEvidenceSql } from "~/server/domains/product/repo/classification-evidence";
+} from "~/server/db/computed/product-category-sql";
+import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import {
+  cookbook,
+  entityAttachment,
+  entityExternalId,
+  expenseAttribution,
+  image,
+  inventoryEntry,
+  ledgerSourceClaim,
+  location,
+  mealRecipe,
+  product,
+  productUnitMappings,
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 
 import { notDeleted } from "./query";
 

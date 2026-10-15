@@ -2,8 +2,11 @@ import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { totalsLookStuck } from "~/features/recipe/recipe-totals-staleness";
-import { getServingBasis, perUnitSuffix } from "~/features/recipe/recipe-utils";
+import { totalsLookStuck } from "~/entity/presentation/recipe-totals-staleness";
+import {
+  getServingBasis,
+  perUnitSuffix,
+} from "~/entity/presentation/recipe-utils";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";

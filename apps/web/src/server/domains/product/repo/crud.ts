@@ -65,6 +65,18 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  productAcquisitionDateFilterSql,
+  productExpenseCountFilterSql,
+  productExpenseTotalFilterSql,
+} from "~/server/db/computed/expense-aggregate-sql";
+import {
+  categorySummarySql,
+  categoryFeatureSql,
+  productStockTrackedSql,
+} from "~/server/db/computed/product-category-sql";
+import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
+import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
+import {
   assertNoDependents,
   associatePendingImages,
   countWhere,
@@ -104,11 +116,6 @@ import {
   productUnitMappings,
   task,
 } from "~/server/db/schema";
-import {
-  productAcquisitionDateFilterSql,
-  productExpenseCountFilterSql,
-  productExpenseTotalFilterSql,
-} from "~/server/domains/expense/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
@@ -127,12 +134,6 @@ import {
   resolveProductCategory,
   loadCategorySummaries,
 } from "~/server/domains/product-category/repo/product-category";
-import {
-  categorySummarySql,
-  categoryFeatureSql,
-  productStockTrackedSql,
-} from "~/server/domains/product-category/repo/product-category-sql";
-import { categoryDescendantsSql } from "~/server/domains/product-category/repo/product-category-sql";
 import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   resolveEntityDisplayImageLists,
@@ -177,7 +178,6 @@ import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summ
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
 import { assertProductCategoryChange } from "./classification";
-import { getProductClassificationEvidence } from "./classification-evidence";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,

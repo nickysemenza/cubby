@@ -38,7 +38,7 @@ import {
   deleteCookbook,
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
 import {
   makeCookbookExtraction,

@@ -2,7 +2,11 @@ import type { RunOut } from "@cubby/schemas/run";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
+
 import { detailSlotsFor } from "./detail-slots";
+
+installFeatures();
 
 // Non-purchase Runs once had no detail page. Their shared evidence must render
 // without claiming purchase workflow slots. Live and stopped progress variants

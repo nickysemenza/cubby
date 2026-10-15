@@ -23,7 +23,6 @@ import {
   imageJoinBindings,
   insertAndReturn,
   notDeleted,
-  syncEntityImages,
   unwrapDb,
 } from "~/server/db/helpers";
 import {
@@ -33,6 +32,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

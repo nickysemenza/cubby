@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { ListGroupState } from "../../ui/hooks/progressive-list";
+import type { ListGroupState } from "../hooks/progressive-list";
 
 /** Keep the cell's footprint while its field is unavailable. */
 export function DeferredListValue({

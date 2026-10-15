@@ -8,7 +8,7 @@ import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense
 import {
   aiCallRunInput,
   ensureRun,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";

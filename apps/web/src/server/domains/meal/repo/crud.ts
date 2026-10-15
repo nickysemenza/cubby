@@ -25,12 +25,12 @@ import {
   type ListReadIntent,
   notDeleted,
   relations,
-  syncEntityImages,
   updateAndReturn,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import { meal, mealRecipe, mealRecipePortion } from "~/server/db/schema";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";

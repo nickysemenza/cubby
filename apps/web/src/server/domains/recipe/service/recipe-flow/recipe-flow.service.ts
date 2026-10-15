@@ -5,28 +5,27 @@ import {
   type RecipeFlowArtifact,
   type RecipeFlowGenerateInput,
   type RecipeFlowPlan,
-  type RecipeFlowState,
   type RecipeFlowWarning,
   recipeFlowArtifactSchema,
   safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
-import { sha256Hex } from "@cubby/shared/sha256";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
-import {
-  listAiAnalysesForEntityFeature,
-  type StoredAiAnalysis,
-  upsertAiAnalysis,
-} from "~/server/ai/repo/ai-analysis";
+import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
-import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
-import { createAppError } from "~/server/errors/app-error";
+import {
+  flowPromptInput,
+  listConsistentFlowCandidates,
+  productionRecipeFlowReadPorts,
+  recipeFlowContentFingerprint,
+  recipeFlowOrThrow,
+  type RecipeFlowReadPorts,
+} from "~/server/domains/recipe/repo/recipe-flow-state";
 
 import { validateRecipeFlowPlan } from "./validation";
 
-type FlowCandidate = StoredAiAnalysis<RecipeFlowArtifact>;
 type PersistFlowArtifactInput = {
   feature: typeof RECIPE_FLOW_PRIMARY_FEATURE;
   fingerprint: string;
@@ -35,15 +34,7 @@ type PersistFlowArtifactInput = {
   warnings: RecipeFlowArtifact["warnings"];
 };
 
-export interface RecipeFlowPorts {
-  readonly getRecipe: (
-    db: Database,
-    recipeId: RecipeId,
-  ) => Promise<RecipeOut | null>;
-  readonly listCandidates: (
-    db: Database,
-    recipeId: RecipeId,
-  ) => Promise<FlowCandidate[]>;
+export interface RecipeFlowPorts extends RecipeFlowReadPorts {
   readonly persistArtifact: (
     db: Database,
     recipeId: RecipeId,
@@ -56,15 +47,7 @@ export interface RecipeFlowPorts {
 }
 
 const productionRecipeFlowPorts: RecipeFlowPorts = {
-  getRecipe: getRecipeByID,
-  listCandidates: async (db, recipeId) =>
-    await listAiAnalysesForEntityFeature(db, {
-      entityKind: "recipe",
-      entityId: recipeId,
-      feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
-      promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
-      schema: recipeFlowArtifactSchema,
-    }),
+  ...productionRecipeFlowReadPorts,
   persistArtifact: async (db, recipeId, input) => {
     const artifact = recipeFlowArtifactSchema.parse({
       plan: input.plan,
@@ -95,27 +78,6 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
 type RecipeFlowGenerateRequest = Omit<RecipeFlowGenerateInput, "id"> & {
   id: RecipeId;
 };
-
-interface RecipeFlowPromptInput {
-  title: string;
-  sections: Array<{
-    sectionId: string;
-    name: string | null;
-    ingredients: Array<{
-      usageId: string;
-      kind: "ingredient" | "subrecipe";
-      entityId: string;
-      name: string;
-      rawLine: string | null;
-      modifier: string | null;
-      amounts: unknown[];
-    }>;
-    instructions: Array<{
-      instructionIndex: number;
-      text: string;
-    }>;
-  }>;
-}
 
 type RecipeFlowCandidateAssessment =
   | {
@@ -160,107 +122,6 @@ export function assessRecipeFlowCandidate(
     : validation;
 }
 
-export function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
-  return {
-    title: recipe.name,
-    sections: recipe.sections.map((section) => ({
-      sectionId: section.id,
-      name: section.name ?? null,
-      ingredients: section.ingredients.map((usage) => ({
-        usageId: usage.id,
-        kind: usage.type === "ingredient" ? "ingredient" : "subrecipe",
-        entityId:
-          usage.type === "ingredient" ? usage.ingredient.id : usage.recipe.id,
-        name:
-          usage.type === "ingredient"
-            ? usage.ingredient.name
-            : usage.recipe.name,
-        rawLine: usage.rawLine ?? null,
-        modifier: usage.modifier ?? null,
-        amounts: usage.amounts,
-      })),
-      instructions: section.instructions.map(
-        (instruction, instructionIndex) => ({
-          instructionIndex,
-          text: instruction.instruction,
-        }),
-      ),
-    })),
-  };
-}
-
-async function contentFingerprint(
-  promptInput: RecipeFlowPromptInput,
-  guidance: string | null,
-): Promise<string> {
-  return sha256Hex(JSON.stringify({ recipe: promptInput, guidance }));
-}
-
-/**
- * A stored flow stays usable for its prompt version whichever model generated
- * it, so retiering the feature never hides flows a previous model produced;
- * only a row whose artifact disagrees with it is ignored.
- */
-async function listConsistentCandidates(
-  db: Database,
-  recipeId: RecipeId,
-  ports: RecipeFlowPorts,
-): Promise<FlowCandidate[]> {
-  return (await ports.listCandidates(db, recipeId)).filter(
-    (candidate) =>
-      candidate.result.model === candidate.model &&
-      candidate.result.promptVersion === candidate.promptVersion,
-  );
-}
-
-async function recipeOrThrow(
-  db: Database,
-  recipeId: RecipeId,
-  ports: RecipeFlowPorts,
-): Promise<RecipeOut> {
-  const recipe = await ports.getRecipe(db, recipeId);
-  if (!recipe) throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
-  return recipe;
-}
-
-export async function getRecipeFlowState(
-  db: Database,
-  recipeId: RecipeId,
-  ports: RecipeFlowPorts = productionRecipeFlowPorts,
-): Promise<RecipeFlowState> {
-  const [recipe, candidates] = await Promise.all([
-    recipeOrThrow(db, recipeId, ports),
-    listConsistentCandidates(db, recipeId, ports),
-  ]);
-  const latest = candidates[0];
-  const guidance = latest?.result.guidance ?? null;
-  const fingerprint = await contentFingerprint(
-    flowPromptInput(recipe),
-    guidance,
-  );
-  const current = candidates.find(
-    (candidate) =>
-      candidate.inputFingerprint === fingerprint &&
-      candidate.result.contentFingerprint === fingerprint,
-  );
-
-  if (current) {
-    return {
-      status: "current",
-      currentFingerprint: fingerprint,
-      artifact: current.result,
-    };
-  }
-  if (latest) {
-    return {
-      status: "stale",
-      currentFingerprint: fingerprint,
-      artifact: latest.result,
-    };
-  }
-  return { status: "missing", currentFingerprint: fingerprint };
-}
-
 async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
@@ -295,8 +156,8 @@ export async function generateRecipeFlow(
   ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
-    recipeOrThrow(db, input.id, ports),
-    listConsistentCandidates(db, input.id, ports),
+    recipeFlowOrThrow(db, input.id, ports),
+    listConsistentFlowCandidates(db, input.id, ports),
   ]);
   const latest = candidates[0];
   const guidance =
@@ -304,7 +165,7 @@ export async function generateRecipeFlow(
       ? (latest?.result.guidance ?? null)
       : input.guidance;
   const promptInput = flowPromptInput(recipe);
-  const fingerprint = await contentFingerprint(promptInput, guidance);
+  const fingerprint = await recipeFlowContentFingerprint(promptInput, guidance);
   const current = candidates.find(
     (candidate) =>
       candidate.inputFingerprint === fingerprint &&

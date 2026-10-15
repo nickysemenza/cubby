@@ -12,12 +12,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
-import { startMailDiscovery } from "~/server/domains/purchase-import/gmail/discovery";
-import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/gmail/persistence";
+import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
+import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import {
   issueExecutionAuthorization,
   reserveExecutionAuthorization,
-} from "~/server/domains/run/service/execution-authorization";
+} from "~/server/domains/run/repo/execution-authorization";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";

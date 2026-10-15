@@ -83,7 +83,7 @@ and Planting; `routes` on Plant reads each start route against this month
 (seed routes against sow windows, `bought` against transplant windows); a
 Planting's `expectedHarvestStart/End` adds the Plant's packet days, else the
 crop maturity, to `transplantedOn`, else `sowedOn`. All are derived by
-`apps/web/src/server/domains/plant/service/windows.ts` for the household
+`apps/web/src/server/domains/plant/repo/windows.ts` for the household
 microclimate (`sunny`, falling back to `bay-area`) and rendered as a band on
 the planting timeline. When updating the guide data, preserve source dates
 and upstream attribution and run the focused guide test — do not infer tray

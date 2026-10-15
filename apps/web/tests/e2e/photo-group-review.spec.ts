@@ -9,11 +9,11 @@ import {
 import { and, eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TestHarness } from "wrangler";
-import { memberImport } from "~/server/domains/purchase-import/order-import.fixtures";
+import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
-} from "~/server/domains/purchase-import/reconciliation";
+} from "~/server/domains/purchase-import/repo/reconciliation";
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import * as schema from "~/server/db/schema";

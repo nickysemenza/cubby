@@ -17,6 +17,7 @@ import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
 import {
   amountToColumns,
   getDb,
@@ -44,7 +45,6 @@ import {
   assertIndividualOwner,
   loadInventoryOwnershipTraces,
 } from "./ownership";
-import { stockOnly } from "./placement";
 import {
   inventorySlotKey,
   inventorySnapshotToken,

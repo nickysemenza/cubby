@@ -1,7 +1,7 @@
 import type { UseFormReturn } from "react-hook-form";
 
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
+import { PickerField } from "~/entity/forms/picker-field";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 
 import type { RecipeFormValues } from "./types";
 

@@ -61,7 +61,7 @@ import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
-import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/run-retirement";
+import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import {
   awaitingPostingSql,
@@ -78,7 +78,6 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { attentionStatePredicate } from "~/server/generic/work-queue/repo/work-attention";
-import { additionalWorkProblemSelections } from "~/server/generic/work-queue/repo/work-queue-problems";
 import {
   NO_FACT_COLUMNS,
   scopeAdmitsUnrecorded,
@@ -133,9 +132,16 @@ const gapViewFilters = (
 };
 
 /** One read-only relation, shared by household routing and member eligibility. */
+/** Diagnostic-backed queue branches; supplied by `service/work-queue-read`. */
+export type WorkProblemSelections = (
+  db: Database,
+  scope: WorkQueueScope,
+) => Promise<SQL[]>;
+
 async function workQueueProjection(
   db: Database,
   scope: WorkQueueScope,
+  problemSelections: WorkProblemSelections,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   // Skips building a branch the scope would drop anyway.
@@ -466,7 +472,7 @@ async function workQueueProjection(
       key: "account:run",
     }),
   );
-  selections.push(...(await additionalWorkProblemSelections(db, scope)));
+  selections.push(...(await problemSelections(db, scope)));
   // A scope that admits no branch still yields a typed, empty relation.
   if (selections.length === 0)
     return sql`SELECT NULL::text AS entity, NULL::text AS id, NULL::text AS name,
@@ -549,17 +555,22 @@ const vendorOf = (uuid: SQL) =>
 
 async function queryWorkQueue(
   db: Database,
+  problemSelections: WorkProblemSelections,
   currentPartyId: LedgerPartyId | null,
   input: QueueInput,
   memberOnly: boolean,
   record?: WorkQueueScope["record"],
 ) {
-  const projection = await workQueueProjection(db, {
-    source: input.source,
-    kind: input.kind,
-    check: input.check === undefined ? undefined : [input.check].flat(),
-    record,
-  });
+  const projection = await workQueueProjection(
+    db,
+    {
+      source: input.source,
+      kind: input.kind,
+      check: input.check === undefined ? undefined : [input.check].flat(),
+      record,
+    },
+    problemSelections,
+  );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
   const conditions: SQL[] = [
@@ -681,16 +692,18 @@ async function queryWorkQueue(
 }
 
 /** Authority is an implicit argument supplied only by the authenticated operation context. */
-export const readWorkQueue = (
+export const readWorkQueueWith = (
+  problemSelections: WorkProblemSelections,
   db: Database,
   currentPartyId: LedgerPartyId | null,
   input: QueueInput,
   memberOnly: boolean,
-) => queryWorkQueue(db, currentPartyId, input, memberOnly);
+) => queryWorkQueue(db, problemSelections, currentPartyId, input, memberOnly);
 
 /** One record's rows of the same projection and routing. The record filter is
  * pushed into each branch, so this never plans the whole queue. */
-export async function readRecordWorkQueue(
+export async function readRecordWorkQueueWith(
+  problemSelections: WorkProblemSelections,
   db: Database,
   currentPartyId: LedgerPartyId | null,
   id: string,
@@ -700,6 +713,7 @@ export async function readRecordWorkQueue(
   if (!parsed) throw new Error(`Work queue record ${id} is not a shortcode`);
   return queryWorkQueue(
     db,
+    problemSelections,
     currentPartyId,
     workQueueHouseholdInput.parse({
       pageSize: 100,

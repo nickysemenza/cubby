@@ -30,23 +30,21 @@ import {
 } from "react-hook-form";
 
 import { enumFieldOptions } from "~/entity/display/enum-field-display";
+import { featureRegistry } from "~/entity/feature-registry";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
+import { PickerField } from "~/entity/forms/picker-field";
+import type { EntitySearchScope } from "~/entity/picker/entity-search-hooks";
+import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import {
   generic,
   implemented,
   ownedElsewhere,
   type PresentationCoverage,
 } from "~/entity/presentation-coverage";
-import { basisValueOf } from "~/features/ai/field-suggestion";
-import { FormFieldResolution } from "~/features/ai/form-field-resolution";
-import {
-  SourceAliasesField,
-  SourceRefsField,
-} from "~/features/finance/financial-form-fields";
-import type { EntitySearchScope } from "~/ui/combobox/entity-search-hooks";
-import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { AutoSuggestSlot } from "~/entity/suggestions/auto-suggest-slot";
+import { basisValueOf } from "~/entity/suggestions/field-suggestion";
+import { FormFieldResolution } from "~/entity/suggestions/form-field-resolution";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 
 const EntityEditFieldScopeContext = createContext<string | undefined>(
   undefined,
@@ -65,7 +63,7 @@ export function EntityEditFieldScopeProvider({
     </EntityEditFieldScopeContext.Provider>
   );
 }
-import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
+import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { FormSection } from "~/ui/forms/form-section";
@@ -87,14 +85,6 @@ import {
 } from "./entity-field-presentation";
 import { fieldClearing } from "./field-clearing";
 import { LedgerAttributionsField } from "./ledger-attributions-field";
-import {
-  ProductExternalIdsField,
-  ProductLabelNutritionField,
-  ProductTagsField,
-  ProductUnitMappingsField,
-  ProductUpcField,
-  ProductUsdaFoodField,
-} from "./product-editor-fields";
 import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
   presentEntitySelectOptions,
@@ -309,6 +299,10 @@ function renderPrimitiveField({
     // SAFETY: The generated text-control declaration selects a string
     // field. RHF's conditional string path cannot express a dynamic model.
     const textName = name as never;
+    const suggestField = suggestFieldFor(
+      Boolean(field.control?.suggest),
+      field.key,
+    );
     return (
       <UnifiedTextField
         key={field.key}
@@ -318,10 +312,11 @@ function renderPrimitiveField({
         description={description}
         placeholder={placeholder ?? presentation.label}
         nullable={field.nullable}
-        suggestField={suggestFieldFor(
-          Boolean(field.control?.suggest),
-          field.key,
-        )}
+        suggestion={
+          suggestField ? (
+            <AutoSuggestSlot form={form} name={textName} field={suggestField} />
+          ) : undefined
+        }
         focusOnMount={fieldOptions.focusOnMount}
       />
     );
@@ -703,58 +698,80 @@ function StructuredFieldRenderer({
  * specialized, non-reference field with no entry here fails loudly rather
  * than silently dropping the field.
  */
-export const controlRendererCoverage = {
-  "entity-select": generic,
-  money: generic,
-  url: generic,
-  "tag-list": implemented(TagListField),
-  "ledger-attributions": implemented(({ entity, field, form, mode }) => (
-    <LedgerAttributionsField
-      form={form}
-      name={field.key}
-      label={field.label}
-      prefillFromVendor={entity === "expense" && mode === "create"}
-    />
-  )),
-  amount: implemented(AmountField),
-  "entity-multi-select": implemented(EntityMultiSelectField),
-  "vendor-name": implemented(VendorNameField),
-  // The gallery block the dialog shell mounts owns reordering (it writes
-  // `imageOrder` through `onExistingImagesReorder`); the field itself has no
-  // control of its own to draw.
-  "image-order": ownedElsewhere,
-  // Drawn from the field's generated `StructuredValueSchema`, the same description native draws.
-  "structured-field": implemented(StructuredFieldRenderer),
-  "unit-mappings": implemented(ProductUnitMappingsField),
-  "label-nutrition": implemented(ProductLabelNutritionField),
-  "external-ids": implemented(ProductExternalIdsField),
-  "upc-lookup": implemented(ProductUpcField),
-  "usda-food": implemented(ProductUsdaFoodField),
-  "product-tags": implemented(ProductTagsField),
-  // `SourceAliasesField`/`SourceRefsField` (`financial-form-fields.tsx`)
-  // already hardcode their own `name` (`sourceAliases`/`sourceRefs`), the
-  // only field key either renderer is ever declared against — no need to
-  // thread `field.key` through.
-  "source-aliases": implemented(({ form }) => (
-    <SourceAliasesField form={form} />
-  )),
-  "source-refs": implemented(({ form }) => <SourceRefsField form={form} />),
-} satisfies Readonly<
+const buildControlRendererCoverage = () => {
+  const controls = featureRegistry().controlRenderers;
+  return {
+    "entity-select": generic,
+    money: generic,
+    url: generic,
+    "tag-list": implemented(TagListField),
+    "ledger-attributions": implemented(({ entity, field, form, mode }) => (
+      <LedgerAttributionsField
+        form={form}
+        name={field.key}
+        label={field.label}
+        prefillFromVendor={entity === "expense" && mode === "create"}
+      />
+    )),
+    amount: implemented(AmountField),
+    "entity-multi-select": implemented(EntityMultiSelectField),
+    "vendor-name": implemented(VendorNameField),
+    // The gallery block the dialog shell mounts owns reordering (it writes
+    // `imageOrder` through `onExistingImagesReorder`); the field itself has no
+    // control of its own to draw.
+    "image-order": ownedElsewhere,
+    // Drawn from the field's generated `StructuredValueSchema`, the same description native draws.
+    "structured-field": implemented(StructuredFieldRenderer),
+    "unit-mappings": implemented(controls["unit-mappings"]),
+    "label-nutrition": implemented(controls["label-nutrition"]),
+    "external-ids": implemented(controls["external-ids"]),
+    "upc-lookup": implemented(controls["upc-lookup"]),
+    "usda-food": implemented(controls["usda-food"]),
+    "product-tags": implemented(controls["product-tags"]),
+    "source-aliases": implemented(controls["source-aliases"]),
+    "source-refs": implemented(controls["source-refs"]),
+  } satisfies Readonly<
+    Record<
+      ControlRendererId,
+      PresentationCoverage<ComponentType<SpecializedIntentRendererProps>>
+    >
+  >;
+};
+
+/** The specialized controls a feature owns (product editor fields, finance source fields). */
+type FeatureControlRendererId =
+  | "unit-mappings"
+  | "label-nutrition"
+  | "external-ids"
+  | "upc-lookup"
+  | "usda-food"
+  | "product-tags"
+  | "source-aliases"
+  | "source-refs";
+export type FeatureControlRenderers = Readonly<
   Record<
-    ControlRendererId,
-    PresentationCoverage<ComponentType<SpecializedIntentRendererProps>>
+    FeatureControlRendererId,
+    ComponentType<SpecializedIntentRendererProps>
   >
 >;
+
+let controlCoverage:
+  | ReturnType<typeof buildControlRendererCoverage>
+  | undefined;
+
+export const controlRendererCoverage = () =>
+  (controlCoverage ??= buildControlRendererCoverage());
 
 /** Looks up a manifest-declared `control.renderer` name, or `undefined` for
  * one this registry doesn't (yet) carry an entry for. */
 function specializedRendererFor(
   name: string,
 ): ComponentType<SpecializedIntentRendererProps> | undefined {
-  if (!Object.hasOwn(controlRendererCoverage, name)) return undefined;
+  const coverage = controlRendererCoverage();
+  if (!Object.hasOwn(coverage, name)) return undefined;
   // SAFETY: the `Object.hasOwn` check above proves `name` is one of
   // `controlRendererCoverage`'s own declared keys, not an arbitrary string.
-  const disposition = controlRendererCoverage[name as ControlRendererId];
+  const disposition = coverage[name as ControlRendererId];
   if (disposition.kind === "implemented") return disposition.implementation;
   if (disposition.kind === "ownedElsewhere") return () => null;
   return undefined;

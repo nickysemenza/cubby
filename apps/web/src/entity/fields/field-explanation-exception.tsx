@@ -7,12 +7,12 @@ import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useId, useMemo, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { MarkdownText } from "~/ui/text/markdown";
 
 type ExplainedCheck = NonNullable<
   FieldExplanationOutput["qualityBreakdown"]

@@ -23,6 +23,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
 
+import { runHref } from "~/entity/routing/purchase-import-links";
 import {
   QueuePassProgress,
   QueuePassResumePrompt,
@@ -46,7 +47,6 @@ import {
 } from "~/ui/primitives/empty";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { runHref } from "../../purchase/purchase-import-links";
 import { useProductViewSnapshot } from "../worklist/use-product-view-snapshot";
 import { TriageBounds, type TriageBoundsValue } from "./triage-bounds";
 import { TriageStopCard } from "./triage-stop-card";

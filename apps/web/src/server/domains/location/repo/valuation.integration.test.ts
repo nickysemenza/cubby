@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { getLocationById } from "~/server/domains/location/repo/crud";
-import { rollupLocationValuations } from "~/server/domains/location/service/location-valuation-rollup";
+import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import {
   createInventoryFixture,
   createLocationFixture,

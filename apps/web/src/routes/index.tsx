@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 
+import { Page } from "~/entity/page/page";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
 import { TodayAttention } from "~/features/home/house-card";
 import { TodayMeals } from "~/features/home/meals-card";
@@ -11,6 +12,7 @@ import { DailyPasses } from "~/features/home/quick-actions-card";
 import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
 import { RecordedSpendCard } from "~/features/home/recorded-spend-card";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";
+import { installFeatures } from "~/features/registry";
 import {
   expense,
   location,
@@ -21,7 +23,6 @@ import {
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
 import { CollapsibleSection, Grid, Section } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/features/home/home-insights");
@@ -74,6 +75,9 @@ function timeOfDay(date: Date): string {
 }
 
 function Home() {
+  // Home sits outside `_authenticated`, which otherwise installs the feature
+  // registry its pickers read; idempotent.
+  installFeatures();
   const { asOf } = Route.useLoaderData();
   const session = authClient.useSession();
   // Clock-dependent text is set after mount so SSR (UTC) and the client's

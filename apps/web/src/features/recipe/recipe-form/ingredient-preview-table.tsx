@@ -29,12 +29,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { formatAmounts } from "~/ui/text/format-amount";
 
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../../../entity/entity-media/entity-display-images";
-import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
 import {
   type IngredientMatch,

@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { listProductStock } from "~/server/domains/inventory/repo/product-stock";
-import { mergeProducts } from "~/server/domains/product/repo/merge";
 import {
   listProductMatchRows,
   productPairKey,
-} from "~/server/domains/product/repo/product-match-candidate";
-import { proposeProductMatch } from "~/server/domains/product/service/product-match.service";
+} from "~/server/domains/product/repo/match/product-match-candidate";
+import { proposeProductMatch } from "~/server/domains/product/repo/match/product-match-review";
+import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {

@@ -12,7 +12,7 @@ import {
   SideBySideFields,
   UnifiedTextField,
 } from "../../ui/forms/form-utils";
-import { getHoverableMeasureUnitIcon } from "./format-amount";
+import { getHoverableMeasureUnitIcon } from "../../ui/text/format-amount";
 
 /**
  * The unit every new inventory row starts with.

@@ -72,9 +72,9 @@ import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
+import { withListReadTracing } from "~/server/observability/list-read-tracing";
 
 import type { ListProjection } from "./list-projection";
-import { withListReadTracing } from "./list-read-tracing";
 
 const filterValues = z.record(z.string(), z.unknown());
 const suggestionFilterValue = z

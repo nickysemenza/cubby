@@ -29,15 +29,12 @@ export {
   imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,
-  syncEntityImages,
   updateAndReturn,
   touchUpdatedAt,
   updateLiveAndReturn,
 } from "./crud";
 export type { ImageJoinBinding } from "./crud";
 export type { ImageJoinTable } from "./crud";
-// Dependency-edge replacement + read (project/task blockedByIds)
-export { dependencyIdsFor, replaceDependencyEdges } from "./dependency-edges";
 export type { ListReadIntent } from "./query";
 // Query helpers
 export {

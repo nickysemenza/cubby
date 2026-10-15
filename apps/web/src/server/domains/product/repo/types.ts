@@ -4,6 +4,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
+import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import type { MappableImageRecord } from "~/server/db/helpers";
 import type {
   cookbook,
@@ -14,7 +15,6 @@ import type {
   productUnitMappings,
 } from "~/server/db/schema";
 import type { LocationIdentityProductRow } from "~/server/domains/location/repo/internal-types";
-import type { CategoryStockTracking } from "~/server/domains/product-category/repo/product-category-sql";
 
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";

@@ -114,7 +114,7 @@ const assessmentFamilies = {
         .limit(1);
       if (!source) throw new Error("Email no longer exists");
       const { correctEmailRelevance } =
-        await import("~/server/domains/purchase-import/gmail/relevance-correction");
+        await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
       await correctEmailRelevance(
         db,
         {
@@ -168,7 +168,7 @@ const assessmentFamilies = {
       if (!mail || !target)
         throw new Error("Email link target no longer exists");
       const { decideEmailPurchase } =
-        await import("~/server/domains/purchase-import/email-purchase-decision");
+        await import("~/server/domains/purchase-import/repo/email-purchase-decision");
       await decideEmailPurchase(
         db,
         {
@@ -250,7 +250,7 @@ const assessmentFamilies = {
           "Product merging requires a survivor and the current pair fingerprint",
         );
       const { mergeProductMatch } =
-        await import("~/server/domains/product/service/product-match.service");
+        await import("~/server/domains/product/repo/match/product-match-review");
       await mergeProductMatch(
         { ...context, db },
         {

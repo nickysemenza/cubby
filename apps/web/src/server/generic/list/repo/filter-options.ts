@@ -23,6 +23,7 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { formatSearchTerm, getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -38,7 +39,6 @@ import {
 } from "~/server/db/schema";
 import { financialAccountTransactionCount } from "~/server/domains/financial-account/repo";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { getProductTagOptions } from "~/server/domains/product/repo/analytics";
 import { projectNameOptions } from "~/server/domains/project/repo/lookup";

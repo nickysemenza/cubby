@@ -13,20 +13,20 @@ import {
   type SearchableEntityText,
   upsertEntityEmbeddingsIfCurrent,
 } from "~/server/generic/embedding/repo/entity-embedding-refresh";
+import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
+import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import {
   getSemanticEmbeddingConfig,
   type SemanticEmbeddingConfig,
-} from "~/server/generic/embedding/semantic/config";
+} from "~/server/generic/embedding/service/semantic/config";
 import {
   embedTexts,
   semanticEmbeddingsConfigured,
-} from "~/server/generic/embedding/semantic/embeddings";
-import { embeddingTextHash } from "~/server/generic/embedding/semantic/hash";
-import { normalizeSearchText } from "~/server/generic/embedding/semantic/text";
+} from "~/server/generic/embedding/service/semantic/embeddings";
 import {
   productionVectorStore,
   type VectorStorePort,
-} from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/vector-store";
 import {
   getSearchDocumentEmbeddingTexts,
   refreshSearchDocuments,

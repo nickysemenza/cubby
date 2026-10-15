@@ -24,6 +24,7 @@ import {
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { z } from "zod";
 
+import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import {
   isNotDeleted,
   type MappableImageRecord,
@@ -40,7 +41,6 @@ import type {
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
-import type { CategoryStockTracking } from "~/server/domains/product-category/repo/product-category-sql";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 import { parseWithContext } from "~/server/lib/zod-utils";
 

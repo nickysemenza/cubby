@@ -7,7 +7,7 @@ import { useDebug } from "~/ui/hooks/use-debug";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 
-import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
 import { columnWidthVariables } from "./column-layout";
 import { ROW_DENSITY } from "./density";
 import { useTableVirtualizer } from "./hooks/use-table-virtualizer";

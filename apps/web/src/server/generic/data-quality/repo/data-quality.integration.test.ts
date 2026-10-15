@@ -19,7 +19,7 @@ import { createProductCategory } from "~/server/domains/product-category/repo/pr
 import { productList } from "~/server/domains/product/repo/crud";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { readRecordWorkQueue } from "~/server/generic/work-queue/repo/work-queue";
+import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   createInventoryFixture,
   createLocationFixture,

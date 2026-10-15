@@ -42,7 +42,7 @@ export default defineEntity({
   names: { singular: "Financial Transaction", plural: "Transactions" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/finance",
+      module: "~/features/finance/list-columns",
       export: "financialTransactionListOverride",
     },
     basePath: "financial-transactions",

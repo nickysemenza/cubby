@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
 import { getDb } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -12,7 +13,7 @@ import {
   user,
 } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { memberImport } from "~/server/domains/purchase-import/order-import.fixtures";
+import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -50,11 +51,15 @@ describe("photo product candidates", () => {
       },
     };
   };
-  const findPhotoProductCandidates: typeof queryPhotoProductCandidates = (
-    db,
-    input,
-    actor,
-  ) => queryPhotoProductCandidates(db, input, actor, unknownVariant);
+  const findPhotoProductCandidates = (
+    db: Parameters<typeof queryPhotoProductCandidates>[0],
+    input: Parameters<typeof queryPhotoProductCandidates>[1],
+    actor: Parameters<typeof queryPhotoProductCandidates>[2],
+    port: DecisionPort = unknownVariant,
+  ) =>
+    queryPhotoProductCandidates(db, input, actor, (args) =>
+      decideProductVariantComparison({ ...args, port }),
+    );
 
   it("exposes only known accepted line selectors owned by the reviewing member", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {

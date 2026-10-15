@@ -7,20 +7,20 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { publishProductPair } from "~/server/domains/product/repo/product-match-candidate";
+import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getDuplicateProductRecommendationWorkflow } from "~/server/domains/recommendation/operations/recommendations.server";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
-import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/operations/semantic-similarity.server";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
+import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   createInMemoryVectorizeIndex,
   productionVectorStore,
   type VectorStorePort,
   vectorId,
-} from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/vector-store";
 import { requestEmbeddingRefreshWorkflow } from "~/server/generic/search/operations/search.server";
 import {
   countUnembeddedSearchDocuments,

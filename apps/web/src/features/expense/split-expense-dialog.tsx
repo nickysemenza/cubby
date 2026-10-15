@@ -29,12 +29,12 @@ import type { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entityDetailLink } from "~/entity/entities";
-import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
-import { tradeOptions } from "~/features/project/trade-options";
+import { Picker } from "~/entity/picker/picker";
+import { useEntityListSource } from "~/entity/picker/with-search-hook";
+import { tradeOptions } from "~/entity/presentation/trade-options";
+import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { Picker } from "~/ui/combobox/picker";
-import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

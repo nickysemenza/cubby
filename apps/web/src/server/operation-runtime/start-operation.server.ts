@@ -20,7 +20,7 @@ import {
   mutationChangesHouseholdData,
   readPolicyFor,
 } from "~/server/db/read-policy";
-import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/client";
+import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
 import {
   appErrorFromUnknown,
   isExpectedAppError,

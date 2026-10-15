@@ -3,13 +3,16 @@ import { Fragment, memo, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { renderValueOrMissing } from "~/lib/result";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { MarkdownText } from "~/ui/text/markdown";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
+import { sourceFootnote } from "../../entity/presentation/recipe-source";
+import { getIngredientName } from "../../entity/presentation/recipe-utils";
+import { formatYield } from "../../entity/presentation/recipe-yield";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -20,15 +23,12 @@ import {
   computeScalingPercentages,
   formatScalingPct,
 } from "./recipe-scaling-pct";
-import { sourceFootnote } from "./recipe-source";
 import {
   firstExpansionRowIds,
   type RecipeTreeNode,
   type RecipeTreeRow,
   recipeTreeDisplayImage,
 } from "./recipe-tree";
-import { getIngredientName } from "./recipe-utils";
-import { formatYield } from "./recipe-yield";
 import {
   BasePill,
   NoWeightPill,

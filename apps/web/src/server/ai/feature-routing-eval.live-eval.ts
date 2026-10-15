@@ -63,7 +63,8 @@ const [
   { purchaseAuditPrompt, purchaseRepairRequest },
   { buildRecipeFlowRequest },
   { piCallTarget },
-  { assessRecipeFlowCandidate, flowPromptInput },
+  { assessRecipeFlowCandidate },
+  { flowPromptInput },
   {
     PURCHASE_IMPORT_AUDIT_FEATURE,
     PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -71,11 +72,12 @@ const [
   },
   { runStructuredFeature },
 ] = await Promise.all([
-  import("~/server/domains/purchase-import/agents/extract"),
+  import("~/server/domains/purchase-import/operations/agents/extract"),
   import("~/server/ai/prompts/purchase-import"),
   import("~/server/ai/prompts/recipe-flow"),
   import("~/server/ai/adapters"),
   import("~/server/domains/recipe/service/recipe-flow/recipe-flow.service"),
+  import("~/server/domains/recipe/repo/recipe-flow-state"),
   import("./features"),
   import("./run-feature"),
 ]);

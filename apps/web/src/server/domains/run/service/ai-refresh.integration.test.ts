@@ -12,7 +12,6 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
 import {
   claimAiEvaluation,
   guardAiEvaluation,
@@ -22,6 +21,7 @@ import {
   saveAiDiscoveryCursor,
   readAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
+import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -37,11 +37,8 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
-import {
-  aiRefreshRelaunchCandidates,
-  discoverAiRefresh,
-  executeAiRefreshTarget,
-} from "./ai-refresh";
+import { aiRefreshRelaunchCandidates } from "../repo/ai-refresh-state";
+import { discoverAiRefresh, executeAiRefreshTarget } from "./ai-refresh";
 import {
   categoryPorts,
   PRIMARY_MODEL,

@@ -436,7 +436,7 @@
         "apps/web/src/features/recipe/recipe-magazine-view.tsx",
         "apps/web/src/features/recipe/compare/recipe-compare-grid.tsx",
         "apps/web/src/features/recipe/cookbook-import/run-report-panel.tsx",
-        "apps/web/src/features/units/nutrients-summary.tsx",
+        "apps/web/src/entity/presentation/nutrients-summary.tsx",
         "apps/web/src/ui/visualizations/recipe-cost-treemap.tsx",
         "apps/web/src/app/cookbooks/cookbook-run-report.tsx",
         "apps/web/src/features/purchase/financial-settlement.tsx",
@@ -444,9 +444,9 @@
         "apps/web/src/entity/display/detail-field-renderers/image-capture.tsx",
         "apps/web/src/lib/format-duration.ts",
         "apps/web/src/lib/wasm-execution.ts",
-        "apps/web/src/server/domains/calendar/ics.ts",
+        "apps/web/src/server/domains/calendar/service/ics.ts",
         "apps/web/src/server/domains/financial-transaction/repo/financial-transaction-allocations.ts",
-        "apps/web/src/server/domains/product/service/product-match-ranking.ts"
+        "apps/web/src/server/domains/product/repo/match/product-match-ranking.ts"
       ],
       "rules": {
         "cubby/no-ad-hoc-number-format": "off"
@@ -467,7 +467,7 @@
         "apps/web/src/features/docs/components/guide-doc.tsx",
         "apps/web/src/features/project/charts/task-status-board.tsx",
         "apps/web/src/features/project/tool-matrix-page.tsx",
-        "apps/web/src/ui/text/markdown.tsx",
+        "apps/web/src/entity/prose/markdown.tsx",
         "apps/web/src/ui/matrix/cross-tab-table.tsx"
       ],
       "rules": {
@@ -480,7 +480,7 @@
         "apps/web/src/features/meal/meal-nutrition-summary.tsx",
         "apps/web/src/features/recipe/recipe-magazine-view.tsx",
         "apps/web/src/features/recipe/recipe-form/recipe-live-preview.tsx",
-        "apps/web/src/ui/navigation/application-directory.tsx"
+        "apps/web/src/entity/navigation/application-directory.tsx"
       ],
       "rules": {
         "cubby/no-hand-rolled-record-list": "off"

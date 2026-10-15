@@ -26,8 +26,8 @@ import {
 import { saveMealFood, removeMealFood } from "~/server/domains/meal/repo/food";
 import { saveMealRecipePreparation } from "~/server/domains/meal/repo/portions";
 import { getMealNutrition } from "~/server/domains/meal/service/meal-nutrition.service";
-import { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
-import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/service/usda-helpers";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const noUsda: UsdaFoodBatchPort = {

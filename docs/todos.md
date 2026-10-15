@@ -204,7 +204,7 @@ history is the archive. Permanent product constraints live in the
   photo Products with no candidate at all, split by whether they were seeded.
   Promote widening, caching, or write-time detection only when those logs from
   a real wardrobe import show unseeded photos without candidates that a person
-  later matched (`apps/web/src/server/domains/product/service/product-match.service.ts`).
+  later matched (`apps/web/src/server/domains/product/repo/match/product-match-review.ts`).
 
 - 🤔 🧪 🟡 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
@@ -1191,7 +1191,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
     (`entity/components/ref-link/list.tsx`) in detail-page related sections
     and `ui/document-viewer-list.tsx` file names.
   - Navigation: sidebar entries and group labels
-    (`ui/navigation/sidebar-rail-group.tsx`, `workspace-navigator.tsx`) and
+    (`entity/navigation/sidebar-rail-group.tsx`, `workspace-navigator.tsx`) and
     the shell's page title in `authenticated-app-shell.tsx`.
 - 🤔 🛠️ 🔵 **RTable visual polish pass.** Quieter cells read as finished; the
   mocked target has fewer marks and type-led hierarchy. Start with
@@ -1388,7 +1388,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 - 🟢 🛠️ 🔵 **Rename detail section `placement`.** With the supporting rail gone,
   `primary` and `full` no longer describe width: `primary` sections share one
   ruled card and `full` gets its own (`renderDetailGroup` in
-  `apps/web/src/ui/data-table/detail-page.tsx`). Rename it to the grouping it
+  `apps/web/src/entity/table/detail-page.tsx`). Rename it to the grouping it
   now expresses (possibly folded into `surface`), and give the Apple Run
   console's full-slots-first ordering (`RunConsoleView.swift`) its own field.
 
@@ -1675,36 +1675,31 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
-- 🟢 🛠️ 🔵 **Burn down the domain-layer baseline.**
-  `tools/oxlint/cubby/domain-layers-baseline.json` counts the layer violations
-  that predate `cubby/domain-layers` ([ADR 0019](adr/0019-domain-first-server-layout.md)):
-  134 `entity/` → `features/` and 108 `ui/` → `entity/`/`features/` client
-  inversions, plus 112 server violations (repo → service/`ai/`,
-  platform/generic → domain service/operations, service → `db/schema`/`db/helpers`
-  mostly in `domains/run/service/`, and `db/` → domain repo).
-  Lower a file's count as its imports are inverted; the rule rejects a stale
-  (too high) entry. Rule gaps to close alongside: role-less files in feature
-  domains (`purchase-import`, `purchase-agent`, `photo-import/run`, `calendar`,
-  `image-processing`) are not ranked, so they may import any role; a service
-  may still value-import `~/server/db` itself (`withConnection`); and the
-  baseline is a per-file count, so swapping one violation for another passes. The client half includes data hooks still in `ui/hooks/`
-  (`use-entity-options`, `use-all-entity-records`, `use-infinite-table-list`, …)
-  and `lib/` modules that are not isomorphic.
-
 - 🟢 🛠️ 🔵 **Split oversized modules (>1500 lines).** Largest:
   `server/domains/image/repo/image.ts`, `server/domains/product/repo/crud.ts`,
-  `server/domains/purchase-import/run-service.ts`,
+  `server/domains/purchase-import/repo/run-service.ts`,
   `features/run/photo-group-review.tsx`, `generator/entities/compile.ts`,
   `server/domains/product/repo/merge.ts`, `server/domains/purchase/repo/purchase.ts`,
-  `tooling/sim-e2e.ts`, `server/domains/purchase-import/writer.ts`,
-  `features/ai/record-suggestions.tsx`, `entity/display/entity-display.tsx`,
-  `ui/data-table/column-helpers.tsx`, `features/problems/components/problem-sections.tsx`,
+  `tooling/sim-e2e.ts`, `server/domains/purchase-import/repo/writer.ts`,
+  `entity/suggestions/record-suggestions.tsx`, `entity/display/entity-display.tsx`,
+  `entity/table/column-helpers.tsx`, `features/problems/components/problem-sections.tsx`,
   `server/domains/project/repo/tools.ts`,
   `server/generic/suggestions/repo/field-resolution-evidence.ts`,
   `server/db/entity-edges.ts`, `server/domains/image-processing/repo/image-processing.ts`,
   `server/generic/problems/service/problems.service.ts` (paths under `apps/web/src`
   unless rooted at `apps/web`). Also shrink the folders baselined in
   `apps/web/tooling/layout.unit.test.ts` (`lib/`, `ui/data-table/`, `contracts/`, …).
+
+- 🟢 🛠️ 🔵 **Rank `ai/repo` as repo code in `cubby/domain-layers`.** The rule
+  lets repos import `ai/repo/*` but does not give those files a role, so
+  `ai/repo` may import model code and `db/` may import `ai/repo` unchecked.
+  Ranking it today flags `ai/repo/refresh-policy.ts`, whose
+  `compiledRefreshManifest()` renders prompt templates from `ai/features` and
+  `ai/decision-catalog`. Move the manifest build (with `fieldDependencyKeys`
+  and `producingAiManifest`) up into `ai/`, pass the manifest into the repos
+  that read it (`activateAiRefresh`, `prepareReclassification`,
+  `product-variant-evidence`), then return `{ area: "ai", role: "repo" }` from
+  `roleOf()`.
 
 - 🟢 🛠️ 🔵 **Retire the remaining index barrels.** `cubby/no-domain-barrel`
   covers `domains/`, `generic/`, and `features/`; platform barrels such as
@@ -1884,7 +1879,7 @@ consume the declarations.
 - 🤔 🧪 🔵 **Check Google OAuth agentic-client requirements.** Verify current
   official requirements and whether any Cubby client calls Google Workspace
   MCP servers. The purchase-import Gmail client currently uses the Gmail REST
-  API (`apps/web/src/server/domains/purchase-import/gmail/client.ts`); distinguish that
+  API (`apps/web/src/server/domains/purchase-import/repo/gmail/client.ts`); distinguish that
   path before changing OAuth settings. Preserve existing scopes and member
   connections, and record any applicable rollout deadline in the owning runbook.
 

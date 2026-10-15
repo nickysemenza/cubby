@@ -22,6 +22,6 @@ export const runAiSmokeCase = createServerFn({ method: "POST" })
   .validator(aiSmokeRunInput)
   .handler(async ({ data, context }) => {
     const actor = await smokeContext(context.startOperation.headers);
-    const { runAiSmoke } = await import("~/server/ai/smoke-run");
+    const { runAiSmoke } = await import("~/server/workflows/ai-smoke-run");
     return runAiSmoke(actor, data.scenario, data.input);
   });

@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ShelfGrid } from "~/entity/table/shelf";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { ShelfGrid } from "~/ui/data-table/shelf";
 
 import { EntityShelf } from "./entity-shelf";
 

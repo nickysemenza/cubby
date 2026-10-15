@@ -4,7 +4,7 @@ import type { StoredImageEmbeddedMetadata } from "@cubby/schemas/image";
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
 import { setImageEmbeddedMetadata } from "~/server/domains/image/repo/image";
-import { deriveAndStoreImageCapture } from "~/server/domains/image/service/image-capture-derivation";
+import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 
 /**
  * Writes extracted EXIF and re-derives the image's capture fields in one

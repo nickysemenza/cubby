@@ -27,17 +27,15 @@ import {
   associatePendingImages,
   batchUpdateWithCaseWhen,
   buildPartialUpdateValues,
-  dependencyIdsFor,
   getDb,
   imageJoinBindings,
   notDeleted,
   relations,
-  replaceDependencyEdges,
-  syncEntityImages,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { bulkPatchEntities } from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
@@ -49,6 +47,10 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import {
+  dependencyIdsFor,
+  replaceDependencyEdges,
+} from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Task CRUD operations.

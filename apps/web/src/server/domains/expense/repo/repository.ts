@@ -1,4 +1,4 @@
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/service/expense-pricing.service";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import { bulkUpdatedWithSideEffects } from "~/server/entity-kernel/adapter";
 import {
   defineRepository,
@@ -24,7 +24,12 @@ export const expenseRepository = defineRepository("expense", {
   listRead: listReadOn(expenseListRead),
   listSummary: (ctx, filters) => expenseListSummary(ctx.db, filters),
   create: async (ctx, data) => {
-    const result = await createExpense(ctx.db, data, ctx.actorContext);
+    const result = await createExpense(
+      ctx.db,
+      data,
+      ctx.actorContext,
+      ctx.services.expenseLineRole,
+    );
     await recomputeRecipesForPriceAffectedProducts(
       ctx.db,
       ctx.services.recipeCosting,

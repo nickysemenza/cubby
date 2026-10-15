@@ -28,12 +28,12 @@ import { type FC, useEffect, useId, useMemo, useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";

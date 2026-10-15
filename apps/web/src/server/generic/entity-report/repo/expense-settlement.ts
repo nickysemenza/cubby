@@ -9,7 +9,7 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database } from "~/server/db";
-import { expenseChargeContextWorkflow } from "~/server/domains/expense/operations.server";
+import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { createAppError } from "~/server/errors/app-error";
 

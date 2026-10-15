@@ -5,7 +5,7 @@ import type { RecipeCosting } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
-import { tryFormatAmount } from "../inventory/format-amount";
+import { tryFormatAmount } from "../../ui/text/format-amount";
 import { EstimateMarker } from "./estimate-marker";
 
 /**

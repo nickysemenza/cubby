@@ -26,12 +26,6 @@ import {
 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
-import { completeCloudImageDescription } from "~/server/domains/image-processing/cloud-description";
-import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/cloud-limits";
-import {
-  prepareCompanionImageCommand,
-  reserveCompanionAnalysisOutput,
-} from "~/server/domains/image-processing/dispatch";
 import {
   claimImageProcessingJob,
   reclaimExpiredImageProcessingLeases,
@@ -61,16 +55,20 @@ import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-submission";
-import { safeImageProcessingError } from "~/server/domains/image-processing/safe-error";
+import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-wakeups";
+import { completeCloudImageDescription } from "~/server/domains/image-processing/service/cloud-description";
+import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
+import {
+  prepareCompanionImageCommand,
+  reserveCompanionAnalysisOutput,
+} from "~/server/domains/image-processing/service/dispatch";
+import { safeImageProcessingError } from "~/server/domains/image-processing/service/safe-error";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
-import { inspectImageFile } from "~/server/domains/image/service/image-integrity";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 import { refreshDirectImageOwnerSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-
-const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
 
 /**
  * Persist independent jobs before publishing their lightweight wakeups. The caller
@@ -94,24 +92,6 @@ export async function scheduleImageProcessingJobs(
   if (input.publish !== false && !settings.paused)
     await publishImageProcessingWakeups(db, scheduled.jobIds);
   return scheduled;
-}
-
-/** Queue payloads only wake durable rows, so repeats and repairs are harmless. */
-export async function publishImageProcessingWakeups(
-  db: Database,
-  jobIds: readonly string[],
-): Promise<void> {
-  const settings = await readImageProcessingSettings(db);
-  if (settings.paused || jobIds.length === 0) return;
-  await publishBackgroundTasks(
-    db,
-    [...new Set(jobIds)].map((jobId) => ({
-      kind: "image-processing.wakeup" as const,
-      requestedAt: new Date().toISOString(),
-      jobId,
-    })),
-    { source: IMAGE_PROCESSING_WAKEUP_SOURCE },
-  );
 }
 
 /** Remove only orphan outputs whose signed upload window has elapsed. */

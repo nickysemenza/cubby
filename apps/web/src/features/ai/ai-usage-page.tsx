@@ -12,6 +12,7 @@ import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
@@ -23,7 +24,6 @@ import {
 } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/table";
 import {
   type CubbyColumnCollection,
   createCubbyColumnCollection,

@@ -8,7 +8,7 @@ import {
   getImagesAttachedToEntity,
   updateImageIntegrity,
 } from "~/server/domains/image/repo/image";
-import { inspectImageFile } from "~/server/domains/image/service/image-integrity";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 
 const log = createLogger("image-verification");
 

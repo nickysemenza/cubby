@@ -6,8 +6,8 @@ import {
 } from "@cubby/schemas/context";
 import { auditableEntities } from "@cubby/schemas/entity-manifest";
 
+import { AuditLogList } from "~/entity/audit-log/audit-log-list";
 import { entityPluralLabel } from "~/entity/entities";
-import { AuditLogList } from "~/features/audit-log/audit-log-list";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";

@@ -24,7 +24,6 @@ import { getDb } from "~/server/db/helpers";
 import { expense, purchase, vendor } from "~/server/db/schema";
 import {
   expenseAnalyzeWorkflow,
-  expenseChargeContextWorkflow,
   expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
 } from "~/server/domains/expense/operations.server";
@@ -33,6 +32,7 @@ import {
   expenseMonthlySummary,
   expenseTradeAffinity,
 } from "~/server/domains/expense/repo/analytics";
+import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import {
   createExpense,
   deleteExpenses,
@@ -45,6 +45,7 @@ import {
   expenseList,
   expenseListRead,
 } from "~/server/domains/expense/repo/lookup";
+import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   getPurchaseExpenses,
@@ -226,7 +227,12 @@ describe("expense repository — CRUD", () => {
     });
     delete input.lineKind;
     await expect(
-      createExpense(ctx.db, input, ctx.actor, decisionPort("none")),
+      createExpense(
+        ctx.db,
+        input,
+        ctx.actor,
+        expenseLineRoleClassifier(decisionPort("none")),
+      ),
     ).rejects.toMatchObject({
       reason: "CONSTRAINT_VIOLATION",
       message: expect.stringContaining("Resolve the receipt role first"),
@@ -242,7 +248,7 @@ describe("expense repository — CRUD", () => {
       ctx.db,
       input,
       ctx.actor,
-      decisionPort("none"),
+      expenseLineRoleClassifier(decisionPort("none")),
     );
     expect(output.lineKind).toBe("unclassified");
     const quality = await loadDataQualities(ctx.db, "expense", [entityId]);
@@ -262,7 +268,12 @@ describe("expense repository — CRUD", () => {
       throw new Error("Synthetic Decision outage");
     });
     await expect(
-      createExpense(ctx.db, input, ctx.actor, failing),
+      createExpense(
+        ctx.db,
+        input,
+        ctx.actor,
+        expenseLineRoleClassifier(failing),
+      ),
     ).rejects.toThrow("Synthetic Decision outage");
     expect(failing).toHaveBeenCalledOnce();
     expect(
@@ -294,7 +305,7 @@ describe("expense repository — CRUD", () => {
         lineKind: "principal",
       }),
       ctx.actor,
-      explicitDecision,
+      expenseLineRoleClassifier(explicitDecision),
     );
     expect(explicit.output.lineKind).toBe("principal");
     expect(explicitDecision).not.toHaveBeenCalled();
@@ -313,7 +324,7 @@ describe("expense repository — CRUD", () => {
         productQuantity: 1,
       }),
       ctx.actor,
-      productDecision,
+      expenseLineRoleClassifier(productDecision),
     );
     expect(productExpense.output.lineKind).toBe("principal");
     expect(productDecision).not.toHaveBeenCalled();
@@ -327,7 +338,7 @@ describe("expense repository — CRUD", () => {
           productId: product.id,
         }),
         ctx.actor,
-        productDecision,
+        expenseLineRoleClassifier(productDecision),
       ),
     ).rejects.toThrow("Only principal Expenses may link a Product");
     expect(productDecision).not.toHaveBeenCalled();
@@ -430,7 +441,12 @@ describe("expense repository — CRUD", () => {
     });
     delete taxInput.lineKind;
     const { output: inferredTax, entityId: inferredTaxId } =
-      await createExpense(ctx.db, taxInput, ctx.actor, decisionPort("c1"));
+      await createExpense(
+        ctx.db,
+        taxInput,
+        ctx.actor,
+        expenseLineRoleClassifier(decisionPort("c1")),
+      );
     expect(inferredTax.lineKind).toBe("tax");
 
     const explicitPrincipal = await unwrap(

@@ -3,8 +3,8 @@ import type { SearchableEntityRef } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
 import { getEntityEmbeddingReadiness } from "~/server/generic/embedding/repo/entity-embedding";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/semantic/embeddings";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 
 export interface EmbeddingReadinessPort {
   readonly configured: () => boolean;

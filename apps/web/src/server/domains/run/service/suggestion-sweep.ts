@@ -5,7 +5,6 @@ import {
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   suggestionSweepRunInput,
   suggestionSweepRunProgress,
@@ -13,45 +12,52 @@ import {
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import type { UnparsedError } from "~/lib/error-utils";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import {
   dependencyStamps,
   fieldDependencyKeys,
   fieldPolicyKey,
-} from "~/server/ai/refresh-policy";
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
+} from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import {
-  aiEvaluation,
-  run as runTable,
-  assessmentState as suggestionTable,
-} from "~/server/db/schema";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { ensureRun } from "./ensure-run";
+import {
+  storeAiEvaluationResult,
+  type AiEvaluationRow,
+} from "../repo/ai-work-state";
+import { ensureRun } from "../repo/ensure-run";
+import { withRunTransaction } from "../repo/run-transaction";
+import {
+  jsonValue,
+  pauseRunningSuggestionSweep,
+  readSuggestionSweepRun,
+  saveSweepSuggestions,
+  suggestionValueSchema,
+  sweepSuggestionSchema,
+  writeSuggestionSweepProgress,
+  type SuggestionValue,
+  type SweepSuggestion,
+} from "../repo/suggestion-sweep-state";
 
 type SweepEntity = FieldSuggestionsInput["entity"];
 type SweepInput = {
@@ -80,40 +86,16 @@ type SweepTarget = {
   basis: Record<string, string | null>;
   field: string;
 };
-const suggestionValueSchema: z.ZodType<SuggestionValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(suggestionValueSchema),
-    z.record(z.string(), suggestionValueSchema),
-  ]),
-);
 const processedTargetIdsSchema = z
   .object({
     processedTargetIds: z.array(z.string()).default([]),
   })
   .passthrough();
 const sweepListRowSchema = z.object({ id: z.string() }).passthrough();
-const jsonValue = (value: unknown): SuggestionValue =>
-  suggestionValueSchema.parse(value);
 const sweepRunInputSchema = suggestionSweepRunInput.transform((input) => ({
   ...input,
   entity: fieldSuggestionsInput.shape.entity.parse(input.entity),
 }));
-const sweepSuggestionSchema = z.object({
-  reviewKey: z.string().nullable().optional(),
-  kind: z.enum(["addition", "correction"]),
-  status: z.enum(["applied", "pending"]),
-  currentValue: suggestionValueSchema,
-  suggestedValue: suggestionValueSchema,
-  confidence: z.number(),
-  runnerUpValue: suggestionValueSchema,
-  runnerUpConfidence: z.number().nullable(),
-  model: z.string(),
-  pairKey: z.string().nullable(),
-});
 const sweepSnapshot = z.object({
   input: sweepRunInputSchema,
   target: z.object({
@@ -249,266 +231,12 @@ async function suggestTarget(
   };
 }
 
-export async function publishSweepSuggestions(
-  db: Database,
-  runId: RunId,
-  input: {
-    entity: SweepEntity;
-    field: string;
-    recordId: string;
-    currentValue: SuggestionValue;
-    fieldDecisionId?: string | null;
-    predecessorIds?: string[];
-    evaluationId?: string;
-    provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
-  },
-  entries: readonly SweepSuggestion[],
-  financeReviewFingerprint: string | null,
-  context: EntityKernelContext,
-  onApplyFailure?: (error: UnparsedError) => void,
-) {
-  return withTransactionDatabase(
-    db,
-    async (tx) => {
-      const typedRecordId = parseEntityId(input.entity, input.recordId);
-      const saved = await getDb(tx)
-        .select()
-        .from(suggestionTable)
-        .where(
-          and(
-            eq(suggestionTable.runId, runId),
-            eq(suggestionTable.recordId, typedRecordId),
-            eq(suggestionTable.field, input.field),
-            eq(suggestionTable.active, true),
-          ),
-        );
-      if (saved.length)
-        return saved.some((row) => row.status === "applied")
-          ? ("applied" as const)
-          : ("queued" as const);
-      if (
-        input.fieldDecisionId !== undefined &&
-        (await latestFieldWrite(tx, input.entity, typedRecordId, input.field))
-          ?.id !== (input.fieldDecisionId ?? undefined)
-      )
-        throw new Error("Suggestion member decision changed during inference");
-      const code = (
-        await import("~/server/generic/shortcode/repo/shortcode-resolver")
-      ).lookupShortcodes;
-      const codes = await code(tx, [
-        parseEntityRef(input.entity, typedRecordId),
-      ]);
-      const publicId = codes.get(`${input.entity}:${typedRecordId}`);
-      if (!publicId) throw new Error("Suggestion target no longer exists");
-      const txContext = {
-        ...context,
-        db: tx,
-        actorContext: { ...context.actorContext, runId },
-      };
-      const found = await executeEntity(
-        txContext,
-        entityCommandSchema.parse({
-          action: "get",
-          entity: input.entity,
-          id: publicId,
-        }),
-      );
-      if (found.action !== "get" || !found.item)
-        throw new Error("Suggestion target no longer exists");
-      const record = z.record(z.string(), z.unknown()).parse(found.item);
-      if (
-        canonicalJson(z.json().parse(record[input.field] ?? null)) !==
-        canonicalJson(input.currentValue)
-      )
-        throw new Error("Suggestion target changed during inference");
-
-      const predecessors = await getDb(tx)
-        .select()
-        .from(suggestionTable)
-        .where(
-          and(
-            eq(suggestionTable.entity, input.entity),
-            eq(suggestionTable.recordId, typedRecordId),
-            eq(suggestionTable.field, input.field),
-            eq(suggestionTable.active, true),
-          ),
-        )
-        .for("update");
-      if (
-        input.predecessorIds &&
-        input.predecessorIds.some(
-          (id) =>
-            !predecessors.some(
-              (row) =>
-                row.id === id &&
-                (row.status === "pending" ||
-                  (row.status === "superseded" &&
-                    ["input_changed", "no_proposal"].includes(
-                      row.supersessionReceipt?.reason ?? "",
-                    ))),
-            ),
-        )
-      )
-        throw new Error("Suggestion was decided during inference");
-      if (
-        input.predecessorIds &&
-        predecessors.some(
-          (row) =>
-            row.status === "pending" && !input.predecessorIds!.includes(row.id),
-        )
-      )
-        throw new Error("Suggestion target changed during inference");
-      const rejected = predecessors.filter(
-        (row) =>
-          row.status === "rejected" && row.suppression?.scope === "field_value",
-      );
-      const reviewedWrong = await getDb(tx)
-        .select({ data: suggestionTable.data })
-        .from(suggestionTable)
-        .where(
-          and(
-            eq(suggestionTable.family, "field"),
-            eq(suggestionTable.entity, input.entity),
-            eq(suggestionTable.recordId, typedRecordId),
-            eq(suggestionTable.field, input.field),
-            eq(suggestionTable.status, "rejected"),
-          ),
-        );
-      const unordered =
-        decisionCatalogRows().find(
-          (row) => row.entity === input.entity && row.field === input.field,
-        )?.mode === "prune";
-      const proposalKey = (value: SuggestionValue) =>
-        canonicalJson(
-          unordered && Array.isArray(value)
-            ? [...value].sort((left, right) =>
-                canonicalJson(left).localeCompare(canonicalJson(right)),
-              )
-            : value,
-        );
-      const admissible = entries.filter(
-        (entry) =>
-          !reviewedWrong.some(
-            (row) =>
-              entry.reviewKey &&
-              z.object({ reviewKey: z.string().nullable() }).safeParse(row.data)
-                .data?.reviewKey === entry.reviewKey,
-          ) &&
-          !rejected.some(
-            (row) =>
-              proposalKey(jsonValue(row.suggestedValue)) ===
-              proposalKey(entry.suggestedValue),
-          ) &&
-          !predecessors.some(
-            (row) =>
-              row.status === "rejected" &&
-              input.provenance &&
-              row.provenance &&
-              proposalKey(jsonValue(row.suggestedValue)) ===
-                proposalKey(entry.suggestedValue) &&
-              canonicalJson(z.json().parse(row.provenance)) ===
-                canonicalJson(
-                  z.json().parse({ ...input.provenance, model: entry.model }),
-                ),
-          ),
-      );
-      for (const previous of predecessors) {
-        if (
-          previous.status !== "pending" ||
-          (input.predecessorIds && !input.predecessorIds.includes(previous.id))
-        )
-          continue;
-        await getDb(tx)
-          .update(suggestionTable)
-          .set({
-            status: "superseded",
-            supersessionReceipt: {
-              reason: admissible.length ? "replacement" : "no_proposal",
-              evaluationId: input.evaluationId ?? null,
-              at: new Date().toISOString(),
-            },
-          })
-          .where(
-            and(
-              eq(suggestionTable.id, previous.id),
-              eq(suggestionTable.status, "pending"),
-            ),
-          );
-      }
-      let outcome: "applied" | "queued" = "queued";
-      const created: {
-        row: typeof suggestionTable.$inferSelect;
-        entry: SweepSuggestion;
-      }[] = [];
-      for (const entry of admissible) {
-        const [row] = await getDb(tx)
-          .insert(suggestionTable)
-          .values({
-            runId,
-            entity: input.entity,
-            recordId: typedRecordId,
-            field: input.field,
-            financeReviewFingerprint,
-            evaluationId: input.evaluationId,
-            provenance: input.provenance
-              ? { ...input.provenance, model: entry.model }
-              : undefined,
-            currentValue: entry.currentValue,
-            suggestedValue: entry.suggestedValue,
-            confidence: entry.confidence,
-            runnerUpValue: entry.runnerUpValue,
-            runnerUpConfidence: entry.runnerUpConfidence,
-            model: entry.model,
-            pairKey: entry.pairKey,
-            kind: entry.kind,
-            data: { reviewKey: entry.reviewKey ?? null },
-            status: "pending",
-          })
-          .returning();
-        if (row) created.push({ row, entry });
-      }
-      for (const { row, entry } of created) {
-        if (entry.status === "applied") {
-          try {
-            await acceptSuggestion(
-              tx,
-              txContext,
-              { id: row.id },
-              { mode: "automatic", confidence: entry.confidence },
-            );
-            outcome = "applied";
-          } catch (error) {
-            onApplyFailure?.(error);
-            // The nested acceptance transaction rolled back; its pending proposal remains reviewable.
-            await getDb(tx)
-              .update(suggestionTable)
-              .set({ status: "pending" })
-              .where(eq(suggestionTable.id, row.id));
-          }
-        }
-      }
-      return outcome;
-    },
-    { isolationLevel: "serializable" },
-  );
-}
-
-const savedSweep = async (db: Database, runId: RunId) => {
-  const [row] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.id, runId));
-  if (!row || row.purpose !== "suggestion_sweep")
-    throw new Error("Suggestion sweep Run not found");
-  return row;
-};
-
 export async function prepareSuggestionSweep(
   db: Database,
   runId: RunId,
   ports: SuggestionSweepPorts,
 ) {
-  const saved = await savedSweep(db, runId);
+  const saved = await readSuggestionSweepRun(db, runId);
   const input = sweepRunInputSchema.parse(saved.input);
   let pageIndex = 0;
   let rowsSeen = 0;
@@ -641,30 +369,25 @@ export async function prepareSuggestionSweep(
       sequence,
     );
   }
-  await getDb(db)
-    .update(runTable)
-    .set({
-      progress: {
-        ...suggestionSweepRunProgress.parse(saved.progress),
-        ...(processed.size
-          ? {
-              legacyCounts: suggestionSweepRunProgress
-                .pick({ done: true, applied: true, queued: true, failed: true })
-                .parse(saved.progress),
-            }
-          : {}),
-        rosterPrepared: true,
-        attempt: z
-          .object({ attempt: z.number().default(0) })
-          .parse(saved.progress ?? {}).attempt,
-      },
-    })
-    .where(eq(runTable.id, runId));
+  await writeSuggestionSweepProgress(db, runId, {
+    ...suggestionSweepRunProgress.parse(saved.progress),
+    ...(processed.size
+      ? {
+          legacyCounts: suggestionSweepRunProgress
+            .pick({ done: true, applied: true, queued: true, failed: true })
+            .parse(saved.progress),
+        }
+      : {}),
+    rosterPrepared: true,
+    attempt: z
+      .object({ attempt: z.number().default(0) })
+      .parse(saved.progress ?? {}).attempt,
+  });
 }
 
 export async function executeSuggestionSweepTarget(
   db: Database,
-  item: typeof aiEvaluation.$inferSelect,
+  item: AiEvaluationRow,
   ports: SuggestionSweepPorts,
 ) {
   if (!item.attemptToken)
@@ -744,21 +467,14 @@ export async function executeSuggestionSweepTarget(
     };
     saved = sweepResult.safeParse({ ...captured.result, provenance });
     if (!saved.success) throw saved.error;
-    const [stored] = await getDb(db)
-      .update(aiEvaluation)
-      .set({
-        state: "result_ready",
-        result: JSON.parse(JSON.stringify(saved.data)),
-      })
-      .where(
-        and(
-          eq(aiEvaluation.id, item.id),
-          eq(aiEvaluation.attemptToken, item.attemptToken),
-          eq(aiEvaluation.state, "running"),
-        ),
-      )
-      .returning({ id: aiEvaluation.id });
-    if (!stored) throw new Error("Suggestion evaluation attempt is obsolete");
+    if (
+      !(await storeAiEvaluationResult(
+        db,
+        item,
+        JSON.parse(JSON.stringify(saved.data)),
+      ))
+    )
+      throw new Error("Suggestion evaluation attempt is obsolete");
   }
   const result = saved.data;
   await publishAiEvaluation(db, item.id, item.attemptToken, async (tx) => {
@@ -789,27 +505,45 @@ export async function executeSuggestionSweepTarget(
   });
 }
 
+/** Publishes one target's proposals; the field's catalog policy decides set ordering. */
+export async function publishSweepSuggestions(
+  db: Database,
+  runId: RunId,
+  input: Omit<Parameters<typeof saveSweepSuggestions>[2], "unordered">,
+  ...rest: Parameters<typeof saveSweepSuggestions> extends [
+    unknown,
+    unknown,
+    unknown,
+    ...infer Rest,
+  ]
+    ? Rest
+    : never
+) {
+  const unordered =
+    decisionCatalogRows().find(
+      (row) => row.entity === input.entity && row.field === input.field,
+    )?.mode === "prune";
+  return saveSweepSuggestions(db, runId, { ...input, unordered }, ...rest);
+}
+
 function stablePair(id: string) {
   let hash = 2166136261;
   for (const c of id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
   return (hash >>> 0) % 10 === 0;
 }
 export async function pauseSuggestionSweep(db: Database, runId: RunId) {
-  const saved = await savedSweep(db, runId);
+  const saved = await readSuggestionSweepRun(db, runId);
   if (saved.status === "paused") return;
   if (saved.status !== "running")
     throw new Error("Only a running sweep can be paused");
-  await getDb(db)
-    .update(runTable)
-    .set({ status: "paused" })
-    .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
+  await pauseRunningSuggestionSweep(db, runId);
 }
 export async function resumeSuggestionSweep(
   db: Database,
   runId: RunId,
   ports: SuggestionSweepPorts,
 ) {
-  const saved = await savedSweep(db, runId);
+  const saved = await readSuggestionSweepRun(db, runId);
   if (saved.status === "completed")
     throw new Error("Completed suggestion sweep cannot be resumed");
   if (saved.status !== "paused")
@@ -843,7 +577,7 @@ export async function startSuggestionSweep(
     failed: 0,
     diagnostics: [],
   });
-  const runId = await withTransactionDatabase(db, async (tx) => {
+  const runId = await withRunTransaction(db, async (tx) => {
     const runId = await ensureRun(tx, actor, {
       purpose: "suggestion_sweep",
       trigger: "manual",
@@ -865,20 +599,12 @@ export async function startSuggestionSweep(
   return { id: runId };
 }
 
-export type SuggestionValue =
-  | string
-  | number
-  | boolean
-  | null
-  | SuggestionValue[]
-  | { [key: string]: SuggestionValue };
 export type SweepDecision = {
   value: SuggestionValue;
   confidence: number;
   runnerUpValue?: SuggestionValue;
   runnerUpConfidence?: number;
 };
-export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
 const isBlank = (value: SuggestionValue) => value == null || value === "";
 const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
   canonicalJson(left) === canonicalJson(right);

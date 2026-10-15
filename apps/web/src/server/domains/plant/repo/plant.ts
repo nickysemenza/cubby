@@ -35,7 +35,7 @@ import {
   plantDisplayName,
   plantRoutesFor,
   resolveGardenGuideKey,
-} from "~/server/domains/plant/service/windows";
+} from "~/server/domains/plant/repo/windows";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";

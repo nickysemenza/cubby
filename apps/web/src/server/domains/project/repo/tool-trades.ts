@@ -3,10 +3,10 @@ import type { Trade } from "@cubby/schemas/project";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient } from "~/server/db";
+import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/product-category-sql";
 
 const effectiveTrade = effectiveExpenseTradeSql();
 

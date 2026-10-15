@@ -23,12 +23,12 @@ import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
-import { ingestGmailMessages } from "~/server/domains/purchase-import/gmail/ingest";
+import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import {
   commitPurchaseImport,
   preparePurchaseImport,
-} from "~/server/domains/purchase-import/import-orders";
-import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
+} from "~/server/domains/purchase-import/operations/import-orders";
+import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
 import { getDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {

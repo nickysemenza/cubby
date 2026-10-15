@@ -9,7 +9,7 @@ export default defineEntity({
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/ingredient",
+      module: "~/features/ingredient/list-columns",
       export: "ingredientListOverride",
     },
     basePath: "ingredients",

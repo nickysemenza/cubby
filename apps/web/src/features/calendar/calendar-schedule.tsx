@@ -9,13 +9,13 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 import {
   ScheduleGrid,
   type ScheduleRow,
   type ScheduleSegment,
   type ScheduleWindow,
 } from "~/features/schedule/schedule-grid";
-import { TASK_STATUS_LABELS } from "~/features/task/task-options";
 import { Description } from "~/ui/primitives/description";
 
 const milestoneFields = [

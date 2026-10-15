@@ -7,7 +7,7 @@ import type {
 } from "@cubby/usda";
 import type { FoodSearchArgs, FoodSearchPage } from "@cubby/usda/release";
 
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const ORDER_BY_SORT_KEY = new Map<string, FoodSearchArgs["orderBy"]>([

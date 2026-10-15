@@ -5,9 +5,9 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
+import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { RecipeUsagesTable } from "~/features/recipe/recipe-usages-table";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

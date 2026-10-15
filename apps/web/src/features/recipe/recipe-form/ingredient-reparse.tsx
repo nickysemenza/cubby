@@ -8,8 +8,8 @@ import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Button } from "~/ui/primitives/button";
+import { formatAmounts } from "~/ui/text/format-amount";
 
-import { formatAmounts } from "../../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
 import { useResolveIngredientName } from "../use-resolve-ingredient-names";
 import type { IngItem, RecipeFormValues } from "./types";

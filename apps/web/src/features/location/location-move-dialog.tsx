@@ -1,8 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";

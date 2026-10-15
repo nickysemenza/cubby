@@ -11,6 +11,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 import { TradeBadge } from "~/features/project/shared";
 import { householdLocalDate } from "~/lib/household-date";
 import { statusTone } from "~/lib/status-tone";
@@ -35,7 +36,6 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
-import { TASK_STATUS_LABELS } from "../task-options";
 import type {
   BoardColumnKey,
   BoardLaneKey,

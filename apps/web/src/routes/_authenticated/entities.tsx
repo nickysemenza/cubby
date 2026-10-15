@@ -23,19 +23,19 @@ import { EntityRelations } from "~/entity/relationships/entity-relations";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
 import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
-  import("~/ui/visualizations/recipe-dependency-graph").then((module) => ({
+  import("~/entity/graphs/recipe-dependency-graph").then((module) => ({
     default: module.RecipeDependencyGraph,
   })),
 );
 const WorkDependencyGraph = lazy(() =>
-  import("~/ui/visualizations/work-dependency-graph").then((module) => ({
+  import("~/entity/graphs/work-dependency-graph").then((module) => ({
     default: module.WorkDependencyGraph,
   })),
 );
+import { Page } from "~/entity/page/page";
 import { pageTitle } from "~/lib/page-title";
 import { useTabParam } from "~/ui/hooks/use-tab-param";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum([

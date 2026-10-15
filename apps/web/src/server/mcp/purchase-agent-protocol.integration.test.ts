@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { runApproval, runOperation } from "~/server/db/schema";
-import { controlRun } from "~/server/domains/purchase-import/run-service";
+import { controlRun } from "~/server/domains/purchase-import/repo/run-service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";

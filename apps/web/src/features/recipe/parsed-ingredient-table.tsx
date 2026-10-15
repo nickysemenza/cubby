@@ -15,7 +15,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../../entity/entity-media/entity-display-images";
-import { formatAmounts } from "../inventory/format-amount";
+import { formatAmounts } from "../../ui/text/format-amount";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { parseIngredientLines } from "./recipe-form/ingredient-line-utils";
 import type { IngredientMatchMap } from "./use-ingredient-matches";

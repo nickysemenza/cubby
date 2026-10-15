@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { upsertAgentProductMatch } from "~/server/domains/product/repo/product-match-candidate";
+import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 

@@ -10,9 +10,10 @@ import { type ReactElement, type ReactNode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import { Picker } from "~/entity/picker/picker";
 
 import type { ComboboxItem } from "./combobox-types";
-import { matchesPickerItem, Picker } from "./picker";
+import { matchesPickerItem } from "./picker";
 
 // Record pickers read stored codes' records through React Query.
 function render(ui: ReactElement, client = new QueryClient()) {

@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -12,6 +13,8 @@ import {
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { createEntityDisplayColumns } from "./entity-display";
+
+installFeatures();
 
 /**
  * The product list (`routes/_authenticated/products.index.tsx`) is the one

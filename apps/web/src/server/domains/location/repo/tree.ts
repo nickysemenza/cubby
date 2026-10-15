@@ -19,6 +19,9 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
+import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import {
   getDb,
   imageOrder,
@@ -35,12 +38,9 @@ import {
   product,
 } from "~/server/db/schema";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
-import { locationAiDescriptionSql } from "./ai-description";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";

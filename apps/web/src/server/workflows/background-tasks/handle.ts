@@ -43,7 +43,7 @@ const productionMarkCalendarFeedDirty: MarkCalendarFeedDirtyPort = async (
   reason,
 ) => {
   const { calendarFeedStateFor } =
-    await import("~/server/domains/calendar/client");
+    await import("~/server/domains/calendar/repo/client");
   await (await calendarFeedStateFor(origin)).markDirty(reason);
 };
 
@@ -105,7 +105,7 @@ export async function handleBackgroundTask(
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
       const { ensureRun, systemActor } =
-        await import("~/server/domains/run/service/ensure-run");
+        await import("~/server/domains/run/repo/ensure-run");
       try {
         // Attribute to the mutation's actor run when the publisher recorded
         // one; older queue messages (and backfills) carry no `runId`, so
@@ -126,7 +126,7 @@ export async function handleBackgroundTask(
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
       const { ensureRun, systemActor } =
-        await import("~/server/domains/run/service/ensure-run");
+        await import("~/server/domains/run/repo/ensure-run");
       try {
         const runId =
           (task.runId ? runEntityId.parse(task.runId) : null) ??
@@ -142,16 +142,16 @@ export async function handleBackgroundTask(
     }
     case "image-processing.wakeup": {
       const { handoffCloudImageTask } =
-        await import("~/server/domains/image-processing/cloud-queue");
+        await import("~/server/domains/image-processing/service/cloud-queue");
       if (await handoffCloudImageTask(db, task)) return "succeeded";
       const { dispatchImageProcessingWakeup } =
-        await import("~/server/domains/image-processing/dispatch");
+        await import("~/server/domains/image-processing/service/dispatch");
       const outcome = await dispatchImageProcessingWakeup(db, task.jobId);
       return outcome === "skipped" ? "skipped" : "succeeded";
     }
     case "image-processing.result": {
       const { handoffCloudImageTask } =
-        await import("~/server/domains/image-processing/cloud-queue");
+        await import("~/server/domains/image-processing/service/cloud-queue");
       if (await handoffCloudImageTask(db, task)) return "succeeded";
       const { completeCompanionImageProcessingResult } =
         await import("~/server/domains/image-processing/service/image-processing.service");
@@ -164,8 +164,7 @@ export async function handleBackgroundTask(
     case "image-metadata.extract":
       return ports.extractImageMetadata(db, task.imageId);
     case "maintenance.recover": {
-      const { recoverMissedWork } =
-        await import("~/server/generic/work-queue/service/catch-up.service");
+      const { recoverMissedWork } = await import("~/server/workflows/catch-up");
       await recoverMissedWork(
         db,
         task.coordinatorRetireBefore === undefined
@@ -175,8 +174,7 @@ export async function handleBackgroundTask(
       return "succeeded";
     }
     case "maintenance.purchase-discovery": {
-      const { discoverPurchases } =
-        await import("~/server/generic/work-queue/service/catch-up.service");
+      const { discoverPurchases } = await import("~/server/workflows/catch-up");
       await discoverPurchases(db);
       return "succeeded";
     }

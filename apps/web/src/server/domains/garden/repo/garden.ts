@@ -49,7 +49,6 @@ import {
   type MappableImageRecord,
   notDeleted,
   shortcodeSetCondition,
-  syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -61,12 +60,13 @@ import {
   planting,
   product,
 } from "~/server/db/schema";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import {
   expectedHarvestFor,
   guideWindowsFor,
   plantingDisplayName,
   resolveGardenGuideKey,
-} from "~/server/domains/plant/service/windows";
+} from "~/server/domains/plant/repo/windows";
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -283,7 +283,7 @@ type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   images: Array<{ image: MappableImageRecord; deletedAt?: Date | null }>;
 };
 
-export { plantingDisplayName } from "~/server/domains/plant/service/windows";
+export { plantingDisplayName } from "~/server/domains/plant/repo/windows";
 
 const GARDEN_ENTRY_KIND_LABELS = {
   note: "Note",

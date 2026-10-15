@@ -49,7 +49,7 @@ const BROWSER_DISPATCH_BUDGET = 3.25 * MB;
 // pi-durable, MCP client; ~1.8 MB, sharing zod, pi-ai, and Sentry with the
 // app) as one lazily loaded chunk: 19.34 MB total, first request unchanged at
 // 5.41 MB. The agent's Durable Object and queue consumer load it on their
-// first event (`server/domains/purchase-import/agent-host.ts`), never on a page.
+// first event (`server/domains/purchase-import/operations/agent-host.ts`), never on a page.
 const FIRST_REQUEST_BUDGET = 6.5 * MB;
 const TOTAL_BUDGET = 20 * MB;
 

@@ -76,6 +76,38 @@ test("repo stays off ai/ and services stay off the schema and helpers", () => {
       `${S}/db`,
       false,
     ),
+    "serviceDb",
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/run/service/execution-context.ts`,
+      `${S}/db/auth.schema`,
+      true,
+    ),
+    "serviceDb",
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/image/service/image-storage.service.ts`,
+      `${S}/db`,
+      true,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/recipe/service/recipe.service.ts`,
+      `${S}/db/freshness/client`,
+      false,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/product/repo/merge.ts`,
+      `${S}/ai/repo/ai-usage`,
+      false,
+    ),
     undefined,
   );
 });
@@ -83,7 +115,7 @@ test("repo stays off ai/ and services stay off the schema and helpers", () => {
 test("platform and generic code never reach a domain's service or operations", () => {
   assert.equal(
     violation(
-      `${S}/mcp/tools.ts`,
+      `${S}/entity-kernel/actions.ts`,
       `${S}/domains/product/service/product.service`,
       false,
     ),
@@ -109,12 +141,36 @@ test("platform and generic code never reach a domain's service or operations", (
     violation(`${S}/mcp/tools.ts`, `${S}/domains/product/repo/crud`, false),
     undefined,
   );
+  // Role-less files anywhere (including feature domains) rank as platform.
   assert.equal(
     violation(
       `${S}/domains/purchase-import/gmail/server.ts`,
       `${S}/domains/product/service/product.service`,
       false,
     ),
+    "platformUpward",
+  );
+});
+
+test("http, mcp, and workflows import like operations and stay importable", () => {
+  assert.equal(
+    violation(
+      `${S}/http/request-services.ts`,
+      `${S}/domains/recipe/service/recipe-costing.service`,
+      false,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(
+      `${S}/workflows/ai-refresh.ts`,
+      `${S}/domains/run/service/ai-refresh`,
+      false,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(`${S}/domains/run/repo/run.ts`, `${S}/workflows/runtime`, false),
     undefined,
   );
 });

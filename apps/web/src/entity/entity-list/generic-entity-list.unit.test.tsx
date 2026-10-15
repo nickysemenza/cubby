@@ -26,12 +26,13 @@ import {
   productListItem,
 } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
-import { mealNameUpdate } from "~/entity/list-columns/meal";
 import {
   listReadFields,
   projectListRows,
 } from "~/entity/model/list-read-schema";
 import { listPage } from "~/entity/routing/list-page";
+import { mealNameUpdate } from "~/features/meal/list-columns";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type {
@@ -41,6 +42,8 @@ import type {
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { listSlotFor } from "./list-slots";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 

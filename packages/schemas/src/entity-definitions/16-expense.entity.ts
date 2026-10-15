@@ -42,7 +42,7 @@ export default defineEntity({
   names: { singular: "Expense", plural: "Expenses" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/expense",
+      module: "~/features/expense/list-columns",
       export: "expenseListOverride",
     },
     basePath: "expenses",
@@ -1453,7 +1453,7 @@ Rules:
           export: "tradeSchema",
         },
         optionsRef: {
-          module: "~/features/project/trade-options",
+          module: "~/entity/presentation/trade-options",
           export: "tradeOptions",
         },
       },

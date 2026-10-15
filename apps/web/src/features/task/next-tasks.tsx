@@ -15,9 +15,9 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import { renderOptionCell } from "~/entity/table/column-helpers";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { DateDisplay } from "~/ui/common/date-display";
-import { renderOptionCell } from "~/ui/data-table/column-helpers";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";

@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -10,6 +11,8 @@ import {
 } from "~/ui/data-table/table-features";
 
 import { createEntityDisplayColumns } from "./entity-display";
+
+installFeatures();
 
 /**
  * The task list (`routes/_authenticated/tasks.index.tsx`) is the one page this

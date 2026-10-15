@@ -3,9 +3,9 @@ import type { Pool } from "pg";
 
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { photoRunImage } from "~/server/db/schema";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
-import { proposePhotoGroups } from "~/server/domains/photo-import/run/proposals";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
+import { proposePhotoGroups } from "~/server/domains/photo-import/repo/run/proposals";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { getDb } from "~/server/db/helpers";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

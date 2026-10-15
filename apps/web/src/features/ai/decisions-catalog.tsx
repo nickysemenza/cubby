@@ -9,10 +9,10 @@ import { z } from "zod";
 
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -28,7 +28,7 @@ import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
-} from "./field-suggestion";
+} from "../../entity/suggestions/field-suggestion";
 
 const helper = createCubbyColumnHelper<DecisionCatalogRow>();
 const TRIAL_MODELS = ["typesafe/jev", "@cf/cloudflare/clef"] as const;

@@ -17,7 +17,6 @@ import {
   buildPartialUpdateValues,
   getDb,
   notDeleted,
-  replaceDependencyEdges,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
@@ -39,6 +38,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Project CRUD operations.

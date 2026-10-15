@@ -31,8 +31,9 @@ import { z } from "zod";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import { wasm } from "~/lib/wasm";
 
-import { tryFormatAmount } from "../../features/inventory/format-amount";
 import type { ComboboxItem } from "../combobox/combobox-types";
+import type { PickerOption } from "../combobox/picker-option";
+import { tryFormatAmount } from "../text/format-amount";
 import type {
   CellClipboardSpec,
   CellCopyPayload,
@@ -40,7 +41,6 @@ import type {
   CellPastePayload,
 } from "./cell-clipboard";
 import type { CellKind } from "./cell-clipboard-model";
-import type { PickerOption } from "./editable-cell";
 
 /**
  * Column-level copy/paste descriptor. `getCopyPayload` / `applyPaste` take the

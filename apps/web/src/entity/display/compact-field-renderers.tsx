@@ -4,7 +4,7 @@ import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { CategoryLabel } from "~/features/product/category-label";
+import { CategoryLabel } from "~/entity/presentation/category-label";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 type CompactFieldRenderer = <TRecord extends object>(

@@ -21,6 +21,7 @@ import { uniq } from "es-toolkit";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -29,7 +30,6 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
-import { expenseAcquisitionSql } from "~/server/domains/expense/repo/expense-aggregate-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";

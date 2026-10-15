@@ -17,6 +17,7 @@ import {
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
 import { useStandardColumns } from "~/entity/hooks/use-standard-columns";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
@@ -32,6 +33,8 @@ import {
   entitySectionFields,
   renderDetailFieldValue,
 } from "./entity-display";
+
+installFeatures();
 
 /**
  * Narrows a column's `cell` to a callable renderer taking only `{ row }` —

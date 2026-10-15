@@ -1,7 +1,7 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { useId } from "react";
 
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Row } from "~/ui/layout";
 
 interface CookbookSelectProps {

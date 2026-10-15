@@ -8,8 +8,6 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { tradeOptions } from "~/features/project/trade-options";
 /**
  * DiscardLineFields — the trade/date/reason trio shared by `ProductDiscardDialog`
  * and `BulkDiscardInventoryDialog`.
@@ -22,7 +20,9 @@ import { tradeOptions } from "~/features/project/trade-options";
  * component supplies both in one place instead of trusting every future
  * discard-line caller to remember.
  */
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
+import { PickerField } from "~/entity/forms/picker-field";
+import { tradeOptions } from "~/entity/presentation/trade-options";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 
 import { PlainDateField, UnifiedTextField } from "../../ui/forms/form-utils";
 

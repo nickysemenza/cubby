@@ -11,7 +11,7 @@ import {
   getProductMatchQueue,
   mergeProductMatch,
   proposeProductMatch,
-} from "~/server/domains/product/service/product-match.service";
+} from "~/server/domains/product/repo/match/product-match-review";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import {

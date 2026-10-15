@@ -28,12 +28,12 @@ import type {
 import { and, asc, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
-import { expense, project, task } from "~/server/db/schema";
 import {
   EXPENSE_MONTH_BUCKET,
   expenseShareAggregateFields,
-} from "~/server/domains/expense/repo/expense-aggregate-sql";
+} from "~/server/db/computed/expense-aggregate-sql";
+import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
+import { expense, project, task } from "~/server/db/schema";
 import {
   executeExpenseDerivedBatch,
   expenseSelectionForWhere,

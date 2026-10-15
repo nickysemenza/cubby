@@ -27,12 +27,12 @@ import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
 } from "~/entity/generated/entity-routes.gen";
+import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
-} from "~/features/ai/field-suggestion";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+} from "~/entity/suggestions/field-suggestion";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row } from "~/ui/layout";

@@ -21,6 +21,8 @@ import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { Picker } from "~/entity/picker/picker";
 import {
   entityFilterOptions,
   meal,
@@ -31,8 +33,6 @@ import {
   getIngredientMappings,
 } from "~/lib/unit-mapping-utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
-import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";

@@ -40,6 +40,7 @@ import {
   lintImportRecipe,
   notionPageToImportRecipe,
 } from "~/server/clients/notion-recipe";
+import { deleteStoredObjects } from "~/server/clients/s3";
 import {
   htmlToImportRecipe,
   scrapeToImportRecipe,
@@ -62,14 +63,13 @@ import {
   type ImageUrlImportPort,
   importRecipeImageFromUrl,
   productionRecipeImageImportPort,
-} from "~/server/domains/image/service/image-import";
+} from "~/server/domains/image/repo/image-import";
 import {
   attachFileToEntity,
-  deleteStoredObjects,
   importImageFromUrl as importStoredImageFromUrl,
   validateStagedImageUpload,
-} from "~/server/domains/image/service/image-storage.service";
-import { findOrCreateByUPC } from "~/server/domains/product/service/product-orchestration.service";
+} from "~/server/domains/image/repo/image-storage";
+import { findOrCreateByUPC } from "~/server/domains/product/repo/write/product-orchestration";
 import {
   projectCookbookImportEvent,
   projectNotionImportEvent,
@@ -94,7 +94,7 @@ import {
   aiCallRunInput,
   cookbookRunInput,
   ensureRun,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import {
   mutationEvents,
   runMutationSideEffects,

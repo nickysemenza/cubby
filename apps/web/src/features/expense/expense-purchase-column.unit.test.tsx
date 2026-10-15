@@ -4,9 +4,9 @@ import { render, screen } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import RTable from "~/entity/table/table";
 import { expenseVendorColumn } from "~/features/project/shared";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnHelper,
   useCubbyTable,

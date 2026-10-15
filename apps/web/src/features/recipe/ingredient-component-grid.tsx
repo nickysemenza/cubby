@@ -11,6 +11,7 @@ import {
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";
 import { EMPTY_MARK, totalCell } from "~/ui/matrix/matrix-chrome";
 
+import { formatMakes, gramText } from "../../entity/presentation/recipe-utils";
 import {
   buildIngredientMatrix,
   flattenComponents,
@@ -18,7 +19,6 @@ import {
   type RecipeTreeNode,
   recipeTreeDisplayImage,
 } from "./recipe-tree";
-import { formatMakes, gramText } from "./recipe-utils";
 
 // Ingredient × component grid: rows are ingredients, columns are each sub-recipe
 // + the root assembly at FULL BATCH, cells are how much of that ingredient the

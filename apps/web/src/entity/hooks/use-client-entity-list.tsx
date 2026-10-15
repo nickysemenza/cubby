@@ -1,12 +1,12 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
+import { TableEmptyState } from "~/entity/table/entity-empty-states";
+import type { ListWorkbenchModel } from "~/entity/table/list-workbench";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
-import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
-import type { ListWorkbenchModel } from "~/ui/data-table/list-workbench";
 import { reconcileRowSelection } from "~/ui/data-table/row-selection";
 import type { CubbyRow as Row } from "~/ui/data-table/table-features";
 import { useTableConfig } from "~/ui/data-table/use-table-config";

@@ -15,7 +15,7 @@ import {
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
-import { reclassifyEmails } from "~/server/domains/purchase-import/gmail/reclassify";
+import { reclassifyEmails } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { emailReclassifyResults } from "@cubby/schemas/email-actions";
 import type { z } from "zod";

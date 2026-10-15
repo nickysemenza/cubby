@@ -8,7 +8,7 @@ import {
   commitPhotoImport,
   productionPhotoImportCommitPorts,
   type PhotoImportRouteAdapter,
-} from "~/server/domains/photo-import/service/photo-import-commit.service";
+} from "~/server/domains/photo-import/repo/photo-import-commit";
 import { reconcilePhotoImport } from "~/server/domains/photo-import/service/photo-import-reconcile.service";
 import { manifestPhotoImportRouteAdapter } from "~/server/domains/photo-import/service/photo-import-route.adapter";
 import { entityKernelContextSchema } from "~/server/entity-kernel";

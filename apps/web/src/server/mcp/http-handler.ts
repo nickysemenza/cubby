@@ -203,7 +203,7 @@ async function serveAuthenticatedMcp(
     await import("~/server/http/request-context");
   const { emitTelemetry } = await import("~/server/observability/telemetry");
   const { findActivePurchaseAgentGrant } =
-    await import("~/server/domains/purchase-import/agent-auth");
+    await import("~/server/domains/purchase-import/repo/agent-auth");
 
   const actor = await verifyMcpToken(request);
   if (!actor) return unauthorizedResponse();
@@ -236,7 +236,7 @@ async function serveAuthenticatedMcp(
       : null;
     if (!grant) return unauthorizedResponse();
     const { loadRunScope } =
-      await import("~/server/domains/purchase-import/run-service");
+      await import("~/server/domains/purchase-import/repo/run-service");
     const [scope, party] = await Promise.all([
       loadRunScope(ctx.db, actor.purchaseAgentRunId),
       ctx.currentParty(),

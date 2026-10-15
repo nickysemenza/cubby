@@ -6,7 +6,7 @@ import { taxonomyShortcode } from "../product-category-fixtures";
 import { createEntity } from "../factories/create";
 import { buildKernelContext, buildScenarioDatabase } from "./context";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SIM_PRODUCT_NAME } from "./simulator-product-fixture";

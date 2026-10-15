@@ -20,8 +20,8 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
+import { getIngredientName } from "../../entity/presentation/recipe-utils";
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
-import { getIngredientName } from "./recipe-utils";
 
 const QUICK_FACTORS = [0.5, 1, 2, 3] as const;
 

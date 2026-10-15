@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { loadProductMatchSides } from "~/server/domains/product/repo/match/product-match";
 import {
   getProductMovementTimeline,
   toEntityTimeline,
@@ -12,7 +13,6 @@ import {
   attachProductComponents,
   listKitMembership,
 } from "~/server/domains/product/repo/product-components";
-import { loadProductMatchSides } from "~/server/domains/product/repo/product-match";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { getCollectionDetail } from "~/server/generic/collection/repo/collection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

@@ -6,7 +6,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { entityAttachment, image, product } from "~/server/db/schema";
-import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/description-policy";
+import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
 import {
