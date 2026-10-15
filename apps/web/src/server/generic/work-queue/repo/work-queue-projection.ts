@@ -3,6 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { householdDaySql } from "~/server/db/helpers";
 import {
@@ -118,7 +119,7 @@ export const workQueueCandidate = (
     carriesGaps = false,
   }: {
     entity: Entity;
-    table: SQL;
+    table: PgTable | SQL;
     id: SQL;
     name: SQL;
     owners: SQL;
