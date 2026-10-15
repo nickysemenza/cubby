@@ -8,7 +8,11 @@ export const resolveBeneficiaryEvidence = <PartyId extends string>(args: {
 }):
   | { status: "none" | "blocked"; ownerId: null }
   | { status: "owner"; ownerId: PartyId } => {
-  if (args.rows.length === 0) return { status: "none", ownerId: null };
+  // Itemization can persist implicit unknown financial allocations. Only a
+  // named beneficiary supplies an ownership decision; partial knowledge still
+  // blocks fallback rather than discarding the unknown share of a split.
+  if (args.rows.every((row) => row.ledgerPartyId === null))
+    return { status: "none", ownerId: null };
   const rowsByExpense = new Map<string, typeof args.rows>();
   for (const row of args.rows) {
     rowsByExpense.set(row.expenseShortcode, [
