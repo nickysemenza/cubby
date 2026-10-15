@@ -423,12 +423,16 @@ export async function interpretMailRelevance(
         src,
         MAX_ORIGINAL_BYTES - acquiredBytes,
         ports.fetcher,
-        prepare,
       );
       acquiredBytes += acquired.consumedBytes;
       if (!acquired.bytes) {
         complete = false;
         if (acquired.failure) imageFailures.push(acquired.failure);
+        continue;
+      }
+      const image = await prepare(acquired.bytes, "standard");
+      if (!image) {
+        complete = false;
         continue;
       }
       const parts: MailContentPart[] = [
