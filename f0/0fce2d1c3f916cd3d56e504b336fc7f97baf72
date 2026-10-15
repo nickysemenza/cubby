@@ -1,0 +1,83 @@
+apps/web/DESIGN.md
+  s_2a22d2c73c07e5::t_5574413e85c3bc 62
+apps/web/src/cf-server.ts
+  s_2a22d2c73c07e5::t_f14917e73a992a 6-7,574
+apps/web/src/contracts/mcp-tools.ts
+  s_2a22d2c73c07e5::t_b1a352040def0d 88
+apps/web/src/entity/entity-detail/detail-slots.tsx
+  s_2a22d2c73c07e5::t_3b0bcb1ffeb0dd 257
+apps/web/src/features/calendar/calendar-icons.ts
+  s_2a22d2c73c07e5::t_7ac936a558bb61 15
+apps/web/src/lib/request-id.ts
+  s_2a22d2c73c07e5::t_cd66407eb1be0d 4
+apps/web/src/routes/_authenticated/design.tsx
+  s_2a22d2c73c07e5::t_65ee3edc30565c 68,123-125,185,199-200,219
+apps/web/src/server/cf-env.ts
+  s_2a22d2c73c07e5::t_e1bdf751412313 134,138
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_2a22d2c73c07e5::t_ab13bb579a8184 1455
+apps/web/src/server/domains/project/repo/attention.ts
+  s_2a22d2c73c07e5::t_c9646d67922594 3
+apps/web/src/server/domains/purchase-agent/environment.ts
+  s_2a22d2c73c07e5::t_61577221d6bb75 4,6
+apps/web/src/server/domains/purchase-agent/run-agent.ts
+  s_2a22d2c73c07e5::t_2acaa99bd160ef 106
+apps/web/src/server/domains/purchase-import/README.md
+  s_2a22d2c73c07e5::t_fb8feccf3a35bc 89,95,150,152,159
+apps/web/src/server/domains/purchase-import/agent-host.ts
+  s_2a22d2c73c07e5::t_5e8b6412af1915 9
+apps/web/src/server/domains/purchase-import/agent-services.ts
+  s_2a22d2c73c07e5::t_4a72805cb49088 5
+apps/web/src/server/domains/run/repo/run-operation.ts
+  s_2a22d2c73c07e5::t_4ace8aff5f0f6d 4
+apps/web/src/server/generic/entity-graph/repo/entity-graph.ts
+  s_2a22d2c73c07e5::t_2a09d9feec3ce2 279,302
+apps/web/tests/e2e/assignment-picker-dialog.spec.ts
+  s_2a22d2c73c07e5::t_f0ed5a310ac0e5 19
+apps/web/tooling/checks/check-server-closure.ts
+  s_2a22d2c73c07e5::t_455d3f01d0bf95 41
+apps/web/tooling/layout.unit.test.ts
+  s_2a22d2c73c07e5::t_6187b59e139127 60,68
+apps/web/vite.config.ts
+  s_2a22d2c73c07e5::t_afbb42a8e021b6 186
+apps/web/wrangler.jsonc
+  s_2a22d2c73c07e5::t_a3e26ac75e4485 194
+docs/agents/domain-rules.md
+  s_2a22d2c73c07e5::t_66103b31209e04 93-105,199
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_77fa706468aea7 39,42,60-61,67,75-76,82,102,119,125,192
+docs/agents/mcp.md
+  s_2a22d2c73c07e5::t_d085244aa0e47b 60
+docs/agents/web-ui-reference.md
+  s_2a22d2c73c07e5::t_a74006b11bc85d 96,119,169
+docs/agents/web-ui.md
+  s_2a22d2c73c07e5::t_cd93aee46ce09c 55
+docs/entities.md
+  s_2a22d2c73c07e5::t_1da37b805c82da 204,219,237,719,733,1029
+docs/infrastructure.md
+  s_2a22d2c73c07e5::t_b62d8baff2ec05 95,117-118,125,166,444,462
+docs/todos.md
+  s_2a22d2c73c07e5::t_77309834c90f2d 628,639,1131,1167,1781,1788,1888,1905
+packages/schemas/src/entity-definitions/definition.ts
+  s_2a22d2c73c07e5::t_fcd6e8f5c24850 1982
+packages/schemas/src/project.ts
+  s_2a22d2c73c07e5::t_4311311d984363 155
+packages/schemas/src/wish.ts
+  s_2a22d2c73c07e5::t_24cd71f4e79cbd 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f00fce2d1c3f916cd3d56e504b336fc7f97baf72",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
