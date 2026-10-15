@@ -255,7 +255,9 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
     /** Complete vocabularies need their declared fields, not full media/quality hydration.
      * Base page size and the enrichment schema's ID cap must stay aligned:
      * each page is completed by one enrichment call. */
-    projectedInfiniteQueryOptions: <Schema extends z.ZodObject>(
+    projectedInfiniteQueryOptions: <
+      Schema extends z.ZodObject<{ id: z.ZodString }>,
+    >(
       input: EntityListParams<E>,
       groups: readonly ListEnrichmentGroup[],
       schema: Schema,
