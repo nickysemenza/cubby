@@ -1,0 +1,57 @@
+apps/web/src/server/domains/run/repo/ai-work-state.ts
+  s_7e35fea85e51c2::t_26230035791780 1-228
+apps/web/src/server/domains/run/repo/execution-lineage.ts
+  s_2a22d2c73c07e5::t_dead1aff335768 1-86
+apps/web/src/server/domains/run/repo/reclassification-recovery-state.ts
+  s_2a22d2c73c07e5::t_7c994f0e3376a4 1-142
+apps/web/src/server/domains/run/repo/run-transaction.ts
+  s_2a22d2c73c07e5::t_4ee694b7b45fa5 1-10
+apps/web/src/server/domains/run/repo/suggestion-sweep-state.ts
+  s_2a22d2c73c07e5::t_ec85232be44607 1-326
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_2a22d2c73c07e5::t_9ca428f0413d22 40-41
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_2a22d2c73c07e5::t_41b4220e7fdf71 69-88,248,288,317,320,389-397,549,682,721-728,798-809,841,851
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_2a22d2c73c07e5::t_15936df22eacf9 8-9,27-41,96,115-117,128,139,142,157,164,168,194,205-208,221,223-224,226,230,246-247,372,392,426-436
+apps/web/src/server/domains/run/service/execution-transport.ts
+  s_2a22d2c73c07e5::t_e9a233db2d1af3 1,30-35,60,80-83,103,128
+apps/web/src/server/domains/run/service/reclassification-recovery.ts
+  s_2a22d2c73c07e5::t_c772912d5ed1c0 15-25,36,38,46-50,77-83,135-136,172-181
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_2a22d2c73c07e5::t_e4bc346b8bb330 44-47,49-60,240,373-386,391,471-478,509-529,536,540,547,581
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_dcc51378bc2bcb::t_167d0a95e595f1 1-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1c7a63dcf490840df8bc8ff1fd8857eb942bbecb",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7e35fea85e51c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ecbd2af-fb3c-4e13-927a-e8a719fa2c8b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_dcc51378bc2bcb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae54d3eaa22d594bb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
