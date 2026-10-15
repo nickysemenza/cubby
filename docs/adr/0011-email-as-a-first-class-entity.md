@@ -21,6 +21,9 @@ backfilling existing rows rather than losing household history. Links remain
 derived: Purchases through existing lifecycle link decisions, Expenses and
 Products through those Purchases, and related Emails through a shared Purchase
 or Gmail thread. Email does not introduce a second stored relationship graph.
+Linked/unlinked checks use the same accepted-source and active lifecycle-decision
+policy as the Purchase association list, but may stop at the first matching
+Purchase rather than enumerate and deduplicate all associations.
 
 Classification-only backfill uses rules followed by Jev/Clef, with no Luna
 relevance escalation or admission to Pi. It keeps related/uncertain content and

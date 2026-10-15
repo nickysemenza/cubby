@@ -205,7 +205,9 @@ export const emailReviewConflictSql = () => sql<boolean>`
 
 /** The same SQL owns filter/count membership and the hydrated linked value. */
 export const emailLinkedSql = () =>
-  sql<boolean>`EXISTS (${emailPurchaseAssociationsSql()})`;
+  // Existence does not need the complete, deduplicated association list.
+  sql<boolean>`(EXISTS (${emailAcceptedEvidenceSql()})
+    OR EXISTS (${emailLinkedDecisionPurchasesSql()}))`;
 
 /** Resolve immutable Feedback lineage once before the mailbox join. Without
  * this boundary, join reordering can repeat the Assessment lookup for every

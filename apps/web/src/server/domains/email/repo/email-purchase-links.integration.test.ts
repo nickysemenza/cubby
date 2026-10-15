@@ -19,6 +19,7 @@ import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
  */
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   databaseForTransaction,
@@ -40,7 +41,10 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
-import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+import {
+  emailLinkedSql,
+  emailMemberClassificationSql,
+} from "~/server/domains/email/repo/email-sql";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/email-purchase-decision";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/gmail/observations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/gmail/retained-mail.fixtures";
@@ -362,6 +366,67 @@ describe("Email Purchase links", () => {
       email: await emailCode(source.id),
     };
   }
+
+  // A boolean link check must stop at accepted evidence instead of reading and
+  // deduplicating every accepted order before it can return true.
+  it("bounds link existence work when one Email has many accepted orders", async () => {
+    const f = await retainedReviewFixture();
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.party.id,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic accepted claim missing");
+    await getDb(ctx.db)
+      .insert(importSourceOrder)
+      .values(
+        Array.from({ length: 1000 }, (_, i) => ({
+          sourceClaimId: claim.id,
+          orderKey: `synthetic-accepted-order-${i}`,
+          purchaseId: f.purchase.id,
+          checksum: f.checksum,
+          outputFingerprint: `synthetic-fingerprint-${i}`,
+        })),
+      );
+    const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email"
+      WHERE "Email"."shortcode" = ${f.email}`;
+    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
+      { linked: true },
+    ]);
+    const result = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const plans = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
+      )
+      .parse(result.rows);
+    const nodeSchema = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Rows": z.number().default(0),
+      "Actual Loops": z.number().default(0),
+      "Rows Removed by Filter": z.number().default(0),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    let acceptedRows = 0;
+    const visit = (value: unknown) => {
+      const node = nodeSchema.parse(value);
+      if (node["Relation Name"] === "ImportSourceOrder")
+        acceptedRows +=
+          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
+          node["Actual Loops"];
+      node.Plans?.forEach(visit);
+    };
+    for (const row of plans)
+      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+    expect(acceptedRows).toBeLessThan(10);
+  });
 
   it("retries an identical current Email decision without duplicating its immutable history", async () => {
     const f = await retainedReviewFixture();
