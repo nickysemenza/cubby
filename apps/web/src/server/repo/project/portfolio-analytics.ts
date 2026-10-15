@@ -38,7 +38,10 @@ import {
   EXPENSE_MONTH_BUCKET,
   expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
-import { executeExpenseDerivedBatch } from "~/server/repo/expense-derived-read";
+import {
+  executeExpenseDerivedBatch,
+  expenseSelectionForWhere,
+} from "~/server/repo/expense-derived-read";
 import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
@@ -142,7 +145,7 @@ export async function projectPortfolioAnalytics(
       {
         scope: allocationScope,
         where: expenseScope,
-        expenseIds: sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${expenseScope ?? sql`true`})`,
+        expenseIds: expenseSelectionForWhere(expenseScope),
       },
       (read) => ({
         monthlyRows: read

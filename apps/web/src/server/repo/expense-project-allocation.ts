@@ -24,7 +24,8 @@ import {
 
 /** SQL arrays retain legacy correlated callers; relational selections expose
  * cardinality to the planner instead of hiding a whole ledger in an InitPlan. */
-export type ExpenseIdSelection = readonly ExpenseId[] | SQL | { select: SQL };
+export type ExpenseIdRelation = { select: SQL };
+export type ExpenseIdSelection = readonly ExpenseId[] | SQL | ExpenseIdRelation;
 
 export const expenseSelectionConditionSql = (
   id: SQL,

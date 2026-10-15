@@ -8,7 +8,10 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 
 import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
 import { expenseDerivedReadSql } from "./expense-derived-read";
-import type { ExpenseProjectAllocationBasis } from "./expense-project-allocation";
+import type {
+  ExpenseIdSelection,
+  ExpenseProjectAllocationBasis,
+} from "./expense-project-allocation";
 
 export type ExpenseSpendingAllocationRow = {
   spendingCategoryId: SpendingCategoryId | null;
@@ -28,7 +31,7 @@ type RawSpendingAllocationRow = ExpenseSpendingAllocationRow & {
 
 /** Unknown shares remain in the breakdown and never acquire a guessed category. */
 export const expenseSpendingAllocationSql = (
-  expenseIds?: readonly ExpenseId[] | SQL,
+  expenseIds?: ExpenseIdSelection,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL => expenseDerivedReadSql("categories", { expenseIds, draft });
 
