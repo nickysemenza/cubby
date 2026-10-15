@@ -117,7 +117,9 @@ Read real originals via Cubby or Gmail MCP and lock session labels first. Remove
 identifying headers and addresses, preserving transaction evidence. Supply the
 JSON array of `{label, body, html?, subject?}` through the stdin wrapper
 (`pnpm --dir apps/web eval:mail-prompts:stdin`); never put member inputs in case
-files or command arguments. The wrapper transfers input through an ephemeral loopback socket, avoiding
+files or command arguments. Use `label: "ungraded"` for diagnostic coverage when
+source review is incomplete; these cases are excluded from accuracy counts and
+confusion matrices. The wrapper transfers input through an ephemeral loopback socket, avoiding
 environment-size limits. Input stays in process memory; logs and reports
 contain aggregates. CI refuses custom member inputs. Catalog-based cost is an
 estimate, not a billing receipt. Confirm a candidate on fresh held-out sources

@@ -32,12 +32,17 @@ Whenever HTML is present, the input also keeps
 bounded link labels and destinations, image URLs and alternative text, and raw
 JSON-LD excerpts from the existing page condenser. These remain untrusted evidence;
 clipped structured data is an excerpt, not a parsed order. The serialized view stays
-within its context budget and marks omitted evidence explicitly. An unrelated
-verdict from a partial view becomes uncertain. Readable HTML is always a partial
-view because markup and visual evidence are omitted; retained originals and checksums
-remain complete. Sender domains never establish Purchase or Vendor associations.
+within its context budget and marks omitted evidence explicitly. Definite Jev/Clef
+decisions are honored; the exception-only Luna path retains uncertainty when a
+negative lacks required evidence. Discarded layout markup alone does not make
+evidence incomplete; retained originals and checksums remain complete. Sender
+domains never establish Purchase or Vendor associations.
 The exception-only Luna relevance path may acquire content images selected by
 that compactor when labels alone cannot explain them; tracking pixels are excluded.
+Responsive images inside hidden containers use the same bounded image path as
+visible images, preserving their labels and sources rather than declaring them
+lost. Unresolved sources, image overflow and omitted hidden transaction text
+still report missing evidence; non-content script/style/template trees stay excluded.
 Guarded HTTP retrieval rejects private destinations. Optional remote-image
 failures leave evidence incomplete with diagnostics without aborting the batch.
 Gmail success JSON is bounded at 36 MiB before parsing, accommodating Gmail

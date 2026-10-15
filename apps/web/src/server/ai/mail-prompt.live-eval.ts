@@ -43,6 +43,24 @@ const { mailTriagePrompt, mailTriageChoices } = await import("./prompts/mail");
 // An optional full rules draft is compared without changing deployed routing.
 const candidateRules = process.env.MAIL_PROMPT_CANDIDATE_RULES?.trim();
 
+const carrierDigestCases = [
+  {
+    label: "related",
+    body: "Your daily inbound parcel digest: a package from Cedar Hardware is arriving tomorrow. Tracking number SYNTRACK123456. A package from Harbor Books is in transit. Tracking number SYNTRACK789012.",
+    html: "",
+  },
+  {
+    label: "unrelated",
+    body: "Your daily postal digest contains scanned letters and local advertising circulars. Save on parcel shipping this month. No packages are arriving today.",
+    html: "",
+  },
+  {
+    label: "uncertain",
+    body: "Packages arriving soon. Open the attached digest to see who sent them and the tracking details. The digest could not be read.",
+    html: "",
+  },
+];
+
 const syntheticCases = [
   {
     label: "unrelated",
@@ -54,6 +72,7 @@ const syntheticCases = [
     body: "Because you recently purchased the kettle, we recommend these replacement filters. Explore our latest offers.",
     html: "",
   },
+  ...carrierDigestCases,
   {
     label: "unrelated",
     subject: "Weekend dispatch: a shopping trip",
@@ -159,7 +178,7 @@ const inputSchema = z
   .array(
     z
       .object({
-        label: z.enum(mailTriageChoices),
+        label: z.enum([...mailTriageChoices, "ungraded"]),
         body: z.string(),
         html: z.string().optional(),
         subject: z.string().optional(),
@@ -223,6 +242,7 @@ async function evaluateDecisions() {
         inputTokens: 0,
         outputTokens: 0,
         calls: 0,
+        gradedCases: cases.filter((entry) => entry.label !== "ungraded").length,
         correct: 0,
         falseNegatives: 0,
         falsePositives: 0,
@@ -364,7 +384,7 @@ async function evaluateDecisions() {
       expect(counts.errors).toBe(0);
       const strict = process.env.MAIL_PROMPT_BASELINE_ONLY === "1";
       expect(counts.unavailable).toBe(strict ? 0 : counts.unavailable);
-      expect(counts.correct).toBe(strict ? cases.length : counts.correct);
+      expect(counts.correct).toBe(strict ? counts.gradedCases : counts.correct);
       expect(counts.falseNegatives).toBe(0);
       expect(counts.unsafeNegatives).toBe(0);
     }
@@ -434,6 +454,7 @@ async function evaluateRelevance() {
           ],
         },
         ...cases.slice(0, 2),
+        ...carrierDigestCases,
         ...cases.slice(-2),
         {
           label: "related",
@@ -461,6 +482,8 @@ async function evaluateRelevance() {
   const confusion: Record<string, number> = {};
   const counts = {
     cases: fallbackCases.length,
+    gradedCases: fallbackCases.filter((entry) => entry.label !== "ungraded")
+      .length,
     noInference: 0,
     rawCorrect: 0,
     guardedCorrect: 0,
@@ -575,8 +598,10 @@ async function evaluateRelevance() {
             classification: guarded.classification,
           }),
         );
-      const cell = `${entry.label}->${guarded.classification}`;
-      confusion[cell] = (confusion[cell] ?? 0) + 1;
+      if (entry.label !== "ungraded") {
+        const cell = `${entry.label}->${guarded.classification}`;
+        confusion[cell] = (confusion[cell] ?? 0) + 1;
+      }
       counts.noInference += Number(rawClassification === null);
       counts.rawCorrect += Number(
         rawClassification !== null && rawClassification === entry.label,
