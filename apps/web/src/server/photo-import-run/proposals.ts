@@ -372,9 +372,10 @@ async function toViews(
   return rows.map((storedRow) => {
     const row = {
       ...storedRow,
-      review: normalizeReview(
-        storedRow.review ? photoGroupReview.parse(storedRow.review) : null,
-      ),
+      review:
+        normalizeReview(
+          storedRow.review ? photoGroupReview.parse(storedRow.review) : null,
+        ) ?? null,
     };
     const roster = liveRoster(row, imagesById);
     const productSummary = row.productId
