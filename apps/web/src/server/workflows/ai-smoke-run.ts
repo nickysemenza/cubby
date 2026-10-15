@@ -37,6 +37,7 @@ import {
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { productIdentityPrompt } from "~/server/ai/product-identity";
+import { imageIdentificationCompositionPrompt } from "~/server/ai/prompts/image-identification";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import {
   runStructuredFeature,
@@ -56,10 +57,7 @@ import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-
 import { getUploadedImageProcessingSource } from "~/server/domains/image-processing/repo/image-processing";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { imageAnalysisRenditionUrl } from "~/server/domains/image/service/image-description.service";
-import {
-  imageIdentificationCompositionPrompt,
-  readImageIdentificationRendition,
-} from "~/server/domains/image/service/image-identification.service";
+import { readImageIdentificationRendition } from "~/server/domains/image/service/image-identification.service";
 import { getLocationById } from "~/server/domains/location/repo/crud";
 import { getProductByID } from "~/server/domains/product/repo/crud";
 import {

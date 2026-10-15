@@ -1,3 +1,5 @@
+import { sha256Hex } from "@cubby/shared/sha256";
+
 import type { DecisionPort } from "./decision-model";
 
 /** Common conservative text bound for single and multi-question requests. */
@@ -11,6 +13,16 @@ export type DecisionQuestionsInput = Omit<ChoiceInput, "questions"> & {
 export type DecisionQuestionsResponse = Omit<ChoiceResponse, "answers"> & {
   answers: Record<string, ChoiceResponse["answers"]["selection"]>;
 };
+export function decisionInputFitsContext(
+  input: DecisionQuestionsInput,
+): boolean {
+  const { images: _images, ...text } = input;
+  return (
+    new TextEncoder().encode(JSON.stringify(text)).byteLength <=
+    DECISION_CONTEXT_BYTE_LIMIT
+  );
+}
+
 type Entry = {
   index: number;
   group: string;
@@ -23,6 +35,9 @@ type Entry = {
 function combine(entries: Entry[]): DecisionQuestionsInput {
   if (entries.length === 1) return entries[0]!.input;
   return {
+    ...(entries[0]!.input.images?.length
+      ? { images: entries[0]!.input.images }
+      : {}),
     state:
       "Independent decisions. Each question contains its own evidence. Do not use evidence from other questions.",
     questions: Object.fromEntries(
@@ -49,14 +64,18 @@ export class DecisionRequestBatch {
     if (this.observed.size === this.count) this.flush();
   }
 
-  request(
+  async request(
     index: number,
     group: string,
     input: ChoiceInput,
     execute: Entry["execute"],
   ): Promise<ChoiceResponse> {
+    const media = input.images?.length
+      ? await sha256Hex(JSON.stringify(input.images))
+      : null;
+    const key = JSON.stringify([group, media]);
     return new Promise((resolve, reject) => {
-      this.entries.push({ index, group, input, execute, resolve, reject });
+      this.entries.push({ index, group: key, input, execute, resolve, reject });
       this.ready(index);
     });
   }
@@ -74,9 +93,7 @@ export class DecisionRequestBatch {
         const next = [...chunk, entry];
         if (
           chunk.length &&
-          (next.length > 64 ||
-            new TextEncoder().encode(JSON.stringify(combine(next))).byteLength >
-              DECISION_CONTEXT_BYTE_LIMIT)
+          (next.length > 64 || !decisionInputFitsContext(combine(next)))
         ) {
           void this.dispatch(chunk);
           chunk = [];

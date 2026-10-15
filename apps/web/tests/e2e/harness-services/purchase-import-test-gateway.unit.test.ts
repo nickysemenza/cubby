@@ -90,3 +90,42 @@ describe("test AI gateway semantic decisions", () => {
     expect(await response.text()).toContain("Unscripted gateway feature");
   });
 });
+
+it("answers each batched question from its own fixture and counts usage once", async () => {
+  await configure([
+    {
+      feature: "product-variant-relation",
+      match: "Synthetic first pair",
+      label: choices.same,
+    },
+    {
+      feature: "product-variant-relation",
+      match: "Synthetic second pair",
+      label: choices.different,
+    },
+  ]);
+  const criteria = Object.fromEntries(Object.entries(choices));
+  const response = await gateway.fetch(
+    new Request("https://gateway.test/workers-ai/run/typesafe/jev", {
+      method: "POST",
+      headers: {
+        "cf-aig-metadata": JSON.stringify({
+          feature: "product-variant-relation",
+        }),
+      },
+      body: JSON.stringify({
+        state: "Independent questions",
+        questions: {
+          first: { instructions: "Synthetic first pair", criteria },
+          second: { instructions: "Synthetic second pair", criteria },
+        },
+      }),
+    }),
+  );
+  expect(await response.json()).toMatchObject({
+    result: {
+      answers: { first: { choice: "same" }, second: { choice: "different" } },
+      usage: { input_tokens: 1, output_tokens: 1 },
+    },
+  });
+});
