@@ -74,7 +74,7 @@ test("explains allocated trades with expandable contributor precedence", async (
   await contributor.locator("summary").click();
   await expect(contributor.getByText("Overridden above").first()).toBeVisible();
   await expect(
-    contributor.getByText("Electrical", { exact: true }).first(),
+    contributor.getByText("Electrical & Lighting", { exact: true }).first(),
   ).toBeVisible();
   await expect(
     contributor.getByText("Plumbing", { exact: true }).first(),
