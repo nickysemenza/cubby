@@ -888,7 +888,9 @@ struct FieldExplanationLabel: View {
         return result
     }
 
-    private func resolutionContributor(_ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil) -> some View {
+    private func resolutionContributor(_ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil)
+        -> some View
+    {
         DisclosureGroup {
             resolutionSteps(block)
             if let steps, !steps.isEmpty {
