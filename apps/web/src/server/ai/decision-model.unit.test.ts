@@ -615,3 +615,204 @@ describe("runDecisionChoice", () => {
     expect(sent).toHaveLength(2);
   });
 });
+
+describe("runDecisionChoices", () => {
+  it("batches cold questions, maps answers by id, and retains individual cache entries", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoice, runDecisionChoices } =
+      await import("./decision-model");
+    const tokenCounts: number[] = [];
+    const requests: {
+      state: string;
+      questions: Record<string, { criteria: Record<string, string> }>;
+    }[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const input = JSON.parse(String(init?.body)).input;
+      requests.push(input);
+      return Response.json({
+        result: {
+          usage: { input_tokens: 9, output_tokens: 2 },
+          answers: Object.fromEntries(
+            Object.keys(input.questions)
+              .reverse()
+              .map((id, index) => [
+                id,
+                {
+                  type: "choice",
+                  choice: index === 0 ? "c1" : "c0",
+                  confidence: 0.9,
+                  probabilities:
+                    index === 0 ? { c0: 0.1, c1: 0.9 } : { c0: 0.9, c1: 0.1 },
+                },
+              ]),
+          ),
+        },
+      });
+    });
+    const inputs = ["first", "second"].map((label) => ({
+      ...base,
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `synthetic ${label} ${crypto.randomUUID()}`,
+      choices: ["red", "blue"],
+      allowNone: false,
+      onTokenUsage: (usage: { inputTokens: number | null }) =>
+        tokenCounts.push(usage.inputTokens ?? 0),
+    }));
+    const results = await runDecisionChoices(inputs);
+    expect(requests).toHaveLength(1);
+    expect(Object.keys(requests[0]!.questions)).toHaveLength(2);
+    expect(results.map((result) => result.selectedIndex)).toEqual([0, 1]);
+    expect(tokenCounts.reduce((sum, count) => sum + count, 0)).toBe(9);
+    expect(await runDecisionChoice(inputs[1]!)).toEqual(results[1]);
+    expect(await runDecisionChoices([inputs[1]!, inputs[0]!])).toEqual([
+      results[1],
+      results[0],
+    ]);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("splits at the context bound without dropping questions", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoices } = await import("./decision-model");
+    let count = 0;
+    let calls = 0;
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const input = JSON.parse(String(init?.body)).input;
+      expect(
+        new TextEncoder().encode(JSON.stringify(input)).byteLength,
+      ).toBeLessThanOrEqual(32_000);
+      calls++;
+      count += Object.keys(input.questions).length;
+      return Response.json({
+        result: {
+          answers: Object.fromEntries(
+            Object.keys(input.questions).map((id) => [
+              id,
+              {
+                type: "choice",
+                choice: "c0",
+                confidence: 1,
+                probabilities: { c0: 1 },
+              },
+            ]),
+          ),
+        },
+      });
+    });
+    const results = await runDecisionChoices(
+      Array.from({ length: 5 }, (_, i) => ({
+        ...base,
+        subject: `${i} ${"x".repeat(12_000)}`,
+        choices: ["one"],
+        allowNone: false,
+      })),
+    );
+    expect(results).toHaveLength(5);
+    expect(count).toBe(5);
+    expect(calls).toBe(3);
+  });
+
+  it("coalesces duplicate cold questions without a cache-lease deadlock", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoices } = await import("./decision-model");
+    const fetch = vi.fn(async () =>
+      Response.json({ result: answerFor("c0", { c0: 1 }) }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const input = {
+      ...base,
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `synthetic duplicate ${crypto.randomUUID()}`,
+      choices: ["one"],
+      allowNone: false,
+    };
+    const result = await runDecisionChoices([input, input]);
+    expect(result[0]).toEqual(result[1]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects incomplete batch answers and releases claims for a retry", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoices } = await import("./decision-model");
+    const inputs = ["left", "right"].map((label) => ({
+      ...base,
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `${label} ${crypto.randomUUID()}`,
+      choices: ["one"],
+      allowNone: false,
+    }));
+    vi.stubGlobal("fetch", async () =>
+      Response.json({ result: answerFor("c0", { c0: 1 }) }),
+    );
+    await expect(runDecisionChoices(inputs)).rejects.toThrow(/question/);
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const input = JSON.parse(String(init?.body)).input;
+      return Response.json({
+        answers: Object.fromEntries(
+          Object.keys(input.questions).map((id) => [
+            id,
+            {
+              type: "choice",
+              choice: "c0",
+              confidence: 1,
+              probabilities: { c0: 1 },
+            },
+          ]),
+        ),
+      });
+    });
+    expect(
+      (await runDecisionChoices(inputs)).map((result) => result.selectedIndex),
+    ).toEqual([0, 0]);
+  });
+
+  it("bounds question counts and keeps sampled models in separate requests", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoices } = await import("./decision-model");
+    const requests: { model: string; count: number }[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const { model, input } = JSON.parse(String(init?.body));
+      const ids = Object.keys(input.questions);
+      requests.push({ model, count: ids.length });
+      return Response.json({
+        answers: Object.fromEntries(
+          ids.map((id) => [
+            id,
+            {
+              type: "choice",
+              choice: "c0",
+              confidence: 1,
+              probabilities: { c0: 1 },
+            },
+          ]),
+        ),
+      });
+    });
+    const inputs = Array.from({ length: 66 }, (_, index) => ({
+      ...base,
+      subject: `synthetic item ${index}`,
+      choices: ["one"],
+      allowNone: false,
+      decisionModel:
+        index === 65
+          ? ("@cf/cloudflare/clef" as const)
+          : ("typesafe/jev" as const),
+    }));
+    expect(await runDecisionChoices(inputs)).toHaveLength(66);
+    expect(
+      requests
+        .filter(({ model }) => model === "typesafe/jev")
+        .map(({ count }) => count),
+    ).toEqual([64, 1]);
+    expect(
+      requests
+        .filter(({ model }) => model === "@cf/cloudflare/clef")
+        .map(({ count }) => count),
+    ).toEqual([1]);
+  });
+});

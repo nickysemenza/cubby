@@ -2,7 +2,7 @@ import type { photoRunContextImage } from "@cubby/schemas/photo-import-run";
 import type { z } from "zod";
 
 import { photoImportContract } from "~/contracts/photo-import.contract";
-import { decideProductVariantComparison } from "~/server/ai/semantic-decisions";
+import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { readImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { commitPhotoImport } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
@@ -95,7 +95,7 @@ export const photoImportHandlers = implementOperationDomain(
             ...context.actorContext,
             runId: await resolveOrThrow(context.db, "run", input.runId),
           },
-          decideProductVariantComparison,
+          decideProductVariantComparisons,
         ),
       };
     },
@@ -268,7 +268,7 @@ export const photoImportHandlers = implementOperationDomain(
         context.db,
         input,
         context.actorContext,
-        decideProductVariantComparison,
+        decideProductVariantComparisons,
       ),
     }),
     proposals: (context, input) =>

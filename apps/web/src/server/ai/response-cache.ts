@@ -166,6 +166,8 @@ export async function withAiResponseCache<T>(args: {
   validate(value: JsonValue): T;
   compute(status: ApplicationCacheStatus): Promise<T>;
   onHit?(durationMs: number): Promise<void>;
+  /** A batch may dispatch its owned misses while another request owns this key. */
+  onWait?(): void;
 }): Promise<T> {
   if (!args.enabled) return args.compute("none");
   const key = await aiResponseCacheKey(args.keyInput);
@@ -201,6 +203,7 @@ export async function withAiResponseCache<T>(args: {
       return result;
     }
     if (claim.kind === "busy") {
+      args.onWait?.();
       force = false;
       await sleep(250);
       continue;

@@ -37,7 +37,7 @@ import { z } from "zod";
 
 import { classifyWithDecisionModel } from "~/server/ai/classify";
 import {
-  runDecisionChoice,
+  runDecisionChoices,
   type DecisionChoicePrompt,
   type DecisionChoiceResult,
   type DecisionPort,
@@ -753,14 +753,17 @@ async function resolvePruneTarget(
     .filter((value) => !deterministicValues.has(value))
     .slice(0, spec.maxDecisionCandidates);
   const judged: { value: string; redundant: number; genuine: number }[] = [];
-  for (const value of survivors) {
-    const result = await runDecisionChoice({
+  const results = await runDecisionChoices(
+    survivors.map((value) => ({
       feature: FIELD_SUGGESTION_FEATURE,
       ...prunePrompt(spec, resolvedBasis, value),
       usage,
       port: decisionPort,
       decisionModel,
-    });
+    })),
+  );
+  for (const [index, value] of survivors.entries()) {
+    const result = results[index]!;
     const { redundant, genuine } = pruneJudgment(result);
     judged.push({ value, redundant, genuine });
     if (

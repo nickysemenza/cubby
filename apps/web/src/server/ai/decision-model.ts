@@ -1,5 +1,5 @@
 /**
- * The decision-tier runner: one closed-set choice placed with Jev or Clef
+ * The decision-tier runner: closed-set questions placed with Jev or Clef
  * over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
 import { type Confidence, decisionConfidence } from "@cubby/schemas/ai";
@@ -31,11 +31,15 @@ import {
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
 
+import {
+  DECISION_CONTEXT_BYTE_LIMIT,
+  DecisionRequestBatch,
+  type DecisionQuestionsInput,
+  type DecisionQuestionsResponse,
+} from "./decision-request-batch";
 import { captureAiInput, preparingAiInputs } from "./evaluation-inputs";
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
 
-/** Common trial bounds: the decision model's 32k context, conservatively measured in bytes. */
-const DECISION_CONTEXT_BYTE_LIMIT = 32_000;
 const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
 export const DECISION_MAX_CANDIDATES = DECISION_MAX_CHOICES - 1;
@@ -165,25 +169,6 @@ export type DecisionChoiceResponse = z.infer<
   typeof decisionChoiceResponseSchema
 >;
 
-/**
- * Jev wraps its answer in `result`; Clef returns the answer directly.
- * Keep both wire shapes validated against the same choice contract.
- */
-const jevGatewayEnvelopeSchema = z.object({
-  result: decisionChoiceResponseSchema,
-});
-/**
- * The gateway-scoped run route (`AI.run` with `gateway.id`, REST `/ai/run`)
- * adds a run layer around the decision model's answer: `{result: {state, result}, success,
- * errors}`. Only a `Completed` run carries an answer.
- */
-const jevRunEnvelopeSchema = z.object({
-  result: z.object({
-    state: z.literal("Completed"),
-    result: decisionChoiceResponseSchema,
-  }),
-});
-
 export interface DecisionChoiceResult {
   selectedIndex: number | null;
   confidence: Confidence;
@@ -207,7 +192,10 @@ export type DecisionPort = (
 ) => Promise<DecisionChoiceResponse>;
 
 /** The answer in a successful response body, whichever wire shape carries it. */
-function parseDecisionResponse(body: string): DecisionChoiceResponse {
+function parseDecisionResponse(
+  body: string,
+  input: DecisionQuestionsInput,
+): DecisionQuestionsResponse {
   let decoded: unknown;
   try {
     decoded = JSON.parse(body);
@@ -215,24 +203,46 @@ function parseDecisionResponse(body: string): DecisionChoiceResponse {
     // SILENT: a non-JSON body fails every shape below and is quoted there.
     decoded = undefined;
   }
-  const run = jevRunEnvelopeSchema.safeParse(decoded);
-  if (run.success) return run.data.result.result;
-  const enveloped = jevGatewayEnvelopeSchema.safeParse(decoded);
-  if (enveloped.success) return enveloped.data.result;
-  const direct = decisionChoiceResponseSchema.safeParse(decoded);
-  if (direct.success) return direct.data;
+  const schema = z.object({
+    answers: z.record(
+      z.string(),
+      decisionChoiceResponseSchema.shape.answers.shape.selection,
+    ),
+    usage: decisionChoiceResponseSchema.shape.usage,
+  });
+  const run = z
+    .object({
+      result: z.object({ state: z.literal("Completed"), result: schema }),
+    })
+    .safeParse(decoded);
+  const enveloped = z.object({ result: schema }).safeParse(decoded);
+  const direct = schema.safeParse(decoded);
+  const result = run.success
+    ? run.data.result.result
+    : enveloped.success
+      ? enveloped.data.result
+      : direct.success
+        ? direct.data
+        : undefined;
+  if (
+    result &&
+    Object.keys(result.answers).length ===
+      Object.keys(input.questions).length &&
+    Object.keys(input.questions).every((key) => result.answers[key])
+  )
+    return result;
   // The raw body carries an unfinished run's state and the API's `errors`.
   throw new Error(
-    `Decision model returned an invalid choice response. Body: ${body}`,
+    `Decision model returned an invalid choice response. Unexpected question set or answer. Body: ${body}`,
   );
 }
 
 async function requestDecision(
-  input: DecisionChoiceInput,
+  input: DecisionQuestionsInput,
   ctx: AiRunContext,
   feature: AiDecisionFeature,
   applicationCacheStatus: ApplicationCacheStatus,
-): Promise<DecisionChoiceResponse> {
+): Promise<DecisionQuestionsResponse> {
   const metadata: GatewayMetadata = {
     feature: feature.feature,
     operation: ctx.operation,
@@ -266,7 +276,7 @@ async function requestDecision(
       new Error("Decision request exceeded its 30-second deadline."),
     );
   }, DECISION_DEADLINE_MS);
-  let parsed: DecisionChoiceResponse | undefined;
+  let parsed: DecisionQuestionsResponse | undefined;
   let attempt = 0;
   let admissionWait = false;
   try {
@@ -308,7 +318,10 @@ async function requestDecision(
         { status: response.status },
       );
     }
-    parsed = parseDecisionResponse(await response.text().catch(() => ""));
+    parsed = parseDecisionResponse(
+      await response.text().catch(() => ""),
+      input,
+    );
     return parsed;
   } catch (error) {
     admissionWait = isGatewayAdmissionWait(error);
@@ -414,7 +427,30 @@ export function decisionChoiceFitsContext(args: DecisionChoicePrompt): boolean {
  * silently truncated here; `runAiSelection` routes choices exceeding either
  * the candidate count or serialized byte budget to its overflow feature.
  */
-export async function runDecisionChoice(args: {
+export async function runDecisionChoice(
+  args: DecisionChoiceArgs,
+): Promise<DecisionChoiceResult> {
+  return runDecisionChoiceInternal(args);
+}
+
+export async function runDecisionChoices(
+  args: readonly DecisionChoiceArgs[],
+): Promise<DecisionChoiceResult[]> {
+  const batch = new DecisionRequestBatch(args.length);
+  const usages = new Map<AiRunContext, number>();
+  return Promise.all(
+    args.map((item, index) => {
+      if (!usages.has(item.usage)) usages.set(item.usage, usages.size);
+      return runDecisionChoiceInternal(item, {
+        batch,
+        index,
+        usageGroup: usages.get(item.usage)!,
+      }).finally(() => batch.ready(index));
+    }),
+  );
+}
+
+type DecisionChoiceArgs = {
   feature: AiDecisionFeature;
   subject: string;
   rules: string;
@@ -434,7 +470,12 @@ export async function runDecisionChoice(args: {
   }) => void;
   /** A long-lived Run may pin the sampled decision tier for reproducibility. */
   decisionModel?: SupportedDecisionModel;
-}): Promise<DecisionChoiceResult> {
+};
+
+async function runDecisionChoiceInternal(
+  args: DecisionChoiceArgs,
+  pending?: { batch: DecisionRequestBatch; index: number; usageGroup: number },
+): Promise<DecisionChoiceResult> {
   if (args.choices.length > DECISION_MAX_CANDIDATES) {
     throw new Error(
       `The decision model supports at most ${DECISION_MAX_CANDIDATES} choices, got ${args.choices.length}.`,
@@ -510,17 +551,42 @@ export async function runDecisionChoice(args: {
       input,
     },
     validate,
-    onHit: (durationMs) =>
-      recordApplicationCacheHit(feature, args.usage, durationMs),
+    onWait: () => pending?.batch.ready(pending.index),
+    onHit: (durationMs) => {
+      pending?.batch.ready(pending.index);
+      return recordApplicationCacheHit(feature, args.usage, durationMs);
+    },
     compute: async (applicationCacheStatus) => {
+      if (args.port || input.images?.length)
+        pending?.batch.ready(pending.index);
       const response = await (args.port
         ? args.port(input)
-        : requestDecision(input, args.usage, feature, applicationCacheStatus));
+        : pending && !input.images?.length
+          ? pending.batch.request(
+              pending.index,
+              JSON.stringify([feature, pending.usageGroup]),
+              input,
+              (questions) =>
+                requestDecision(
+                  questions,
+                  args.usage,
+                  feature,
+                  applicationCacheStatus,
+                ),
+            )
+          : requestDecision(
+              input,
+              args.usage,
+              feature,
+              applicationCacheStatus,
+            ));
       args.onTokenUsage?.({
         inputTokens: response.usage?.input_tokens ?? null,
         outputTokens: response.usage?.output_tokens ?? null,
       });
       const answer = response.answers.selection;
+      if (!answer)
+        throw new Error("The decision model omitted the selection question.");
       validateProbabilities(
         answer.probabilities,
         new Set(Object.keys(input.questions.selection.criteria)),

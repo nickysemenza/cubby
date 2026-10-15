@@ -6,6 +6,7 @@ import type { Database } from "~/server/db";
 import type { DecisionPort } from "./decision-model";
 import {
   decideProductVariantComparison,
+  decideProductVariantComparisons,
   decideUpcOfferComparability,
 } from "./semantic-decisions";
 
@@ -51,6 +52,33 @@ describe("semantic decision adapters", () => {
         secondTitle: "Synthetic boots, size 9",
       },
     });
+  });
+
+  it("keeps batch positions and full evidence when an intervening pair abstains", async () => {
+    const port = portFor(0, 0.95);
+    const comparisons = [
+      {
+        firstTitle: "Synthetic blue shirt, M",
+        secondTitle: "Synthetic blue shirt, M",
+      },
+      { firstTitle: "x".repeat(501), secondTitle: "Synthetic bounded source" },
+      {
+        firstTitle: "Synthetic red hat, L",
+        secondTitle: "Synthetic red hat, L",
+      },
+    ];
+    const results = await decideProductVariantComparisons({
+      comparisons,
+      usage,
+      port,
+    });
+    expect(results.map((result) => result.evidence)).toEqual(comparisons);
+    expect(results.map((result) => result.color.relation)).toEqual([
+      "same",
+      "unknown",
+      "same",
+    ]);
+    expect(port).toHaveBeenCalledTimes(2);
   });
 
   it("turns a medium-confidence offer choice into visible unknown", async () => {

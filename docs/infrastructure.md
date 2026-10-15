@@ -462,7 +462,15 @@ payloads and retry policies. Gateway cache verdicts describe upstream billing;
 application `cacheStatus` continues to describe the caller's own cache.
 
 Decision assignment, caching, request bounds and response envelopes belong to
-the shared decision runner. Application feature tiers are declared in
+the shared decision runner. Independent text decisions use `runDecisionChoices`:
+cache hits retain their individual keys, while owned cache misses share requests
+only within the same feature, sampled model, and usage context. Batches carry
+at most 64 independently scoped questions and stay within the runner's serialized
+text budget; larger sets split without dropping candidates. Waiting on another
+request's cache lease does not hold up owned misses. Each upstream batch records
+usage once and still passes through the gateway egress admission limits. Dependent
+decision phases wait for their required answers before starting another batch.
+Application feature tiers are declared in
 `apps/web/src/server/ai/features.ts`; retier only with live-eval evidence or an
 explicit member choice. Small ceiling-scoring evals cannot establish parity.
 The opt-in feature eval uses production prompts, schema, validation and repair
