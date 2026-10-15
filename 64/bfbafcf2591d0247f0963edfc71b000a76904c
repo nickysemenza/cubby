@@ -1,0 +1,99 @@
+apps/web/src/server/domains/email/repo/discovery-email-audit.integration.test.ts
+  s_2a22d2c73c07e5::t_0b916d8b35e302 18-19,286
+apps/web/src/server/domains/purchase-import/operations/gmail/admitted-refresh.integration.test.ts
+  s_2a22d2c73c07e5::t_1805cb73013dc2 18
+apps/web/src/server/domains/purchase-import/operations/gmail/classification-stage.integration.test.ts
+  s_2a22d2c73c07e5::t_b43116c1cb97c5 12
+apps/web/src/server/domains/purchase-import/operations/gmail/discovery.integration.test.ts
+  s_2a22d2c73c07e5::t_5a5a9b7a41b225 41,52-53
+apps/web/src/server/domains/purchase-import/operations/gmail/discovery.ts
+  s_2a22d2c73c07e5::t_facce16a5f4fa2 48-51,56-57,63-65,67,467
+apps/web/src/server/domains/purchase-import/operations/gmail/historical-snapshot.integration.test.ts
+  s_2a22d2c73c07e5::t_45b85705b76569 14
+apps/web/src/server/domains/purchase-import/operations/mail-tool.ts
+  s_2a22d2c73c07e5::t_5058239d915fb0 74
+apps/web/src/server/domains/purchase-import/repo/gmail/acquisition.integration.test.ts
+  s_2a22d2c73c07e5::t_06cae5e119521e 28
+apps/web/src/server/domains/purchase-import/repo/gmail/attachment-storage.integration.test.ts
+  s_2a22d2c73c07e5::t_3ac2bc8d444246 36
+apps/web/src/server/domains/purchase-import/repo/gmail/candidate-source.ts
+  s_2a22d2c73c07e5::t_b9bf5bdbae5b09 2,44-46,63
+apps/web/src/server/domains/purchase-import/repo/gmail/decision-telemetry.integration.test.ts
+  s_2a22d2c73c07e5::t_80486f0eca3d1a 24
+apps/web/src/server/domains/purchase-import/repo/gmail/metadata-owner.integration.test.ts
+  s_2a22d2c73c07e5::t_f7a058fda3d06a 17
+apps/web/src/server/domains/purchase-import/repo/gmail/observations.integration.test.ts
+  s_2a22d2c73c07e5::t_32aceddb68b821 24
+apps/web/src/server/domains/purchase-import/repo/gmail/prune-histories.integration.test.ts
+  s_2a22d2c73c07e5::t_ade470090f82bb 22
+apps/web/src/server/domains/purchase-import/repo/gmail/publication-concurrency.integration.test.ts
+  s_2a22d2c73c07e5::t_0e9f2ec170f0ba 31
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_2a22d2c73c07e5::t_22158a231851d6 80,82-83,85,94-103,106,109,113-118,120,122-126,130-131
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassify-state.ts
+  s_2a22d2c73c07e5::t_6dcf8dc415c839 1-182
+apps/web/src/server/domains/purchase-import/repo/gmail/refresh-evaluation-state.ts
+  s_2a22d2c73c07e5::t_c756aed695984d 1-71
+apps/web/src/server/domains/purchase-import/repo/gmail/retention.integration.test.ts
+  s_2a22d2c73c07e5::t_bffd7dc4f29d2a 29
+apps/web/src/server/domains/purchase-import/service/gmail/candidate-extraction-runtime.ts
+  s_2a22d2c73c07e5::t_a14fe3cb590372 1-62
+apps/web/src/server/domains/purchase-import/service/gmail/candidate-extraction.integration.test.ts
+  s_2a22d2c73c07e5::t_b422300066c08b 19
+apps/web/src/server/domains/purchase-import/service/gmail/candidate-extraction.ts
+  s_2a22d2c73c07e5::t_a87a8c1496d26a 14,123-124
+apps/web/src/server/domains/purchase-import/service/gmail/ingest.ts
+  s_2a22d2c73c07e5::t_5c738143b83da5 18-25,38,58,64-65,104,114,234-237,306,330-333,335-336,346,674,678-680,775
+apps/web/src/server/domains/purchase-import/service/gmail/reclassification-target.ts
+  s_2a22d2c73c07e5::t_413d5e6627dc32 1-162
+apps/web/src/server/domains/purchase-import/service/gmail/reclassify.ts
+  s_2a22d2c73c07e5::t_9b54375eaaaf44 12,35,39-46,93-97,131,231-234
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.integration.test.ts
+  s_2a22d2c73c07e5::t_1a9ebcd38befd8 20
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.ts
+  s_2a22d2c73c07e5::t_fd6f767f4c4c89 11-16,20,28-29,46-49,82-94
+apps/web/src/server/domains/run/operations/run-execution-approval.integration.test.ts
+  s_2a22d2c73c07e5::t_7b46e5047f02cc 20
+apps/web/src/server/domains/run/operations/run.server.ts
+  s_2a22d2c73c07e5::t_16d61c3164a020 21
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_2a22d2c73c07e5::t_9d7f780c42e6d0 101,570
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_2a22d2c73c07e5::t_1013d12073d0f6 22,26
+apps/web/src/server/domains/run/service/execution-transport.integration.test.ts
+  s_2a22d2c73c07e5::t_ada9be0495df19 18
+apps/web/src/server/mcp/run-discovery-read.integration.test.ts
+  s_2a22d2c73c07e5::t_4886a908730f72 15
+apps/web/src/server/workflows/catch-up.ts
+  s_2a22d2c73c07e5::t_1c9f8450a9d9e2 60,155
+apps/web/src/server/workflows/gmail-workflows.ts
+  s_2a22d2c73c07e5::t_a6fc79de8bb920 62
+apps/web/tooling/convergence-harness.ts
+  s_2a22d2c73c07e5::t_0b68ab56dd0802 26
+apps/web/src/server/domains/purchase-import/repo/gmail/ingest-state.ts
+  s_dcc51378bc2bcb::t_08c0805ce6b12e 1-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "64bfbafcf2591d0247f0963edfc71b000a76904c",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_dcc51378bc2bcb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae54d3eaa22d594bb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
