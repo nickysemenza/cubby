@@ -25,8 +25,109 @@ import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
 // stay bound to the scored Email: another Email's attachment or completed
 // import Run must never satisfy this Email's check.
 // A reviewed link to an existing Purchase must not demand another extraction.
+// Original-content checks must inspect the selected Email's original, rather
+// than decompressing every retained message body to build a hashed SubPlan.
 describe("Email data quality", () => {
   const ctx = withTestDb();
+
+  it("bounds original-content inspection to the scored Emails", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic content member",
+      kind: "member",
+    });
+    const originals = await getDb(ctx.db)
+      .insert(orderMail)
+      .values(
+        Array.from({ length: 300 }, (_, index) => ({
+          ledgerPartyId: party.id,
+          rawChecksum: "c".repeat(64),
+          content: {
+            snippet:
+              index < 3 || index === 4 ? " " : "Synthetic retained content",
+            bodyText:
+              index === 1 ? "Synthetic plain text" : index === 2 ? " " : null,
+            bodyHtml: index === 2 ? "<p>Synthetic HTML</p>" : null,
+          },
+        })),
+      )
+      .returning({ id: orderMail.id });
+    const originalAt = (index: number) => {
+      const original = originals[index];
+      if (!original) throw new Error("Synthetic original missing");
+      return original.id;
+    };
+    await getDb(ctx.db)
+      .insert(orderMailAttachment)
+      .values({
+        orderMailId: originalAt(4),
+        providerAttachmentId: "synthetic-retained",
+        filename: "synthetic.pdf",
+        mimeType: "application/pdf",
+        checksum: "d".repeat(64),
+        pendingObjectKey: "synthetic/retained.pdf",
+      });
+    const expectedMissing = new Set<string>();
+    for (let index = 0; index < 120; index++) {
+      const record = await insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-content-mailbox",
+        messageId: `synthetic-content-${index}`,
+        checksum: "c".repeat(64),
+        classification: "related",
+        status: "pending",
+        orderMailId: index === 3 ? null : originalAt(index),
+        contentClearedAt: index === 5 ? new Date() : null,
+      });
+      if (index === 0 || index === 3 || index === 5)
+        expectedMissing.add(record.id);
+    }
+    await getDb(ctx.db).execute(sql`ANALYZE "Email", "OrderMail"`);
+    const query = sql`SELECT "Email".id, ${gapCondition("email", "email_original_missing", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")}`;
+    const rows = await getDb(ctx.db).execute(query);
+    const resultSchema = z.array(
+      z.object({ id: z.string(), gap: z.boolean() }),
+    );
+    const gaps = resultSchema.parse(rows.rows);
+    expect(gaps).toHaveLength(120);
+    expect(new Set(gaps.filter((row) => row.gap).map((row) => row.id))).toEqual(
+      expectedMissing,
+    );
+    const scalar = await getDb(ctx.db).execute(sql`SELECT "Email".id,
+      ${gapCondition("email", "email_original_missing")} AS gap FROM "Email"`);
+    expect(
+      new Map(resultSchema.parse(scalar.rows).map((row) => [row.id, row.gap])),
+    ).toEqual(new Map(gaps.map((row) => [row.id, row.gap])));
+    const explained = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query}`,
+    );
+    const node = z.object({
+      "Relation Name": z.string().optional(),
+      Filter: z.string().optional(),
+      "Actual Rows": z.number().default(0),
+      "Actual Loops": z.number().default(0),
+      "Rows Removed by Filter": z.number().default(0),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    const plans = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
+      )
+      .parse(explained.rows);
+    let inspected = 0;
+    const inspect = (value: unknown) => {
+      const current = node.parse(value);
+      if (
+        current["Relation Name"] === "OrderMail" &&
+        current.Filter?.includes("content")
+      )
+        inspected +=
+          (current["Actual Rows"] + current["Rows Removed by Filter"]) *
+          current["Actual Loops"];
+      current.Plans?.forEach(inspect);
+    };
+    inspect(plans[0]!["QUERY PLAN"][0]!.Plan);
+    expect(inspected).toBeLessThanOrEqual(120);
+  });
 
   // Scalar checks must stay bounded with both unrelated history and enough
   // completed imports to exceed a hashed SubPlan's default memory estimate.

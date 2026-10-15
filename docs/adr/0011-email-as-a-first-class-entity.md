@@ -219,6 +219,9 @@ by stage and model. Email quality scores these pipeline gaps per Relevance:
 undecided, unreviewed, missing original, missing preview and not imported;
 settled unrelated Emails need no member review and leave the operational queue.
 Their prediction history remains eligible for independent accuracy sampling.
+Bulk quality reads join each Email's original before testing retained content;
+they do not evaluate every stored message body for an existence lookup. Scalar
+checks share the same snippet/body/attachment and content-clear policy.
 One association resolver serves hydration, linked filters, counts and related
 records. It distinguishes accepted import associations, active lifecycle links,
 dismissed candidates and mailbox-scoped thread context.
