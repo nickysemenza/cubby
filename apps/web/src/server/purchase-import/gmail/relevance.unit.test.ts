@@ -78,7 +78,7 @@ describe("transient original attachment relevance", () => {
       ),
     ).resolves.toMatchObject({ classification: "unrelated" });
     expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
-      png,
+      '"mimeType":"image/jpeg"',
     );
     await expect(
       interpretMailRelevance(
@@ -399,8 +399,17 @@ describe("transient original attachment relevance", () => {
       classification: "unrelated",
     }));
     await expect(
-      interpretMailRelevance(gmail(500), normalized, interpret),
-    ).resolves.toEqual({ classification: "uncertain" });
+      interpretMailRelevance(
+        gmail(500),
+        normalized,
+        interpret,
+        true,
+        undefined,
+        {
+          fetcher: async () => new Response(null, { status: 404 }),
+        },
+      ),
+    ).resolves.toMatchObject({ classification: "uncertain" });
     const request = JSON.stringify(interpret.mock.calls[0]?.[0]?.messages);
     expect(request.includes("Paid receipt for Synthetic basil plant")).toBe(
       true,

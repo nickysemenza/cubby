@@ -2,6 +2,8 @@
  * downloads, a detail retry downloads again, or missing pixels authorize a negative. */
 import { describe, expect, it, vi } from "vitest";
 
+import { ModelImageInputError } from "~/server/image-processing/model-image";
+
 import { INLINE_EMAIL_PNG_BASE64 } from "./email-html.fixtures";
 import { normalizeMessage } from "./normalize";
 import { interpretMailRelevance, type MailRelevance } from "./relevance";
@@ -204,76 +206,67 @@ describe("bounded Email image evidence", () => {
     expect(ports.fetcher).not.toHaveBeenCalled();
   });
 
-  it.each([9402, 9412, 9413, 9520, 9523])(
-    "keeps image-input refusal %s incomplete while preserving independent positive evidence",
-    async (code) => {
-      const attached = normalizeMessage("synthetic-mailbox", {
-        id: "synthetic-source",
-        payload: {
-          parts: [
-            {
-              mimeType: "text/plain",
-              body: {
-                data: Buffer.from(
-                  "Order SYN-123 confirmed; paid $42 for two towels.",
-                ).toString("base64url"),
-              },
+  it("keeps image-input refusals incomplete while preserving independent positive evidence", async () => {
+    const attached = normalizeMessage("synthetic-mailbox", {
+      id: "synthetic-source",
+      payload: {
+        parts: [
+          {
+            mimeType: "text/plain",
+            body: {
+              data: Buffer.from(
+                "Order SYN-123 confirmed; paid $42 for two towels.",
+              ).toString("base64url"),
             },
-            {
-              mimeType: "image/png",
-              filename: "synthetic.png",
-              body: { data: bytes.toString("base64url"), size: bytes.length },
-            },
-          ],
-        },
-      });
-      const ports = {
-        ...imagePorts(),
-        prepareImage: vi.fn(async () => {
-          throw Object.assign(new Error("Synthetic image input refused"), {
-            code,
-          });
-        }),
-      };
-      for (const classification of ["related", "unrelated"] as const) {
-        const result = await interpretMailRelevance(
-          provider,
-          attached,
-          async () => ({ classification }),
-          true,
-          undefined,
-          ports,
-        );
-        expect(result.classification).toBe(
-          classification === "related" ? "related" : "uncertain",
-        );
-        expect(result.reason).toContain("Synthetic image input refused");
-      }
-      ports.prepareImage.mockImplementation(async () => {
-        throw Object.assign(new Error("Synthetic service unavailable"), {
-          code: 9432,
-        });
-      });
-      await expect(
-        interpretMailRelevance(
-          provider,
-          attached,
-          async () => ({ classification: "unrelated" }),
-          true,
-          undefined,
-          ports,
-        ),
-      ).rejects.toThrow("Synthetic service unavailable");
-    },
-  );
-
-  it("propagates Images billing failures after successful remote acquisition", async () => {
+          },
+          {
+            mimeType: "image/png",
+            filename: "synthetic.png",
+            body: { data: bytes.toString("base64url"), size: bytes.length },
+          },
+        ],
+      },
+    });
     const ports = {
       ...imagePorts(),
       prepareImage: vi.fn(async () => {
-        throw Object.assign(new Error("Synthetic Images billing unavailable"), {
-          code: 9432,
-        });
+        throw new ModelImageInputError("Synthetic image input refused");
+      }),
+    };
+    for (const classification of ["related", "unrelated"] as const) {
+      const result = await interpretMailRelevance(
+        provider,
+        attached,
+        async () => ({ classification }),
+        true,
+        undefined,
+        ports,
+      );
+      expect(result.classification).toBe(
+        classification === "related" ? "related" : "uncertain",
+      );
+      expect(result.reason).toContain("Synthetic image input refused");
+    }
+    ports.prepareImage.mockImplementation(async () => {
+      throw new Error("Synthetic execution failure");
+    });
+    await expect(
+      interpretMailRelevance(
+        provider,
+        attached,
+        async () => ({ classification: "unrelated" }),
+        true,
+        undefined,
+        ports,
+      ),
+    ).rejects.toThrow("Synthetic execution failure");
+  });
+
+  it("propagates unexpected runtime failures after successful remote acquisition", async () => {
+    const ports = {
+      ...imagePorts(),
+      prepareImage: vi.fn(async () => {
+        throw new Error("Synthetic runtime failure");
       }),
     };
     await expect(
@@ -285,7 +278,40 @@ describe("bounded Email image evidence", () => {
         undefined,
         ports,
       ),
-    ).rejects.toThrow("Synthetic Images billing unavailable");
+    ).rejects.toThrow("Synthetic runtime failure");
+  });
+
+  it("caps preparation attempts even when request admission rejects the renditions", async () => {
+    const ports = imagePorts();
+    ports.prepareImage.mockResolvedValue({
+      bytes: Buffer.alloc(128 * 1024),
+      mimeType: "image/jpeg",
+    });
+    const many = normalizeMessage("synthetic-mailbox", {
+      id: "synthetic-source",
+      payload: {
+        mimeType: "multipart/mixed",
+        parts: Array.from({ length: 12 }, (_, index) => ({
+          partId: String(index),
+          filename: `synthetic-${index}.png`,
+          mimeType: "image/png",
+          body: { data: bytes.toString("base64url"), size: bytes.length },
+        })),
+      },
+    });
+    const result = await interpretMailRelevance(
+      provider,
+      many,
+      async () => ({
+        classification: "unrelated",
+        imageReadability: "sufficient",
+      }),
+      true,
+      undefined,
+      ports,
+    );
+    expect(result.classification).toBe("uncertain");
+    expect(ports.prepareImage).toHaveBeenCalledTimes(6);
   });
 
   it("caps supplied attachment images and keeps the omitted seventh image uncertain", async () => {

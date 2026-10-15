@@ -1,53 +1,39 @@
-import {
-  ExternalFetchError,
-  readResponseWithLimit,
-} from "@cubby/shared/external-fetch";
+import { wasm } from "~/lib/wasm";
 
-import { getImages } from "~/server/cf-env";
+/** An unsupported, invalid or oversized input leaves purchase evidence missing. */
+export class ModelImageInputError extends Error {}
 
-/** Keep the full frame: cropping a receipt can remove its transaction evidence. */
+/** Keep private bytes in-process and the full frame: cropping can lose an order. */
 export async function prepareModelImage(
   bytes: Uint8Array,
   detail: "standard" | "detail",
-  images = getImages(),
 ) {
-  if (!images) return null;
-  const renditions =
-    detail === "detail"
-      ? [
-          { width: 2048, height: 4096, quality: 85 },
-          { width: 2048, height: 4096, quality: 45 },
-          { width: 1536, height: 3072, quality: 30 },
-        ]
-      : [
-          { width: 1280, height: 2048, quality: 75 },
-          { width: 1280, height: 2048, quality: 50 },
-          { width: 960, height: 1536, quality: 40 },
-        ];
-  for (const { width, height, quality } of renditions) {
-    const input = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(bytes);
-        controller.close();
-      },
-    });
-    try {
-      const rendition = await images
-        .input(input)
-        .transform({ width, height, fit: "scale-down" })
-        .output({ format: "image/jpeg", quality, anim: false });
-      return {
-        bytes: await readResponseWithLimit(rendition.response(), 128 * 1024),
-        mimeType: rendition.contentType(),
-      };
-    } catch (error) {
-      if (
-        error instanceof ExternalFetchError &&
-        error.code === "body-too-large"
-      )
-        continue;
-      throw error;
-    }
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp =
+    bytes.length >= 12 &&
+    Buffer.from(bytes.subarray(0, 4)).toString() === "RIFF" &&
+    Buffer.from(bytes.subarray(8, 12)).toString() === "WEBP";
+  if (webp) {
+    // The model accepts WebP directly; keep bounded bytes without decoding them.
+    const extended = Buffer.from(bytes.subarray(12, 16)).toString() === "VP8X";
+    if (extended && (bytes[20] ?? 0) & 2)
+      throw new ModelImageInputError(
+        "Animated WebP leaves image evidence incomplete",
+      );
+    if (bytes.byteLength > 128 * 1024)
+      throw new ModelImageInputError("WebP exceeds model image byte budget");
+    return detail === "detail" ? null : { bytes, mimeType: "image/webp" };
   }
-  return null;
+  if (jpeg && bytes.byteLength <= 128 * 1024)
+    return detail === "detail" ? null : { bytes, mimeType: "image/jpeg" };
+  try {
+    return {
+      bytes: wasm.prepare_model_image(bytes, detail === "detail"),
+      mimeType: "image/jpeg",
+    };
+  } catch (error) {
+    // Rust Result::Err(String) is a JS string. Traps and host failures propagate.
+    if (typeof error === "string") throw new ModelImageInputError(error);
+    throw error;
+  }
 }

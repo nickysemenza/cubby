@@ -105,7 +105,7 @@ Fallback reports distinguish raw model choices from completeness-guarded results
 Calls use the production feature/schema with no database usage context; this is
 prompt measurement, not production execution-authorization or accounting parity.
 The session input format accepts body/HTML plus up to six inline images
-(`images: [{ mimeType: "image/png" | "image/jpeg", dataBase64: string }]`).
+(`images: [{ mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", dataBase64: string }]`).
 It does not fetch Gmail attachments. Keep original or transformed pixels in the
 session-only input transport; synthetic images alone may be repository fixtures.
 

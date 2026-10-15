@@ -41,6 +41,8 @@ mod estimates;
 mod food_calculation;
 mod food_mappings;
 mod isbn;
+#[cfg(feature = "model-images")]
+mod model_image;
 mod needs;
 #[cfg(feature = "html")]
 mod page;
@@ -60,6 +62,8 @@ pub use estimates::*;
 pub use food_calculation::*;
 pub use food_mappings::*;
 pub use isbn::*;
+#[cfg(feature = "model-images")]
+pub use model_image::*;
 pub use needs::*;
 #[cfg(feature = "html")]
 pub use page::*;

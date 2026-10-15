@@ -43,12 +43,28 @@ failures leave evidence incomplete with diagnostics without aborting the batch.
 Gmail success JSON is bounded at 36 MiB before parsing, accommodating Gmail
 envelopes and preserving original retention independently of model admission. Decoded original
 mail and acquired attachment/remote-image evidence share a 3 MiB acquisition
-budget, with at most six supplied images. Private Cloudflare Images byte streams
-produce full-frame JPEG renditions (no public upload): standard 1280 by 2048,
+budget, with at most six supplied images. Local Worker-only Rust/WASM codecs produce full-frame JPEG renditions
+(no public upload or Images binding): standard 1280 by 2048,
 or one requested detail attempt at 2048 by 4096, each at most 128 KiB.
 An oversized encoding gets a lower-quality encoding at the same dimensions,
-then one smaller rendition (960 by 1536 standard, 1536 by 3072 detail) before
-being marked unavailable. The complete
+then one smaller rendition (960 by 1536 standard, 1280 by 2560 detail) before
+being marked unavailable. PNG/JPEG/GIF images use local resizing; bounded JPEG and WebP originals are
+supplied without decoding or re-encoding, and need no detail retry. Oversized
+WebP remains missing evidence. Animation and
+other formats remain missing evidence. Before local decoding, refuse sources above
+6 million pixels, 8192 pixels on either axis, or 24 MiB of decoded samples.
+PNG decoder allocations request a 24 MiB limit. JPEG admission separately reserves
+16 bytes per MCU-padded pixel within a 48 MiB working-storage estimate; metadata
+and row buffers add overhead, and the codec output limit alone is not a hard cap.
+Use unmodified codec dependencies; do not vendor or patch them to turn decoding
+into an integrity proof. Ordinary decode errors remain missing evidence, and the
+model still judges readability. JPEG encoding uses streaming 4:2:0 subsampling
+with full-frame spatial dimensions. Block-average thumbnail resizing
+allocates its output without a full-frame float scratch image. JPEG output writes
+to a bounded buffer. At most six initial preparation attempts are allowed, including
+renditions later rejected by request admission; one detail attempt reuses each
+supplied source.
+These per-image limits complement the aggregate acquisition budget. The complete
 serialized feature request is bounded at 256 KiB; provider envelope/schema overhead
 is outside that accounting. The model reports image readability. A still-unreadable
 or omitted image cannot justify a negative, while an independently established

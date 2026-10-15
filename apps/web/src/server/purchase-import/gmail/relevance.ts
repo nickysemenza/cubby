@@ -11,8 +11,10 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { wasm } from "~/lib/wasm";
 import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/features";
 import type { AiChatRequest } from "~/server/ai/run-feature";
-import { getImages } from "~/server/cf-env";
-import { prepareModelImage } from "~/server/image-processing/model-image";
+import {
+  ModelImageInputError,
+  prepareModelImage,
+} from "~/server/image-processing/model-image";
 
 import { unreadableMailImages } from "./triage";
 import {
@@ -217,7 +219,10 @@ type PreparedImage = { bytes: Uint8Array; index: number };
 async function upgradeImageDetail(
   content: MailContentPart[],
   images: PreparedImage[],
-  prepare: typeof prepareModelImage,
+  prepare: (
+    bytes: Uint8Array,
+    detail: "standard" | "detail",
+  ) => Promise<Awaited<ReturnType<typeof prepareModelImage>> | null>,
   modelBytes: () => number,
 ) {
   let changed = false;
@@ -264,15 +269,6 @@ function relevanceWithEvidence(
   };
 }
 
-function imageInputRefusal(error: unknown) {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    typeof error.code === "number" &&
-    [9402, 9412, 9413, 9520, 9523].includes(error.code)
-  );
-}
-
 /** Unsupported, absent, or oversized bytes cannot justify a negative verdict. */
 export async function interpretMailRelevance(
   provider: GmailProvider,
@@ -283,8 +279,7 @@ export async function interpretMailRelevance(
   ports: RelevanceImagePorts = {},
 ): Promise<MailboxRelevanceDecision> {
   const view = readableMailView(normalized.mail);
-  const imagePreparer =
-    ports.prepareImage ?? (getImages() ? prepareModelImage : undefined);
+  const imagePreparer = ports.prepareImage ?? prepareModelImage;
   let complete =
     originalComplete &&
     Boolean(
@@ -293,27 +288,22 @@ export async function interpretMailRelevance(
       normalized.attachments.length,
     );
   const imageFailures: string[] = [];
-  const prepare =
-    imagePreparer &&
-    (async (bytes: Uint8Array, detail: "standard" | "detail") => {
-      try {
-        const image = await imagePreparer(bytes, detail);
-        if (!image)
-          imageFailures.push(
-            `${detail} image rendition exceeds the model image byte budget`,
-          );
-        return image;
-      } catch (error) {
-        if (!imageInputRefusal(error)) throw error;
-        complete = false;
-        imageFailures.push(
-          scrubErrorMessage(
-            error instanceof Error ? error.message : String(error),
-          ),
-        );
-        return null;
-      }
-    });
+  let imagePreparationAttempts = 0;
+  const prepare = async (bytes: Uint8Array, detail: "standard" | "detail") => {
+    if (detail === "standard") imagePreparationAttempts++;
+    try {
+      return await imagePreparer(bytes, detail);
+    } catch (error) {
+      if (!(error instanceof ModelImageInputError)) throw error;
+      complete = false;
+      imageFailures.push(
+        scrubErrorMessage(
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
+      return null;
+    }
+  };
   const content: MailContentPart[] = [{ type: "text", content: view.original }];
   const availableContentIds = new Set<string>();
   const suppliedSources = new Set<string>();
@@ -333,8 +323,7 @@ export async function interpretMailRelevance(
     complete = false;
     return false;
   };
-  const preparePart = async (bytes: Uint8Array, fallback: MailContentPart) => {
-    if (!prepare) return { part: fallback, prepared: false };
+  const preparePart = async (bytes: Uint8Array) => {
     const image = await prepare(bytes, "standard");
     return image
       ? {
@@ -357,7 +346,7 @@ export async function interpretMailRelevance(
     }
     if (
       attachment.mimeType?.startsWith("image/") &&
-      suppliedImageCount >= MAX_IMAGES
+      imagePreparationAttempts >= MAX_IMAGES
     ) {
       complete = false;
       continue;
@@ -377,7 +366,7 @@ export async function interpretMailRelevance(
     }
     onAttachment?.(attachment.sourceKey, context.encoded);
     const image = context.imageBytes
-      ? await preparePart(context.imageBytes, context.part)
+      ? await preparePart(context.imageBytes)
       : { part: context.part, prepared: false };
     if (!image) {
       complete = false;
@@ -411,46 +400,45 @@ export async function interpretMailRelevance(
       )
     : [];
   let attempted = 0;
-  if (prepare)
-    for (const src of candidates.slice(0, MAX_IMAGES)) {
-      if (
-        acquiredBytes >= MAX_ORIGINAL_BYTES ||
-        suppliedImageCount >= MAX_IMAGES
-      )
-        break;
-      attempted++;
-      const acquired = await acquireRemoteImage(
-        src,
-        MAX_ORIGINAL_BYTES - acquiredBytes,
-        ports.fetcher,
-      );
-      acquiredBytes += acquired.consumedBytes;
-      if (!acquired.bytes) {
-        complete = false;
-        if (acquired.failure) imageFailures.push(acquired.failure);
-        continue;
-      }
-      const image = await prepare(acquired.bytes, "standard");
-      if (!image) {
-        complete = false;
-        continue;
-      }
-      const parts: MailContentPart[] = [
-        { type: "text", content: `Email content image ${src}` },
-        {
-          type: "image",
-          source: {
-            type: "inline",
-            value: Buffer.from(image.bytes).toString("base64"),
-            mimeType: image.mimeType,
-          },
-        },
-      ];
-      if (!add(parts)) continue;
-      suppliedImageCount++;
-      preparedImages.push({ bytes: acquired.bytes, index: content.length - 1 });
-      suppliedSources.add(src);
+  for (const src of candidates.slice(0, MAX_IMAGES)) {
+    if (
+      acquiredBytes >= MAX_ORIGINAL_BYTES ||
+      imagePreparationAttempts >= MAX_IMAGES
+    )
+      break;
+    attempted++;
+    const acquired = await acquireRemoteImage(
+      src,
+      MAX_ORIGINAL_BYTES - acquiredBytes,
+      ports.fetcher,
+    );
+    acquiredBytes += acquired.consumedBytes;
+    if (!acquired.bytes) {
+      complete = false;
+      if (acquired.failure) imageFailures.push(acquired.failure);
+      continue;
     }
+    const image = await prepare(acquired.bytes, "standard");
+    if (!image) {
+      complete = false;
+      continue;
+    }
+    const parts: MailContentPart[] = [
+      { type: "text", content: `Email content image ${src}` },
+      {
+        type: "image",
+        source: {
+          type: "inline",
+          value: Buffer.from(image.bytes).toString("base64"),
+          mimeType: image.mimeType,
+        },
+      },
+    ];
+    if (!add(parts)) continue;
+    suppliedImageCount++;
+    preparedImages.push({ bytes: acquired.bytes, index: content.length - 1 });
+    suppliedSources.add(src);
+  }
   if (modelBytes() > MAX_TRANSIENT_BYTES)
     return {
       classification: "uncertain",
@@ -460,8 +448,7 @@ export async function interpretMailRelevance(
   if (
     decision.classification !== "related" &&
     decision.imageReadability === "needs_detail" &&
-    preparedImages.length &&
-    prepare
+    preparedImages.length
   ) {
     if (await upgradeImageDetail(content, preparedImages, prepare, modelBytes))
       decision = await interpret(MAILBOX_RELEVANCE_FEATURE.request(content));

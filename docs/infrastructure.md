@@ -49,14 +49,6 @@ state and reconstruction constraints that configuration cannot reproduce.
 Vectorize's string metadata index is named `entityType`: that provider-side
 name predates `entityKind` and must remain when recreating the index.
 
-The `IMAGES` byte-stream binding requires the current Cloudflare Images billing
-subscription. Legacy Image Resizing billing returns `9432`; Wrangler cannot
-perform that account migration. Activate the current subscription before deploying
-the binding, then verify a synthetic private-stream transformation against the
-remote service. Original media stays in R2; this feature needs no hosted Images
-storage. See [Images troubleshooting](https://developers.cloudflare.com/images/reference/troubleshooting/)
-and [pricing](https://developers.cloudflare.com/images/pricing/).
-
 ### Workflow-backed Runs
 
 Mailbox discovery is a Workflow-backed Run. Its page/retention/admission

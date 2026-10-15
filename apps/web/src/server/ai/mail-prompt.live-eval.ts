@@ -166,7 +166,12 @@ const inputSchema = z
         images: z
           .array(
             z.object({
-              mimeType: z.enum(["image/png", "image/jpeg"]),
+              mimeType: z.enum([
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif",
+              ]),
               dataBase64: z.string(),
             }),
           )
@@ -380,22 +385,22 @@ async function evaluateRelevance() {
   const fallbackCases = privateInput
     ? cases
     : [
-        {
-          label: "related",
+        ...["png", "webp", "gif"].map((format) => ({
+          label: "related" as const,
           body: "See the supplied image for the message content.",
           html: "",
           images: [
             {
-              mimeType: "image/png",
+              mimeType: `image/${format}`,
               dataBase64: readFileSync(
                 new URL(
-                  "../purchase-import/gmail/fixtures/synthetic-seller-payout.png",
+                  `../purchase-import/gmail/fixtures/synthetic-seller-payout.${format}`,
                   import.meta.url,
                 ),
               ).toString("base64"),
             },
           ],
-        },
+        })),
         {
           label: "related",
           body: "See the supplied image for the message content.",
@@ -412,7 +417,7 @@ async function evaluateRelevance() {
             },
           ],
         },
-        ...["standard", "detail"].map((detail) => ({
+        {
           label: "related" as const,
           body: "See the supplied image for the message content.",
           html: "",
@@ -421,13 +426,13 @@ async function evaluateRelevance() {
               mimeType: "image/jpeg",
               dataBase64: readFileSync(
                 new URL(
-                  `../purchase-import/gmail/fixtures/synthetic-photographic-receipt-${detail}.jpg`,
+                  "../purchase-import/gmail/fixtures/synthetic-photographic-receipt.jpg",
                   import.meta.url,
                 ),
               ).toString("base64"),
             },
           ],
-        })),
+        },
         ...cases.slice(0, 2),
         ...cases.slice(-2),
         {

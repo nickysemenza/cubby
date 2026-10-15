@@ -150,9 +150,6 @@ export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
  */
 export const getAi = () => cfEnv?.AI;
 
-/** Private byte-stream image transformations; originals need no public URL. */
-export const getImages = () => cfEnv?.IMAGES;
-
 /** The binding's Universal endpoint for Cubby's gateway (`env.AI.gateway("cubby")`). */
 export const getAiGateway = (gatewayId: string = CUBBY_AI_GATEWAY_ID) =>
   cfEnv?.AI?.gateway(gatewayId);
