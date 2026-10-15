@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -26,11 +28,28 @@ function dist(files: Record<string, string>) {
 }
 
 describe("measureServerClosure", () => {
+  it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
+    const cwd = dist({
+      "dist/server/index.js":
+        'const b=()=>import("./assets/api-adapter-1.js");',
+      "dist/server/assets/api-adapter-1.js": "export const adapter=1;",
+    });
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
+      { cwd, encoding: "utf8" },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Browser dispatch chunk was not reached");
+  });
   it("counts the request path through the server entry and router chunk, not other lazy chunks", () => {
     const report = measureServerClosure(
       dist({
         "index.js":
-          'import{a}from"./assets/db-1.js";const s=()=>import(`./assets/server-1.js`);',
+          'import{a}from"./assets/db-1.js";const s=()=>import(`./assets/server-1.js`);const b=()=>import("./assets/browser-operation-dispatch-1.js");',
+        "assets/browser-operation-dispatch-1.js":
+          'import"./auth-1.js";const o=()=>import("./operation-1.js");',
+        "assets/operation-1.js": "operation".repeat(100),
         "assets/db-1.js": "export const a=1;",
         "assets/server-1.js": 'const r=()=>import("./router-1.js");',
         "assets/router-1.js":
@@ -42,6 +61,12 @@ describe("measureServerClosure", () => {
     // Every invocation pays the static entry cost; page/router imports belong
     // only to the later page path, even when their combined closure is valid.
     expect(report.entry.files.sort()).toEqual(["assets/db-1.js", "index.js"]);
+    expect(report.browserDispatch.files.sort()).toEqual([
+      "assets/auth-1.js",
+      "assets/browser-operation-dispatch-1.js",
+      "assets/db-1.js",
+      "index.js",
+    ]);
     expect(report.firstRequest.files.sort()).toEqual([
       "assets/auth-1.js",
       "assets/db-1.js",
