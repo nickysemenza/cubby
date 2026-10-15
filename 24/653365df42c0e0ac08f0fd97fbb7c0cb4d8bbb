@@ -1,0 +1,67 @@
+apps/web/src/server/ai/ai.server.ts
+  s_2a22d2c73c07e5::t_67cc1b17524cb8 43
+apps/web/src/server/ai/decision-catalog.ts
+  s_2a22d2c73c07e5::t_e063b9665efccd 38-40
+apps/web/src/server/ai/features.ts
+  s_2a22d2c73c07e5::t_9c56c1101f1663 87-105,443-444
+apps/web/src/server/ai/product-identity-grounding.ts
+  s_2a22d2c73c07e5::t_99fe02af4ba7c6 12-14,80
+apps/web/src/server/ai/product-identity.ts
+  s_2a22d2c73c07e5::t_dcf3ebd8d263dc 1,3,19,23-24,26-29,31
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_2a22d2c73c07e5::t_b94ce3b73fe505 9
+apps/web/src/server/ai/repo/ai-refresh-observation.integration.test.ts
+  s_2a22d2c73c07e5::t_89829dc9f9c6f5 10
+apps/web/src/server/ai/repo/ai-refresh.ts
+  s_2a22d2c73c07e5::t_c6f72a6239d0ec 9
+apps/web/src/server/ai/repo/feature-identity.ts
+  s_2a22d2c73c07e5::t_b50bca59b7ce92 1-129
+apps/web/src/server/ai/repo/refresh-policy.ts
+  s_2a22d2c73c07e5::t_5836b1895f9d21 10,16
+apps/web/src/server/ai/smoke-catalog.ts
+  s_2a22d2c73c07e5::t_ef4cf79488617e 37-39
+apps/web/src/server/ai/smoke-run.ts
+  s_2a22d2c73c07e5::t_0a6e6c1815319c 38-40
+apps/web/src/server/domains/image-processing/repo/description-policy.ts
+  s_2a22d2c73c07e5::t_21c7f0a3326908 8,14-15,23
+apps/web/src/server/domains/product/repo/match/product-identity-snapshot.ts
+  s_2a22d2c73c07e5::t_cfbf1ca96e1130 1-267
+apps/web/src/server/domains/product/repo/match/product-match-candidate.ts
+  s_2a22d2c73c07e5::t_71f66f0392ee15 26,101,282
+apps/web/src/server/domains/product/repo/merge.ts
+  s_2a22d2c73c07e5::t_45899c8815b0a4 1387
+apps/web/src/server/domains/product/repo/product-variant-evidence.ts
+  s_2a22d2c73c07e5::t_87d4635fdd5e05 9-11,270
+apps/web/src/server/domains/purchase-import/operations/gmail/ingest.ts
+  s_2a22d2c73c07e5::t_085e7318be2af4 269
+apps/web/src/server/domains/purchase-import/operations/gmail/refresh-evaluation.ts
+  s_2a22d2c73c07e5::t_c5df2f7508d690 6
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_2a22d2c73c07e5::t_29123d8c981295 14
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_2a22d2c73c07e5::t_cfa05004bf0958 15
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_2a22d2c73c07e5::t_417437a3626f8b 38-41,44,51
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_2a22d2c73c07e5::t_de3b885071014c 28
+apps/web/src/server/generic/assessment/repo/assessment-product.integration.test.ts
+  s_2a22d2c73c07e5::t_01a54f4f786477 12-15,19-22,25
+apps/web/src/server/generic/assessment/repo/assessment-product.ts
+  s_2a22d2c73c07e5::t_d7383cc8f6ebbc 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "24653365df42c0e0ac08f0fd97fbb7c0cb4d8bbb",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
