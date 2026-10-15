@@ -1,0 +1,33 @@
+apps/web/DESIGN.md
+  s_2a22d2c73c07e5::t_a908e70ffe6a87 62,68
+apps/web/docs/web-ui-reference.md
+  s_2a22d2c73c07e5::t_afa8c42064df03 119,169
+apps/web/docs/web-ui.md
+  s_2a22d2c73c07e5::t_5e93cd26b49a88 55
+docs/adr/0019-domain-first-server-layout.md
+  s_2a22d2c73c07e5::t_3bf9f0f3d94578 38-39,43-53,57-65,83-84
+docs/agents/domain-rules.md
+  s_2a22d2c73c07e5::t_9027f3bed41a6c 100-104
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_c05f96b29ce5dc 198,208
+docs/entities.md
+  s_2a22d2c73c07e5::t_3f706cf1969c27 1735
+docs/todos.md
+  s_2a22d2c73c07e5::t_2f89d6cd8c161d 1194,1391,1684-1685
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f285d4d412399f1bc785db8db40ad3b7237d2875",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
