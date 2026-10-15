@@ -139,7 +139,7 @@ function useReviewAction(runId: string) {
   return useMutation({
     scope: { id: `photo-run-review-${runId}` },
     mutationFn: (action: ReviewPhotoGroupsAction) => postReview(runId, action),
-    onSuccess: (data) => {
+    onSuccess: (data, action) => {
       queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
         old
           ? {
@@ -153,8 +153,12 @@ function useReviewAction(runId: string) {
             }
           : old,
       );
-      // Approval changes photo states and may complete the run.
-      void invalidateOperationTags(queryClient, ripple.runOnly);
+      void invalidateOperationTags(
+        queryClient,
+        action.action === "approve"
+          ? photoImport.approveGroups.invalidates({ ...action, runId })
+          : ripple.runOnly,
+      );
       for (const { tone, title, description } of reviewOutcomeToasts(data))
         toast[tone](title, description ? { description } : undefined);
     },

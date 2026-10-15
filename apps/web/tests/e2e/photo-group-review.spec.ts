@@ -215,7 +215,7 @@ test("resolves identity, validates counts, and applies selected fields without r
     page.getByText("Run cost · includes all nested work"),
   ).toBeVisible();
   await page.screenshot({
-    path: "/tmp/cubby-photo-review-desktop.png",
+    path: "/tmp/cubby-photo-review-fa0dc45b-desktop.png",
     fullPage: true,
   });
   await page.setViewportSize({ width: 402, height: 874 });
@@ -225,9 +225,18 @@ test("resolves identity, validates counts, and applies selected fields without r
     )
     .toBe(true);
   await page.screenshot({
-    path: "/tmp/cubby-photo-review-mobile.png",
+    path: "/tmp/cubby-photo-review-fa0dc45b-mobile.png",
     fullPage: true,
   });
+  // The optional editor primed this Product's detail cache before applying.
+  // Following its result link must show the committed fields immediately.
+  await group
+    .getByRole("link", { name: `${name} shirt`, exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Label confirmed: medium", { exact: true }),
+  ).toBeVisible();
 });
 
 test("approves two selected photo groups with one reviewed batch action", async ({
