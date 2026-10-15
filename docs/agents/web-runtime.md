@@ -8,6 +8,9 @@ query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
 Pass the displayed selection as mutation variables at the action boundary.
+Queries stay passive on remount. When a write closes an editor, await
+`invalidateOperationTags` with `removeInactive` so navigation cannot reuse that
+editor's stale detail cache.
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
 Resolve table selection updaters at the event boundary: they look up live rows

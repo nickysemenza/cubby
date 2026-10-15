@@ -141,7 +141,7 @@ function useReviewAction(runId: string) {
   return useMutation({
     scope: { id: `photo-run-review-${runId}` },
     mutationFn: (action: ReviewPhotoGroupsAction) => postReview(runId, action),
-    onSuccess: (data, action) => {
+    onSuccess: async (data, action) => {
       queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
         old
           ? {
@@ -155,11 +155,12 @@ function useReviewAction(runId: string) {
             }
           : old,
       );
-      void invalidateOperationTags(
+      await invalidateOperationTags(
         queryClient,
         action.action === "approve"
           ? photoImport.approveGroups.invalidates({ ...action, runId })
           : ripple.runOnly,
+        { removeInactive: action.action === "approve" },
       );
       for (const { tone, title, description } of reviewOutcomeToasts(data))
         toast[tone](title, description ? { description } : undefined);

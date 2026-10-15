@@ -421,7 +421,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await applied.click();
   await expect(
     page
-      .locator("#photo-batch")
+      .locator("#photo-group-g1")
       .getByRole("link", { name: correctedName, exact: true }),
   ).toBeVisible();
   await expect(
