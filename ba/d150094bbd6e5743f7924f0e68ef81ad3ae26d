@@ -1,0 +1,59 @@
+apps/web/src/server/domains/expense/repo/price-affected-recipes.ts
+  s_2a22d2c73c07e5::t_67f16842c83ef5 6
+apps/web/src/server/domains/inventory/operations.server.ts
+  s_2a22d2c73c07e5::t_54638c5d88e9d7 53
+apps/web/src/server/domains/meal/repo/meal-nutrition.integration.test.ts
+  s_2a22d2c73c07e5::t_cb15ef36fef0c1 29
+apps/web/src/server/domains/meal/repo/portions.ts
+  s_2a22d2c73c07e5::t_0b47d92f865c59 50
+apps/web/src/server/domains/meal/service/meal-nutrition.service.ts
+  s_2a22d2c73c07e5::t_f8b9a3f8e2c34c 22
+apps/web/src/server/domains/product/service/product-orchestration.service.integration.test.ts
+  s_2a22d2c73c07e5::t_93eef1b85a940d 15
+apps/web/src/server/domains/product/service/product-orchestration.service.ts
+  s_2a22d2c73c07e5::t_6f0761d37fb672 55
+apps/web/src/server/domains/recipe/operations/recipe-import-chunk.integration.test.ts
+  s_2a22d2c73c07e5::t_7c0c43b6c53131 12
+apps/web/src/server/domains/recipe/repo/repair-stale-recipes-for-read.ts
+  s_2a22d2c73c07e5::t_341f89c19d8752 8
+apps/web/src/server/domains/usda-food/service/usda-link-advance.service.ts
+  s_2a22d2c73c07e5::t_d9eb4946d5d22f 9
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_2a22d2c73c07e5::t_abac8d45687df9 15
+apps/web/src/server/entity-kernel/adapter.ts
+  s_2a22d2c73c07e5::t_968b5860a90f9a 12
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_2a22d2c73c07e5::t_d96e9f15881d5e 22-24
+apps/web/src/server/generic/field-explanation/operations/field-explanation.server.ts
+  s_2a22d2c73c07e5::t_6cc0db4d5e5db9 26
+apps/web/src/server/generic/work-queue/operations/work-queue.server.ts
+  s_2a22d2c73c07e5::t_74a92d160233bb 5
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_2a22d2c73c07e5::t_4e3a626cc4e645 20
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_2a22d2c73c07e5::t_2fbf8f6f3eb6fa 133-138,142,473,556,562-571,693-694,699,703-704,714
+apps/web/src/server/generic/work-queue/service/work-queue-read.ts
+  s_2a22d2c73c07e5::t_6162e440c864a3 1-39
+apps/web/src/server/http/request-context.ts
+  s_2a22d2c73c07e5::t_c6166b43355b10 32
+apps/web/src/server/http/request-services.ts
+  s_2a22d2c73c07e5::t_311e275bc156d4 12
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_2a22d2c73c07e5::t_b143f5e1ec6555 36-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bad150094bbd6e5743f7924f0e68ef81ad3ae26d",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
