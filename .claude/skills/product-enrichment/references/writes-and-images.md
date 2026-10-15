@@ -7,6 +7,12 @@ the Expense-derived fallback; never infer it from a marketplace, crossed-out
 price, aggregator, or receipt quantity. Nutrition decisions (`fdc_id` or
 `labelNutrition`) belong to meal logging.
 
+Normalize units before declaring size ambiguity (for example, 1.5 lb is 24 oz).
+An inventory Location describes storage, not retail packaging. Verify the
+single-item, component and multipack distinction before assigning an identifier;
+never copy a parent package identifier onto a component. A current same-name
+listing does not prove a historical generation or package size.
+
 Cubby snaps `manufacturer` on create to an established live spelling, but not
 on update. Check the established spelling before a manual correction. Create a
 missing researched Product once with all proven metadata; creation does not
@@ -52,15 +58,21 @@ Keep a write singular when it needs judgment during the mutation: a collision,
 gallery drift, cover replacement, or fresh display-order decision.
 
 Before attachment, compare the page and image with the standalone Product.
-When the Product is a kit-packed component, a proven standalone variant can
-support its image and retailer ID, disclosed in notes, but cannot supply the
-kit package's UPC or replace the kit model. Do not detach an old cover before a
-replacement is verified. Use URL fetch unless the source blocks it, then use
-browser-downloaded bytes with the correct MIME.
+Inspect pixels as well as persisted `source` and `purpose`: an unknown-source
+catalog illustration is not an own photo, and a filename or generated image
+description does not establish provenance. Preserve originals, labels, order
+and cover intent; skip redundant or unsuitable catalog photos.
+For a kit-packed component, establish its own model from its label or exact
+maker component specification. The parent kit model never supplies that fact.
+A proven identical standalone item can support a representative image,
+disclosed in notes; its retail package identifiers do not transfer to the
+component. Do not detach an old cover before a replacement is verified. Use URL
+fetch unless the source blocks it, then use browser-downloaded bytes with the
+correct MIME.
 
-If there is no separate retail/package variant, the listing's UPC remains the
-Product's UPC. Confirm that distinction before treating a standalone listing as
-kit-component evidence.
+Assign a listing's UPC only when evidence establishes that the Product is that
+same retail/package unit. A singleton removed from a multipack remains distinct
+even if the seller offers no singleton page.
 
 `product_enrichment.verify_images` returns the detailed Product per item.
 Confirm the previous IDs survived, intended removals are absent, the new image

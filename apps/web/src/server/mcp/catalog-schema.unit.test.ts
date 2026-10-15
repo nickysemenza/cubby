@@ -7,6 +7,7 @@ import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import { encodeAuditCursor } from "~/server/repo/audit-log";
 
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
@@ -170,6 +171,45 @@ function concreteOutputSchema(value: JSONType): boolean {
 }
 
 describe("MCP catalog schemas", () => {
+  it("accepts returned audit cursors and record-backed Sources in the published catalog", async () => {
+    const tools = (await listMcpToolCatalog()).tools;
+    const validator = new Ajv({ strict: false, validateFormats: true });
+    const accepts = (name: string, input: JsonObject) => {
+      const tool = tools.find((tool) => tool.name === name);
+      if (!tool) throw new Error(`Missing tool ${name}`);
+      const validate = validator.compile(tool.inputSchema);
+      expect(validate(input)).toBe(true);
+    };
+    accepts("activity", {
+      action: "recent",
+      cursor: encodeAuditCursor({
+        createdAt: new Date("2026-07-20T12:00:00Z"),
+        id: "00000000-0000-4000-8000-000000000001",
+      }),
+    });
+    const sources = [
+      {
+        sourceEntity: "EXP-4K7M",
+        quote: "Original order line",
+        observedAt: "2026-07-20T12:00:00Z",
+        selectedVariant: "Blue, single",
+      },
+    ];
+    accepts("entity", {
+      action: "update",
+      entity: "product",
+      id: "PRD-4K7M",
+      data: { manufacturer: "Example Maker" },
+      sources,
+    });
+    accepts("image", {
+      action: "attach_files",
+      items: [
+        { entityId: "PRD-4K7M", url: "https://example.com/item.jpg", sources },
+      ],
+    });
+  });
+
   it("keeps repeated constrained workflow fields compact without weakening accepted inputs", () => {
     const field = {
       type: "string",

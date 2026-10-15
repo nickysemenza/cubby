@@ -15,6 +15,10 @@ alone does not establish verification.
 
 ## Worklist and read shape
 
+For a resumed backlog or delegated sweep, load
+[resumption and worker handoffs](references/resumption.md) before assigning work
+or mutating queue members.
+
 For unified backlog triage, `activity.work_queue` offers the connected member's
 eligible work plus shared Product research. The Work queue page shows household
 routing metadata and links from Problems and Research. Public Product facts can
@@ -61,13 +65,15 @@ it does not replace the packet brand, and a retailer's name alone does not
 establish it. When the brand is unclear, keep the current value or leave it
 blank and report the gap.
 
-Start with the purchased item: the original order Email (`imports_read.mail`, by
-the Gmail ids in the Purchase's Email history, or your own Gmail connector) and
-its order-line links, then the member's authenticated order details/history in
-your browser. Recover missing saved originals
-through owned mail (`mail.search` retains each new match as an
-`uncertain` candidate; settle every one with `mail.resolve`) and account history before
-assuming only a name is available.
+Start with the purchased item: recover the original order Email through
+[purchase mail](../purchase-import/references/order-mail.md#recover-an-original-for-interactive-research),
+follow its order-line links, then inspect the member's authenticated order
+details/history in your browser. Exhaust those recovery paths before assuming
+only a name is available.
+Keep the member's source/tool restrictions in every worker brief. A logged-out
+public preview does not establish that authenticated evidence is unavailable;
+check the requested signed-in browser live. Missing browser tooling is an
+execution limitation, not evidence for an unavailable exception.
 Do not begin with generic name search when usable purchase sources exist. Use
 broader search for unavailable sources or facts those sources cannot establish.
 

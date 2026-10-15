@@ -1,5 +1,28 @@
 # Purchase mail
 
+## Recover an original for interactive research
+
+From a full Product read, use `entity_read.connections` to find its Expenses,
+read each Expense's `purchaseId`, then read the Purchase. List Email with
+`filters.purchaseId` and read retained Email for its `mailboxId` and `messageId`;
+pass those handles to `imports_read.mail` for the original. Purchase notes or
+existing Sources may already supply the Gmail message handle. An empty
+Purchase-scoped Email list is not proof that the original is missing:
+`imports_read.mail` can read a message Cubby already holds as an Email, at any
+Relevance, within the connected member's authorized mailbox. A known message
+handle alone cannot read mail Cubby has never recorded. Respect explicitly
+selected source tools rather than silently switching connectors.
+
+If no usable handle remains, search owned mail by the exact order reference
+before generic product searches. `mail.search` retains new matches as uncertain
+Email candidates; it is a mutation. Read-only research workers hand the query
+back to their writer. Inspect and settle every retained candidate through
+`mail.resolve` under this workflow; a search hit alone proves neither order
+identity nor a new purchase. On resumption, inspect retained candidates from
+interrupted searches before repeating them.
+
+## Interpret purchase mail
+
 Identify actual purchases and their related lifecycle evidence. A message may
 describe several orders, and several messages may support one Purchase.
 Services, digital access, recurring purchases and food receipts count as

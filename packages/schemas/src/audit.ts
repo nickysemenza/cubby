@@ -61,7 +61,12 @@ export const auditLogListInput = z.object({
     .optional()
     .describe("Inclusive upper bound on createdAt, as an ISO date string"),
   limit: z.number().min(1).max(500).default(50),
-  cursor: z.string().optional(),
+  cursor: z
+    .string()
+    .optional()
+    .describe(
+      "Opaque nextCursor from the previous page; pass unchanged, not a UUID or timestamp",
+    ),
 });
 
 export type AuditLogListInput = z.infer<typeof auditLogListInput>;
