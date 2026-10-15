@@ -19,6 +19,32 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 // repository imports the list scaffold that imports those bindings.
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
+
+const retainedOriginalContentSql = (original: SQL) => sql`COALESCE(
+  NULLIF(BTRIM(${original}."content"->>'snippet'), ''),
+  NULLIF(BTRIM(${original}."content"->>'bodyText'), ''),
+  NULLIF(BTRIM(${original}."content"->>'bodyHtml'), '')
+) IS NOT NULL`;
+
+/** A bulk quality read supplies its joined original so the planner need not
+ * inspect every retained body to build a hashed existence SubPlan. */
+export const emailRetainedContentSql = (
+  email: SQL = sql`"Email"`,
+  original?: SQL,
+) => sql<boolean>`(
+  ${email}."orderMailId" IS NOT NULL AND ${email}."contentClearedAt" IS NULL AND (
+    ${
+      original
+        ? sql`(${original}.id IS NOT NULL AND ${retainedOriginalContentSql(original)})`
+        : sql`EXISTS (SELECT 1 FROM "OrderMail" original
+          WHERE original.id=${email}."orderMailId"
+            AND ${retainedOriginalContentSql(sql`original`)})`
+    }
+    OR EXISTS (SELECT 1 FROM "OrderMailAttachment" attachment
+      WHERE attachment."orderMailId"=${email}."orderMailId"
+        AND (attachment."pendingObjectKey" IS NOT NULL OR attachment."imageId" IS NOT NULL))
+  )
+)`;
 /** Assessment subjects own observation lineage; caller metadata is not a second join key. */
 export const emailFeedbackObservationIdSql = (label: SQL) => sql<
   string | null
@@ -243,8 +269,10 @@ const emailMemberReviewReadSql = (ids?: SQL) => sql`
  * repeated imports or duplicate sources from multiplying Email rows. */
 export const emailQualityReadSql = (ids?: SQL) => sql`
   SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
+    ${emailRetainedContentSql(sql`candidate`, sql`quality_original`)} AS "retainedContent",
     ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification"
   FROM "Email" candidate
+  LEFT JOIN "OrderMail" quality_original ON quality_original.id=candidate."orderMailId"
   LEFT JOIN (${emailMemberReviewReadSql(ids)}) member_review ON member_review."entityId" = candidate.id
   LEFT JOIN (
     SELECT DISTINCT import."ledgerPartyId", source->'orderMailId' AS "original"
