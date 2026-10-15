@@ -575,9 +575,14 @@ test("suggests an existing variant and previews every merge decision for a creat
   await page
     .getByRole("heading", { name: `Approved · ${createdName}` })
     .click();
-  await page.getByText("Review possible matches", { exact: true }).click();
-  await page.getByText("Compare existing Products", { exact: true }).click();
-  await page
+  const appliedGroup = page.locator("#photo-group-g1");
+  await appliedGroup
+    .getByText("Review possible matches", { exact: true })
+    .click();
+  await appliedGroup
+    .getByText("Compare existing Products", { exact: true })
+    .click();
+  await appliedGroup
     .getByRole("button", { name: "Check existing Products", exact: true })
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
