@@ -83,9 +83,15 @@ export function ResolutionHeadline({
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
       <span className="min-w-0 text-base leading-snug font-semibold break-words">
         {evidence?.outcome && evidence.outcome !== "resolved" ? (
-          { mixed: "Mixed", unset: "Not set", blocked: "Blocked" }[
-            evidence.outcome
-          ]
+          {
+            mixed: "Mixed",
+            unset: policy?.labels?.unresolved ?? "Not set",
+            blocked: "Blocked",
+          }[evidence.outcome]
+        ) : resolution.value === null &&
+          resolution.mode === "allocated" &&
+          evidence?.outcome === "resolved" ? (
+          "Allocated"
         ) : resolution.value === null && emptyLabel ? (
           emptyLabel
         ) : (
@@ -255,7 +261,7 @@ export function ResolutionEvidence({
           ))}
           {contributors.length > 6 ? (
             <details>
-              <summary className="cursor-pointer py-2 text-xs font-medium">
+              <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
                 Show {contributors.length - 6} more contributors
               </summary>
               {contributors.slice(6).map((block) => (
@@ -277,7 +283,7 @@ type Chain = Evidence["chain"];
 function Contributor({ block }: { block: Chain }) {
   return (
     <details className="min-w-0 border-t border-border pt-2">
-      <summary className="cursor-pointer py-2 text-xs font-medium break-words">
+      <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium break-words md:min-h-0">
         {block.title ?? "Contributor"}
         {block.rows[0]?.trailing ? (
           <span className="ml-2 text-muted-foreground">
@@ -296,7 +302,7 @@ function ResolutionChain({ block }: { block: Chain }) {
       <RecordsBlockView block={{ ...block, rows: block.rows.slice(0, 6) }} />
       {block.rows.length > 6 ? (
         <details>
-          <summary className="cursor-pointer py-2 text-xs font-medium">
+          <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
             Show {block.rows.length - 6} more resolution steps
           </summary>
           <RecordsBlockView

@@ -46,6 +46,7 @@ import {
   eligibleParentTaskTradeSql,
 } from "./task-project-inheritance";
 
+const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
 type Json = z.infer<ReturnType<typeof z.json>>;
 type Ref = Pick<
@@ -167,7 +168,8 @@ const selfStep = (entity: Entity, resolution: FieldResolution): Step => ({
   value: resolution.storedValue,
   assigned:
     resolution.mode === "explicit" ||
-    (resolution.mode === "none" && resolution.canReset),
+    (resolution.mode === "none" && resolution.canReset) ||
+    (resolution.mode === "allocated" && resolution.storedValue !== null),
   self: true,
   ...(entity === "inventory" ? { nullLabel: "Household" } : {}),
 });
@@ -217,7 +219,7 @@ async function expenseCategorySteps(
 ): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
   const entity = "expense";
   const field = "spendingCategoryId";
-  const subject = { entity, id: shortcode };
+  const subject = { entity, id: shortcode } as const;
 
   const nodes = await ancestors(
     db,
@@ -239,7 +241,7 @@ async function expenseCategorySteps(
       LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
       LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
       LEFT JOIN "SpendingCategory" vc ON vc.id=v."defaultSpendingCategoryId" AND vc."deletedAt" IS NULL
-      LEFT JOIN "SpendingCategory" pc ON pc.id=p."spendingCategoryId" AND pc."deletedAt" IS NULL AND p."spendingCategoryOrigin"<>${sqlEnumConstant(purchaseOut.shape.spendingCategoryOrigin, purchaseOut.shape.spendingCategoryOrigin.enum.source)}
+      LEFT JOIN "SpendingCategory" pc ON pc.id=p."spendingCategoryId" AND pc."deletedAt" IS NULL AND p."spendingCategoryOrigin"<>${sqlEnumConstant(categoryOrigin, categoryOrigin.enum.source)}
       WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`);
   const fact = z
     .object({
@@ -275,13 +277,12 @@ async function expenseCategorySteps(
     !fact?.hasProduct &&
     ["food_retail", "restaurant", "coffee_shop"].includes(fact?.profile ?? "");
   const categorySteps = nodeSteps("productCategory", nodes, subject).map(
-    (step, index) => ({
+    (step) => ({
       ...step,
-      assigned:
-        principal &&
-        nodes[index] === mapping &&
-        (blocked || Boolean(mappingEligible)) &&
-        step.assigned,
+      unavailableReason:
+        step.assigned && (!principal || !(blocked || mappingEligible))
+          ? "Not applicable to this line"
+          : undefined,
     }),
   );
   const vendorStep = (title: string, eligible: boolean): Step[] =>
@@ -291,7 +292,11 @@ async function expenseCategorySteps(
             title,
             ref: { entityKind: "vendor", entityId: fact.vendorCode },
             value: fact.vendorCategory,
-            assigned: eligible && fact.vendorCategory !== null,
+            assigned: fact.vendorCategory !== null,
+            unavailableReason:
+              !eligible && fact.vendorCategory !== null
+                ? "Not applicable to this line"
+                : undefined,
           },
         ]
       : [];
@@ -309,7 +314,11 @@ async function expenseCategorySteps(
                 entityId: fact.purchaseCode,
               },
               value: fact.purchaseCategory,
-              assigned: Boolean(principal && fact.purchaseCategory !== null),
+              assigned: fact.purchaseCategory !== null,
+              unavailableReason:
+                !principal && fact.purchaseCategory !== null
+                  ? "Not applicable to this line"
+                  : undefined,
             },
           ]
         : []),
@@ -331,7 +340,7 @@ async function taskAssigneeSteps(
 ): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
   const entity = "task";
   const field = "assigneeId";
-  const subject = { entity, id: shortcode };
+  const subject = { entity, id: shortcode } as const;
 
   const parents = await unwrapDb(db).execute(sql`
       SELECT parent.shortcode,parent.name,
@@ -826,8 +835,8 @@ function valueText(
     ).find((candidate) => candidate.value === value);
     return option?.label ?? humanize(value);
   }
-  if (typeof value === "number" || typeof value === "boolean")
-    return String(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return String(value);
   return JSON.stringify(value);
 }
 
@@ -928,7 +937,7 @@ async function allocatedExpenseEvidence(
       LEFT JOIN "Purchase" p ON p.id=a."purchaseId" AND p."deletedAt" IS NULL
     ) SELECT shortcode,name,"purchaseCode","purchaseName",value,"attributedCents",basis,incomplete,"categoryIncomplete",
       (SELECT count(*)::int FROM evidence) AS total,
-      (SELECT count(DISTINCT COALESCE(value,'null'::jsonb))::int FROM evidence) AS distinct_values
+      (SELECT count(DISTINCT value) FILTER (WHERE value <> 'null'::jsonb)::int FROM evidence) AS distinct_values
     FROM evidence ORDER BY shortcode NULLS LAST LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
   const rows = z
     .array(
@@ -1036,7 +1045,7 @@ async function allocatedExpenseEvidence(
       contributors,
       fallbackSource: null,
       outcome:
-        resolution.value !== null
+        resolution.value !== null || distinct === 1
           ? "resolved"
           : distinct > 1
             ? "mixed"
@@ -1102,7 +1111,9 @@ async function productPriceEvidence(
                 (row.cost * row.costWeight) /
                   (Math.abs(row.productQuantity) * row.unitWeight),
               )
-            : "No known units",
+            : row.productQuantity === 0
+              ? "Cost only; zero units"
+              : "Quantity unknown",
           state:
             row.productQuantity === null
               ? { kind: "skipped", label: "Quantity missing" }
@@ -1418,6 +1429,10 @@ async function productOwnersEvidence(
   }
   const labels = await shortcodeLabels(db, [...codes]);
   const resolvedValues = new Set<string>();
+  const unresolvedOwner =
+    entityFieldModels.inventory.fields.find(
+      (field) => field.key === "ownerLedgerPartyId",
+    )?.resolution?.labels?.unresolved ?? "Unknown";
   for (const entry of visible) {
     const ownership = traces.get(entry.id)?.ownership;
     const owner = ownership?.effectiveOwner?.name;
@@ -1433,7 +1448,7 @@ async function productOwnersEvidence(
           ? ownership.mode === "inherit"
             ? "No single owner"
             : "Household"
-          : "Not set"),
+          : unresolvedOwner),
     );
     const resolution = inventoryOwnerResolution(ownership, trace.steps);
     const steps = [
@@ -1457,7 +1472,7 @@ async function productOwnersEvidence(
         (inherited
           ? meaningfulNull
             ? "No single owner"
-            : "Not set"
+            : unresolvedOwner
           : "Household"),
       state: inherited
         ? { kind: "not_reached", label: "Inherited" }
@@ -1486,7 +1501,7 @@ async function productOwnersEvidence(
         : entries.length > CONTRIBUTOR_LIMIT
           ? {}
           : {
-              outcome: resolvedValues.has("Not set")
+              outcome: resolvedValues.has(unresolvedOwner)
                 ? ("unset" as const)
                 : ("resolved" as const),
             }),

@@ -24,7 +24,7 @@ test("explains allocated trades with expandable contributor precedence", async (
   const { id: purchase } = await createEntityFixture(page, "purchase", {
     vendorId: vendor,
     date: "2026-09-01",
-    projectId: project,
+    defaultProjectId: project,
     defaultTrade: "plumbing",
   });
   const { id: cable } = await createEntityFixture(page, "expense", {
@@ -98,6 +98,17 @@ test("explains allocated trades with expandable contributor precedence", async (
   await expect(
     refreshed.getByText("Plumbing", { exact: true }).first(),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
+  const projectTrigger = page.getByRole("button", {
+    name: "How project is determined",
+    exact: true,
+  });
+  await projectTrigger.click();
+  const projects = await inlineExplanation(page, projectTrigger);
+  await expect(projects.getByText("Allocated", { exact: true })).toBeVisible();
+  await expect(
+    projects.locator("summary").filter({ hasText: "Synthetic evidence cable" }),
+  ).toContainText("Synthetic evidence renovation");
 });
 
 // The owner rollup already has readable record rows; rendering its raw resolved
@@ -117,13 +128,19 @@ test("shows owner rollup evidence once without nested wire fields", async ({
   await trigger.click();
   const panel = await inlineExplanation(page, trigger);
   await expect(
-    panel.getByText("Synthetic owner evidence drawer", { exact: true }),
+    panel
+      .locator("summary")
+      .filter({ hasText: "Synthetic owner evidence drawer" }),
   ).toBeVisible();
   await expect(
-    panel.getByText("Synthetic owner evidence owner", { exact: true }),
+    panel
+      .getByText("Synthetic owner evidence owner", { exact: true })
+      .filter({ visible: true }),
   ).toHaveCount(1);
   await expect(
-    panel.getByText("Synthetic owner evidence other", { exact: true }),
+    panel
+      .getByText("Synthetic owner evidence other", { exact: true })
+      .filter({ visible: true }),
   ).toHaveCount(1);
   await expect(panel.getByText("Entity Kind", { exact: true })).toHaveCount(0);
   await expect(panel.getByText("Inherited", { exact: true })).toHaveCount(0);

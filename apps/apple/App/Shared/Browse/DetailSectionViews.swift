@@ -820,7 +820,7 @@ struct FieldExplanationLabel: View {
     private func resolutionOutcomeLabel(_ explanation: FieldExplanationOutput) -> String? {
         switch explanation.resolutionEvidence?.outcome?.rawValue {
         case "mixed": "Mixed"
-        case "unset": "Not set"
+        case "unset": field.resolution?.labels?.unresolved ?? "Not set"
         case "blocked": "Blocked"
         default: nil
         }
@@ -829,6 +829,11 @@ struct FieldExplanationLabel: View {
     private func resolutionValueLabel(_ explanation: FieldExplanationOutput) -> String {
         guard let resolution = explanation.resolution else { return "Not set" }
         if explanation.resolutionEvidence?.outcome?.rawValue == "mixed" { return "Mixed" }
+        if resolution.mode == .allocated, display(resolution.value) == nil,
+            explanation.resolutionEvidence?.outcome?.rawValue == "resolved"
+        {
+            return "Allocated"
+        }
         return display(resolution.value)
             ?? resolutionOutcomeLabel(explanation)
             ?? FieldResolutionPresentation.emptyLabel(resolution, field: field)
@@ -836,13 +841,16 @@ struct FieldExplanationLabel: View {
 
     @ViewBuilder
     private func resolutionSteps(_ block: ReportRecordsBlock) -> some View {
-        let first = resolutionBlock(block, rows: 0..<min(6, block.rows.count))
-        RecordsBlockView(records: ReportPresentation.records(first), host: nil)
-        if block.rows.count > 6 {
-            DisclosureGroup("Show \(block.rows.count - 6) more resolution steps") {
-                RecordsBlockView(
-                    records: ReportPresentation.records(resolutionBlock(block, rows: 6..<block.rows.count)),
-                    host: nil)
+        if !block.rows.isEmpty || !block.empty.isEmpty {
+            let first = resolutionBlock(block, rows: 0..<min(6, block.rows.count))
+            RecordsBlockView(records: ReportPresentation.records(first), host: nil)
+            if block.rows.count > 6 {
+                DisclosureGroup("Show \(block.rows.count - 6) more resolution steps") {
+                    RecordsBlockView(
+                        records: ReportPresentation.records(
+                            resolutionBlock(block, rows: 6..<block.rows.count)),
+                        host: nil)
+                }
             }
         }
     }
