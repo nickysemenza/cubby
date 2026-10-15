@@ -12,6 +12,10 @@ import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-
 import {
   expenseAllocationScopeConditionSql,
   expenseJointAllocationSql,
+  expenseSelectionConditionSql,
+  expenseSelectionIdsSql,
+  type ExpenseIdSelection,
+  type ExpenseIdRelation,
   type ExpenseAllocationProjectScope,
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
@@ -34,7 +38,7 @@ type DerivedRead = keyof typeof derivedReads;
 type DerivedReadOptions = {
   scope?: ExpenseAllocationProjectScope;
   draft?: ExpenseSpendingCategoryResolutionDraft;
-  expenseIds?: readonly ExpenseId[] | SQL;
+  expenseIds?: ExpenseIdSelection;
   source?: SQL;
 };
 
@@ -46,7 +50,7 @@ export function expenseDerivedReadSql(
     return sql`SELECT source."id" AS "expenseId", source."cost" AS cost,
       round(source."cost"::numeric * 100)::bigint AS "costCents", source."projectId"
       FROM "Expense" source WHERE source."deletedAt" IS NULL
-      ${expenseIds ? sql`AND source."id" = ANY(${uuidArrayParam(expenseIds)})` : sql``}`;
+      ${expenseIds ? sql`AND ${expenseSelectionConditionSql(sql`source."id"`, expenseIds)}` : sql``}`;
   if (read === "categoryEvidence")
     return sql`SELECT "expenseId",
         bool_or("spendingCategoryId" IS NULL OR incomplete) AS missing,
@@ -141,7 +145,7 @@ export function expenseDerivedValueSql<K extends keyof DerivedValues>(
   field: K,
   expenseId: SQL,
   scope?: ExpenseAllocationProjectScope,
-  expenseIds?: readonly ExpenseId[] | SQL,
+  expenseIds?: ExpenseIdSelection,
 ): SQL<DerivedValues[K]> {
   const read =
     field === "cost"
@@ -163,13 +167,13 @@ export function expenseDerivedValueSql<K extends keyof DerivedValues>(
 /** One row per selected expense, suitable for joined grouped queries. */
 export const expenseDerivedCostsSql = (
   scope?: ExpenseAllocationProjectScope,
-  expenseIds?: readonly ExpenseId[] | SQL,
+  expenseIds?: ExpenseIdSelection,
 ): SQL => expenseDerivedReadSql("costs", { scope, expenseIds });
 
 export function expenseDerivedCostRead(
   db: Database | DrizzleTransaction,
   scope?: ExpenseAllocationProjectScope,
-  expenseIds?: readonly ExpenseId[] | SQL,
+  expenseIds?: ExpenseIdSelection,
   preparedCosts?: SQL,
 ) {
   const relation =
@@ -187,7 +191,12 @@ export function expenseDerivedCostRead(
   return { cost, select, aggregate: expenseAggregateFields(cost) };
 }
 
-/** Request-local prepared scope and set-based total relation shared by analytical callers. */
+/** Relational ledger population shared by analytical callers. */
+export const expenseSelectionForWhere = (where?: SQL): ExpenseIdRelation => ({
+  select: sql`SELECT ${expense.id} AS id FROM ${expense} WHERE ${where ?? sql`true`}`,
+});
+
+/** Request-local scope and set-based total relation shared by analytical callers. */
 export async function prepareExpenseDerivedRead(
   db: Database,
   filters: ExpenseFilters,
@@ -201,7 +210,7 @@ export async function prepareExpenseDerivedRead(
   const where = await buildExpenseWhereClause(db, filters, {
     projectScope: undefined,
   });
-  const selectedIds = sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`;
+  const selectedIds = expenseSelectionForWhere(where);
   return {
     scope,
     where,
@@ -227,8 +236,8 @@ type DerivedProjectionResults<
 
 export type ExpenseDerivedReadContext = Pick<
   PreparedExpenseDerivedRead,
-  "scope" | "where" | "expenseIds"
->;
+  "scope" | "where"
+> & { expenseIds: readonly ExpenseId[] | ExpenseIdRelation };
 
 const derivedBatchRead = (
   db: Database,
@@ -273,6 +282,24 @@ export async function executeExpenseDerivedBatches<
     reads: Readonly<Record<string, ExpenseDerivedBatchRead>>,
   ) => Queries,
 ): Promise<DerivedProjectionResults<Queries>> {
+  const result = await unwrapDb(db).execute<DerivedProjectionResults<Queries>>(
+    expenseDerivedBatchesSql(db, contexts, projections),
+  );
+  // SAFETY: the builder names each JSON array with its projection key and
+  // positional aliases reproduce the Drizzle query's declared result fields.
+  return result.rows[0] as DerivedProjectionResults<Queries>;
+}
+
+/** The executed statement is also available to EXPLAIN at the real batch boundary. */
+export function expenseDerivedBatchesSql<
+  Queries extends Record<string, DerivedProjectionQuery>,
+>(
+  db: Database,
+  contexts: Readonly<Record<string, ExpenseDerivedReadContext>>,
+  projections: (
+    reads: Readonly<Record<string, ExpenseDerivedBatchRead>>,
+  ) => Queries,
+): SQL {
   const groups: Array<{ scope: ExpenseAllocationProjectScope | undefined }> =
     [];
   const groupByScope = new Map<string, number>();
@@ -316,11 +343,12 @@ export async function executeExpenseDerivedBatches<
     return sql`(SELECT coalesce(jsonb_agg(to_jsonb(derived_rows)), '[]'::jsonb)
       FROM ${rows}(${sql.join(names, sql`, `)})) AS ${sql.identifier(key)}`;
   });
-  const selected = Object.values(contexts).map(
-    (context) =>
-      sql`SELECT unnest(${uuidArrayParam(context.expenseIds)}) AS id`,
+  const selected = Object.values(contexts).map((context) =>
+    expenseSelectionIdsSql(context.expenseIds),
   );
-  const expenseIds = sql`ARRAY(SELECT DISTINCT id FROM (${sql.join(selected, sql` UNION ALL `)}) selected_ids)`;
+  const expenseIds = {
+    select: sql`SELECT DISTINCT id FROM (${sql.join(selected, sql` UNION ALL `)}) selected_ids`,
+  };
   const relations = groups.flatMap(({ scope }, group) => {
     const shareName = sql.identifier(`expense_derived_share_${group}`);
     const costName = sql.identifier(`expense_derived_cost_${group}`);
@@ -337,14 +365,9 @@ export async function executeExpenseDerivedBatches<
       sql`${costName} AS MATERIALIZED (${costs})`,
     ];
   });
-  const result = await unwrapDb(db).execute<
-    DerivedProjectionResults<Queries>
-  >(sql`
+  return sql`
     WITH expense_derived_allocation AS MATERIALIZED (${expenseJointAllocationSql(expenseIds)}),
       ${sql.join(relations, sql`, `)}
     SELECT ${sql.join(columns, sql`, `)}
-  `);
-  // SAFETY: this SELECT names each JSON array with its projection key, and
-  // positional aliases reproduce that Drizzle query's declared result fields.
-  return result.rows[0] as DerivedProjectionResults<Queries>;
+  `;
 }

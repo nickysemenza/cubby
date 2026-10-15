@@ -22,6 +22,24 @@ import {
   effectiveExpenseTradeSql,
 } from "./expense-inheritance";
 
+/** SQL arrays retain legacy correlated callers; relational selections expose
+ * cardinality to the planner instead of hiding a whole ledger in an InitPlan. */
+export type ExpenseIdRelation = { select: SQL };
+export type ExpenseIdSelection = readonly ExpenseId[] | SQL | ExpenseIdRelation;
+
+export const expenseSelectionConditionSql = (
+  id: SQL,
+  selection: ExpenseIdSelection,
+): SQL =>
+  "select" in selection
+    ? sql`${id} IN (${selection.select})`
+    : sql`${id} = ANY(${uuidArrayParam(selection)})`;
+
+export const expenseSelectionIdsSql = (selection: ExpenseIdSelection): SQL =>
+  "select" in selection
+    ? selection.select
+    : sql`SELECT unnest(${uuidArrayParam(selection)}) AS id`;
+
 export type ExpenseProjectAllocationBasis =
   | "principal"
   | "unclassified"
@@ -66,7 +84,7 @@ type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
  * Project/category assignments. ID-scoped reads first select complete purchases.
  */
 export const expenseJointAllocationSql = (
-  expenseIds?: readonly ExpenseId[] | SQL,
+  expenseIds?: ExpenseIdSelection,
   draft?: ExpenseSpendingCategoryResolutionDraft,
   { categories = true }: { categories?: boolean } = {},
 ): SQL => sql`
@@ -74,7 +92,7 @@ export const expenseJointAllocationSql = (
     expenseIds
       ? sql`selected_expense AS (
     SELECT target."id", target."purchaseId" FROM "Expense" target
-    WHERE target."deletedAt" IS NULL AND target."id" = ANY(${uuidArrayParam(expenseIds)})
+    WHERE target."deletedAt" IS NULL AND ${expenseSelectionConditionSql(sql`target."id"`, expenseIds)}
   ),`
       : sql``
   } principal_fact AS (

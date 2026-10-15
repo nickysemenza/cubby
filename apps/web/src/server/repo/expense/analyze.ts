@@ -54,6 +54,7 @@ import {
   type ExpenseDerivedBatchRead,
   expenseDerivedCostRead,
   expenseDerivedReadSql,
+  expenseSelectionForWhere,
 } from "~/server/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import {
@@ -766,7 +767,7 @@ export const loadExpenseAnalysisPeriod = async (
     {
       scope: allocationScope,
       where: scopeWhere,
-      expenseIds: sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${or(gridWhere, scopeWhere) ?? sql`true`})`,
+      expenseIds: expenseSelectionForWhere(or(gridWhere, scopeWhere)),
     },
     (read) => ({
       rows: groupedDimensionQuery(
@@ -966,7 +967,7 @@ export const loadExpenseAnalysisCauses = async (
       {
         scope: allocationScope,
         where,
-        expenseIds: sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`,
+        expenseIds: expenseSelectionForWhere(where),
       },
       (read) => analysisCausesQueries(db, input, where, allocationScope, read),
     ),
@@ -1168,7 +1169,7 @@ export async function loadExpenseFacetCounts(
         return {
           scope,
           where,
-          expenseIds: sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`,
+          expenseIds: expenseSelectionForWhere(where),
         };
       })();
       preparedByFilters.set(key, prepared);

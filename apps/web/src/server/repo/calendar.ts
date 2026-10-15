@@ -31,7 +31,10 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
-import { expenseDerivedCostRead } from "~/server/repo/expense-derived-read";
+import {
+  expenseDerivedCostRead,
+  expenseSelectionForWhere,
+} from "~/server/repo/expense-derived-read";
 
 import {
   loadCalendarPlantings,
@@ -232,7 +235,7 @@ const loadCalendarExpenses = async (
   if (!allocationScope) return load(where);
   // Selected cost rows supply both membership and displayed cost. Hydration
   // consumes only those identities and does not resolve allocation again.
-  const selectedIds = sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`;
+  const selectedIds = expenseSelectionForWhere(where);
   const read = expenseDerivedCostRead(db, allocationScope, selectedIds);
   const costs = await read
     .select({ id: expense.id, cost: read.cost })
