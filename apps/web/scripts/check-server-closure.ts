@@ -2,7 +2,8 @@
  * Budgets the Worker bundle (dist/server) so request-path growth fails the
  * build instead of being found in a later performance sweep.
  *
- * "First request" is what one page or API request loads: the entry's static
+ * "Entry" is the static import closure loaded for every Worker invocation.
+ * "First request" is what the combined page path loads: the entry's static
  * imports, plus the server entry and router chunks it imports lazily, plus
  * everything those import statically. A route or helper that statically
  * imports a heavy module (an SDK, a generated document) lands it here even if
@@ -26,6 +27,7 @@ import { pathToFileURL } from "node:url";
 const MB = 1_000_000;
 // Every invocation loads this static entry, including API reads that never
 // render a page. Keep unrelated entity metadata behind its consuming handler.
+// In 2026-10, removing the helper barrel cut 2.39 MB / 94 files to 1.67 MB / 88.
 const ENTRY_BUDGET = 2 * MB;
 // Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
@@ -109,14 +111,18 @@ export function measureServerClosure(root: string) {
     entry: closure(entry.keys()),
     firstRequest: closure(parent.keys()),
     total: closure(sources.keys()),
-    chainTo(file: string): string[] {
+    chainTo(
+      file: string,
+      scope: "entry" | "firstRequest" = "firstRequest",
+    ): string[] {
+      const graph = scope === "entry" ? entry : parent;
       const chain: string[] = [];
-      for (let at: string | null | undefined = file; at; at = parent.get(at))
+      for (let at: string | null | undefined = file; at; at = graph.get(at))
         chain.unshift(at);
-      return parent.has(file) ? chain : [];
+      return graph.has(file) ? chain : [];
     },
-    largest(count: number) {
-      return [...parent.keys()]
+    largest(count: number, scope: "entry" | "firstRequest" = "firstRequest") {
+      return [...(scope === "entry" ? entry : parent).keys()]
         .map((file) => ({ file, bytes: sources.get(file)!.length }))
         .sort((a, b) => b.bytes - a.bytes)
         .slice(0, count);
@@ -184,14 +190,15 @@ if (invokedPath === import.meta.url) {
   if (report.total.bytes > TOTAL_BUDGET)
     over.push(`total ${mb(report.total.bytes)} > ${mb(TOTAL_BUDGET)}`);
   if (over.length > 0) {
+    const scope = report.entry.bytes > ENTRY_BUDGET ? "entry" : "firstRequest";
     const largest = report
-      .largest(12)
+      .largest(12, scope)
       .map(
         ({ file, bytes }) =>
-          `  ${mb(bytes)} ${file}\n    via ${report.chainTo(file).join(" -> ")}`,
+          `  ${mb(bytes)} ${file}\n    via ${report.chainTo(file, scope).join(" -> ")}`,
       );
     throw new Error(
-      `Worker bundle over budget: ${over.join("; ")}\nLargest request-path chunks:\n${largest.join("\n")}\n` +
+      `Worker bundle over budget: ${over.join("; ")}\nLargest ${scope} chunks:\n${largest.join("\n")}\n` +
         "Load heavy modules inside the handler that uses them (await import()).",
     );
   }

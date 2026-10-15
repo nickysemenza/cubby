@@ -168,8 +168,10 @@ loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets the static entry, combined
 page path, and total output). Startup lifecycle/progress modules import the
 database helpers' `core` and `query` modules directly: the barrel also
-initializes relation loaders and pulls in the generated entity field model,
-which belongs behind its consuming handler.
+initializes relation loaders and pulls in the generated entity field model
+through the CRUD helpers' shortcode resolver. These belong behind their
+consuming handler; the entry budget does not measure the additional imports
+an API operation or page needs.
 
 Run purposes and MCP authority are declared in
 `packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript

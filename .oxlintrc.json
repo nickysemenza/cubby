@@ -139,6 +139,12 @@
                 "name": "~/server/db/schema",
                 "message": "Services cannot access DB schema directly. Use repo functions instead."
               }
+            ],
+            "patterns": [
+              {
+                "group": ["~/server/repo/database-helpers/*"],
+                "message": "Services cannot access DB helpers directly. Use repo functions instead."
+              }
             ]
           }
         ]
