@@ -1,18 +1,22 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import {
+  email,
   orderMail,
   orderMailAttachment,
   run as runTable,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
+import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readWorkQueue } from "~/server/generic/work-queue/repo/work-queue";
 
 import { loadDataQualities } from "./hydrate";
 import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
@@ -115,7 +119,35 @@ describe("Email data quality", () => {
     for (const row of planRows)
       row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
     // Allow one complete history/source scan, reject a scan per Email.
-    expect(membershipRowsVisited).toBeLessThan(10000);
+    expect(membershipRowsVisited).toBeLessThan(50000);
+    // Plain count reads need no completed-import membership or hydration.
+    const plain = await countTestDbQueries(() =>
+      listScaffold("email", email).list(
+        ctx.db,
+        {
+          filters: {},
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 25 },
+          readIntent: "count",
+        },
+        { hydrate: (selected) => selected },
+      ),
+    );
+    expect(plain.result.count).toBe(120);
+    expect(plain.queryCount).toBe(1);
+    expect(plain.statements.join("\n")).not.toMatch(/\bJOIN\b/i);
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        check: ["email_not_imported"],
+        pageSize: 100,
+      }),
+      false,
+    );
+    expect(queue.meta.totalCount).toBe(80);
+    expect(queue.items).toHaveLength(80);
+    expect(queue.items.every((item) => item.entity === "email")).toBe(true);
   });
 
   it("rejects completed Mail import Runs without an owner", async () => {

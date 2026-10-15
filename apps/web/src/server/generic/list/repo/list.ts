@@ -62,6 +62,7 @@ import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   dataQualityFilterPredicates,
   qualityFilterContext,
+  hasDataQualityFilter,
   qualityFilterSource,
   qualityFilterJoin,
   dataQualitySortResolver,
@@ -423,7 +424,9 @@ export function listScaffold<
   // list at once rather than beside each repo's own conditions.
   const scored = isScoredEntity(entity) ? entity : null;
   const qualityContext = scored ? qualityFilterContext(scored) : undefined;
-  const source = scored ? qualityFilterSource(scored, table) : sql`${table}`;
+  const qualitySource = scored
+    ? qualityFilterSource(scored, table)
+    : sql`${table}`;
   const scoreSort = scored
     ? dataQualitySortResolver(scored, table, qualityContext)
     : null;
@@ -459,7 +462,7 @@ export function listScaffold<
       return sql`${parent} IN (SELECT ${table.id} FROM ${table} WHERE ${requested})`;
     }
     // A row whose parent is absent, deleted, or filtered out is a root.
-    return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${table} WHERE ${filtered ?? sql`true`}))`;
+    return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${qualitySource} WHERE ${filtered ?? sql`true`}))`;
   };
   /** Each listed parent's direct children that match `filtered`, by shortcode. */
   const childCounts = async (
@@ -481,7 +484,7 @@ export function listScaffold<
         code: sql<string>`(SELECT p.${shortcode} FROM ${name} p WHERE p.${id} = ${parentOf})`,
         count: sql<number>`count(*)::int`,
       })
-      .from(source)
+      .from(qualitySource)
       .where(
         and(
           filtered,
@@ -577,6 +580,11 @@ export function listScaffold<
       request: ListRequest<Filters>,
       spec: ListSpec<Row, Out>,
     ): Promise<{ data: Out[]; count: number }> {
+      const readsQuality =
+        scored !== null &&
+        (hasDataQualityFilter(request.filters) ||
+          request.sorts.some((sort) => sort.orderBy === "dataQuality"));
+      const source = readsQuality ? qualitySource : sql`${table}`;
       const filtered =
         "where" in spec ? spec.where : scaffold.where(request.filters);
       const nesting = listNestingFromFilters(request.filters);
@@ -639,7 +647,10 @@ export function listScaffold<
               .select(getTableColumns(root))
               .from(root)
               .$dynamic();
-            const join = scored ? qualityFilterJoin(scored, table) : undefined;
+            const join =
+              readsQuality && scored
+                ? qualityFilterJoin(scored, table)
+                : undefined;
             const selected = join
               ? query.leftJoin(join.relation, join.on)
               : query;

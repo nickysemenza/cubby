@@ -1210,7 +1210,8 @@ score sorting, and bounded hydration join a deduplicated source-membership
 relation before evaluating the check, so ordinary join planning can spill rather
 than rescanning a source set per Email when a hashed SubPlan exceeds memory.
 The data-quality registry owns both the relation and the predicate context;
-list reads and Work queue counts use the same binding. Single-record predicates
+list reads and Work queue counts use the same binding. Plain lists and counts
+join no quality relation unless quality filtering or score sorting needs it. Single-record predicates
 retain JSON containment. Historical source JSON allows extra fields, excludes
 missing keys and malformed source arrays, and distinguishes an explicit JSON
 null from an absent key.

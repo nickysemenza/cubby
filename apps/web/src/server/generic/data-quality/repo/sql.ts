@@ -352,6 +352,14 @@ const dataQualityFilterValues = z
   })
   .passthrough();
 
+/** The derived quality relation is unnecessary for plain list/count reads. */
+export const hasDataQualityFilter = <Filters extends object>(
+  filters: Filters,
+): boolean => {
+  const values = dataQualityFilterValues.parse(filters);
+  return values.dataStatus.length > 0 || values.dataGap.length > 0;
+};
+
 /**
  * The `dataStatus` / `dataGap` list predicates for one entity, from filters
  * the generated schema already validated. A `dataGap` naming a related
