@@ -55,12 +55,14 @@ import { Picker } from "~/ui/combobox/picker";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { useOptimisticDisplayValue } from "~/ui/data-table/editable-cell";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { CollapsibleSection, Row, Section, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -691,6 +693,36 @@ function IdentityDecision({
   );
 }
 
+function FieldChangeToggle({
+  checked,
+  disabled,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => Promise<boolean>;
+  children: ReactNode;
+}) {
+  const { displayValue, setOptimisticValue } =
+    useOptimisticDisplayValue(checked);
+  return (
+    <label className="flex items-center gap-2">
+      <Checkbox
+        checked={displayValue ?? false}
+        disabled={disabled}
+        onCheckedChange={(next) => {
+          setOptimisticValue(next);
+          void onChange(next).then((success) => {
+            if (!success) setOptimisticValue(undefined);
+          });
+        }}
+      />
+      {children}
+    </label>
+  );
+}
+
 function ExistingProductChanges({
   proposal,
   save,
@@ -741,27 +773,25 @@ function ExistingProductChanges({
                 : (change ?? "");
               return (
                 <Stack key={field} gap="xs">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={Object.hasOwn(changes, field)}
-                      disabled={busy}
-                      onChange={(event) =>
-                        save(() => {
-                          const next = { ...changes };
-                          if (!event.target.checked) delete next[field];
-                          else if (field === "tags")
-                            next.tags = current.data?.tags ?? [];
-                          else next[field] = before;
-                          return {
-                            ...toGroupInput(proposal),
-                            review: { ...review, productChanges: next },
-                          };
-                        })
-                      }
-                    />
+                  <FieldChangeToggle
+                    checked={Object.hasOwn(changes, field)}
+                    disabled={busy}
+                    onChange={(checked) =>
+                      save(() => {
+                        const next = { ...changes };
+                        if (!checked) delete next[field];
+                        else if (field === "tags")
+                          next.tags = current.data?.tags ?? [];
+                        else next[field] = before;
+                        return {
+                          ...toGroupInput(proposal),
+                          review: { ...review, productChanges: next },
+                        };
+                      })
+                    }
+                  >
                     Change {field}
-                  </label>
+                  </FieldChangeToggle>
                   {Object.hasOwn(changes, field) ? (
                     <>
                       <p className="break-words text-muted-foreground">
@@ -800,26 +830,24 @@ function ExistingProductChanges({
               );
             },
           )}
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={Object.hasOwn(changes, "categoryId")}
-              disabled={busy}
-              onChange={(event) =>
-                save(() => {
-                  const next = { ...changes };
-                  if (event.target.checked)
-                    next.categoryId = current.data?.category?.id ?? null;
-                  else delete next.categoryId;
-                  return {
-                    ...toGroupInput(proposal),
-                    review: { ...review, productChanges: next },
-                  };
-                })
-              }
-            />
+          <FieldChangeToggle
+            checked={Object.hasOwn(changes, "categoryId")}
+            disabled={busy}
+            onChange={(checked) =>
+              save(() => {
+                const next = { ...changes };
+                if (checked)
+                  next.categoryId = current.data?.category?.id ?? null;
+                else delete next.categoryId;
+                return {
+                  ...toGroupInput(proposal),
+                  review: { ...review, productChanges: next },
+                };
+              })
+            }
+          >
             Change category
-          </label>
+          </FieldChangeToggle>
           {Object.hasOwn(changes, "categoryId") ? (
             <>
               <p>Before: {current.data.category?.name ?? "None"}</p>
