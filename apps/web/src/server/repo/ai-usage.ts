@@ -189,7 +189,7 @@ const decodeRunUsageCursor = (value: string) =>
 
 /**
  * Recorded calls attributed to a Run, its descendants and their image jobs.
- * EXISTS membership deduplicates calls carrying both run and attempt lineage.
+ * Indexed membership sets deduplicate calls carrying both run and job lineage.
  */
 export async function listAiUsageForRun(
   db: Database,
@@ -209,12 +209,27 @@ export async function listAiUsageForRun(
     UNION SELECT child.id FROM "Run" child JOIN run_scope parent ON child."parentRunId" = parent.id
       WHERE child."deletedAt" IS NULL
   ) SELECT id FROM run_scope`;
-  const attributed = sql`(${aiUsage.runId} IN (${scope}) OR EXISTS (
-    SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND j."runId" IN (${scope}) AND (
-      (${aiUsage.jobKind} = 'image_processing_attempt' AND ${aiUsage.jobId} IN (
-        SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
-      OR (${aiUsage.jobKind} = j.kind AND ${aiUsage.jobId} = j.id::text)
-    )))`;
+  // Correlating job membership under an OR re-scans jobs for every unrelated
+  // usage row. Build the ID set through run/job indexes first; UNION preserves
+  // one contribution when both lineage paths reach the same call.
+  const attributed = sql`${aiUsage.id} IN (
+    WITH scoped_runs AS (${scope}), scoped_jobs AS (
+      SELECT j.id, j.kind FROM "ImageProcessingJob" j
+      JOIN scoped_runs r ON r.id = j."runId" WHERE j."deletedAt" IS NULL
+    )
+    SELECT u.id FROM "AiUsage" u JOIN scoped_runs r ON u."runId" = r.id
+      WHERE u."deletedAt" IS NULL
+    UNION
+    SELECT u.id FROM scoped_jobs j JOIN "AiUsage" u
+      ON u."jobKind" = j.kind AND u."jobId" = j.id::text
+      WHERE u."deletedAt" IS NULL
+    UNION
+    SELECT u.id FROM scoped_jobs j
+      JOIN "ImageProcessingAttempt" a ON a."jobId" = j.id
+      JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+        AND u."jobId" = a.id::text
+      WHERE u."deletedAt" IS NULL
+  )`;
   const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
     WHERE r.id IN (${scope}) AND r."deletedAt" IS NULL AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
   const missingImageCoverage = (allowDeviceCharge: boolean) => sql`EXISTS (

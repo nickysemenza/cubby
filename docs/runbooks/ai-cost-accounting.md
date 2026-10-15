@@ -41,6 +41,11 @@ an external processor makes coverage incomplete; device-completed work proves
 zero charge but does not invent a standard-cost comparison. Reads never call a
 model or count budget reservations as spend.
 
+Run usage membership is an indexed union of directly attributed calls, linked
+image-job calls, and linked image-attempt calls. Resolve that set before reading
+the subtotal and page; a correlated job-membership check for each unrelated
+usage row makes household-wide history consume Run-detail query capacity.
+
 Current queued messages retain their captured prices through retries. Raw legacy
 in-flight messages without captured costs receive one compatibility upgrade at
 consumption: supported inference usage captures current rates and labels the
