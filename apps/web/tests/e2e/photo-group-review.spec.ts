@@ -66,6 +66,11 @@ test("resolves identity, validates counts, and applies selected fields without r
     name,
     e2eRuntime.objectStorageUrl,
   );
+  const incompatibleStock = await createEntityFixture(page, "inventory", {
+    productId: existing.id,
+    locationId: seed.location.id,
+    amount: { value: 2, unit: "kg" },
+  });
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -114,6 +119,25 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Confirm identity", exact: true })
     .click();
+  // A failed existing-entry selection can be replaced with a fresh count.
+  await group.getByRole("combobox", { name: "existing stock entry" }).click();
+  await page
+    .getByRole("option")
+    .filter({ hasText: `${name} shirt` })
+    .first()
+    .click();
+  await expect(
+    group.getByText("Retry the stock-entry selection before applying"),
+  ).toBeVisible();
+  await group
+    .getByRole("combobox", { name: "location", exact: true })
+    .fill(`${name} location`);
+  await page
+    .getByRole("option", { name: new RegExp(`${name} location`) })
+    .click();
+  await expect(
+    group.getByText("Retry the stock-entry selection before applying"),
+  ).toHaveCount(0);
   const quantity = group.getByRole("spinbutton", { name: "Qty" });
   await quantity.fill("1.5");
   await group
@@ -179,7 +203,8 @@ test("resolves identity, validates counts, and applies selected fields without r
   const stock = await db.query.inventoryEntry.findMany({
     where: eq(schema.inventoryEntry.productId, product!.id),
   });
-  expect(stock).toHaveLength(0);
+  expect(stock).toHaveLength(1);
+  expect(stock[0]?.shortcode).toBe(incompatibleStock.id);
   await expect(
     page.getByRole("navigation", { name: "Section index" }),
   ).toHaveCount(1);
@@ -838,11 +863,9 @@ test("distinguishes blocking description failure from optional cutout failure", 
     page.getByText(/Description failed: Synthetic description failure/),
   ).toBeVisible();
   await expect(
-    page
-      .locator("#photo-group-g1")
-      .getByRole("button", {
-        name: /^(Create Product|Attach photos|Apply changes)$/,
-      }),
+    page.locator("#photo-group-g1").getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    }),
   ).toBeDisabled();
   await expect(
     page
@@ -857,11 +880,9 @@ test("distinguishes blocking description failure from optional cutout failure", 
     page.getByText(/Optional cutout failed: Synthetic cutout failure/),
   ).toBeVisible();
   await expect(
-    page
-      .locator("#photo-group-g2")
-      .getByRole("button", {
-        name: /^(Create Product|Attach photos|Apply changes)$/,
-      }),
+    page.locator("#photo-group-g2").getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    }),
   ).toBeEnabled();
 });
 
