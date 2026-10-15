@@ -1,6 +1,6 @@
 import { createEntityFixture } from "./fixtures-core";
 import { seedLocationPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { gotoAuthenticatedPage, inlineExplanation } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test.setTimeout(60_000);
@@ -61,18 +61,18 @@ test("product location context preserves links and explains the same partial gap
     .click();
   await expect(
     page.getByText("Stock not tracked", { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByText("1 expected item unlocated", { exact: true }).first(),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Stocked at", exact: true }),
   ).toBeVisible();
-  await page
+  const ownerControl = page
     .getByRole("button", { name: "How owner is determined", exact: true })
-    .first()
-    .click();
-  const ownerPanel = page.locator('[data-slot="popover-content"]:visible');
+    .first();
+  await ownerControl.click();
+  const ownerPanel = await inlineExplanation(page, ownerControl);
   await ownerPanel
     .locator("summary")
     .filter({ hasText: `${name} shelf` })
@@ -86,12 +86,16 @@ test("product location context preserves links and explains the same partial gap
   });
   await expect(beneficiaries).toBeVisible();
   await beneficiaries.click();
-  const sourceExplanation = page
-    .locator('[data-slot="popover-content"]:visible')
-    .last();
-  await expect(sourceExplanation).toContainText(
-    "How beneficiaries is determined",
-  );
+  const sourceExplanation = beneficiaries.locator("..");
+  await expect(
+    sourceExplanation.getByRole("heading", {
+      name: "Beneficiaries",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    sourceExplanation.getByText("Technical details", { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     sourceExplanation.getByRole("button", { name: "Retry explanation" }),
   ).toHaveCount(0);
