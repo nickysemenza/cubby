@@ -76,7 +76,7 @@ const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
-export const comparableQuantityHistorySql = (productAlias = '"product"') =>
+const comparableQuantityHistorySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
 export const comparableQuantityHistoryFilterSql = (productId: AnyColumn) =>
   sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)} SELECT ${sql.raw(PROJECTED_COMPARABLE_HISTORY)} ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
