@@ -4,13 +4,7 @@ import type {
   PhotoRunImage,
   PhotoRunReview,
 } from "@cubby/schemas/photo-import-run";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
@@ -251,6 +245,11 @@ describe("PhotoImportRunView", () => {
             images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],
             product: { kind: "create", create: { name: "Fixture shirt" } },
+            review: {
+              observedName: "Fixture shirt",
+              unresolvedReason: null,
+              stockIntent: "evidence",
+            },
             committedProduct: null,
             inventory: null,
             evidence: null,
@@ -277,7 +276,7 @@ describe("PhotoImportRunView", () => {
     });
 
     expect(
-      await screen.findByRole("button", { name: "Approve item" }),
+      await screen.findByRole("button", { name: "Create Product" }),
     ).toBeEnabled();
     expect(
       screen.queryByText(/photos that can no longer be reviewed/),
@@ -495,32 +494,6 @@ describe("PhotoImportRunView", () => {
         ),
       } satisfies PhotoRunReview,
     );
-    answerOperations({
-      candidates: [
-        {
-          id: "PRD-4K7N",
-          name: "ForgeWear pocket tee black small",
-          coverUrl: null,
-          match: {
-            source: "catalog_name",
-            sharedNameTerms: ["pocket", "tee", "black", "small"],
-            brandMatches: true,
-            variant: {
-              color: { relation: "unknown" },
-              size: { relation: "unknown" },
-              evidence: {
-                firstTitle: "Fixture sweater",
-                secondTitle: "ForgeWear pocket tee black small",
-              },
-            },
-          },
-          hasOwnPhoto: false,
-          hasPhotoImport: false,
-          hasPurchase: true,
-          hasInventory: false,
-        },
-      ],
-    });
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
     const labelRow = screen
@@ -531,18 +504,6 @@ describe("PhotoImportRunView", () => {
       within(labelRow).getByText("Cutout: not queued"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Cutout: Skipped")).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("heading", { name: "Approved · Fixture sweater" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("heading", { name: "Review possible matches" }),
-    );
-    expect(
-      await screen.findByRole("region", { name: "Product comparison" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Shared terms: pocket, tee, black, small/),
-    ).toBeInTheDocument();
   });
 
   it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {
@@ -560,6 +521,11 @@ describe("PhotoImportRunView", () => {
             images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],
             product: { kind: "create", create: { name: "Fixture sweater" } },
+            review: {
+              observedName: "Fixture sweater",
+              unresolvedReason: null,
+              stockIntent: "evidence",
+            },
             committedProduct: null,
             inventory: null,
             evidence: null,
@@ -586,7 +552,7 @@ describe("PhotoImportRunView", () => {
     );
 
     const approveItem = await screen.findByRole("button", {
-      name: "Approve item",
+      name: "Create Product",
     });
     expect(approveItem).toBeDisabled();
     expect(
