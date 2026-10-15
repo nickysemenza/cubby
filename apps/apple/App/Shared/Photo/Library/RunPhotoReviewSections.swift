@@ -383,8 +383,9 @@ struct RunPhotoReviewSections: View {
                         .touchTargetLabel()
                 }
             }
+            Text(PhotoReviewPolicy.effects(group: group)).font(.caption).foregroundStyle(.secondary)
             HStack {
-                Button("Approve") {
+                Button("Apply photos and stock decision") {
                     workspace.freezeApproval([group.groupKey], session: session, runID: runID)
                     workspace.confirmingGroup = group.groupKey
                 }

@@ -283,7 +283,7 @@ async function createConvergenceHarness(
         }),
       ],
     });
-    // "Approve 1 selected item" sends the revision the review page loaded.
+    // "Apply 1 selected item" sends the revision the review page loaded.
     const loaded = await listPhotoGroupProposals(db, runId);
     const approved = await approvePhotoGroupProposals(
       db,

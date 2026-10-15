@@ -28,14 +28,18 @@ export const matchesTags =
       invalidations.some((invalidation) => tagMatches(tag, invalidation)),
     );
 
-export function invalidateOperationTags(
+export async function invalidateOperationTags(
   queryClient: QueryClient,
   invalidations: InvalidationTagSet,
+  options?: { removeInactive?: boolean },
 ) {
-  if (invalidations.length === 0) return Promise.resolve();
-  return queryClient.invalidateQueries({
-    predicate: matchesTags(invalidations),
-  });
+  if (invalidations.length === 0) return;
+  const predicate = matchesTags(invalidations);
+  await queryClient.invalidateQueries({ predicate });
+  // Passive queries do not refetch on mount. An editor that closes after a
+  // write can drop its stale cache so following its result reads fresh data.
+  if (options?.removeInactive)
+    queryClient.removeQueries({ predicate, type: "inactive" });
 }
 
 export const cancelQueriesByTags = (

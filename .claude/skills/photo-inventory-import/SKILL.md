@@ -29,9 +29,12 @@ its `capturedAtOffsetMinutes`, `position` (picker order within one upload),
 description, when either has run). Read those summaries and capture-order
 adjacency first; match `capturedAt`, read as local time through its offset,
 against time windows in the run's `notes` to place each item. If you can view images, pass
-`withImageUrls: true` and open an image (`originalUrl` or `cutoutUrl`) only
+`withImageUrls: true` and open the image bytes directly (`originalUrl` or `cutoutUrl`) when the host
+supports image viewing, or use the browser image viewer only
 when the summary leaves the item, its label text, or a group boundary
-genuinely unclear — most groups resolve from the summary alone. Background
+unclear — most groups resolve from the summary alone. Browser screenshots
+are a fallback for visual questions, not a required step per photo. Read OCR
+and descriptions as leads; the actual label takes precedence when they conflict. Background
 removal is queued for every image automatically; cutouts appear only while
 image processing is enabled and a paired Apple device is connected, so a
 missing cutout is not an import failure.
@@ -96,13 +99,26 @@ Each group: `product` is `{ kind: "existing", existingId }` or
 `{ kind: "create", create: {...} }`; `images` lists every attached image with
 `purpose: "item"` or `"label"`; `skip` lists every rejected image (duplicate
 file, unusable frame, video) with a reason — every image must appear in
-exactly one of `images` or `skip`, across all proposed groups of the run. Add
-`inventory` once ownership and location are settled: `ownershipMode:
-"person"` with the owner (default the run's own `ledgerPartyId` unless the
-photo says otherwise) and a real location — resolve one from the run's
-`notes` (location-by-time-window) or ask; never invent a holding location.
-Omit `inventory` when ownership or location is genuinely unresolved and say
-so in `evidence` — a group is not forced into a guess to stay unblocked.
+exactly one of `images` or `skip`, across all proposed groups of the run.
+Include `review` with the independent `observedName`, `unresolvedReason` (null
+when resolved), and `stockIntent`: `evidence`, `counted`, `historical`, or
+`receive`. An unresolved variant has an explicit reason; prose uncertainty
+alone does not block approval. Choosing a catalog Product must not replace the
+observed identity. Unknown brand/model alone need not block a distinct new item.
+
+Only `receive` includes `inventory`: a whole-number quantity, real location,
+and ownership. Omit both ownership fields to use the Run member, or pass
+`ownershipMode: "explicit"` and `ownerPartyId` (null means household stock).
+Never use the retired `person` value. Resolve the location from the Run's notes
+or ask; never invent a holding location. Historical or sold items and stock
+already counted attach evidence without receiving anything; historical intent
+does not record a sale. If receiving is intended but ownership/location is
+unresolved, keep an explicit `unresolvedReason` and ask before approval.
+
+Attaching to an existing Product preserves its fields, existing gallery order,
+and cover. Only explicit `review.productChanges` updates the selected name,
+category, manufacturer, model, notes, or tags, atomically with attachments and
+Inventory. Leave it absent unless the user chose those changes.
 
 Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
 it while it is still `proposed`; `committed`/`discarded` groups are frozen and

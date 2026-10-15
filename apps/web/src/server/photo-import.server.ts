@@ -88,12 +88,10 @@ export const photoImportHandlers = implementOperationDomain(
       if (!group) throw new Error("Photo group was not found");
       const images = await listPhotoRunImages(context.db, input.runId);
       return {
-        candidates: await photoProductCandidates(
-          context.db,
-          group,
-          images,
-          context.actorContext,
-        ),
+        candidates: await photoProductCandidates(context.db, group, images, {
+          ...context.actorContext,
+          runId: await resolveOrThrow(context.db, "run", input.runId),
+        }),
       };
     },
     linkableExpenses: async (context, input) => {

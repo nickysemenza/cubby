@@ -1,6 +1,8 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  createContext,
+  useMemo,
   type ElementType,
   type ReactNode,
   useCallback,
@@ -58,6 +60,23 @@ export interface IndexedSectionGroup {
   id: string;
   title: string;
   sections: IndexedSection[];
+}
+
+const SubsectionsContext = createContext<
+  ((parentId: string, sections: IndexedSection[] | undefined) => void) | null
+>(null);
+
+/** Async workspaces contribute anchors to the existing page index. Memoize
+ * `sections` so registration does not cause a render/register loop. */
+export function useIndexedSubsections(
+  parentId: string,
+  sections: IndexedSection[],
+) {
+  const register = useContext(SubsectionsContext);
+  useEffect(() => {
+    register?.(parentId, sections);
+    return () => register?.(parentId, undefined);
+  }, [register, parentId, sections]);
 }
 
 export function normalizedHash(hash: string) {
@@ -414,6 +433,32 @@ export function IndexedSections({
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
 }) {
+  const [subsections, setSubsections] = useState<Map<string, IndexedSection[]>>(
+    new Map(),
+  );
+  const registerSubsections = useCallback(
+    (parentId: string, sections: IndexedSection[] | undefined) => {
+      setSubsections((current) => {
+        if (current.get(parentId) === sections) return current;
+        const next = new Map(current);
+        if (sections) next.set(parentId, sections);
+        else next.delete(parentId);
+        return next;
+      });
+    },
+    [],
+  );
+  const indexGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        ...group,
+        sections: group.sections.flatMap((section) => [
+          section,
+          ...(subsections.get(section.id) ?? []),
+        ]),
+      })),
+    [groups, subsections],
+  );
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -621,38 +666,40 @@ export function IndexedSections({
       ref={workspaceRef}
       className={cn("min-w-0", wide ? "flex items-start gap-4" : "space-y-2")}
     >
-      <ContinuousDetailContext.Provider value>
-        <SectionIndexRegistryContext.Provider value={registerSection}>
-          <SectionIndex
-            groups={groups}
-            sectionStates={sectionStates}
-            activeId={activeId}
-            wide={wide}
-            onSelect={selectSection}
-            onFocusTarget={focusTarget}
-          />
-          <div
-            ref={bodyRef}
-            className="min-w-0 flex-1 space-y-4 text-[0.8125rem]/5"
-          >
-            {groups.map((group) => (
-              <div
-                key={group.id}
-                id={group.id}
-                data-detail-group
-                tabIndex={-1}
-                className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                <h2 className="text-sm font-semibold">{group.title}</h2>
-                <div className="space-y-3">
-                  <SectionStack sections={group.sections} />
+      <SubsectionsContext.Provider value={registerSubsections}>
+        <ContinuousDetailContext.Provider value>
+          <SectionIndexRegistryContext.Provider value={registerSection}>
+            <SectionIndex
+              groups={indexGroups}
+              sectionStates={sectionStates}
+              activeId={activeId}
+              wide={wide}
+              onSelect={selectSection}
+              onFocusTarget={focusTarget}
+            />
+            <div
+              ref={bodyRef}
+              className="min-w-0 flex-1 space-y-4 text-[0.8125rem]/5"
+            >
+              {groups.map((group) => (
+                <div
+                  key={group.id}
+                  id={group.id}
+                  data-detail-group
+                  tabIndex={-1}
+                  className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  <h2 className="text-sm font-semibold">{group.title}</h2>
+                  <div className="space-y-3">
+                    <SectionStack sections={group.sections} />
+                  </div>
                 </div>
-              </div>
-            ))}
-            {footer}
-          </div>
-        </SectionIndexRegistryContext.Provider>
-      </ContinuousDetailContext.Provider>
+              ))}
+              {footer}
+            </div>
+          </SectionIndexRegistryContext.Provider>
+        </ContinuousDetailContext.Provider>
+      </SubsectionsContext.Provider>
     </div>
   );
 }

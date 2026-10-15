@@ -1,14 +1,16 @@
 import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import {
+  run as runOperations,
   photoImport,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { AiCost } from "~/ui/common/ai-cost";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -19,6 +21,24 @@ import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
+
+function PhotoRunCost({ run }: { run: RunDetail }) {
+  const usage = useQuery({
+    ...runOperations.aiUsage.queryOptions({ runId: run.publicId, limit: 1 }),
+    refetchInterval: run.status === "running" ? 5000 : false,
+  });
+  if (usage.isError)
+    return <StatusText tone="destructive">{usage.error.message}</StatusText>;
+  if (!usage.data) return null;
+  return (
+    <div aria-live="polite">
+      <p className="text-xs text-muted-foreground">
+        Run cost · includes all nested work
+      </p>
+      <AiCost cost={usage.data} />
+    </div>
+  );
+}
 
 function PhotoRunProgress({
   run,
@@ -98,6 +118,7 @@ function PhotoRunProgress({
       </CardHeader>
       <CardContent className="grid gap-3">
         <p className="text-sm font-medium">{stage}</p>
+        <PhotoRunCost run={run} />
         <Progress
           value={
             uploading

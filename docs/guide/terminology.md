@@ -491,6 +491,18 @@ _Avoid_: confirmed identity, inventory change
 An existing record proposed as a match for something depicted in a photo. Its rank or score supports review; it does not itself confirm the match.
 _Avoid_: confirmed match, duplicate
 
+**Photo group**:
+A reviewed set of item and label photos intended to describe one physical item
+or an explicitly counted set of identical copies. Combining photo groups does
+not establish that two catalog Products are duplicates.
+_Avoid_: Product merge, additional owned copy
+
+**Photo attachment**:
+An association between an Image and the Product it depicts or documents.
+Attaching a photo alone establishes neither a new owned copy nor a change to
+the Product's identity fields.
+_Avoid_: Product merge, inventory receipt
+
 Plant, Planting and Garden Entry are defined under [Garden](#garden).
 
 **Growing guide**:
