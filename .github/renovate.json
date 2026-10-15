@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": ["github>nickysemenza/renovate-config"],
   "schedule": ["before 6am on sunday"],
   "minimumReleaseAge": "7 days",
   "rebaseWhen": "conflicted",
@@ -9,23 +9,9 @@
   "postUpdateOptions": ["pnpmDedupe"],
   "packageRules": [
     {
-      "description": "Automerge dependency updates only through a PR with passing checks",
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch",
-        "pin",
-        "digest",
-        "pinDigest",
-        "lockFileMaintenance"
-      ],
-      "automerge": true
-    },
-    {
-      "matchUpdateTypes": ["minor", "pin"],
-      "groupName": "all minor and pin updates",
-      "automerge": true,
-      "groupSlug": "all-deps"
+      "description": "Preserve the repository's longer npm cooldown",
+      "matchDatasources": ["npm"],
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchUpdateTypes": ["patch", "digest"],
@@ -50,14 +36,26 @@
         "recipe-types",
         "cookbook"
       ],
+      "enabled": true
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": [
+        "ingredient",
+        "recipe-scraper",
+        "recipe-types",
+        "cookbook"
+      ],
       "enabled": true,
       "groupName": "ingredient-parser upstream",
-      "groupSlug": "ingredient-parser-upstream"
+      "groupSlug": "ingredient-parser-upstream",
+      "matchUpdateTypes": [
+        "major",
+        "pin",
+        "digest",
+        "pinDigest",
+        "lockFileMaintenance"
+      ]
     }
-  ],
-  "automerge": false,
-  "automergeType": "pr",
-  "platformAutomerge": false,
-  "ignoreTests": false,
-  "internalChecksAsSuccess": false
+  ]
 }
