@@ -14,6 +14,7 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 
 import {
   effectiveExpenseSpendingCategorySql,
+  productCategorySpendingAncestorsSql,
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
@@ -89,6 +90,13 @@ export const expenseJointAllocationSql = (
   { categories = true }: { categories?: boolean } = {},
 ): SQL => sql`
   WITH ${
+    categories
+      ? sql`category_ancestry AS MATERIALIZED (
+    WITH RECURSIVE ancestors AS (${productCategorySpendingAncestorsSql(undefined, draft)})
+    SELECT * FROM ancestors
+  ),`
+      : sql``
+  } ${
     expenseIds
       ? sql`selected_expense AS (
     SELECT target."id", target."purchaseId" FROM "Expense" target
@@ -99,10 +107,14 @@ export const expenseJointAllocationSql = (
     SELECT e."id" AS "expenseId", e."purchaseId",
       ${effectiveExpenseProjectSql("e")} AS "projectId",
       ${
-        // Resolving a principal line's category walks its product's category
-        // ancestry per row; a project-only read skips it (~10x on the ledger).
+        // Share the taxonomy walk across principals. Project-only reads skip
+        // both the catalog and category resolution.
         categories
-          ? effectiveExpenseSpendingCategorySql("e", draft)
+          ? effectiveExpenseSpendingCategorySql(
+              "e",
+              draft,
+              sql`category_ancestry`,
+            )
           : sql`NULL::uuid`
       } AS "spendingCategoryId",
       ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,

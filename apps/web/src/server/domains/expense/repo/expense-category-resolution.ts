@@ -66,9 +66,10 @@ function redirectedCategory(
   )} ELSE ${value} END`;
 }
 
-/** Same nearest-ancestor mapping policy for expense classification and category navigation. */
+/** Same nearest-ancestor policy for classification and navigation. An omitted
+ * root builds a catalog that a bulk allocation can share across its rows. */
 export function productCategorySpendingAncestorsSql(
-  categoryId: SQL,
+  categoryId: SQL | undefined,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL {
   const categoryParent = projectedValue(
@@ -85,10 +86,10 @@ export function productCategorySpendingAncestorsSql(
     projectedValue("c", "spendingCategoryId", draft?.productCategories),
     draft,
   );
-  return sql`      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
-      FROM "ProductCategory" c WHERE c.id=${categoryId} AND c."deletedAt" IS NULL
+  return sql`      SELECT c.id AS "rootId",c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
+      FROM "ProductCategory" c WHERE c."deletedAt" IS NULL ${categoryId ? sql`AND c.id=${categoryId}` : sql``}
       UNION ALL
-      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id
+      SELECT a."rootId",c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id
       FROM ancestors a JOIN "ProductCategory" c ON c.id=a."parentId" AND c."deletedAt" IS NULL
       WHERE NOT c.id=ANY(a.visited) AND a.depth<3`;
 }
@@ -128,6 +129,7 @@ function expenseSpendingCategoryChoiceSql(
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
   ignoreOverride = false,
+  ancestorCatalog?: SQL,
 ): SQL {
   const productId = column(alias, "productId");
   const purchaseId = column(alias, "purchaseId");
@@ -144,8 +146,13 @@ function expenseSpendingCategoryChoiceSql(
   const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
   const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
+  const categoryId = sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`;
   return sql`WITH RECURSIVE ancestors AS (
-      ${productCategorySpendingAncestorsSql(sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`, draft)}
+      ${
+        ancestorCatalog
+          ? sql`SELECT * FROM ${ancestorCatalog} WHERE "rootId"=${categoryId}`
+          : productCategorySpendingAncestorsSql(categoryId, draft)
+      }
     ), mapping AS (
       SELECT a.* FROM ancestors a WHERE a."spendingCategoryMode"<>'inherit' ORDER BY a.depth LIMIT 1
     ), facts AS (
@@ -215,8 +222,9 @@ export function expenseSpendingCategoryResolutionSql(
 export const effectiveExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
+  ancestorCatalog?: SQL,
 ): SQL =>
-  sql`(${expenseSpendingCategoryChoiceSql(alias, draft)} SELECT category_id FROM chosen)`;
+  sql`(${expenseSpendingCategoryChoiceSql(alias, draft, false, ancestorCatalog)} SELECT category_id FROM chosen)`;
 export const fallbackExpenseSpendingCategorySql = (alias: string): SQL =>
   sql`(${expenseSpendingCategoryChoiceSql(alias, undefined, true)} SELECT category_id FROM chosen)`;
 export const parseExpenseCategoryResolution = (

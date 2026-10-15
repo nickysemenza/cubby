@@ -22,7 +22,8 @@ const categoryPlanNode = z.object({
 
 // Real SQL regressions: mixed retailer purchases must not flatten Product
 // classifications, blocked ancestors must remain unknown, and restaurant
-// context must classify Food without classifying unrelated merchandise.
+// context must classify Food without classifying unrelated merchandise. Bulk
+// allocations must not repeat the taxonomy walk for every principal Expense.
 describe("Expense category resolution", () => {
   const ctx = withTestDb();
   async function fixture() {
@@ -120,6 +121,87 @@ describe("Expense category resolution", () => {
       FROM "Expense" e GROUP BY ${category}, ${trade}`);
     expect(rows.rows).toHaveLength(1);
     expect(rows.rows[0]?.count).toBe("1");
+  });
+
+  it("shares category ancestry across principal allocations and draft mappings", async () => {
+    const f = await fixture();
+    const ids = [f.expense.id];
+    for (let index = 0; index < 12; index++) {
+      const line = await insertWithShortcode(ctx.db, "expense", {
+        name: `Shared taxonomy fixture ${index}`,
+        cost: 1,
+        date: "2026-09-01",
+        costType: "materials",
+        lineKind: "principal",
+        productId: f.product.id,
+        purchaseId: f.purchase.id,
+      });
+      ids.push(line.id);
+    }
+    const otherRoot = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Shared taxonomy electronics",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: f.electronics.id,
+    });
+    const otherProduct = await insertWithShortcode(ctx.db, "product", {
+      name: "Shared taxonomy radio",
+      manufacturer: "Fixture",
+      categoryId: otherRoot.id,
+    });
+    const otherLine = await insertWithShortcode(ctx.db, "expense", {
+      name: "Shared taxonomy unrelated root",
+      cost: 3,
+      date: "2026-09-01",
+      costType: "materials",
+      lineKind: "principal",
+      productId: otherProduct.id,
+      purchaseId: f.purchase.id,
+    });
+    ids.push(otherLine.id);
+    const allocation = expenseSpendingAllocationSql(ids);
+    const result = await unwrapDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${allocation}`,
+    );
+    const plan = z
+      .array(z.object({ Plan: categoryPlanNode }))
+      .parse(result.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+    let taxonomyScans = 0;
+    const inspect = (node: z.infer<typeof categoryPlanNode>) => {
+      if (node["Relation Name"] === "ProductCategory")
+        taxonomyScans += node["Actual Loops"] ?? 0;
+      node.Plans?.forEach(inspect);
+    };
+    inspect(plan);
+    expect(taxonomyScans).toBeLessThanOrEqual(8);
+    const stored = await unwrapDb(ctx.db).execute(allocation);
+    expect(stored.rows).toHaveLength(ids.length);
+    expect(
+      stored.rows.every(
+        (row) =>
+          row.spendingCategoryId ===
+          (row.expenseId === otherLine.id ? f.electronics.id : f.clothing.id),
+      ),
+    ).toBe(true);
+    const preview = await unwrapDb(ctx.db).execute(
+      expenseSpendingAllocationSql(ids, {
+        productCategories: [
+          {
+            id: f.root.id,
+            parentId: f.child.id,
+            spendingCategoryMode: "mapped",
+            spendingCategoryId: f.gifts.id,
+          },
+        ],
+      }),
+    );
+    expect(preview.rows).toHaveLength(ids.length);
+    expect(
+      preview.rows.every(
+        (row) =>
+          row.spendingCategoryId ===
+          (row.expenseId === otherLine.id ? f.electronics.id : f.gifts.id),
+      ),
+    ).toBe(true);
   });
 
   it("does not inherit Purchase category or trade for an unresolved receipt role", async () => {
