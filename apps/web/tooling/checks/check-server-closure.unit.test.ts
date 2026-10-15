@@ -30,7 +30,10 @@ describe("measureServerClosure", () => {
     const report = measureServerClosure(
       dist({
         "index.js":
-          'import{a}from"./assets/db-1.js";const s=()=>import(`./assets/server-1.js`);',
+          'import{a}from"./assets/db-1.js";const s=()=>import(`./assets/server-1.js`);const b=()=>import("./assets/browser-operation-dispatch-1.js");',
+        "assets/browser-operation-dispatch-1.js":
+          'import"./auth-1.js";const o=()=>import("./operation-1.js");',
+        "assets/operation-1.js": "operation".repeat(100),
         "assets/db-1.js": "export const a=1;",
         "assets/server-1.js": 'const r=()=>import("./router-1.js");',
         "assets/router-1.js":
@@ -42,6 +45,12 @@ describe("measureServerClosure", () => {
     // Every invocation pays the static entry cost; page/router imports belong
     // only to the later page path, even when their combined closure is valid.
     expect(report.entry.files.sort()).toEqual(["assets/db-1.js", "index.js"]);
+    expect(report.browserDispatch.files.sort()).toEqual([
+      "assets/auth-1.js",
+      "assets/browser-operation-dispatch-1.js",
+      "assets/db-1.js",
+      "index.js",
+    ]);
     expect(report.firstRequest.files.sort()).toEqual([
       "assets/auth-1.js",
       "assets/db-1.js",

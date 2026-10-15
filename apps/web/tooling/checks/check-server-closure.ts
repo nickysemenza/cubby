@@ -3,6 +3,8 @@
  * build instead of being found in a later performance sweep.
  *
  * "Entry" is the static import closure loaded for every Worker invocation.
+ * "Browser dispatch" adds the browser API adapter's static imports, before
+ * loading a particular operation handler.
  * "First request" is what the combined page path loads: the entry's static
  * imports, plus the server entry and router chunks it imports lazily, plus
  * everything those import statically. A route or helper that statically
@@ -29,6 +31,9 @@ const MB = 1_000_000;
 // render a page. Keep unrelated entity metadata behind its consuming handler.
 // In 2026-10, removing the helper barrel cut 2.39 MB / 94 files to 1.67 MB / 88.
 const ENTRY_BUDGET = 2 * MB;
+// The browser API bootstrap was 3.80 MB before title-column generation removed
+// the full field model from shortcode resolution (2026-10).
+const BROWSER_DISPATCH_BUDGET = 3.25 * MB;
 // Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
 // attribute conventions, and channel-instrumentation tables) that Cubby never
@@ -51,8 +56,11 @@ const STATIC_IMPORT =
   /(?:import|export)\s*(?:[\w*{}\s,$]*?from\s*)?["'`](\.{1,2}\/[^"'`]+\.js)["'`]/g;
 const DYNAMIC_IMPORT = /import\(\s*["'`](\.{1,2}\/[^"'`]+\.js)["'`]\s*\)/g;
 const REQUEST_PATH_CHUNK = /(?:^|\/)assets\/(?:server|router)-[^/]+\.js$/;
+const BROWSER_DISPATCH_CHUNK =
+  /(?:^|\/)assets\/browser-operation-dispatch-[^/]+\.js$/;
 
 type Closure = { files: string[]; bytes: number };
+type ClosureScope = "entry" | "browserDispatch" | "firstRequest";
 
 function listJs(root: string, directory = ""): string[] {
   return readdirSync(path.join(root, directory), {
@@ -98,7 +106,14 @@ export function measureServerClosure(root: string) {
     return parent;
   };
   const entry = traceImports((file) => importsOf(file, STATIC_IMPORT));
+  const browserDispatch = traceImports((file) => [
+    ...importsOf(file, STATIC_IMPORT),
+    ...importsOf(file, DYNAMIC_IMPORT).filter((target) =>
+      BROWSER_DISPATCH_CHUNK.test(target),
+    ),
+  ]);
   const parent = traceImports(requestPathImports);
+  const graphs = { entry, browserDispatch, firstRequest: parent };
 
   const closure = (files: Iterable<string>): Closure => {
     const list = [...files];
@@ -109,20 +124,18 @@ export function measureServerClosure(root: string) {
   };
   return {
     entry: closure(entry.keys()),
+    browserDispatch: closure(browserDispatch.keys()),
     firstRequest: closure(parent.keys()),
     total: closure(sources.keys()),
-    chainTo(
-      file: string,
-      scope: "entry" | "firstRequest" = "firstRequest",
-    ): string[] {
-      const graph = scope === "entry" ? entry : parent;
+    chainTo(file: string, scope: ClosureScope = "firstRequest"): string[] {
+      const graph = graphs[scope];
       const chain: string[] = [];
       for (let at: string | null | undefined = file; at; at = graph.get(at))
         chain.unshift(at);
       return graph.has(file) ? chain : [];
     },
-    largest(count: number, scope: "entry" | "firstRequest" = "firstRequest") {
-      return [...(scope === "entry" ? entry : parent).keys()]
+    largest(count: number, scope: ClosureScope = "firstRequest") {
+      return [...graphs[scope].keys()]
         .map((file) => ({ file, bytes: sources.get(file)!.length }))
         .sort((a, b) => b.bytes - a.bytes)
         .slice(0, count);
@@ -178,11 +191,15 @@ if (invokedPath === import.meta.url) {
   const report = measureServerClosure(serverRoot);
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
   console.log(
-    `[check-server-closure] entry ${mb(report.entry.bytes)} (${report.entry.files.length} files), first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,
+    `[check-server-closure] entry ${mb(report.entry.bytes)} (${report.entry.files.length} files), browser dispatch ${mb(report.browserDispatch.bytes)} (${report.browserDispatch.files.length} files), first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,
   );
   const over: string[] = [];
   if (report.entry.bytes > ENTRY_BUDGET)
     over.push(`entry ${mb(report.entry.bytes)} > ${mb(ENTRY_BUDGET)}`);
+  if (report.browserDispatch.bytes > BROWSER_DISPATCH_BUDGET)
+    over.push(
+      `browser dispatch ${mb(report.browserDispatch.bytes)} > ${mb(BROWSER_DISPATCH_BUDGET)}`,
+    );
   if (report.firstRequest.bytes > FIRST_REQUEST_BUDGET)
     over.push(
       `first request ${mb(report.firstRequest.bytes)} > ${mb(FIRST_REQUEST_BUDGET)}`,
@@ -190,7 +207,12 @@ if (invokedPath === import.meta.url) {
   if (report.total.bytes > TOTAL_BUDGET)
     over.push(`total ${mb(report.total.bytes)} > ${mb(TOTAL_BUDGET)}`);
   if (over.length > 0) {
-    const scope = report.entry.bytes > ENTRY_BUDGET ? "entry" : "firstRequest";
+    const scope =
+      report.entry.bytes > ENTRY_BUDGET
+        ? "entry"
+        : report.browserDispatch.bytes > BROWSER_DISPATCH_BUDGET
+          ? "browserDispatch"
+          : "firstRequest";
     const largest = report
       .largest(12, scope)
       .map(

@@ -1,7 +1,6 @@
 /** Central, batched boundary between public shortcodes and private UUIDs. */
 
 import { entityRefKey } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   shortcodeEntities,
   type ShortcodeEntity,
@@ -43,7 +42,10 @@ import {
 } from "~/server/db/schema";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
-import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import {
+  SHORTCODE_TABLE,
+  TITLE_FIELD_COLUMN,
+} from "~/server/generated/shortcode-tables.gen";
 
 import type { ShortcodeTable } from "./shortcode-utils";
 
@@ -344,9 +346,10 @@ export const LABEL_COLUMN_OVERRIDES = {
 /**
  * The drizzle column backing `presentation.titleField`, independent of
  * `LABEL_COLUMN_OVERRIDES`: `titleField` names a field's external `readKey`,
- * which the field model maps to an internal field `key`, which the field
- * model's `storage` array maps to a physical column name, which
- * `getTableColumns` resolves to the actual `PgColumn`. `null` means the
+ * which the generator maps through the field's internal key and storage
+ * column to the actual `PgColumn`. The resolver loads only this small lookup,
+ * without initializing the complete field model on every API dispatch.
+ * `null` means the
  * titleField has no physical storage column at all (a computed/relational
  * value) — every such entity must appear in `LABEL_COLUMN_OVERRIDES`, checked
  * by `DISPLAY_NAME_COLUMN`'s construction below.
@@ -358,25 +361,7 @@ export const LABEL_COLUMN_OVERRIDES = {
  */
 export const resolveTitleFieldColumn = (
   entity: ShortcodeEntity,
-): PgColumn | null => {
-  const titleField = entitySummary[entity].titleField;
-  const model = entityFieldModels[entity];
-  const field = model.fields.find((f) => f.readKey === titleField);
-  const storageEntry = field
-    ? model.storage.find((s) => s.key === field.key)
-    : undefined;
-  if (!storageEntry) return null;
-  // SAFETY: `getTableColumns` types its result by the table's own literal
-  // column keys, which can't be indexed by a runtime string; every generated
-  // `storage[].column` name is one of those keys by construction (it comes
-  // from the same drizzle schema this table is built from), so the lookup
-  // below either hits or the `?? null` catches a genuine drift.
-  const columns = getTableColumns(SHORTCODE_TABLE[entity]) as Record<
-    string,
-    PgColumn
-  >;
-  return columns[storageEntry.column] ?? null;
-};
+): PgColumn | null => TITLE_FIELD_COLUMN[entity];
 
 /**
  * `null` means the label is relational or the entity has no display column.

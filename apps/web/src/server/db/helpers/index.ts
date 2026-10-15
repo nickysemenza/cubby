@@ -3,7 +3,7 @@
  *
  * Re-exports all database helper functions.
  * Worker static-entry modules use core/query directly to avoid loading CRUD,
- * relation metadata, and the generated field model before a consuming handler.
+ * and relation metadata before a consuming handler.
  * check-server-closure.ts enforces that entry's size budget.
  */
 

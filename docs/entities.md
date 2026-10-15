@@ -918,6 +918,11 @@ schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific
 command schemas, repository/relation-adapter assembly, and contract cases.
+The server's generated shortcode table bindings also carry physical title
+columns, derived through `presentation.titleField`, the field's `readKey`, and
+its storage mapping. Computed titles remain null and use the shortcode
+resolver's explicit label overrides. Resolving identities and labels therefore
+does not load the complete entity field model.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity with a contract: its index — generated, or hand-written like Image's —
 and every client (native browse, HTTP `entity.list`, MCP) read the

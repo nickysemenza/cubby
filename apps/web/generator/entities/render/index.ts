@@ -1072,6 +1072,13 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
   const shortcodeTableEntities = entities
     .flatMap((entity) => {
       const { dbTable } = entity.descriptor;
+      const title = entity.fieldModel.fields.find(
+        (field) => field.readKey === entity.inspector.titleField,
+      );
+      const titleColumn = title
+        ? (entity.fieldModel.storage.find((entry) => entry.key === title.key)
+            ?.column ?? null)
+        : null;
       return entity.shortcode === null ||
         dbTable === null ||
         dbTable === undefined
@@ -1080,6 +1087,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             {
               key: entity.key,
               dbTable: stringValue(dbTable, `${entity.key}.descriptor.dbTable`),
+              titleColumn,
             },
           ];
     })
@@ -1093,6 +1101,12 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     .map(
       ({ key, dbTable }) =>
         `  ${JSON.stringify(key)}: ${lowerCamelCase(dbTable)},`,
+    )
+    .join("\n");
+  const titleColumnBindings = shortcodeTableEntities
+    .map(
+      ({ key, dbTable, titleColumn }) =>
+        `  ${JSON.stringify(key)}: ${titleColumn === null ? "null" : `${lowerCamelCase(dbTable)}[${JSON.stringify(titleColumn)}]`},`,
     )
     .join("\n");
   return [
@@ -1674,7 +1688,9 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
         `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/schema";\n\n` +
         "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
+        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n\n` +
+        "// Physical title columns only; computed titles remain null for the resolver's explicit overrides.\n// oxfmt-ignore\n" +
+        `export const TITLE_FIELD_COLUMN = {\n${titleColumnBindings}\n} as const;\n`,
     },
   ];
 };

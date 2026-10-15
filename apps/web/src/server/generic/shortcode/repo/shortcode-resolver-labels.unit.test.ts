@@ -1,5 +1,14 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { getTableColumns } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import {
+  SHORTCODE_TABLE,
+  TITLE_FIELD_COLUMN,
+} from "~/server/generated/shortcode-tables.gen";
 import {
   LABEL_COLUMN_OVERRIDES,
   resolveTitleFieldColumn,
@@ -17,6 +26,27 @@ import {
  * dead documentation nobody would notice going stale.
  */
 describe("DISPLAY_NAME_COLUMN", () => {
+  // A wrong readKey → storage-key projection changes labels across every
+  // reference picker. Compare the small generated lookup to the complete model.
+  it("preserves every entity's declared title storage column", () => {
+    for (const entity of shortcodeEntities) {
+      const model = entityFieldModels[entity];
+      const title = model.fields.find(
+        (field) => field.readKey === entitySummary[entity].titleField,
+      );
+      const storage = title
+        ? model.storage.find((entry) => entry.key === title.key)
+        : undefined;
+      const columns = getTableColumns(SHORTCODE_TABLE[entity]) as Record<
+        string,
+        PgColumn
+      >;
+      expect({ entity, column: TITLE_FIELD_COLUMN[entity] }).toEqual({
+        entity,
+        column: storage ? (columns[storage.column] ?? null) : null,
+      });
+    }
+  });
   const overrideEntities = Object.keys(LABEL_COLUMN_OVERRIDES) as Array<
     keyof typeof LABEL_COLUMN_OVERRIDES
   >;
