@@ -362,6 +362,51 @@ describe("targeted prompt refresh", () => {
     );
   });
 
+  it("defers a busy admission claim without occupying a waiting connection or changing queued work", async () => {
+    const item = await productFixture(ctx, "Synthetic contended refresh");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    await activateAiRefresh(ctx.db, "synthetic-contended-refresh", {
+      enabled: true,
+    });
+    await discoverAiRefresh(ctx.db, {
+      context: kernelCtx(ctx),
+      suggestPorts: categoryPorts(0.6).suggestPorts,
+    });
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    expect(evaluation).toBeDefined();
+    await withTransactionDatabase(ctx.db, async (holder) => {
+      await getDb(holder).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('cubby-ai-admission'))`,
+      );
+      await withTransactionDatabase(ctx.db, async (contender) => {
+        // A blocking claim fails at the database boundary while the owner still
+        // holds admission; a deferred claim returns without spending an attempt.
+        await getDb(contender).execute(sql`SET LOCAL lock_timeout = '100ms'`);
+        expect(await claimAiEvaluation(contender, evaluation!.id)).toBeNull();
+        expect(
+          (
+            await getDb(contender)
+              .select()
+              .from(aiEvaluation)
+              .where(eq(aiEvaluation.id, evaluation!.id))
+          )[0],
+        ).toEqual(evaluation);
+      });
+    });
+    expect(await claimAiEvaluation(ctx.db, evaluation!.id)).not.toBeNull();
+  });
+
   it("resumes a saved result with a new attempt token without reinference and caps global active targets at two", async () => {
     const item = await productFixture(ctx, "Synthetic resume product");
     await startSuggestionSweep(
