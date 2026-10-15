@@ -302,7 +302,7 @@ function declaredSections<E extends GenericDetailEntity>(
               />
             ),
             content: (
-              <div className="grid gap-3">
+              <div className="grid min-w-0 grid-cols-1 gap-3">
                 {section.contextFields?.length > 0 ? (
                   <EntityRecordFields
                     entity={entity}
