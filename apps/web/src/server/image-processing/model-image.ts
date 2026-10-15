@@ -17,12 +17,12 @@ export async function prepareModelImage(
       ? [
           { width: 2048, height: 4096, quality: 85 },
           { width: 2048, height: 4096, quality: 45 },
-          { width: 1536, height: 3072, quality: 45 },
+          { width: 1536, height: 3072, quality: 30 },
         ]
       : [
           { width: 1280, height: 2048, quality: 75 },
           { width: 1280, height: 2048, quality: 50 },
-          { width: 960, height: 1536, quality: 50 },
+          { width: 960, height: 1536, quality: 40 },
         ];
   for (const { width, height, quality } of renditions) {
     const input = new ReadableStream<Uint8Array>({
