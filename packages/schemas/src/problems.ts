@@ -1,3 +1,4 @@
+import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
@@ -150,12 +151,12 @@ export const toolUsedOutsideOwnershipSchema = z.object({
 });
 
 export const duplicateProductIdentitySchema = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: assessmentChildHandle,
   fingerprint: z.string().nullable(),
   identityConflict: z.boolean(),
   pairs: z.array(
     z.object({
-      assessmentId: z.uuid(),
+      assessmentId: assessmentChildHandle,
       fingerprint: z.string().nullable(),
       identityConflict: z.boolean(),
       productIds: z.tuple([productShortcode, productShortcode]),

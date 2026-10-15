@@ -179,6 +179,21 @@ describe("shared Assessment history", () => {
           ? { present: true as const, value: "Corrected note" }
           : { present: false as const },
       };
+      // A retained command can have a PostgreSQL GUID outside RFC UUID
+      // version/variant bits; its application receipt must replay unchanged.
+      await getDb(ctx.db)
+        .insert(feedback)
+        .values({
+          ...command,
+          id: "e2401ffa-3eda-6673-6a93-95accfcf1320",
+          authority: "member",
+          actorUserId: ctx.actor.userId,
+          metadata: {
+            kind: "assessment_review",
+            application: null,
+            expectedFingerprint: null,
+          },
+        });
       const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
       const history = await getDb(ctx.db).select().from(feedback);
       const audit = await getDb(ctx.db).select().from(auditLog);

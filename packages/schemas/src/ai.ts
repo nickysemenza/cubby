@@ -1,3 +1,4 @@
+import { assessmentChildHandle } from "./assessment-reference";
 import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
   aiProvenance,
@@ -532,7 +533,7 @@ const suggestionRecordId = anyShortcodeSchema([
   ...otherShortcodeEntities,
 ]);
 export const suggestionReviewRowSchema = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: assessmentChildHandle,
   provenance: aiProvenance.nullable().optional(),
   acceptanceReceipt: suggestionAcceptanceReceipt
     .omit({ runId: true })
@@ -543,7 +544,7 @@ export const suggestionReviewRowSchema = z.object({
     .omit({ evaluationId: true })
     .nullable()
     .optional(),
-  id: z.string().uuid(),
+  id: assessmentChildHandle,
   /** The sweep or page Run that produced it, opened from its provenance. */
   runId: runShortcode.nullable(),
   entity: z.enum(shortcodeEntities),
@@ -675,7 +676,7 @@ export type FieldSuggestionRemoval = z.infer<
 >;
 
 export const fieldSuggestionSchema = z.object({
-  assessmentId: z.uuid().optional(),
+  assessmentId: assessmentChildHandle.optional(),
   financeReview: financeCategoryReviewSchema.optional(),
   value: z.string().nullable(),
   label: z.string().nullable(),
@@ -714,7 +715,7 @@ export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("evaluated"),
-    assessmentId: z.uuid().optional(),
+    assessmentId: assessmentChildHandle.optional(),
     answer: z.enum(["pick", "none"]),
     confidence,
     /** Calibrated probability of `answer` — the winner's for a pick, `none`'s

@@ -1,4 +1,7 @@
-import { assessmentReviewReference } from "./assessment-reference";
+import {
+  assessmentChildHandle,
+  assessmentReviewReference,
+} from "./assessment-reference";
 import { z } from "zod";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
@@ -130,7 +133,7 @@ export type ProductMatchSide = z.infer<typeof productMatchSide>;
 
 export const productMatchCandidate = z.object({
   review: assessmentReviewReference.optional(),
-  assessmentId: z.uuid(),
+  assessmentId: assessmentChildHandle,
   fingerprint: z.string().nullable(),
   identityConflict: z.boolean(),
   source: productMatchSource,
@@ -160,7 +163,7 @@ export type ProductMatchQueueOut = z.infer<typeof productMatchQueueOut>;
 
 /** Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos. */
 export const mergeProductMatchInput = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: assessmentChildHandle,
   expectedFingerprint: z.string().min(1),
   keepId: productShortcode,
   mergeId: productShortcode,

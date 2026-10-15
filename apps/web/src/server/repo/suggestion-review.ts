@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/ai";
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
+import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
@@ -42,10 +43,10 @@ const requestedSuggestionRun = (code: string) => sql`(
   )
 )`;
 
-const rowIdInput = z.object({ id: z.string().uuid() });
+const rowIdInput = z.object({ id: assessmentChildHandle });
 const jsonSchema = z.json();
 const suggestionRowSchema = z.object({
-  id: z.string().uuid(),
+  id: assessmentChildHandle,
   runId: z.string().uuid().nullable(),
   entity: fieldSuggestionsInput.shape.entity,
   recordId: z.string().uuid(),

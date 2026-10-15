@@ -1,4 +1,5 @@
 import {
+  assessmentChildHandle,
   assessmentProducer,
   type AssessmentProducer,
 } from "@cubby/schemas/assessment";
@@ -43,7 +44,7 @@ const pairProjection = z.object({
   conflict: z.boolean().default(false),
 });
 const pairRow = z.object({
-  id: z.uuid(),
+  id: assessmentChildHandle,
   productAId: productId,
   productBId: productId,
   source: z.enum(["agent", "detector"]),
