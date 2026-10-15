@@ -89,9 +89,10 @@ const project_kindDescriptions = {
   furniture: "Building or restoring a piece of furniture",
   workshop:
     "Shop infrastructure, tooling, and workspace setup, including workbenches, jigs, and tool storage",
-  household: "General household projects not tied to a room renovation",
+  household:
+    "Standalone home maintenance, repair, or replacement, including ceiling lights and furnaces; general household projects not remodeling a room or structure",
   renovation:
-    "Renovating a room or structure, including permanent outdoor construction, paving, retaining walls, and irrigation infrastructure",
+    "Remodeling a room or structure, including permanent outdoor construction, paving, retaining walls, and irrigation infrastructure; not standalone home maintenance, repair, or replacement",
   garden:
     "Growing plants, planting, and plant care; not permanent construction",
   trip: "Travel and trip planning",
