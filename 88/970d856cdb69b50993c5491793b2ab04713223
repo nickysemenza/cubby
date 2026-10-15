@@ -1,0 +1,51 @@
+.github/ci-lanes.yml
+  s_2a22d2c73c07e5::t_169dcd035a3b44 16
+apps/apple/AGENTS.md
+  s_2a22d2c73c07e5::t_16d1429ebb1807 71,174
+apps/apple/App/Shared/Photo/Import/PhotoImportManifest.swift
+  s_2a22d2c73c07e5::t_40ade770515f79 65,1445
+apps/apple/CubbyKit/Package.swift
+  s_2a22d2c73c07e5::t_a8c4efd7b1e556 75
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityManifestTests.swift
+  s_2a22d2c73c07e5::t_25d8cd1c6ce17f 7
+apps/web/tooling/checks/apple-preview-fixtures.ts
+  s_2a22d2c73c07e5::t_7beb544592dc4d 4,494
+docs/entities.md
+  s_2a22d2c73c07e5::t_89695285b3710c 354
+docs/todos.md
+  s_2a22d2c73c07e5::t_059dfd71851942 1034
+packages/schemas/src/native-coverage.ts
+  s_2a22d2c73c07e5::t_fc7ab57c58db4e 213,318
+project.json
+  s_2a22d2c73c07e5::t_e49e1e8a2f0767 68
+scripts/apple/apple-inputs.test.ts
+  s_2a22d2c73c07e5::t_b6ff2057e53c72 12
+scripts/design-tokens.ts
+  s_2a22d2c73c07e5::t_f5d9dd02571b00 159
+apps/apple/project.yml
+  s_fc438913c865d2::t_fbd3b3c822bc24 73-76,187-190,275-276,302-311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "88970d856cdb69b50993c5491793b2ab04713223",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_fc438913c865d2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8f4c0ba5138e459b",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
