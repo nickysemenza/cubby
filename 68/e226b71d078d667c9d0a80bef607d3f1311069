@@ -1,0 +1,31 @@
+.oxlintrc.json
+  s_2a22d2c73c07e5::t_e6c592116c717a 82-83
+apps/web/tooling/layout.unit.test.ts
+  s_2a22d2c73c07e5::t_ead9e71b292117 1-145
+tools/oxlint/cubby/domain-layers-baseline.json
+  s_2a22d2c73c07e5::t_b1412a105c15cd 1-169
+tools/oxlint/cubby/domain-layers.test.ts
+  s_2a22d2c73c07e5::t_348ab0b1c61108 1-167
+tools/oxlint/cubby/index.ts
+  s_2a22d2c73c07e5::t_3980448f4eba8e 15-16,29-30
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_2a22d2c73c07e5::t_c94f2ef8cff8ad 1-215
+tools/oxlint/cubby/rules/no-domain-barrel.ts
+  s_2a22d2c73c07e5::t_720c013e0b1d2c 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "68e226b71d078d667c9d0a80bef607d3f1311069",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
