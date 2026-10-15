@@ -38,16 +38,41 @@ constraints and acceptance criteria in its body; use subissues for independently
 deliverable steps and native dependencies for actual prerequisites. Read the
 parent issue when working a subissue. Preserve explicit sequencing and triggers;
 do not infer a dependency just because two issues mention the same domain.
+Use native Relates to for associated work whose containment, dependency, or
+common cause is unproven. Related Sentry symptoms alone do not establish a
+duplicate or blocker.
 
 ## Project views and automation
 
 Backlog is the open-work table, grouped by Readiness and sorted by Priority.
+Its Labels slice sidebar filters by existing areas without another Area field;
+Updated helps identify neglected work, but activity does not prove progress.
 Ready is the Todo/Ready board, with Work type columns and Priority swimlanes.
 Delivery uses Status columns and Priority swimlanes. Intake catches open issues
 in Inbox or missing any of the three metadata fields. These are views of the
 same issues, not separate backlogs.
 Intake uses `is:issue is:open (Status:Inbox OR no:Readiness OR no:work-type
 OR no:Priority)`; multiword field keys use hyphens in Project filters.
+Leave Readiness, Work type, and Priority defaults unset so Intake exposes
+missing triage. New items receive Status Inbox through automation.
+
+Unblock shows open Needs decision or Needs schema plan work, highest priority
+first. Investigate what can be answered from evidence before asking the human.
+Operations filters the existing `operational` label. Stale review shows active
+Todo/In progress/Verify issues untouched for 30 days, excluding Later and
+Waiting, oldest update first. Review these deliberately; do not close work
+merely for inactivity.
+Delivery's In progress limit is three: an advisory highlight, not a hard limit,
+task reservation, or coordination mechanism.
+
+Private repository saved views Blocked and Completed are pinned in the issue
+sidebar and remain useful after Project archival; Completed excludes duplicate
+and not-planned closures. Keep custom-field planning in the Project. Pin the accepted
+decision or current workaround on long issue threads when useful; durable
+behavior still belongs in its owning repository document. The Open work by
+readiness chart shows current issue counts, not effort or completed deliveries.
+Project Insights excludes archived/deleted items, so charts do not provide a
+complete delivery history with the archive policy below.
 
 Native workflows auto-add new or updated open repository issues, put new items
 in Inbox, set closed items to Done, and return reopened items to Todo. Marking
@@ -61,6 +86,13 @@ rather than adding duplicate PR cards.
 
 Authenticate with repository access and the `project` scope. List issues with
 `gh issue list --repo nickysemenza/cubby`; read an issue with `gh issue view`.
+Inspect native relationships before starting:
+
+```sh
+gh issue view <number> --repo nickysemenza/cubby \
+  --json number,title,state,stateReason,parent,subIssuesSummary,blockedBy,blocking
+```
+
 Use `gh project item-list 2 --owner nickysemenza --limit 500 --format json` with Project number `2` to read its fields. Project metadata belongs to the Project and
 is not guaranteed to appear in an issue-only API response.
 
@@ -78,8 +110,12 @@ interpolation of issue text.
 Use `gh project item-edit 2 --owner nickysemenza --url <issue-url>
 --field Readiness --value Ready` to change one field; repeat for other fields.
 For native relationships, use `gh issue create --parent <number>` or
-`--blocked-by <numbers>`, or the corresponding issue-edit commands. Keep updates
-on the existing issue rather than creating a parallel task.
+`--blocked-by <numbers>`. For existing issues use `gh issue edit <number>
+--parent <parent-number>` or `--add-blocked-by <blocker-number>`; remove obsolete
+relationships explicitly. A dependency does not automatically change Readiness.
+Relates to currently requires the UI or the [related-issue API](https://docs.github.com/en/rest/issues/issues#add-a-related-issue);
+the API's target `issue_id` is an internal numeric ID, not the issue number.
+Keep updates on the existing issue rather than creating a parallel task.
 
 Link the implementing PR with `Fixes #<number>` for work accepted on merge to
 the default branch. Include focused validation evidence. Only use Verify when
@@ -88,10 +124,20 @@ reference in that PR and close the issue after verification instead of promising
 automatic closure. Completing a household operational pass needs verified
 outcomes, not a PR unless code or docs changed.
 
+Attach useful synthetic screenshots or short reproduction videos with `--attach`
+on `gh issue`/`gh pr` create, edit, or comment commands. Check installed help for
+support; use a body file and a referenced local image path so the CLI rewrites
+it to an uploaded URL. Free uploads are limited to 10 MB per image or video.
+Follow [PR screenshot validation](validation.md#pr-screenshots) for capture and
+public-content constraints; do not upload live household evidence.
+
 Close abandoned or superseded work as not planned, with the reason or replacement
-link. Wanted-but-deferred work stays open with Readiness Later. Closed is the
+link. For a genuine duplicate, preserve useful evidence on the canonical issue
+and close with `gh issue close <number> --duplicate-of <canonical-number>`;
+do not describe distinct symptoms as duplicates without evidence. Wanted-but-deferred work stays open with Readiness Later. Closed is the
 issue's state; Done is a Project status. Do not count not-planned closures as
-delivered work merely because their Project status is Done. Closing a parent
+delivered work, or duplicates as additional deliveries, merely because their
+Project status is Done. Closing a parent
 does not establish that its open subissues are complete. Git history and closed
 issues preserve completed work; remove completed plans/reports after moving
 durable facts into their owning documentation.
