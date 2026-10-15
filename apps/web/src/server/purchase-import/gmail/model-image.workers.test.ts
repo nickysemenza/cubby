@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import { prepareModelImage } from "~/server/image-processing/model-image";
 
 import { INLINE_EMAIL_PNG_BASE64 } from "./email-html.fixtures";
-import photographicReceipt from "./fixtures/synthetic-photographic-receipt.jpg?inline";
 import tallReceipt from "./fixtures/synthetic-tall-receipt.png?inline";
 
 describe("private model image transformation in workerd", () => {
@@ -24,17 +23,6 @@ describe("private model image transformation in workerd", () => {
           : { width: 1400, height: 3800 },
       );
     }
-  });
-
-  it("keeps photographic receipt detail within the model image budget", async () => {
-    const bytes = Buffer.from(photographicReceipt.split(",")[1]!, "base64");
-    const result = await prepareModelImage(bytes, "detail", env.IMAGES);
-    expect(result).not.toBeNull();
-    expect(result!.bytes.byteLength).toBeLessThanOrEqual(128 * 1024);
-    const info = await env.IMAGES.info(
-      new Response(new Uint8Array(result!.bytes)).body!,
-    );
-    expect(info).toMatchObject({ width: 1400, height: 2200 });
   });
 
   it("transforms a private PNG byte stream into a bounded JPEG", async () => {

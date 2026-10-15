@@ -412,6 +412,22 @@ async function evaluateRelevance() {
             },
           ],
         },
+        ...["standard", "detail"].map((detail) => ({
+          label: "related" as const,
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: "image/jpeg",
+              dataBase64: readFileSync(
+                new URL(
+                  `../purchase-import/gmail/fixtures/synthetic-photographic-receipt-${detail}.jpg`,
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        })),
         ...cases.slice(0, 2),
         ...cases.slice(-2),
         {
