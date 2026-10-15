@@ -589,7 +589,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,
         description:
-          "Run the deployed Mail triage on one retained Email's Gmail original, refetched as Reclassify does, without recording an observation or changing Relevance (its Run holds only model usage). Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the routed classification, stage, reason and model, and the bounded view's bytes, completeness and incompleteReasons.",
+          "Preview the full deployed classification of one retained Email's Gmail original: Jev/Clef triage, then Luna with bounded image evidence only when uncertain. Records only a diagnostic Run and model usage; never changes Relevance, observations or retained content. Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the final classification/model, triage result/view, fallback result, image evidence/refusal diagnostics, Run, elapsed time and priced usage (unknown costs stay null).",
       }),
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,

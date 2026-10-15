@@ -77,7 +77,11 @@ const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
  * chunk carries only the slots its own entity declares.
  */
 export const detailSlots = {
-  email: { review: reportSlot<"email">("email.review") },
+  email: {
+    review: slot<"email">(() =>
+      import("./email-review").then((m) => ({ default: m.EmailReview })),
+    ),
+  },
   imageJob: { attempts: reportSlot<"imageJob">("imageJob.attempts") },
   product: {
     ownership: slot(() =>

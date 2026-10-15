@@ -159,7 +159,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     input: mailReadInput,
     output: mailReadOut,
   }),
-  /** Mail triage on one Email's Gmail original; records no observation or Relevance. */
+  /** Full classification preview from Gmail, including exception-only Luna; no publication. */
   mailTriagePreview: query({
     readPolicy: "strong",
     input: mailTriagePreviewInput,

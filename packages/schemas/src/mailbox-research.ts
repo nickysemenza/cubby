@@ -7,6 +7,7 @@ import {
   financialTransactionShortcode,
   financialAccountShortcode,
   ledgerPartyShortcode,
+  runShortcode,
 } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 import { importSourceIdentity } from "./import-source";
@@ -217,12 +218,44 @@ export const mailTriagePreviewInput = mailMessageRef.extend({
 });
 export type MailTriagePreviewInput = z.infer<typeof mailTriagePreviewInput>;
 
+export const mailImageEvidence = z.object({
+  attempted: z.number().int().nonnegative(),
+  prepared: z.number().int().nonnegative(),
+  supplied: z.number().int().nonnegative(),
+  candidates: z.number().int().nonnegative(),
+  sourceBytes: z.number().int().nonnegative(),
+  requestBytes: z.number().int().nonnegative(),
+  complete: z.boolean(),
+  failures: z.array(z.string()),
+  detailRetried: z.boolean(),
+  imageReadability: mailboxRelevanceDecision.shape.imageReadability
+    .unwrap()
+    .nullable(),
+  rawClassification: mailboxClassification.nullable(),
+});
+export type MailImageEvidence = z.infer<typeof mailImageEvidence>;
+
 export const mailTriagePreviewOut = z.object({
   classification: mailboxClassification,
   stage: mailboxClassificationStage,
   reason: z.string(),
-  /** The decision model asked, or null when a rule decided before the decision model. */
-  model: supportedDecisionModelSchema.nullable(),
+  /** The final deciding model, or null when no model ran. */
+  model: z.string().nullable(),
+  runId: runShortcode,
+  triage: z.object({
+    classification: mailboxClassification,
+    stage: mailboxClassificationStage,
+    reason: z.string(),
+    model: supportedDecisionModelSchema.nullable(),
+  }),
+  relevance: mailboxRelevanceDecision.nullable(),
+  imageEvidence: mailImageEvidence.nullable(),
+  usage: z.object({
+    calls: z.number().int().nonnegative(),
+    elapsedMs: z.number().nonnegative(),
+    standardCost: z.number().nullable(),
+    chargedCost: z.number().nullable(),
+  }),
   /** Null when the original had no readable body and no view was built. */
   view: z
     .object({

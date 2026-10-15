@@ -68,8 +68,12 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    Lock grades before opening predictions. If the member changes the label
    contract after scoring, preserve the original blind grades and report the
    policy-adjusted scores separately.
-3. `imports_read.mail_triage_preview` runs the deployed triage on one Email
-   without writing (optionally `decisionModel`). Before/after a change:
+3. `imports_read.mail_triage_preview` runs the deployed full classification on one
+   Email: Jev/Clef followed by Luna only after uncertainty (optionally pin
+   `decisionModel`). It publishes no Email changes; its diagnostic Run records
+   model usage. Read `triage` separately from the final classification, and inspect
+   `imageEvidence` and `usage` for image refusals, readability, bytes and costs.
+   Before/after a change:
    preview the same graded sample before and after it deploys.
 4. Report, weighted by inclusion probability: false negatives (related
    Email called unrelated — the costly error), false positives, uncertain
