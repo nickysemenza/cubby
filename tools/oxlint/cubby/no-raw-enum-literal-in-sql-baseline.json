@@ -20,7 +20,6 @@
   "apps/web/src/server/repo/expense-category-resolution.ts": 34,
   "apps/web/src/server/repo/expense-inheritance.ts": 9,
   "apps/web/src/server/repo/expense-project-allocation.ts": 10,
-  "apps/web/src/server/repo/field-resolution-evidence.ts": 4,
   "apps/web/src/server/repo/financial-booking.ts": 3,
   "apps/web/src/server/repo/financial-transfer-pairing.ts": 1,
   "apps/web/src/server/repo/household-contribution/allocation.ts": 11,
