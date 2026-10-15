@@ -14,6 +14,7 @@ import { expenseSpendingAllocationSql } from "./expense-spending-allocation";
 
 const categoryPlanNode = z.object({
   "Relation Name": z.string().optional(),
+  Alias: z.string().optional(),
   "Actual Loops": z.number().optional(),
   get Plans() {
     return z.array(categoryPlanNode).optional();
@@ -23,7 +24,8 @@ const categoryPlanNode = z.object({
 // Real SQL regressions: mixed retailer purchases must not flatten Product
 // classifications, blocked ancestors must remain unknown, and restaurant
 // context must classify Food without classifying unrelated merchandise. Bulk
-// allocations must not repeat the taxonomy walk for every principal Expense.
+// allocations must not repeat taxonomy or category-catalog lookups for every
+// principal Expense.
 describe("Expense category resolution", () => {
   const ctx = withTestDb();
   async function fixture() {
@@ -166,13 +168,28 @@ describe("Expense category resolution", () => {
       .array(z.object({ Plan: categoryPlanNode }))
       .parse(result.rows[0]?.["QUERY PLAN"])[0]!.Plan;
     let taxonomyScans = 0;
+    let categoryLookups = 0;
     const inspect = (node: z.infer<typeof categoryPlanNode>) => {
       if (node["Relation Name"] === "ProductCategory")
         taxonomyScans += node["Actual Loops"] ?? 0;
+      // Output labels may use indexed per-share reads; the four validation
+      // joins must resolve policy across the batch rather than per principal.
+      if (
+        node["Relation Name"] === "SpendingCategory" &&
+        [
+          "override_category",
+          "purchase_category",
+          "mapped_category",
+          "vendor_category",
+        ].includes(node.Alias ?? "")
+      ) {
+        categoryLookups += node["Actual Loops"] ?? 0;
+      }
       node.Plans?.forEach(inspect);
     };
     inspect(plan);
     expect(taxonomyScans).toBeLessThanOrEqual(8);
+    expect(categoryLookups).toBeLessThanOrEqual(12);
     const stored = await unwrapDb(ctx.db).execute(allocation);
     expect(stored.rows).toHaveLength(ids.length);
     expect(

@@ -14,9 +14,10 @@ live, while explicit purposes such as Gifts stay in place.
 Scalar category reads and explanation reads share the same SQL choice policy.
 Allocation, filtering, and grouping select the chosen UUID directly; only
 explanation reads join labels and build fallback/source provenance JSON.
-Bulk allocations share one query-local ancestry catalog across their principal
-lines, including draft policy changes. The catalog uses the same depth and
-cycle guards as scalar resolution; project-only reads omit it.
+Bulk allocations resolve their selected principal lines together, sharing one
+ancestry catalog and joining category policy once across the batch, including
+draft changes. The resolver uses the same depth and cycle guards and choice
+policy as scalar resolution; project-only reads omit category resolution.
 
 Purchase categories are fallbacks, not summaries. Purchases and Financial
 Transactions expose derived single, mixed, partial, unclassified, or
