@@ -670,6 +670,8 @@ struct FieldExplanationLabel: View {
                     if let evidence = resolved.resolutionEvidence {
                         Divider()
                         explanationSectionLabel(evidence.chain.title ?? "Resolution order")
+                        explanationCoverage(evidence.coverage, noun: "evaluation rows")
+                        explanationCoverage(evidence.branches, noun: "inventory entries")
                         resolutionSteps(evidence.chain)
                             .accessibilityIdentifier("field.explanation.chain")
                         if let contributors = evidence.contributors, !contributors.isEmpty {
@@ -678,13 +680,17 @@ struct FieldExplanationLabel: View {
                             }
                             ForEach(Array(contributors.prefix(6).enumerated()), id: \.offset) {
                                 _, contributor in
-                                resolutionContributor(contributor.chain, steps: contributor.steps)
+                                resolutionContributor(
+                                    contributor.chain, steps: contributor.steps,
+                                    coverage: contributor.coverage)
                             }
                             if contributors.count > 6 {
                                 DisclosureGroup("Show \(contributors.count - 6) more contributors") {
                                     ForEach(Array(contributors.dropFirst(6).enumerated()), id: \.offset) {
                                         _, contributor in
-                                        resolutionContributor(contributor.chain, steps: contributor.steps)
+                                        resolutionContributor(
+                                            contributor.chain, steps: contributor.steps,
+                                            coverage: contributor.coverage)
                                     }
                                 }
                             }
@@ -696,6 +702,7 @@ struct FieldExplanationLabel: View {
                                 ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
                                     explanationSource(observation)
                                 }
+                                explanationCoverage(step.coverage, noun: "inputs")
                             }
                         }
                     }
@@ -888,17 +895,29 @@ struct FieldExplanationLabel: View {
         return result
     }
 
-    private func resolutionContributor(_ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil)
+    @ViewBuilder
+    private func explanationCoverage(_ coverage: FieldEvidenceCoverage?, noun: String) -> some View {
+        if let coverage, coverage.omitted > 0 {
+            Text("Showing \(coverage.shown) of \(coverage.total) \(noun).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func resolutionContributor(
+        _ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil, coverage: FieldEvidenceCoverage? = nil
+    )
         -> some View
     {
         DisclosureGroup {
             resolutionSteps(block)
+            explanationCoverage(coverage, noun: "evaluation rows")
             if let steps, !steps.isEmpty {
                 DisclosureGroup("Inputs and source settings") {
                     ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
                         ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
                             explanationSource(observation)
                         }
+                        explanationCoverage(step.coverage, noun: "inputs")
                     }
                 }
             }
