@@ -100,7 +100,7 @@ describe("MCP batch actions", () => {
 
     expect(response.isError).not.toBe(true);
     expect(run).toHaveBeenCalledOnce();
-    expect(run.mock.calls[0]?.[1].sources[0].observedAt).toBeInstanceOf(Date);
+    expect(run.mock.calls[0]?.[1].sources[0]?.observedAt).toBeInstanceOf(Date);
     expect(batchResultSchema.parse(response.structuredContent).summary).toEqual(
       { requested: 1, succeeded: 1, failed: 0 },
     );
