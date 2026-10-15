@@ -1,35 +1,32 @@
 # Household taxonomy
 
-Vocabulary for household classification. Cross-layer domain terminology lives in
-[Terminology](docs/guide/terminology.md).
+Vocabulary for household categories and storage roles. Shared domain concepts,
+including Inventory and Tags, live in [Terminology](docs/guide/terminology.md).
 
 ## Storage locations
 
-**Backstock**:
-Reserve supplies held separately from everyday access or active use. An explicit
-location label or note records this role; storing an item in a bin does not by
-itself establish backstock. A location can remain physically present when empty.
+**Bulk storage location**:
+A Location used to hold additional supplies separately from everyday access or
+active use, including when temporarily empty. The Inventory meaning of
+**Backstock** is defined in [Terminology](docs/guide/terminology.md).
 
-Location names describe identifiable physical places or the recorded contents
-of an existing container. A plausible destination based on an item's category
-does not establish where the item is physically stored.
+**Location name**:
+A label identifying a known physical place or the recorded contents of an
+existing container.
 
 ## Project scope
 
 **Standing household project**:
-An ongoing grouping for routine household consumption, including food, personal
-care, and pet supplies. It remains open across individual purchases. Bounded
-work, events, and trips keep their own Projects when the records identify them.
+An ongoing household Project for routine consumption. Its scope is separate from
+[automatic Expense project routing](docs/guide/how-values-are-determined.md),
+which determines which Expenses default to it.
 
 ## Compatibility tags
 
 **Compatibility tag**:
-A reusable battery platform, mounting interface, fit standard, or product
-ecosystem used to select compatible equipment and replacements. Its usefulness
-does not depend on how many Products currently carry it. Manufacturer names,
-purchase provenance, and descriptive classifications use their own fields.
-An equipment maker named on a third-party fitting can identify its target
-system; distinguish that fit information from the fitting's own manufacturer.
+See the [Product tag contract](docs/agents/domain-rules.md#data-layers-and-deletion)
+for compatibility and ecosystem labels. Tags are free-form labels, as defined in
+[Terminology](docs/guide/terminology.md).
 
 ## Garden planting materials
 
@@ -111,6 +108,7 @@ parsley, rosemary, and thyme. Live potted plants remain distinct from cut herbs.
 
 ## Hand tools
 
+**Hand tools**:
 Hand-operated implements and portable measuring or testing instruments for
 construction, repair, and maintenance, including reusable drain-clearing and
 fitting-removal tools.

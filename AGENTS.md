@@ -120,8 +120,10 @@ owns a distinct concern.
   garden-plan, product-enrichment, or purchase-import skill for those
   household workflows.
 - **Engineering diagnosis:** Use `diagnosing-bugs` for hard regressions,
-  `domain-modeling` for terminology ([glossary](docs/guide/terminology.md)) or durable model decisions, `tdd` when
-  test-first is requested, and `code-review` for a requested review.
+  `domain-modeling` for terminology or durable model decisions, `tdd` when
+  test-first is requested, and `code-review` for a requested review. Shared domain
+  terms belong in [Terminology](docs/guide/terminology.md); household category
+  labels and storage roles belong in [GLOSSARY.md](GLOSSARY.md).
 
 ## Load when triggered
 
