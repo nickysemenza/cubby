@@ -1453,7 +1453,7 @@ Rules:
           export: "tradeSchema",
         },
         optionsRef: {
-          module: "~/app/projects/trade-options",
+          module: "~/features/project/trade-options",
           export: "tradeOptions",
         },
       },
@@ -1965,7 +1965,7 @@ Rules:
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/expense/repository",
+        module: "~/server/domains/expense/repo/repository",
         export: "expenseRepository",
       },
       search: "document",

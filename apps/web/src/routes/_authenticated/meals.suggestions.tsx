@@ -7,10 +7,10 @@ import {
 import {
   mealSuggestionsSearchDefaults,
   mealSuggestionsSearchSchema,
-} from "~/app/meals/meal-search";
-import { MealSuggestionsPage } from "~/app/meals/suggestions-page";
+} from "~/features/meal/meal-search";
+import { MealSuggestionsPage } from "~/features/meal/suggestions-page";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/meals/suggestions")({
   validateSearch: mealSuggestionsSearchSchema,

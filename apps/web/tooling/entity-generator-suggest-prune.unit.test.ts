@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { compileEntityDeclarations } from "../../../scripts/generator/entities/compile";
+import { compileEntityDeclarations } from "../generator/entities/compile";
 
 /**
  * Minimal valid two-field declaration ("subject", restated by a candidate

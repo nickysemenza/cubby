@@ -1,7 +1,7 @@
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import type { CubbyColumnHelper as ColumnHelper } from "~/ui/data-table/table-features";
 
-import { UnitMappingDisplay } from "./UnitMappingDisplay";
+import { UnitMappingDisplay } from "./unit-mapping-display";
 
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 

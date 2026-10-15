@@ -6,6 +6,7 @@ import type {
 import type { LocationType } from "@cubby/schemas/location";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { buildLocationComboboxItem } from "~/ui/combobox/combobox-builders";
 import {
   useEntityListSource,
@@ -13,7 +14,6 @@ import {
 } from "~/ui/combobox/with-search-hook";
 import { EditableAmountCell } from "~/ui/data-table/editable-cell";
 import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";

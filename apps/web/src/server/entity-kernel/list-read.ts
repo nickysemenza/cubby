@@ -6,15 +6,18 @@ import {
   type ListEnrichmentGroup,
   listEnrichmentGroups,
   listReadRowSchema,
-} from "~/entity/list-read-fields";
-import { listReadFields, projectListRows } from "~/entity/list-read-schema";
-import { withListEntityMedia } from "~/server/repo/entity-display-image";
-import { withRecordEmoji } from "~/server/repo/entity-emoji";
-import { listTotalLabels } from "~/server/repo/list-display-labels";
-import { expandListGroups } from "~/server/repo/list-projection";
-import { withListReadTracing } from "~/server/repo/list-read-tracing";
-import { normalizeStartOperationError } from "~/server/start-operation.server";
-import { withTrace } from "~/server/tracing";
+} from "~/entity/model/list-read-fields";
+import {
+  listReadFields,
+  projectListRows,
+} from "~/entity/model/list-read-schema";
+import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
+import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
+import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
+import { expandListGroups } from "~/server/generic/list/repo/list-projection";
+import { withListReadTracing } from "~/server/generic/list/repo/list-read-tracing";
+import { withTrace } from "~/server/observability/tracing";
+import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
 
 import type {
   EntityBindingSchemas,

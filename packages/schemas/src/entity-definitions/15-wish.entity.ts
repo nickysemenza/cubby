@@ -440,7 +440,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/wish",
+        module: "~/server/domains/wish/repo",
         export: "wishRepository",
       },
       search: "document",

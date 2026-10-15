@@ -1,6 +1,6 @@
-import { seedWardrobePrerequisites } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedWardrobePrerequisites } from "./fixtures/catalog";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Wardrobe is the generic Inventory list narrowed to an owner and the apparel
 // category family; the same list answers for any member.

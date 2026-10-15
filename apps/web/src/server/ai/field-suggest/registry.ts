@@ -31,26 +31,26 @@ import {
 } from "@cubby/shared/redundant-tokens";
 import { z } from "zod";
 
+import { locationSuggestionSpec } from "~/server/ai/enrichment/location-suggest";
 import type { Database } from "~/server/db";
-import { expenseTradeAffinity } from "~/server/repo/expense/analytics";
+import { expenseTradeAffinity } from "~/server/domains/expense/repo/analytics";
 import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
-} from "~/server/repo/location/lookup";
+} from "~/server/domains/location/repo/lookup";
 import {
   listBoundCategoryFeatures,
   listProductCategoryTreeOptions,
-} from "~/server/repo/product-category";
-import { projectNameOptions } from "~/server/repo/project/lookup";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { listSpendingCategories } from "~/server/repo/spending-category";
-import { vendorOptions } from "~/server/repo/vendor";
-import { locationSuggestionSpec } from "~/server/services/ai-enrichment/location-suggest";
+} from "~/server/domains/product-category/repo/product-category";
+import { projectNameOptions } from "~/server/domains/project/repo/lookup";
+import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
+import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
+import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import {
   findLexicalSearchCandidates,
   type InternalSearchCandidate,
-} from "~/server/services/search.service";
-import { semanticEntityCandidates } from "~/server/services/semantic-search.service";
+} from "~/server/generic/search/service/search.service";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { rankCategoryCandidates } from "./category-ranking";
 

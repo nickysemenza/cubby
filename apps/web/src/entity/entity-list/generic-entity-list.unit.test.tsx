@@ -27,14 +27,17 @@ import {
 } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { mealNameUpdate } from "~/entity/list-columns/meal";
-import { listReadFields, projectListRows } from "~/entity/list-read-schema";
+import {
+  listReadFields,
+  projectListRows,
+} from "~/entity/model/list-read-schema";
 import { listPage } from "~/entity/routing/list-page";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
-} from "~/ui/hooks/usePaginatedTableCore";
+} from "~/ui/hooks/use-paginated-table-core";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { listSlotFor } from "./list-slots";

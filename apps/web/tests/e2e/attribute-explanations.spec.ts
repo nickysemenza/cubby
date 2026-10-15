@@ -1,7 +1,10 @@
-import { createEntityFixture } from "./fixtures-core";
-import { seedLocationPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage, inlineExplanation } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures/core";
+import { seedLocationPrerequisite } from "./fixtures/catalog";
+import {
+  gotoAuthenticatedPage,
+  inlineExplanation,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test.setTimeout(60_000);
 

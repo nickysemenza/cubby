@@ -13,14 +13,15 @@ import {
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
-import { RunAgentActions } from "~/app/purchases/purchase-import-run-detail";
 import { entityDetailLink } from "~/entity/entities";
+import { RunAgentActions } from "~/features/purchase/purchase-import-run-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
-import { cn, formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -38,7 +39,7 @@ import {
   TableRow,
   Table as UiTable,
 } from "~/ui/primitives/table";
-import { ShortcodeProse } from "~/ui/shortcode-prose";
+import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";

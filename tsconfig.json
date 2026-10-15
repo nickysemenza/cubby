@@ -1,6 +1,7 @@
 {
   // Dependency-free CLIs use Node's native type stripping. The generator
-  // imports web aliases and is checked by apps/web/tsconfig.json.
+  // (apps/web/generator) imports web aliases and is checked by
+  // apps/web/tsconfig.json.
   "compilerOptions": {
     "incremental": true,
     "target": "es2023",
@@ -22,6 +23,5 @@
     "noFallthroughCasesInSwitch": true,
     "noEmit": true
   },
-  "include": ["scripts/**/*.ts"],
-  "exclude": ["scripts/generator/**"]
+  "include": ["scripts/**/*.ts", "tools/oxlint/**/*.test.ts"]
 }

@@ -1,12 +1,12 @@
 import {
   createImageProcessingJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/repo/image-processing";
-import { createUploadedImageRecord } from "~/server/repo/image";
+} from "~/server/domains/image-processing/repo/image-processing";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
   markRunFailed,
   startPhotoInventoryRun,
-} from "~/server/purchase-import/run-service";
+} from "~/server/domains/purchase-import/run-service";
 import * as schema from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseEntityId } from "@cubby/schemas/identifiers";

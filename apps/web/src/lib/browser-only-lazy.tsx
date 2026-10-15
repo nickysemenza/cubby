@@ -1,6 +1,6 @@
 import { type ComponentType, lazy, Suspense } from "react";
 
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 
 /**
  * A lazily loaded component that only works in the browser (canvas, WebGL,

@@ -1,8 +1,8 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { validateClassificationPolicies } from "../../../scripts/generator/entities/classification-policies";
-import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
+import { validateClassificationPolicies } from "../generator/entities/classification-policies";
+import type { CompiledEntity } from "../generator/entities/declarations";
 
 type Policy = CompiledEntity["classificationPolicies"][number];
 type FieldPolicy = Omit<Policy["fields"][number], "relation"> & {

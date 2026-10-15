@@ -8,7 +8,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { useProductCategories } from "~/entity/hooks/use-product-categories";
 
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 import { isReferencePickerEntity } from "./reference-picker-entities";

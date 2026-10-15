@@ -1,4 +1,4 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import {
   financialBookingPreview,
   financialBookingResult,
@@ -12,9 +12,9 @@ import {
   chooseOption,
   gotoAuthenticatedPage,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { dispatchesOperation } from "./dispatch-wire";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation } from "./support/dispatch-wire";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.

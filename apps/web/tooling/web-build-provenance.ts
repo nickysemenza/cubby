@@ -104,7 +104,7 @@ const WEB_BUILD_SOURCE = {
     "apps/web/src/**",
     "apps/web/public/**",
     "apps/web/tooling/**",
-    "apps/web/scripts/**",
+    "apps/web/generator/**",
     "apps/web/*.{ts,json,jsonc,toml,html}",
     "packages/**",
     "recipebridge/**",

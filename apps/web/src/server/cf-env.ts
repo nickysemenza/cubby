@@ -9,10 +9,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
-import type { BackgroundQueueProducer } from "./background-queue-types";
-import type { PurchaseAgentQueueProducer } from "./purchase-agent-queue-types";
-import type { VectorizeIndexBinding } from "./semantic/vector-store";
-import type { TelemetryQueueProducer } from "./telemetry-queue-types";
+import type { PurchaseAgentQueueProducer } from "./domains/purchase-agent/purchase-agent-queue-types";
+import type { VectorizeIndexBinding } from "./generic/embedding/semantic/vector-store";
+import type { TelemetryQueueProducer } from "./observability/telemetry-queue-types";
+import type { BackgroundQueueProducer } from "./workflows/background-queue-types";
 
 interface WaitUntilContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -131,11 +131,11 @@ export const getApnsCredentials = () => {
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;
 
-/** The purchase agent's per-Run coordinators (`server/purchase-import/agent-host`). */
+/** The purchase agent's per-Run coordinators (`server/domains/purchase-import/agent-host`). */
 export const getPurchaseImportRunAgentNamespace = () =>
   cfEnv?.PURCHASE_IMPORT_RUN;
 
-/** USDA release Durable Objects and the active release name (`server/usda-release`). */
+/** USDA release Durable Objects and the active release name (`server/domains/usda-release`). */
 export const getUsdaReleaseEnv = ():
   | Pick<Env, "USDA_RELEASE" | "USDA_ACTIVE_RELEASE">
   | undefined => cfEnv;

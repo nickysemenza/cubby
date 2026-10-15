@@ -4,8 +4,8 @@ import { z } from "zod";
 import {
   compileLoadedEntityDeclarations,
   loadEntityDeclarationBundle,
-} from "../../../scripts/generator/entities/declarations";
-import { renderOverrideComparisonArtifact } from "../../../scripts/generator/entities/override-comparisons";
+} from "../generator/entities/declarations";
+import { renderOverrideComparisonArtifact } from "../generator/entities/override-comparisons";
 
 const declarationObject = z.record(z.string(), z.unknown());
 

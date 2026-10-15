@@ -55,21 +55,21 @@ import {
   runAiSelection,
 } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
-import { classificationAllowsField } from "~/server/repo/classification-field-policy";
-import { classificationRefusesField } from "~/server/repo/classification-field-policy";
-import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
+import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   isFinanceCategoryEntity,
   loadFinanceSuggestionContext,
-} from "~/server/repo/finance-suggestion-context";
-import { resolveDraftEvidenceFields } from "~/server/repo/purchase-evidence-policy";
+} from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
+import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
+import { createAppError } from "~/server/errors/app-error";
 import {
   lookupEntityLabels,
   resolveShortcodes,
-} from "~/server/repo/shortcode-resolver";
-import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
-import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** A client-supplied basis value beyond this length is truncated, not rejected. */
 const MAX_BASIS_VALUE_LENGTH = 500;

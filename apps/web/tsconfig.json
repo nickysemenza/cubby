@@ -1,11 +1,12 @@
 {
-  // `scripts/generator` runs under this tsconfig (`pnpm generate`), so it is
+  // `apps/web/generator` runs under this tsconfig (`pnpm generate`), so it is
   // type-checked here rather than by the root project.
-  "include": ["**/*.ts", "**/*.tsx", "../../scripts/generator/**/*.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     // The typecheck script uses one native checker to avoid duplicating the
-    // large generic type graph. Measurements: docs/reports/local-check-performance.md.
+    // large generic type graph. Measurements:
+    // `git show 18f8bd430:docs/reports/local-check-performance.md`.
     //
     // The default buildinfo path is beside this tsconfig, which is what keeps
     // parallel worktrees from clobbering each other's cache — do not point it
@@ -29,7 +30,7 @@
     // Vite already compiles each file alone. For tsc it also skips recomputing
     // declaration signatures across an edited file's importer closure, which
     // roughly halves the first incremental check after an edit; measurements
-    // in docs/reports/local-check-performance.md.
+    // in `git show 18f8bd430:docs/reports/local-check-performance.md`.
     "isolatedModules": true,
     "noEmit": true,
 

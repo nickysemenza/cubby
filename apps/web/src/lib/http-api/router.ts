@@ -2,7 +2,7 @@ import { initContract, type RouterOptions } from "@ts-rest/core";
 import { z } from "zod";
 
 import type { MutationContract, QueryContract } from "~/contracts/define";
-import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
+import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
 
 import { isFlatQueryInput, type Json, toWire } from "./wire";
 

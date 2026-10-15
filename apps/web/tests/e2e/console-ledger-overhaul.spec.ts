@@ -1,5 +1,5 @@
-import { expect, test } from "./e2e-test";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 
 test("desktop workspace sidebar marks the current page and collapses", async ({
   page,

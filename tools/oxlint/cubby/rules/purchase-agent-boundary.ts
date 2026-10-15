@@ -3,7 +3,7 @@ import { defineRule } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
 /**
- * The purchase agent (`apps/web/src/server/purchase-agent/`) reads untrusted
+ * The purchase agent (`apps/web/src/server/domains/purchase-agent/`) reads untrusted
  * vendor pages, mail, and photos inside the web Worker. Its only authority is
  * the narrowed environment its host passes in (`environment.ts`): this rule
  * keeps the directory from importing anything that could reach the database,

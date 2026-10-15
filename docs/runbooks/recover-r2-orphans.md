@@ -9,7 +9,7 @@ Recovery is a bucket listing, not a query:
 
 1. Sign a `list-type=2` GET with `aws4fetch` (the repo's S3 client — not
    `@aws-sdk/client-s3`) against `$R2_ENDPOINT/$R2_BUCKET_NAME`, paging on
-   `NextContinuationToken`. Put the script under `apps/web/scripts/` (ESM,
+   `NextContinuationToken`. Put the script under `apps/web/tooling/checks/` (ESM,
    top-level `await` is fine); a scratchpad script outside `apps/web` cannot
    resolve the workspace's dependencies.
 2. Subtract `SELECT key FROM "Image"` **including soft-deleted rows** — they

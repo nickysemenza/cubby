@@ -5,10 +5,10 @@ import { seedBaseWorld } from "../factories/base-world";
 import { taxonomyShortcode } from "../product-category-fixtures";
 import { createEntity } from "../factories/create";
 import { buildKernelContext, buildScenarioDatabase } from "./context";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
-import { attachPurchaseProducts } from "~/server/repo/purchase-products";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SIM_PRODUCT_NAME } from "./simulator-product-fixture";
 
 export async function seedSimulatorPhotoActor(pool: Pool, userId: string) {

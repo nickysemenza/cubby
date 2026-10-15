@@ -3,16 +3,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
-import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
+import { AuthEntryFrame } from "~/features/auth/auth-entry-frame";
 import {
   canAllowConsent,
   type PublicClientLookupState,
   verifyPublicClient,
-} from "~/app/auth/oauth-consent-client";
+} from "~/features/auth/oauth-consent-client";
 import { authClient } from "~/lib/auth-client";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

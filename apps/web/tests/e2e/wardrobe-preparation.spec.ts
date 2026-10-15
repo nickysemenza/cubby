@@ -1,15 +1,15 @@
-import { seedProductCategoryPrerequisite } from "./fixtures-catalog";
+import { seedProductCategoryPrerequisite } from "./fixtures/catalog";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
-} from "./fixtures-photos";
+} from "./fixtures/photos";
 import {
   gotoAuthenticatedPage,
   openProductFromPalette,
   selectComboboxItem,
   waitForFormHydration,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("taxonomy edits keep product classification paths and labels separate from covers", async ({
   page,

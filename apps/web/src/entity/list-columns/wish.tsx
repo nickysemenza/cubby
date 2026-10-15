@@ -4,33 +4,33 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
 
+import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "~/features/product/product-image-summaries";
 import {
   buildWishRows,
   type WishRow,
   wishSubRows,
-} from "~/app/wishes/wish-rows";
-import { entities, entityDetailParams } from "~/entity/entities";
-import { fieldEnumOptions } from "~/entity/enum-field-display";
-import { relationshipFieldProvenance } from "~/entity/field-provenance";
-import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "~/features/products/product-image-summaries";
+} from "~/features/wish/wish-rows";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrencyRange } from "~/lib/number-format";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { renderOptionCell } from "~/ui/data-table/column-helpers";
+import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 import { NoneValue } from "~/ui/primitives/none-value";
-import { ImageThumbnail } from "~/ui/table/ImageThumbnail";
 
 import { defineListOverride, interleaveDeclared } from "./types";
 

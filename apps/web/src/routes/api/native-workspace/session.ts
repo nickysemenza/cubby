@@ -5,7 +5,7 @@ export const Route = createFileRoute("/api/native-workspace/session")({
     handlers: {
       POST: async ({ request }) => {
         const { nativeWorkspaceSession } =
-          await import("~/server/native-workspace-session");
+          await import("~/server/http/native-workspace-session");
         return nativeWorkspaceSession(request);
       },
     },

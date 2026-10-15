@@ -16,12 +16,12 @@ import type {
   QueryContract,
   SubscriptionContract,
 } from "~/contracts/define";
+import { openWorkflowStream } from "~/integrations/tanstack-query/workflow-stream";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
   startOperationDefinitionFor,
   type StartOperationId,
 } from "~/lib/start-operation-observability";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,

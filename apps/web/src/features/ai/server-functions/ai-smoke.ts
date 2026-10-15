@@ -1,11 +1,11 @@
 import { aiSmokeRunInput } from "@cubby/schemas/ai-smoke";
 import { createServerFn } from "@tanstack/react-start";
 
-import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
+import { authenticatedStartServerFunction } from "~/server/operation-runtime/middleware/entity-server-functions";
 
 const smokeContext = async (headers: Headers) => {
   const { createRequestContext, requireActor } =
-    await import("~/server/request-context");
+    await import("~/server/http/request-context");
   return requireActor(await createRequestContext({ headers }));
 };
 

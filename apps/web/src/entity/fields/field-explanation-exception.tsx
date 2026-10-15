@@ -1,0 +1,157 @@
+import {
+  dataCheck,
+  dataExceptionReasonLabel,
+  setDataExceptionInput,
+} from "@cubby/schemas/data-quality";
+import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { useId, useMemo, useState } from "react";
+
+import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { MarkdownText } from "~/ui/text/markdown";
+
+type ExplainedCheck = NonNullable<
+  FieldExplanationOutput["qualityBreakdown"]
+>["checks"][number];
+
+/**
+ * Evidence-bound accept/clear for one explained check. The reason list comes
+ * from the server per check, so a check that forbids exceptions has an empty
+ * list and no action; operational Problems and aggregate rules never reach
+ * here because they are not breakdown checks.
+ */
+export function ExceptionControls({
+  entityId,
+  check,
+}: {
+  entityId: string;
+  check: ExplainedCheck;
+}) {
+  const fieldId = useId();
+  const [accepting, setAccepting] = useState(false);
+  const [reason, setReason] = useState(check.exceptionReasons[0]?.reason);
+  const [note, setNote] = useState("");
+  const reasonOptions = useMemo<PickerOption[]>(
+    () =>
+      check.exceptionReasons.map((option) => ({
+        value: option.reason,
+        label: option.label,
+      })),
+    [check.exceptionReasons],
+  );
+  const set = useActionMutation({
+    mutationFn: dataQuality.setException.mutationOptions,
+    success: "Exception recorded",
+    onSuccess: () => setAccepting(false),
+  });
+  const clear = useActionMutation({
+    mutationFn: dataQuality.clearException.mutationOptions,
+    success: "Exception cleared",
+  });
+  // Only exceptions-enabled entities parse; any other record has no action.
+  const parsedTarget = setDataExceptionInput.shape.entityId.safeParse(entityId);
+  const parsedCheck = dataCheck.safeParse(check.check);
+  if (!parsedTarget.success || !parsedCheck.success) return null;
+  const target = parsedTarget.data;
+  const checkId = parsedCheck.data;
+
+  if (check.exception) {
+    return (
+      <div
+        data-ledger-expanded
+        className="flex basis-full flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground"
+      >
+        <div className="min-w-0 flex-1 leading-5">
+          {check.exception.state === "stale"
+            ? "Evidence changed since this exception was recorded: "
+            : "Recorded as "}
+          {dataExceptionReasonLabel[check.exception.reason]}
+          <MarkdownText className="text-xs">
+            {check.exception.note}
+          </MarkdownText>
+        </div>
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={clear.isPending}
+          onClick={() => clear.mutate({ entityId: target, check: checkId })}
+        >
+          Clear exception
+        </Button>
+      </div>
+    );
+  }
+  if (check.state !== "gap" || check.exceptionReasons.length === 0 || !reason) {
+    return null;
+  }
+  if (!accepting) {
+    return (
+      <Button size="xs" variant="ghost" onClick={() => setAccepting(true)}>
+        Accept as…
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="grid w-full basis-full gap-2 border-t border-border pt-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!note.trim()) return;
+        set.mutate({
+          entityId: target,
+          check: checkId,
+          reason,
+          note: note.trim(),
+        });
+      }}
+    >
+      <div className="grid gap-1 text-xs">
+        <label htmlFor={`${fieldId}-reason`}>Reason</label>
+        <Picker
+          mode="choose"
+          label="Reason"
+          inputId={`${fieldId}-reason`}
+          options={reasonOptions}
+          value={reason}
+          onValueChange={(value) => {
+            const next = check.exceptionReasons.find(
+              (option) => option.reason === value,
+            );
+            if (next) setReason(next.reason);
+          }}
+        />
+      </div>
+      <div className="grid gap-1 text-xs">
+        <label htmlFor={`${fieldId}-note`}>Note</label>
+        <Input
+          id={`${fieldId}-note`}
+          value={note}
+          required
+          placeholder="What did you check, and what did you find?"
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="xs"
+          type="submit"
+          disabled={set.isPending || !note.trim()}
+        >
+          Accept exception
+        </Button>
+        <Button
+          size="xs"
+          type="button"
+          variant="ghost"
+          onClick={() => setAccepting(false)}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}

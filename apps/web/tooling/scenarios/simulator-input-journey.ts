@@ -10,14 +10,14 @@ import { z } from "zod";
 import { testUserId } from "@cubby/schemas/testing";
 import { imageId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   proposePhotoGroups,
-} from "~/server/photo-import-run/proposals";
-import { listImageSightings } from "~/server/repo/image";
-import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
+} from "~/server/domains/photo-import/run/proposals";
+import { listImageSightings } from "~/server/domains/image/repo/image";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   completeDescribeImageJobs,
   listDescribeImageJobs,

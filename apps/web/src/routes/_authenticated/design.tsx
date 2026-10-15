@@ -10,26 +10,26 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { TreeStructureIcon } from "@phosphor-icons/react/dist/csr/TreeStructure";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { ComponentsLine } from "~/app/design/_components/design-section";
+import { ComponentsLine } from "~/features/design/components/design-section";
 import {
   ControlsSection,
   FeedbackSection,
   FoundationsSection,
-} from "~/app/design/sections/basics-section";
+} from "~/features/design/sections/basics-section";
 import {
   LocationTreeSection,
   RecipeUnitsSection,
-} from "~/app/design/sections/household-section";
-import { PickerSection } from "~/app/design/sections/picker-section";
-import { RecordsSection } from "~/app/design/sections/records-section";
-import { RTableSection } from "~/app/design/sections/rtable-section";
-import { ValuesSection } from "~/app/design/sections/values-section";
+} from "~/features/design/sections/household-section";
+import { PickerSection } from "~/features/design/sections/picker-section";
+import { RecordsSection } from "~/features/design/sections/records-section";
+import { RTableSection } from "~/features/design/sections/rtable-section";
+import { ValuesSection } from "~/features/design/sections/values-section";
 import { pageTitle } from "~/lib/page-title";
 import {
   IndexedSections,
   type IndexedSectionGroup,
 } from "~/ui/data-table/indexed-sections";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/_authenticated/design")({
@@ -65,7 +65,7 @@ const GROUPS: IndexedSectionGroup[] = [
             source={[
               "ui/combobox/picker.tsx",
               "ui/combobox/picker-visual.tsx",
-              "ui/form-utils/picker-field.tsx",
+              "ui/forms/form-utils/picker-field.tsx",
             ]}
           />
         ),
@@ -120,9 +120,9 @@ const GROUPS: IndexedSectionGroup[] = [
               "createPlainDateColumn",
             ]}
             source={[
-              "ui/data-table/Table.tsx",
-              "ui/data-table/ListWorkbench.tsx",
-              "ui/data-table/columnHelpers.tsx",
+              "ui/data-table/table.tsx",
+              "ui/data-table/list-workbench.tsx",
+              "ui/data-table/column-helpers.tsx",
             ]}
           />
         ),
@@ -182,7 +182,7 @@ const GROUPS: IndexedSectionGroup[] = [
               "ui/common/date-display.tsx",
               "ui/primitives/enum-pill.tsx",
               "features/work-queue/work-queue-display.tsx",
-              "ui/data-table/FilterBar.tsx",
+              "ui/data-table/filter-bar.tsx",
             ]}
           />
         ),
@@ -196,8 +196,8 @@ const GROUPS: IndexedSectionGroup[] = [
           <ComponentsLine
             components={["formatRichText", "ConversionCapabilities"]}
             source={[
-              "features/recipes/richtext.tsx",
-              "features/units/ConversionCapabilities.tsx",
+              "features/recipe/richtext.tsx",
+              "features/units/conversion-capabilities.tsx",
             ]}
           />
         ),
@@ -216,7 +216,7 @@ const GROUPS: IndexedSectionGroup[] = [
         description: (
           <ComponentsLine
             components={["Page", "Card", "Badge"]}
-            source={["styles.css", "ui/page/Page.tsx"]}
+            source={["styles.css", "ui/layout/page.tsx"]}
           />
         ),
         content: <FoundationsSection />,

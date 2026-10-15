@@ -10,8 +10,11 @@ import {
 } from "react";
 
 import { cn } from "~/lib/utils";
-import type { MobileMetaValue } from "~/ui/data-table/useMobileListModel";
-import { type LongPressHandlers, useLongPress } from "~/ui/hooks/useLongPress";
+import type { MobileMetaValue } from "~/ui/data-table/use-mobile-list-model";
+import {
+  type LongPressHandlers,
+  useLongPress,
+} from "~/ui/hooks/use-long-press";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { MobileListScreen } from "./MobileListScreen";
+import { MobileListScreen } from "./mobile-list-screen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

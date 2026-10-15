@@ -1,27 +1,27 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { buildEntityReport } from "~/server/repo/entity-report";
-import { attachPurchaseProducts } from "~/server/repo/purchase-products";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { buildEntityReport } from "~/server/generic/entity-report/repo";
+import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
 import {
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
+} from "./fixtures/catalog";
 import {
   createEvidenceHarnessContext,
   createFixture,
   ensureMemberParty,
   seedConcurrently,
-} from "./fixtures-core";
+} from "./fixtures/core";
 import {
   inlineExplanation,
   escapeRegExp,
   gotoAuthenticatedPage,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 function recordRows(container: Page | Locator) {
   return container

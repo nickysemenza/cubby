@@ -17,16 +17,16 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
-import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
-import { getDb } from "~/server/repo/database-helpers";
-import { createUploadedImageRecord } from "~/server/repo/image";
-import { saveImageDescriptionAnalysis } from "~/server/repo/image-processing";
-import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
-import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
-import { ensureRun } from "~/server/runs/ensure-run";
-import { createEvidenceHarnessContext } from "./fixtures-core";
-import { expect, test } from "./e2e-test";
+import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/description-policy";
+import { getDb } from "~/server/db/helpers";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
+import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { createEvidenceHarnessContext } from "./fixtures/core";
+import { expect, test } from "./support/e2e-test";
 
 const original = readFileSync(
   new URL("./fixtures/synthetic-white.avif", import.meta.url),

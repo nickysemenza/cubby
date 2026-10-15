@@ -13,9 +13,9 @@ import { entityOverrideComparisons } from "~/entity/generated/entity-override-co
 import {
   detailFieldRenderersFor,
   detailRendererCoverage,
-} from "./detail-field-renderers";
+} from "./display/detail-field-renderers";
+import { listRendererCoverage } from "./display/list-field-renderers";
 import { controlRendererCoverage } from "./editing/entity-primitive-fields";
-import { listRendererCoverage } from "./list-field-renderers";
 
 const entities = Object.keys(entitySummary) as Array<
   keyof typeof entitySummary

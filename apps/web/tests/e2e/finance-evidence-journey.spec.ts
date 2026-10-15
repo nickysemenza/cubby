@@ -1,6 +1,6 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 // These corrections cross Expense, settlement allocation and transfer ownership.
 // A failure at any boundary must leave the reviewed economic graph intact.

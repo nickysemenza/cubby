@@ -11,7 +11,7 @@ import path from "node:path";
 import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
-import { ensureMacPresentationHelper } from "../../../scripts/mac-presentation-helper.ts";
+import { ensureMacPresentationHelper } from "../../../scripts/apple/mac-presentation-helper.ts";
 import {
   macFixturePaths,
   macFixtureSigningIdentity,

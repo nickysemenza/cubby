@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { UsdaAlternateIdRedirect } from "~/app/usda/usda-alternate-id-redirect";
+import { UsdaAlternateIdRedirect } from "~/features/usda-food/usda-alternate-id-redirect";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/upc/$code")({

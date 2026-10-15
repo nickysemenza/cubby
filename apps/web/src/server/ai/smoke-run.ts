@@ -13,13 +13,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import {
-  auditPurchaseImportBatch,
-  extractPurchaseEvidence,
-} from "~/server/agents/purchase-import/extract";
-import {
   DECISION_MAX_CANDIDATES,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
+import { suggestIngredientMergeBatch } from "~/server/ai/enrichment/ingredient-merge";
+import {
+  suggestUsdaFood,
+  suggestUsdaFoodBatch,
+} from "~/server/ai/enrichment/usda-match";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   IMAGE_IDENTIFICATION_FEATURE,
@@ -48,38 +49,37 @@ import {
   decideProductVariantComparison,
 } from "~/server/ai/semantic-decisions";
 import { getAiClient } from "~/server/clients/ai";
+import { getR2PublicUrl } from "~/server/clients/r2-public-url";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiUsage, image, run as runTable } from "~/server/db/schema";
-import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
-import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
-import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
-import { shouldPromoteMailAttachment } from "~/server/purchase-import/mail-attachment-purpose";
-import { chooseLineStage } from "~/server/purchase-import/writer";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { decideExpenseLineRole } from "~/server/repo/expense-line-role";
-import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
-import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
-import { getLocationById } from "~/server/repo/location/crud";
-import { getProductByID } from "~/server/repo/product/crud";
-import { getRecipeByID } from "~/server/repo/recipe/crud";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { ensureRun } from "~/server/runs/ensure-run";
-import { embedTexts } from "~/server/semantic/embeddings";
-import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
-import {
-  suggestUsdaFood,
-  suggestUsdaFoodBatch,
-} from "~/server/services/ai-enrichment/usda-match";
-import { imageAnalysisRenditionUrl } from "~/server/services/image-description.service";
+import { decideExpenseLineRole } from "~/server/domains/expense/repo/expense-line-role";
+import { getUploadedImageProcessingSource } from "~/server/domains/image-processing/repo/image-processing";
+import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
+import { imageAnalysisRenditionUrl } from "~/server/domains/image/service/image-description.service";
 import {
   imageIdentificationCompositionPrompt,
   readImageIdentificationRendition,
-} from "~/server/services/image-identification.service";
+} from "~/server/domains/image/service/image-identification.service";
+import { getLocationById } from "~/server/domains/location/repo/crud";
+import { getProductByID } from "~/server/domains/product/repo/crud";
+import {
+  auditPurchaseImportBatch,
+  extractPurchaseEvidence,
+} from "~/server/domains/purchase-import/agents/extract";
+import { loadPurchaseAuditBatch } from "~/server/domains/purchase-import/audit-batch";
+import { normalizeMessage } from "~/server/domains/purchase-import/gmail/normalize";
+import { interpretMailRelevance } from "~/server/domains/purchase-import/gmail/relevance";
+import { shouldPromoteMailAttachment } from "~/server/domains/purchase-import/mail-attachment-purpose";
+import { chooseLineStage } from "~/server/domains/purchase-import/writer";
+import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
 import {
   assessRecipeFlowCandidate,
   flowPromptInput,
-} from "~/server/services/recipe-flow/recipe-flow.service";
-import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+} from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { embedTexts } from "~/server/generic/embedding/semantic/embeddings";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
 
 import { finishSmokeAttempt, withSmokeUsage } from "./smoke-attempt";
 import { AI_SMOKE_CASES } from "./smoke-catalog";

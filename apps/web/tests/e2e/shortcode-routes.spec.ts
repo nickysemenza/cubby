@@ -1,5 +1,5 @@
-import { seedLocationPrerequisite } from "./fixtures-catalog";
-import { expect, test } from "./e2e-test";
+import { seedLocationPrerequisite } from "./fixtures/catalog";
+import { expect, test } from "./support/e2e-test";
 
 const toLegacy = (code: string): string =>
   `${code[0]}-${code.slice(code.indexOf("-") + 1)}`;

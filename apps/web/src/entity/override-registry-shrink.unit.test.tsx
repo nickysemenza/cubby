@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loadEntityDeclarations } from "../../../../scripts/generator/entities/declarations";
+import { loadEntityDeclarations } from "../../generator/entities/declarations";
 import { editHooks } from "./editing/definitions";
 import { listOverrides } from "./list-columns/list-overrides.fixtures";
 

@@ -9,7 +9,7 @@ import {
 import { Stack } from "~/ui/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { NoneValue } from "~/ui/primitives/none-value";
-import { TruncatedList } from "~/ui/TruncatedList";
+import { TruncatedList } from "~/ui/truncated-list";
 
 import { InlineRefLink } from "./inline";
 

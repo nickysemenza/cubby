@@ -3,11 +3,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import { runApproval, runOperation } from "~/server/db/schema";
-import { controlRun } from "~/server/purchase-import/run-service";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { requireActor } from "~/server/request-context";
+import { controlRun } from "~/server/domains/purchase-import/run-service";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { McpOperationContext } from "./operation-context";

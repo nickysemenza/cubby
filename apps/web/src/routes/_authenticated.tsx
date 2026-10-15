@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { SmartCollectionProvider } from "~/app/collections/smart-collection-state";
+import { SmartCollectionProvider } from "~/features/collection/smart-collection-state";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context, search }) => {

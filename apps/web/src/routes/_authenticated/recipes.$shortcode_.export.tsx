@@ -15,33 +15,33 @@ import {
 import { useCallback, useMemo, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import { CopyDebugButton } from "~/features/recipes/copy-debug-button";
+import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
+import { CopyDebugButton } from "~/features/recipe/copy-debug-button";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
-} from "~/features/recipes/IngredientQuantities";
-import { recipeTreeToMarkdown } from "~/features/recipes/recipe-export-markdown";
-import { scaleRecipe } from "~/features/recipes/recipe-scaling";
-import { getRecipeNutritionBasis } from "~/features/recipes/recipe-utils";
-import { RecipeFlowView } from "~/features/recipes/RecipeFlowView";
-import { RecipeIngredientMatrixView } from "~/features/recipes/RecipeIngredientMatrixView";
-import { RecipeMagazineView } from "~/features/recipes/RecipeMagazineView";
-import { RecipePrepSheetView } from "~/features/recipes/RecipePrepSheetView";
-import { RecipeScaleControl } from "~/features/recipes/RecipeScaleControl";
-import { RecipeSpecView } from "~/features/recipes/RecipeSpecView";
-import { useRecipeTree } from "~/features/recipes/useRecipeTree";
+} from "~/features/recipe/ingredient-quantities";
+import { recipeTreeToMarkdown } from "~/features/recipe/recipe-export-markdown";
+import { RecipeFlowView } from "~/features/recipe/recipe-flow-view";
+import { RecipeIngredientMatrixView } from "~/features/recipe/recipe-ingredient-matrix-view";
+import { RecipeMagazineView } from "~/features/recipe/recipe-magazine-view";
+import { RecipePrepSheetView } from "~/features/recipe/recipe-prep-sheet-view";
+import { RecipeScaleControl } from "~/features/recipe/recipe-scale-control";
+import { scaleRecipe } from "~/features/recipe/recipe-scaling";
+import { RecipeSpecView } from "~/features/recipe/recipe-spec-view";
+import { getRecipeNutritionBasis } from "~/features/recipe/recipe-utils";
+import { useRecipeTree } from "~/features/recipe/use-recipe-tree";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { pageTitle } from "~/lib/page-title";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { useDetailTitle } from "~/ui/hooks/useDocumentTitle";
-import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { DetailPagePending } from "~/ui/feedback/route-pending";
+import { useDetailTitle } from "~/ui/hooks/use-document-title";
 import { Row } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { DetailPagePending } from "~/ui/route-pending";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";
 

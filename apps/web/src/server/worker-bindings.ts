@@ -1,20 +1,20 @@
 // Types only. worker-configuration.d.ts types the Worker's Durable Object and
-// Workflow bindings from here (scripts/worker-type-imports.ts rewrites
+// Workflow bindings from here (tooling/checks/worker-type-imports.ts rewrites
 // Wrangler's `import("./src/cf-server")`). That file is a global script, and
 // tsc re-checks the whole program after an edit to anything it reaches, so
 // each binding names a type-only RPC interface whose module imports nothing
-// but schema types (docs/reports/local-check-performance.md#typechecking).
+// but schema types (`git show 18f8bd430:docs/reports/local-check-performance.md`).
 import type { Rpc } from "@cloudflare/workers-types";
 import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
-import type { CalendarFeedDurableObjectRpc } from "./calendar/rpc";
-import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
-import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
-import type { PurchaseImportRunAgentRpc } from "./purchase-agent/environment";
-import type { UsdaReleaseRpc } from "./usda-release/rpc";
-import type { WorkflowRunParams } from "./workflow-runs/contract";
+import type { DatabaseFreshnessRpc } from "./db/freshness/rpc";
+import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/rpc";
+import type { ImageProcessingCompanionRpc } from "./domains/image-processing/contracts";
+import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/environment";
+import type { UsdaReleaseRpc } from "./domains/usda-release/rpc";
+import type { WorkflowRunParams } from "./workflows/runs/contract";
 
 // Its implementation imports nothing from the app.
 export type { AiResponseCacheDurableObject } from "./ai/response-cache-durable-object";

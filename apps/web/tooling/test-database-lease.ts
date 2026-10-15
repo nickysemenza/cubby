@@ -18,7 +18,7 @@ import { holdLock, worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
  * Disposable databases for Vitest, browser E2E and native runners.
  * IntegreSQL serves the Vitest integration tier and browser E2E workers;
  * guarded named databases serve native fixtures. The adapters (`tooling/test-setup.ts`,
- * `tests/e2e/e2e-database.ts`) keep their own seeding and reset policies;
+ * `tests/e2e/support/e2e-database.ts`) keep their own seeding and reset policies;
  * this module owns template preparation, checkout, and release.
  *
  * Browser acceptance and Vitest share one IntegreSQL service (every worktree's

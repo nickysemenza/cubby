@@ -1,13 +1,13 @@
 import {
   clearNutritionCachePrerequisite,
   seedNutritionPrerequisite,
-} from "./fixtures-recipes";
+} from "./fixtures/recipes";
 import {
   gotoAuthenticatedPage,
   selectComboboxItem,
   waitForAppHydration,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("nutrition matrix shares URL basis, preserves partial ranges and zero, and exposes the catalog", async ({
   page,

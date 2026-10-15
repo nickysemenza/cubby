@@ -1,13 +1,13 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { eq } from "drizzle-orm";
 
 import { auditLog, product as productTable } from "~/server/db/schema";
 import type { NativeWorkspaceMessage } from "~/lib/native-workspace";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { fixtureUserId, getFixtureDb } from "./fixtures-core";
-import { expect, test } from "./e2e-test";
-import { seedProductPrerequisite } from "./fixtures-catalog";
+import { getDb } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { fixtureUserId, getFixtureDb } from "./fixtures/core";
+import { expect, test } from "./support/e2e-test";
+import { seedProductPrerequisite } from "./fixtures/catalog";
 
 declare global {
   interface Window {

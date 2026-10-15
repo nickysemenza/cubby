@@ -1,8 +1,11 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { dragByKeyboard, waitForDndMutation } from "./dnd-helpers";
-import { seedTaskPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { dragByKeyboard, waitForDndMutation } from "./support/dnd-helpers";
+import { seedTaskPrerequisite } from "./fixtures/catalog";
+import {
+  gotoAuthenticatedPage,
+  reloadAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 const fixtureName = (prefix: string, testInfo: TestInfo) =>
   `${prefix} ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;

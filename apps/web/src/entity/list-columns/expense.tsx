@@ -2,20 +2,20 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { ExpenseSummaryStrip } from "~/app/expenses/expense-summary-strip";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { ExpenseSummaryStrip } from "~/features/expense/expense-summary-strip";
 import {
   expenseOrderIdColumn,
   expenseVendorColumn,
-} from "~/app/projects/shared";
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+} from "~/features/project/shared";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { useDeferredFilterOptions } from "~/ui/hooks/useDeferredFilterOptions";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 
 import { defineListOverride } from "./types";
 

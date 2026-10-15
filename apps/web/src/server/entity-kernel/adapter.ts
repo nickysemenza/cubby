@@ -4,9 +4,19 @@ import type { EntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
-import type { ListReadRow } from "~/entity/list-read-fields";
+import type { ListReadRow } from "~/entity/model/list-read-fields";
+import type { UpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import type { MealMutationHooks } from "~/server/domains/meal/repo/crud";
+import type { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
+import type { TaskMutationHooks } from "~/server/domains/task/repo/crud";
+import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
+import {
+  type MutationSideEffectEntity,
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   ENTITY_SCHEMA_BINDINGS,
   type EntitySchemaBindingEntity,
@@ -15,17 +25,7 @@ import {
 import type {
   ListProjection,
   ListReadPage,
-} from "~/server/repo/list-projection";
-import type { MealMutationHooks } from "~/server/repo/meal/crud";
-import type { TaskMutationHooks } from "~/server/repo/task/crud";
-import {
-  type MutationSideEffectEntity,
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
-import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
-import type { UpcLookupService } from "~/server/services/upc";
-import type { USDAService } from "~/server/services/usda.service";
+} from "~/server/generic/list/repo/list-projection";
 export interface EntityKernelContext {
   /**
    * The operation's single database adapter: authoritative for strong

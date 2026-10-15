@@ -11,10 +11,10 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import * as schema from "~/server/db/schema";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
-import { upsertCookbook } from "~/server/repo/cookbook";
-import { createRecipe } from "~/server/repo/recipe/crud";
-import { saveMealFood } from "~/server/repo/meal/food";
+import { getDb } from "~/server/db/helpers";
+import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
+import { createRecipe } from "~/server/domains/recipe/repo/crud";
+import { saveMealFood } from "~/server/domains/meal/repo/food";
 import {
   householdDateTime,
   householdLocalDate,
@@ -23,12 +23,12 @@ import {
 import {
   attachExistingImageToEntity,
   createUploadedImageRecord,
-} from "~/server/repo/image";
+} from "~/server/domains/image/repo/image";
 import {
   startPhotoInventoryRun,
   markRunFailed,
-} from "~/server/purchase-import/run-service";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+} from "~/server/domains/purchase-import/run-service";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { seedBaseWorld, BASE_HOME_SHORTCODE } from "../factories/base-world";
 import {
   buildEntity,

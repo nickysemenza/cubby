@@ -23,16 +23,16 @@ import superjson from "superjson";
 import { runContract } from "~/contracts/run.contract";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
-import { unparsedStartOperationResultSchema } from "~/server/start-operation.contract";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { unparsedStartOperationResultSchema } from "~/server/operation-runtime/start-operation.contract";
+import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { financialAccount } from "~/server/db/schema";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
-import { recordStatementRows } from "~/server/repo/statement-row";
-import { statementRowExternalId } from "~/server/repo/statement-row-identity";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { replaceSettlementRefs } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { statementRowExternalId } from "~/server/domains/statement-import/repo/statement-row-identity";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   buildKernelContext,

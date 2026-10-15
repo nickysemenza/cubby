@@ -1,11 +1,11 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
 import { ROW_DENSITY } from "~/ui/data-table/density";
 
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // The virtualizer positions rows at ROW_DENSITY.rowHeight; a cell that stacks
 // lines past it (brand/category/UPC, nutrient chips over a count, reference

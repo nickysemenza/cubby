@@ -7,10 +7,10 @@ import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { viewsForEntity } from "~/entity/view-manifest";
+import { viewsForEntity } from "~/entity/model/view-manifest";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
-import { usePageWorkbenchTarget } from "~/ui/page/Page";
+import { usePageWorkbenchTarget } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -27,12 +27,12 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import { isTableLayoutCustomized } from "./column-layout";
 import { DataTableViewOptions } from "./data-table-view-options";
-import { TableSavedViewsMenuItems } from "./DataTableViews";
-import type { FilterSheetSwitch } from "./FilterBar";
-import { LedgerFilters } from "./LedgerFilters";
+import { TableSavedViewsMenuItems } from "./data-table-views";
+import type { FilterSheetSwitch } from "./filter-bar";
+import { LedgerFilters } from "./ledger-filters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
-import TableLayoutCustomizer from "./TableLayoutCustomizer";
+import TableLayoutCustomizer from "./table-layout-customizer";
 
 interface DataTableToolbarProps<TData extends RowData> {
   table: Table<TData>;

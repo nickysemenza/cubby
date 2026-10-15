@@ -3,7 +3,7 @@ import { pollUntil } from "@cubby/shared/retry";
 import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 
 import {
   createPostgresPool,

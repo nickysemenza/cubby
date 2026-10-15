@@ -8,7 +8,7 @@ import {
   type OperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import { defaultPagination } from "~/ui/data-table/tableUtils";
+import { defaultPagination } from "~/ui/data-table/table-utils";
 
 import { getEntityFilters } from "./filter-manifest";
 import {
@@ -28,7 +28,10 @@ import {
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
-import type { ListEnrichmentGroup, ListReadRow } from "./list-read-fields";
+import type {
+  ListEnrichmentGroup,
+  ListReadRow,
+} from "./model/list-read-fields";
 
 export type EntityListParams<E extends ListEntity> =
   EntityListParamsByEntity[E];

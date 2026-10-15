@@ -9,13 +9,13 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { image, imageProcessingJob } from "~/server/db/schema";
-import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/direct-socket-paths";
-import { getDb } from "~/server/repo/database-helpers";
-import { createUploadedImageRecord } from "~/server/repo/image";
-import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
-import { persistAppleImageDescriptionSubmission } from "~/server/repo/image-processing-submission";
-import { createEvidenceHarnessContext } from "./fixtures-core";
-import { expect, test } from "./e2e-test";
+import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/http/direct-socket-paths";
+import { getDb } from "~/server/db/helpers";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { persistAppleImageDescriptionSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
+import { createEvidenceHarnessContext } from "./fixtures/core";
+import { expect, test } from "./support/e2e-test";
 
 const jpeg = readFileSync(
   new URL("./fixtures/synthetic-white.jpg", import.meta.url),

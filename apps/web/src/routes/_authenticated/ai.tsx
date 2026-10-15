@@ -7,8 +7,8 @@ import { suggestionReviewFiltersSchema } from "~/features/ai/suggestion-review-f
 import { SuggestionReviewList } from "~/features/ai/suggestion-review-list";
 import { AiSmokeTest } from "~/features/developer/ai-smoke-test";
 import { pageTitle } from "~/lib/page-title";
-import { useTabParam } from "~/ui/hooks/useTabParam";
-import { Page } from "~/ui/page/Page";
+import { useTabParam } from "~/ui/hooks/use-tab-param";
+import { Page } from "~/ui/layout/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum(["decisions", "review", "smoke", "usage"]);

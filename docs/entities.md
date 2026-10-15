@@ -95,12 +95,12 @@ pnpm generate
 pnpm check:clean
 ```
 
-One generator (`scripts/generator/main.ts`) writes the entity artifacts first
-(`scripts/generator/entities/`), then the artifacts derived from the operation
+One generator (`apps/web/generator/main.ts`) writes the entity artifacts first
+(`apps/web/generator/entities/`), then the artifacts derived from the operation
 contracts: the operation registry, handler loaders, the browser client catalog
 that resolves each contract's cache tags and invalidation data
-(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with its
-native derivations (`scripts/generator/http-api/`). Generation fails on invalid
+(`apps/web/generator/start-operations/`), and the HTTP OpenAPI document with its
+native derivations (`apps/web/generator/http-api/`). Generation fails on invalid
 metadata, duplicate entity keys or routes, invalid relation policies, and
 unsupported capabilities. Generated files are never committed:
 `pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
@@ -143,7 +143,7 @@ and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
 also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
-(`scripts/generator/entities/render/shared.ts`). `bulkUpdate` is the
+(`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` is the
 capability's own roster, not `entityFieldModels[entity].bulk` (Expense
 bulk-updates `date`, which the field model does not mark bulk). Navigation
 grouping, the Records catalog, empty states and the native shell's sections
@@ -201,7 +201,7 @@ exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
 review and durable transcript rather than purchase report sections.
 
-Expense analytical reads use `server/repo/expense-derived-read.ts`: a declared
+Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.
 Compatible charts, analyzer grids and facets consume that relation in one
 statement; distinct date scopes remain separate. Ledger selection, search,
@@ -221,7 +221,7 @@ Unclassified receipt roles keep one unresolved allocation with the original
 signed amount; they never enter adjustment weighting. Role completeness is
 reported separately from amount completeness.
 
-Entity reports declare lazy dependencies in `server/repo/entity-report/`.
+Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
 Each batch memoizes dependency promises by declaration identity, preserving
 slot order, duplicates, cursors and status. Distinct slots share compatible
 project trees and scopes, record identities, purchase hydration and Run
@@ -239,7 +239,7 @@ separately rather than generalizing a synthetic speedup to production.
 
 **Report slots.** A `slot` section whose content is figures, a chart series, a
 table or dated schedule rows has no per-platform code: the server composes it
-once (`entityReport.get`, builders in `server/repo/entity-report/`, block kinds
+once (`entityReport.get`, builders in `server/generic/entity-report/repo/`, block kinds
 in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
 `reportSlots`, a declaration to `REPORTS`, and register the slot on both clients;
@@ -338,7 +338,7 @@ field declares `.meta({ readFrom: "ingredient.id" })`: the generator emits it as
 `readPath` for `StructuredValue.project`, and `structured-value.ts` applies the same path.
 `pnpm generate` derives the `valueSchema` from the field's Zod input schema (`update`, else `create`;
 a create-only field such as a meal's `recipes` draws on create alone;
-`scripts/generator/entities/render/value-schema.ts`) and writes it to the Swift manifest and to
+`apps/web/generator/entities/render/value-schema.ts`) and writes it to the Swift manifest and to
 `generated/structured-value-schemas.gen.ts` (web imports it only from the editor): nullable text,
 number, boolean, enum, shortcode reference (a pattern that names an entity prefix), amount
 (`{value, unit}`), constants, objects, arrays, maps over an enum of keys, and variants over a
@@ -356,7 +356,7 @@ including recursive `ValueSchema`. Synthesized Codable still owns encoding and d
 optionals and initializer defaults stay distinct, and the catalog stays bundled JSON to avoid
 the Release compiler stall from a giant Swift literal. `LabeledOption.color` is retained
 in both web and native descriptors and resolves to the shared adaptive palette. Computed
-native conveniences remain extensions in `Catalog/EntityManifest.swift`.
+native conveniences remain extensions in `Manifest/EntityManifest.swift`.
 
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
 of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it
@@ -385,7 +385,7 @@ A section or slot can declare `workspace: "overview" | "work" | "evidence"` for 
 
 Relation tables are opt-out. Every `many` relation on a generic detail page
 renders a table: a declared `relation` section, or one the compiler derives
-(`scripts/generator/entities/derive.ts`) with `derived: true`,
+(`apps/web/generator/entities/derive.ts`) with `derived: true`,
 the target's default columns. Empty derived sections remain visible and open. The derived
 section finds its filter on the target: the only id/idMulti descriptor whose
 `brandRef` names this entity and that no other section on the page already
@@ -440,7 +440,7 @@ stay out, since the editors' image block owns them on both platforms.
 `presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
 start/optional-end pair. Web lists fold it into the start field's row through
 `DateDisplay` and `formatDateSpan` (full date plus relative context outside tables;
-compact stacked day/distance inside tables, per [web UI contracts](agents/web-ui.md))
+compact stacked day/distance inside tables, per [web UI contracts](../apps/web/docs/web-ui.md))
 and hide the end field. Web details and inspectors show both endpoints as
 independently editable, human-readable dates with their contextual quality
 results. The editor rejects an end before its start; the native catalog's
@@ -482,7 +482,7 @@ unchecked touched checkbox sends `false`, and a cleared nullable field sends
 `bulkUpdate` route or multi-select delete.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
-table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
+table, bound in `apps/web/src/server/db/helpers/crud.ts`
 `imageJoinBindings`, whose keys are checked against `GalleryEntity`),
 `"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
 direct logo FK, vendor). The manifest keeps the storage boolean `hasImages`
@@ -502,7 +502,7 @@ outgoing relation to an Image or image-storing subject (direct Image
 references first); `displaySourceOverrides` replaces that derived ranking and
 `[]` opts out. The schema rejects the other name for each kind. The compiler does not borrow through incoming activity or
 recursively consume another entity's resolved `displayImages`. The centralized
-resolver in `apps/web/src/server/repo/entity-display-image.ts` orders direct
+resolver in `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` orders direct
 displayable images before related images, filters unavailable files, and
 deduplicates by image ID. Web and native clients render the first result and do
 not derive their own cover.
@@ -721,7 +721,7 @@ root is a row whose parent is null or does not itself match the filters (judged
 over the whole filtered set, so a matching child of a filtered-out or deleted
 parent stays reachable); `roots`/`children` rows carry `childCount`, their
 directly nested children that match the filters, and `totalCount` counts the
-requested scope. The shared list scaffold (`server/repo/list.ts`) owns it, so a
+requested scope. The shared list scaffold (`server/generic/list/repo/list.ts`) owns it, so a
 scaffold-built tree repository needs no code. The web table pages the roots and
 reads an expanded row's first children page through the same query; a status
 row after its children shows that read loading, a failed read or deferred
@@ -735,7 +735,7 @@ counted parent's children, level by level. A structured
 value that every client would otherwise re-word declares where the record
 carries its text instead of a renderer: `display.labelPath` for a list cell,
 `display.detailLabelPath` for a detail row (a server-composed sentence, lines
-joined with `\n`, built in `server/repo/detail-display-labels.ts` and carried
+joined with `\n`, built in `server/entity-kernel/repo/detail-display-labels.ts` and carried
 as a `labelField`), `display.itemsPath` for a list of worded rows that each
 open their record (`displayItemsField`), and `display.readPath` plus `format`
 or `valueOptions` for a nested value. Clients print what the record carries;
@@ -779,7 +779,7 @@ means None and reset clears the stored override. Project’s field label is
 Default assignee; task’s is Assignee. The static My tasks saved view combines
 open status with `assigneeId: @me`; every Ledger Party filter accepts `@me`,
 which the entity kernel resolves to the actor's linked member (nothing matches
-without one; [ADR 0015](adr/0015-current-member-filter-token.md)). Unassigned uses the assignee presence filter. Both reuse the generic saved-view and resolution-badge paths.
+without one; [ADR 0018](adr/0018-current-member-filter-token.md)). Unassigned uses the assignee presence filter. Both reuse the generic saved-view and resolution-badge paths.
 
 A saved view may also declare `view` (the list view it opens in, such as
 `shelf`) and `pin: { surface: "home", order }`, which lists it in the home
@@ -913,7 +913,7 @@ declaration module must not export `filterSchemas`.
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
-inspector metadata (server and the `features/entity-platform` schema surfaces only), browser route roster, the typed list search
+inspector metadata (server and the `entity/platform` schema surfaces only), browser route roster, the typed list search
 schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific
@@ -975,12 +975,67 @@ mutation order. Workflow services own operations that are not entity CRUD, such
 as expense splitting, reconciliation, cookbook import, and product enrichment.
 Extensions delegate to those services instead of branching inside the kernel.
 
+Partial updates preserve omitted fields. Scalar patching rejects undeclared
+keys, skips unchanged rows, and audits changes in the same transaction;
+convenience bulk setters keep their all-selected-row responses. Alias
+deduplication, tree invariants, relationship writes, import settlement,
+quantity reconciliation, explicit receiving, and deletion/merge transactions
+stay on registered domain owners. Specialized renderers keep inline edits,
+quantity displays, relationship filters, and computed facts; an unknown
+renderer override fails rather than silently dropping a field. Semantic editing
+intents select fields once; context-sensitive defaults, access rules, command
+transforms, and editor-specific blank handling stay explicit, and canonical
+schemas validate the resulting payloads. Domain wayfinding owns labels and
+entity membership; the application-view catalog derives ordinary destinations
+from it and the entity registry, while authored specialty destinations keep
+their order.
+
+Source generation never changes stored data; physical changes need their own
+preserving migration under
+[domain rules](agents/domain-rules.md#production-changes). Generated operation
+rosters and primitive field enumeration do not establish behavior: exercise
+shared compiler/runtime behavior with representative contracts and keep real
+database/browser coverage for domain exceptions.
+
+## Workflows
+
+The fluent builder is the public graph-authoring interface; a bound workflow
+exposes the same executable definition the inspector shows. Argument adapters
+supply context and input, and application decisions belong to named steps. A
+single repository transaction, provider operation, or pure computation that
+needs no graph sequencing is an ordinary registered function: it runs directly
+with tracing and exposes its operation identity to inspection without a
+one-step graph. Repositories exclusively own transactions; the workflow runtime
+has no transaction adapters, transaction nodes, or after-commit queues.
+
+The runtime distinguishes reads, commits, and required effects. Workflow-level
+failure translation preserves cancellation and effect-failure evidence.
+Required effects follow their commit, including when cancellation arrives after
+the write. Ordinary recovery refuses new or ambiguously acknowledged writes and
+is not retried recursively by the executor. Queue messages are wakeups, not
+durable jobs; handlers gate on the row's own staleness marker (README
+"Background tasks").
+
+Mapped and bulk workflows preserve input order and bounded concurrency. Started
+work settles before failure, cancellation, or early close is finalized; later
+windows are not prefetched. Finalization receives every completed item even
+when its progress tick was not consumed, and an empty operation keeps its
+original completion metadata without inventing an item.
+
+The agent stream is a direct async generator: it acquires and unconditionally
+releases read-only tools, preserves event order, and forwards cancellation.
+Cookbook preparation feeds the shared bounded bulk executor; there is no
+generic preparation framework. Import settlement keeps committed recipe
+receipts for final costing and indexing. Background payload graphs expose
+revision checks, replacement dispatch, provider calls, and persistence; queue
+draining caches each batch-kind lookup once.
+
 ## Transports
 
 Generic detail, list, deferred filter-option, and write operations use one
 authenticated operation dispatcher and generated entity-to-input/output maps.
 Specialized shapes such as Image and USDA Food are ordinary operations in
-`server/operations/`, so they share the operation module's authentication,
+`server/domains/<domain>/operations*`, so they share the operation module's authentication,
 validation, errors, cancellation checkpoints, tracing, and console
 observability.
 
@@ -990,13 +1045,15 @@ dispatcher; operation and entity labels remain in request headers for DevTools
 and tracing. SSR invokes that dispatcher in-process.
 
 The operation boundary chooses the read policy before invoking its handler.
-`apps/web/src/server/read-policy.ts` owns that policy; ordinary interactive
+`apps/web/src/server/db/read-policy.ts` owns that policy; ordinary interactive
 operations currently use authoritative reads without a freshness RPC.
 Specialized snapshot/external-service readers select their own sources.
 Transport methods do not determine policy.
 
 Operations that are not entity CRUD have one path: an operation contract in
-`src/contracts/`, implemented once in `src/server/operations/<domain>.server.ts`
+`src/contracts/`, implemented once in the owning domain's operations module
+(`src/server/domains/<domain>/operations.server.ts`, or `operations/*.server.ts`
+when a domain has several)
 with `implementOperationDomain(contract, handlers)`, calling repositories. The
 browser client, HTTP API, and MCP are adapters over that implementation and
 hold no business logic; there is no per-transport `*-browser.server.ts` module.
@@ -1013,6 +1070,75 @@ invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
 `entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
 not import browser transport modules. Operation adapters and typed JSONL stream routes are the only transport
 seams; business behavior remains in the operation modules.
+
+## Browser cache policy
+
+Contracts (`apps/web/src/contracts/*.contract.ts`) carry browser cache policy as
+data: a query's `cache: { tags?, profile? }` and a mutation's
+`invalidates: RippleKey[]`. Tags default to `[domain, member]`, so a member
+declares them only when they differ (`tags: []` opts out of tagging).
+`invalidates` names rows of the fan-out table in
+`integrations/tanstack-query/cache-tags.ts`; an empty list is a deliberate no-op.
+The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
+import; no contract holds React, query-client, or input-dependent code.
+
+The Start operation stage of `pnpm generate` resolves that data into one
+generated browser catalog, `integrations/tanstack-query/generated/catalog.gen.ts`,
+with a domain object per contract (`product`, `recipe`, ...) that call sites
+import. Policy that must read the call's input (the per-entity output schema and
+cache profile of `entity.list`/`entity.detail`/`entity.timeline`, the payload-keyed
+fan-out of `entity.mutate`) cannot be data; it lives in
+`integrations/tanstack-query/operation-overrides.ts`, and the catalog spreads it
+onto its member. There are no per-domain client wrapper modules.
+
+## Progressive lists
+
+Standard lists use three shared operations: `entity.listBase`,
+`entity.listEnrichment`, and `entity.listSummary`. Declarations own the deferred
+field groups and their dependencies; fields outside those groups are core.
+Generated schemas validate group ownership against the canonical complete row,
+reject dependency cycles, and supply browser and native metadata.
+
+Base reads perform authoritative filtering, ordering, grouping, pagination, and
+exact counts; expensive expressions that select or order rows still run before
+base results return. Enrichment reads accept public IDs, resolve declared
+dependencies, and return canonical patches for requested groups. Summaries apply
+the complete filter population, including ID restrictions, independently of the
+visible page. Complete readers call the same selectors and loaders and validate
+the composed canonical result. Specialist workflows keep their own readers.
+
+The browser list session and native enrichment model track field readiness
+separately: a pending value is not zero, a missing image, or healthy quality.
+Visible columns and structural/provider dependencies determine requested
+groups. Superseded work is cancelled, responses from earlier generations are
+discarded, and ready patches preserve row identity and order. A failed combined
+enrichment read falls back to the same reader per group so independent fields
+stay available; healthy batches select their page once. Failed groups can be
+retried.
+
+MCP `entity_read.list` at the default summary detail publishes only
+`entitySummaryFields` (`contracts/mcp-projections.ts`), so it runs `listFields`:
+the base read, one enrichment read of only the groups owning those fields, and
+the complete-population summary. `resultDetail: "full"` and kinds without a
+progressive reader run the complete list. Product list readers start the page's
+USDA batch as soon as its barcodes load, so the external lookup overlaps the
+remaining enrichment reads.
+
+Timing evidence comes from
+`pnpm --dir apps/web exec tsx tooling/checks/read-performance.ts --origin <origin> --output <artifact.json>`
+with `CUBBY_READ_AUTHORIZATION` or `CUBBY_READ_COOKIE` supplied privately in the
+environment; the script's options own sample counts, entity selection,
+concurrency, `--input` populations, `--mode complete`, `--first-invocation`, and
+`--caldav`. Credentials and response bodies are never written to artifacts.
+Resource GET pagination uses `page=1` while progressive structured input uses
+`pageIndex=0`; keep compared populations equivalent. The harness does not infer
+platform cold starts from elapsed time. SQL count, database acquisition, and
+Worker CPU require matching sampled trace evidence (unavailable values stay
+null), and a decoded-row measurement does not prove browser paint time. The
+target is warm usable lists below 500 ms (300 ms stretch), with full enrichment
+compared separately. No historical SQL-plan baseline exists for regional or
+Hyperdrive placement; placement stays unchanged unless isolated repeated
+comparisons show gains without regressions or recurring cost.
 
 ## Filters and search
 
@@ -1040,7 +1166,7 @@ Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection
 SQL and embedding loaders remain explicit because several entities need joins,
 aggregates, and workflow-specific text. Fan-out is declared once per
-dependency in `searchDependents` (`server/services/mutation-side-effects.ts`):
+dependency in `searchDependents` (`server/entity-kernel/repo/mutation-side-effects.ts`):
 any create or update of the source entity refreshes its dependents, never a
 field-sensitive subset and never one inferred from relation edges. The kernel
 refreshes an entity's own projection and its fan-out projections inside the
@@ -1167,7 +1293,7 @@ unsupported sort fields fall back to the default. Column controls are session
 state. MCP retains its paged read contract. Run rows open passive Problems until
 Run detail reads stop recovering execution.
 
-The compiler (`scripts/generator/entities/data-quality.ts`) synthesizes two
+The compiler (`apps/web/generator/entities/data-quality.ts`) synthesizes two
 model fields (`dataQuality`, `dataGaps`) with the `data-quality` list
 renderer, the `dataStatus`/`dataGap` filter descriptors, and a `dataQuality`
 sort entry — the sort shares the column id, so the "Data quality" column
@@ -1184,7 +1310,7 @@ message maps, `dataCheckPresentation` (satisfied labels and ownership), `dataQua
 composes the public schema from that leaf.
 
 Every declared check id needs exactly one binding in the web registry
-(`apps/web/src/server/repo/data-quality/checks/<entity>.ts`), typechecked two
+(`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`), typechecked two
 ways: `entries.ts`'s `satisfies` against the generated per-entity check
 union, and the registry unit test. A `CheckBinding<T>` supplies
 `expected?(t)` (omitted = always expected), `missing(t)`, and
@@ -1237,14 +1363,14 @@ and applicable caps. Related gaps remain separate from the owner's score and
 must not propagate through recursive relationship chains. The score is unindexed — a correlated `EXISTS`
 per check per row — which is fine at household scale. `related` roll-ups add
 an `EXISTS` against an aliased related table using that entity's own
-bindings; `repo/list.ts` binds the resulting filters and sort for every
+bindings; `generic/list/repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
 Durable "not available" exceptions (`data_exception.set`/
 `data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
-list per check (`EXCEPTION_REASONS` in `repo/data-quality/exception-reasons.ts`, exposed on each
+list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
 explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
@@ -1310,6 +1436,93 @@ removes its proof before its worklist target and detaches retained original
 evidence to the owning Run. These history references do not claim ownership of
 an Image.
 
+## Relationship discovery and suggestions
+
+Web and the Apple apps share relationships through the ordinary operation
+contracts and `/api/v1`. Swift maps generated OpenAPI payloads into CubbyKit
+relationship models; ranking and eligibility are not reimplemented on device.
+The cross-client wire example
+`packages/schemas/fixtures/relationship-discovery.json` feeds both Zod and Swift
+mapping tests. Web inline previews and the full Relationships section share one
+query result; native graph and list views share selection and loaded data, and
+graph state is local to the active view.
+
+`entity.explore` takes an entity reference and a depth of one to three and reads
+the manifest-backed graph breadth-first, returning nodes, directed edges,
+branches, explanatory paths, and completion state. A hop is a displayed
+relationship; a derived relationship keeps its declared provenance. Each branch
+contributes its first 12 records and keeps `nextOffset` for explicit paging
+through `entity.graph`, so deeper levels never silently exhaust a large branch.
+Reads batch up to 25 roots under aggregate ceilings of 500 records, 1,000
+edges, 32 reads, and ten seconds. Completion distinguishes exhaustion from
+depth, pagination, and budget limits; returned paths explain the explored
+records and do not claim an unsearched branch has no shorter connection.
+`entity.graphPaths` remains the destination-path search. Cycles are valid, and
+all traversal applies the live-record filters, including on intermediate tables.
+
+`recommendations.forEntity` returns a source reference, a source-context
+`basisKey`, and typed groups; discovery works when recommendations or a
+similarity index are unavailable.
+
+- **Expense projects:** candidates overlap the expense date, exclude the
+  current project, and rank by same-trade principal expenses, then exact-product
+  principal expenses, then the narrower date window, name, and identifier. The
+  reviewed expense is excluded from history and derived dates before ancestor
+  windows are folded; explicit date overrides win. At most three candidates and
+  three supporting expenses per candidate are returned.
+- **Inventory placement:** stock in Unknown earns a suggestion only when the
+  exact product has one unambiguous other live stock destination.
+- **Product relatedness:** semantic candidates and shared-tag evidence remain
+  discovery, with their similarity readiness state.
+
+Graph proximity alone never enables a write. An expense project proposal uses
+the expense update and inventory placement the move operation; both require
+explicit acceptance, keep the proposal on failure, and refresh affected views
+on success. A changed source basis clears an outstanding proposal. When a move
+coalesces stock into an existing row, both clients follow the surviving row and
+replace the deleted source in navigation.
+
+### Product relationship route
+
+`product.relationshipRoute`, keyed by the Product's public shortcode, owns
+Product relationship previews; generic inspectors and route renderers must not
+recreate its semantics with client-side fan-out. Product is the selected
+station. Inventory/Location, Purchase/Expense/Vendor, Project, and Task are
+conditional branches from Product, not a chain: a visual route continues
+through a branch only when the record supplies evidence for every edge, so a
+Location never implies it caused a Purchase, nor a Purchase that it belongs to
+a Project.
+
+The result separates `direct` and `derived` branches (direct first), returns
+exact branch counts with at most three deterministic previews, uses public
+shortcodes for every linked station, and exposes source/provenance labels,
+never SQL or renderer concerns. Empty branches explain what is absent without
+inventing a station. Deeper pagination stays lazy; generic layout owns only
+disclosure, links, loading/error geometry, and accessibility.
+
+| Station                | Meaning and source                                             | Required distinction                                                                        |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Stock                  | Product → InventoryEntry → holding Location                    | A holding Location is not an identity-only Location.                                        |
+| Also a location        | Location whose identity is this Product                        | Keep separate from “Stock”.                                                                 |
+| Expenses               | Acquisition or disposition lines keyed by `productId`          | Explain kit-owned expenses and explicit manual prices where applicable.                     |
+| Purchases              | Explicit `purchaseProduct` links or inferred itemized Expenses | Label `Direct link`, `Via expense`, or both; exit/future Expense rows are not acquisitions. |
+| Vendors                | Derived attributed Product Expense → Purchase → Vendor spend   | An explicit `purchaseProduct` link alone is not vendor spend.                               |
+| Used on projects       | Explicit reusable-tool usage                                   | Keep separate from acquisition attribution.                                                 |
+| Purchased for projects | Derived acquisition-spend project attribution                  | A Project may appear in both project branches.                                              |
+| Tasks                  | Nullable `Task.subjectProductId` links for non-food Products   | Preserve the existing task creation path and truthful empty state.                          |
+
+The station labels above are required; do not collapse paired meanings into a
+decorative graph. A recategorized Product keeps historical project-use evidence
+visible and linkable, while category-gated mutations stay read-only. Soft-deleted
+intermediates and targets never appear in counts or previews; real unassigned
+project attribution is shown. Every linked target opens its canonical
+`/<plural>/$shortcode` route. `ProductPurchaseOut` carries `vendorName`, not
+`vendorId`: Purchase stations open Purchases, and the derived Vendor branch owns
+Vendor links from its own evidence. Specialized Product sections remain the
+source of their mutation behavior. The
+[local journey coverage map](agents/core-journey-e2e.md) tracks the
+relationship browser check.
+
 ## Identity, attachments, and the physical graph
 
 Every shortcode entity has one durable `Entity` row (ADR 0006): payloads bind
@@ -1348,7 +1561,7 @@ attachment metadata/checksums. Model failures propagate without a heuristic
 fallback. Explicit file attachment remains available.
 
 The physical graph is composed at read time from `ENTITY_EDGES` and
-`ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
+`ENTITY_EDGE_OWNERS` (`generic/entity-links/repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
 the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
@@ -1364,7 +1577,7 @@ table each (ADR 0007):
   `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and
   cycle rules, per-end role, label, liveness, and merge collision rule). The
   table's CHECKs and the edge-source branch per kind derive from that
-  declaration; the write helpers are in `repo/entity-links.ts`. Every query
+  declaration; the write helpers are in `generic/entity-links/repo/entity-links.ts`. Every query
   names its `kind` and filters `deletedAt`.
 - `EntityExternalId(entityId/entityKind, source, kind, externalId, url,
   isPrimary)` holds every identifier an outside system gave an entity, and
@@ -1377,7 +1590,7 @@ table each (ADR 0007):
 - `EntitySource(entityId/entityKind, fieldPath, url, sourceEntityId/sourceEntityKind, quote, observedAt,
   selectedVariant, valueFingerprint, recorder)` records where a fact about an
   entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
-  `repo/entity-source.ts`). Every create/update command and image attach
+  `entity-kernel/repo/entity-source.ts`). Every create/update command and image attach
   accepts `sources[]`; the kernel validates `fieldPath` against the manifest,
   writes the rows in the mutation's transaction, takes the recorder from the
   actor (never input) and fingerprints the post-write field value. Detail
@@ -1679,7 +1892,7 @@ precedence rule.
    projections explicit. A physical change still requires a migration that
    carries existing rows; generation does not apply production DDL.
 3. Declare its repository with `defineRepository(entity, { get, list, … })`
-   (`apps/web/src/server/repo/repository.ts`) and point
+   (`apps/web/src/server/entity-kernel/repo/repository.ts`) and point
    `extensions.ports.repository` at the export; the generator binds it to
    the kernel. Methods take the kernel context (`(ctx, …)`); the declared
    actions gate which ones the kernel exposes (`capabilities.lifecycle:

@@ -8,8 +8,8 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { type ReactNode, useCallback, useState } from "react";
 
+import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { entities } from "~/entity/entities";
-import { enumFieldLabel } from "~/entity/enum-field-display";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { cn } from "~/lib/utils";
 

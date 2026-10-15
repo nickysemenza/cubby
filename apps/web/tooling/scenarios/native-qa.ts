@@ -3,12 +3,12 @@ import type { Pool } from "pg";
 
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { photoRunImage } from "~/server/db/schema";
-import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
-import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
-import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertOperation } from "~/server/repo/run-operation";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
+import { proposePhotoGroups } from "~/server/domains/photo-import/run/proposals";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { getDb } from "~/server/db/helpers";
+import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { createEntity } from "../factories/create";

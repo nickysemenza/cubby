@@ -5,7 +5,7 @@ import { z } from "zod";
 import { SearchPage } from "~/features/search/search-page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   q: urlStringParam,

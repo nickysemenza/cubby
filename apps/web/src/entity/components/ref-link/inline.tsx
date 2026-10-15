@@ -19,10 +19,11 @@ import {
 } from "~/entity/components/record-mark";
 import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";
-import { LocationIcon } from "~/features/locations/location-icons";
+import { LocationIcon } from "~/features/location/location-icons";
+import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import {
   STACKED_SECONDARY_CLASS,
   useDenseCell,

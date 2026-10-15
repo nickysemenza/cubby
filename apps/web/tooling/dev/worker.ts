@@ -3,7 +3,7 @@ import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
 import worker from "../../src/cf-server";
-import { activeUsdaRelease } from "../../src/server/usda-release/client";
+import { activeUsdaRelease } from "../../src/server/domains/usda-release/client";
 import { PREVIEW_DOCUMENT } from "./preview/document";
 import { assertDevDatabaseUrl } from "./state";
 import {

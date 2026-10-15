@@ -1,12 +1,12 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import type { Request } from "@playwright/test";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { dispatchesOperation } from "./dispatch-wire";
-import { seedTaskPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { dispatchesOperation } from "./support/dispatch-wire";
+import { seedTaskPrerequisite } from "./fixtures/catalog";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 /**
  * List/selection delete confirms through the same dialog as the detail

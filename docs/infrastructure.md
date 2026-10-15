@@ -52,7 +52,7 @@ name predates `entityKind` and must remain when recreating the index.
 ### Workflow-backed Runs
 
 Mailbox discovery is a Workflow-backed Run. Its page/retention/admission
-contract lives in the [purchase-import module guide](../apps/web/src/server/purchase-import/README.md#mail-import-end-to-end).
+contract lives in the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/README.md#mail-import-end-to-end).
 Workflow instances are attempts, not the durable record; retries must resume
 persisted progress without depending on provider retention. Instance diagnostics
 expire independently of Run history. The Run's Cloudflare dashboard link requires
@@ -92,7 +92,7 @@ checked-in configuration is part of `apps/web/wrangler.jsonc`:
   `photo-inventory:<Run.id>` per run (`importRunAgentIdentity`); pi keeps the
   transcript, inbox, and tasks in the object's SQLite, and Lifecycle jobs wake
   it through its alarm after eviction;
-- the `cubby-purchase-agent` queue consumer (`server/purchase-agent/queue.ts`),
+- the `cubby-purchase-agent` queue consumer (`server/domains/purchase-agent/queue.ts`),
   which fences duplicate and late `start_or_resume` deliveries with the Run's
   dispatch generation (`canDispatchCoordinator` / `acknowledgeCoordinator`),
   retries a transient failure, and fails the Run after three attempts;
@@ -113,16 +113,16 @@ state.
 It was a separate Worker with no database credential for that reason; it now
 runs in this Worker behind an in-process boundary enforced by construction:
 
-- The agent's code (`apps/web/src/server/purchase-agent/`) receives no `env`.
-  Its host (`server/purchase-import/agent-host.ts`) builds a narrowed
-  environment (`server/purchase-agent/environment.ts`): the AI Gateway, the
+- The agent's code (`apps/web/src/server/domains/purchase-agent/`) receives no `env`.
+  Its host (`server/domains/purchase-import/agent-host.ts`) builds a narrowed
+  environment (`server/domains/purchase-agent/environment.ts`): the AI Gateway, the
   scripted test model in the workerd harness, the purpose's MCP tool
   definitions, and the services of the one Run the object's name identifies
   (`importRunIdFromAgentIdentity`), so a coordinator cannot address another
   Run. The queue consumer gets a separate environment that resolves any Run's
   services and coordinator. The Agents SDK base class gets an empty
   environment.
-- Every Cubby effect is a Run service (`server/purchase-import/agent-services.ts`):
+- Every Cubby effect is a Run service (`server/domains/purchase-import/agent-services.ts`):
   bound to one Run when created, it parses its input
   (`@cubby/schemas/purchase-agent-services`), opens its own database scope,
   and resolves every target from that Run. No input names a Run, party,
@@ -163,9 +163,9 @@ linted instead of a deployment topology.
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
-`server/purchase-agent/run-agent.ts` on its first event, and the queue handler
+`server/domains/purchase-agent/run-agent.ts` on its first event, and the queue handler
 loads the consumer when a `cubby-purchase-agent` batch arrives
-(`apps/web/scripts/check-server-closure.ts` budgets the static entry, combined
+(`apps/web/tooling/checks/check-server-closure.ts` budgets the static entry, combined
 page path, and total output). Startup lifecycle/progress modules import the
 database helpers' `core` and `query` modules directly: the barrel also
 initializes relation loaders and pulls in the generated entity field model
@@ -175,7 +175,7 @@ an API operation or page needs.
 
 Run purposes and MCP authority are declared in
 `packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
-retirement follow the [purchase-import module guide](../apps/web/src/server/purchase-import/README.md).
+retirement follow the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/README.md).
 The shared host records model usage in `AiUsage`; transport attribution follows
 [ChatGPT-plan usage attribution](runbooks/chatgpt-plan.md#usage-attribution).
 Model/tool content stays out of Sentry and Workers traces.
@@ -407,23 +407,37 @@ explicitly authenticated REST requests. Workers AI REST calls use the account
 `/ai/run` endpoint with gateway routing, metadata, caching, and timeout controls
 in `cf-aig-*` headers (not body options), avoiding a nested
 unscoped provider call.
-Every REST request names the gateway explicitly so it cannot create `default`.
+Every REST request names the gateway explicitly so it cannot create `default`:
+the first authenticated request without a gateway ID recreates `default` even
+after it is deleted
+([manage gateways](https://developers.cloudflare.com/ai-gateway/configuration/manage-gateway/#default-gateway)).
 
 Gateway metadata has three stable dimensions: `environment` (`production`,
 `ci`, or `development`), `feature`, and `operation`, with optional `entityKind`.
 The outbound transport filters to that contract. Model/provider, input counts,
 entity and run identifiers, document paths, chunks, revisions, and prompt
 versions remain in application accounting or traces rather than gateway
-metadata. Cookbook metadata used for model pricing is read before outbound
+metadata. Cloudflare saves only the first five metadata entries per request,
+and a spend rule split by a high-cardinality key gives every value its own
+budget ([custom metadata](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/),
+[spend limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits/)).
+Cookbook metadata used for model pricing is read before outbound
 filtering. Tester Army preserves application feature/operation attribution,
-sets its own environment, and always bypasses gateway caching.
+sets its own environment, and always bypasses gateway caching because the
+documented cache key does not include the gateway or metadata, so shared-gateway
+traffic can return another environment's cached response
+([caching](https://developers.cloudflare.com/ai-gateway/features/caching/#how-the-cache-key-works)).
 
 The shared gateway also shares Cloudflare's Unified Billing allowance of
-200 requests per 60 seconds; this is an accepted capacity tradeoff. A spend
-limit can filter by `environment` to budget CI independently, but cannot
-separate that request allowance. See the
-[consolidation research](research/ai-gateway-consolidation.md) for current
-Cloudflare contracts and their limits.
+200 requests per 60 seconds and its gateway-wide rate limit; this is an
+accepted capacity tradeoff. A spend limit can filter by `environment` to budget
+CI independently, but cannot separate that request allowance. Gateways are not
+a security boundary: AI Gateway tokens are account-scoped, so any `Run` token
+reaches every gateway and its stored BYOK keys
+([authenticated gateway](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)).
+Dynamic routes accept only the OpenAI chat-completions shape, so Anthropic
+Messages calls cannot use them
+([dynamic routing](https://developers.cloudflare.com/ai-gateway/features/dynamic-routing/)).
 Provider routing and model identifiers live in
 `packages/shared/src/ai/models.ts`. The declarations supply the model IDs,
 provider names, capabilities, role-specific schemas, and defaults for application
@@ -460,7 +474,7 @@ Image decisions route to vision-capable Clef independently of the text-only Jev
 trial. Photo identification prepares renditions before the shared adapter
 checks embedded media and uses the existing gateway, retry, cache and usage
 paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
-`server/services/image-identification.service.ts`.
+`server/domains/image/service/image-identification.service.ts`.
 
 Image description consumers select confirmed corrections first, then the current
 preferred cloud result, then the newest available source-matching observation.
@@ -474,11 +488,24 @@ matching. Suggestions remain unconfirmed and never change inventory or identity
 automatically. Prompt/schema revisions fence reuse; historical observations are
 retained rather than rewritten.
 
+Clef classifies composition, selects a category, shortlists bounded catalog
+candidates, then compares the source rendition with at most three
+independently attached Product references. A source image never matches itself
+by id or content hash, and a borrowed gallery image is not independent
+evidence. Candidate names are hints; a search over a truncated roster reports
+the truncation and is never presented as exhaustive, and option probabilities
+are not calibrated confidence. Matching the same Product does not establish
+that two photos show the same possession. Member corrections take precedence;
+later machine evidence may flag a confirmed match for review but cannot replace
+it. Reads never start inference, and retained results for deleted targets or
+changed source content are filtered out. AVIF sources wait, without consuming
+attempts, for the normalization job's verified JPEG snapshot.
+
 An available Apple companion claims compatible waiting image jobs immediately
 when it connects. The queue's no-device cooldown does not delay that claim;
 pending retries still honor backoff. Device participation and advertised image
 capabilities both gate execution. The claim policy belongs to
-`server/repo/image-processing.ts`.
+`server/domains/image-processing/repo/image-processing.ts`.
 
 Cloud image execution uses `cubby-image-cloud`, separate from
 `cubby-background`. Shared image wakeups await durable queue acceptance before

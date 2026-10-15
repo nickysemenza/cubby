@@ -2,11 +2,11 @@ import type { Locator } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 
-import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createFixture } from "./fixtures-core";
-import { seedActiveResearchHistory } from "./fixtures-photos";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createFixture } from "./fixtures/core";
+import { seedActiveResearchHistory } from "./fixtures/photos";
 
 // The server nests a tree list: the browser shows the roots it pages and reads
 // an expanded row's children, never nesting loaded pages itself.

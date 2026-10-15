@@ -783,7 +783,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/financial-account",
+        module: "~/server/domains/financial-account/repo",
         export: "financialAccountRepository",
       },
       search: "document",

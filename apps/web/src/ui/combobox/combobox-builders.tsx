@@ -26,12 +26,12 @@ import { z } from "zod";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { EntityIcon, entityLabel } from "~/entity/entities";
-import { compactFieldText } from "~/entity/field-text";
-import { locationToSegments } from "~/features/locations/location-breadcrumb";
-import { LocationIcon } from "~/features/locations/location-icons";
-import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";
+import { compactFieldText } from "~/entity/fields/field-text";
+import { locationToSegments } from "~/features/location/location-breadcrumb";
+import { LocationIcon } from "~/features/location/location-icons";
+import { resolveLocationPrimaryVisual } from "~/features/location/location-visual-resolver";
 import { matchKindLabel } from "~/features/search/search-utils";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
 import type {
   ComboboxItem,
   PickerChip,

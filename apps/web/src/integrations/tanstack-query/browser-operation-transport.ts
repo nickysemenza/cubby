@@ -3,9 +3,9 @@ import { retryWithBackoff } from "@cubby/shared/retry";
 import superjson from "superjson";
 import { z } from "zod";
 
+import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
-import { createRequestBatcher } from "~/lib/request-batcher";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import {
   START_OPERATION_TRACE_HEADERS,
@@ -17,7 +17,7 @@ import {
   type StartOperationResult,
   type UnparsedStartOperationData,
   unparsedStartOperationResultSchema,
-} from "~/server/start-operation.contract";
+} from "~/server/operation-runtime/start-operation.contract";
 
 type DispatchItem = {
   operation: StartOperationId;

@@ -7,16 +7,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export {
-  formatCompactCount,
-  formatCompactCurrency,
-  formatCount,
-  formatCurrency,
-  formatPercent,
-  formatSmallCurrency,
-} from "~/lib/number-format";
-export { roundTo } from "~/lib/round-to";
-
 // timeZone: "UTC" is load-bearing. __BUILD_DATE__ is a UTC ISO string; without
 // pinning the zone, the CF edge (UTC) and the client (local tz) format it in
 // different zones and can land on different calendar days near a UTC midnight

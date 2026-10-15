@@ -1694,7 +1694,8 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/financial-transaction",
+        module:
+          "~/server/domains/financial-transaction/repo/financial-transaction",
         export: "financialTransactionRepository",
       },
       search: "document",

@@ -5,9 +5,12 @@ import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
-import { EditableTagsCell } from "~/features/recipes/editable-tags-cell";
-import { RecipeTag } from "~/features/recipes/recipe-tag";
-import { formatYield } from "~/features/recipes/recipe-yield";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { EditableTagsCell } from "~/features/recipe/editable-tags-cell";
+import { RecipeTag } from "~/features/recipe/recipe-tag";
+import { formatYield } from "~/features/recipe/recipe-yield";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
@@ -21,12 +24,9 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
-import { useTagOptions } from "~/ui/hooks/useEntityOptions";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
+import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/primitives/none-value";
-import { TruncatedList } from "~/ui/TruncatedList";
+import { TruncatedList } from "~/ui/truncated-list";
 
 import { defineListOverride } from "./types";
 

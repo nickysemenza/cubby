@@ -57,7 +57,7 @@ needs no dollar grant. Explicit member selections of Vendor order Emails use
 the same policy within the existing selection limit. Historical discovery still needs its
 separate scope authorization; other paid models keep their allowance checks.
 No run purpose holds the `start_run` or `member_decision` capability
-(`server/purchase-import/capabilities.ts`), so a coordinator never starts
+(`server/domains/purchase-import/capabilities.ts`), so a coordinator never starts
 another run or makes a member's decision. That gate applies only to
 Run-delegated tokens: a member OAuth session, including an automated routine
 holding a member token, can call every `member_decision` write.

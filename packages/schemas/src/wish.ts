@@ -25,5 +25,5 @@ export const wishFiltersSchema = z.object(wishFilterFields);
 export type WishFilters = z.infer<typeof wishFiltersSchema>;
 
 // `priceRange` is not a Wish column: an aggregate over candidate prices,
-// ordered by the range midpoint via `resolveWishSort` in `server/repo/wish.ts`.
+// ordered by the range midpoint via `resolveWishSort` in `server/domains/wish/repo.ts`.
 export const wishListOut = createPaginatedResponseSchema(wishOut);

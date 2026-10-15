@@ -23,6 +23,11 @@ import {
   mcpResultsEnvelope,
   projectEntityResult,
 } from "~/contracts/mcp-projections";
+import { resolveWithProductCandidatesWorkflow } from "~/server/domains/ingredient/operations.server";
+import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
+import { beginProductCoverage } from "~/server/domains/product/operations/product-recipe-coverage.server";
+import { resolveProductNames } from "~/server/domains/product/repo/resolve-names";
+import { recipeLineCoverage } from "~/server/domains/recipe/operations/recipe.server";
 import { type EntityCommand, executeEntity } from "~/server/entity-kernel";
 import {
   entityBulkUpdateResultSchema,
@@ -59,12 +64,7 @@ import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
-import { previewOperation } from "~/server/operations/entity-integrity-preview.server";
-import { resolveWithProductCandidatesWorkflow } from "~/server/operations/ingredient.server";
-import { beginProductCoverage } from "~/server/operations/product-recipe-coverage.server";
-import { recipeLineCoverage } from "~/server/operations/recipe.server";
-import { resolveOrCreatePlants } from "~/server/repo/plant";
-import { resolveProductNames } from "~/server/repo/product/resolve-names";
+import { previewOperation } from "~/server/generic/integrity/operations/entity-integrity-preview.server";
 
 import {
   batchInputSchema,

@@ -12,7 +12,7 @@ import {
   type DetailEntity,
   detailEntities,
 } from "~/entity/generated/entity-details.gen";
-import { ScopeChip } from "~/ui/data-table/ScopeChip";
+import { ScopeChip } from "~/ui/data-table/scope-chip";
 import { Row } from "~/ui/layout";
 
 import type { ListSearch } from "./list-slot-types";

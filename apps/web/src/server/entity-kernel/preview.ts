@@ -4,11 +4,14 @@ import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
+import {
+  aiCallRunInput,
+  ensureRun,
+} from "~/server/domains/run/service/ensure-run";
+import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
-import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
-import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
-import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 
 import type { EntityKernelContext } from "./adapter";
 

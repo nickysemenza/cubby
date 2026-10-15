@@ -3,18 +3,18 @@ import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
 import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
-import type { ListWorkbenchProps } from "~/ui/data-table/ListWorkbench";
-import type {
-  createCubbyColumnCollection,
-  CubbyColumnDef,
-  CubbyColumnCollection,
-} from "~/ui/data-table/table-features";
 import type {
   BaseListRow,
   EntityListTreeConfig,
   UseEntityListOptions,
   UseEntityListReturn,
-} from "~/ui/hooks/useEntityList";
+} from "~/entity/hooks/use-entity-list";
+import type { ListWorkbenchProps } from "~/ui/data-table/list-workbench";
+import type {
+  createCubbyColumnCollection,
+  CubbyColumnDef,
+  CubbyColumnCollection,
+} from "~/ui/data-table/table-features";
 
 /**
  * What the generic list hands an override module: the route's validated

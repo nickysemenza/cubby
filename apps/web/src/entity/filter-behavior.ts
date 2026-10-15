@@ -2,8 +2,8 @@ import { taskStatusSchema } from "@cubby/schemas/task-fields";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
 
-import { resolveDueRange } from "~/app/tasks/task-options";
 import type { FilterPatch } from "~/entity/filters";
+import { resolveDueRange } from "~/features/task/task-options";
 
 interface ProductPurchaseDateRangeFilters {
   purchaseDateFrom?: string;

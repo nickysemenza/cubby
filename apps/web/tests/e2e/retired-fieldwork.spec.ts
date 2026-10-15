@@ -1,5 +1,5 @@
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Scanning, recount, sweep, and the location photo pass moved to the native
 // app; their web routes are gone and answer with the ordinary not-found page.

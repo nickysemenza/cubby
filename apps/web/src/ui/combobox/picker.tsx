@@ -12,7 +12,7 @@ import * as React from "react";
 
 import { entityLabel } from "~/entity/entities";
 import { cn } from "~/lib/utils";
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 

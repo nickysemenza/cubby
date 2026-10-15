@@ -11,14 +11,14 @@ import {
 } from "~/server/ai/decision-model";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
 import type { Database } from "~/server/db";
-import { canonicalJson } from "~/server/repo/entity-source";
 import {
   groundedVariantEvidence,
   variantDecisionReceipt,
   variantDimension,
   variantLiteral,
   variantSourceSide,
-} from "~/server/repo/product-variant-evidence";
+} from "~/server/domains/product/repo/product-variant-evidence";
+import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 
 /** Structural span candidates carry no color, garment, size or pack vocabulary. */
 async function literalCandidates(side: z.infer<typeof variantSourceSide>) {
@@ -74,7 +74,7 @@ export async function groundProductIdentityVariants(input: {
   decisionPort?: DecisionPort;
   provenance?: AiProvenance;
 }) {
-  const { producingAiManifest } = await import("~/server/repo/ai-refresh");
+  const { producingAiManifest } = await import("~/server/ai/repo/ai-refresh");
   const { dependencyStamps } = await import("~/server/ai/refresh-policy");
   const sides = [
     variantSourceSide.parse(input.first),

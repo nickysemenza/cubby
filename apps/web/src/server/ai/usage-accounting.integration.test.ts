@@ -30,15 +30,15 @@ import {
   runStructuredFeature,
   type StructuredRunPorts,
 } from "~/server/ai/run-feature";
+import { getDb } from "~/server/db/helpers";
 import { aiUsage } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { processTelemetryQueueBatch } from "~/server/observability/telemetry-queue";
 import {
   createLocationFixture,
   makeLocationInput,
-} from "~/server/repo/repo.fixtures";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { ensureRun } from "~/server/runs/ensure-run";
-import { processTelemetryQueueBatch } from "~/server/telemetry-queue";
+} from "~/server/testing/repo.fixtures";
 
 // The SDK reads global fetch at request time. Route the catalog separately
 // on every test, including when an inference socket is overridden.
@@ -208,7 +208,8 @@ describe("AiUsage accounting", () => {
         ),
       ),
     );
-    const { embedTexts } = await import("~/server/semantic/embeddings");
+    const { embedTexts } =
+      await import("~/server/generic/embedding/semantic/embeddings");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
 
     await embedTexts(["eggs", "flour"], {

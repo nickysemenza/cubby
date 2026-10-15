@@ -5,18 +5,18 @@ import { lazy, Suspense } from "react";
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { RoutePending } from "~/ui/feedback/route-pending";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { RoutePending } from "~/ui/route-pending";
 
 // The overview pulls in all five independently loaded Problems lanes plus the
 // declarative assembly UI. It is only useful on this dedicated route, so keep
 // it out of the app shell while preserving its own loading
 // semantics once the route is opened.
 const ProblemsOverview = lazy(async () => {
-  const module = await import("~/app/problems/problems-overview");
+  const module = await import("~/features/problems/problems-overview");
   return { default: module.ProblemsOverview };
 });
 export const Route = createFileRoute("/_authenticated/problems")({

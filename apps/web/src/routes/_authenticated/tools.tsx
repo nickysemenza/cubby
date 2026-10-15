@@ -6,20 +6,20 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
-import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";
+import { ToolMatrixPage } from "~/features/project/tool-matrix-page";
 import {
   ToolGalleryPage,
   type ToolGalleryPresentation,
-} from "~/app/tools/tool-gallery-page";
+} from "~/features/tools/tool-gallery-page";
 import {
   matrixSearchFromTools,
   type ToolMatrixSearch,
   toolsSearchSchema,
-} from "~/app/tools/tool-search";
+} from "~/features/tools/tool-search";
 import { pageTitle } from "~/lib/page-title";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 type ToolsView = ToolGalleryPresentation | "usage";
 

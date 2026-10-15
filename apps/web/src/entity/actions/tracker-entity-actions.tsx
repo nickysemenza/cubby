@@ -5,8 +5,8 @@ import {
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { useState } from "react";
 
-import { CreateProjectFromTasksDialog } from "~/app/tasks/create-project-from-tasks-dialog";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import { CreateProjectFromTasksDialog } from "~/features/task/create-project-from-tasks-dialog";
 
 import { VerbMenuItem } from "./action-verb-ui";
 import type {

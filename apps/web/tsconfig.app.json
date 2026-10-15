@@ -3,7 +3,7 @@
   // except tests and test tooling, which are a quarter to a third of what an
   // edit re-checks. `pnpm typecheck`, `pnpm check` and CI check the
   // full tsconfig.json. Excluded files still load when app code imports them.
-  // Measurements: docs/reports/local-check-performance.md.
+  // Measurements: `git show 18f8bd430:docs/reports/local-check-performance.md`.
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",

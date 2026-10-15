@@ -1,6 +1,9 @@
 import { FLAGS } from "~/lib/flags";
 import { recordWasmExec } from "~/lib/perf/perf-store";
-import { TraceNames, withSynchronousManualTrace } from "~/server/tracing";
+import {
+  TraceNames,
+  withSynchronousManualTrace,
+} from "~/server/observability/tracing";
 
 /** A synchronous WASM call over one 60fps frame can visibly block the UI. */
 const SLOW_WASM_THRESHOLD_MS = 16;

@@ -10,9 +10,9 @@ import { z } from "zod";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/Table";
+import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

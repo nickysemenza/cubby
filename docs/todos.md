@@ -130,7 +130,7 @@ history is the archive. Permanent product constraints live in the
   retained Apple/Clef observation and unconfirmed-Product suggestion paths
   (`image-identification.service.ts`, `image-identification.ts`,
   `image-processing-panel.tsx`); the
-  [design interview](plans/photo-identification.md) owns the wider use cases.
+  design interview (`git show d94c04b17:docs/plans/photo-identification.md`) owns the wider use cases.
   Keep processing automatic and simple, without regions or manual tuning.
 
   **Next implementation brief — retrieval and coverage (steps 1–3).** Improve
@@ -204,7 +204,7 @@ history is the archive. Permanent product constraints live in the
   photo Products with no candidate at all, split by whether they were seeded.
   Promote widening, caching, or write-time detection only when those logs from
   a real wardrobe import show unseeded photos without candidates that a person
-  later matched (`apps/web/src/server/services/product-match.service.ts`).
+  later matched (`apps/web/src/server/domains/product/service/product-match.service.ts`).
 
 - 🤔 🧪 🟡 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
@@ -625,7 +625,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
      from USDA `portionInfo` or an ingredient-level mapping; product `each`
      prices the package and never satisfies a piece unit.
   2. 🧱 ✨ 🔵 A durable ingredient-level unit mapping store, which the harvested
-     equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
+     equivalences report (`server/lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
 
 - 🧱 ✨ 🔵 **Salt amounts for “to taste” recipe lines.** Sanity-check the proposed
@@ -636,7 +636,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   merge/repoint path to stop same-title collisions and renamed-EPUB forks. A
   recipe changes cookbook only to fix an import, so merge/repoint is the
   sanctioned path; record `cookbookId` changes in the recipe audit roster
-  (`server/repo/recipe/crud.ts`) and decide whether the recipe form's cookbook
+  (`server/domains/recipe/repo/crud.ts`) and decide whether the recipe form's cookbook
   picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
 
 - 🧱 ✨ 🔵 **Portion shares alongside grams.** Accept `{share}` per portion in
@@ -1031,7 +1031,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 - ⏳ ✨ 🔵 **Core native inventory experience.** Promote when everyday use exposes a
   specific bottleneck: location-first browsing, stock comparison,
-  capture/recount, photo completion. Owners: `App/Shared/Browse`, `Capture`,
+  capture/recount, photo completion. Owners: `App/Shared/Entity`, `Capture`,
   `Audit`; see [native design](../apps/apple/DESIGN.md).
 
 - ⏳ 🛠️ 🔵 **Generated native list/detail parity.** Stay on generated `EntityCatalog`
@@ -1153,7 +1153,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
      class uses an `in-data-[slot=…]` override.
 - 🤔 🐛 🟡 **Review behaviour changes from the RecordList migration.**
   - The home meals card links only the meal label rather than the whole row
-    (`features/home/MealsCard.tsx`); decide whether the row is the target.
+    (`features/home/meals-card.tsx`); decide whether the row is the target.
   - Lists in narrow popovers (recipe totals gaps, smart-collection match
     evidence) sit below the ledger's 32rem two-column width, so the totals-gap
     fix link drops beneath its suggestion.
@@ -1189,7 +1189,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
     dry…").
   - Record lists: `EntityRefLink variant="list"` rows
     (`entity/components/ref-link/list.tsx`) in detail-page related sections
-    and `ui/DocumentViewerList.tsx` file names.
+    and `ui/document-viewer-list.tsx` file names.
   - Navigation: sidebar entries and group labels
     (`ui/navigation/sidebar-rail-group.tsx`, `workspace-navigator.tsx`) and
     the shell's page title in `authenticated-app-shell.tsx`.
@@ -1272,6 +1272,28 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 ---
 
 ## Entity platform & data model
+
+- 🟢 🛠️ 🟡 **Finish compiler-owned entity defaults.** The first pass already
+  resolves related images, sort defaults, Overview sections, default
+  actions/views, card subtitles, editor-section fallbacks and routine routes
+  (`git show fa514df72:docs/plans/entity-defaults.md`). Remaining:
+  1. 🟢 🛠️ 🟡 One shared effective-specification pass used by both
+     `loadEntityDeclarations` and `compileEntityDeclarations`
+     (`apps/web/generator/entities/compile.ts`). Defaults stay in the
+     compiler, never in a web or native renderer. Diff the effective output
+     against today's generated catalog before deleting declarations.
+  2. 🟢 🛠️ 🟡 Derive list/detail field availability from the actual
+     projections. An unreadable or unsupported renderer becomes ineligible,
+     and an override that requests one is a compiler error. Turn intentional
+     absences into explicit omissions.
+  3. 🟢 🛠️ 🟡 Derive sorting, search, routes, actions and image sources from
+     the same facts, keeping domain ordering as small overrides. Audit every
+     entity, including storage-less, custom-list and no-generic-detail ones.
+     Check that a new ordinary entity needs only domain facts and that an
+     opt-out works on web and native.
+     Overrides keep the `*Override` naming, and the generator rejects an override
+     that compiles to its default. If a default exposes a new read or write
+     operation, recheck compatibility with deployed code first.
 
 - 🤔 🐛 🟡 **Serve field explanations from complete declared projections.**
   Location direct valuation lacks valuation.directPricedCount at the source boundary,
@@ -1653,6 +1675,70 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
+- 🟢 🛠️ 🔵 **Burn down the domain-layer baseline.**
+  `tools/oxlint/cubby/domain-layers-baseline.json` counts the layer violations
+  that predate `cubby/domain-layers` ([ADR 0019](adr/0019-domain-first-server-layout.md)):
+  134 `entity/` → `features/` and 108 `ui/` → `entity/`/`features/` client
+  inversions, plus 112 server violations (repo → service/`ai/`,
+  platform/generic → domain service/operations, service → `db/schema`/`db/helpers`
+  mostly in `domains/run/service/`, and `db/` → domain repo).
+  Lower a file's count as its imports are inverted; the rule rejects a stale
+  (too high) entry. Rule gaps to close alongside: role-less files in feature
+  domains (`purchase-import`, `purchase-agent`, `photo-import/run`, `calendar`,
+  `image-processing`) are not ranked, so they may import any role; a service
+  may still value-import `~/server/db` itself (`withConnection`); and the
+  baseline is a per-file count, so swapping one violation for another passes. The client half includes data hooks still in `ui/hooks/`
+  (`use-entity-options`, `use-all-entity-records`, `use-infinite-table-list`, …)
+  and `lib/` modules that are not isomorphic.
+
+- 🟢 🛠️ 🔵 **Split oversized modules (>1500 lines).** Largest:
+  `server/domains/image/repo/image.ts`, `server/domains/product/repo/crud.ts`,
+  `server/domains/purchase-import/run-service.ts`,
+  `features/run/photo-group-review.tsx`, `generator/entities/compile.ts`,
+  `server/domains/product/repo/merge.ts`, `server/domains/purchase/repo/purchase.ts`,
+  `tooling/sim-e2e.ts`, `server/domains/purchase-import/writer.ts`,
+  `features/ai/record-suggestions.tsx`, `entity/display/entity-display.tsx`,
+  `ui/data-table/column-helpers.tsx`, `features/problems/components/problem-sections.tsx`,
+  `server/domains/project/repo/tools.ts`,
+  `server/generic/suggestions/repo/field-resolution-evidence.ts`,
+  `server/db/entity-edges.ts`, `server/domains/image-processing/repo/image-processing.ts`,
+  `server/generic/problems/service/problems.service.ts` (paths under `apps/web/src`
+  unless rooted at `apps/web`). Also shrink the folders baselined in
+  `apps/web/tooling/layout.unit.test.ts` (`lib/`, `ui/data-table/`, `contracts/`, …).
+
+- 🟢 🛠️ 🔵 **Retire the remaining index barrels.** `cubby/no-domain-barrel`
+  covers `domains/`, `generic/`, and `features/`; platform barrels such as
+  `ui/layout/index.ts` (~290 importers) remain. Repoint importers to the owning
+  module, then extend the rule's scope.
+
+- 🟢 🛠️ 🔵 **Finish the deferred restructure moves.** Split `apps/web/tooling/`
+  into `test/`, `db/`, `e2e/`, `native/`, `workerd/`, `local-providers/` (≈45
+  root-depth constants plus vitest/vite/oxlint/TestFlight path couplings) and
+  move `scripts/native-*.test.ts` beside their sources; move client route bodies
+  into `features/<domain>/pages/`; merge `lib/status-colors.ts` into
+  `lib/status-tone.ts` without pulling icon/UI imports into server consumers;
+  consolidate the server's generated outputs (`server/generated/`,
+  `server/db/generated/`, `server/domains/purchase-import/agents/`); move the
+  Rust crates under `crates/`.
+
+- 🤔 🛠️ 🔵 **Decide the deferred Apple layout steps.** The restructure landed
+  Apple S1–M3 and deferred the deeper steps (recorded only as "D1–D3", with no
+  written scope); re-derive what they were before scheduling any of them.
+
+- ⏳ 🛠️ 🔵 **Reconsider Drizzle v1 for migration bookkeeping.** The 2026-10-05
+  RC.4 spike (`git show fa514df72:docs/research/drizzle-v1-spike.md`) kept v0:
+  migrations converted with identical SQL, but three prebuilt predicate forms
+  failed against v2's relational root alias, table-derived insert schemas omit
+  virtual inputs and declaration defaults, and Drizzle Seed bypasses the kernel.
+  Trigger: wanting named migration bookkeeping, missing-migration handling, or
+  cross-branch conflict detection, not a list-query or factory fix. Before
+  adopting it, check that the full generated schema still works and how Kit's
+  diff behaves on fresh and already-migrated scratch databases. Never rewrite
+  committed SQL or touch production in the spike.
+
+- ⏳ 🛠️ 🔵 **Fold `apps/web-worker-tests` back into `apps/web`** once
+  `@cloudflare/vitest-plugin` supports Vitest 5, and delete its shim config.
+
 - 🤔 🐛 🔵 **Verify agent calls against the current Mail action contract.**
   Missing action discriminators are caller-input failures. Confirm discovery and
   examples expose the current public tool contract; retain useful raw validation errors
@@ -1727,7 +1813,7 @@ consume the declarations.
   saves wall time against the simulator build it duplicates.
 
 - 🤔 🧪 🔵 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
-  under `scripts/generator/http-api/` might be replaceable by
+  under `apps/web/generator/http-api/` might be replaceable by
   `swift-openapi-generator` and `openapi-typescript`; establish whether they
   cover the generated client contracts before replacing any emitter.
 
@@ -1743,7 +1829,7 @@ consume the declarations.
   For remaining Run detail pool-slot failures, measure origin occupancy and query
   duration before tuning connection limits; background contention is unproven.
   Browser read admission and transient recovery are owned by
-  [web runtime rules](agents/web-runtime.md).
+  [web runtime rules](../apps/web/docs/web-runtime.md).
   Sentry: `CUBBY-15V`, `CUBBY-15Z`, `CUBBY-162`, `CUBBY-169`, `CUBBY-17N`, `CUBBY-17T`,
   `CUBBY-17W`, `CUBBY-17X`, `CUBBY-180`, `CUBBY-184`, `CUBBY-192`, `CUBBY-198`,
   `CUBBY-19E`, `CUBBY-19F`, `CUBBY-19G`, `CUBBY-19H`, `CUBBY-19V`, `CUBBY-1A7`,
@@ -1798,19 +1884,19 @@ consume the declarations.
 - 🤔 🧪 🔵 **Check Google OAuth agentic-client requirements.** Verify current
   official requirements and whether any Cubby client calls Google Workspace
   MCP servers. The purchase-import Gmail client currently uses the Gmail REST
-  API (`apps/web/src/server/purchase-import/gmail/client.ts`); distinguish that
+  API (`apps/web/src/server/domains/purchase-import/gmail/client.ts`); distinguish that
   path before changing OAuth settings. Preserve existing scopes and member
   connections, and record any applicable rollout deadline in the owning runbook.
 
 - 🤔 ✨ 🟡 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
-  Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
+  Worker answer 503 and skips the cron (`server/http/maintenance.ts`); purchase
   coordinator callbacks and tool effects now defer/refuse before DB/model
   access.
   Queues are paused by hand. Remaining:
   status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
-  consumer) and each Workflow-backed Run step (`server/workflow-runs/`), and by the agent's purchase-import run before each tool call (via a
+  consumer) and each Workflow-backed Run step (`server/workflows/runs/`), and by the agent's purchase-import run before each tool call (via a
   Run service); toggle from Settings and MCP. Decide first how
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
@@ -1910,7 +1996,7 @@ consume the declarations.
 
 - 🟢 🛠️ 🔵 **Pre-render the docs Mermaid diagrams.** Three diagrams pull ~108 client
   chunks (~4.9 MB raw, ~1.4 MB gzip, including the only >500 kB chunk, `elk`)
-  through `app/docs/_components/MermaidDiagram.tsx`. Render them to SVG in
+  through `features/docs/components/mermaid-diagram.tsx`. Render them to SVG in
   `pnpm generate` (with a drift check) and delete the runtime dependency. Pick a
   renderer that runs without a browser first.
 
@@ -1927,7 +2013,7 @@ consume the declarations.
 
 [Breaking changes](agents/domain-rules.md#breaking-changes) is the rule; these are the
 compatibility paths still live. Printed `P-`/`L-` QR labels and stored agent
-transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
+transcript tool names (`features/purchase/agent-tool-names.ts`) are physical or
 historical records and stay readable. `oauth_client.requirePKCE` and
 `referenceId` are not legacy: the installed Better Auth declares and reads them.
 

@@ -1632,7 +1632,7 @@ const buildMetadataSchemas = () => {
    * promotes itself to primary only when a declared source-entity field matches one of a set
    * of values (e.g. a Location's `type`), falling back to `otherwise` when it does not. The
    * compiler enforces `field` is an enum field on the source entity and every value is a member
-   * of it (`validateImageIngress` in `scripts/generator/entities/compile.ts`).
+   * of it (`validateImageIngress` in `apps/web/generator/entities/compile.ts`).
    */
   const imageIngressConditionalChoiceMetadataSchema = z
     .object({
@@ -1726,7 +1726,7 @@ const buildMetadataSchemas = () => {
       /**
        * The photo category (`packages/schemas/src/photo-categories.ts`) this entity's
        * routing belongs to. Optional here — not because a routing entity may omit it, but
-       * so a missing value reaches `validateImageRouting` (scripts/generator/entities/compile.ts)
+       * so a missing value reaches `validateImageRouting` (apps/web/generator/entities/compile.ts)
        * with the entity's key still in hand, for a message that names the entity instead of
        * a bare declaration index. An unrecognized value still fails here, at the enum.
        */
@@ -1979,7 +1979,7 @@ const buildMetadataSchemas = () => {
        * Data-quality checks: the compiler synthesizes the `dataQuality` and
        * `dataGaps` model fields, the `dataStatus`/`dataGap` filter descriptors
        * and the `dataQualityScore` sort from this one block; the web repo binds
-       * each check id to SQL in `server/repo/data-quality/checks`.
+       * each check id to SQL in `server/generic/data-quality/repo/checks`.
        */
       dataQuality: entityDataQualityMetadataSchema
         .nullable()
@@ -2304,15 +2304,15 @@ const buildMetadataSchemas = () => {
 
   const documentSearchPorts = {
     projection: {
-      module: "~/server/repo/search-document",
+      module: "~/server/generic/search/repo/search-document",
       export: "refreshSearchDocument",
     },
     semanticText: {
-      module: "~/server/repo/search-document",
+      module: "~/server/generic/search/repo/search-document",
       export: "getSearchDocumentEmbeddingText",
     },
     dependentRefresh: {
-      module: "~/server/services/mutation-side-effects",
+      module: "~/server/entity-kernel/repo/mutation-side-effects",
       export: "runMutationSideEffects",
     },
   };
@@ -2359,7 +2359,7 @@ const buildMetadataSchemas = () => {
             .default({
               label: { module: "~/entity/entities", export: "entityLabel" },
               resolver: {
-                module: "~/server/repo/shortcode-resolver",
+                module: "~/server/generic/shortcode/repo/shortcode-resolver",
                 export: "resolveLiveShortcode",
               },
             }),

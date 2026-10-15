@@ -14,14 +14,18 @@ import type { McpActionSpec } from "~/contracts/mcp-define";
 import { roundTo } from "~/lib/round-to";
 import type { StartOperationId } from "~/lib/start-operation-observability";
 import { DECISION_DEADLINE_MS } from "~/server/ai/decision-model";
-import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
-import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { recordDatabaseWrite } from "~/server/db/freshness/client";
+import { getDb } from "~/server/db/helpers";
+import { type ReadPolicy, readPolicyFor } from "~/server/db/read-policy";
 import { run as runTable } from "~/server/db/schema";
+import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/client";
+import { assertPurchaseAgentAction } from "~/server/domains/purchase-import/capabilities";
 import { AppError, toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,
   withErrorReporting,
 } from "~/server/errors/report-error";
+import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import {
   batchInputSchema,
   batchOutputSchema,
@@ -35,18 +39,14 @@ import {
   purchaseAgentSelfGoverned,
   trustedPurchaseAgent,
 } from "~/server/mcp/purchase-agent-protocol";
-import type { DirectOperationRun } from "~/server/operation-domain.server";
-import { assertPurchaseAgentAction } from "~/server/purchase-import/capabilities";
-import { type ReadPolicy, readPolicyFor } from "~/server/read-policy";
-import { getDb } from "~/server/repo/database-helpers";
-import type { AuthenticatedRequestContext } from "~/server/request-context";
-import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
+import { getRequestId } from "~/server/observability/tracing";
+import type { DirectOperationRun } from "~/server/operation-runtime/operation-domain.server";
+import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
 import {
   normalizeStartOperationError,
   type OperationFailureContext,
   type OperationStage,
-} from "~/server/start-operation.server";
-import { getRequestId } from "~/server/tracing";
+} from "~/server/operation-runtime/start-operation.server";
 
 import {
   type ActionInputSchema,

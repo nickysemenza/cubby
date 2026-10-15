@@ -6,7 +6,7 @@ import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
-import { annotateActiveSpanError } from "~/server/tracing";
+import { annotateActiveSpanError } from "~/server/observability/tracing";
 
 export type AppErrorCode = (typeof AppErrors)[AppErrorReason];
 

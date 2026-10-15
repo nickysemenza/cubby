@@ -5,7 +5,7 @@ name: Apple TestFlight
 # upload or that upload is 30 days old; a manual run always publishes; a push
 # that changes the compatibility version publishes immediately. The `plan`
 # job decides in seconds on Linux before any macOS runner or credential is
-# used (scripts/apple-release.ts). Retry with a fresh dispatch, never a rerun.
+# used (scripts/apple/apple-release.ts). Retry with a fresh dispatch, never a rerun.
 on:
   schedule:
     - cron: "17 10 * * *"
@@ -50,7 +50,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.event.after }}
-        run: node scripts/apple-release.ts plan
+        run: node scripts/apple/apple-release.ts plan
       # Changes since the uploaded commit that can reach the shipped app:
       # native and generator sources (`apple`), or root, CI, and tooling
       # files outside every app (`full`). Documentation never selects either.
@@ -79,7 +79,8 @@ jobs:
               - "Cargo.{toml,lock}"
               - "packages/{schemas,shared}/**"
               - "apps/web/src/**"
-              - "apps/web/scripts/apple-preview-fixtures.ts"
+              - "apps/web/generator/**"
+              - "apps/web/tooling/checks/apple-preview-fixtures.ts"
               - "apps/web/wrangler.jsonc"
               - "apps/web/tooling/wrangler-public-config.ts"
               - *notMarkdown
@@ -121,7 +122,6 @@ jobs:
             apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated
             apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json
             apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml
-            apps/apple/App/Shared/Previews/Fixtures
             apps/apple/Generated
 
   # One leg per platform archives, verifies, and uploads its own build, so
@@ -278,7 +278,7 @@ jobs:
 
   # Upload acceptance by App Store Connect for BOTH platforms, not TestFlight
   # availability: one immutable annotated tag per upload, its message the
-  # checkpoint JSON. scripts/apple-release.ts reads the highest build as the
+  # checkpoint JSON. scripts/apple/apple-release.ts reads the highest build as the
   # last complete upload, and the tag list is the upload history.
   checkpoint:
     name: Record the upload

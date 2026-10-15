@@ -865,12 +865,12 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/repository",
+        module: "~/server/domains/garden/repo/repository",
         export: "plantingRepository",
       },
       filters: null,
       timeline: {
-        module: "~/server/repo/garden/timeline",
+        module: "~/server/domains/garden/repo/timeline",
         export: "plantingTimeline",
       },
     },

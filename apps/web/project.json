@@ -119,7 +119,7 @@
         "{workspaceRoot}/packages/**",
         "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
         "{workspaceRoot}/.npmrc",
-        "{workspaceRoot}/docs/**/*.md",
+        "{workspaceRoot}/docs/guide/**/*.md",
         "{workspaceRoot}/.claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md",
         // The bundle embeds source identity, and its provenance requires HEAD.
         { "runtime": "git rev-parse HEAD" },

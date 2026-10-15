@@ -1107,7 +1107,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/run",
+        module: "~/server/domains/run/repo/run",
         export: "runRepository",
       },
     },

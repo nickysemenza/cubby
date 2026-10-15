@@ -12,8 +12,8 @@ import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 
 import { EntityIcon } from "~/entity/entities";
+import { useLocationTree } from "~/entity/hooks/use-location-tree";
 import { cn } from "~/lib/utils";
-import { useLocationTree } from "~/ui/hooks/useLocationTree";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -21,7 +21,7 @@ import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
-import { LocationVisual } from "../locations/location-visual";
+import { LocationVisual } from "../location/location-visual";
 
 interface LocationTreeProps {
   data: InfLocation[];

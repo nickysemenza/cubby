@@ -463,7 +463,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/spending-category",
+        module: "~/server/domains/spending-category/repo/spending-category",
         export: "spendingCategoryRepository",
       },
     },

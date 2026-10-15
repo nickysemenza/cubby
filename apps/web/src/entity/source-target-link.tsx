@@ -2,7 +2,7 @@ import type { EntitySourceRead } from "@cubby/schemas/entity-source";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import { ExternalLinkText } from "~/ui/ExternalLink";
+import { ExternalLinkText } from "~/ui/external-link";
 
 /** Every citation surface uses the same internal identity or external destination. */
 export function SourceTargetLink({

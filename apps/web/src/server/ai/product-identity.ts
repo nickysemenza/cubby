@@ -19,7 +19,9 @@ import {
   PRODUCT_IDENTITY_RULE_REVISION,
 } from "~/server/ai/features";
 import { groundProductIdentityVariants } from "~/server/ai/product-identity-grounding";
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   product,
   entityExternalId,
@@ -27,23 +29,21 @@ import {
   entityAttachment,
   image,
 } from "~/server/db/schema";
-import { enqueueAiEvaluation } from "~/server/repo/ai-evaluation-requests";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { findSimilarEntities } from "~/server/repo/entity-embedding";
-import { canonicalJson } from "~/server/repo/entity-source";
-import { loadSelectedDescriptions } from "~/server/repo/image-description-selection";
+import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import {
   loadProductIdentifierClaims,
   retainedProductIdentifierClaim,
-} from "~/server/repo/product-identity-claims";
-import { publishProductPair } from "~/server/repo/product-match-candidate";
+} from "~/server/domains/product/repo/product-identity-claims";
+import { publishProductPair } from "~/server/domains/product/repo/product-match-candidate";
 import {
   readVariantVerification,
   variantVerification,
   variantSourceSide,
-} from "~/server/repo/product-variant-evidence";
-import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
-import { productionVectorStore } from "~/server/semantic/vector-store";
+} from "~/server/domains/product/repo/product-variant-evidence";
+import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { findSimilarEntities } from "~/server/generic/embedding/repo/entity-embedding";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/semantic/embeddings";
+import { productionVectorStore } from "~/server/generic/embedding/semantic/vector-store";
 
 export const productIdentityPrompt = (subject: string) => ({
   subject,

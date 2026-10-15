@@ -943,7 +943,7 @@ Rules:
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/meal/repository",
+        module: "~/server/domains/meal/repo/repository",
         export: "mealRepository",
       },
       search: "document",

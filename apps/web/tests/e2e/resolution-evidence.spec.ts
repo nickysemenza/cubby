@@ -1,12 +1,12 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,
   inlineExplanation,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
-import { seedWardrobePrerequisites } from "./fixtures-catalog";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture } from "./fixtures/core";
+import { seedWardrobePrerequisites } from "./fixtures/catalog";
 
 test.setTimeout(60_000);
 

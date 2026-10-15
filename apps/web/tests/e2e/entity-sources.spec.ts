@@ -1,12 +1,12 @@
-import { resolveEntityIdentity } from "~/server/repo/entity-identity";
-import { recordEntitySources } from "~/server/repo/entity-source";
+import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
+import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import {
   seedProductPrerequisite,
   seedVendorDisplayPrerequisite,
-} from "./fixtures-catalog";
-import { createEvidenceHarnessContext } from "./fixtures-core";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/catalog";
+import { createEvidenceHarnessContext } from "./fixtures/core";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Internal evidence must navigate as a record and group its field citations without losing quotes.
 test("Sources group internal citations and open their entity", async ({

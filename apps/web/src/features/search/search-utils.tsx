@@ -15,7 +15,7 @@ import { IconTile } from "~/ui/primitives/icon-tile";
 import {
   getLocationIcon,
   getLocationTypeColor,
-} from "../locations/location-type-theme";
+} from "../location/location-type-theme";
 
 export type { SearchHit } from "@cubby/schemas/search";
 

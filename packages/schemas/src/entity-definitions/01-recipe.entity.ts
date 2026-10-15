@@ -1308,7 +1308,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/recipe/repository",
+        module: "~/server/domains/recipe/repo/repository",
         export: "recipeRepository",
       },
       search: "document",

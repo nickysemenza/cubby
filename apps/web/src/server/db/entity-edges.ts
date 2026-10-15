@@ -534,7 +534,7 @@ export const ENTITY_EDGES = {
           reason:
             "Deleting a recipe deliberately preserves the recipe-as-ingredient pointer " +
             "(`preserve-sub-recipe-pointer` in RECIPE_DELETE_EDGE_POLICY, " +
-            "apps/web/src/server/repo/recipe/crud.ts) so parent recipes still resolve " +
+            "apps/web/src/server/domains/recipe/repo/crud.ts) so parent recipes still resolve " +
             "the tombstone for staleness detection and recompute, instead of silently " +
             "losing a line.",
         },

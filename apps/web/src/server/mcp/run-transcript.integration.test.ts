@@ -5,13 +5,13 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { requireActor } from "~/server/request-context";
+import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failure modes: foreign evidence dispatch, accidental execution, lost tool

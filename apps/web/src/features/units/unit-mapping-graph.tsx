@@ -3,7 +3,7 @@ import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { wasm } from "~/lib/wasm";
-import { useContainerDimensions } from "~/ui/hooks/useContainerDimensions";
+import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
 import { Row } from "~/ui/layout";
 
 /**

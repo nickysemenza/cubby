@@ -6,13 +6,12 @@
     ".": {
       "entry": [
         "neon.ts!",
-        "scripts/apple.ts!",
-        "scripts/apple-inputs.ts!",
-        "scripts/apple-release.ts!",
+        "scripts/apple/apple.ts!",
+        "scripts/apple/apple-inputs.ts!",
+        "scripts/apple/apple-release.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure.ts!",
         "scripts/design-tokens.ts!",
-        "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
@@ -31,7 +30,7 @@
         "agent-device",
         "@neon/env"
       ],
-      // xcode-select: scripts/apple-check.sh (the `apple` Nx targets) uses it
+      // xcode-select: scripts/apple/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm
@@ -68,12 +67,8 @@
         // Opt-in `live-eval` vitest project (billed model evals).
         "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
-        "scripts/check-client-bundle.ts!",
-        "scripts/worker-type-imports.ts!",
-        "scripts/check-server-closure.ts!",
-        "scripts/read-performance.ts!",
-        "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
+        "generator/main.ts!",
         "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!"
       ],
@@ -81,12 +76,11 @@
       // production mode leaves them out of the file graph.
       "project": [
         "src/**/*.{ts,tsx}!",
-        "scripts/**/*.{ts,mjs}!",
+        "generator/**/*.ts!",
         "!src/**/*.fixtures.{ts,tsx}!",
         "!src/**/*-test-helpers.{ts,tsx}!",
         "!src/lib/test/**!",
-        "!src/server/testing/**!",
-        "!src/server/repo/database-helpers/mock-db.ts!"
+        "!src/server/testing/**!"
       ],
       "paths": {
         "~/*": ["./src/*"],

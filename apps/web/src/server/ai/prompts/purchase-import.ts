@@ -3,8 +3,8 @@ import type {
   ImportExtractionOutcome,
 } from "@cubby/schemas/purchase-import";
 
-import { purchaseImportPromptText } from "~/server/agents/purchase-import/prompt-text.gen";
 import type { AiMessage, AiChatRequest } from "~/server/ai/run-feature";
+import { purchaseImportPromptText } from "~/server/domains/purchase-import/agents/prompt-text.gen";
 
 export const purchaseExtractionPrompt = (capture: BrowserCapture) => ({
   systemPrompts: [

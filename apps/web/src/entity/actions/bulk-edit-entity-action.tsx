@@ -38,7 +38,7 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
-import { useActionMutation } from "../../ui/hooks/useActionMutation";
+import { useActionMutation } from "../hooks/use-action-mutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";

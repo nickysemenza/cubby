@@ -1,0 +1,134 @@
+import {
+  render as renderWithTestingLibrary,
+  screen,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import { Page, usePageCount } from "./page";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function render(element: ReactElement) {
+  return renderWithTestingLibrary(element, { wrapper: harness.wrapper });
+}
+
+function CountReporter({ count }: { count: number }) {
+  usePageCount(count);
+  return null;
+}
+
+describe("Page bare variant", () => {
+  it("renders bare content without inventing a loading-page header", () => {
+    render(
+      <Page variant="bare">
+        <p>Loading recipe export</p>
+      </Page>,
+    );
+
+    expect(screen.getByText("Loading recipe export")).toBeVisible();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+  });
+
+  it("reserves a shell-aware viewport without negative margins", () => {
+    render(
+      <Page variant="bare" layout="viewport">
+        <p>Pantry workspace</p>
+      </Page>,
+    );
+
+    const viewport = screen.getByText("Pantry workspace").parentElement;
+    expect(viewport).toHaveClass(
+      "h-[calc(100dvh-var(--app-chrome-top)-var(--app-chrome-bottom))]",
+      "overflow-hidden",
+    );
+    expect(viewport?.className).not.toContain("-mx-");
+  });
+});
+
+describe("Page workbench", () => {
+  it("gives non-ledger full-width renderers standard responsive gutters", () => {
+    render(
+      <Page variant="list" title="Products" layout="full" bodyGutter="standard">
+        <p>Product shelf</p>
+      </Page>,
+    );
+
+    expect(screen.getByText("Product shelf").parentElement).toHaveClass(
+      "px-2",
+      "md:px-6",
+    );
+  });
+
+  it("keeps identity, modes, count, and creation action in the first tier", async () => {
+    const { rerender } = render(
+      <Page
+        variant="list"
+        entity="product"
+        title="Products"
+        listChrome="workbench"
+        workbenchControls={<button type="button">Table</button>}
+        actions={<button type="button">New</button>}
+      >
+        <CountReporter count={7} />
+        <p>Table body</p>
+      </Page>,
+    );
+
+    const identity = screen.getByRole("heading", { name: "Products" });
+    expect(await screen.findByText("7 products")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Table" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New" }).parentElement,
+    ).toHaveClass("min-w-0", "overflow-x-auto");
+
+    rerender(
+      <Page
+        variant="list"
+        entity="product"
+        title="Products"
+        listChrome="workbench"
+        workbenchControls={<button type="button">Shelf</button>}
+        actions={<button type="button">New</button>}
+      >
+        <CountReporter count={7} />
+        <p>Shelf body</p>
+      </Page>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Products" })).toBe(identity);
+    expect(screen.getByRole("button", { name: "Shelf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+  });
+
+  it("renders secondary detail actions once beside the primary", () => {
+    render(
+      <Page
+        variant="detail"
+        entity="product"
+        title="Blue mug"
+        heroActions={{
+          primary: <button type="button">Edit</button>,
+          secondary: <button type="button">Delete</button>,
+        }}
+      >
+        <p>Detail body</p>
+      </Page>,
+    );
+
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    // The content owns its width treatment; the plate never duplicates it.
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
+  });
+});

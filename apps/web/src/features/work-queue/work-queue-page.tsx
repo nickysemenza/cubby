@@ -32,7 +32,7 @@ import type { z } from "zod";
 
 import { verbBulkAction } from "~/entity/actions/action-verb-ui";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { DataQualityValue } from "~/entity/data-quality-value";
+import { DataQualityValue } from "~/entity/display/data-quality-value";
 import {
   EntityIcon,
   entities,
@@ -41,6 +41,11 @@ import {
 } from "~/entity/entities";
 import { type FilterSpecCore } from "~/entity/filters";
 import {
+  type DeferredEntityRoster,
+  useDeferredEntityRosters,
+} from "~/entity/hooks/use-deferred-reference-filter-options";
+import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
+import {
   GapChipCluster,
   memberOptionsOf,
   WaitingForPill,
@@ -48,12 +53,12 @@ import {
 } from "~/features/work-queue/work-queue-display";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyShortcodes } from "~/lib/clipboard";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
+import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
-import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
 import { numberCellData, textCellData } from "~/ui/data-table/cell-data";
 import {
   createCurrencyColumn,
@@ -61,41 +66,36 @@ import {
   createPlainDateColumn,
   createSelectColumn,
   renderOptionCell,
-} from "~/ui/data-table/columnHelpers";
+} from "~/ui/data-table/column-helpers";
 import {
   buildSelectColumn,
   reconcileRowSelection,
 } from "~/ui/data-table/row-selection";
-import RTable from "~/ui/data-table/Table";
+import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyRow,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useBulkActions } from "~/ui/data-table/useBulkActions";
-import { useTableConfig } from "~/ui/data-table/useTableConfig";
+import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
+import { useTableConfig } from "~/ui/data-table/use-table-config";
 import {
   useTableState,
   type TableStateReturn,
-} from "~/ui/data-table/useTableState";
+} from "~/ui/data-table/use-table-state";
 import {
   deferredFilterOptionSource,
   type RuntimeFilterOptionSource,
 } from "~/ui/hooks/filter-option-types";
-import {
-  type DeferredEntityRoster,
-  useDeferredEntityRosters,
-} from "~/ui/hooks/useDeferredReferenceFilterOptions";
-import { useEntityPreview } from "~/ui/hooks/useEntityPreview";
-import { useHydratedLoading } from "~/ui/hooks/useHydrated";
-import { useInfiniteTableList } from "~/ui/hooks/useInfiniteTableList";
-import { type ListQueryOptionsFn } from "~/ui/hooks/usePaginatedTableCore";
+import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
+import { useInfiniteTableList } from "~/ui/hooks/use-infinite-table-list";
+import { type ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import { Page, usePageCount } from "~/ui/layout/page";
 import {
   domainForEntity,
   domainWayfinding,
 } from "~/ui/navigation/domain-wayfinding";
-import { Page, usePageCount } from "~/ui/page/Page";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 const EMPTY_MEMBERS: WorkQueueMember[] = [];

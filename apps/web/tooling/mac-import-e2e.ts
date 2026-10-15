@@ -1,6 +1,6 @@
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
-import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
+import { withKitPackageResolution } from "../../../scripts/apple/apple-package-resolution.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

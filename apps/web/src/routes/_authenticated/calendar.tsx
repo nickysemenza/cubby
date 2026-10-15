@@ -5,15 +5,15 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
-import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
-import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
-import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
+import { listChromePage } from "~/entity/routing/list-page";
+import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
+import { CalendarFilterBar } from "~/features/calendar/calendar-filter-bar";
+import { buildCalendarFilters } from "~/features/calendar/calendar-filters";
 import {
   calendarSearchDefaults,
   calendarSearchSchema,
-} from "~/app/calendar/calendar-search";
-import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
-import { listChromePage } from "~/entity/routing/list-page";
+} from "~/features/calendar/calendar-search";
+import { UnifiedCalendar } from "~/features/calendar/unified-calendar";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object below: see

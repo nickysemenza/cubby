@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { compileChildTables } from "../../../scripts/generator/entities/child-tables";
-import { validateRetainedTableBoundary } from "../../../scripts/generator/entities/child-table-boundary";
-import { renderChildTables } from "../../../scripts/generator/entities/render/children";
+import { compileChildTables } from "../generator/entities/child-tables";
+import { validateRetainedTableBoundary } from "../generator/entities/child-table-boundary";
+import { renderChildTables } from "../generator/entities/render/children";
 
 const children = [
   {

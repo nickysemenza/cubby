@@ -22,21 +22,21 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
-import { PendingDocumentUpload } from "~/entity/entity-media/PendingDocumentUpload";
-import type { PendingImage } from "~/entity/entity-media/PendingImageUpload";
+import { PendingDocumentUpload } from "~/entity/entity-media/pending-document-upload";
+import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
+import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { basisValueOf } from "~/features/ai/field-suggestion";
-import { ExternalIdKindSuggestion } from "~/features/products/external-id-kind-suggestion";
-import { IdentifyProductButton } from "~/features/products/identify-product-with-ai";
+import { ExternalIdKindSuggestion } from "~/features/product/external-id-kind-suggestion";
+import { IdentifyProductButton } from "~/features/product/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { NullableNumericField, UnifiedTextField } from "~/ui/form-utils";
-import { PickerField } from "~/ui/form-utils/picker-field";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
+import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";

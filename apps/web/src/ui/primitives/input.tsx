@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Input as InputPrimitive } from "@base-ui/react/input";
 
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { cn } from "~/lib/utils";
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {

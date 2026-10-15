@@ -48,7 +48,7 @@ const rootGateResults =
     : null;
 
 const COMMON = `
-You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) pantry/recipe/meal-planning app: TanStack Start + tRPC + Drizzle/Postgres web app on Cloudflare Workers (apps/web), a Rust WASM crate (recipebridge), and shared packages (packages/*).
+You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) pantry/recipe/meal-planning app: TanStack Start + operation contracts + Drizzle/Postgres web app on Cloudflare Workers (apps/web), a Rust WASM crate (recipebridge), and shared packages (packages/*).
 
 HARD RULES:
 - NEVER look inside .claude/, node_modules/, target/, dist/, or generated files (routeTree.gen.ts, *.gen.*). Findings there are invalid.
@@ -123,8 +123,8 @@ const LANES = [
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Security audit.
-Scope: apps/web/src/server (tRPC routers/procedures in server/api, auth middleware, MCP server in server/mcp, agent endpoints in server/agent, AI endpoints in server/ai), the USDA release Durable Object in apps/web/src/server/usda-release.
-Look for: missing auth checks on mutating tRPC procedures or server routes (compare against the _authenticated guard pattern); SQL injection (raw sql\`\` with interpolation in server/repo or server/db); secrets committed or logged; SSRF in URL-fetching endpoints (recipe scraping/import takes user URLs); unvalidated external input reaching the DB or WASM; MCP tools that bypass auth; overly permissive CORS. Auth is better-auth with passkeys — check the guard actually covers all mutation surfaces including MCP and /api routes.`,
+Scope: apps/web/src/server (operation dispatch and middleware in server/operation-runtime, request context/auth/OAuth in server/http, MCP server in server/mcp, purchase agent in server/domains/purchase-agent and server/domains/purchase-import, AI endpoints in server/ai), the USDA release Durable Object in apps/web/src/server/domains/usda-release.
+Look for: missing auth checks on mutating operations or server routes (compare against the _authenticated guard pattern); SQL injection (raw sql\`\` with interpolation in server/domains/*/repo, server/generic/*/repo, server/entity-kernel or server/db); secrets committed or logged; SSRF in URL-fetching endpoints (recipe scraping/import takes user URLs); unvalidated external input reaching the DB or WASM; MCP tools that bypass auth; overly permissive CORS. Auth is better-auth with passkeys — check the guard actually covers all mutation surfaces including MCP and /api routes.`,
   },
   {
     key: "server-correctness",
@@ -134,8 +134,8 @@ Look for: missing auth checks on mutating tRPC procedures or server routes (comp
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Server-side correctness.
-Scope: apps/web/src/server/repo, server/services, server/api (routers), background-queue.ts, queue-recompute.ts.
-Look for: transaction boundaries that leave data inconsistent on partial failure (mutations doing multi-table writes outside withTransaction); soft-delete filters (notDeleted) missing from queries so deleted rows leak; race conditions in queue/recompute paths; error swallowing that hides failures; incorrect cascade logic on delete; mutation side-effect paths that skip runMutationSideEffects (orphaned embeddings pattern — see server/repo delete cascades); off-by-one / wrong-operator query predicates; places where noUncheckedIndexedAccess is silenced with ! on genuinely-reachable undefined.`,
+Scope: apps/web/src/server/domains (each domain's repo, service and operations), server/generic, server/entity-kernel, server/db, server/workflows (background-tasks, runtime).
+Look for: transaction boundaries that leave data inconsistent on partial failure (mutations doing multi-table writes outside withTransaction); soft-delete filters (notDeleted) missing from queries so deleted rows leak; race conditions in queue/recompute paths; error swallowing that hides failures; incorrect cascade logic on delete; mutation side-effect paths that skip runMutationSideEffects (orphaned embeddings pattern — see server/generic/removal and domain repo delete cascades); off-by-one / wrong-operator query predicates; places where noUncheckedIndexedAccess is silenced with ! on genuinely-reachable undefined.`,
   },
   {
     key: "client-correctness",
@@ -145,7 +145,7 @@ Look for: transaction boundaries that leave data inconsistent on partial failure
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Client/React correctness.
-Scope: apps/web/src/app (413 files — prioritize _components, inventory, recipes, products), src/ui/hooks, src/ui.
+Scope: apps/web/src/features (prioritize inventory, recipe, product), src/entity, src/ui.
 Look for: hook-dependency bugs (stale closures, missing deps that cause real staleness, inline object/array literals passed to hooks with deps — the AGENTS.md infinite-loop pattern); useQueries without combine; effects that set state from unstable deps; race conditions in async handlers (setState after unmount, double-submit); optimistic-update rollback bugs; SSR/hydration branching on session or non-deterministic values (Date, locale) — the hydration-gate rule; forms that lose user input. Skip pure style issues.`,
   },
   {
@@ -156,9 +156,9 @@ Look for: hook-dependency bugs (stale closures, missing deps that cause real sta
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Architecture & layering.
-Read AGENTS.md's "Where logic lives", "Service vs. Direct Repo Boundary", and "Opaque Database Type" sections carefully — they define the rules.
-Scope: apps/web/src (server + app), recipebridge/src, packages/schemas.
-Look for: TS code reimplementing logic that recipebridge WASM owns (costing, availability, unit conversion, ingredient parsing/formatting — grep for suspicious unit-math or amount-formatting in TS and verify it is not just thin marshalling); *.service.ts files that are empty pass-throughs (violating the service-boundary rule) or routers doing orchestration a service should own; repo-layer code leaking above the boundary (getDb outside server/repo); duplicated domain logic between the MCP server (server/mcp) and tRPC routers that has already drifted or will; packages/* importing app-level code (dependency direction violations). For each finding state which documented rule it violates.`,
+Read AGENTS.md and docs/agents/domain-rules.md "Data, layers, and deletion" carefully — they define the rules.
+Scope: apps/web/src (server + features), recipebridge/src, packages/schemas.
+Look for: TS code reimplementing logic that recipebridge WASM owns (costing, availability, unit conversion, ingredient parsing/formatting — grep for suspicious unit-math or amount-formatting in TS and verify it is not just thin marshalling); *.service.ts files that are empty pass-throughs (violating the service-boundary rule) or routers doing orchestration a service should own; repo-layer code leaking above the boundary (getDb outside repo folders and server/db); duplicated domain logic between the MCP server (server/mcp) and operation handlers that has already drifted or will; packages/* importing app-level code (dependency direction violations). For each finding state which documented rule it violates.`,
   },
   {
     key: "rust",
@@ -180,7 +180,7 @@ Look for: unwrap/expect/panic/indexing that could panic in prod paths; #[tracing
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Performance.
-Scope: apps/web/src/server (repo queries, routers, services), apps/web/src/app list pages, apps/web/src/server/usda-release.
+Scope: apps/web/src/server (domain and generic repo queries, operations, services), apps/web/src/features list pages, apps/web/src/server/domains/usda-release.
 Known context: runs on Cloudflare Workers with strict cpu_ms limits and ~6-connection Hyperdrive limit; per-request pg.Pool max 5; Promise.all does NOT parallelize CPU on workerd; the workerd clock freezes during sync CPU so timing logs lie.
 Look for: N+1 query patterns in repos (loop of awaited queries where one IN query works); missing pagination on unbounded list queries; queries selecting * / heavy jsonb columns (Recipe.totals) on list endpoints that do not need them; sequential awaits that should be Promise.all (real I/O, not CPU); missing DB indexes for hot predicates visible in schema.ts vs query patterns; oversized client bundles (heavy imports at route top-level that should be lazy); React list pages rendering unvirtualized huge lists. Verify each with actual code reading.`,
   },
@@ -192,7 +192,7 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
     codexEffort: "medium",
     prompt: `${COMMON}
 LANE: Convention drift.
-Read the current AGENTS.md, docs/agents/domain-rules.md, and docs/agents/web-runtime.md before auditing. Respect their caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
+Read the current AGENTS.md, docs/agents/domain-rules.md, and apps/web/docs/web-runtime.md before auditing. Respect their caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
 Scope: apps/web/src.
 Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Cross-check every candidate against the carve-out list before reporting.`,
   },
@@ -216,7 +216,7 @@ Look for: dependencies listed but never imported (spot-check with grep, do not t
     prompt: `${COMMON}
 LANE: Test health & coverage gaps.
 Scope: all *.test.ts / *.spec.ts / e2e files in apps/web, recipebridge/tests, vitest/playwright configs.
-Look for: high-risk modules with zero test coverage (server/repo transactional mutations, the merge/recompute paths, MCP tool handlers, auth guard); tests that assert nothing meaningful (no assertions, or asserting mocks against mocks); disabled/skipped tests (.skip, .todo) hiding regressions; e2e tests not using the shared e2e-helpers.ts (documented convention); test fixtures drifting from current zod schemas; unit tests importing ~/ aliased .tsx into the node project (documented failure mode). Name the top 5 UNTESTED risk areas concretely (file + what could silently break) rather than generic 'add more tests'.`,
+Look for: high-risk modules with zero test coverage (domain repo transactional mutations, the merge/recompute paths, MCP tool handlers, auth guard); tests that assert nothing meaningful (no assertions, or asserting mocks against mocks); disabled/skipped tests (.skip, .todo) hiding regressions; e2e tests not using the shared e2e-helpers.ts (documented convention); test fixtures drifting from current zod schemas; unit tests importing ~/ aliased .tsx into the node project (documented failure mode). Name the top 5 UNTESTED risk areas concretely (file + what could silently break) rather than generic 'add more tests'.`,
   },
   {
     key: "docs-ci",

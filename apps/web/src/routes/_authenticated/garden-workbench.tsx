@@ -7,9 +7,9 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { GardenWorkbench } from "~/app/garden-workbench/garden-workbench";
+import { GardenWorkbench } from "~/features/garden/garden-workbench";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   mode: z.enum(["timing", "practice", "plan"]).optional().catch(undefined),

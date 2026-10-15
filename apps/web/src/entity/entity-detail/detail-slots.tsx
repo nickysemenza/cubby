@@ -30,7 +30,8 @@ export interface DetailSlot<E extends GenericDetailEntity> {
 }
 
 /** The Run slots that are nothing but their server-composed report. */
-type RunReportSlotId = keyof typeof import("~/app/runs/slots").runReportSlots;
+type RunReportSlotId =
+  keyof typeof import("~/features/run/slots").runReportSlots;
 
 const isImportRun = (run: { purpose: RunPurpose }) =>
   hasImportRunReports(run.purpose);
@@ -45,7 +46,7 @@ const runReportSlot = (
 ): PresentationCoverage<DetailSlot<"run">> =>
   slot(
     () =>
-      import("~/app/runs/slots").then((m) => ({
+      import("~/features/run/slots").then((m) => ({
         default: m.runReportSlots[report],
       })),
     applies,
@@ -85,180 +86,182 @@ export const detailSlots = {
   imageJob: { attempts: reportSlot<"imageJob">("imageJob.attempts") },
   product: {
     ownership: slot(() =>
-      import("~/app/products/product-runs").then((m) => ({
+      import("~/features/product/product-runs").then((m) => ({
         default: m.ProductOwnershipEvidence,
       })),
     ),
     nutrition: slot(() =>
-      import("~/app/products/slots").then((m) => ({
+      import("~/features/product/slots").then((m) => ({
         default: m.ProductNutrition,
       })),
     ),
     "unit-mappings": slot(() =>
-      import("~/app/products/slots").then((m) => ({
+      import("~/features/product/slots").then((m) => ({
         default: m.ProductUnitMappings,
       })),
     ),
     "fits-with": slot(() =>
-      import("~/app/products/slots").then((m) => ({
+      import("~/features/product/slots").then((m) => ({
         default: m.ProductFitsWith,
       })),
     ),
     cookbooks: slot(
       () =>
-        import("~/app/products/slots").then((m) => ({
+        import("~/features/product/slots").then((m) => ({
           default: m.ProductCookbooks,
         })),
       (product) => product.cookbooks.length > 0,
     ),
     "recipe-appearances": slot(
       () =>
-        import("~/app/products/slots").then((m) => ({
+        import("~/features/product/slots").then((m) => ({
           default: m.ProductRecipeAppearances,
         })),
       (product) => product.ingredient !== null,
     ),
     labels: slot(() =>
-      import("~/app/products/slots").then((m) => ({
+      import("~/features/product/slots").then((m) => ({
         default: m.ProductLabels,
       })),
     ),
     runs: slot(() =>
-      import("~/app/products/product-runs").then((m) => ({
+      import("~/features/product/product-runs").then((m) => ({
         default: m.ProductRuns,
       })),
     ),
   },
   recipe: {
     workflow: slot(() =>
-      import("~/app/recipes/slots").then((m) => ({
+      import("~/features/recipe/slots").then((m) => ({
         default: m.RecipeWorkflow,
       })),
     ),
   },
   ingredient: {
     "nutrition-product": slot(() =>
-      import("~/app/ingredients/slots").then((m) => ({
+      import("~/features/ingredient/slots").then((m) => ({
         default: m.IngredientNutritionProduct,
       })),
     ),
     "recipe-usages": slot(() =>
-      import("~/app/ingredients/slots").then((m) => ({
+      import("~/features/ingredient/slots").then((m) => ({
         default: m.IngredientRecipeUsages,
       })),
     ),
   },
   cookbook: {
     toc: slot(() =>
-      import("~/app/cookbooks/slots").then((m) => ({
+      import("~/features/cookbook/slots").then((m) => ({
         default: m.CookbookContents,
       })),
     ),
     "import-progress": slot(() =>
-      import("~/app/cookbooks/slots").then((m) => ({
+      import("~/features/cookbook/slots").then((m) => ({
         default: m.CookbookImportProgress,
       })),
     ),
   },
   location: {
     "contents-valuation": slot(() =>
-      import("~/app/locations/slots").then((m) => ({
+      import("~/features/location/slots").then((m) => ({
         default: m.LocationContentsValuation,
       })),
     ),
     "ai-description": slot(() =>
-      import("~/app/locations/slots").then((m) => ({
+      import("~/features/location/slots").then((m) => ({
         default: m.LocationAiDescription,
       })),
     ),
   },
   meal: {
     composition: slot(() =>
-      import("~/app/meals/slots").then((m) => ({
+      import("~/features/meal/slots").then((m) => ({
         default: m.MealComposition,
       })),
     ),
     nutrition: slot(() =>
-      import("~/app/meals/slots").then((m) => ({ default: m.MealNutrition })),
+      import("~/features/meal/slots").then((m) => ({
+        default: m.MealNutrition,
+      })),
     ),
   },
   project: {
     schedule: slot(() =>
-      import("~/app/projects/slots").then((m) => ({
+      import("~/features/project/slots").then((m) => ({
         default: m.ProjectSchedule,
       })),
     ),
     budget: slot(() =>
-      import("~/app/projects/slots").then((m) => ({
+      import("~/features/project/slots").then((m) => ({
         default: m.ProjectBudget,
       })),
     ),
     contribution: slot(() =>
-      import("~/app/projects/slots").then((m) => ({
+      import("~/features/project/slots").then((m) => ({
         default: m.ProjectContribution,
       })),
     ),
     analytics: slot(() =>
-      import("~/app/projects/slots").then((m) => ({
+      import("~/features/project/slots").then((m) => ({
         default: m.ProjectAnalytics,
       })),
     ),
   },
   productCategory: {
     "spending-classification": slot(() =>
-      import("~/app/finance/spending-classification-review").then((m) => ({
+      import("~/features/finance/spending-classification-review").then((m) => ({
         default: m.ProductCategoryClassification,
       })),
     ),
   },
   vendor: {
     "spending-classification": slot(() =>
-      import("~/app/finance/spending-classification-review").then((m) => ({
+      import("~/features/finance/spending-classification-review").then((m) => ({
         default: m.VendorClassification,
       })),
     ),
   },
   purchase: {
     runs: slot(() =>
-      import("~/app/purchases/slots").then((m) => ({
+      import("~/features/purchase/slots").then((m) => ({
         default: m.Runs,
       })),
     ),
     "project-allocation": slot(() =>
-      import("~/app/purchases/project-allocation-table").then((m) => ({
+      import("~/features/purchase/project-allocation-table").then((m) => ({
         default: m.PurchaseProjectAllocation,
       })),
     ),
     receiving: slot(() =>
-      import("~/app/purchases/receive-purchase-section").then((m) => ({
+      import("~/features/purchase/receive-purchase-section").then((m) => ({
         default: m.PurchaseReceiving,
       })),
     ),
     reconciliation: slot(() =>
-      import("~/app/purchases/slots").then((m) => ({
+      import("~/features/purchase/slots").then((m) => ({
         default: m.PurchaseReconciliation,
       })),
     ),
     "financial-settlement": slot(() =>
-      import("~/app/purchases/financial-settlement-body").then((m) => ({
+      import("~/features/purchase/financial-settlement-body").then((m) => ({
         default: m.PurchaseFinancialSettlement,
       })),
     ),
   },
   expense: {
     settlement: slot(() =>
-      import("~/app/expenses/expense-settlement-body").then((m) => ({
+      import("~/features/expense/expense-settlement-body").then((m) => ({
         default: m.ExpenseSettlement,
       })),
     ),
   },
   run: {
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
-    // component (`app/runs/slots.tsx`).
+    // component (`features/run/slots.tsx`).
     "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
           default: m.RunImportControls,
         })),
       isImportRun,
@@ -270,7 +273,7 @@ export const detailSlots = {
     ),
     "import-agent-live": slot(
       () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
           default: m.RunImportAgentActive,
         })),
       isImportRun,
@@ -289,7 +292,7 @@ export const detailSlots = {
     ),
     "import-agent-stopped": slot(
       () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
           default: m.RunImportAgentStopped,
         })),
       isImportRun,
@@ -298,28 +301,28 @@ export const detailSlots = {
     "import-debug-log": runReportSlot("import-debug-log"),
     suggestions: slot(
       () =>
-        import("~/app/runs/slots").then((m) => ({
+        import("~/features/run/slots").then((m) => ({
           default: m.RunSuggestions,
         })),
       (run) => run.purpose === "suggestion_sweep",
     ),
     "photo-batch": slot(
       () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
           default: m.RunPhotoBatch,
         })),
       (run) => run.purpose === "photo_inventory",
     ),
     "ai-usage": runReportSlot("ai-usage"),
     changes: slot(() =>
-      import("~/app/runs/slots").then((m) => ({
+      import("~/features/run/slots").then((m) => ({
         default: m.RunChanges,
       })),
     ),
   },
   image: {
     associations: slot(() =>
-      import("~/app/images/slots").then((m) => ({
+      import("~/features/image/slots").then((m) => ({
         default: m.ImageAssociations,
       })),
     ),

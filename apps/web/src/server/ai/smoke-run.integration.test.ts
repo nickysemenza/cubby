@@ -10,14 +10,14 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import {
   aiAnalysis,
   runFinding,
   run as runTable,
   orderMail,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { requireActor } from "~/server/request-context";
+import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { PURCHASE_IMPORT_MAIL_FEATURE } from "./features";

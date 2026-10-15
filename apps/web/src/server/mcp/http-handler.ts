@@ -9,8 +9,8 @@ import { type JSONType, z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { AppError } from "~/server/errors/app-error";
 import { withErrorReporting } from "~/server/errors/report-error";
-import { normalizeStartOperationError } from "~/server/start-operation.server";
-import { getRequestId } from "~/server/tracing";
+import { getRequestId } from "~/server/observability/tracing";
+import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
 
 const log = createLogger("MCP");
 
@@ -200,10 +200,10 @@ async function serveAuthenticatedMcp(
   const { McpOperationContext } =
     await import("~/server/mcp/operation-context");
   const { createRequestContext, requireActor } =
-    await import("~/server/request-context");
-  const { emitTelemetry } = await import("~/server/telemetry");
+    await import("~/server/http/request-context");
+  const { emitTelemetry } = await import("~/server/observability/telemetry");
   const { findActivePurchaseAgentGrant } =
-    await import("~/server/purchase-import/agent-auth");
+    await import("~/server/domains/purchase-import/agent-auth");
 
   const actor = await verifyMcpToken(request);
   if (!actor) return unauthorizedResponse();
@@ -236,7 +236,7 @@ async function serveAuthenticatedMcp(
       : null;
     if (!grant) return unauthorizedResponse();
     const { loadRunScope } =
-      await import("~/server/purchase-import/run-service");
+      await import("~/server/domains/purchase-import/run-service");
     const [scope, party] = await Promise.all([
       loadRunScope(ctx.db, actor.purchaseAgentRunId),
       ctx.currentParty(),

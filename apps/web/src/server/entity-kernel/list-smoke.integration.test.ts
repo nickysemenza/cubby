@@ -40,6 +40,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { ingredientList } from "~/server/domains/ingredient/repo/search";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
@@ -55,7 +56,6 @@ import {
   SKIPPED_ENTITIES,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { ingredientList } from "~/server/repo/ingredient/search";
 
 /* oxlint-disable anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**

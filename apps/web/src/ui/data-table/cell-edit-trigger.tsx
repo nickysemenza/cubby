@@ -4,7 +4,7 @@ import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 
 import {
   type CellClipboardSpec,

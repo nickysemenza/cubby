@@ -5,7 +5,7 @@
   // compressed map limit; maps remain in the build for Sentry and path validation.
   "upload_source_maps": false,
   // 2026-06-16 is the minimum for the cloudflare:workers `tracing.enterSpan` custom-spans
-  // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
+  // API (shipped 2026-06-16) — see src/server/observability/tracing.ts prod backend.
   "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   // Runaway-request guardrail above the 30s default. The original 120s stopgap
@@ -107,13 +107,13 @@
       },
       // The purchase agent: one import Run's coordinator per object, named by
       // `importRunAgentIdentity`; pi-durable keeps its transcript in the
-      // object's SQLite (src/server/purchase-import/agent-host.ts).
+      // object's SQLite (src/server/domains/purchase-import/agent-host.ts).
       {
         "name": "PURCHASE_IMPORT_RUN",
         "class_name": "PurchaseImportRunAgent"
       },
       // One object per USDA release, named `<release>.g<generation>`
-      // (src/server/usda-release; docs/adr/0008-usda-release-durable-object.md).
+      // (src/server/domains/usda-release; docs/adr/0008-usda-release-durable-object.md).
       {
         "name": "USDA_RELEASE",
         "class_name": "UsdaReleaseDurableObject"
@@ -169,7 +169,7 @@
   // range live in docs/infrastructure.md; neither is expressible here. Pool
   // capacity must account for concurrent requests and available origin RAM,
   // not only the per-request ceiling in db-runtime-resolver.ts. Desired timings live
-  // in src/lib/hyperdrive-cache-policy.ts for the same reason.
+  // in src/server/db/freshness/hyperdrive-cache-policy.ts for the same reason.
   // Creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   //   wrangler hyperdrive create cubby-db-cached --connection-string="postgres://..."
@@ -189,7 +189,7 @@
   // Scheduled Gmail discovery runs one `mail_discovery` pass per mailbox. Its
   // Run row is the durable record and each instance is one attempt at it
   // (`<runShortcode>-<attempt>`), so retention only bounds diagnostics
-  // (`server/workflow-runs/launcher.ts` sets it per instance).
+  // (`server/workflows/runs/launcher.ts` sets it per instance).
   "workflows": [
     {
       "name": "cubby-ai-refresh",

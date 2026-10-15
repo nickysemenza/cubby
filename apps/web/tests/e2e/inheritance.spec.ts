@@ -1,3 +1,3 @@
-import { inheritanceContract } from "./inheritance-contract";
+import { inheritanceContract } from "./support/inheritance-contract";
 
 inheritanceContract();

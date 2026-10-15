@@ -10,19 +10,19 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import { searchDocument } from "~/server/db/schema";
+import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { getDb } from "~/server/repo/database-helpers";
-import { createLocation } from "~/server/repo/location/crud";
+import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createPlantFixture,
   makeLocationInput,
-} from "~/server/repo/repo.fixtures";
-import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /** The raw projected title, for assertions the semantic embedding text alone

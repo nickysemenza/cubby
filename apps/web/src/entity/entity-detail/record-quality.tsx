@@ -11,11 +11,11 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useId, type ReactNode } from "react";
 
-import { ExceptionControls } from "~/entity/field-explanation-exception";
+import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Stack, SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

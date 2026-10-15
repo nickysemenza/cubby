@@ -6,7 +6,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 
 import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
 
 const localCountKeys = dashboardLocalCounts.keyof();
 

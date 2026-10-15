@@ -30,20 +30,16 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { ilikeContains, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
-import { logAuditEntry } from "~/server/repo/audit-log";
-import {
-  ilikeContains,
-  notDeleted,
-  unwrapDb,
-} from "~/server/repo/database-helpers";
-import { buildAnyPrefixTsQuery } from "~/server/repo/search-lexical";
+import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { buildAnyPrefixTsQuery } from "~/server/generic/search/repo/search-lexical";
 import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
   type ShortcodeTableFor,
-} from "~/server/repo/shortcode-tables";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+} from "~/server/generic/shortcode/repo/shortcode-tables";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 export type ResolvableEntity = keyof typeof generatedEntityResolveCapabilities;
 

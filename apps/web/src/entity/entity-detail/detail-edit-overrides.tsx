@@ -44,12 +44,12 @@ function RecipeEditRedirect({
 export const detailEditOverrides = {
   recipe: RecipeEditRedirect,
   cookbook: lazy(() =>
-    import("~/app/cookbooks/cookbook-edit-dialog").then((module) => ({
+    import("~/features/cookbook/cookbook-edit-dialog").then((module) => ({
       default: module.CookbookEditDialog,
     })),
   ),
   image: lazy(() =>
-    import("~/app/images/image-edit-dialog").then((module) => ({
+    import("~/features/image/image-edit-dialog").then((module) => ({
       default: module.ImageEditDialog,
     })),
   ),

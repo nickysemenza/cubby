@@ -1,6 +1,6 @@
-import { seedProductPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedProductPrerequisite } from "./fixtures/catalog";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Table hosting must preserve record click-to-edit behavior. Portaled Save
 // controls stay inside the resized viewport, and scalar writes survive reload.

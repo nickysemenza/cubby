@@ -2,8 +2,8 @@ import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
-import { AuthUIProvider } from "~/app/auth/auth-ui-provider";
+import { AuthEntryFrame } from "~/features/auth/auth-entry-frame";
+import { AuthUIProvider } from "~/features/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { cn } from "~/lib/utils";
@@ -57,7 +57,7 @@ function AuthPage() {
             pathname={authView}
             cardFooter={
               /* Statically false in every build, so the link never reaches a
-                 production bundle (enforced by scripts/check-client-bundle.ts).
+                 production bundle (enforced by tooling/checks/check-client-bundle.ts).
                  The route itself exists only in tooling/dev/worker.ts. */
               import.meta.env.DEV && authView === "sign-in" ? (
                 <a

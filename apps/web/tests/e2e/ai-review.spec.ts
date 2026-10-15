@@ -11,18 +11,22 @@ import {
   assessmentState as suggestionTable,
   feedback,
 } from "~/server/db/schema";
-import { publishAssessment } from "~/server/repo/assessment";
-import { getDb } from "~/server/repo/database-helpers";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { getDb } from "~/server/db/helpers";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 
-import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
-import { chooseOption, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  chooseOption,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 import {
   createEntityFixture,
   createEvidenceHarnessContext,
-} from "./fixtures-core";
+} from "./fixtures/core";
 
 // Acceptance must acknowledge the chosen value before the response arrives,
 // retain other pills throughout the write/refetch, and persist the real value.

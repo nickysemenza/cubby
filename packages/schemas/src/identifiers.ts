@@ -57,7 +57,7 @@ const sentenceCaseEntityLabel = (entity: ShortcodeEntity): string =>
  * not-found copy all already said "item" — "entry" survives only in row-scoped
  * repo error strings (`InventoryEntry` is the table name) that are a different,
  * deliberately narrower case (see
- * `apps/web/src/app/inventory/inventoryitemlist.tsx`'s delete-dialog comment)
+ * the inventory list's delete dialog)
  * and aren't sourced from this map.
  */
 export const ENTITY_LABEL = mapRecord(

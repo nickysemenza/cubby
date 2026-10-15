@@ -21,7 +21,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { MobileCardView } from "~/ui/data-table/MobileCardView";
+import { MobileCardView } from "~/ui/data-table/mobile-card-view";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

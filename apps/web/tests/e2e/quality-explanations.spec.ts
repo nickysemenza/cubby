@@ -1,4 +1,4 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { entityRecordsOutputSchema } from "~/contracts/entity-records.schema";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
@@ -10,20 +10,20 @@ import {
   gotoAuthenticatedPage,
   inlineExplanation,
   reloadAuthenticatedPage,
-} from "./e2e-helpers";
+} from "./support/e2e-helpers";
 import {
   seedProductPrerequisite,
   seedPlantPrerequisite,
   seedLocationPrerequisite,
   seedTaskPrerequisite,
-} from "./fixtures-catalog";
-import { createEntityFixture } from "./fixtures-core";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
+import { expect, test } from "./support/e2e-test";
 import {
   dispatchesOperation,
   dispatchOperations,
   unbatchFor,
-} from "./dispatch-wire";
+} from "./support/dispatch-wire";
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -636,10 +636,10 @@ test("specialist board and gallery cards retain the shared quality explanation",
 test("explanation evidence formats links and dates without exposing internal entity ids", async ({
   page,
 }) => {
-  const { getFixtureDb } = await import("./fixtures-core");
-  const { getDb } = await import("~/server/repo/database-helpers");
+  const { getFixtureDb } = await import("./fixtures/core");
+  const { getDb } = await import("~/server/db/helpers");
   const { resolveProductIdentifierSource } =
-    await import("~/server/repo/product-identifier-source");
+    await import("~/server/domains/product/repo/product-identifier-source");
   const { vendor } = await import("~/server/db/schema");
   const { eq } = await import("drizzle-orm");
   const suffix = Date.now();

@@ -28,7 +28,7 @@ import { generateLabelCsv } from "~/lib/label-generator";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";

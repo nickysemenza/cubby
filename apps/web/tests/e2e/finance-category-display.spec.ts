@@ -1,11 +1,14 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
-import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
-import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
+import {
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture } from "./fixtures/core";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,

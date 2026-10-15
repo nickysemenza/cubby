@@ -276,8 +276,8 @@ returns the entity's parsed create input (the entity list and types come from
 the generated create schemas; `ENTITY_DEFAULTS` is exhaustive, so a new creatable
 entity cannot skip it). `createEntity(context, ...)` writes it through the
 entity kernel. A factory never defaults a relation id; pass it. E2E specs call
-`createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures-core.ts`
-and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
+`createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures/core.ts`
+and keep domain seeders in `tests/e2e/fixtures/*.ts`. `seedBaseWorld` seeds Home
 and the taxonomy roots for every lane.
 
 Faker fills only fields nothing asserts on, from a per-test seed (E2E title
@@ -289,8 +289,8 @@ literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
 costing and nutrition numbers, and scenario states stay literal. `build:cf`
 fails if Faker reaches the Worker bundle.
 
-Keep kernel fixtures declaration-backed. The
-[Drizzle v1 RC spike](../research/drizzle-v1-spike.md) confirmed that
+Keep kernel fixtures declaration-backed. The Drizzle v1 RC spike
+(`git show fa514df72:docs/research/drizzle-v1-spike.md`) confirmed that
 table-derived insert schemas omit virtual inputs and declaration-level defaults;
 `drizzle-seed` generates foreign keys and writes directly to tables. Those are
 storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.

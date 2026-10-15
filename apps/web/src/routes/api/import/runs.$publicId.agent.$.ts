@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { createRequestContext, requireActor } from "~/server/request-context";
+import {
+  createRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
 
 async function handler(input: {
   request: Request;
@@ -10,7 +13,8 @@ async function handler(input: {
     await createRequestContext({ headers: input.request.headers }),
   );
   // Loaded on request: run-service reaches the AI SDK stack.
-  const { controlRun } = await import("~/server/purchase-import/run-service");
+  const { controlRun } =
+    await import("~/server/domains/purchase-import/run-service");
   const party = await context.currentParty();
   if (!party)
     return Response.json(
@@ -25,7 +29,7 @@ async function handler(input: {
     });
   // Loaded on request: the proxy reaches run-service and the AI SDK stack.
   const { proxyPurchaseAgentRequest } =
-    await import("~/server/purchase-import/agent-proxy");
+    await import("~/server/domains/purchase-import/agent-proxy");
   return await proxyPurchaseAgentRequest({
     request: input.request,
     publicId: input.params.publicId,

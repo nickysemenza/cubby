@@ -2,15 +2,15 @@ import { expenseOut } from "@cubby/schemas/project";
 import { z } from "zod";
 import { buildEntity } from "tooling/factories/build";
 
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import {
   gotoAuthenticatedPage,
   readExpense,
   uniqueName,
   waitForFormHydration,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // An unresolved role must remain visible and retain its amount after manual resolution.
 test("unclassified Expense explains its role gap and resolution preserves money", async ({

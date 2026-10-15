@@ -4,9 +4,9 @@
  * dismissal must survive a reload; Link must replace it; the Vendor page must
  * show the per-Purchase state; the Email page must keep the Gmail original.
  */
-import { seedVendorMailReviewPrerequisite } from "./fixtures-mail";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedVendorMailReviewPrerequisite } from "./fixtures/mail";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("reviews an Email's Purchase link from the Purchase's Emails section", async ({
   page,

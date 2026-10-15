@@ -5,7 +5,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
-} from "../src/server/repo/member-login";
+} from "../src/server/http/member-login";
 import {
   buildKernelContext,
   buildScenarioDatabase,

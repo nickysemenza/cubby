@@ -3,7 +3,7 @@ import {
   devSessionSchema as sessionSchema,
   type DevSession as Session,
 } from "./state";
-import { localSimulatorServer } from "../../../../scripts/lib/simulator-server.ts";
+import { localSimulatorServer } from "../../../../scripts/apple/lib/simulator-server.ts";
 import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {

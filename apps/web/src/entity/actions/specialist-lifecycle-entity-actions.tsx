@@ -10,7 +10,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
-import { useActionMutation } from "../../ui/hooks/useActionMutation";
+import { useActionMutation } from "../hooks/use-action-mutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import { DeleteEntityDialog } from "./delete-entity-action";
 import { defineEntityAction } from "./entity-action-definition";

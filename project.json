@@ -7,18 +7,18 @@
     // or edited output) while these inputs are unchanged. Generated output is
     // ignored by Nx's file map, so it never feeds its own key.
     "generate": {
-      "command": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts && redocly lint apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json --config redocly.yaml",
+      "command": "tsx --tsconfig apps/web/tsconfig.json apps/web/generator/main.ts && redocly lint apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json --config redocly.yaml",
       "cache": true,
       "inputs": [
         // Every root the generator reads: its own code, the packages the
         // declarations and contracts import, the web app (contracts, routes,
         // list sources), and the preview-fixture builder in apps/web/scripts.
-        "{workspaceRoot}/scripts/generator/**/*",
+        "{workspaceRoot}/apps/web/generator/**/*",
         "{workspaceRoot}/scripts/lib/tree-digest.ts",
         "{workspaceRoot}/packages/**/*",
         "{workspaceRoot}/apps/web/src/**/*",
-        "{workspaceRoot}/apps/web/scripts/apple-preview-fixtures.ts",
-        // Purchase-import prompt sources (scripts/generator/agent-prompts.ts).
+        "{workspaceRoot}/apps/web/tooling/checks/apple-preview-fixtures.ts",
+        // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts).
         "{workspaceRoot}/.claude/skills/purchase-import/references/*.md",
         // The R2 public origin generated into `SharedConstants.swift`.
         "{workspaceRoot}/apps/web/wrangler.jsonc",
@@ -40,7 +40,6 @@
         "{workspaceRoot}/packages/schemas/src/generated",
         "{workspaceRoot}/packages/shared/src/generated",
         "{workspaceRoot}/apps/apple/Generated",
-        "{workspaceRoot}/apps/apple/App/Shared/Previews/Fixtures",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyKit/Generated",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
@@ -66,7 +65,7 @@
       "inputs": [
         "{workspaceRoot}/packages/design-tokens/**/*",
         "{workspaceRoot}/scripts/design-tokens.ts",
-        "{workspaceRoot}/apps/apple/App/Shared/Theme/FieldGuideMetrics.swift",
+        "{workspaceRoot}/apps/apple/App/Shared/DesignSystem/FieldGuideMetrics.swift",
         "{workspaceRoot}/apps/apple/App/Assets.xcassets/**/*"
       ]
     },

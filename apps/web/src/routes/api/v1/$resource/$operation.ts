@@ -3,7 +3,7 @@ export const Route = createFileRoute("/api/v1/$resource/$operation")({
   server: {
     handlers: {
       ANY: async ({ request }) => {
-        const { handleHttpOperation } = await import("~/server/http-api");
+        const { handleHttpOperation } = await import("~/server/http/http-api");
         return handleHttpOperation(request);
       },
     },

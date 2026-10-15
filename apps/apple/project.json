@@ -8,7 +8,7 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/scripts/{apple-check.sh,apple-inputs.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}",
+      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple-inputs.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}",
       "{projectRoot}/scripts/{prepare-project.sh,build-rust.sh,check-openapi-warnings.sh}",
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
       "{workspaceRoot}/.github/workflows/ci.yaml",
@@ -22,7 +22,7 @@
       "{projectRoot}/CubbyKit/**/*",
       "!{projectRoot}/CubbyKit/Sources/CubbyAPI/README.md",
       {
-        "runtime": "node scripts/apple-inputs.ts host"
+        "runtime": "node scripts/apple/apple-inputs.ts host"
       }
     ],
     "appleApp": [
@@ -32,32 +32,32 @@
       "!{projectRoot}/CubbyKit/Sources/CubbyAPI/README.md",
       "!{projectRoot}/CubbyKit/Tests/**/*",
       {
-        "runtime": "node scripts/apple-inputs.ts app"
+        "runtime": "node scripts/apple/apple-inputs.ts app"
       }
     ]
   },
   "targets": {
     "lint": {
-      "command": "bash scripts/apple-check.sh lint",
+      "command": "bash scripts/apple/apple-check.sh lint",
       "cache": true,
       "inputs": [
         "{projectRoot}/**/*.swift",
         "{projectRoot}/.swift-format",
-        "{workspaceRoot}/scripts/apple-check.sh",
+        "{workspaceRoot}/scripts/apple/apple-check.sh",
         {
           "externalDependencies": []
         }
       ]
     },
     "host-tests": {
-      "command": "bash scripts/apple-check.sh host",
+      "command": "bash scripts/apple/apple-check.sh host",
       "cache": true,
       "inputs": [
         "appleHost"
       ]
     },
     "simulator-build": {
-      "command": "bash scripts/apple-check.sh app",
+      "command": "bash scripts/apple/apple-check.sh app",
       "cache": true,
       "inputs": [
         "appleApp"

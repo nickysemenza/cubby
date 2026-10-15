@@ -13,7 +13,7 @@ import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useEntityOptions } from "~/ui/hooks/useEntityOptions";
+import { useEntityOptions } from "~/ui/hooks/use-entity-options";
 import { Row, Stack } from "~/ui/layout";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";

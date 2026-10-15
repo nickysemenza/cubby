@@ -8,7 +8,7 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import { ShortcodeProse } from "~/ui/shortcode-prose";
+import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import {
   DetailAction,

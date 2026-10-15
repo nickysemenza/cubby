@@ -4,7 +4,7 @@ import {
 } from "@cubby/shared";
 import { z } from "zod";
 
-import { currentMemberLedgerParty } from "~/server/repo/current-member-party";
+import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
 
 import type { EntityKernelContext } from "./adapter";
 

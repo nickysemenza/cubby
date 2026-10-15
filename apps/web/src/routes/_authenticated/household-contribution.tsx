@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { HouseholdContributionLedger } from "~/app/finance/household-contribution-ledger";
+import { HouseholdContributionLedger } from "~/features/finance/household-contribution-ledger";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/household-contribution")({
   component: HouseholdContributionPage,

@@ -9,8 +9,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 ## Entity spine
 
 - Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, metadata
-  schema in `definition.ts`, compiled by `scripts/generator/entities/*`. Presentation metadata changes also update the compiled contract in
-  `scripts/generator/entities/declarations.ts`, the web field-model emitter, and
+  schema in `definition.ts`, compiled by `apps/web/generator/entities/*`. Presentation metadata changes also update the compiled contract in
+  `apps/web/generator/entities/declarations.ts`, the web field-model emitter, and
   the native wire/catalog projection. Generation checks structure; the web/test
   typecheck verifies those contracts agree.
 - Reference names and composed display labels: use the typed `display.labelPath`
@@ -19,8 +19,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   custom label sources instead of adding suffix guesses to a renderer.
 - List columns: field `display` (`standard`, `format`, `readPath`,
   `renderer.list`) compiled by `createEntityDisplayColumns`
-  (`apps/web/src/entity/entity-display.tsx`); named renderers in
-  `apps/web/src/entity/list-field-renderers.tsx`. Hand overrides in
+  (`apps/web/src/entity/display/entity-display.tsx`); named renderers in
+  `apps/web/src/entity/display/list-field-renderers.tsx`. Hand overrides in
   `entity/list-columns/` are only for mutation-bound cells.
 - Run detail: every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
   declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched
@@ -36,10 +36,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Field expected/allowed by a classification: declare
   `capabilities.classificationPolicies` (or a per-row policy column) and read
   `@cubby/schemas/classification-field-policy` plus
-  `server/repo/classification-field-policy.ts` — never a feature literal at a
+  `server/domains/spending-category/repo/classification-field-policy.ts` — never a feature literal at a
   call site. See [entities](../entities.md#classification-field-policies).
-- Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
-- Slot reports: `entityReport.get` and `server/repo/entity-report/` compose
+- Detail pages: generic detail with declared slots (`features/*/slots.tsx`).
+- Slot reports: `entityReport.get` and `server/generic/entity-report/repo/` compose
   shared server-owned blocks; web `ReportBlocks` and native `ReportDetailSlot`
   render them. [Compiled entities](../entities.md#one-declaration-several-consumers)
   owns block/command/choice semantics. Add a builder rather than deriving figures
@@ -48,7 +48,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
   (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in
   `packages/schemas/src/manifest-wire.ts` drives descriptor JSON validation, Swift storage,
-  and web structured-value types; `scripts/generator/entities/render/swift-catalog.ts`
+  and web structured-value types; `apps/web/generator/entities/render/swift-catalog.ts`
   emits the bundle and declarations. Native conveniences stay extensions. The generic list
   and detail views consume that bundle; no hand-written mapping layer.
 
@@ -57,14 +57,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/repo/repository.ts`), `declaredFilterPredicates` /
-  `listScaffold` (`server/repo/list.ts`; a list read goes through its `list`,
+  (`server/entity-kernel/repo/repository.ts`), `declaredFilterPredicates` /
+  `listScaffold` (`server/generic/list/repo/list.ts`; a list read goes through its `list`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined
   `count` instead of calling
   `executeListQueryWithCount`), `insertAndReturn`,
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
-  policy-driven removal (`server/repo/removal/`).
+  policy-driven removal (`server/generic/removal/repo/`).
   List filtering, sorting, paging, and count share a plain root-table FROM,
   including dashboard counts that reuse list predicates. Remove consuming alias
   overrides together. Scalar projections omit `load` to retain their two-query
@@ -72,14 +72,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
 - Search fan-out: a record whose search text embeds another entity is one
-  `searchDependents` entry (`server/services/mutation-side-effects.ts`) naming
-  an explicit query in `server/repo/entity-embedding-cleanup.ts`; it drives
+  `searchDependents` entry (`server/entity-kernel/repo/mutation-side-effects.ts`) naming
+  an explicit query in `server/generic/embedding/repo/entity-embedding-cleanup.ts`; it drives
   both the projection refresh and the embedding wave. Writers call
   `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
   refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
-  rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);
+  rollups select `expenseAggregateFields` (`server/domains/expense/repo/expense-aggregate-sql.ts`);
   all money is `SUM(Expense.cost)`.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
@@ -99,7 +99,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Provider failures retain HTTP status, full upstream response bodies, and
   original causes after bounded retries. UPC partial failures preserve successful
   lookups while carrying the failed provider diagnostic through the batch error.
-- Purchase-agent proxy: `server/purchase-import/agent-proxy.ts` forwards the
+- Purchase-agent proxy: `server/domains/purchase-import/agent-proxy.ts` forwards the
   caller's abort signal to its Durable Object request. Internal disconnects still
   propagate as failures; cancellation does not replace the Run's abort command.
 - Calendar days: `householdLocalDate`, `householdDateTime`, `householdDaysAgo`/
@@ -116,13 +116,13 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
 - Run operation replay: every `RunOperation` read by key and every write goes
-  through `server/repo/run-operation.ts` (`readOperation`, `insertOperation`
+  through `server/domains/run/repo/run-operation.ts` (`readOperation`, `insertOperation`
   (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),
   `insertDebugEventOperations`,
   `reclaimOperation`, `completeOperation`, `setOperationResult`,
   `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
   the ledger transaction use the leased policy `executeLeasedOperation`
-  (`server/runs/operation.ts`); writers whose row commits with their business
+  (`server/domains/run/service/operation.ts`); writers whose row commits with their business
   writes (purchase prepare, commit, validate, Product enrichment, validation
   corrections) use the atomic policy `executeAtomicOperation` there, which
   replays only a completed row and calls any other "outcome is uncertain".
@@ -189,7 +189,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   are one Rust implementation (`recipebridge/src/display_format.rs`) shared
   with native via UniFFI; add a rule there and to
   `golden-vectors/display-format.json`. Declared list totals arrive as
-  server-worded `totalLabels` (`server/repo/list-display-labels.ts`); clients
+  server-worded `totalLabels` (`server/generic/list/repo/list-display-labels.ts`); clients
   print them.
 - Plurals: `countLabel(count, noun)` from `@cubby/shared/pluralize` for
   "3 nouns", `pluralize(noun, count)` for the noun alone. The

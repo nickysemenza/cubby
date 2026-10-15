@@ -11,7 +11,7 @@ import {
   NullableNumericField,
   SideBySideFields,
   UnifiedTextField,
-} from "../../ui/form-utils";
+} from "../../ui/forms/form-utils";
 import { getHoverableMeasureUnitIcon } from "./format-amount";
 
 /**

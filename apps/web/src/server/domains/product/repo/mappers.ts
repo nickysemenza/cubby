@@ -1,0 +1,614 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import {
+  canonicalExternalIdUrl,
+  externalIdKind,
+  GTIN_SOURCE,
+} from "@cubby/schemas/external-id";
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
+import type { ImageAnalysisSummary } from "@cubby/schemas/image";
+import type {
+  InventoryListProductOut,
+  ProductInventoryEmbedOut,
+} from "@cubby/schemas/inventory";
+import {
+  type ProductListItem,
+  type ProductPickerItemOut,
+  type ProductTopLevelOut,
+  productListItemOut,
+  productPickerItemOut,
+  productTopLevelOut,
+  productWithIngredientAndInventoryAndMappingsOut,
+} from "@cubby/schemas/product";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { z } from "zod";
+
+import {
+  isNotDeleted,
+  type MappableImageRecord,
+  mapImages,
+  mapRelation,
+  parseInventoryAmount,
+} from "~/server/db/helpers";
+import type {
+  ingredient,
+  location,
+  product,
+  productUnitMappings,
+} from "~/server/db/schema";
+import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
+import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
+import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import type { CategoryStockTracking } from "~/server/domains/product-category/repo/product-category-sql";
+import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
+import { parseWithContext } from "~/server/lib/zod-utils";
+
+import type { MappableProductExternalId } from "./external-id-types";
+import {
+  type ProductPricing,
+  resolveProductPricing,
+  resolveProductPriceField,
+} from "./pricing";
+import { productStockContext } from "./stock-context";
+import type { ProductDeepDB, ProductListDB } from "./types";
+import { unitMappingSides } from "./unit-mappings";
+
+type ProductImageRow =
+  | MappableImageRecord
+  | {
+      image: MappableImageRecord;
+      purpose?: "item" | "label" | null;
+      deletedAt?: Date | null;
+    };
+
+const productImagePurposeOf = (row: ProductImageRow): "item" | "label" =>
+  "image" in row && row.purpose === "label" ? "label" : "item";
+
+const productImageShortcodeOf = (row: ProductImageRow): string =>
+  ("image" in row ? row.image : row).shortcode;
+
+/**
+ * Every image shortcode attached to a Product's joined image rows (item and
+ * label alike). A caller loading `analysisSummaries` for `dbProductToAPI`
+ * batches `loadImageAnalysisSummaries` over exactly this set.
+ */
+export const productImageShortcodesOf = (
+  rows: ProductDeepDB["images"] | null | undefined,
+): string[] => (rows ?? []).map(productImageShortcodeOf);
+
+const mapProductImages = (
+  rows: ProductImageRow[],
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
+) =>
+  rows.flatMap((row) =>
+    mapImages([row]).map((image) => ({
+      ...image,
+      // The absence of a role on an older join is evidence in its own right;
+      // do not rewrite it to the item default used only for grouping/covers.
+      purpose: "image" in row ? (row.purpose ?? null) : null,
+      // Populated only when the caller (a Product detail/get read) loaded
+      // `analysisSummaries` — absent on a list read, which passes none, to
+      // keep list cost flat.
+      analysisSummary: analysisSummaries?.get(image.id) ?? null,
+    })),
+  );
+
+/**
+ * Split a Product's joined image rows into item/label galleries.
+ *
+ * `analysisSummaries`, when supplied, is a pre-loaded batch (see
+ * `dbProductToAPI`) keyed by image shortcode — never loaded here, so a list
+ * read that never passes it stays a single query regardless of image count.
+ */
+export const splitProductImages = (
+  rows: ProductImageRow[] | null | undefined,
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
+) => {
+  const itemRows = (rows ?? []).filter(
+    (row) => productImagePurposeOf(row) === "item",
+  );
+  const labelRows = (rows ?? []).filter(
+    (row) => productImagePurposeOf(row) === "label",
+  );
+  const filesOf = (items: ProductImageRow[]) =>
+    mapProductImages(items, analysisSummaries);
+  const itemImages = filesOf(itemRows);
+  const labelImages = filesOf(labelRows);
+  return {
+    itemImages,
+    labelImages,
+    itemImageCount: itemImages.filter(isDisplayableImageFile).length,
+    labelImageCount: labelImages.filter(isDisplayableImageFile).length,
+  };
+};
+
+type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
+  classificationEvidence: string;
+  category: ProductCategorySummary | null;
+  /** The category decision a Product without its own inherits (ADR 0013). */
+  categoryStockTracking: CategoryStockTracking | null;
+  growsPlantId?: (typeof product.$inferSelect)["growsPlantId"];
+  images?: ProductImageRow[] | null;
+  externalIds?: MappableProductExternalId[] | null;
+  dataQuality: ProductTopLevelOut["dataQuality"];
+  pricing?: ProductPricing;
+  // Batch-resolved by the caller via `getProductCoverImageUrlsByProductIds`
+  // (same rule the picker uses). Optional: callers that never asked for it
+  // (e.g. ingredient-relation reads) fall back to `null` below.
+  coverImageUrl?: string | null;
+  /** Loaded where a public product response needs the garden source relation. */
+  growsPlant?: { shortcode: string } | null;
+};
+
+/**
+ * The barcode that stands for a product, from its already-loaded external ids.
+ *
+ * Derived rather than queried: every caller that emits `primaryGtin` on a
+ * top-level product shape has `externalIds` in hand, so this costs nothing. A
+ * slot can be left with no primary (removing one promotes the oldest survivor,
+ * but a replace-payload can leave the slot empty), so fall back to the first
+ * live barcode rather than reporting none.
+ */
+export const primaryGtinOf = (
+  externalIds: MappableProductExternalId[] | undefined | null,
+): string | null => {
+  const live = (externalIds ?? []).filter(
+    (row) => row.deletedAt === null && row.source === GTIN_SOURCE,
+  );
+  return (
+    live.find((row) => row.isPrimary)?.externalId ?? live[0]?.externalId ?? null
+  );
+};
+
+export const mapProductExternalIds = (
+  externalIds: MappableProductExternalId[] | undefined | null,
+) =>
+  (externalIds ?? [])
+    .filter((externalId) => externalId.deletedAt === null)
+    .map((externalId) => {
+      const kind = externalIdKind.parse(externalId.kind);
+      return {
+        id: externalId.id,
+        source: externalId.source,
+        kind,
+        externalId: externalId.externalId,
+        url: canonicalExternalIdUrl({ ...externalId, kind }),
+        // Rows written before the column existed default to primary, which is
+        // what they were: back then a slot held exactly one row.
+        isPrimary: externalId.isPrimary ?? true,
+        createdAt: externalId.createdAt,
+        updatedAt: externalId.updatedAt,
+      };
+    });
+
+export const mapProductUnitMappings = (
+  productId: ProductTopLevelOut["id"],
+  unitMappings: Array<typeof productUnitMappings.$inferSelect>,
+) =>
+  unitMappings
+    .filter((unitMapping) => unitMapping.deletedAt === null)
+    .map((unitMapping) => ({
+      id: unitMapping.id,
+      ...unitMappingSides(unitMapping),
+      source: unitMapping.source,
+      sourceMetadata: {
+        type: "product" as const,
+        productId,
+      },
+      createdAt: unitMapping.createdAt,
+      updatedAt: unitMapping.updatedAt,
+    }));
+
+/** Every Product read derives its resolutions here, list and detail alike. */
+export const productFieldResolutions = (
+  productData: Pick<
+    ProductTopLevelDB,
+    "price" | "stockTracked" | "categoryStockTracking"
+  >,
+  pricing: ProductPricing,
+): FieldResolutions => ({
+  price: resolveProductPriceField(productData.price, pricing),
+  stockTracked: resolveStockTrackingField(
+    productData.stockTracked,
+    productData.categoryStockTracking,
+    "product decision",
+  ),
+});
+
+export const mapDbProductToTopLevel = (
+  productData: ProductTopLevelDB,
+): ProductTopLevelOut => {
+  const imageGroups = splitProductImages(productData.images);
+  const pricing =
+    productData.pricing ?? resolveProductPricing(productData.price);
+  return {
+    id: parseShortcodeFor("product", productData.shortcode),
+    name: productData.name,
+    aliases: productData.aliases,
+    tags: productData.tags,
+    primaryGtin: primaryGtinOf(productData.externalIds),
+    fdc_id: productData.fdc_id,
+    manufacturer: productData.manufacturer,
+    model: productData.model,
+    notes: productData.notes,
+    expectedQuantity: productData.expectedQuantity,
+    category: productData.category,
+    categoryId: productData.category?.id ?? null,
+    classificationEvidence: productData.classificationEvidence,
+    growsPlantId: productData.growsPlant
+      ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
+      : null,
+    price: productData.price,
+    pricing,
+    fieldResolutions: productFieldResolutions(productData, pricing),
+    usdaUnavailable: productData.usdaUnavailable,
+    stockTracked: productData.stockTracked,
+    kind: productData.kind,
+    acquisitionOrigin: productData.acquisitionOrigin,
+    labelNutrition: productData.labelNutrition,
+    dataQuality: productData.dataQuality,
+    images: imageGroups.itemImages,
+    labelImages: imageGroups.labelImages,
+    itemImageCount: imageGroups.itemImageCount,
+    labelImageCount: imageGroups.labelImageCount,
+    // Same derived cover rule as the picker (see
+    // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
+    // batch-resolve it for this read.
+    coverImageUrl: productData.coverImageUrl ?? null,
+    externalIds: mapProductExternalIds(productData.externalIds),
+    createdAt: productData.createdAt,
+    updatedAt: productData.updatedAt,
+  };
+};
+
+export const dbProductToTopLevelAPI = (
+  productData: ProductTopLevelDB,
+): ProductTopLevelOut => {
+  const result = mapDbProductToTopLevel(productData);
+
+  return parseWithContext(productTopLevelOut, result, {
+    entityKind: "Product",
+    identifier: { id: productData.id, name: productData.name },
+  });
+};
+
+const mapDbProductToPickerItem = (
+  productData: Pick<
+    typeof product.$inferSelect,
+    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
+  > & {
+    category: ProductCategorySummary | null;
+    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
+    price: ProductPickerItemOut["price"];
+    quantityLedger: ProductPickerItemOut["quantityLedger"];
+    onHand: ProductPickerItemOut["onHand"];
+  },
+): ProductPickerItemOut => ({
+  id: parseShortcodeFor("product", productData.shortcode),
+  name: productData.name,
+  manufacturer: productData.manufacturer,
+  category: productData.category,
+  price: productData.price,
+  coverImageUrl: productData.coverImageUrl,
+  quantityLedger: productData.quantityLedger,
+  onHand: productData.onHand,
+});
+
+export const dbProductToPickerItemAPI = (
+  productData: Pick<
+    typeof product.$inferSelect,
+    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
+  > & {
+    category: ProductCategorySummary | null;
+    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
+    price: ProductPickerItemOut["price"];
+    quantityLedger: ProductPickerItemOut["quantityLedger"];
+    onHand: ProductPickerItemOut["onHand"];
+  },
+): ProductPickerItemOut => {
+  const result = mapDbProductToPickerItem(productData);
+
+  return parseWithContext(productPickerItemOut, result, {
+    entityKind: "Product",
+    identifier: { id: productData.id, name: productData.name },
+  });
+};
+
+export const mapDbProductToInventoryEmbed = (
+  productData: typeof product.$inferSelect & {
+    category: ProductCategorySummary | null;
+    pricing: ProductPricing;
+    primaryGtin: string | null;
+  },
+): ProductInventoryEmbedOut => ({
+  id: parseShortcodeFor("product", productData.shortcode),
+  name: productData.name,
+  primaryGtin: productData.primaryGtin,
+  fdc_id: productData.fdc_id,
+  manufacturer: productData.manufacturer,
+  model: productData.model,
+  notes: productData.notes,
+  expectedQuantity: productData.expectedQuantity,
+  category: productData.category,
+  price: productData.pricing.effectivePrice,
+  usdaUnavailable: productData.usdaUnavailable,
+  createdAt: productData.createdAt,
+  updatedAt: productData.updatedAt,
+});
+
+export const mapDbProductToInventoryList = (
+  productData: typeof product.$inferSelect & {
+    category: ProductCategorySummary | null;
+    pricing?: ProductPricing;
+    primaryGtin: string | null;
+  },
+): InventoryListProductOut => ({
+  id: parseShortcodeFor("product", productData.shortcode),
+  name: productData.name,
+  manufacturer: productData.manufacturer,
+  primaryGtin: productData.primaryGtin,
+  fdc_id: productData.fdc_id,
+  category: productData.category,
+  expectedQuantity: productData.expectedQuantity,
+  model: productData.model,
+  price:
+    productData.pricing?.effectivePrice ??
+    resolveProductPricing(productData.price).effectivePrice,
+  usdaUnavailable: productData.usdaUnavailable,
+});
+
+export const mapDbProductIngredient = (
+  ingredientData: typeof ingredient.$inferSelect,
+) => ({
+  id: parseShortcodeFor("ingredient", ingredientData.shortcode),
+  name: ingredientData.name,
+  aliases: ingredientData.aliases,
+  naKinds: ingredientData.naKinds,
+  createdAt: ingredientData.createdAt,
+  updatedAt: ingredientData.updatedAt,
+});
+
+const mapDbLocationToProductListInventory = (
+  locationData: typeof location.$inferSelect,
+) => ({
+  id: parseShortcodeFor("location", locationData.shortcode),
+  name: locationData.name,
+  type: parseLocationType(locationData.type),
+});
+
+/**
+ * List-shaped stock rows for one product: live entries in live locations,
+ * paired with a compact location ref.
+ *
+ * Exported because the product list is no longer the only reader — any table
+ * showing "where does this thing live" for a product it merely references goes
+ * through here, so the surfaces cannot disagree about which entries count. The
+ * `isNotDeleted(entry.location)` filter is the load-bearing half: it matches
+ * `dbProductToAPI` and `onHandUnitsSql`, and dropping it is how a detail read
+ * once counted an entry whose LOCATION was soft-deleted while the list did not.
+ */
+export const mapProductListInventoryEntries = (
+  entries: ProductListDB["inventoryEntry"],
+) =>
+  mapRelation(
+    entries.filter((entry) => isNotDeleted(entry.location)),
+    (entry) => ({
+      id: parseShortcodeFor("inventory", entry.shortcode),
+      amount: parseInventoryAmount(entry),
+      valuation: entry.valuation,
+      verifiedAt: entry.verifiedAt,
+      placement: entry.placement,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      location: mapDbLocationToProductListInventory(entry.location),
+    }),
+  );
+
+export const dbProductToListAPI = (
+  productData: ProductListDB,
+  displayImages: DisplayImageSummary[],
+): ProductListItem => {
+  const inventoryEntry = mapProductListInventoryEntries(
+    productData.inventoryEntry,
+  );
+  const result = {
+    ...mapDbProductToTopLevel(productData),
+    displayImages,
+    ingredient:
+      productData.ingredient && isNotDeleted(productData.ingredient)
+        ? mapDbProductIngredient(productData.ingredient)
+        : null,
+    unitMappings: mapProductUnitMappings(
+      parseShortcodeFor("product", productData.shortcode),
+      productData.unitMappings,
+    ),
+    modelPresence: Boolean(productData.model),
+    upcPresence: Boolean(primaryGtinOf(productData.externalIds)),
+    notesPresence: Boolean(productData.notes),
+    dataGaps: productData.dataQuality.gaps.map((gap) => gap.check),
+    inventoryEntry,
+    expenseCount: Number(productData.expenseCount),
+    componentCount: Number(productData.componentCount),
+    // Net basis: SUM(expense.cost), 0 for a product with no expenses (never
+    // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
+    expenseTotal: Number(productData.expenseTotal),
+    purchaseDate: productData.purchaseDate,
+    owners: productData.owners ?? [],
+    ...deriveProductQuantitySummary(inventoryEntry, productData.quantityLedger),
+  };
+
+  return parseWithContext(
+    productListItemOut,
+    {
+      ...result,
+      ...productStockContext({
+        ...result,
+        stockTracked:
+          result.fieldResolutions?.stockTracked?.value === true
+            ? true
+            : result.fieldResolutions?.stockTracked?.value === false
+              ? false
+              : null,
+      }),
+    },
+    {
+      entityKind: "Product",
+      identifier: { id: productData.id, name: productData.name },
+    },
+  );
+};
+
+/**
+ * Transform a deeply nested product DB record to API format.
+ * Handles shortcode branding, image extraction, and nested transforms.
+ *
+ * `analysisSummaries`, like `dataQuality`, is pre-loaded by the caller (a
+ * batched `loadImageAnalysisSummaries` keyed by image shortcode) rather than
+ * fetched in here — this mapper stays a synchronous, DB-free transform, and a
+ * caller that never loads it (a list read) gets `analysisSummary: null`
+ * throughout at no extra query cost.
+ */
+export const dbProductToAPI = (
+  productData: ProductDeepDB,
+  dataQuality: ProductTopLevelOut["dataQuality"],
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
+): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
+  const { ingredient, unitMappings, inventoryEntry, images } = productData;
+  const imageGroups = splitProductImages(images, analysisSummaries);
+
+  // `isNotDeleted(entry.location)` matches `dbProductToListAPI` and
+  // `onHandUnitsSql`, which inner-joins live locations. Without it a detail
+  // read counted an entry whose LOCATION was soft-deleted while the list
+  // dropped it — one product, two surfaces, different stock. Same drift the
+  // `deriveProductQuantitySummary` docblock exists to prevent.
+  const mappedInventoryEntry = mapRelation(
+    inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
+    (entry) => ({
+      id: parseShortcodeFor("inventory", entry.shortcode),
+      amount: parseInventoryAmount(entry),
+      valuation: entry.valuation,
+      verifiedAt: entry.verifiedAt,
+      placement: entry.placement,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      location: {
+        id: parseShortcodeFor("location", entry.location.shortcode),
+        name: entry.location.name,
+        aliases: entry.location.aliases,
+        notes: entry.location.notes ?? null,
+        type: parseLocationType(entry.location.type),
+        product: mapLocationIdentityProduct(entry.location),
+        lastBulkInventory: entry.location.lastBulkInventory,
+        // Like `valuation` below: a lightweight identity reference, not the
+        // place callers read a location's AI description from.
+        aiDescription: null,
+        images: mapImages(entry.location.images),
+        displayImage: entry.location.displayImage ?? null,
+        // Valuation is a whole-tree rollup; this movement-timeline embed is a
+        // lightweight identity reference, not a place callers read this
+        // location's own aggregate value from.
+        valuation: null,
+        ancestors: entry.location.ancestors ?? [],
+        createdAt: entry.location.createdAt,
+        updatedAt: entry.location.updatedAt,
+      },
+    }),
+  );
+
+  const pricing =
+    productData.pricing ?? resolveProductPricing(productData.price);
+  const result = {
+    id: parseShortcodeFor("product", productData.shortcode),
+    name: productData.name,
+    aliases: productData.aliases,
+    tags: productData.tags,
+    primaryGtin: primaryGtinOf(productData.externalIds),
+    fdc_id: productData.fdc_id,
+    manufacturer: productData.manufacturer,
+    model: productData.model,
+    notes: productData.notes,
+    expectedQuantity: productData.expectedQuantity,
+    classificationEvidence: productData.classificationEvidence,
+    categoryId: productData.category?.id ?? null,
+    category: productData.category,
+    growsPlantId: productData.growsPlant
+      ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
+      : null,
+    price: productData.price,
+    pricing,
+    fieldResolutions: productFieldResolutions(productData, pricing),
+    usdaUnavailable: productData.usdaUnavailable,
+    stockTracked: productData.stockTracked,
+    kind: productData.kind,
+    acquisitionOrigin: productData.acquisitionOrigin,
+    labelNutrition: productData.labelNutrition,
+    dataQuality,
+    createdAt: productData.createdAt,
+    updatedAt: productData.updatedAt,
+    ingredient: ingredient ? mapDbProductIngredient(ingredient) : null,
+    unitMappings: mapProductUnitMappings(
+      parseShortcodeFor("product", productData.shortcode),
+      unitMappings,
+    ),
+    externalIds: mapProductExternalIds(productData.externalIds),
+    images: imageGroups.itemImages,
+    labelImages: imageGroups.labelImages,
+    itemImageCount: imageGroups.itemImageCount,
+    labelImageCount: imageGroups.labelImageCount,
+    // Same derived cover rule as the picker (see
+    // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
+    // batch-resolve it for this read.
+    coverImageUrl: productData.coverImageUrl ?? null,
+    inventoryEntry: mappedInventoryEntry,
+    // The bins in service, beside the stock held somewhere. `mapRelation`
+    // drops soft-deleted rows, matching `quantityLedger.locationCount`, which
+    // counts only live locations — the two must agree or the hero contradicts
+    // the table beneath it.
+    servingAsLocations: mapRelation(productData.locations ?? [], (loc) => ({
+      id: parseShortcodeFor("location", loc.shortcode),
+      name: loc.name,
+      type: parseLocationType(loc.type),
+      // This row carries no image columns — the select is scalar-only on
+      // purpose — so the hydrated thumbnail is the only visual it has.
+      displayImage: loc.displayImage ?? null,
+      ancestors: loc.ancestors ?? [],
+    })),
+    // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
+    // reads as 1. Non-zero is what makes this product a kit.
+    componentCount: Number(productData.componentCount ?? 0),
+    // A product may be the physical copy for many cookbooks. The query filters
+    // both cookbook and recipe rows, while mapRelation remains a defensive
+    // backstop for callers that construct ProductDeepDB directly.
+    cookbooks: mapRelation(productData.cookbooks ?? [], (cb) => ({
+      id: parseShortcodeFor("cookbook", cb.shortcode),
+      name: cb.name,
+      recipeCount:
+        cb.recipes?.filter((recipe) => isNotDeleted(recipe)).length ?? 0,
+    })),
+    ...deriveProductQuantitySummary(
+      mappedInventoryEntry,
+      productData.quantityLedger,
+    ),
+  };
+
+  return parseWithContext(
+    productWithIngredientAndInventoryAndMappingsOut,
+    {
+      ...result,
+      ...productStockContext({
+        ...result,
+        stockTracked:
+          result.fieldResolutions?.stockTracked?.value === true
+            ? true
+            : result.fieldResolutions?.stockTracked?.value === false
+              ? false
+              : null,
+      }),
+    },
+    {
+      entityKind: "Product",
+      identifier: { id: productData.id, name: productData.name },
+    },
+  );
+};

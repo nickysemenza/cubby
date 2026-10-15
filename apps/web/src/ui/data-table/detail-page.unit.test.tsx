@@ -12,7 +12,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 import { type DetailSection, DetailSections } from "./detail-page";
 import { useSectionEmpty } from "./detail-section-state";

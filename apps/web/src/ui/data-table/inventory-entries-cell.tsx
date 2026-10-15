@@ -21,7 +21,7 @@ import {
 import { tryFormatAmount } from "../../features/inventory/format-amount";
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import type { SearchProviderProps } from "../combobox/with-search-hook";
-import { TruncatedList } from "../TruncatedList";
+import { TruncatedList } from "../truncated-list";
 import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { EditableEntityCell } from "./editable-entity-cell";
 import {

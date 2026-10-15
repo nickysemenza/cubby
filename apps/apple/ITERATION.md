@@ -122,7 +122,7 @@ remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
 ## Recommended loop
 
 Focused iOS app tests use the `Cubby-iOS` scheme, a concrete simulator destination,
-and the build flags in `scripts/apple-check.sh`. Swift Testing method selectors
+and the build flags in `scripts/apple/apple-check.sh`. Swift Testing method selectors
 include parentheses, for example
 `'-only-testing:Cubby-iOS-Tests/LibraryMetadataSyncTests/bulkPagesAreBoundedAndSerialized()'`.
 Check the executed test count: `TEST SUCCEEDED` with zero tests is not validation.
@@ -200,7 +200,7 @@ including a screenshot and UI tree after replay failure; use
 
 Every simulator lane, local or hosted, builds through the cached
 `apple:simulator-build` Nx target (one simulator-generic profile in
-`scripts/apple-check.sh`). A later lane, worktree restart, or disposable
+`scripts/apple/apple-check.sh`). A later lane, worktree restart, or disposable
 simulator gets that app restored from the Nx cache, locally or from the shared
 remote cache, when its inputs and Xcode version are unchanged. Its
 `native-build` phase includes `pnpm apple gen`, so setup and scenario time

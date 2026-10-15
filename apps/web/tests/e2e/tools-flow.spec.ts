@@ -1,10 +1,10 @@
-import { seedToolFlowPrerequisite } from "./fixtures-catalog";
+import { seedToolFlowPrerequisite } from "./fixtures/catalog";
 import {
   chooseOption,
   expectViewportBounded,
   gotoAuthenticatedPage,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("tool Flow keeps group order across pagination, jumps to unloaded groups, and reflows around inspection", async ({
   page,

@@ -1,10 +1,10 @@
 import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import { useMemo } from "react";
 
-import { mealDateLabel } from "~/app/meals/meal-format";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { mealDateLabel } from "~/features/meal/meal-format";
 
 import { defineListOverride } from "./types";
 

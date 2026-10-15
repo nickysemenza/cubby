@@ -2,7 +2,7 @@ import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

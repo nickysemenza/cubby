@@ -1,14 +1,14 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 import {
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
-import { createEntityFixture } from "./fixtures-core";
+} from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
 
-// Columns are as narrow as their values (docs/agents/web-ui-reference.md):
+// Columns are as narrow as their values (apps/web/docs/web-ui-reference.md):
 // - a header's sort arrow and source icon take no width until it is hovered;
 // - a count of one entity's records heads its column with that entity's icon;
 // - a date prints "Sep 3" over "’25 · 1y ago";

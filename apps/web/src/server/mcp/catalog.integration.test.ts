@@ -8,22 +8,22 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { getDb } from "~/server/db/helpers";
 import {
   photoRunImage,
   assessmentState as suggestion,
   runFinding,
 } from "~/server/db/schema";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
-import { getDb } from "~/server/repo/database-helpers";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
 import {
   createImageFixture,
   makeExpenseInput,
-} from "~/server/repo/repo.fixtures";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { requireActor } from "~/server/request-context";
-import { ensureRun } from "~/server/runs/ensure-run";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -31,7 +31,7 @@ import {
   kernelRequestContext,
   listMcpTools,
   type McpTestRequestContext,
-} from "./mcp-test-utils";
+} from "../testing/mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";

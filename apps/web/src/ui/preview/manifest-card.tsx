@@ -22,7 +22,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../../entity/entity-media/entity-display-images";
-import { NutrientsSummary } from "../../features/units/NutrientsSummary";
+import { NutrientsSummary } from "../../features/units/nutrients-summary";
 
 // The single "manifest" hovercard renderer. Every entity preview is expressed
 // as a declarative ManifestCardProps (built by a per-entity toXCard spec) and

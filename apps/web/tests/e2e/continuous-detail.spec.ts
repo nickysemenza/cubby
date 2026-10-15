@@ -1,14 +1,17 @@
 import {
   seedProductPrerequisite,
   seedProductCategoryPrerequisite,
-} from "./fixtures-catalog";
-import { seedConcurrently } from "./fixtures-core";
+} from "./fixtures/catalog";
+import { seedConcurrently } from "./fixtures/core";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
-} from "./fixtures-photos";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/photos";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Long record identity and many actions must never compete for the same pixels.
 // Overflow must retain registry dialogs and lazy workflow controls on every width.

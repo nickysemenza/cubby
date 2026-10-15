@@ -39,8 +39,9 @@ import type { Icon, IconProps } from "@phosphor-icons/react/lib";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
+import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import {
   domainForEntity,
   domainWayfinding,

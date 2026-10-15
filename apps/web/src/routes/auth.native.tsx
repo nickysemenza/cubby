@@ -2,7 +2,7 @@ import type { NativeCallbackScheme } from "@cubby/shared/apple-app-identity";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
+import { AuthEntryFrame } from "~/features/auth/auth-entry-frame";
 import { createCubbyAuthClient } from "~/lib/auth-client";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";

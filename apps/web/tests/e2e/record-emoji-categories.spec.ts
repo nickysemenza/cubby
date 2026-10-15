@@ -1,17 +1,20 @@
-import { publishAssessment } from "~/server/repo/assessment";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { entityApi } from "./entity-api";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { entityApi } from "./support/entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
-import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 import {
   createEntityFixture,
   createEvidenceHarnessContext,
-} from "./fixtures-core";
+} from "./fixtures/core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
@@ -208,7 +211,7 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   const { buildScenarioDatabase } =
     await import("../../tooling/scenarios/context");
   const { loadVendorSuggestionContext } =
-    await import("~/server/repo/vendor-suggestion-context");
+    await import("~/server/domains/vendor/repo/vendor-suggestion-context");
   const pool = createPostgresPool({ connectionString: e2eRuntime.databaseUrl });
   const db = buildScenarioDatabase(pool);
   const headers = { Origin: baseURL! };

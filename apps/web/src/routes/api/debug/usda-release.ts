@@ -5,15 +5,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "~/lib/auth";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
+import { activeUsdaRelease } from "~/server/domains/usda-release/client";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
 import {
   hasExplicitCredential,
   verifyHttpApiKeyActor,
-} from "~/server/http-api-handler";
-import { authenticateHttpSession } from "~/server/http-session-cache";
-import { createRequestContext, requireActor } from "~/server/request-context";
-import type { RequestActor } from "~/server/request-context";
-import { activeUsdaRelease } from "~/server/usda-release/client";
-import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
+} from "~/server/http/http-api-handler";
+import { authenticateHttpSession } from "~/server/http/http-session-cache";
+import {
+  createRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
+import type { RequestActor } from "~/server/http/request-context";
 
 const headers = { "Cache-Control": "private, no-store" };
 
@@ -133,7 +136,7 @@ export const Route = createFileRoute("/api/debug/usda-release")({
           const [{ USDAClient }, { advanceProductUsdaLinks }] =
             await Promise.all([
               import("~/server/clients/usda"),
-              import("~/server/services/usda-link-advance.service"),
+              import("~/server/domains/usda-food/service/usda-link-advance.service"),
             ]);
           return {
             ...status,

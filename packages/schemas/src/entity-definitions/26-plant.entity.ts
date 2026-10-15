@@ -489,7 +489,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/plant.repository",
+        module: "~/server/domains/plant/repo/plant.repository",
         export: "plantRepository",
       },
     },

@@ -14,7 +14,7 @@ import { z } from "zod";
 import {
   FieldResolutionStatus,
   resolutionActionClassName,
-} from "~/entity/field-resolution";
+} from "~/entity/fields/field-resolution";
 import { Button } from "~/ui/primitives/button";
 
 import { useFieldSuggestionContext } from "./field-suggestion-provider";

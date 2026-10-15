@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getRegisteredTool } from "./tool-catalog";
 import { installToolCallProtocolHandler } from "./tool-protocol";

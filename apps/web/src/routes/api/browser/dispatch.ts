@@ -5,7 +5,7 @@ export const Route = createFileRoute("/api/browser/dispatch")({
     handlers: {
       ANY: async ({ request }) => {
         const { handleBrowserOperationDispatch } =
-          await import("~/server/browser-operation-dispatch");
+          await import("~/server/operation-runtime/browser-operation-dispatch");
         return handleBrowserOperationDispatch(request);
       },
     },

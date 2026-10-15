@@ -1,7 +1,7 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { cn } from "~/lib/utils";
 
 // Field Guide controls use modest radii, compact desktop heights, and a

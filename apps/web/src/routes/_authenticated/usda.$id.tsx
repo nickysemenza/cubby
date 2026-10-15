@@ -1,13 +1,13 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { USDAFoodDetail } from "~/features/usda/USDAFoodDetail";
+import { USDAFoodDetail } from "~/features/usda-food/usda-food-detail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { DetailPagePending } from "~/ui/feedback/route-pending";
+import { Page } from "~/ui/layout/page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   loader: async ({ params, context }) => {

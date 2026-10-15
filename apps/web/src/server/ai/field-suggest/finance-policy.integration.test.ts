@@ -5,14 +5,14 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { getDb } from "~/server/db/helpers";
 import { spendingCategory, vendor } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { suggestFields } from "./suggest-fields";

@@ -3,7 +3,7 @@ import type {
   ScriptStep,
   ScriptValue,
 } from "../../../tooling/purchase-agent-script";
-import { parseSignal } from "../../../src/server/purchase-agent/signals";
+import { parseSignal } from "../../../src/server/domains/purchase-agent/signals";
 
 type ResponsesFunctionCall = {
   type: "function_call";

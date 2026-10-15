@@ -4,8 +4,8 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type { RowData } from "@tanstack/react-table";
 
+import { formatCount, formatCurrency } from "~/lib/number-format";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
-import { formatCount, formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

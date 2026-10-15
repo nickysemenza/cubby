@@ -58,7 +58,7 @@ database enforces what it can:
   with live links remains the delete policy's job.
 
 Dependencies became soft-deletable in the same move. Cycle detection stays in
-`repo/database-helpers/dependency-edges.ts`, because a cycle is a graph
+`db/helpers/dependency-edges.ts`, because a cycle is a graph
 property no row constraint can express. Each per-domain repository keeps its
 own validation and refusals and calls the shared helpers in
 `repo/entity-links.ts` for the rows; every helper names its link kind, since

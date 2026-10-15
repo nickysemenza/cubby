@@ -21,8 +21,8 @@ import {
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
 
-import { useActionMutation } from "../../ui/hooks/useActionMutation";
 import { useRelationScope } from "../entity-detail/relation-scope";
+import { useActionMutation } from "../hooks/use-action-mutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import type {
   EntityActionHandles,

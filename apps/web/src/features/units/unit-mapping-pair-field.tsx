@@ -5,7 +5,7 @@ import type {
   UseFormReturn,
 } from "react-hook-form";
 
-import { UnifiedTextField } from "../../ui/form-utils";
+import { UnifiedTextField } from "../../ui/forms/form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 
 interface UnitMappingPairFieldProps<

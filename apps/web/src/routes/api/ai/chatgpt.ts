@@ -7,10 +7,13 @@ import { z } from "zod";
 import { auth } from "~/lib/auth";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
-import { verifyHttpApiKeyActor } from "~/server/http-api-handler";
-import { authenticateHttpSession } from "~/server/http-session-cache";
-import type { RequestActor } from "~/server/request-context";
-import { createRequestContext, requireActor } from "~/server/request-context";
+import { verifyHttpApiKeyActor } from "~/server/http/http-api-handler";
+import { authenticateHttpSession } from "~/server/http/http-session-cache";
+import type { RequestActor } from "~/server/http/request-context";
+import {
+  createRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
 
 async function handle(
   request: Request,

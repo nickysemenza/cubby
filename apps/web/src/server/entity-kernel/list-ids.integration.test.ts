@@ -1,18 +1,18 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import {
   createInventoryFixture,
   createLocationFixture,
   makeLocationInput,
   createProductFixture,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

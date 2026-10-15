@@ -1,13 +1,13 @@
 /**
  * Request-correlation id, shared by both sides of the wire.
  *
- * Lives in `lib/` rather than `server/tracing.ts` because the browser needs the
+ * Lives in `lib/` rather than `server/observability/tracing.ts` because the browser needs the
  * header name too, and importing anything under `~/server` from client code
  * would drag the server router into the client bundle
- * (see `assertNoServerCodeInClient` in scripts/check-client-bundle.ts). Keep
+ * (see `assertNoServerCodeInClient` in tooling/checks/check-client-bundle.ts). Keep
  * this module free of every server import for that reason.
  *
- * The server fills the header via `getRequestId()` in `~/server/tracing`: an
+ * The server fills the header via `getRequestId()` in `~/server/observability/tracing`: an
  * Cloudflare `cf-ray` when available.
  */
 

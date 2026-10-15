@@ -1,10 +1,10 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import superjson from "superjson";
 import { z } from "zod";
 
 import { auditLogListOut } from "@cubby/schemas/audit";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 test("browser dispatch preserves operation dates and rejects foreign origins", async ({
   page,

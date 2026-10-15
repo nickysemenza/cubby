@@ -1,0 +1,129 @@
+import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
+import type { QueryKey, QueryMeta } from "@tanstack/react-query";
+import { useMemo } from "react";
+
+import type { TableStateReturn } from "../data-table/use-table-state";
+import type { DeferredListGroup, LoadListEnrichment } from "./progressive-list";
+
+/** Full-filtered-set aggregates: column sums and the declared totals' server text. */
+export interface ListTotals {
+  /** Column aggregates (footer totals), by column id. */
+  sums?: Record<string, number>;
+  /** Declared list totals as the server words them, by total id. */
+  totalLabels?: Record<string, string>;
+}
+
+export interface ListQueryResponse<TData> {
+  items: TData[];
+  deferredGroups?: DeferredListGroup[];
+  meta: ListTotals & {
+    pageIndex: number;
+    pageSize: number;
+    totalCount: number;
+    groups?: ListGroupSummary[];
+  };
+}
+
+/**
+ * A fully-bound finite list request.
+ *
+ * Query descriptors retain their own cache-key type; this module adapts that
+ * descriptor exactly once into the smaller interface the infinite pager needs.
+ * The row type therefore travels with both the key and the executor instead of
+ * being represented by a phantom result field beside an untyped callback.
+ */
+export interface ListQueryPlan<
+  TData,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+> {
+  queryKey: QueryKey;
+  meta?: QueryMeta;
+  execute: (signal: AbortSignal) => Promise<TPage>;
+  progressive?: {
+    enrich: LoadListEnrichment;
+    summary: (signal: AbortSignal) => Promise<ListTotals>;
+  };
+}
+
+/**
+ * Finite list-query contract shared with the infinite-page adapter.
+ *
+ * The transport's cache key can remain as precise as its descriptor needs,
+ * while the response keeps the row type correlated through every page.
+ */
+export type ListQueryOptionsFn<
+  TFilters,
+  TData extends { id: string } = { id: string },
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+> = (params: {
+  /** Sort stack, primary first. */
+  sort?: Array<{ orderBy: string; direction: "asc" | "desc" }>;
+  pagination: { pageIndex: number; pageSize: number };
+  filters: TFilters;
+  groupBy?: string;
+  /** A declared tree's scope; omitted reads the flat list. */
+  nesting?: ListNesting;
+}) => ListQueryPlan<TData, TPage>;
+
+interface UsePaginatedTableCoreOptions<
+  TFilters,
+  TData extends { id: string },
+  TPage extends ListQueryResponse<TData>,
+> {
+  queryOptions: ListQueryOptionsFn<TFilters, TData, TPage>;
+  buildFilters: (tableState: TableStateReturn) => TFilters;
+  tableState: TableStateReturn;
+  groupBy?: string;
+}
+
+export function usePaginatedTableCore<
+  TFilters,
+  TData extends { id: string },
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+>({
+  queryOptions,
+  buildFilters,
+  tableState,
+  groupBy,
+}: UsePaginatedTableCoreOptions<TFilters, TData, TPage>) {
+  const filters = useMemo(
+    () => buildFilters(tableState),
+    [buildFilters, tableState],
+  );
+
+  const sortParams = useMemo(() => tableState.getSorts(), [tableState]);
+  const searching = tableState.hasPrimarySearch;
+  const { pagination } = tableState;
+
+  const queryParams = useMemo((): Parameters<
+    ListQueryOptionsFn<TFilters, TData, TPage>
+  >[0] => {
+    const params: Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] = {
+      pagination,
+      filters,
+    };
+    if (!searching || tableState.hasExplicitSort) params.sort = sortParams;
+    if (groupBy) params.groupBy = groupBy;
+    return params;
+  }, [
+    sortParams,
+    pagination,
+    filters,
+    groupBy,
+    searching,
+    tableState.hasExplicitSort,
+  ]);
+
+  const memoizedQueryOptions = useMemo(
+    () => queryOptions(queryParams),
+    [queryOptions, queryParams],
+  );
+
+  return {
+    filters,
+    sortParams,
+    pagination,
+    queryParams,
+    memoizedQueryOptions,
+  };
+}

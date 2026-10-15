@@ -107,7 +107,7 @@ const RUNTIME = new Map<string, RuntimeRoute>([
   ],
   // Generated output bytes decide cache reuse; producer inputs route the probe.
   ...["host", "app"].map((scope): [string, RuntimeRoute] => [
-    `node scripts/apple-inputs.ts ${scope}`,
+    `node scripts/apple/apple-inputs.ts ${scope}`,
     { producedBy: ["cubby-checks:generate"] },
   ]),
 ]);

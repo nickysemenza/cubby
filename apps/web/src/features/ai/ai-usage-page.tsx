@@ -13,7 +13,7 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
@@ -23,7 +23,7 @@ import {
 } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/Table";
+import RTable from "~/ui/data-table/table";
 import {
   type CubbyColumnCollection,
   createCubbyColumnCollection,
@@ -31,7 +31,7 @@ import {
   useCubbyTable,
 } from "~/ui/data-table/table-features";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

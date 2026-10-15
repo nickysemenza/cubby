@@ -3,7 +3,7 @@ import { productCreateManyEvent } from "@cubby/schemas/product-workflow";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 const eventFrame = z.object({
   kind: z.literal("event"),

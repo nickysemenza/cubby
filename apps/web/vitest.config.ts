@@ -115,10 +115,10 @@ const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 // ordinary integration job and fails there: in CI `ensureWorkerBuilds`
 // refuses to rebuild a missing or stale bundle.
 const workerdIntegrationTests = [
-  "src/server/runs/ai-work-workflow.integration.test.ts",
+  "src/server/domains/run/service/ai-work-workflow.integration.test.ts",
   "tooling/database-socket-lifecycle.integration.test.ts",
-  "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
-  "src/server/purchase-import/run-retirement.integration.test.ts",
+  "src/server/domains/purchase-import/purchase-agent-scenarios.integration.test.ts",
+  "src/server/domains/purchase-import/run-retirement.integration.test.ts",
   "tooling/workerd-runtime.integration.test.ts",
   "tooling/workerd-runtime-profiles.integration.test.ts",
 ];

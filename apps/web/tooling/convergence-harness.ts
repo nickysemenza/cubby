@@ -1,4 +1,4 @@
-import { readRetainedMail } from "~/server/repo/retained-mail";
+import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -23,21 +23,21 @@ import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
-import { ingestGmailMessages } from "~/server/purchase-import/gmail/ingest";
+import { ingestGmailMessages } from "~/server/domains/purchase-import/gmail/ingest";
 import {
   commitPurchaseImport,
   preparePurchaseImport,
-} from "~/server/purchase-import/import-orders";
-import { resolveMail } from "~/server/purchase-import/mail-tool";
-import { getDb } from "~/server/repo/database-helpers";
-import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
+} from "~/server/domains/purchase-import/import-orders";
+import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
+import { getDb } from "~/server/db/helpers";
+import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
-} from "~/server/repo/image-processing";
-import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
-import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
+} from "~/server/domains/image-processing/repo/image-processing";
+import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 
 import type { CreatableEntity, EntityOverrides } from "./factories/build";
 

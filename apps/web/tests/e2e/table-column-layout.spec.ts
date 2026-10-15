@@ -3,13 +3,13 @@ import type { Locator, Page } from "@playwright/test";
 import {
   seedInventoryPrerequisites,
   seedVendorDisplayPrerequisite,
-} from "./fixtures-catalog";
-import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
-import { createEntityFixture } from "./fixtures-core";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/catalog";
+import { seedCookbookSourcePrerequisite } from "./fixtures/recipes";
+import { createEntityFixture } from "./fixtures/core";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
-// Column layout is session state (docs/agents/web-ui-reference.md): every
+// Column layout is session state (apps/web/docs/web-ui-reference.md): every
 // pointer and keyboard path through the one layout policy applies to the live
 // header, keeps the locked structural columns at their edges, and a reload
 // restores the declared default layout.

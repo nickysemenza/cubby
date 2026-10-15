@@ -54,7 +54,7 @@ export default defineEntity({
     detail: {},
     list: {
       savedViews: [
-        // `@me` is the viewing member (ADR 0015); the owner filter matches the
+        // `@me` is the viewing member (ADR 0018); the owner filter matches the
         // effective owner, so inherited stock counts as someone's stuff.
         {
           id: "wardrobe",
@@ -904,7 +904,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/inventory/repository",
+        module: "~/server/domains/inventory/repo/repository",
         export: "inventoryRepository",
       },
       search: "document",

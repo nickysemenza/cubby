@@ -210,7 +210,7 @@ export const nativeCoverage = {
   },
   /**
    * `implemented` slots are exactly the keys of `DetailSlotRegistry` in
-   * `apps/apple/App/Shared/Browse/DetailSlots.swift` (asserted by a Swift test).
+   * `apps/apple/App/Shared/Entity/Detail/DetailSlots.swift` (asserted by a Swift test).
    */
   detailSlot: {
     ...implemented([
@@ -315,7 +315,7 @@ export const nativeCoverage = {
   },
   /**
    * `implemented` slots are exactly the keys of `ListSlotRegistry` in
-   * `apps/apple/App/Shared/Browse/SpecialistListViews.swift`; `ownedElsewhere` ones are
+   * `apps/apple/App/Shared/Entity/List/SpecialistListViews.swift`; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
   /**

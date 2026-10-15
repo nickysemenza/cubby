@@ -1,8 +1,8 @@
 import { syntheticCookbookArchive } from "../../tooling/cookbook-bundle-fixture";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("imports an incomplete cookbook bundle, retries its staged photo, and preserves success on reselection", async ({
   page,

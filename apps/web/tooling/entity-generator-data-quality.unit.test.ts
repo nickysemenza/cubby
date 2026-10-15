@@ -1,8 +1,8 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { validateDataQualityDeclarations } from "../../../scripts/generator/entities/data-quality";
-import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
+import { validateDataQualityDeclarations } from "../generator/entities/data-quality";
+import type { CompiledEntity } from "../generator/entities/declarations";
 
 // The cross-entity pass reads only key, dataQuality and descriptors.
 const scored = (key: string, related: string[]): CompiledEntity =>

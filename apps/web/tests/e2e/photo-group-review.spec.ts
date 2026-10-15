@@ -1,33 +1,36 @@
-import { startOperation } from "./start-operation";
-import { dispatchOperations } from "./dispatch-wire";
+import { startOperation } from "./support/start-operation";
+import { dispatchOperations } from "./support/dispatch-wire";
 import { z } from "zod";
 import type { Fixture as TestGatewayFixture } from "./harness-services/purchase-import-test-gateway";
 import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
-} from "./fixtures-catalog";
+} from "./fixtures/catalog";
 import { and, eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TestHarness } from "wrangler";
-import { memberImport } from "~/server/purchase-import/order-import.fixtures";
+import { memberImport } from "~/server/domains/purchase-import/order-import.fixtures";
 import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
-} from "~/server/purchase-import/reconciliation";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+} from "~/server/domains/purchase-import/reconciliation";
+import { getDb } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import * as schema from "~/server/db/schema";
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
-} from "./fixtures-core";
+} from "./fixtures/core";
 import {
   seedPhotoGroupReviewRun,
   seedPhotoReviewProcessingFailure,
   seedPhotoReviewLabelText,
-} from "./fixtures-photos";
-import { openDetailActions, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, recordingVideo, test } from "./e2e-test";
+} from "./fixtures/photos";
+import {
+  openDetailActions,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, recordingVideo, test } from "./support/e2e-test";
 
 async function configureVariantDecisions(
   harness: TestHarness,

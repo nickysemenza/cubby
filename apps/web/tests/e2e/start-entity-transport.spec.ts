@@ -1,4 +1,4 @@
-import { chooseListView } from "./e2e-helpers";
+import { chooseListView } from "./support/e2e-helpers";
 /**
  * The core entity browser runtime uses named operations
  * (docs/entities.md, "Transports").
@@ -16,10 +16,10 @@ import superjson from "superjson";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { seedProductPrerequisite } from "./fixtures-catalog";
-import { createProduct } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { dispatchOperations, unbatchFor } from "./dispatch-wire";
+import { seedProductPrerequisite } from "./fixtures/catalog";
+import { createProduct } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { dispatchOperations, unbatchFor } from "./support/dispatch-wire";
 
 const batchedEntity = z.object({ entity: z.string() });
 

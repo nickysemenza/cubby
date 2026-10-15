@@ -5,7 +5,7 @@ import { accountAiUsage, type AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
-import { emitTelemetry } from "~/server/telemetry";
+import { emitTelemetry } from "~/server/observability/telemetry";
 
 import { snapshotAiUsagePrice } from "./pricing";
 

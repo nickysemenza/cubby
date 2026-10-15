@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { Grid, Row, Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 

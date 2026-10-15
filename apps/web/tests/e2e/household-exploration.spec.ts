@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { getFixtureDb } from "./fixtures-core";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { seedHouseholdRuntime } from "./fixtures-household";
+import { getDb } from "~/server/db/helpers";
+import { getFixtureDb } from "./fixtures/core";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { seedHouseholdRuntime } from "./fixtures/household";
 
 test.beforeAll(async ({ e2eRuntime }) => {
   test.setTimeout(120_000);

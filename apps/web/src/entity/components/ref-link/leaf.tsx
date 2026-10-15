@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
-import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/EntityPreviewContent";
+import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/entity-preview-content";
 import { RecordMarkByReference } from "~/entity/components/record-mark";
 import {
   entities,
@@ -22,7 +22,7 @@ import {
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
-import { ExternalLinkIcon } from "~/ui/ExternalLink";
+import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
@@ -45,7 +45,7 @@ const EntityPreviewContent = browserOnlyLazy<
   import.meta.env.SSR
     ? null
     : () =>
-        import("~/entity/components/EntityPreviewContent").then((module) => ({
+        import("~/entity/components/entity-preview-content").then((module) => ({
           default: module.EntityPreviewContent,
         })),
 );

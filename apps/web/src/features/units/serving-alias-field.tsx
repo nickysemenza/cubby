@@ -22,8 +22,8 @@ import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { useUpdateMutation } from "../../ui/hooks/useUpdateMutation";
-import { NutrientsSummary } from "./NutrientsSummary";
+import { useUpdateMutation } from "../../entity/hooks/use-update-mutation";
+import { NutrientsSummary } from "./nutrients-summary";
 
 interface ServingAliasFieldProps {
   productId: ProductShortcode;

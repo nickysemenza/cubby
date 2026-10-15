@@ -5,7 +5,7 @@ import vendorAccountDeclaration from "../../../../packages/schemas/src/entity-de
 import {
   compileEntity,
   validateEntityIdentities,
-} from "../../../../scripts/generator/entities/compile";
+} from "../../generator/entities/compile";
 
 describe("entity field provenance", () => {
   it("publishes a reference field's related entity", () => {

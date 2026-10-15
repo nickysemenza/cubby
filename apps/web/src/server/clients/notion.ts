@@ -11,7 +11,7 @@ import { LRUCache } from "lru-cache";
 import pRetry from "p-retry";
 import { z } from "zod";
 
-import { TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("notion");
 

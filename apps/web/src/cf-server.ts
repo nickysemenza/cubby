@@ -3,8 +3,8 @@
  * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
  *   TanStack Start.
  * - `handler.queue`: `cubby-purchase-agent` (the purchase agent's consumer,
- *   `server/purchase-agent/queue`), `cubby-telemetry`, then background tasks
- *   (`server/background-tasks/consume`).
+ *   `server/domains/purchase-agent/queue`), `cubby-telemetry`, then background tasks
+ *   (`server/workflows/background-tasks/consume`).
  * - `handler.scheduled`: the one daily maintenance cron.
  * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
  */
@@ -35,36 +35,39 @@ import {
   startOperationTraceAttributes,
   startOperationTraceName,
 } from "./lib/start-operation-observability";
-import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
-import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import {
   requestOperations,
   serverTimingHeader,
   withDatabaseRequestMetrics,
-} from "./server/db-observability";
-import { IMAGE_PROCESSING_SOCKET_PATH } from "./server/direct-socket-paths";
+} from "./server/db/db-observability";
+import { recordDatabaseWrite } from "./server/db/freshness/client";
+import type { PurchaseAgentQueueBatch } from "./server/domains/purchase-agent/environment";
+import { purchaseAgentQueueEnvironment } from "./server/domains/purchase-import/agent-host";
 import {
   reportServerError,
   withErrorReporting,
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
-import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
-import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environment";
-import { purchaseAgentQueueEnvironment } from "./server/purchase-import/agent-host";
-import type { SearchDocumentCursor } from "./server/repo/search-document";
-import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
-import { testDurationOverrideMs } from "./server/test-duration-override";
+import type { SearchDocumentCursor } from "./server/generic/search/repo/search-document";
+import { IMAGE_PROCESSING_SOCKET_PATH } from "./server/http/direct-socket-paths";
+import {
+  isMaintenanceMode,
+  maintenanceResponse,
+} from "./server/http/maintenance";
+import { classifyHttpWorkload } from "./server/http/workload";
+import type { TelemetryQueueBatch } from "./server/observability/telemetry-queue-types";
 import {
   type AppSpan,
   getRequestId,
   withInvocationTrace,
   withManualTrace,
   withTrace,
-} from "./server/tracing";
-import { workerSentryOptions } from "./server/worker-sentry";
-import { classifyHttpWorkload } from "./server/workload";
+} from "./server/observability/tracing";
+import { workerSentryOptions } from "./server/observability/worker-sentry";
+import { testDurationOverrideMs } from "./server/testing/test-duration-override";
+import type { BackgroundQueueBatch } from "./server/workflows/background-queue-types";
 
 // Cache the handler module promise so the dynamic import only runs once (on
 // first request). We keep it lazy (not a top-level static import) so that
@@ -89,12 +92,12 @@ const getHandler = () => {
   return handlerPromise;
 };
 
-let httpApiPromise: Promise<typeof import("./server/http-api")>;
+let httpApiPromise: Promise<typeof import("./server/http/http-api")>;
 let httpApiImportState = "uninitialized";
 const getHttpApi = () => {
   httpApiPromise ??= (() => {
     httpApiImportState = "pending";
-    return import("./server/http-api").then(
+    return import("./server/http/http-api").then(
       (module) => {
         httpApiImportState = "ready";
         return module;
@@ -109,13 +112,13 @@ const getHttpApi = () => {
 };
 
 let browserOperationPromise: Promise<
-  typeof import("./server/browser-operation-dispatch")
+  typeof import("./server/operation-runtime/browser-operation-dispatch")
 >;
 let browserOperationImportState = "uninitialized";
 const getBrowserOperation = () => {
   browserOperationPromise ??= (() => {
     browserOperationImportState = "pending";
-    return import("./server/browser-operation-dispatch").then(
+    return import("./server/operation-runtime/browser-operation-dispatch").then(
       (module) => {
         browserOperationImportState = "ready";
         return module;
@@ -263,7 +266,7 @@ const handler = {
                           ctx,
                           async () =>
                             (
-                              await import("./server/calendar/client")
+                              await import("./server/domains/calendar/client")
                             ).handleCalDavRequest(request),
                           url.origin,
                         );
@@ -285,8 +288,8 @@ const handler = {
                             async () => {
                               const [{ createCalendarFeedHandler }, calendar] =
                                 await Promise.all([
-                                  import("./server/calendar/feed"),
-                                  import("./server/calendar/client"),
+                                  import("./server/domains/calendar/feed"),
+                                  import("./server/domains/calendar/client"),
                                 ]);
                               return createCalendarFeedHandler(
                                 calendar.externalCalendarFeedStateFor,
@@ -324,7 +327,7 @@ const handler = {
                                     ctx,
                                     async () =>
                                       (
-                                        await import("./server/image-processing/direct-socket-route")
+                                        await import("./server/domains/image-processing/direct-socket-route")
                                       ).handleImageProcessingSocketUpgrade(
                                         request,
                                       ),
@@ -571,9 +574,9 @@ const handler = {
       async () => {
         if (batch.queue === "cubby-purchase-agent") {
           // The agent's consumer holds no database client: each Run service it
-          // calls opens its own (`server/purchase-import/agent-services`).
+          // calls opens its own (`server/domains/purchase-import/agent-services`).
           const { consumePurchaseAgentQueue } =
-            await import("./server/purchase-agent/queue");
+            await import("./server/domains/purchase-agent/queue");
           await consumePurchaseAgentQueue(
             batch,
             purchaseAgentQueueEnvironment(env, ctx),
@@ -587,7 +590,7 @@ const handler = {
           if (batch.queue === "cubby-telemetry") {
             const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
               import("./server/db"),
-              import("./server/telemetry-queue"),
+              import("./server/observability/telemetry-queue"),
             ]);
             await processTelemetryQueueBatch(db, batch);
             return;
@@ -600,14 +603,14 @@ const handler = {
           // the module-init path of every fetch invocation too.
           const [{ db }, { handleBackgroundQueueBatch }] = await Promise.all([
             import("./server/db"),
-            import("./server/background-tasks/consume"),
+            import("./server/workflows/background-tasks/consume"),
           ]);
           await handleBackgroundQueueBatch(db, batch, {
             ...(batch.queue === "cubby-image-cloud"
               ? {
                   handleTask: async (db, task) =>
                     (
-                      await import("./server/image-processing/cloud-queue")
+                      await import("./server/domains/image-processing/cloud-queue")
                     ).handleCloudImageTask(db, task),
                 }
               : {}),
@@ -671,7 +674,7 @@ const handler = {
                     { claimCatchUp, discoverPurchases, recoverMissedWork },
                   ] = await Promise.all([
                     import("./server/db"),
-                    import("./server/services/catch-up.service"),
+                    import("./server/generic/work-queue/service/catch-up.service"),
                   ]);
                   const claimedAt = new Date();
                   if (await claimCatchUp(db, claimedAt)) {
@@ -706,7 +709,7 @@ const handler = {
                 async () =>
                   await (
                     await (
-                      await import("./server/calendar/client")
+                      await import("./server/domains/calendar/client")
                     ).calendarFeedStateFor(env.APP_ORIGIN)
                   ).refreshNow("cron.daily"),
                 { "cubby.scheduled.job": "calendar-feed" },
@@ -728,7 +731,7 @@ const handler = {
                 async () => {
                   const [{ db }, { countAwaitingWork }] = await Promise.all([
                     import("./server/db"),
-                    import("./server/services/awaiting-work.service"),
+                    import("./server/generic/work-queue/service/awaiting-work.service"),
                   ]);
                   await withTrace(
                     "cf.scheduled.job",
@@ -777,7 +780,7 @@ const handler = {
                 "cf.scheduled.job",
                 async (span) => {
                   const { semanticEmbeddingsConfigured } =
-                    await import("./server/semantic/embeddings");
+                    await import("./server/generic/embedding/semantic/embeddings");
                   if (!semanticEmbeddingsConfigured()) {
                     span.setAttribute("cubby.vectorReconcile.skipped", true);
                     return;
@@ -791,8 +794,8 @@ const handler = {
                         { productionVectorStore },
                       ] = await Promise.all([
                         import("./server/db"),
-                        import("./server/repo/entity-embedding-cleanup"),
-                        import("./server/semantic/vector-store"),
+                        import("./server/generic/embedding/repo/entity-embedding-cleanup"),
+                        import("./server/generic/embedding/semantic/vector-store"),
                       ]);
                       const since = new Date(
                         Date.now() - 7 * 24 * 60 * 60 * 1000,
@@ -852,16 +855,16 @@ const handler = {
 // Named exports: `wrangler types` finds Durable Object classes by reading them.
 export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "./server/ai/chatgpt/durable-object";
-export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
-export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
-export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
-export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
-export { UsdaReleaseDurableObject } from "./server/usda-release/durable-object";
-export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
-export { MailDiscoveryWorkflow } from "./server/gmail-workflows";
+export { CalendarFeedDurableObject } from "./server/domains/calendar/durable-object";
+export { DatabaseFreshnessDurableObject } from "./server/db/freshness/durable-object";
+export { ImageProcessingDurableObject } from "./server/domains/image-processing/durable-object";
+export { PurchaseImportRunAgent } from "./server/domains/purchase-import/agent-host";
+export { UsdaReleaseDurableObject } from "./server/domains/usda-release/durable-object";
+export { SearchIndexRepairWorkflow } from "./server/workflows/search-index-repair-workflow";
+export { MailDiscoveryWorkflow } from "./server/workflows/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);
 
 export { AiGatewayEgressDurableObject } from "./server/ai/gateway-egress-durable-object";
 
-export { AiRefreshWorkflow } from "./server/ai-refresh-workflow";
+export { AiRefreshWorkflow } from "./server/workflows/ai-refresh-workflow";

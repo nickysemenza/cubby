@@ -6,7 +6,7 @@ import {
   formatCount,
   formatCurrency,
   formatPercent,
-} from "./utils";
+} from "~/lib/number-format";
 
 describe("number formatters", () => {
   it("formatCurrency pins the default $-and-cents shape", () => {

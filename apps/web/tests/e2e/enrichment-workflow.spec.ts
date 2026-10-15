@@ -5,8 +5,8 @@ import {
 import superjson from "superjson";
 import { z } from "zod";
 
-import { seedIngredientPrerequisite } from "./fixtures-catalog";
-import { expect, test } from "./e2e-test";
+import { seedIngredientPrerequisite } from "./fixtures/catalog";
+import { expect, test } from "./support/e2e-test";
 
 const eventFrame = z.object({
   kind: z.literal("event"),

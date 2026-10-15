@@ -20,7 +20,7 @@ export default defineConfig({
   workers: 1,
   reporter: [
     ["line"],
-    ["./tests/e2e/e2e-harness-reporter.ts", { lane: "hmr" }],
+    ["./tests/e2e/support/e2e-harness-reporter.ts", { lane: "hmr" }],
   ],
   // A route's first visit compiles its module graph on demand.
   expect: { timeout: 15_000 },

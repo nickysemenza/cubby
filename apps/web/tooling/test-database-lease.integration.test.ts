@@ -2,7 +2,7 @@ import { createPostgresPool } from "./postgres-pool";
 import { pollUntil } from "@cubby/shared/retry";
 import { type Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
-import { createE2EDatabase } from "../tests/e2e/e2e-database";
+import { createE2EDatabase } from "../tests/e2e/support/e2e-database";
 import { leaseDatabase, prepareTemplate } from "./test-database-lease";
 import { TEST_USER_ID, withTestDb } from "./test-setup";
 

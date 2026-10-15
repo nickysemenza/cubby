@@ -1,8 +1,11 @@
 import type { Page } from "@playwright/test";
 
-import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
-import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
-import { expect, test } from "./e2e-test";
+import {
+  gotoAuthenticatedPage,
+  reloadAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { seedStaplePlanningPrerequisite } from "./fixtures/recipes";
+import { expect, test } from "./support/e2e-test";
 
 async function openIngredientEditor(page: Page) {
   const checkbox = page.getByRole("checkbox", {

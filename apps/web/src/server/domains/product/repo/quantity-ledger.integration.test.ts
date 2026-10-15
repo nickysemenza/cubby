@@ -1,0 +1,421 @@
+import type { ProductId } from "@cubby/schemas/identifiers";
+import { type ExpenseCreateInput } from "@cubby/schemas/project";
+import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+
+import { getDb } from "~/server/db/helpers";
+import { product } from "~/server/db/schema";
+import {
+  createInventoryFixture,
+  createLocationFixture,
+  createProductFixture as createProduct,
+  makeExpenseInput,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
+
+import { attachProductComponents } from "./product-components";
+import {
+  hasUnknownQuantityLinesSql,
+  hasUnknownAcquisitionLinesSql,
+  loadProductDetailQuantityLedgers,
+  loadProductPickerQuantities,
+  loadProductQuantityLedgers,
+  loadProductQuantitySummaries,
+  onHandUnitsSql,
+  quantityVarianceSql,
+} from "./quantity-ledger";
+
+/**
+ * The ledger rule, exercised against a real database.
+ *
+ * Every case here is a shape that exists in the production ledger, and several
+ * are shapes an earlier draft of the rule got wrong — the negative-cost line
+ * that stores a POSITIVE quantity (302 live rows do), and the $0 line whose
+ * sign is the only thing distinguishing a freebie from a discard.
+ */
+describe("loadProductQuantityLedgers", () => {
+  const ctx = withTestDb();
+
+  const seed = (overrides: Partial<ExpenseCreateInput>) =>
+    createRepoEntity(ctx, "expense", makeExpenseInput(overrides));
+
+  const ledgerFor = async (productId: ProductId) =>
+    (await loadProductQuantityLedgers(ctx.db, [productId])).get(productId);
+
+  // A discard/sale whose earlier acquisition was never recorded drives the
+  // expected quantity negative. Recording the historical acquisition (known
+  // quantity, unknown cost, unknown date) corrects it — and only the ledger
+  // moves: no InventoryEntry is created as a side effect.
+  it("corrects a negative expected quantity with an unknown-cost undated acquisition", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Historical Hinge" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "sold 2",
+      cost: -10,
+      date: "2026-02-01",
+      productId: prod.id,
+      productQuantity: -2,
+    });
+    expect(await ledgerFor(prod.entityId)).toMatchObject({
+      acquiredUnits: 0,
+      exitedUnits: 2,
+      expectedQuantity: -2,
+    });
+
+    await seed({
+      name: "historical acquisition",
+      cost: null,
+      date: null,
+      productId: prod.id,
+      productQuantity: 5,
+    });
+    expect(await ledgerFor(prod.entityId)).toMatchObject({
+      acquiredUnits: 5,
+      exitedUnits: 2,
+      expectedQuantity: 3,
+      unknownAcquisitionLines: 0,
+      locationCount: 0,
+    });
+    const inventory = await getDb(ctx.db).execute(
+      sql`SELECT count(*)::int AS n FROM "InventoryEntry" WHERE "productId" = ${prod.entityId}`,
+    );
+    expect(inventory.rows[0]).toMatchObject({ n: 0 });
+  });
+
+  it("retains unknown ancestor kit quantities on both batch and detail ledgers", async () => {
+    const kit = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Example fastener kit" }),
+      ctx.actor,
+    );
+    const part = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Example fastener" }),
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: part.entityId, quantity: 4 }],
+      ctx.actor,
+    );
+    await seed({
+      name: "Unquantified kit",
+      cost: 12,
+      productId: kit.id,
+      productQuantity: null,
+    });
+    const batch = await ledgerFor(part.entityId);
+    const detail = (
+      await loadProductDetailQuantityLedgers(ctx.db, [part.entityId])
+    ).get(part.entityId);
+    expect(batch?.unknownAcquisitionLines).toBe(1);
+    expect(detail).toEqual(batch);
+    const matches = await getDb(ctx.db).execute(
+      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND ${hasUnknownQuantityLinesSql(product.id)} AND ${hasUnknownAcquisitionLinesSql(product.id)}`,
+    );
+    expect(matches.rows).toHaveLength(1);
+    const excluded = await getDb(ctx.db).execute(
+      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND NOT ${hasUnknownQuantityLinesSql(product.id)}`,
+    );
+    expect(excluded.rows).toHaveLength(0);
+  });
+
+  it("keeps non-count units and incomplete history incomparable in SQL and hydrated summaries", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic quantity comparison" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic quantity shelf" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "Known units",
+      cost: 12,
+      productId: product.id,
+      productQuantity: 3,
+    });
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: product.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2, unit: "kg" },
+      },
+      ctx.actor,
+    );
+    const readSql = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT ${sql.raw(onHandUnitsSql('"Product"'))} AS units, ${sql.raw(quantityVarianceSql('"Product"'))} AS variance FROM "Product" WHERE id=${product.entityId}`,
+        )
+      ).rows[0];
+    expect(await readSql()).toMatchObject({ units: null, variance: null });
+    expect(
+      (await loadProductQuantitySummaries(ctx.db, [product.entityId])).get(
+        product.entityId,
+      ),
+    ).toMatchObject({ onHandUnits: null, quantityVariance: null });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "InventoryEntry" SET "amountUnit"='each' WHERE "productId"=${product.entityId}`,
+    );
+    await seed({
+      name: "Unknown additional units",
+      cost: 4,
+      productId: product.id,
+      productQuantity: null,
+    });
+    expect(await readSql()).toMatchObject({ units: 2, variance: null });
+    expect(
+      (await loadProductQuantitySummaries(ctx.db, [product.entityId])).get(
+        product.entityId,
+      ),
+    ).toMatchObject({ onHandUnits: 2, quantityVariance: null });
+  });
+
+  it("nets acquisitions against every kind of exit", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Outlet Box" }),
+      ctx.actor,
+    );
+
+    await seed({
+      name: "bought 8",
+      cost: 33.44,
+      productId: prod.id,
+      productQuantity: 8,
+    });
+    // A return: negative cost, POSITIVE quantity — the legacy shape, no longer
+    // writable through the repo since `assertQuantitySignMatchesCost` closes
+    // that door. Forced past it with raw SQL on purpose: the
+    // reader's `abs()` is defence-in-depth for rows that arrive some other way,
+    // and without a test pinning it, a later reader would look at the assert
+    // and "simplify" the tolerance away. The sign of the money decides, so this
+    // is 8 units leaving however the quantity is stored.
+    const returned = await seed({
+      name: "returned 8",
+      cost: -33.44,
+      productId: prod.id,
+      productQuantity: -8,
+    });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET "productQuantity" = 8 WHERE "id" = ${returned.entityId}`,
+    );
+    await seed({
+      name: "bought 2 more",
+      cost: 9,
+      productId: prod.id,
+      productQuantity: 2,
+    });
+
+    expect(await ledgerFor(prod.entityId)).toEqual({
+      acquiredUnits: 10,
+      exitedUnits: 8,
+      expectedQuantity: 2,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount: 0,
+    });
+  });
+
+  // The `::int` casts this query used to carry would have rounded 0.5 back to a
+  // whole number at the SELECT boundary, so the column type alone proves
+  // nothing — the ledger has to come back fractional end to end. This is the
+  // half-installed conduit coil: one bought, half of it later binned.
+  it("keeps a fractional exit fractional", async () => {
+    const coil = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Conduit Coil" }),
+      ctx.actor,
+    );
+
+    await seed({
+      name: "bought one coil",
+      cost: 17.96,
+      productId: coil.id,
+      productQuantity: 1,
+    });
+    await seed({
+      name: "binned the rest",
+      cost: 0,
+      productId: coil.id,
+      productQuantity: -0.5,
+    });
+
+    expect(await ledgerFor(coil.entityId)).toEqual({
+      acquiredUnits: 1,
+      exitedUnits: 0.5,
+      expectedQuantity: 0.5,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount: 0,
+    });
+  });
+
+  it("goes negative rather than clamping — that is the defect signal", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Circular Saw" }),
+      ctx.actor,
+    );
+    // The acquisition was never recorded, so the sale has nothing to net against.
+    await seed({
+      name: "sold",
+      cost: -60,
+      productId: prod.id,
+      productQuantity: -1,
+    });
+
+    expect((await ledgerFor(prod.entityId))?.expectedQuantity).toBe(-1);
+  });
+
+  it("counts an unrecorded quantity rather than guessing at one", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Old Receipt Item" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "bought 3",
+      cost: 30,
+      productId: prod.id,
+      productQuantity: 3,
+    });
+    // The receipt proves the cost but not the count. Reading it as one unit is
+    // exactly the silent guess the nullable column exists to prevent.
+    await seed({
+      name: "bought ?",
+      cost: 10,
+      productId: prod.id,
+      productQuantity: null,
+    });
+    await seed({
+      name: "returned ?",
+      cost: -10,
+      productId: prod.id,
+      productQuantity: null,
+    });
+
+    expect(await ledgerFor(prod.entityId)).toEqual({
+      acquiredUnits: 3,
+      exitedUnits: 0,
+      expectedQuantity: 3,
+      unknownAcquisitionLines: 1,
+      unknownExitLines: 1,
+      locationCount: 0,
+    });
+  });
+
+  // The distinction this test pins is the whole reason `0` was admitted to the
+  // CHECK in 2026-08: a price concession (money back, item KEPT) knows its
+  // quantity exactly, and spelling that `null` reported it as debt — the `−N?`
+  // cue beside Expected lit on all eight such rows in the live ledger while
+  // their counts were in fact certain. Both values sum to nothing; only `null`
+  // is an unknown line, and that difference is what the cue reads.
+
+  it("ignores planned spend — `future` rows are not on any shelf yet", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "On Order" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "have 2",
+      cost: 20,
+      productId: prod.id,
+      productQuantity: 2,
+    });
+    await seed({
+      name: "ordered 5 more",
+      cost: 50,
+      productId: prod.id,
+      productQuantity: 5,
+      future: true,
+    });
+
+    // 2, not 7 — planned spend has not arrived, so it is not expected on hand.
+    expect((await ledgerFor(prod.entityId))?.expectedQuantity).toBe(2);
+  });
+});
+
+describe("loadProductPickerQuantities", () => {
+  const ctx = withTestDb();
+
+  it("distinguishes absent, counted, and mixed-unit stock", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Picker shelf" }),
+      ctx.actor,
+    );
+    const absent = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Absent brace" }),
+      ctx.actor,
+    );
+    const counted = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Counted brace" }),
+      ctx.actor,
+    );
+    const mixed = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Mixed brace" }),
+      ctx.actor,
+    );
+
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: counted.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const secondShelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Picker shelf two" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: secondShelf.entityId,
+        amount: { value: 1, unit: "box" },
+      },
+      ctx.actor,
+    );
+
+    const result = await loadProductPickerQuantities(ctx.db, [
+      absent.entityId,
+      counted.entityId,
+      mixed.entityId,
+    ]);
+    expect(result.get(absent.entityId)?.onHand).toEqual({ state: "none" });
+    expect(result.get(counted.entityId)?.onHand).toEqual({
+      state: "counted",
+      units: 2,
+    });
+    expect(result.get(mixed.entityId)?.onHand).toEqual({ state: "mixed" });
+  });
+});

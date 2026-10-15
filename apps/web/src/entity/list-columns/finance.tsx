@@ -12,12 +12,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import {
   financialTransaction,
   entityFilterOptions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 
 import { defineListOverride } from "./types";
 

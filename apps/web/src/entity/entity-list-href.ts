@@ -3,7 +3,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entities } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { encodeFilters, sortToParam } from "~/entity/filters";
-import type { ViewDefinition } from "~/entity/view-manifest";
+import type { ViewDefinition } from "~/entity/model/view-manifest";
 
 type ListState = {
   filters: readonly ViewDefinition["filters"][number][];

@@ -5,6 +5,15 @@ import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
 import { generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";
+import { withTransactionDatabase } from "~/server/db/helpers";
+import { runAfterCommit } from "~/server/db/helpers/core";
+import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
+import {
+  isMutationSideEffectRef,
+  type MutationSideEffectEvent,
+  refreshProjectionsForEvent,
+  runMutationSideEffects,
+} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_KERNEL_BINDINGS,
@@ -15,20 +24,11 @@ import {
   executeGeneratedRelationMutation,
   listGeneratedRelation,
 } from "~/server/generated/entity-relation-bindings.gen";
-import { withTransactionDatabase } from "~/server/repo/database-helpers";
-import { runAfterCommit } from "~/server/repo/database-helpers/core";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
-import {
-  isMutationSideEffectRef,
-  type MutationSideEffectEvent,
-  refreshProjectionsForEvent,
-  runMutationSideEffects,
-} from "~/server/services/mutation-side-effects";
 import {
   findRelatedSearchHits,
   findSearchHits,
-} from "~/server/services/search.service";
-import { bindWorkflow, workflow } from "~/server/workflow-runtime";
+} from "~/server/generic/search/service/search.service";
+import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 import type { EntityKernelContext } from "./adapter";
 import {

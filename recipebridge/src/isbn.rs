@@ -8,7 +8,7 @@
 //! a plain callable Rust item off wasm32) read the exact same check-digit
 //! logic. `packages/schemas` cannot depend on this crate (no WASM in that
 //! package), so callers there now validate at the repository boundary
-//! instead — see `apps/web/src/server/repo/product/update-helpers.ts`'s
+//! instead — see `apps/web/src/server/domains/product/repo/update-helpers.ts`'s
 //! `requireCanonicalIsbn`.
 
 use serde::{Deserialize, Serialize};

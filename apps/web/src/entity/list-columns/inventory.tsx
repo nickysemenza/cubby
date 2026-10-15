@@ -13,15 +13,19 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
-import { relationshipFieldProvenance } from "~/entity/field-provenance";
+import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import { multiSelectFilterFn } from "~/entity/filters";
 import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
-import { CategoryLabel } from "~/features/products/CategoryLabel";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useProductCategories } from "~/entity/hooks/use-product-categories";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { CategoryLabel } from "~/features/product/category-label";
 import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
-} from "~/ui/data-table/columnHelpers";
+} from "~/ui/data-table/column-helpers";
 import type {
   InventoryEntryBase,
   InventoryRelatedEntity,
@@ -42,10 +46,6 @@ import {
   type MobileColumnMeta,
   type ColumnExplanation,
 } from "~/ui/data-table/table-meta";
-import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { Stack } from "~/ui/layout";
 import { NoneValue } from "~/ui/primitives/none-value";
 

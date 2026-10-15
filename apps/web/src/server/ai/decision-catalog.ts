@@ -52,7 +52,7 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
-import { suggestionCounts } from "~/server/repo/suggestion-review";
+import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
 
 import { productIdentityPrompt } from "./product-identity";
 

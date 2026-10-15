@@ -23,10 +23,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
+import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { getExpenseByShortcode } from "~/server/repo/expense/crud";
-import { makeExpenseInput } from "~/server/repo/repo.fixtures";
-import { requireActor } from "~/server/request-context";
+import { requireActor } from "~/server/http/request-context";
+import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createMcpServer } from "./server";

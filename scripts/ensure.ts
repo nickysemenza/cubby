@@ -50,7 +50,7 @@ if (target === "generate") {
     runNxTarget("generate", mode === "--force" ? ["--skip-nx-cache"] : []);
     // Cache restoration writes expected files but cannot remove retired outputs.
     const { ARTIFACT_MANIFEST, removeExtraArtifacts } =
-      await import("./generator/artifacts.ts");
+      await import("../apps/web/generator/artifacts.ts");
     const manifest = join(ROOT, ARTIFACT_MANIFEST);
     if (existsSync(manifest)) {
       const paths: string[] = JSON.parse(readFileSync(manifest, "utf8"));

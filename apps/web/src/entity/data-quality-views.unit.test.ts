@@ -7,8 +7,8 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { problemQueryDeclarations } from "./problem-registry";
-import { viewManifest } from "./view-manifest";
+import { viewManifest } from "./model/view-manifest";
+import { problemQueryDeclarations } from "./problems/problem-registry";
 
 /**
  * Every `dataGaps` filter value pinned anywhere in the manifest has to name a

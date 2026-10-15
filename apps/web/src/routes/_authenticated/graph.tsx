@@ -8,7 +8,7 @@ import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/graph")({
   validateSearch: z.object({

@@ -3,20 +3,20 @@ import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { aiEvaluation, run } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 import {
   advanceAiWorkRun,
   aiWorkItems,
   executeAiWorkTarget,
   type AiWorkPorts,
-} from "~/server/runs/ai-work";
+} from "~/server/domains/run/service/ai-work";
 import {
   failWorkflowRun,
   runFailureText,
-} from "~/server/workflow-runs/lifecycle";
-import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
-import { reclassifyEmails } from "~/server/purchase-import/gmail/reclassify";
-import { loadMailReclassificationRead } from "~/server/repo/run-reclassification-read";
+} from "~/server/workflows/runs/lifecycle";
+import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
+import { reclassifyEmails } from "~/server/domains/purchase-import/gmail/reclassify";
+import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { emailReclassifyResults } from "@cubby/schemas/email-actions";
 import type { z } from "zod";
 

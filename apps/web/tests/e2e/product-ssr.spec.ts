@@ -1,6 +1,6 @@
-import { seedProductPrerequisite } from "./fixtures-catalog";
-import { waitForAppHydration } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedProductPrerequisite } from "./fixtures/catalog";
+import { waitForAppHydration } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 const hydrationWarning =
   /hydration|hydrating|did not match|server rendered html/i;

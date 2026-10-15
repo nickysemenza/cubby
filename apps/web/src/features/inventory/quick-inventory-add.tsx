@@ -31,24 +31,24 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   getOptionalProductShortcode,
   requiredProductField,
-} from "~/ui/form-fields";
-import { NullableNumericField, UnifiedTextField } from "~/ui/form-utils";
-import { PickerField } from "~/ui/form-utils/picker-field";
-import { useImageState } from "~/ui/hooks/useImageState";
+} from "~/ui/forms/form-fields";
+import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
+import { PickerField } from "~/ui/forms/form-utils/picker-field";
+import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Collapsible, CollapsibleContent } from "~/ui/primitives/collapsible";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { PendingImageUpload } from "../../entity/entity-media/PendingImageUpload";
+import { PendingImageUpload } from "../../entity/entity-media/pending-image-upload";
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
-import { IdentifyProductButton } from "../products/identify-product-with-ai";
-import { useUpcAwareCreate } from "../products/use-upc-aware-create";
+import { IdentifyProductButton } from "../product/identify-product-with-ai";
+import { useUpcAwareCreate } from "../product/use-upc-aware-create";
 import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 import {
   useCreateInventoryMutation,
   useProductLookupInvalidation,
-} from "./hooks";
+} from "./hooks/use-inventory-mutation";
 
 /**
  * Client-side counterpart to the deleted `@cubby/schemas/isbn`'s `isbn` Zod

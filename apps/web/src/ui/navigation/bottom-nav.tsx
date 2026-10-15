@@ -5,8 +5,8 @@ import { Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
-import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
-import { useVirtualKeyboard } from "~/ui/hooks/useVirtualKeyboard";
+import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
+import { useVirtualKeyboard } from "~/ui/hooks/use-virtual-keyboard";
 import { Row } from "~/ui/layout";
 
 import { resolveMobileRoute } from "./mobile-route-descriptor";

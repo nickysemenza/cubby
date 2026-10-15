@@ -6,7 +6,7 @@ import {
 } from "@cubby/shared/ai/gateway-request";
 import { DurableObject } from "cloudflare:workers";
 
-import { isMaintenanceMode } from "../maintenance";
+import { isMaintenanceMode } from "../http/maintenance";
 import {
   gatewayEgressInput,
   type GatewayAdmission,
@@ -81,7 +81,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     });
     if (epoch === null) return;
     const activeEpoch = await (
-      await import("../ai-refresh-startup")
+      await import("../workflows/ai-refresh-startup")
     ).observeAiRefreshFeatures(this.env, epoch);
     if (activeEpoch > epoch) {
       await this.ctx.blockConcurrencyWhile(async () => {
@@ -153,7 +153,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     await withRequestDbClient(
       this.env.HYPERDRIVE.connectionString,
       async () => {
-        const { recoverManualAiWork } = await import("../runs/ai-work");
+        const { recoverManualAiWork } =
+          await import("../domains/run/service/ai-work");
         await recoverManualAiWork(
           db,
           undefined,

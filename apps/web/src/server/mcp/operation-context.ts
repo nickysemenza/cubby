@@ -1,10 +1,10 @@
-import { deferPublications } from "~/server/background-tasks/publish";
-import type { ReadPolicy } from "~/server/read-policy";
-import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { withTransactionDatabase } from "~/server/db/helpers";
+import type { ReadPolicy } from "~/server/db/read-policy";
 import {
   selectOperationContext,
   type AuthenticatedRequestContext,
-} from "~/server/request-context";
+} from "~/server/http/request-context";
+import { deferPublications } from "~/server/workflows/background-tasks/publish";
 
 /**
  * Resolves the database once for one MCP tool execution. It deliberately has

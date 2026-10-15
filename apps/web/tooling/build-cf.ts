@@ -26,8 +26,8 @@ function buildCloudflare() {
     DEPLOY_TARGET: "cloudflare",
     NODE_ENV: "production",
   });
-  run("pnpm", ["exec", "tsx", "scripts/check-client-bundle.ts"]);
-  run("pnpm", ["exec", "tsx", "scripts/check-server-closure.ts"]);
+  run("pnpm", ["exec", "tsx", "tooling/checks/check-client-bundle.ts"]);
+  run("pnpm", ["exec", "tsx", "tooling/checks/check-server-closure.ts"]);
   console.log(
     `[web build] Provenance: ${writeWebBuildProvenance(repoRoot, source)}`,
   );

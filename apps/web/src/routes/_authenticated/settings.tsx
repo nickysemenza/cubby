@@ -12,11 +12,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { ChatGptPlanCard } from "~/app/account/chatgpt-plan-card";
-import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
-import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
-import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
-import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
+import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { ChatGptPlanCard } from "~/features/account/chatgpt-plan-card";
+import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
+import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
+import { AwaitingWorkCard } from "~/features/problems/components/awaiting-work-card";
+import { MaintenanceCard } from "~/features/problems/components/maintenance-card";
 import {
   calendar,
   ledgerParty,
@@ -39,9 +40,8 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import {
   Card,

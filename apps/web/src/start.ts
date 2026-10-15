@@ -7,9 +7,9 @@ import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
 import { notifyNativeWorkspaceResponse } from "~/lib/native-workspace";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import { labelStartRequest } from "~/lib/start-dispatch-url";
-import { nativeWorkspaceClientGate } from "~/server/middleware/native-workspace";
-import { privateServerFunctionResponses } from "~/server/middleware/private-server-functions";
-import { tracingMiddleware } from "~/server/middleware/tracing";
+import { nativeWorkspaceClientGate } from "~/server/operation-runtime/middleware/native-workspace";
+import { privateServerFunctionResponses } from "~/server/operation-runtime/middleware/private-server-functions";
+import { tracingMiddleware } from "~/server/operation-runtime/middleware/tracing";
 
 // Restores the framework-default CSRF protection that defining a custom start
 // instance otherwise replaces (TanStack only auto-applies it when no start

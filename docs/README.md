@@ -8,8 +8,8 @@ the repository.
 
 - [Development](development.md) covers architecture, commands, testing,
   deployment, and the HTTP API.
-- [Entities](entities.md) and [Application framework](application-framework/README.md)
-  describe the compiled entity architecture.
+- [Entities](entities.md) describes the compiled entity architecture,
+  workflows, and relationship contracts.
 - [Household taxonomy vocabulary](../GLOSSARY.md) defines classification terms.
 - [Inventory audit](inventory-audit.md), [Garden](garden.md), and [Photos library
   deduplication](photo-library-dedup.md) explain household workflows.
@@ -21,14 +21,14 @@ the repository.
 
 ## Document roles
 
-| Folder                   | Purpose                                                                |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `adr/`                   | Durable decisions and their reasoning; keep even after implementation. |
-| `agents/`                | Current agent rules and validation contracts.                          |
-| `application-framework/` | Entity framework design and ownership records.                         |
-| `guide/`                 | Household-facing guide bundled into the app's Documentation route.     |
-| `plans/`                 | Proposed or in-progress work; status at the top of each plan governs.  |
-| `runbooks/`              | Operational procedures that require current-environment checks.        |
+| Folder                     | Purpose                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `adr/`                     | Durable decisions and their reasoning; keep even after implementation. [Index](adr/README.md).              |
+| `agents/`                  | Cross-app agent rules and validation contracts.                                                             |
+| `guide/`                   | Household-facing guide bundled into the app's Documentation route.                                          |
+| `plans/`                   | Proposed or in-progress work; status at the top of each plan governs.                                       |
+| `runbooks/`                | Operational procedures that require current-environment checks.                                             |
+| `apps/*/docs/` (repo root) | Rules for one app only (web runtime and UI, Xcode MCP); that app's `AGENTS.md` names when to load each one. |
 
 ## Ownership and pruning
 

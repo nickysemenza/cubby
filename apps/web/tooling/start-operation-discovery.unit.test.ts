@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import {
   sourceFiles,
   SOURCE_ROOT,
-} from "../../../scripts/generator/start-operations/collect";
+} from "../generator/start-operations/collect";
 
 it("ignores temporary lint fixtures when discovering the application operation catalog", async () => {
   const directory = await mkdtemp(join(SOURCE_ROOT, "server/.lint-fixture-"));

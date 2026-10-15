@@ -41,7 +41,7 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   timeout: isCI ? 120_000 : 30_000,
 
   /* Global setup prepares the immutable Worker config and database template. */
-  globalSetup: "./tests/e2e/e2e-global-setup.ts",
+  globalSetup: "./tests/e2e/support/e2e-global-setup.ts",
 
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -65,10 +65,10 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
-    ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]
+    ? [["github"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]]
     : // `line` so a failing pre-push or verify run says which test failed in the
       // terminal; the HTML report alone leaves the hook's output blank.
-      [["line"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]],
+      [["line"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]],
   expect: {
     // Allow a bit more time on CI for client-side navigations
     timeout: isCI ? 15000 : 5000,

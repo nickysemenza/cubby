@@ -937,7 +937,7 @@ export default defineEntity({
           export: "tradeSchema",
         },
         optionsRef: {
-          module: "~/app/projects/trade-options",
+          module: "~/features/project/trade-options",
           export: "tradeOptions",
         },
       },
@@ -1256,7 +1256,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/task/repository",
+        module: "~/server/domains/task/repo/repository",
         export: "taskRepository",
       },
       search: "document",

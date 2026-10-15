@@ -12,6 +12,17 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ProductGtin } from "~/entity/components/product-gtin";
+import { entityListHiddenColumns } from "~/entity/display/entity-display";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
+import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useNameEditable } from "~/entity/hooks/use-name-editable";
+import { useProductCategories } from "~/entity/hooks/use-product-categories";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { useCreateInventoryMutation } from "~/features/inventory/hooks/use-inventory-mutation";
+import { InventoryEntriesQuickEditDialog } from "~/features/inventory/inventory-entries-quick-edit-dialog";
 import {
   buildProductTreeRows,
   groupComponentsByParent,
@@ -19,19 +30,13 @@ import {
   type ProductTreeRow,
   productTreeRowKey,
   productTreeSubRows,
-} from "~/app/products/product-kit-rows";
-import { ProductGtin } from "~/entity/components/product-gtin";
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { entityListHiddenColumns } from "~/entity/entity-display";
-import { relationshipFieldProvenance } from "~/entity/field-provenance";
-import { useCreateInventoryMutation } from "~/features/inventory/hooks";
-import { InventoryEntriesQuickEditDialog } from "~/features/inventory/inventory-entries-quick-edit-dialog";
+} from "~/features/product/product-kit-rows";
 import {
   product as productOperations,
   relatedData,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
-import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { treePickerItems } from "~/ui/combobox/tree-items";
@@ -40,20 +45,15 @@ import {
   createBooleanColumn,
   createExternalLinkColumn,
   createSingleEntityInlineLinkColumn,
-} from "~/ui/data-table/columnHelpers";
+} from "~/ui/data-table/column-helpers";
 import { EditableCell } from "~/ui/data-table/editable-cell";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
-import type { GroupConfig } from "~/ui/data-table/useGroupedList";
-import { useDeferredFilterOptions } from "~/ui/hooks/useDeferredFilterOptions";
-import { useTagOptions } from "~/ui/hooks/useEntityOptions";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import { useNameEditable } from "~/ui/hooks/useNameEditable";
-import { useProductCategories } from "~/ui/hooks/useProductCategories";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
+import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
+import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,

@@ -15,9 +15,9 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { getDb } from "~/server/db/helpers";
 import { auditLog } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { createDevice } from "~/server/repo/device";
+import { createDevice } from "~/server/domains/device/repo/device";
 import { updateThroughKernel } from "~/server/testing/entity-kernel";
 
 type Patch = Record<string, string | number | boolean | null>;

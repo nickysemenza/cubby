@@ -16,7 +16,7 @@ import {
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
 import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
 
-import { EntityPreviewContent } from "../components/EntityPreviewContent";
+import { EntityPreviewContent } from "../components/entity-preview-content";
 import {
   EntityRelations,
   supportsEntityGraph,

@@ -6,11 +6,11 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
-import { getDb } from "~/server/repo/database-helpers";
-import { ensureRun } from "~/server/runs/ensure-run";
 
 /**
  * The server owns tree nesting: `roots` and `children` are judged against the

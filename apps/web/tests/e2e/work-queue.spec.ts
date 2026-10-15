@@ -7,24 +7,24 @@ import {
   product,
   run,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   chooseOption,
   gotoAuthenticatedPage,
   inlineExplanation,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { seedProductPrerequisite } from "./fixtures-catalog";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import {
   ensureMemberParty,
   fixtureUserId,
   getFixtureDb,
-} from "./fixtures-core";
-import { seedUnimportedOrderMail } from "./fixtures-mail";
-import { seedImagePrerequisite } from "./fixtures-photos";
+} from "./fixtures/core";
+import { seedUnimportedOrderMail } from "./fixtures/mail";
+import { seedImagePrerequisite } from "./fixtures/photos";
 
 // Failure modes: a member filter widens to shared work, filtering runs only on
 // the loaded page, URL state is lost on reload, a queue row loses its source,

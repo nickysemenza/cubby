@@ -246,6 +246,6 @@ esac
 
 # Archiving takes long enough for another run to start; never upload a build
 # number a newer run may already have used.
-node scripts/apple-release.ts guard
+node scripts/apple/apple-release.ts guard
 mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/$platform"
 export_platform "$archive" "$TESTFLIGHT_OUTPUT_DIR/exports/$platform" "$export_options"

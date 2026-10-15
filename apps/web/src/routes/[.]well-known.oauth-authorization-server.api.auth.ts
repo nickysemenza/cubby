@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   authServerMetadataHandler,
   preflightHandler,
-} from "~/server/oauth/metadata";
+} from "~/server/http/oauth/metadata";
 
 // RFC 8414's path-insertion form for issuer `<origin>/api/auth`. The plugin
 // serves the append form (`/api/auth/.well-known/...`) itself through the

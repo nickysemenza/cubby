@@ -1,6 +1,9 @@
-import { seedProductPrerequisite } from "./fixtures-catalog";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedProductPrerequisite } from "./fixtures/catalog";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // CI installs only Chromium, so the phone layout is a Chromium phone viewport.
 test.use({

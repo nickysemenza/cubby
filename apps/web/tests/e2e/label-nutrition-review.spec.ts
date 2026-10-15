@@ -5,12 +5,12 @@ import {
   openProductFromPalette,
   waitForAppHydration,
   waitForFormHydration,
-} from "./e2e-helpers";
+} from "./support/e2e-helpers";
 import {
   seedDetectedLabelNutrition,
   readStoredLabelNutrition,
-} from "./fixtures-label-nutrition";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/label-nutrition";
+import { expect, test } from "./support/e2e-test";
 
 const labelPhoto = fileURLToPath(
   new URL("./fixtures/synthetic-wardrobe-label.png", import.meta.url),

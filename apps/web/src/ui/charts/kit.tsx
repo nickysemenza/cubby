@@ -4,15 +4,15 @@ import { sumBy } from "es-toolkit";
 import type { ComponentProps, ReactNode } from "react";
 import { useMemo } from "react";
 
-import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+import { ChartEmpty } from "~/features/project/charts/chart-empty";
+import { ChartTooltip } from "~/features/project/charts/chart-tooltip";
 import {
   nivoBarChrome,
   nivoChartTheme,
   nivoCurrencyAxis,
   nivoMotion,
 } from "~/lib/nivo-theme";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
 import {
   ResponsiveBar,
   ResponsiveLine,

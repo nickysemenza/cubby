@@ -21,7 +21,7 @@ import {
 } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useDebug } from "~/ui/hooks/useDebug";
+import { useDebug } from "~/ui/hooks/use-debug";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import {

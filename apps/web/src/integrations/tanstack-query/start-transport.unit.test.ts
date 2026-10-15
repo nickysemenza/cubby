@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { reset, snapshot } from "~/lib/perf/perf-store";
-import type { StartOperationResult } from "~/server/start-operation.contract";
+import type { StartOperationResult } from "~/server/operation-runtime/start-operation.contract";
 
 import {
   StartOperationError,

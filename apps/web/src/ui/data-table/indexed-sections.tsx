@@ -13,8 +13,9 @@ import {
   useState,
 } from "react";
 
-import { cn, formatCount } from "~/lib/utils";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { formatCount } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {

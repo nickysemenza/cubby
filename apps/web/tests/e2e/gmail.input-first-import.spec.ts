@@ -1,16 +1,16 @@
-import { entityApi } from "./entity-api";
-import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
+import { entityApi } from "./support/entity-api";
+import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
 import { z } from "zod";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
-import { setMemberLoginParty } from "~/server/repo/member-login";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import { setMemberLoginParty } from "~/server/http/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
-import { createGmailApiClient } from "~/server/purchase-import/gmail/client";
+import { createGmailApiClient } from "~/server/domains/purchase-import/gmail/client";
 import {
   convergenceNames,
   createConvergenceFixtures,
@@ -21,15 +21,15 @@ import {
   createEntityFixture,
   createEvidenceHarnessContext,
   ensureMemberParty,
-} from "./fixtures-core";
+} from "./fixtures/core";
 import {
   chooseOption,
   escapeRegExp,
   gotoAuthenticatedPage,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { applyReviewedSourceReconciliation } from "./import-order-convergence.helpers";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { applyReviewedSourceReconciliation } from "./support/import-order-convergence.helpers";
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
 // original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
