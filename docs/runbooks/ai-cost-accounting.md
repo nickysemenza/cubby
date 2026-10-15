@@ -45,6 +45,10 @@ Run usage membership is an indexed union of directly attributed calls, linked
 image-job calls, and linked image-attempt calls. Resolve that set before reading
 the subtotal and page; a correlated job-membership check for each unrelated
 usage row makes household-wide history consume Run-detail query capacity.
+Resolve the transitive Run scope once per read and share its bound UUID set
+across membership, totals, pagination, and completeness checks. Recursive scope
+estimates inside each usage query can otherwise make selective Run reads scan
+unrelated history. An empty live scope matches no calls.
 
 Current queued messages retain their captured prices through retries. Raw legacy
 in-flight messages without captured costs receive one compatibility upgrade at

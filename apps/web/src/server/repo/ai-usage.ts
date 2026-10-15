@@ -17,6 +17,7 @@ import {
   householdDaySql,
   ilikeContains,
   notDeleted,
+  uuidArrayParam,
 } from "~/server/repo/database-helpers";
 
 export function aiCostSummarySql() {
@@ -209,16 +210,20 @@ export async function listAiUsageForRun(
     UNION SELECT child.id FROM "Run" child JOIN run_scope parent ON child."parentRunId" = parent.id
       WHERE child."deletedAt" IS NULL
   ) SELECT id FROM run_scope`;
+  // Resolve once: recursive row-count estimates can otherwise turn even the
+  // independent membership union into scans of unrelated household history.
+  const scopedRuns = await database.execute<{ id: RunId }>(scope);
+  const runIds = scopedRuns.rows.map(({ id }) => id);
   // Correlating job membership under an OR re-scans jobs for every unrelated
   // usage row. Build the ID set through run/job indexes first; UNION preserves
   // one contribution when both lineage paths reach the same call.
   const attributed = sql`${aiUsage.id} IN (
-    WITH scoped_runs AS (${scope}), scoped_jobs AS (
+    WITH scoped_jobs AS (
       SELECT j.id, j.kind FROM "ImageProcessingJob" j
-      JOIN scoped_runs r ON r.id = j."runId" WHERE j."deletedAt" IS NULL
+      WHERE j."runId" = ANY(${uuidArrayParam(runIds)}) AND j."deletedAt" IS NULL
     )
-    SELECT u.id FROM "AiUsage" u JOIN scoped_runs r ON u."runId" = r.id
-      WHERE u."deletedAt" IS NULL
+    SELECT u.id FROM "AiUsage" u
+      WHERE u."runId" = ANY(${uuidArrayParam(runIds)}) AND u."deletedAt" IS NULL
     UNION
     SELECT u.id FROM scoped_jobs j JOIN "AiUsage" u
       ON u."jobKind" = j.kind AND u."jobId" = j.id::text
@@ -231,10 +236,10 @@ export async function listAiUsageForRun(
       WHERE u."deletedAt" IS NULL
   )`;
   const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
-    WHERE r.id IN (${scope}) AND r."deletedAt" IS NULL AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
+    WHERE r.id = ANY(${uuidArrayParam(runIds)}) AND r."deletedAt" IS NULL AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
   const missingImageCoverage = (allowDeviceCharge: boolean) => sql`EXISTS (
     SELECT 1 FROM "ImageProcessingJob" j
-    WHERE j."deletedAt" IS NULL AND j."runId" IN (${scope}) AND (
+    WHERE j."deletedAt" IS NULL AND j."runId" = ANY(${uuidArrayParam(runIds)}) AND (
       (NOT EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id)
         AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."deletedAt" IS NULL
           AND u."jobKind" = j.kind AND u."jobId" = j.id::text))

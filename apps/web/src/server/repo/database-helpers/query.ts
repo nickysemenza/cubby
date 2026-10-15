@@ -535,6 +535,9 @@ export const correlated = <T>(fragment: string): SQL<T> =>
  *
  * This is the only sanctioned way to write `= ANY(...)` in raw SQL; the small
  * SQL-safety check rejects direct JS-array interpolation elsewhere. The trap is
+ * avoided by calling this helper directly at each interpolation boundary,
+ * where that check can verify it rather than following an intermediate SQL alias.
+ * The runtime trap is
  * interpolating a **JS array**, which
  * drizzle renders as a row constructor (`ANY(($1, $2))` — "op ANY/ALL requires
  * array"). What this returns is a Postgres array *literal* bound as a single

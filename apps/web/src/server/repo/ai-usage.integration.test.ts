@@ -5,7 +5,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { MIGRATIONS_FOLDER } from "tooling/db-migrate";
@@ -18,6 +18,7 @@ import {
   aiUsage,
   imageProcessingJob,
   imageProcessingAttempt,
+  run as runTable,
 } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
@@ -104,8 +105,8 @@ describe("listAiUsageForRun", () => {
   };
 
   // Unrelated usage must not re-scan the Run's jobs once per usage row. This
-  // executes the repository's real statements and inspects executor loops,
-  // avoiding machine-dependent latency assertions for a pool-starving query.
+  // executes the repository's real statements and inspects executor work,
+  // including scans of unrelated usage, without machine-dependent timings.
   it("keeps Run job membership work independent of unrelated usage volume", async () => {
     const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const unrelated = await ensureRun(ctx.db, ctx.actor, {
@@ -115,7 +116,7 @@ describe("listAiUsageForRun", () => {
     await getDb(ctx.db).execute(sql`INSERT INTO "AiUsage"
       ("feature", "provider", "model", "operation", "runId", "durationMs", "standardCost", "chargedCost")
       SELECT 'synthetic-cost', 'test', 'test-model', 'suggest', ${unrelated}, 1, 1, 1
-      FROM generate_series(1, 1000)`);
+      FROM generate_series(1, 10000)`);
     await getDb(ctx.db).insert(aiUsage).values({
       runId: root,
       feature: "synthetic-cost",
@@ -145,18 +146,27 @@ describe("listAiUsageForRun", () => {
     const planNode = z.object({
       "Relation Name": z.string().optional(),
       "Actual Loops": z.number().optional(),
+      "Actual Rows": z.number().optional(),
+      "Rows Removed by Filter": z.number().optional(),
       Plans: z.array(z.unknown()).optional(),
     });
     const planRow = z.object({
       "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })),
     });
     let maxRelationLoops = 0;
+    let maxUsageRowsRead = 0;
     const visit = (value: unknown) => {
       const node = planNode.parse(value);
       if (node["Relation Name"])
         maxRelationLoops = Math.max(
           maxRelationLoops,
           node["Actual Loops"] ?? 0,
+        );
+      if (node["Relation Name"] === "AiUsage")
+        maxUsageRowsRead = Math.max(
+          maxUsageRowsRead,
+          ((node["Actual Rows"] ?? 0) + (node["Rows Removed by Filter"] ?? 0)) *
+            (node["Actual Loops"] ?? 0),
         );
       node.Plans?.forEach(visit);
     };
@@ -175,9 +185,63 @@ describe("listAiUsageForRun", () => {
           planRow.parse(row)["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
       }
       expect(maxRelationLoops).toBeLessThan(100);
+      expect(maxUsageRowsRead).toBeLessThan(100);
     } finally {
       await pool.end();
     }
+  });
+
+  // Legacy job links remain attributable even when their call names another
+  // Run. Deleted jobs and an empty live Run scope must not widen membership.
+  it("retains legacy job attribution and excludes deleted jobs and Runs", async () => {
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const unrelated = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    const job = await imageJob(root);
+    const usage = {
+      feature: "synthetic-cost",
+      provider: "test",
+      model: "test-model",
+      operation: "suggest",
+      durationMs: 1,
+      standardCost: 2,
+      chargedCost: 1,
+    };
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values([
+        { ...usage, runId: root },
+        {
+          ...usage,
+          runId: unrelated,
+          jobKind: "describe_image",
+          jobId: job.id,
+        },
+      ]);
+    expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+      count: 2,
+      chargedCost: 2,
+    });
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ deletedAt: new Date() })
+      .where(eq(imageProcessingJob.id, job.id));
+    expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+      count: 1,
+      chargedCost: 1,
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(runTable.id, root));
+    expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+      count: 0,
+      chargedCost: 0,
+      records: [],
+      chargedComplete: true,
+      standardComplete: true,
+    });
   });
 
   // An AI run has no member party; the run detail page must still read its
