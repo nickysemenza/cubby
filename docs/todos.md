@@ -47,7 +47,9 @@ root cause or merging their Sentry histories. Resolve only when an identifiable
 deployed fix addresses the reported failure; absence of recent events is not
 proof. Merge only when evidence establishes the same root cause.
 
-Keep entries concise and outcome-oriented. Record only constraints that would
+Keep entries concise and outcome-oriented. Consolidate overlapping descriptions
+of the same deliverable; keep independently shippable outcomes and their blockers
+separate. Record only constraints that would
 change selection or implementation, with a pointer to the code or focused doc
 that owns the full contract. Shipped and superseded work leaves this file; git
 history is the archive. Permanent product constraints live in the
@@ -133,62 +135,50 @@ history is the archive. Permanent product constraints live in the
   design interview (`git show d94c04b17:docs/plans/photo-identification.md`) owns the wider use cases.
   Keep processing automatic and simple, without regions or manual tuning.
 
-  **Next implementation brief — retrieval and coverage (steps 1–3).** Improve
-  existing-Product identification when the visual category is plausible but
-  narrower than the catalog identity. Deliver one automatic, bounded retrieval
-  path and an honest explanation of what was searched and compared.
+  1. 🤔 ✨ 🟡 **Deliver bounded retrieval with truthful coverage.** The next
+     implementation slice combines category expansion, independent-reference
+     checks and their explanation; it excludes multi-item proposals, frontier
+     escalation and native chooser integration.
+     - Use category as a ranking hint rather than a hard filter; combine
+       lexical/semantic identity evidence and broaden a bounded search when
+       it misses. A flower-and-fruit image must be able to retrieve Plants &
+       seeds rather than searching only Produce. Inspect existing helpers
+       before choosing expansion, deduplication, deterministic ordering,
+       limits or indexes.
+     - Start with synthetic regressions for wrong category, the correct
+       Product outside the initial roster, truncation and source-image-only
+       references. Preserve source/revision/live-Product guards and retrieval
+       provenance through visual ranking: “not retrieved,” “no independent
+       reference,” and “compared but rejected” remain distinct. Show “already
+       attached here” as a relationship, never independent match evidence.
+       Generic imagery cannot establish exact cultivar, model, size,
+       ownership or physical-instance identity; consequential changes still
+       require confirmation.
+     - Decide the retained coverage/result shape, revision invalidation,
+       historical-observation preservation and migration needs first. Use
+       that contract in the image UI and generic reports/MCP. Show selected
+       category, candidates considered, truncation and independent-reference
+       availability; distinguish bounded no-match from incomplete comparison
+       without implying exhaustive search. Keep readable reasons primary
+       and raw diagnostics expandable.
 
-  Start with synthetic regressions for a wrong category, a correct Product
-  outside the initial roster, truncated searches, and candidates with only the
-  source image as reference. Inspect existing search/ranking helpers before
-  choosing category expansion, lexical/semantic blending, deduplication and
-  deterministic ordering. Preserve retrieval provenance through visual ranking
-  so “not retrieved,” “no independent reference,” and “compared but rejected”
-  remain distinguishable. Existing attachment context is separate from match
-  confidence; it must never validate itself.
-
-  Before implementation, decide the retained coverage/result shape, revision
-  invalidation and preservation of historical observations; establish whether
-  a data migration is needed rather than assuming one. Use the same coverage
-  contract in the image UI and generic reports/MCP. Present bounded no-match
-  and incomplete comparison separately, with diagnostic detail behind disclosure.
-  Keep multi-item proposals, frontier escalation and native chooser integration
-  outside this slice.
-
-  Acceptance: the correct Product reaches retrieval despite category mismatch;
-  source/revision/live-Product guards survive expansion; confirmation remains
-  required for consequential changes; and the visible explanation matches the
-  retained coverage. Measure retrieval recall separately from match quality on
-  held-out cases, with latency/call limits explicit before any live replay.
-
-  1. 🤔 ✨ 🟡 **Retrieve across plausible categories.** Use category as a ranking
-     hint rather than a hard filter; combine lexical/semantic identity evidence
-     and broaden a bounded search when it misses. A flower-and-fruit catalog
-     image should not search only Produce when its Product is Plants & seeds.
-     Evaluate ranking and expansion before choosing limits or adding indexes.
-  2. 🤔 ✨ 🟡 **Separate existing attachments from visual matches.** Show “already
-     attached here” as an existing relationship, not a new model suggestion or
-     independent proof. Preserve the no-self-comparison rule. Distinguish
-     insufficient independent reference imagery from a rejected visual match;
-     never infer exact cultivar, model, size, ownership, or physical-instance
-     identity from generic imagery alone.
-  3. 🟢 ✨ 🟡 **Explain identification coverage in the UI.** Show selected category,
-     candidates considered, truncation, and whether independent visual evidence
-     was available. A bounded no-match result must not imply an exhaustive
-     search. Keep readable reasons primary and raw diagnostics expandable.
-  4. 🤔 🧪 🟡 **Evaluate retrieval separately from matching.** Use a small labeled
+     Acceptance: the correct Product survives category mismatch, the guards
+     survive expansion and the explanation matches retained coverage. Set
+     latency/call limits before live replay; measure retrieval recall
+     separately from match quality on held-out cases.
+  2. 🤔 🧪 🟡 **Evaluate retrieval separately from matching.** Use a small labeled
      set spanning clothing, packaged goods, visually similar tools, plants,
      and related parts/views. Measure whether the correct Product reached the
      roster, match precision/recall, abstentions, category mistakes, truncation,
      missing reference images, latency, and per-provider cost. Include
      plant-versus-produce confusion and same-image-only attachments; compare
      prompt/ranking changes on held-out examples before claiming improvement.
-  5. 🤔 ✨ 🔵 **Broader workflows and budgeted escalation.** Support multi-item
+  3. 🤔 ✨ 🔵 **Broader workflows and budgeted escalation.** Support multi-item
      shelf/wardrobe proposals, plants, receipts/documents, older-photo search,
      and inventory recount review. Escalate useful unresolved questions through
      AI Gateway within explicit interactive and backfill budgets; preserve
      confirmation for attachment, creation, merge, and inventory changes.
-  6. ⏳ ✨ 🔵 **Feed visual identity ranking into native import review.** Connect
+  4. ⏳ ✨ 🔵 **Feed visual identity ranking into native import review.** Connect
      independently evidenced cover/cutout comparisons to `PhotoEvidenceScorer`
      when measured wardrobe imports show deterministic evidence leaving the
      chooser in default order. Reuse the existing single-image ranking path
@@ -381,16 +371,10 @@ unattended Mail import / interactive Burn-down boundary.
     the deploy, delete exactly those keys from R2 by hand; no repository code
     deletes them.
 
-  - The generated `/api/import/evidence` byte read (`run.readEvidenceMedia`)
-    has no server handler since #1846. Delete it with the native retained-media
-    viewer (`RecordsBlockView.swift` `ReportRetainedMedia`,
-    `CubbyClient.reportMedia`) in an Apple change.
-  - Drop VendorAccount `browser`, `browserSyncEnabled`, `cursor` and the
-    `paused_*` statuses from the manifest, `repo/vendor-account.ts` and the
-    Gmail account default. The native client decodes them as required fields
-    of `VendorAccountDetail`, so this needs an
-    `APPLE_CLIENT_COMPATIBILITY_VERSION` bump and a column-dropping migration
-    that maps `paused_*` rows to a surviving status.
+  - Review retirement of the remaining VendorAccount `cursor`, including
+    retained Run snapshots and current native readers, before changing its
+    required read contract or dropping storage. Preserve stored data through
+    a migration and follow the client compatibility-version rule.
 
 - 🤔 ✨ 🔵 **Layer public web research into Worker / pi-durable tools.** Evaluate
   filling logged-out gaps an Email leaves (manufacturer, model, identifiers,
@@ -592,10 +576,6 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   history, record the missing evidence explicitly, and verify usable replacement
   evidence before treating document presence as source acceptance.
 
-- ⏳ ✨ 🔵 **Show the Research queue count where the household looks.** Surface the
-  `research-queue` saved-view counts on Home or Activity, linking to the views,
-  so Burn-down happens; no notifications or scheduling.
-
 - ⏳ 🧪 🔵 **Accept research root grouping and record-level history in the
   clients.** The grouped Activity reads and the Purchase/Vendor/Vendor Account
   Emails sections ship on web and native; installed-household acceptance
@@ -638,10 +618,6 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   sanctioned path; record `cookbookId` changes in the recipe audit roster
   (`server/domains/recipe/repo/crud.ts`) and decide whether the recipe form's cookbook
   picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
-
-- 🧱 ✨ 🔵 **Portion shares alongside grams.** Accept `{share}` per portion in
-  `meal_recipe.save_preparation` and derive grams at read time from the
-  current `estimatedYieldGrams`, so served-by-eye portions do not go stale.
 
 - 🤔 🧪 🔵 **Cookbook fallback evaluation.** Run the six-book answer-key corpus
   against GPT-6 Luna as the second ladder reader; compare recall, escalation
@@ -1372,9 +1348,10 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   different pins; that adds a stored per-member preference and a settings
   surface, which one trusted household did not need for v1.
 
-- 🟢 ✨ 🔵 **Pin the Research queue to home.** Products sorted by weakest data
-  quality as a pinned saved view with a count. Left out of the first home row
-  (Wardrobe, My stuff, My tasks, Needs a home) to keep it to four.
+- 🟢 ✨ 🔵 **Surface the Research queue on Home.** Pin the declared
+  `research-queue` Product saved view with a live count and a link to its
+  weakest-quality-first list, reusing the generic home pins. Keep this a
+  visible Burn-down entry point, without notifications or scheduling.
 
 - 🤔 ✨ 🔵 **Product Category feature expectations.** Decide whether Food _expects_
   an ingredient and Books an ISBN (both `unknown` today, so no data-quality
