@@ -4,6 +4,7 @@ import {
   ExternalFetchError,
   fetchExternalResponse,
   readResponseWithLimit,
+  sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -177,16 +178,17 @@ async function acquireRemoteImage(
 ) {
   let response: Response | undefined;
   let consumedBytes = 0;
+  let readingPixels = false;
   try {
     response = await fetchExternalResponse(src, { fetcher });
     if (!response.ok) {
-      const diagnostic = await readResponseWithLimit(response, availableBytes);
-      consumedBytes = diagnostic.byteLength;
+      const diagnostic = await readResponseWithLimit(response, 32 * 1024);
       throw new Error(
         `Email content image fetch failed: HTTP ${response.status} ${response.statusText}\n${new TextDecoder().decode(diagnostic)}`,
       );
     }
     assertResponseContentType(response, ["image/"]);
+    readingPixels = true;
     const bytes = await readResponseWithLimit(response, availableBytes);
     consumedBytes = bytes.byteLength;
     return {
@@ -196,15 +198,17 @@ async function acquireRemoteImage(
       failure: null,
     };
   } catch (error) {
-    if (error instanceof ExternalFetchError && error.code === "body-too-large")
+    if (
+      readingPixels &&
+      error instanceof ExternalFetchError &&
+      error.code === "body-too-large"
+    )
       consumedBytes = availableBytes;
     return {
       bytes: null,
       image: null,
       consumedBytes,
-      failure: scrubErrorMessage(
-        error instanceof Error ? error.message : String(error),
-      ),
+      failure: `${sanitizeExternalUrl(src)}: ${response ? `HTTP ${response.status}: ` : ""}${scrubErrorMessage(error instanceof Error ? error.message : String(error))}`,
     };
   } finally {
     await response?.body?.cancel().catch(() => undefined);

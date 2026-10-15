@@ -14,7 +14,9 @@ describe("private model image transformation in workerd", () => {
     for (const detail of ["standard", "detail"] as const) {
       const result = await prepareModelImage(bytes, detail, env.IMAGES);
       expect(result).not.toBeNull();
-      const info = await env.IMAGES.info(new Response(result!.bytes).body!);
+      const info = await env.IMAGES.info(
+        new Response(new Uint8Array(result!.bytes)).body!,
+      );
       expect(info).toMatchObject(
         detail === "standard"
           ? { width: 755, height: 2048 }

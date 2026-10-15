@@ -12,6 +12,7 @@ import {
   type GmailProvider,
 } from "./types";
 
+const MAX_GMAIL_RESPONSE_BYTES = 36 * 1024 * 1024;
 const DEFAULT_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
 
 export type GmailFetcher = (
@@ -86,7 +87,6 @@ export const createGmailApiClient = ({
   const request = async <T>(
     path: string,
     params?: URLSearchParams,
-    maxBytes = 36 * 1024 * 1024,
   ): Promise<T> => {
     const response = await retryWithBackoff(
       () =>
@@ -109,7 +109,10 @@ export const createGmailApiClient = ({
     );
     if (response.ok) {
       // Model-message admission is separate from retaining original attachments.
-      const bytes = await readResponseWithLimit(response, maxBytes);
+      const bytes = await readResponseWithLimit(
+        response,
+        MAX_GMAIL_RESPONSE_BYTES,
+      );
       // SAFETY: Each caller supplies the owned Gmail response type; normalization validates persistence fields.
       return JSON.parse(new TextDecoder().decode(bytes)) as T;
     }

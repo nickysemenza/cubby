@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { prepareModelImage } from "./model-image";
 
+type Images = NonNullable<Parameters<typeof prepareModelImage>[2]>;
+type Transformer = ReturnType<Images["input"]>;
+
 describe("image preparation refusal", () => {
   it("tries a smaller rendition when encoded bytes would consume the request budget", async () => {
     const output = vi
@@ -17,10 +20,10 @@ describe("image preparation refusal", () => {
         response: () => new Response(new Uint8Array([255, 216, 255])),
         contentType: () => "image/jpeg",
       });
-    const images = fromPartial<ImagesBinding>({
+    const images = fromPartial<Images>({
       input: () =>
-        fromPartial<ImageTransformer>({
-          transform: () => fromPartial<ImageTransformer>({ output }),
+        fromPartial<Transformer>({
+          transform: () => fromPartial<Transformer>({ output }),
         }),
     });
     const result = await prepareModelImage(
