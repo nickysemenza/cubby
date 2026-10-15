@@ -1,5 +1,5 @@
 import { resolvedListSchema } from "./field-resolution";
-import { listLabel } from "./entity-definitions/label-field";
+import { displayItems, listLabel } from "./entity-definitions/label-field";
 import { tradeSchema } from "./task-fields";
 import { impliedClassification } from "./classification-field-policy";
 import {
@@ -783,6 +783,8 @@ export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
  * produced two bugs when the list owned its own copy.
  */
 export const productQuantityFields = {
+  stockStatus: z.string().nullish(),
+  stockStatusItems: displayItems,
   quantityLedger: productQuantityLedgerOut,
   onHandUnits: z.number().nullable(),
   quantityVariance: z.number().nullable(),

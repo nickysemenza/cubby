@@ -155,6 +155,14 @@ const checkSections = (
         }
         break;
       case "relation":
+        for (const key of section.contextFields) {
+          lookup.read(key, where);
+          if (!detailFieldKeys.has(key) || namedDetailFields.has(key))
+            throw new EntityDeclarationError(
+              `${context}.${where} context field ${key} must be a unique display.detail field.`,
+            );
+          namedDetailFields.set(key, section.id);
+        }
         if (!manyRelations.has(section.relation))
           throw new EntityDeclarationError(
             `${context}.${where} relation ${section.relation} is not a many-cardinality relation.`,
@@ -468,7 +476,11 @@ export const compilePresentation = (
     .map((field) => field.key);
   const additionalFields = new Set(
     detail.additionalSections.flatMap((section) =>
-      section.kind === "fields" ? section.fields : [],
+      section.kind === "fields"
+        ? section.fields
+        : section.kind === "relation"
+          ? section.contextFields
+          : [],
     ),
   );
   const overviewFields = detailFields.filter(

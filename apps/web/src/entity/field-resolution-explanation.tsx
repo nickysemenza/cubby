@@ -1,8 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { capitalize, parseShortcode } from "@cubby/shared";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
@@ -12,6 +13,7 @@ import { NoneValue } from "~/ui/primitives/none-value";
 
 import {
   ExplanationEntityLink,
+  FieldExplanation,
   ReadableExplanationValue,
   type ExplanationValue,
 } from "./field-explanation";
@@ -248,6 +250,7 @@ export function ResolutionEvidence({
         {evidence.chain.title ?? "Resolution order"}
       </h3>
       <ResolutionChain block={{ ...evidence.chain, title: undefined }} />
+      <FieldEvaluationInputs evidence={evidence} />
       {contributors.length > 0 ? (
         <>
           {evidence.chain.rows.length > 0 || evidence.chain.empty ? (
@@ -255,7 +258,7 @@ export function ResolutionEvidence({
           ) : null}
           {contributors.slice(0, 6).map((block) => (
             <Contributor
-              key={block.key ?? JSON.stringify(block)}
+              key={block.chain.key ?? JSON.stringify(block.chain)}
               block={block}
             />
           ))}
@@ -266,7 +269,7 @@ export function ResolutionEvidence({
               </summary>
               {contributors.slice(6).map((block) => (
                 <Contributor
-                  key={block.key ?? JSON.stringify(block)}
+                  key={block.chain.key ?? JSON.stringify(block.chain)}
                   block={block}
                 />
               ))}
@@ -280,7 +283,12 @@ export function ResolutionEvidence({
 
 type Chain = Evidence["chain"];
 
-function Contributor({ block }: { block: Chain }) {
+function Contributor({
+  block: contributor,
+}: {
+  block: NonNullable<Evidence["contributors"]>[number];
+}) {
+  const block = contributor.chain;
   return (
     <details className="min-w-0 border-t border-border pt-2">
       <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium break-words md:min-h-0">
@@ -292,6 +300,14 @@ function Contributor({ block }: { block: Chain }) {
         ) : null}
       </summary>
       <ResolutionChain block={{ ...block, title: undefined }} />
+      <FieldEvaluationInputs
+        evidence={{
+          chain: block,
+          steps: contributor.steps,
+          coverage: contributor.coverage,
+          fallbackSource: null,
+        }}
+      />
     </details>
   );
 }
@@ -316,5 +332,92 @@ function ResolutionChain({ block }: { block: Chain }) {
         </details>
       ) : null}
     </>
+  );
+}
+
+/** Render the resolver's trace verbatim; an unresolved winner still blocks later sources. */
+function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
+  const [inputsOpen, setInputsOpen] = useState(false);
+  return (
+    <div className="grid min-w-0 gap-2">
+      {evidence.coverage && evidence.coverage.omitted > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Showing {evidence.coverage.shown} of {evidence.coverage.total}{" "}
+          evaluation rows.
+        </p>
+      ) : null}
+      {evidence.branches && evidence.branches.omitted > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Showing {evidence.branches.shown} of {evidence.branches.total}{" "}
+          inventory entries.
+        </p>
+      ) : null}
+      {evidence.steps?.some((step) => step.observed.length > 0) ? (
+        <details onToggle={(event) => setInputsOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer text-xs font-medium">
+            Inputs and source settings
+          </summary>
+          {inputsOpen ? (
+            <div className="grid gap-3 pt-2">
+              {evidence.steps.map((step) => (
+                <div
+                  key={`${step.branch?.entityId ?? "subject"}:${step.source}:${step.rowIndex}`}
+                  className="grid min-w-0 gap-1"
+                >
+                  <p className="text-xs font-semibold">
+                    {evidence.chain.rows[step.rowIndex]?.title ?? step.source}
+                  </p>
+                  {step.observed.map((observation) => (
+                    <div
+                      key={`${observation.label}:${observation.entity?.entityId ?? "self"}:${JSON.stringify(observation.value)}`}
+                      className="grid min-w-0 gap-1 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span>{observation.label}</span>
+                        {observation.entity ? (
+                          <ExplanationEntityLink
+                            entity={observation.entity.entityKind}
+                            id={observation.entity.entityId}
+                          />
+                        ) : null}
+                      </div>
+                      {observation.entity
+                        ? observation.fields?.map((key) => {
+                            const target = observation.entity!;
+                            const sourceField = entityFieldModels[
+                              target.entityKind
+                            ].fields.find((candidate) => candidate.key === key);
+                            return sourceField?.explanation ? (
+                              <span
+                                key={key}
+                                className="inline-flex items-center gap-1"
+                              >
+                                <span>{sourceField.label}</span>
+                                <FieldExplanation
+                                  entity={target.entityKind}
+                                  id={target.entityId}
+                                  field={key}
+                                  label={sourceField.label}
+                                />
+                              </span>
+                            ) : null;
+                          })
+                        : null}
+                      <ReadableExplanationValue value={observation.value} />
+                    </div>
+                  ))}
+                  {step.coverage && step.coverage.omitted > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Showing {step.coverage.shown} of {step.coverage.total}{" "}
+                      inputs.
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+    </div>
   );
 }

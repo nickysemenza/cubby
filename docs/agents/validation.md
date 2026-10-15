@@ -111,8 +111,11 @@ only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential, including across active sessions on a constrained host.
-Reuse valid input-hash results at handoff. Finish edits to build inputs before
-starting immutable-build verification; use healthy HMR for suitable iteration.
+Reuse valid input-hash results at handoff. Finish edits and commits, including staged formatting hooks, before starting
+immutable-build verification. The web stamp records HEAD as well as source bytes:
+even a commit with unchanged runtime content invalidates it. Wait for commit hooks
+to finish, then build and run dependent prebuilt checks without Git mutations in
+parallel; use healthy HMR for suitable iteration.
 Nx reports task durations/cache hits, the dev supervisor records startup phase
 timings, and GitHub records named check steps; use those before adding telemetry.
 Wait for a build runner's terminal success before starting a dependent prebuilt

@@ -1537,6 +1537,42 @@ and inheritance: the result and interpretation lead, followed by applicable chec
 and source evidence, then technical metadata. Check rows distinguish missing data,
 defects, and accepted exceptions with labeled semantic badges; weights and caps stay inline; check identifiers and raw evidence remain available in Technical details. Satisfied checks collapse into a green labeled summary; gaps use amber and defects red, with labels carrying the meaning. Repeated owner gaps are shown once through the check rows, while related-record gaps remain separate. Inheritance ladders align source, value,
 and precedence, allow long values to wrap, and emphasize the winning source.
+Resolvers return the selected value and its evaluation trace together. Traces distinguish
+used sources, unresolved decisions that block fallback, absent or disabled sources that
+permit fallback, and alternatives evaluated but overridden. Observed inputs retain source
+links and current policy settings; they do not invent historical intent. Coverage reports
+shown and omitted rows, inventory branches, and inputs. Each independent contributor
+contains its own chain, typed decision steps, and coverage; row indexes address that
+contributor chain, including its summary row. Ownership evidence includes at most
+50 inventory contributors, 50 decision steps per chain plus its contributor summary
+row, and 50 observations per step. Record labels are batch-loaded across the visible
+contributors so query count does not grow with inventory entries. The same generic evidence view
+serves populated and empty fields on list and detail surfaces, with exact inputs available
+under Technical details. Observation `fields` name declared source fields whose own
+explanation and controls are available alongside the record link. Editable stored fields
+receive a direct-value explanation; native detail retains explainable empty fields.
+Stock-tracking resolutions retain their evaluated category chain and fallback source even
+when a Product override wins.
+
+Product Owner explanations expand each inventory entry's assignment and acquisition
+stack. Acquisition-only owner labels say "from purchase"; purchaser, beneficiary, funder,
+and account holder retain their separate roles. Entirely unknown beneficiary shares permit
+account defaults; partially named, conflicting, split named, and named Household attribution
+retain the blocking semantics owned by the terminology guide. Unknown ownership is not
+explicit Household ownership.
+
+Product Locations retain their links and add a server-composed inventory status. Status
+combines tracking policy, installed Location presence, recorded acquisitions/exits and
+comparable inventory counts. No quantified history differs from a supported zero balance;
+unknown kit quantities also keep history incomplete. Exact discrepancies require complete
+quantity history and inventory in each units. The variance column, SQL filters/sorts,
+picker/recount summaries, and location captions share that comparability rule. No status implies automatic consumption or
+disposal, and disabled tracking never removes manual inventory. Declared relation sections
+may place unique detail `contextFields` above their table; Stocked at uses this for the same
+inventory status and its expandable evidence. Native default list rows also include
+relation context fields marked for list display, even when the separate web column
+is hidden because another column embeds that context.
+
 Resolution order uses the shared records block's `timeline` presentation for
 precedence, not chronological history. Every nonempty chain remains visible,
 including a single subject or steps without record links. Explanations include

@@ -111,6 +111,8 @@ export function interpretFieldValue(
   value: z.infer<ReturnType<typeof z.json>>,
 ): NonNullable<FieldExplanationOutput["interpretation"]> {
   const result = resultLabel(field, value);
+  const emptyLabel =
+    "emptyLabel" in field.display ? field.display.emptyLabel : null;
   const interpretation: NonNullable<FieldExplanationOutput["interpretation"]> =
     {
       result,
@@ -147,7 +149,10 @@ export function interpretFieldValue(
         "Open the linked expense lines and classify the remaining lines.",
       );
   } else if (Array.isArray(value)) {
-    interpretation.result = `${value.length} ${value.length === 1 ? "entry" : "entries"}`;
+    interpretation.result =
+      value.length === 0 && emptyLabel
+        ? emptyLabel
+        : `${value.length} ${value.length === 1 ? "entry" : "entries"}`;
   } else if (value === null) {
     interpretation.caveats.push(
       "No value was determined from the current inputs; this is not a numeric zero.",

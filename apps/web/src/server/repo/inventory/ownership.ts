@@ -1,3 +1,4 @@
+import type { FieldDecisionStep } from "@cubby/schemas/field-explanation";
 import type {
   FieldResolution,
   ResolvedListItem,
@@ -67,7 +68,10 @@ type InheritedSource =
 /** One rung of the inheritance ladder, kept even when an earlier rung wins so
  * an explanation can show what it overrode. */
 export type InventoryOwnershipStep = {
-  source: InheritedSource;
+  source: InheritedSource | "acquisition";
+  reason: FieldDecisionStep["reason"];
+  effect: FieldDecisionStep["effect"];
+  observed: FieldDecisionStep["observed"];
   owner: IndividualParty | null;
   /** This rung's evidence settles the inherited owner, even as ambiguous. */
   decides: boolean;
@@ -92,12 +96,52 @@ const isIndividual = <Party extends { kind: string }>(
 
 const today = (): string => householdLocalDate();
 
-const unresolvedCandidate = (): InheritedCandidate => ({
+const acquisitionStep = (
+  acquisitions: Acquisition[],
+): InventoryOwnershipStep => ({
+  source: "acquisition",
+  reason:
+    acquisitions.length === 0
+      ? "acquisition_absent"
+      : acquisitions.length === 1
+        ? "acquisition_single"
+        : "acquisition_multiple",
+  effect: acquisitions.length === 1 ? "context" : "blocked",
+  owner: null,
+  decides: acquisitions.length !== 1,
+  ref: null,
+  observed: [
+    {
+      label: "Applicable acquisitions",
+      entity: null,
+      value: { count: acquisitions.length },
+    },
+    ...acquisitions.map((acquisition) => ({
+      label: "Acquisition",
+      entity: acquisition.purchaseShortcode
+        ? {
+            entityKind: "purchase" as const,
+            entityId: acquisition.purchaseShortcode,
+          }
+        : acquisition.expenseIds[0]
+          ? {
+              entityKind: "expense" as const,
+              entityId: acquisition.expenseIds[0],
+            }
+          : null,
+      value: { expenses: acquisition.expenseIds },
+    })),
+  ],
+});
+
+const unresolvedCandidate = (
+  acquisitions: Acquisition[] = [],
+): InheritedCandidate => ({
   owner: null,
   source: "unresolved",
   acquisition: null,
   fingerprintEvidence: null,
-  steps: [],
+  steps: [acquisitionStep(acquisitions)],
 });
 
 const loadAcquisitionExpenseRows = async (
@@ -243,12 +287,12 @@ const addAcquisition = (
   acquisitionsByProduct.set(productId, acquisitions);
 };
 
-const collectSingleAcquisitions = (args: {
+const collectAcquisitions = (args: {
   acquisitionExpenseRows: AcquisitionExpenseRow[];
   sparseRows: SparsePurchaseRow[];
   purchaseById: Map<PurchaseId, PurchaseRow>;
   expensesByPurchase: Map<PurchaseId, PurchaseExpenseRow[]>;
-}): SingleAcquisition[] => {
+}): Map<ProductId, Map<string, Acquisition>> => {
   const acquisitionsByProduct = new Map<ProductId, Map<string, Acquisition>>();
   for (const row of args.acquisitionExpenseRows) {
     if (!row.productId) continue;
@@ -297,14 +341,7 @@ const collectSingleAcquisitions = (args: {
     });
   }
 
-  return [...acquisitionsByProduct.entries()].flatMap(
-    ([productId, acquisitions]) => {
-      const values = [...acquisitions.values()];
-      return values.length === 1
-        ? [{ productId, acquisition: values[0]! }]
-        : [];
-    },
-  );
+  return acquisitionsByProduct;
 };
 
 const loadBeneficiaryRows = async (
@@ -368,6 +405,7 @@ const loadPaymentDefaults = async (
       accountId: financialAccount.id,
       accountShortcode: financialAccount.shortcode,
       transactionId: financialTransaction.id,
+      transactionShortcode: financialTransaction.shortcode,
       allocationAmount: financialTransactionAllocation.amount,
     })
     .from(financialTransactionAllocation)
@@ -439,11 +477,21 @@ const indexPayments = (rows: PaymentDefault[]) => {
 const resolveInheritedCandidate = (args: {
   acquisition: Acquisition;
   parties: Map<LedgerPartyId, IndividualParty>;
+  partyDetails: Map<
+    LedgerPartyId,
+    Awaited<ReturnType<typeof loadIndividualParties>>[number]
+  >;
   beneficiariesByExpense: Map<string, BeneficiaryRow[]>;
   vendorDefaultById: Map<VendorAccountId, VendorDefault>;
   paymentByPurchase: Map<PurchaseId, PaymentDefault[]>;
 }): InheritedCandidate => {
   const { acquisition } = args;
+  const partyEvidence = (id: LedgerPartyId | null) => {
+    const party = id ? args.partyDetails.get(id) : undefined;
+    return party
+      ? { id: party.shortcode, name: party.name, kind: party.kind }
+      : null;
+  };
   const beneficiary = acquisition.expenseIds.flatMap(
     (id) => args.beneficiariesByExpense.get(id) ?? [],
   );
@@ -459,6 +507,27 @@ const resolveInheritedCandidate = (args: {
   const firstExpense = acquisition.expenseIds[0];
   const beneficiaryStep: InventoryOwnershipStep = {
     source: "inherited_beneficiary",
+    reason: beneficiaryResolution.reason,
+    effect:
+      beneficiaryResolution.status === "none"
+        ? "fallback"
+        : beneficiaryResolution.status === "owner"
+          ? "used"
+          : "blocked",
+    observed: acquisition.expenseIds.map((id) => ({
+      label: "Expense beneficiaries",
+      fields: ["beneficiaries"],
+      entity: { entityKind: "expense", entityId: id },
+      value: {
+        beneficiaries: (args.beneficiariesByExpense.get(id) ?? []).map(
+          (row) => ({
+            party: partyEvidence(row.ledgerPartyId),
+            partyPresent: row.ledgerPartyId !== null,
+            weight: row.weight,
+          }),
+        ),
+      },
+    })),
     owner: beneficiaryOwnerId
       ? (args.parties.get(beneficiaryOwnerId) ?? null)
       : null,
@@ -475,6 +544,35 @@ const resolveInheritedCandidate = (args: {
     : undefined;
   const vendorStep: InventoryOwnershipStep = {
     source: "inherited_vendor_account",
+    reason: !vendorDefault
+      ? "vendor_absent"
+      : !vendorDefault.enabled
+        ? "vendor_disabled"
+        : !args.parties.has(vendorDefault.ledgerPartyId)
+          ? "vendor_unusable"
+          : "vendor_enabled",
+    effect: vendorDefault?.enabled
+      ? args.parties.has(vendorDefault.ledgerPartyId)
+        ? "used"
+        : "blocked"
+      : "fallback",
+    observed: vendorDefault
+      ? [
+          {
+            label: "Vendor account policy",
+            fields: ["inventoryOwnerDefaultEnabled", "ledgerPartyId"],
+            entity: {
+              entityKind: "vendorAccount",
+              entityId: vendorDefault.shortcode,
+            },
+            value: {
+              inventoryOwnerDefaultEnabled: vendorDefault.enabled,
+              party: partyEvidence(vendorDefault.ledgerPartyId),
+              partyPresent: true,
+            },
+          },
+        ]
+      : [],
     owner: vendorDefault?.enabled
       ? (args.parties.get(vendorDefault.ledgerPartyId) ?? null)
       : null,
@@ -487,15 +585,33 @@ const resolveInheritedCandidate = (args: {
   const payments = acquisition.purchaseId
     ? (args.paymentByPurchase.get(acquisition.purchaseId) ?? [])
     : [];
-  const paymentOwnerId = resolvePaymentEvidence({
+  const paymentResolution = resolvePaymentEvidence({
     rows: payments,
     isIndividual: (id) => args.parties.has(id),
   });
+  const paymentOwnerId = paymentResolution.ownerId;
   const paymentAccounts = [
     ...new Set(payments.map((row) => row.accountShortcode)),
   ];
   const paymentStep: InventoryOwnershipStep = {
     source: "inherited_payment_account",
+    reason: paymentResolution.reason,
+    effect: paymentOwnerId ? "used" : "blocked",
+    observed: payments.map((row) => ({
+      label: "Payment account policy",
+      fields: ["inventoryOwnerDefaultEnabled", "ledgerPartyId"],
+      entity: {
+        entityKind: "financialAccount",
+        entityId: row.accountShortcode,
+      },
+      value: {
+        inventoryOwnerDefaultEnabled: row.enabled,
+        party: partyEvidence(row.ledgerPartyId),
+        partyPresent: row.ledgerPartyId !== null,
+        transaction: row.transactionShortcode,
+        allocationAmount: row.allocationAmount,
+      },
+    })),
     owner: paymentOwnerId ? (args.parties.get(paymentOwnerId) ?? null) : null,
     // The last rung always settles: no payment evidence is itself unresolved.
     decides: true,
@@ -507,6 +623,8 @@ const resolveInheritedCandidate = (args: {
 
   const steps = [beneficiaryStep, vendorStep, paymentStep];
   const winner = steps.find((step) => step.decides) ?? paymentStep;
+  for (const step of steps.slice(steps.indexOf(winner) + 1))
+    step.effect = "overridden";
   const fingerprintEvidence =
     winner === beneficiaryStep
       ? {
@@ -538,10 +656,13 @@ const resolveInheritedCandidate = (args: {
           };
   return {
     owner: winner.owner,
-    source: winner.owner ? winner.source : "unresolved",
+    source:
+      winner.owner && winner.source !== "acquisition"
+        ? winner.source
+        : "unresolved",
     acquisition,
     fingerprintEvidence,
-    steps,
+    steps: [acquisitionStep([acquisition]), ...steps],
   };
 };
 
@@ -576,12 +697,19 @@ async function loadInheritedCandidates(
     loadPurchaseRows(client, purchaseIds),
     loadPurchaseExpenseRows(client, purchaseIds),
   ]);
-  const singleAcquisitions = collectSingleAcquisitions({
+  const acquisitionsByProduct = collectAcquisitions({
     acquisitionExpenseRows,
     sparseRows,
     purchaseById: new Map(purchaseRows.map((row) => [row.id, row])),
     expensesByPurchase: groupPurchaseExpenses(purchaseExpenses),
   });
+  const singleAcquisitions: SingleAcquisition[] = [];
+  for (const id of productIds) {
+    const acquisitions = [...(acquisitionsByProduct.get(id)?.values() ?? [])];
+    unresolved.set(id, unresolvedCandidate(acquisitions));
+    if (acquisitions.length === 1)
+      singleAcquisitions.push({ productId: id, acquisition: acquisitions[0]! });
+  }
   if (singleAcquisitions.length === 0) return unresolved;
 
   const applicableExpenseCodes = [
@@ -602,11 +730,9 @@ async function loadInheritedCandidates(
       ...beneficiaryRows.flatMap((row) =>
         row.ledgerPartyId ? [row.ledgerPartyId] : [],
       ),
-      ...vendorDefaults.flatMap((row) =>
-        row.enabled ? [row.ledgerPartyId] : [],
-      ),
+      ...vendorDefaults.map((row) => row.ledgerPartyId),
       ...paymentDefaults.flatMap((row) =>
-        row.enabled && row.ledgerPartyId ? [row.ledgerPartyId] : [],
+        row.ledgerPartyId ? [row.ledgerPartyId] : [],
       ),
     ] satisfies LedgerPartyId[]),
   ];
@@ -614,6 +740,7 @@ async function loadInheritedCandidates(
   const parties = new Map(
     partyRows.filter(isIndividual).map((party) => [party.id, party]),
   );
+  const partyDetails = new Map(partyRows.map((row) => [row.id, row]));
   const beneficiariesByExpense = indexBeneficiaries(beneficiaryRows);
   const vendorDefaultById = new Map(vendorDefaults.map((row) => [row.id, row]));
   const paymentByPurchase = indexPayments(paymentDefaults);
@@ -624,6 +751,7 @@ async function loadInheritedCandidates(
       resolveInheritedCandidate({
         acquisition,
         parties,
+        partyDetails,
         beneficiariesByExpense,
         vendorDefaultById,
         paymentByPurchase,
@@ -721,10 +849,11 @@ const resolveEntryOwnership = async (
 };
 
 const INHERITED_SOURCE_PHRASES = {
+  acquisition: "Acquisition context",
   inherited_beneficiary: "Purchase beneficiary",
   inherited_vendor_account: "Vendor account default",
   inherited_payment_account: "Payment account default",
-} satisfies Record<InheritedSource, string>;
+} satisfies Record<InventoryOwnershipStep["source"], string>;
 
 const OWNERSHIP_SOURCE_ENTITY = {
   purchase: "purchase",
@@ -781,16 +910,18 @@ export const inventoryOwnerResolution = (
   };
 };
 
+type InventoryOwnershipTrace = {
+  intent: Pick<FieldDecisionStep, "source" | "reason" | "effect" | "observed">;
+  ownership: EffectiveInventoryOwnership;
+  steps: InventoryOwnershipStep[];
+  fallbackSource: FieldResolution["sourceEntity"];
+};
+
 /** Each entry's effective ownership plus the inheritance ladder behind it. */
 export async function loadInventoryOwnershipTraces(
   db: Database | DrizzleTransaction,
   entries: OwnershipEntry[],
-): Promise<
-  Map<
-    InventoryId,
-    { ownership: EffectiveInventoryOwnership; steps: InventoryOwnershipStep[] }
-  >
-> {
+): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
   const productIds = [...new Set(entries.map((entry) => entry.productId))];
   const inheritedByProduct = await loadInheritedCandidates(db, productIds);
   const explicitIds = [
@@ -818,19 +949,47 @@ export async function loadInventoryOwnershipTraces(
     explicitRows.filter(isIndividual).map((row) => [row.id, row]),
   );
 
-  const resolved = new Map<
-    InventoryId,
-    { ownership: EffectiveInventoryOwnership; steps: InventoryOwnershipStep[] }
-  >();
+  const resolved = new Map<InventoryId, InventoryOwnershipTrace>();
   for (const entry of entries) {
     const inherited =
       inheritedByProduct.get(entry.productId) ?? unresolvedCandidate();
     const explicit = entry.ownerLedgerPartyId
       ? (explicitById.get(entry.ownerLedgerPartyId) ?? null)
       : null;
+    const decider = inherited.steps.find((step) => step.decides);
     resolved.set(entry.id, {
+      intent: {
+        source: "inventory",
+        reason:
+          entry.ownershipMode === "inherit"
+            ? "inherit"
+            : explicit
+              ? "explicit"
+              : "household",
+        effect: entry.ownershipMode === "inherit" ? "fallback" : "used",
+        observed: [
+          {
+            label: "Stored ownership intent",
+            entity: null,
+            value: {
+              mode: entry.ownershipMode,
+              owner: explicit?.shortcode ?? null,
+              ownerPresent: entry.ownerLedgerPartyId !== null,
+            },
+          },
+        ],
+      },
       ownership: await resolveEntryOwnership(entry, inherited, explicit),
-      steps: inherited.steps,
+      steps:
+        entry.ownershipMode === "explicit"
+          ? inherited.steps.map((step) =>
+              step.effect === "context"
+                ? step
+                : { ...step, effect: "overridden" },
+            )
+          : inherited.steps,
+      fallbackSource:
+        decider?.owner && decider.ref ? { ...decider.ref, name: null } : null,
     });
   }
   return resolved;
@@ -971,7 +1130,7 @@ export async function loadProductOwners(
         owner
           ? [
               {
-                label: owner.name,
+                label: `${owner.name} · from purchase`,
                 ref: { entityKind: "ledgerParty", entityId: owner.shortcode },
                 inherited: true,
               },

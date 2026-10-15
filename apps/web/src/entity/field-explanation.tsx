@@ -840,9 +840,9 @@ function ExplanationTechnicalDetails({
               {caveat}
             </p>
           ))}
-          <RawExplanationEvidence data={data} />
         </>
       ) : null}
+      <RawExplanationEvidence data={data} />
     </details>
   );
 }

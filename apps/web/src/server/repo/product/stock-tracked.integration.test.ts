@@ -244,6 +244,22 @@ describe("effective Product stock tracking", () => {
           storedValue: true,
           value: true,
           fallbackValue: false,
+          fallbackSource: {
+            entityKind: "productCategory",
+            entityId: untracked.output.id,
+          },
+          evaluation: [
+            expect.objectContaining({
+              entityId: nested.output.id,
+              value: null,
+              assigned: false,
+            }),
+            expect.objectContaining({
+              entityId: untracked.output.id,
+              value: false,
+              assigned: true,
+            }),
+          ],
           matchesFallback: false,
           canReset: true,
         },

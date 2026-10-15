@@ -3,7 +3,10 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ReportRecordRow } from "@cubby/schemas/entity-report";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
-import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import type {
+  FieldDecisionStep,
+  FieldExplanationOutput,
+} from "@cubby/schemas/field-explanation";
 import {
   fieldResolutionSchema,
   type FieldResolution,
@@ -75,6 +78,12 @@ type Step = {
   /** What an assigned null means at this step, over the field's None label. */
   nullLabel?: string;
   unavailableReason?: string;
+  decision?: Pick<
+    FieldDecisionStep,
+    "source" | "reason" | "effect" | "observed"
+  >;
+  branch?: FieldDecisionStep["branch"];
+  lines?: ReportRecordRow["lines"];
 };
 
 const source = (kind: AncestryKind, node: Node | undefined) =>
@@ -97,10 +106,7 @@ async function ancestors(
   const parent = sql.identifier(config.parent);
   let value: SQL;
   let assigned: SQL;
-  if (
-    kind === "productCategory" &&
-    (field === "feature" || field === "stockTracked")
-  ) {
+  if (kind === "productCategory" && field === "feature") {
     const column = sql.identifier(field);
     value = sql`to_jsonb(p.${column})`;
     assigned = sql`p.${column} IS NOT NULL`;
@@ -194,24 +200,87 @@ async function eligibleTaskTradeSource(
 }
 
 const OWNERSHIP_STEP_TITLES = {
+  acquisition: "Acquisition context",
   inherited_beneficiary: "Purchase beneficiary",
   inherited_vendor_account: "Vendor account default",
   inherited_payment_account: "Payment account default",
 } as const;
+
+const DECISION_REASONS = {
+  assigned: "A value is assigned at this source.",
+  not_set: "No value is assigned at this source; continue to the next source.",
+  explicit:
+    "The individual owner is set on this inventory entry and overrides acquisition defaults.",
+  household:
+    "This inventory entry explicitly records Household stock, with no individual owner.",
+  inherit:
+    "This inventory entry inherits its owner from current acquisition evidence.",
+  acquisition_absent:
+    "No applicable acquisition is recorded. Inherited ownership is unknown.",
+  acquisition_multiple:
+    "Multiple distinct acquisitions are recorded. They cannot supply one inherited owner.",
+  acquisition_single:
+    "Exactly one applicable acquisition supplies the ownership context. Only acquisition lines count; funders and purchasers do not establish ownership.",
+  beneficiary_absent:
+    "No beneficiary attribution is recorded on the applicable acquisition lines; account defaults may apply.",
+  beneficiary_unknown:
+    "All beneficiary shares have unknown parties; no ownership decision is recorded, so account defaults may apply.",
+  beneficiary_incomplete:
+    "Some applicable acquisition lines lack beneficiary attribution. Incomplete coverage blocks account defaults.",
+  beneficiary_split:
+    "An applicable acquisition line has split beneficiary attribution. It cannot establish a single owner and blocks account defaults.",
+  beneficiary_unresolved:
+    "Some beneficiary attribution names an individual while another share has no resolved party. Partial attribution blocks account defaults.",
+  beneficiary_not_individual:
+    "A beneficiary party is unavailable or is not a live member or guest. It cannot establish an individual owner and blocks account defaults.",
+  beneficiary_conflict:
+    "The applicable acquisition lines name different beneficiaries. Conflicting evidence blocks account defaults.",
+  beneficiary_agreement:
+    "Every applicable acquisition line wholly names the same live member or guest as beneficiary.",
+  vendor_absent:
+    "No live vendor account default is available; payment account defaults may apply.",
+  vendor_disabled:
+    "The vendor account's inventory owner default is off. Its associated party does not supply an owner; payment defaults may apply.",
+  vendor_unusable:
+    "The vendor account's inventory owner default is on, but its associated party is not a live member or guest. This blocks payment account fallback.",
+  vendor_enabled:
+    "The vendor account's inventory owner default is on and its associated party is a live member or guest.",
+  payment_absent:
+    "No qualifying positive payment allocation from a live account is recorded. Inherited ownership remains unknown.",
+  payment_disabled:
+    "At least one qualifying payment account has its inventory owner default off. Every payment must be enabled and agree on an individual party.",
+  payment_unresolved:
+    "At least one qualifying payment account has no resolved party. Account holders alone do not establish ownership.",
+  payment_not_individual:
+    "At least one qualifying payment account's party is unavailable or is not a live member or guest.",
+  payment_conflict:
+    "The qualifying payment accounts name different individual parties. They cannot establish a single owner.",
+  payment_agreement:
+    "Every qualifying payment account has its inventory owner default on and all name the same live member or guest.",
+} satisfies Record<FieldDecisionStep["reason"], string>;
 
 const ownershipSteps = (steps: readonly InventoryOwnershipStep[]): Step[] =>
   steps.map((step) => ({
     title: OWNERSHIP_STEP_TITLES[step.source],
     ref: step.ref,
     value: step.owner?.shortcode ?? null,
-    // The payment rung always settles resolution, but it is only a source
-    // when some payment evidence exists.
-    assigned: step.decides && (step.owner !== null || step.ref !== null),
-    // Evidence that settles on nobody (two beneficiaries, a shared account)
-    // names no single owner; it is not household stock.
+    assigned: step.decides,
     nullLabel: "No single owner",
+    decision: {
+      source: step.source,
+      reason: step.reason,
+      effect: step.effect,
+      observed: step.observed,
+    },
   }));
 
+const ownershipSelfStep = (
+  resolution: FieldResolution,
+  decision: Step["decision"],
+): Step => ({
+  ...selfStep("inventory", resolution),
+  decision,
+});
 async function expenseCategorySteps(
   db: Database,
   shortcode: string,
@@ -474,34 +543,52 @@ async function expenseProjectSteps(
   };
 }
 
-async function stockTrackingSteps(
-  db: Database,
-  entity: "product" | "productCategory",
-  shortcode: string,
-  resolution: FieldResolution,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
-  const field = "stockTracked";
-  const subject = { entity, id: shortcode };
+type FieldSteps = { steps: Step[]; fallbackSource: Evidence["fallbackSource"] };
 
-  const nodes = await ancestors(
-    db,
-    "productCategory",
-    entity === "product"
-      ? sql`(SELECT "categoryId" FROM "Product" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`
-      : sql`(SELECT id FROM "ProductCategory" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
-    field,
-  );
+function evaluatedFieldSteps(
+  entity: Entity,
+  resolution: FieldResolution,
+): FieldSteps {
   return {
     steps: [
-      ...(entity === "product" ? [selfStep(entity, resolution)] : []),
-      ...nodeSteps("productCategory", nodes, subject),
+      selfStep(entity, resolution),
+      ...(resolution.evaluation ?? []).map((step) => ({
+        title: step.name ?? "Category decision",
+        ref: { entityKind: step.entityKind, entityId: step.entityId },
+        value: step.value,
+        assigned: step.assigned,
+      })),
     ],
-    fallbackSource: source(
-      "productCategory",
-      nodes.find(
-        (node) => node.assigned && (entity === "product" || node.depth > 0),
-      ),
+    fallbackSource: resolution.fallbackSource ?? null,
+  };
+}
+
+async function inventoryOwnershipFieldSteps(
+  db: Database,
+  shortcode: string,
+  resolution: FieldResolution,
+): Promise<FieldSteps> {
+  const row = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.shortcode, shortcode),
+      notDeleted(inventoryEntry),
     ),
+    columns: {
+      id: true,
+      productId: true,
+      ownershipMode: true,
+      ownerLedgerPartyId: true,
+    },
+  });
+  const trace = row
+    ? (await loadInventoryOwnershipTraces(db, [row])).get(row.id)
+    : undefined;
+  return {
+    steps: [
+      ownershipSelfStep(resolution, trace?.intent),
+      ...ownershipSteps(trace?.steps ?? []),
+    ],
+    fallbackSource: trace?.fallbackSource ?? null,
   };
 }
 
@@ -514,6 +601,7 @@ async function fieldSteps(
   resolution: FieldResolution,
 ): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
   const subject = { entity, id: shortcode };
+  if (resolution.evaluation) return evaluatedFieldSteps(entity, resolution);
   if (entity === "recipe" && field === "servings") {
     return {
       steps: [
@@ -584,11 +672,6 @@ async function fieldSteps(
   }
   if (entity === "task" && field === "assigneeId")
     return taskAssigneeSteps(db, shortcode, resolution);
-  if (
-    (entity === "product" || entity === "productCategory") &&
-    field === "stockTracked"
-  )
-    return stockTrackingSteps(db, entity, shortcode, resolution);
   if (entity === "expense" && field === "spendingCategoryId")
     return expenseCategorySteps(db, shortcode, resolution);
   if (entity === "expense" && field === "projectId")
@@ -714,45 +797,16 @@ async function fieldSteps(
       ),
     };
   }
-  if (entity === "inventory" && field === "ownerLedgerPartyId") {
-    const row = await getDb(db).query.inventoryEntry.findFirst({
-      where: and(
-        eq(inventoryEntry.shortcode, shortcode),
-        notDeleted(inventoryEntry),
-      ),
-      columns: {
-        id: true,
-        productId: true,
-        ownershipMode: true,
-        ownerLedgerPartyId: true,
-      },
-    });
-    const trace = row
-      ? (await loadInventoryOwnershipTraces(db, [row])).get(row.id)
-      : undefined;
-    return {
-      steps: [
-        selfStep(entity, resolution),
-        ...ownershipSteps(trace?.steps ?? []),
-      ],
-      fallbackSource: (() => {
-        const deciding = trace?.steps.find((step) => step.decides);
-        return deciding?.ref ? { ...deciding.ref, name: null } : null;
-      })(),
-    };
-  }
+  if (entity === "inventory" && field === "ownerLedgerPartyId")
+    return inventoryOwnershipFieldSteps(db, shortcode, resolution);
+
   return {
     steps: [
       selfStep(entity, resolution),
       ...(resolution.sourceEntity || resolution.fallbackValue !== null
         ? [
             {
-              title:
-                entity === "recipe" && field === "servings"
-                  ? "Recipe yield"
-                  : entity === "product" && field === "price"
-                    ? "Expense-derived unit price"
-                    : humanize(resolution.source),
+              title: humanize(resolution.source),
               ref: resolution.sourceEntity,
               value: resolution.fallbackValue,
               assigned: resolution.fallbackValue !== null,
@@ -767,7 +821,10 @@ async function fieldSteps(
 /** The step that supplies the value: the subject's own for explicit/none,
  * otherwise the resolution's source record, else the first assigned step
  * after the subject (sources outside the ladder are appended). */
-function winnerIndex(steps: Step[], resolution: FieldResolution): number {
+function winnerIndex(
+  steps: readonly Step[],
+  resolution: FieldResolution,
+): number {
   if (
     resolution.mode === "explicit" ||
     (resolution.mode === "none" && resolution.canReset)
@@ -781,8 +838,6 @@ function winnerIndex(steps: Step[], resolution: FieldResolution): number {
       )
     : -1;
   if (byRef >= 0) return byRef;
-  if (resolution.mode === "none" && steps[0]?.self && steps[0].assigned)
-    return 0;
   if (resolution.value === null)
     return steps.findIndex(
       (step) =>
@@ -850,6 +905,18 @@ const collectCodes = (value: Json, into: Set<string>) => {
     for (const item of Object.values(value)) collectCodes(item ?? null, into);
 };
 
+async function labelsForSteps(db: Database, steps: readonly Step[]) {
+  const codes = new Set<string>();
+  for (const step of steps) {
+    collectCodes(step.value, codes);
+    for (const observation of step.decision?.observed ?? []) {
+      if (observation.entity) codes.add(observation.entity.entityId);
+      collectCodes(observation.value, codes);
+    }
+  }
+  return shortcodeLabels(db, [...codes]);
+}
+
 async function chainBlock(
   db: Database,
   entity: Entity,
@@ -858,39 +925,70 @@ async function chainBlock(
   winner: number,
   loadedLabels?: Map<string, string>,
 ): Promise<Evidence["chain"]> {
-  const codes = new Set<string>();
-  for (const step of steps) collectCodes(step.value, codes);
-  const labels = loadedLabels ?? (await shortcodeLabels(db, [...codes]));
+  const labels = loadedLabels ?? (await labelsForSteps(db, steps));
   const model = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === field,
   );
   const noneLabel = model?.resolution?.labels?.none;
-  const rows: ReportRecordRow[] = steps.slice(0, 50).map((step, index) => {
-    const state: NonNullable<ReportRecordRow["state"]> = step.unavailableReason
-      ? { kind: "skipped", label: step.unavailableReason }
-      : index === winner
-        ? { kind: "done", label: "Used" }
-        : !step.assigned
-          ? { kind: "skipped", label: "Not set" }
-          : winner >= 0 && index > winner
-            ? { kind: "not_reached", label: "Overridden above" }
-            : { kind: "skipped", label: "Not used" };
-    return {
-      entity: step.ref?.entityKind ?? null,
-      id: step.ref?.entityId ?? null,
-      title: step.title,
-      trailing: step.assigned
-        ? valueText(
-            step.value,
-            entity,
-            field,
-            labels,
-            step.nullLabel ?? noneLabel,
-          )
-        : null,
-      state,
-    };
-  });
+  const rows: ReportRecordRow[] = steps
+    .slice(0, MAX_CHAIN_ROWS)
+    .map((step, index) => {
+      const effect = step.decision?.effect;
+      const state: NonNullable<ReportRecordRow["state"]> =
+        step.unavailableReason
+          ? { kind: "skipped", label: step.unavailableReason }
+          : effect === "used"
+            ? { kind: "done", label: "Used" }
+            : effect === "blocked"
+              ? { kind: "skipped", label: "Blocks fallback" }
+              : effect === "overridden"
+                ? { kind: "skipped", label: "Evaluated · overridden" }
+                : effect === "context"
+                  ? { kind: "done", label: "Context" }
+                  : effect === "fallback"
+                    ? { kind: "skipped", label: "Continue" }
+                    : index === winner
+                      ? { kind: "done", label: "Used" }
+                      : !step.assigned
+                        ? { kind: "skipped", label: "Not set" }
+                        : winner >= 0 && index > winner
+                          ? { kind: "skipped", label: "Evaluated · overridden" }
+                          : { kind: "skipped", label: "Not used" };
+      return {
+        entity: step.ref?.entityKind ?? null,
+        id: step.ref?.entityId ?? null,
+        title: step.title,
+        lines: step.decision
+          ? [
+              { text: DECISION_REASONS[step.decision.reason], tone: "muted" },
+              ...step.decision.observed.flatMap((observation) => {
+                const text = observationText(observation, labels);
+                return text ? [{ text, tone: "muted" as const }] : [];
+              }),
+            ]
+          : [
+              {
+                text: step.assigned
+                  ? DECISION_REASONS.assigned
+                  : DECISION_REASONS.not_set,
+                tone: "muted",
+              },
+            ],
+        trailing:
+          step.decision?.source === "acquisition"
+            ? null
+            : step.assigned
+              ? valueText(
+                  step.value,
+                  entity,
+                  field,
+                  labels,
+                  step.nullLabel ?? noneLabel,
+                )
+              : null,
+        state,
+      };
+    });
   return {
     kind: "records",
     presentation: "timeline",
@@ -899,6 +997,128 @@ async function chainBlock(
   };
 }
 
+const coverage = (total: number, shown: number) => ({
+  total,
+  shown,
+  omitted: total - shown,
+});
+const MAX_CHAIN_ROWS = 50;
+const MAX_OBSERVATIONS = 50;
+
+function observationText(
+  observation: FieldDecisionStep["observed"][number],
+  labels: Map<string, string>,
+): string | null {
+  const value = observation.value;
+  const record =
+    value !== null && !Array.isArray(value) && typeof value === "object"
+      ? value
+      : null;
+  const party = record?.party;
+  const partyRecord =
+    party !== null && !Array.isArray(party) && typeof party === "object"
+      ? party
+      : null;
+  const ref = observation.entity
+    ? ` (${labels.get(observation.entity.entityId) ?? observation.entity.entityId})`
+    : "";
+  if (record && typeof record.inventoryOwnerDefaultEnabled === "boolean") {
+    return `${observation.label}${ref}: inventory owner default ${record.inventoryOwnerDefaultEnabled ? "on" : "off"}; associated party: ${partyRecord?.name ?? "Unresolved"}${partyRecord?.kind ? ` (${partyRecord.kind})` : ""}${record.allocationAmount !== undefined ? `; allocation ${record.allocationAmount}` : ""}`;
+  }
+  if (record && Array.isArray(record.beneficiaries)) {
+    const beneficiaries = record.beneficiaries.map((value) => {
+      if (value === null || Array.isArray(value) || typeof value !== "object")
+        return "Unresolved party";
+      const party = value.party;
+      return `${party && !Array.isArray(party) && typeof party === "object" ? `${party.name} (${party.kind})` : "Unresolved party"}; weight ${value.weight}`;
+    });
+    return `${observation.label}${ref}: ${beneficiaries.length ? beneficiaries.join("; ") : "No beneficiary attribution"}`;
+  }
+  return null;
+}
+
+async function evidenceBlock(
+  db: Database,
+  entity: Entity,
+  field: string,
+  allSteps: Step[],
+  winner: number,
+  fallbackSource: Evidence["fallbackSource"],
+  loadedLabels?: Map<string, string>,
+): Promise<Evidence> {
+  const steps = allSteps.slice(0, MAX_CHAIN_ROWS).map((step) =>
+    step.decision
+      ? {
+          ...step,
+          decision: {
+            ...step.decision,
+            observed: step.decision.observed.slice(0, MAX_OBSERVATIONS),
+          },
+        }
+      : step,
+  );
+  const chain = await chainBlock(
+    db,
+    entity,
+    field,
+    steps,
+    winner,
+    loadedLabels,
+  );
+  const omittedObservations = allSteps
+    .slice(0, steps.length)
+    .reduce(
+      (count, step) =>
+        count +
+        Math.max(0, (step.decision?.observed.length ?? 0) - MAX_OBSERVATIONS),
+      0,
+    );
+  if (allSteps.length > steps.length || omittedObservations > 0)
+    chain.footer = `${steps.length} of ${allSteps.length} decision steps shown; ${omittedObservations} observations omitted.`;
+  return {
+    chain,
+    fallbackSource,
+    coverage: coverage(allSteps.length, steps.length),
+    steps: steps.map((step, rowIndex) => ({
+      ...(step.decision ?? {
+        source: step.ref?.entityKind ?? "self",
+        reason: step.assigned ? ("assigned" as const) : ("not_set" as const),
+        effect:
+          rowIndex === winner
+            ? ("used" as const)
+            : !step.assigned
+              ? ("fallback" as const)
+              : winner >= 0 && rowIndex > winner
+                ? ("overridden" as const)
+                : ("context" as const),
+        observed: [
+          {
+            label: step.title,
+            entity: step.ref
+              ? { entityKind: step.ref.entityKind, entityId: step.ref.entityId }
+              : null,
+            value: step.value,
+          },
+        ],
+      }),
+      rowIndex,
+      ...(step.branch ? { branch: step.branch } : {}),
+      ...(step.decision
+        ? {
+            coverage: coverage(
+              allSteps[rowIndex]!.decision!.observed.length,
+              step.decision.observed.length,
+            ),
+          }
+        : {}),
+    })),
+  };
+}
+
+const isTruncated = (evidence: Evidence) =>
+  (evidence.coverage?.omitted ?? 0) > 0 ||
+  (evidence.branches?.omitted ?? 0) > 0 ||
+  evidence.steps?.some((step) => (step.coverage?.omitted ?? 0) > 0) === true;
 function resolutionOutcome(
   steps: Step[],
   resolution: FieldResolution,
@@ -1010,26 +1230,28 @@ async function allocatedExpenseEvidence(
       });
     }
     contributors.push({
-      ...chain,
-      title: row.name ?? row.purchaseName ?? "Purchase default share",
-      rows: [
-        {
-          entity: row.shortcode
-            ? "expense"
-            : row.purchaseCode
-              ? "purchase"
-              : null,
-          id: row.shortcode ?? row.purchaseCode,
-          title: row.name ?? row.purchaseName ?? "No principal line",
-          trailing: valueText(row.value, "expense", field, labels, undefined),
-          lines: [
-            {
-              text: `${row.attributedCents === null ? "Unpriced share" : formatCurrency(Number(row.attributedCents) / 100)}; ${row.basis} allocation basis${row.incomplete || row.categoryIncomplete ? "; incomplete evidence" : ""}`,
-            },
-          ],
-        },
-        ...chain.rows,
-      ],
+      chain: {
+        ...chain,
+        title: row.name ?? row.purchaseName ?? "Purchase default share",
+        rows: [
+          {
+            entity: row.shortcode
+              ? "expense"
+              : row.purchaseCode
+                ? "purchase"
+                : null,
+            id: row.shortcode ?? row.purchaseCode,
+            title: row.name ?? row.purchaseName ?? "No principal line",
+            trailing: valueText(row.value, "expense", field, labels, undefined),
+            lines: [
+              {
+                text: `${row.attributedCents === null ? "Unpriced share" : formatCurrency(Number(row.attributedCents) / 100)}; ${row.basis} allocation basis${row.incomplete || row.categoryIncomplete ? "; incomplete evidence" : ""}`,
+              },
+            ],
+          },
+          ...chain.rows,
+        ],
+      },
     });
   }
   const distinct = rows[0]?.distinct_values ?? 0;
@@ -1097,51 +1319,53 @@ async function productPriceEvidence(
   const contributors: NonNullable<Evidence["contributors"]> = rows
     .slice(0, CONTRIBUTOR_LIMIT)
     .map((row) => ({
-      kind: "records",
-      presentation: "timeline",
-      title: row.name ?? "Acquisition",
-      empty: "No price sample",
-      rows: [
-        {
-          entity: "expense",
-          id: row.shortcode,
-          title: row.name ?? "Acquisition",
-          trailing: row.productQuantity
-            ? formatCurrency(
-                (row.cost * row.costWeight) /
-                  (Math.abs(row.productQuantity) * row.unitWeight),
-              )
-            : row.productQuantity === 0
-              ? "Cost only; zero units"
-              : "Quantity unknown",
-          state:
-            row.productQuantity === null
-              ? { kind: "skipped", label: "Quantity missing" }
-              : { kind: "done", label: "Price sample" },
-          lines: [
-            {
-              text:
-                row.productQuantity === null
-                  ? "Excluded from the unit-price numerator and denominator"
-                  : `Cost ${row.cost} × ${row.costWeight}; units ${Math.abs(row.productQuantity)} × ${row.unitWeight}`,
-            },
-          ],
-        },
-        {
-          entity: "product",
-          id: row.productCode,
-          title: row.productName,
-          trailing:
-            row.depth === 0
-              ? "Direct acquisition"
-              : `Kit projection: ${row.depth} hops`,
-          lines: [
-            {
-              text: "Blended acquisition cost divided by known units; the Product override wins over this fallback",
-            },
-          ],
-        },
-      ],
+      chain: {
+        kind: "records",
+        presentation: "timeline",
+        title: row.name ?? "Acquisition",
+        empty: "No price sample",
+        rows: [
+          {
+            entity: "expense",
+            id: row.shortcode,
+            title: row.name ?? "Acquisition",
+            trailing: row.productQuantity
+              ? formatCurrency(
+                  (row.cost * row.costWeight) /
+                    (Math.abs(row.productQuantity) * row.unitWeight),
+                )
+              : row.productQuantity === 0
+                ? "Cost only; zero units"
+                : "Quantity unknown",
+            state:
+              row.productQuantity === null
+                ? { kind: "skipped", label: "Quantity missing" }
+                : { kind: "done", label: "Price sample" },
+            lines: [
+              {
+                text:
+                  row.productQuantity === null
+                    ? "Excluded from the unit-price numerator and denominator"
+                    : `Cost ${row.cost} × ${row.costWeight}; units ${Math.abs(row.productQuantity)} × ${row.unitWeight}`,
+              },
+            ],
+          },
+          {
+            entity: "product",
+            id: row.productCode,
+            title: row.productName,
+            trailing:
+              row.depth === 0
+                ? "Direct acquisition"
+                : `Kit projection: ${row.depth} hops`,
+            lines: [
+              {
+                text: "Blended acquisition cost divided by known units; the Product override wins over this fallback",
+              },
+            ],
+          },
+        ],
+      },
     }));
   return {
     evidence: {
@@ -1266,23 +1490,25 @@ async function transactionPolicyEvidence(
       winnerIndex(ladder.steps, row.resolution),
     );
     contributors.push({
-      ...chain,
-      title: row.name,
-      rows: [
-        {
-          entity: "purchase",
-          id: row.shortcode,
-          title: row.name,
-          trailing: valueText(
-            row.resolution.value,
-            "purchase",
-            "itemizationExpectation",
-            new Map(),
-            undefined,
-          ),
-        },
-        ...chain.rows,
-      ],
+      chain: {
+        ...chain,
+        title: row.name,
+        rows: [
+          {
+            entity: "purchase",
+            id: row.shortcode,
+            title: row.name,
+            trailing: valueText(
+              row.resolution.value,
+              "purchase",
+              "itemizationExpectation",
+              new Map(),
+              undefined,
+            ),
+          },
+          ...chain.rows,
+        ],
+      },
     });
   }
   const fallback = steps.find((step) => !step.self && step.assigned);
@@ -1333,20 +1559,16 @@ export async function loadFieldResolutionEvidence(
     field,
     resolution,
   );
-  return {
-    evidence: {
-      chain: await chainBlock(
-        db,
-        entity,
-        field,
-        steps,
-        winnerIndex(steps, resolution),
-      ),
-      fallbackSource,
-      outcome: resolutionOutcome(steps, resolution),
-    },
-    truncated: steps.length > 50,
-  };
+  const evidence = await evidenceBlock(
+    db,
+    entity,
+    field,
+    steps,
+    winnerIndex(steps, resolution),
+    fallbackSource,
+  );
+  evidence.outcome = resolutionOutcome(steps, resolution);
+  return { evidence, truncated: isTruncated(evidence) };
 }
 
 /**
@@ -1393,41 +1615,54 @@ async function productOwnersEvidence(
     .where(
       and(eq(inventoryEntry.productId, productId), notDeleted(inventoryEntry)),
     )
-    .orderBy(location.name, inventoryEntry.shortcode)
-    .limit(CONTRIBUTOR_LIMIT + 1);
+    .orderBy(location.name, inventoryEntry.shortcode);
   if (entries.length === 0) {
     const steps = (await loadInheritedProductSteps(db, [productId])).get(
       productId,
     );
     const ladder = ownershipSteps(steps ?? []);
-    const winner = ladder.findIndex((step) => step.assigned);
-    const deciding = steps?.find((step) => step.decides);
-    return {
-      evidence: {
-        chain: await chainBlock(
-          db,
-          "inventory",
-          "ownerLedgerPartyId",
-          ladder,
-          winner,
-        ),
-        fallbackSource: deciding?.ref ? { ...deciding.ref, name: null } : null,
-        outcome: winner >= 0 ? "resolved" : "unset",
-      },
-      truncated: false,
-    };
+    const evidence = await evidenceBlock(
+      db,
+      "inventory",
+      "ownerLedgerPartyId",
+      ladder,
+      ladder.findIndex((step) => step.assigned),
+      steps?.find((step) => step.decides)?.ref
+        ? { ...steps.find((step) => step.decides)!.ref!, name: null }
+        : null,
+    );
+    evidence.outcome = ladder.some((step) => step.assigned)
+      ? "resolved"
+      : "unset";
+    evidence.chain.title = "Acquisition owner context";
+    evidence.chain.footer =
+      "No live inventory entries. This is the owner context a new inheriting entry would use.";
+    evidence.branches = coverage(0, 0);
+    return { evidence, truncated: isTruncated(evidence) };
   }
-  const visible = entries.slice(0, CONTRIBUTOR_LIMIT);
+
+  const visible = entries.slice(0, 50);
   const traces = await loadInventoryOwnershipTraces(db, visible);
+  const evaluated = new Map(
+    [...traces].map(([id, trace]) => {
+      const resolution = inventoryOwnerResolution(trace.ownership, trace.steps);
+      return [
+        id,
+        {
+          resolution,
+          steps: [
+            ownershipSelfStep(resolution, trace.intent),
+            ...ownershipSteps(trace.steps),
+          ],
+        },
+      ] as const;
+    }),
+  );
+  const labels = await labelsForSteps(
+    db,
+    [...evaluated.values()].flatMap((entry) => entry.steps),
+  );
   const contributors: NonNullable<Evidence["contributors"]> = [];
-  const codes = new Set<string>();
-  for (const trace of traces.values()) {
-    for (const step of trace.steps)
-      if (step.owner) codes.add(step.owner.shortcode);
-    if (trace.ownership.explicitOwner)
-      codes.add(trace.ownership.explicitOwner.id);
-  }
-  const labels = await shortcodeLabels(db, [...codes]);
   const resolvedValues = new Set<string>();
   const unresolvedOwner =
     entityFieldModels.inventory.fields.find(
@@ -1450,19 +1685,21 @@ async function productOwnersEvidence(
             : "Household"
           : unresolvedOwner),
     );
-    const resolution = inventoryOwnerResolution(ownership, trace.steps);
-    const steps = [
-      selfStep("inventory", resolution),
-      ...ownershipSteps(trace.steps),
-    ];
-    const chain = await chainBlock(
+    const { resolution, steps } = evaluated.get(entry.id)!;
+    const branch = {
+      entityKind: "inventory" as const,
+      entityId: entry.shortcode,
+    };
+    const detail = await evidenceBlock(
       db,
       "inventory",
       "ownerLedgerPartyId",
-      steps,
+      steps.map((step) => ({ ...step, branch })),
       winnerIndex(steps, resolution),
+      trace.fallbackSource,
       labels,
     );
+    const chain = detail.chain;
     const summary: ReportRecordRow = {
       entity: "inventory",
       id: parseShortcodeFor("inventory", entry.shortcode),
@@ -1479,9 +1716,16 @@ async function productOwnersEvidence(
         : { kind: "done", label: "Set here" },
     };
     contributors.push({
-      ...chain,
-      title: entry.locationName,
-      rows: [summary, ...chain.rows],
+      chain: {
+        ...chain,
+        title: entry.locationName,
+        rows: [summary, ...chain.rows],
+      },
+      steps: detail.steps?.map((step) => ({
+        ...step,
+        rowIndex: step.rowIndex + 1,
+      })),
+      coverage: detail.coverage,
     });
   }
 
@@ -1495,10 +1739,11 @@ async function productOwnersEvidence(
         empty: "",
       },
       contributors,
+      branches: coverage(entries.length, visible.length),
       fallbackSource: null,
       ...(resolvedValues.size > 1
         ? { outcome: "mixed" as const }
-        : entries.length > CONTRIBUTOR_LIMIT
+        : entries.length > visible.length
           ? {}
           : {
               outcome: resolvedValues.has(unresolvedOwner)
@@ -1506,6 +1751,12 @@ async function productOwnersEvidence(
                 : ("resolved" as const),
             }),
     },
-    truncated: entries.length > CONTRIBUTOR_LIMIT,
+    truncated:
+      entries.length > visible.length ||
+      contributors.some(
+        (block) =>
+          (block.coverage?.omitted ?? 0) > 0 ||
+          block.steps?.some((step) => (step.coverage?.omitted ?? 0) > 0),
+      ),
   };
 }

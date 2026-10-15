@@ -322,6 +322,7 @@ struct FieldsSectionView<Inline: View>: View {
             guard
                 EntityFieldValue.text(in: row.raw, field: field, surface: "detail") != nil
                     || FieldResolutionPresentation(raw: row.raw, field: field) != nil
+                    || field.explanation != nil
             else { return nil }
             return field
         }
@@ -402,6 +403,12 @@ struct FieldsSectionView<Inline: View>: View {
                 FieldExplanationLabel(
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
+            }
+        } else if field.explanation != nil {
+            LabeledContent {
+                Text(field.emptyLabel ?? "Not recorded").foregroundStyle(.secondary)
+            } label: {
+                FieldExplanationLabel(field: field, subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
     }
@@ -663,6 +670,8 @@ struct FieldExplanationLabel: View {
                     if let evidence = resolved.resolutionEvidence {
                         Divider()
                         explanationSectionLabel(evidence.chain.title ?? "Resolution order")
+                        explanationCoverage(evidence.coverage, noun: "evaluation rows")
+                        explanationCoverage(evidence.branches, noun: "inventory entries")
                         resolutionSteps(evidence.chain)
                             .accessibilityIdentifier("field.explanation.chain")
                         if let contributors = evidence.contributors, !contributors.isEmpty {
@@ -671,15 +680,29 @@ struct FieldExplanationLabel: View {
                             }
                             ForEach(Array(contributors.prefix(6).enumerated()), id: \.offset) {
                                 _, contributor in
-                                resolutionContributor(contributor)
+                                resolutionContributor(
+                                    contributor.chain, steps: contributor.steps,
+                                    coverage: contributor.coverage)
                             }
                             if contributors.count > 6 {
                                 DisclosureGroup("Show \(contributors.count - 6) more contributors") {
                                     ForEach(Array(contributors.dropFirst(6).enumerated()), id: \.offset) {
                                         _, contributor in
-                                        resolutionContributor(contributor)
+                                        resolutionContributor(
+                                            contributor.chain, steps: contributor.steps,
+                                            coverage: contributor.coverage)
                                     }
                                 }
+                            }
+                        }
+                    }
+                    if let steps = resolved.resolutionEvidence?.steps, !steps.isEmpty {
+                        DisclosureGroup("Inputs and source settings") {
+                            ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                                ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
+                                    explanationSource(observation)
+                                }
+                                explanationCoverage(step.coverage, noun: "inputs")
                             }
                         }
                     }
@@ -806,6 +829,15 @@ struct FieldExplanationLabel: View {
                     value?["name"]?.stringValue ?? reference.entityId,
                     value: Route.entityDetail(entity, id: reference.entityId))
             }
+            if let reference = source.entity, let entity = EntityKey(rawValue: reference.entityKind.rawValue)
+            {
+                ForEach(source.fields ?? [], id: \.self) { key in
+                    if let sourceField = EntityCatalog[entity].field(key) {
+                        FieldExplanationLabel(
+                            field: sourceField, subject: EntityRef(entity: entity, id: reference.entityId))
+                    }
+                }
+            }
             if let value {
                 ExplanationEvidenceValue(value: sourceFacts(value, reference: source.entity?.entityId))
             }
@@ -863,9 +895,32 @@ struct FieldExplanationLabel: View {
         return result
     }
 
-    private func resolutionContributor(_ block: ReportRecordsBlock) -> some View {
+    @ViewBuilder
+    private func explanationCoverage(_ coverage: FieldEvidenceCoverage?, noun: String) -> some View {
+        if let coverage, coverage.omitted > 0 {
+            Text("Showing \(coverage.shown) of \(coverage.total) \(noun).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func resolutionContributor(
+        _ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil, coverage: FieldEvidenceCoverage? = nil
+    )
+        -> some View
+    {
         DisclosureGroup {
             resolutionSteps(block)
+            explanationCoverage(coverage, noun: "evaluation rows")
+            if let steps, !steps.isEmpty {
+                DisclosureGroup("Inputs and source settings") {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                        ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
+                            explanationSource(observation)
+                        }
+                        explanationCoverage(step.coverage, noun: "inputs")
+                    }
+                }
+            }
         } label: {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 Text(block.title ?? block.rows.first?.title ?? "Contributor")
@@ -986,6 +1041,7 @@ private struct ExplanationEvidenceValue: View {
 /// opens the generic editor prefilled with this record's id.
 struct RelationSectionView: View {
     let model: RelationSectionModel
+    let row: EntityRow
     let onCreate: (() -> Void)?
 
     @Environment(AppModel.self) private var appModel
@@ -1007,6 +1063,11 @@ struct RelationSectionView: View {
     var body: some View {
         Group {
             Section {
+                if !model.spec.contextFields.isEmpty {
+                    FieldsSectionView(descriptor: model.source, row: row, keys: model.spec.contextFields) {
+                        EmptyView()
+                    }
+                }
                 content
             } header: {
                 HStack {
@@ -1387,6 +1448,9 @@ private struct ResolvedListRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
+            if items.isEmpty, let emptyLabel = field.emptyLabel {
+                Text(emptyLabel).foregroundStyle(.secondary)
+            }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 if let reference = item.reference {
                     NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {

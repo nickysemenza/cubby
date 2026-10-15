@@ -238,7 +238,10 @@ function renderFormattedScalar(
       : PRESENCE_OPTIONS;
     return renderOptionCell(isPresent(value) ? "yes" : "no", options);
   }
-  if (value.kind === "empty") return renderScalarValue(value, surface);
+  if (value.kind === "empty")
+    return (
+      context?.field.display.emptyLabel ?? renderScalarValue(value, surface)
+    );
   switch (format) {
     // Known counts read literally: `0` is a fact, never a dash.
     case "count":
@@ -324,7 +327,7 @@ function renderFormattedScalar(
       const parsed = resolvedListSchema.safeParse(value.raw);
       if (!parsed.success) return renderScalarValue(value, surface);
       return parsed.data.length === 0 ? (
-        <NoneValue />
+        (context?.field.display.emptyLabel ?? <NoneValue />)
       ) : (
         <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden whitespace-pre">
           {parsed.data.map((item, index) => (

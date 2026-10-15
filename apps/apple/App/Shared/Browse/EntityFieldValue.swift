@@ -66,7 +66,7 @@ nonisolated enum EntityFieldValue {
         case "amount": return amount(value)
         case "resolvedList":
             let labels = resolvedItems(value).map(\.label)
-            return labels.isEmpty ? nil : labels.joined(separator: ", ")
+            return labels.isEmpty ? field.emptyLabel : labels.joined(separator: ", ")
         case "external-link":
             if let string = value.stringValue { return string.isEmpty ? nil : string }
             if let number = number(value) { return DisplayFormat.number(number) }

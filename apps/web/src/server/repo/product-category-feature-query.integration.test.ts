@@ -143,7 +143,12 @@ describe("batched category feature lookup", () => {
       }
       const result = await tx.execute<{
         candidate: string | null;
-        tracking: { value: boolean; id: string; name: string } | null;
+        tracking: {
+          value: boolean | null;
+          id: string | null;
+          name: string | null;
+          evaluation: unknown[];
+        } | null;
         tracked: boolean | null;
       }>(sql`SELECT candidate."id" AS candidate,
           ${categoryStockTrackingSql(sql`candidate."id"`)} AS tracking,
@@ -163,7 +168,9 @@ describe("batched category feature lookup", () => {
         const tracking = byId.get(id(index))?.tracking ?? null;
         if (node.deleted) continue;
         expect(
-          tracking && { value: tracking.value, id: tracking.id },
+          tracking?.value !== null && tracking
+            ? { value: tracking.value, id: tracking.id }
+            : null,
           `category ${index}`,
         ).toEqual(
           node.expected && {

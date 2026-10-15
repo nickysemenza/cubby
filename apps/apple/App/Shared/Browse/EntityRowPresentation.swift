@@ -179,6 +179,8 @@ struct EntityRowPresentation: Sendable, Hashable {
                         Fact(
                             id: key, label: label ?? field.label,
                             segments: items.map { Fact.Segment(text: $0.label, inherited: $0.inherited) }))
+                } else if let emptyLabel = field.emptyLabel {
+                    facts.append(Fact(id: key, label: label ?? field.label, value: emptyLabel))
                 }
                 return
             }
@@ -214,10 +216,21 @@ struct EntityRowPresentation: Sendable, Hashable {
             imageURL: row.imageURL)
     }
 
+    static func listContextKeys(descriptor: EntityDescriptor) -> Set<String> {
+        Set(
+            descriptor.presentation.detailSections.flatMap { section -> [String] in
+                if case .relation(let spec) = section.kind { return spec.contextFields }
+                return []
+            })
+    }
+
     private static func defaultKeys(descriptor: EntityDescriptor) -> [String] {
-        descriptor.fields
+        let contextKeys = listContextKeys(descriptor: descriptor)
+        // Relation context can replace a separate web column while remaining a native list fact.
+        return descriptor.fields
             .filter {
-                $0.showInList && !$0.listHidden && $0.key != descriptor.titleField && $0.key != "id"
+                $0.showInList && (!$0.listHidden || contextKeys.contains($0.key))
+                    && $0.key != descriptor.titleField && $0.key != "id"
                     && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil
                         || $0.format == "resolvedList")
             }

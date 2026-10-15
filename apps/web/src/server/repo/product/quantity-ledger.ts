@@ -9,6 +9,10 @@ import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  deriveProductQuantitySummary,
+  hasComparableQuantityHistory,
+} from "~/lib/product-quantity-summary";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import {
@@ -71,6 +75,11 @@ const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
+const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
+const comparableQuantityHistorySql = (productAlias = '"product"') =>
+  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
+export const comparableQuantityHistoryFilterSql = (productId: AnyColumn) =>
+  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)} SELECT ${sql.raw(PROJECTED_COMPARABLE_HISTORY)} ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 /**
  * Correlated scalar for Product root-list sorting and filtering.
@@ -90,11 +99,11 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
 export const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT CASE
              WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
-             WHEN ohu_inv.units > 1 THEN NULL
+             WHEN ohu_inv.noncount THEN NULL
              ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
            END::double precision
       FROM (SELECT count(*) AS n,
-                   count(DISTINCT ohu_i."amountUnit") AS units,
+                   bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                    sum(ohu_i."amountValue"::numeric) AS qty
               FROM "InventoryEntry" ohu_i
               JOIN "Location" ohu_l
@@ -115,7 +124,7 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
  * includes-installed: inherited from `onHandUnitsSql` — see that doc.
  */
 export const quantityVarianceSql = (productAlias = '"product"') =>
-  `(${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)})`;
+  `(CASE WHEN ${comparableQuantityHistorySql(productAlias)} THEN ${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)} END)`;
 
 /** Shared SQL fragments for product-list filters; interpolate product.id rather than a hand-qualified alias. */
 export const expectedQuantityFilterSql = (productId: AnyColumn) =>
@@ -128,11 +137,11 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
   sql`(SELECT CASE
                 WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
-                WHEN ohu_inv.units > 1 THEN NULL
+                WHEN ohu_inv.noncount THEN NULL
                 ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
               END::double precision
          FROM (SELECT count(*) AS n,
-                      count(DISTINCT ohu_i."amountUnit") AS units,
+                      bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                       sum(ohu_i."amountValue"::numeric) AS qty
                  FROM "InventoryEntry" ohu_i
                  JOIN "Location" ohu_l
@@ -144,22 +153,17 @@ export const onHandUnitsFilterSql = (productId: AnyColumn) =>
                 WHERE ohu_ol."productId" = ${productId}
                   AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
 
-/** Does this product carry any product-linked Expense with no quantity? */
+/** Quantity gaps include inherited kit lines, matching the displayed ledger. */
 export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
-  sql`EXISTS (SELECT 1 FROM "Expense" uq_e
-               WHERE uq_e."productId" = ${productId}
-                 AND uq_e."deletedAt" IS NULL
-                 AND uq_e."future" = false
-                 AND uq_e."productQuantity" IS NULL)`;
+  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0
+    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
-/** Does this product carry an acquisition whose quantity is unknown? */
+/** An unknown acquisition anywhere in the kit ancestry keeps disposal uncertain. */
 export const hasUnknownAcquisitionLinesSql = (productId: AnyColumn) =>
-  sql`EXISTS (SELECT 1 FROM "Expense" uaq_e
-               WHERE uaq_e."productId" = ${productId}
-                 AND uaq_e."deletedAt" IS NULL
-                 AND uaq_e."future" = false
-                 AND uaq_e."productQuantity" IS NULL
-                 AND (uaq_e."cost" IS NULL OR uaq_e."cost" >= 0))`;
+  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines"), 0) > 0
+    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 const ownershipQuantityEvidenceRow = z.object({
   productId,
@@ -206,8 +210,8 @@ export const loadProductQuantityLedgers = async (
     SELECT ka.target AS "productId",
            COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::double precision AS "acquiredUnits",
            COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::double precision AS "exitedUnits",
-           COALESCE(${sql.raw(ownOnly(`"unknownAcquisitionLines"`))}, 0)::int AS "unknownAcquisitionLines",
-           COALESCE(${sql.raw(ownOnly(`"unknownExitLines"`))}, 0)::int AS "unknownExitLines",
+           COALESCE(${sql.raw(`sum(ko."unknownAcquisitionLines")`)}, 0)::int AS "unknownAcquisitionLines",
+           COALESCE(${sql.raw(`sum(ko."unknownExitLines")`)}, 0)::int AS "unknownExitLines",
            COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
       ${sql.raw(QUANTITY_PROJECTION_FROM)}
      GROUP BY ka.target`;
@@ -330,8 +334,8 @@ export const loadProductDetailQuantityLedgers = async (
       SELECT ka.target AS "productId",
              COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::double precision AS "acquiredUnits",
              COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::double precision AS "exitedUnits",
-             COALESCE(${sql.raw(ownOnly(`"unknownAcquisitionLines"`))}, 0)::int AS "unknownAcquisitionLines",
-             COALESCE(${sql.raw(ownOnly(`"unknownExitLines"`))}, 0)::int AS "unknownExitLines",
+             COALESCE(${sql.raw(`sum(ko."unknownAcquisitionLines")`)}, 0)::int AS "unknownAcquisitionLines",
+             COALESCE(${sql.raw(`sum(ko."unknownExitLines")`)}, 0)::int AS "unknownExitLines",
              COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
         ${sql.raw(QUANTITY_PROJECTION_FROM)}
        GROUP BY ka.target
@@ -362,8 +366,8 @@ export const loadProductDetailQuantityLedgers = async (
 
 /**
  * Attach the ledger to loaded rows. A product with no product-linked Expense
- * gets the empty ledger rather than a null — expected 0 is a real, meaningful
- * answer ("nothing says you own any"), not missing data.
+ * gets the empty ledger rather than null. Its zero is a numeric identity,
+ * not evidence that nothing is owned; presence explanations retain that distinction.
  */
 export const enrichProductRowsWithQuantityLedger = async <
   T extends { id: ProductId },
@@ -432,21 +436,16 @@ export const loadProductPickerQuantities = async (
   for (const id of ids) {
     const quantityLedger = ledgers.get(id) ?? EMPTY_QUANTITY_LEDGER;
     const amounts = amountsByProduct.get(id) ?? [];
-    const units = new Set(amounts.map((amount) => amount.unit));
-
-    let onHand: ProductPickerOnHandOut;
-    if (amounts.length === 0 && quantityLedger.locationCount === 0) {
-      onHand = { state: "none" };
-    } else if (units.size > 1) {
-      onHand = { state: "mixed" };
-    } else {
-      onHand = {
-        state: "counted",
-        units:
-          amounts.reduce((sum, amount) => sum + amount.value, 0) +
-          quantityLedger.locationCount,
-      };
-    }
+    const summary = deriveProductQuantitySummary(
+      amounts.map((amount) => ({ amount })),
+      quantityLedger,
+    );
+    const onHand: ProductPickerOnHandOut =
+      amounts.length === 0 && quantityLedger.locationCount === 0
+        ? { state: "none" }
+        : summary.onHandUnits === null
+          ? { state: "mixed" }
+          : { state: "counted", units: summary.onHandUnits };
 
     quantities.set(id, { quantityLedger, onHand });
   }
@@ -474,7 +473,7 @@ export const loadProductQuantitySummaries = async (
       quantityLedger,
       onHandUnits,
       quantityVariance:
-        onHandUnits === null
+        onHandUnits === null || !hasComparableQuantityHistory(quantityLedger)
           ? null
           : onHandUnits - quantityLedger.expectedQuantity,
     });

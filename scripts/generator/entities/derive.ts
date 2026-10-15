@@ -510,6 +510,7 @@ export const deriveRelationSections = (
       sectionIds.add(id);
       derived.push({
         kind: "relation",
+        contextFields: [],
         id,
         title: relation.label,
         placement: "primary",

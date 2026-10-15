@@ -526,7 +526,7 @@ struct EntityDetailContent: View {
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
-                RelationSectionView(model: model) { onCreateRelation(model) }
+                RelationSectionView(model: model, row: row) { onCreateRelation(model) }
             }
         case .timeline:
             ContinuousDetailSection(title: section.title ?? "Timeline") {

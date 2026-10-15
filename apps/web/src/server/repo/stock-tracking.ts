@@ -24,20 +24,27 @@ export const resolveStockTrackingField = (
   ownSource: string,
 ): FieldResolution => {
   const fallbackValue = fallback?.value ?? null;
+  const fallbackSource =
+    fallback?.id && fallbackValue !== null
+      ? {
+          entityKind: "productCategory" as const,
+          entityId: fallback.id,
+          name: fallback.name,
+        }
+      : null;
   return {
     mode: stored === null ? "inherit" : "explicit",
     storedValue: stored,
     value: stored ?? fallbackValue,
     fallbackValue,
     source: stored !== null ? ownSource : (fallback?.name ?? "undecided"),
-    sourceEntity:
-      stored === null && fallback
-        ? {
-            entityKind: "productCategory",
-            entityId: fallback.id,
-            name: fallback.name,
-          }
-        : null,
+    sourceEntity: stored === null ? fallbackSource : null,
+    fallbackSource,
+    evaluation:
+      fallback?.evaluation ??
+      (fallbackSource
+        ? [{ ...fallbackSource, value: fallbackValue, assigned: true }]
+        : []),
     matchesFallback: stored !== null && stored === fallbackValue,
     canReset: stored !== null,
   };

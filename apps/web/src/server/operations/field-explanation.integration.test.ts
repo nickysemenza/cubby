@@ -236,7 +236,7 @@ describe("derived field explanations against canonical records", () => {
       ),
     ).toMatchObject({
       trailing: "Fixture gifts",
-      state: { kind: "not_reached", label: "Overridden above" },
+      state: { kind: "skipped", label: "Evaluated · overridden" },
     });
     expect(explanation.resolutionEvidence).toMatchObject({
       fallbackSource: {
@@ -384,17 +384,17 @@ describe("derived field explanations against canonical records", () => {
     expect(explanation.resolutionEvidence?.outcome).toBe("mixed");
     expect(
       explanation.resolutionEvidence?.contributors
-        ?.map((block) => block.rows[0]?.id)
+        ?.map((block) => block.chain.rows[0]?.id)
         .sort(),
     ).toEqual([first.shortcode, second.shortcode].sort());
     expect(
       explanation.resolutionEvidence?.contributors?.every((block) =>
-        block.rows.some((row) => row.state?.kind === "done"),
+        block.chain.rows.some((row) => row.state?.kind === "done"),
       ),
     ).toBe(true);
     expect(
       explanation.resolutionEvidence?.contributors
-        ?.flatMap((block) => block.rows[0]?.lines ?? [])
+        ?.flatMap((block) => block.chain.rows[0]?.lines ?? [])
         .map((line) => line.text)
         .join(" "),
     ).toContain("positive");
@@ -408,7 +408,7 @@ describe("derived field explanations against canonical records", () => {
     expect(projects.resolutionEvidence?.outcome).toBe("resolved");
     expect(
       projects.resolutionEvidence?.contributors?.map(
-        (block) => block.rows[0]?.trailing,
+        (block) => block.chain.rows[0]?.trailing,
       ),
     ).toEqual(["Synthetic shared project", "Synthetic shared project"]);
   });
@@ -470,7 +470,7 @@ describe("derived field explanations against canonical records", () => {
       }),
       expect.objectContaining({
         trailing: "4",
-        state: { kind: "not_reached", label: "Overridden above" },
+        state: { kind: "skipped", label: "Evaluated · overridden" },
       }),
     ]);
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
@@ -625,7 +625,7 @@ describe("derived field explanations against canonical records", () => {
       canReset: true,
     });
     expect(price.sources).toEqual([]);
-    expect(price.resolutionEvidence?.contributors?.[0]?.rows[0]?.id).toBe(
+    expect(price.resolutionEvidence?.contributors?.[0]?.chain.rows[0]?.id).toBe(
       expense.output.id,
     );
     expect(price.resolutionEvidence?.chain.rows).toEqual([
@@ -635,7 +635,7 @@ describe("derived field explanations against canonical records", () => {
       }),
       expect.objectContaining({
         trailing: "6",
-        state: { kind: "not_reached", label: "Overridden above" },
+        state: { kind: "skipped", label: "Evaluated · overridden" },
       }),
     ]);
 
@@ -789,7 +789,7 @@ describe("derived field explanations against canonical records", () => {
     });
     expect(explanation.resolutionEvidence?.chain.rows[1]).toMatchObject({
       trailing: "Expected",
-      state: { kind: "not_reached", label: "Overridden above" },
+      state: { kind: "skipped", label: "Evaluated · overridden" },
     });
   });
 

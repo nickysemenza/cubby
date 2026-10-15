@@ -80,7 +80,9 @@ real dialog journey.
 
 Use `RTable` for interactive lists, Table primitives for static tables, and raw
 tables only for matrices/debug/external content. `useTableColumnLayout` owns
-table order/pinning/visibility/sizing. Decorated cells render through
+table order/pinning/visibility/sizing. Grid wrappers around tables use a
+zero-minimum track (`grid-cols-1`) so wide columns scroll inside the table
+instead of expanding the page. Decorated cells render through
 `CellFrame`; don't append icons beside a cell value by hand. Hover-only
 controls (explanation, relation workbench, resolution marks) use `CellFrame
 overlay` and reserve no width; a derived value reads muted and suggestion marks

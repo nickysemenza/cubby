@@ -86,7 +86,8 @@ struct EntityListView: View {
         _model = State(initialValue: model)  // state-init-ok
         _browsePresentation = State(initialValue: presentation)  // state-init-ok: route-scoped lifetime
         _hiddenTableColumns = State(  // state-init-ok: manifest defaults for this route's entity
-            initialValue: Set(EntityCatalog[key].fields.filter(\.listHidden).map(\.key)))
+            initialValue: Set(EntityCatalog[key].fields.filter(\.listHidden).map(\.key))
+                .subtracting(EntityRowPresentation.listContextKeys(descriptor: EntityCatalog[key])))
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }

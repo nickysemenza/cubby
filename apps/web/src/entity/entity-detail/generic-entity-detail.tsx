@@ -302,18 +302,27 @@ function declaredSections<E extends GenericDetailEntity>(
               />
             ),
             content: (
-              <EntityRelationTable
-                plan={plan}
-                recordId={bag.id}
-                title={section.title}
-                operations={operations.list}
-                emptyLabel={
-                  section.empty ??
-                  (detail.variant === "journal"
-                    ? "Nothing logged yet — the first entry starts the journal."
-                    : undefined)
-                }
-              />
+              <div className="grid min-w-0 grid-cols-1 gap-3">
+                {section.contextFields?.length > 0 ? (
+                  <EntityRecordFields
+                    entity={entity}
+                    record={record}
+                    fields={section.contextFields}
+                  />
+                ) : null}
+                <EntityRelationTable
+                  plan={plan}
+                  recordId={bag.id}
+                  title={section.title}
+                  operations={operations.list}
+                  emptyLabel={
+                    section.empty ??
+                    (detail.variant === "journal"
+                      ? "Nothing logged yet — the first entry starts the journal."
+                      : undefined)
+                  }
+                />
+              </div>
             ),
           },
         ];

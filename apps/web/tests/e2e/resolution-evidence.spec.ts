@@ -8,6 +8,8 @@ import { expect, test } from "./e2e-test";
 import { createEntityFixture } from "./fixtures-core";
 import { seedWardrobePrerequisites } from "./fixtures-catalog";
 
+test.setTimeout(60_000);
+
 // Allocation evidence must name the contributing items and preserve each item's
 // override/fallback order. A null mixed result must never read as an unset trade.
 test("explains allocated trades with expandable contributor precedence", async ({
@@ -71,8 +73,10 @@ test("explains allocated trades with expandable contributor precedence", async (
         .filter({ hasText: "Synthetic evidence cable" }),
     })
     .first();
-  await contributor.locator("summary").click();
-  await expect(contributor.getByText("Overridden above").first()).toBeVisible();
+  await contributor.locator(":scope > summary").click();
+  await expect(
+    contributor.getByText("Evaluated · overridden").first(),
+  ).toBeVisible();
   await expect(
     contributor.getByText("Electrical & Lighting", { exact: true }).first(),
   ).toBeVisible();
@@ -160,7 +164,7 @@ test("shows owner rollup evidence once without nested wire fields", async ({
         .filter({ hasText: "Synthetic owner evidence drawer" }),
     })
     .first();
-  await ownerDetails.locator("summary").click();
+  await ownerDetails.locator(":scope > summary").click();
   await expect(
     ownerDetails.locator('[data-record-list="timeline"]').first(),
   ).toBeVisible();

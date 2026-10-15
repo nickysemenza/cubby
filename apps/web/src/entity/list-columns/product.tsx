@@ -421,6 +421,21 @@ export const productListOverride = defineListOverride<
               (e) => e.location,
               {
                 id: "location",
+                context: (product) =>
+                  product.stockStatus ? (
+                    <span
+                      title={product.stockStatus}
+                      className="text-xs text-muted-foreground"
+                    >
+                      {product.stockStatus}
+                    </span>
+                  ) : null,
+                contextReadFields: ["stockStatus"],
+                explanation: {
+                  entity: "product",
+                  field: "stockStatus",
+                  label: "Locations",
+                },
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 40, interactive: true },
                 provenance: relationshipFieldProvenance("product", "inventory"),
