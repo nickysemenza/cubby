@@ -11,6 +11,10 @@ Product Category mapping stops automatic defaults; deliberate Expense and
 Purchase choices remain available. Product mappings update historical Expenses
 live, while explicit purposes such as Gifts stay in place.
 
+Scalar category reads and explanation reads share the same SQL choice policy.
+Allocation, filtering, and grouping select the chosen UUID directly; only
+explanation reads join labels and build fallback/source provenance JSON.
+
 Purchase categories are fallbacks, not summaries. Purchases and Financial
 Transactions expose derived single, mixed, partial, unclassified, or
 not-applicable summaries. Transaction allocations connect Purchases, not
