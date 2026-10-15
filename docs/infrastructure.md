@@ -217,8 +217,14 @@ AI refresh follows this rule; its scheduling details live in the
 [refresh runbook](runbooks/ai-refresh.md).
 
 Neon owns the PostgreSQL database. Production compute is autoscaling
-0.25–1 CU (it was a fixed 0.25 CU compute until the 2026-09-21 OOM incident).
-The Hyperdrive origin connection caps below remain 12 + 5. The background
+0.25–4 CU. This range belongs to the production endpoint: changing the project's
+default compute range does not resize an existing endpoint. The Hyperdrive
+origin connection caps below are 12 + 12. Both configurations share origin
+compute; the cached pool needs headroom for short reads while expensive reads
+are running. Pool caps are soft limits, not interactive connection reservations.
+Keep them below database capacity and measure origin waits and query execution
+together before raising them. More connections cannot remove expensive query
+work. The background
 queue runs one message per invocation with `max_concurrency: 2`, a conservative
 starting policy to reduce competing database work, not a measured optimum or
 an interactive connection reservation. Tune it against queue backlog and oldest
@@ -227,13 +233,20 @@ concurrency remains 1. Purchase-agent delivery is serial within each batch, but
 starts coordinator work outside delivery; capping that queue would not bound
 active agent database work. That workload policy remains separate.
 
+Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
+sessions; automatic resizing within those bounds does not. Apply a range change
+away from critical writes or migrations, then verify reconnects and read latency.
+Reverting the range also restarts the endpoint. See
+[Neon compute management](https://neon.com/docs/manage/computes) and
+[Hyperdrive pool tuning](https://developers.cloudflare.com/hyperdrive/configuration/tune-connection-pool/).
+
 Cloudflare has two Hyperdrive configurations pointing at the same direct Neon
 connection string:
 
-| Binding             | Hyperdrive ID                      | Contract                                                                                             |
-| ------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12                         |
-| `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 5 |
+| Binding             | Hyperdrive ID                      | Contract                                                                                              |
+| ------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12                          |
+| `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 12 |
 
 The IDs are checked into `apps/web/wrangler.jsonc`; the origin connection
 string and cache/connection-limit settings are provider-side state. Recreate
