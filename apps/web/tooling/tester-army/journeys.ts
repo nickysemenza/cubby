@@ -61,16 +61,16 @@ const mailImportFollowUps = (
   {
     label:
       "only the selected confirmation links, with the admitted actor and source checksum",
-    sql: `SELECT e.event, d."decidedByUserId" = r."actorUserId" AS "actorMatches",
+    sql: `SELECT e.event, d."decidedByUserId" = r."actorUserId"::text AS "actorMatches",
                  d."evidenceChecksum" = m."rawChecksum" AS "sourceMatches", p."orderId"
             FROM "OrderMailEvent" e
             JOIN "OrderMail" m ON m.id = e."orderMailId"
             JOIN "Vendor" v ON v.id = m."vendorId"
-            JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id AND d.decision = 'linked'
+            JOIN "AssessmentEmailLink" d ON d."eventId" = e.id AND d.decision = 'linked'
             JOIN "Purchase" p ON p.id = d."purchaseId"
             LEFT JOIN "Email" email ON email."orderMailId" = m.id
             LEFT JOIN "Run" r ON r.id = email."runId"
-           WHERE v.shortcode = $1
+           WHERE v.shortcode = $1 AND e."supersededAt" IS NULL
            ORDER BY e.event`,
     params: only("vendor"),
     rows: () => [
