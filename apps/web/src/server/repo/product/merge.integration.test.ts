@@ -402,77 +402,100 @@ describe("mergeProducts", () => {
 
   // Regression: merging used to hard-delete every match review naming a loser,
   // so an agent's evidence against a third product vanished with the merge.
-  it("keeps match reviews against third products, folding and dropping self-pairs", async () => {
-    const keeper = await seedProduct("Match Keeper");
-    const loser = await seedProduct("Match Loser");
-    const third = await seedProduct("Match Third");
-    const fourth = await seedProduct("Match Fourth");
-    await upsertAgentProductMatch(ctx.db, {
-      productIds: [keeper.id, loser.id],
-      evidence: "same item",
-      sourceUrls: [],
-    });
-    await upsertAgentProductMatch(ctx.db, {
-      productIds: [loser.id, third.id],
-      evidence: "loser matches third",
-      sourceUrls: ["https://example.com/a"],
-    });
-    const preference = await upsertAgentProductMatch(ctx.db, {
-      productIds: [keeper.id, fourth.id],
-      evidence: "Synthetic preference",
-      sourceUrls: [],
-    });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: preference.id,
-      operationId: crypto.randomUUID(),
-      verdict: "dismissed",
-      suppression: {
-        scope: "product_pair",
-        candidateKey: productPairKey(keeper.id, fourth.id),
+  it.each(["keeper first", "third first"] as const)(
+    "keeps match reviews against third products, folding and dropping self-pairs: %s",
+    async (order) => {
+      const ordered = [
+        await seedProduct("Match Side A"),
+        await seedProduct("Match Side B"),
+      ].sort((left, right) => left.id.localeCompare(right.id));
+      const keeper = ordered[order === "keeper first" ? 0 : 1]!;
+      const third = ordered[order === "keeper first" ? 1 : 0]!;
+      const loser = await seedProduct("Match Loser");
+      const fourth = await seedProduct("Match Fourth");
+      const selfPair = await upsertAgentProductMatch(ctx.db, {
+        productIds: [keeper.id, loser.id],
+        evidence: "same item",
+        sourceUrls: [],
+      });
+      const thirdPair = await upsertAgentProductMatch(ctx.db, {
+        productIds: [loser.id, third.id],
+        evidence: "loser matches third",
+        sourceUrls: ["https://example.com/a"],
+      });
+      const preference = await upsertAgentProductMatch(ctx.db, {
+        productIds: [keeper.id, fourth.id],
+        evidence: "Synthetic preference",
+        sourceUrls: [],
+      });
+      await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: preference.id,
+        operationId: crypto.randomUUID(),
+        verdict: "dismissed",
+        suppression: {
+          scope: "product_pair",
+          candidateKey: productPairKey(keeper.id, fourth.id),
+          fingerprint: null,
+        },
+      });
+      await upsertAgentProductMatch(ctx.db, {
+        productIds: [loser.id, fourth.id],
+        evidence: "loser matches fourth",
+        sourceUrls: ["https://example.com/b"],
+      });
+
+      const beforeHistory = await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.family, "product_pair"))
+        .orderBy(asc(assessment.id));
+      await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      const history = await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.family, "product_pair"))
+        .orderBy(asc(assessment.id));
+      expect(history).toHaveLength(4);
+      expect(history).toEqual(beforeHistory);
+      expect(
+        history.some(
+          (row) =>
+            row.subject.kind === "product_pair" &&
+            [row.subject.recordId, row.subject.otherId].includes(loser.id),
+        ),
+      ).toBe(true);
+      const states = await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.family, "product_pair"));
+      const [pairA, pairB] = [keeper.id, third.id].sort();
+      expect(states.find((row) => row.id === thirdPair.id)).toMatchObject({
+        recordId: pairA,
+        data: { otherId: pairB },
+        active: true,
+        status: "superseded",
         fingerprint: null,
-      },
-    });
-    await upsertAgentProductMatch(ctx.db, {
-      productIds: [loser.id, fourth.id],
-      evidence: "loser matches fourth",
-      sourceUrls: ["https://example.com/b"],
-    });
-
-    await mergeProducts(
-      ctx.db,
-      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-      TEST_ACTOR,
-    );
-
-    const history = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.family, "product_pair"));
-    expect(history).toHaveLength(4);
-    expect(
-      history.some(
-        (row) =>
-          row.subject.kind === "product_pair" &&
-          [row.subject.recordId, row.subject.otherId].includes(loser.id),
-      ),
-    ).toBe(true);
-    const states = await getDb(ctx.db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
-    expect(
-      states.find(
-        (row) => row.data && JSON.stringify(row.data).includes(third.id),
-      ),
-    ).toMatchObject({
-      recordId: keeper.id,
-      status: "superseded",
-      fingerprint: null,
-    });
-    expect(await listProductMatchRows(ctx.db)).toMatchObject([
-      { state: "dismissed" },
-    ]);
-  });
+      });
+      expect(states.find((row) => row.id === selfPair.id)).toMatchObject({
+        active: false,
+        status: "superseded",
+        suppression: null,
+      });
+      const [suppressedA, suppressedB] = [keeper.id, fourth.id].sort();
+      expect(await listProductMatchRows(ctx.db)).toMatchObject([
+        {
+          productAId: suppressedA,
+          productBId: suppressedB,
+          state: "dismissed",
+        },
+      ]);
+    },
+  );
 
   it("dedupes separately stored product images with the same verified hash", async () => {
     const keeper = await seedProduct("Image keeper");

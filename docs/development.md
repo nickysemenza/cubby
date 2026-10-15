@@ -165,7 +165,10 @@ native PostgreSQL installation remain owned by their existing runners.
 - On macOS, every worktree's database and browser test commands share one
   Apple `container` PostgreSQL/IntegreSQL pair (`cubby-test-<config>-*`),
   started on first use and reused afterwards; each worktree gets its own
-  IntegreSQL templates and disposable databases. Workers, peers and Playwright
+  IntegreSQL templates and disposable databases. A test reset keeps its expected
+  termination handlers attached to every selected client until socket closure,
+  including idle clients checked out while their fatal packet is buffered;
+  other database errors remain failures. Workers, peers and Playwright
   listen on OS-assigned ports, so worktrees never collide. Startup runs under
   the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
   itself in `/tmp/cubby-test-services/runs`: a pair a live run uses is never

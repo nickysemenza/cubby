@@ -6,8 +6,9 @@ const clientClosures = new WeakMap<Pool, Map<PoolClient, Promise<void>>>();
  * Reset must not hand a killed idle client to the next test before its error
  * arrives: a successful pg_terminate_backend does not mean node-postgres has
  * received the fatal 57P01, and checking the client out first removes its pool
- * error listener. Checked-out targets get a temporary handler that consumes
- * only the deliberate 57P01 and its disconnect; other errors still surface.
+ * error listener. Every selected target keeps a temporary handler through
+ * socket closure, even if a later checkout removes pg-pool's idle handler.
+ * Only the deliberate 57P01 and its disconnect are consumed; other errors surface.
  */
 export async function terminateOtherPostgresConnections(
   pool: Pool,
@@ -17,20 +18,18 @@ export async function terminateOtherPostgresConnections(
   const control = await pool.connect();
   try {
     const targets = [...clients].filter(([client]) => client !== control);
-    const listeners = targets
-      .filter(([client]) => client.listenerCount("error") === 0)
-      .map(([client]) => {
-        const expectedTermination = (error: Error) => {
-          if ("code" in error && error.code === "57P01") {
-            return;
-          }
-          if (error.message === "Connection terminated unexpectedly") return;
-          throw error;
-        };
-        // Checked-out clients have no pg-pool idle handler during deliberate reset.
-        client.on("error", expectedTermination);
-        return { client, expectedTermination };
-      });
+    const listeners = targets.map(([client]) => {
+      const expectedTermination = (error: Error) => {
+        if ("code" in error && error.code === "57P01") {
+          return;
+        }
+        if (error.message === "Connection terminated unexpectedly") return;
+        throw error;
+      };
+      // A client can move from idle to checked out while the fatal packet is buffered.
+      client.on("error", expectedTermination);
+      return { client, expectedTermination };
+    });
     try {
       await control.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
         WHERE datname = current_database() AND pid <> pg_backend_pid()`);
