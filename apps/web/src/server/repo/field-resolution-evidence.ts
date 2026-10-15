@@ -821,7 +821,10 @@ async function fieldSteps(
 /** The step that supplies the value: the subject's own for explicit/none,
  * otherwise the resolution's source record, else the first assigned step
  * after the subject (sources outside the ladder are appended). */
-function winnerIndex(steps: Step[], resolution: FieldResolution): number {
+function winnerIndex(
+  steps: readonly Step[],
+  resolution: FieldResolution,
+): number {
   if (
     resolution.mode === "explicit" ||
     (resolution.mode === "none" && resolution.canReset)
