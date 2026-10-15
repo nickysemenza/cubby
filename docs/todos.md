@@ -333,11 +333,55 @@ unattended Mail import / interactive Burn-down boundary.
     `APPLE_CLIENT_COMPATIBILITY_VERSION` bump and a column-dropping migration
     that maps `paused_*` rows to a surviving status.
 
-- 🤔 ✨ **Server-side web search for Mail import.** Reintroduce `web_*` for Pi on
-  [Cloudflare web search](https://developers.cloudflare.com/web-search/) to fill
-  logged-out gaps an Email leaves (manufacturer, model, image), within the paid
-  caps. It cannot reach logged-in order pages; those stay Burn-down work.
-  Compare filled-at-import quality against Burn-down cost before adopting.
+- 🤔 ✨ **Layer public web research into Worker / pi-durable tools.** Evaluate
+  filling logged-out gaps an Email leaves (manufacturer, model, identifiers,
+  representative images) with explicit budgets and admission for search,
+  retrieval and browser time alongside model inference. Existing inference
+  admission does not bound those additional service costs. Use scoped Run
+  services and the existing Pi tool registration; keep writes on the public MCP
+  contracts with Sources. Proposed layers and their purpose:
+  - **Discover sources with the
+    [Cloudflare Web Search API](https://developers.cloudflare.com/web-search/).**
+    Expose an explicit search tool using the
+    [Workers AI binding](https://developers.cloudflare.com/web-search/how-to-use/).
+    Structured URLs and excerpts let Luna choose sources without depending on
+    provider-native search support. Benchmark Ceramic first and compare Exa or
+    Linkup when coverage is insufficient; the
+    [provider documentation](https://developers.cloudflare.com/web-search/providers/)
+    owns current pricing. Search results alone do not verify a Product fact.
+  - **Read known URLs with
+    [Workers `fetch`](https://developers.cloudflare.com/workers/runtime-apis/fetch/).**
+    Prefer direct retrieval of HTML, JSON-LD, published variant data, PDFs and
+    catalog assets before launching a browser. It avoids browser-session
+    overhead but does not execute page JavaScript or inherit member logins.
+  - **Render pages with
+    [Browser Run Quick Actions](https://developers.cloudflare.com/browser-run/get-started/).**
+    Request rendered HTML, Markdown, screenshots or element extraction when
+    direct retrieval lacks usable content; use a single-page operation before
+    maintaining an interactive session.
+  - **Interact through
+    [Playwright on Browser Run](https://developers.cloudflare.com/browser-run/playwright/).**
+    Escalate for variant selection, expanded specifications and multi-page
+    navigation. Playwright is the control interface to Browser Run, not a
+    separate browser-hosting layer. Preserve session references across durable
+    execution; a cloud browser does not inherit the member's Chrome session.
+  - **Compare
+    [AI Gateway provider-native web search](https://developers.cloudflare.com/ai-gateway/usage/web-search/)
+    as an alternative search path.** The upstream model searches during
+    inference, with Gateway logging and controls; support depends on the model
+    and transport. Evaluate against the explicit search tool rather than
+    enabling both by default and paying for duplicate searches.
+
+  Start from existing receipt/source URLs, fetch directly, search when discovery
+  is needed, then escalate to rendering and interactive browsing. Return bounded
+  excerpts, exact quotations, selected variants, source URLs, observation times
+  and useful image inputs instead of entire page dumps; preserve structured
+  variant evidence rather than flattening it away. Measure total cost per
+  correctly enriched Product, including search, browser time, model tokens,
+  retries and review, against interactive Burn-down. Decide admission and update
+  ADR 0010 before enabling server-side adaptive research; logged-in member order
+  history remains interactive Burn-down work. This proposal does not restore
+  the retired Mac browser bridge or authorize unattended queue enrichment.
 
 - ⏳ 🧪 **Tune decision and relevance prompts from measured conflicts.**
   Promote once the decision-model Email triage has deployed and 0042 has run.
