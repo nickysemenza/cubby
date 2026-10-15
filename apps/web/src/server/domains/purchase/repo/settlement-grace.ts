@@ -7,13 +7,21 @@ import { sql, type SQL } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import { householdDaySql } from "~/server/db/helpers";
 
-/** Two complete Monday-Friday days after the evidence date; imports never reset dated evidence. */
+/** Two complete Monday-Friday days after the evidence date. The second
+ * following weekday ends the grace at the next household midnight. Resolve
+ * the evidence date once: its transaction lookup must not be inlined into
+ * every deadline operand, and historical age must not expand a date series. */
 export const awaitingPostingSql = (
   start: SQL,
   now = new Date(),
 ): SQL<boolean> => sql`(
-  SELECT count(*) < 2 FROM generate_series((${start})::date + 1, ${householdLocalDate(now)}::date - 1, interval '1 day') day
-  WHERE extract(isodow FROM day) BETWEEN 1 AND 5
+  WITH evidence_day AS MATERIALIZED (SELECT (${start})::date AS day)
+  SELECT COALESCE(${householdLocalDate(now)}::date <= day + CASE extract(isodow FROM day)
+    WHEN 4 THEN 4
+    WHEN 5 THEN 4
+    WHEN 6 THEN 3
+    ELSE 2 END, true)
+  FROM evidence_day
 )`;
 
 export const transactionPostingStartSql = (alias: string): SQL => sql`coalesce(
