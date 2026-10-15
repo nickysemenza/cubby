@@ -37,11 +37,10 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
       }),
     retry: false,
   });
-  const result =
+  const isForRecord =
     preview.variables?.mailboxId === record.mailboxId &&
-    preview.variables.messageId === record.messageId
-      ? preview.data
-      : undefined;
+    preview.variables.messageId === record.messageId;
+  const result = isForRecord ? preview.data : undefined;
   return (
     <div className="space-y-3">
       {record.ownedByViewer && record.provider === "gmail" && (
@@ -78,7 +77,9 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
             Refetches the Gmail original and runs the current classifier,
             including Luna when needed. Does not apply the result.
           </p>
-          {preview.error && <ErrorDisplay error={preview.error} />}
+          {isForRecord && preview.error && (
+            <ErrorDisplay error={preview.error} />
+          )}
           {result && !preview.isPending && (
             <div aria-live="polite" className="space-y-1 text-sm">
               <p>
