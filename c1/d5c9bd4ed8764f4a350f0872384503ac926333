@@ -1,0 +1,235 @@
+.github/actions/setup-apple/action.yml
+  s_2a22d2c73c07e5::t_c280828808a8c3 215
+.github/ci-lanes.yml
+  s_2a22d2c73c07e5::t_9732aae68e4075 17,19,145,153,155,178,191
+.github/workflows/apple-testflight.yaml
+  s_2a22d2c73c07e5::t_13077c4858f28b 8,53,82,281
+apps/apple/AGENTS.md
+  s_2a22d2c73c07e5::t_b9721f2abab50a 41,46,66,77,146-148,152,211
+apps/apple/App/Shared/Previews/PreviewFixtures.swift
+  s_2a22d2c73c07e5::t_7d03f1ee76cd70 18,144
+apps/apple/CubbyKit/Sources/CubbyAPI/README.md
+  s_2a22d2c73c07e5::t_98cfcef35f645b 7
+apps/apple/CubbyKit/Sources/CubbyAPISupport/CubbyAPISupport.swift
+  s_2a22d2c73c07e5::t_f0ffdab0de17de 5
+apps/apple/CubbyKit/Sources/CubbyKit/API/GeneratedTypeExtensions.swift
+  s_2a22d2c73c07e5::t_e1f04973b16bb7 8
+apps/apple/CubbyKit/Sources/CubbyKit/API/OperationRoute.swift
+  s_2a22d2c73c07e5::t_390617ade48765 3
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityKernel.swift
+  s_2a22d2c73c07e5::t_c45fe4d35fc60a 18
+apps/apple/CubbyKit/Tests/CubbyKitTests/EntityFilterTests.swift
+  s_2a22d2c73c07e5::t_df3400a7ec379b 22
+apps/apple/CubbyKit/Tests/CubbyKitTests/PhotoCategoryClassifierLabelsTests.swift
+  s_2a22d2c73c07e5::t_2a854166380e34 8
+apps/apple/ITERATION.md
+  s_2a22d2c73c07e5::t_e1288884f34c8e 125,203
+apps/apple/README.md
+  s_2a22d2c73c07e5::t_33fa5fe35698cd 51
+apps/apple/project.json
+  s_2a22d2c73c07e5::t_74e3561d4895f5 11,25,35,41,46,53,60
+apps/apple/scripts/build-rust.sh
+  s_2a22d2c73c07e5::t_2d481cc0c2330c 179
+apps/apple/scripts/prepare-project.sh
+  s_2a22d2c73c07e5::t_8a347033cbdfc9 4
+apps/apple/scripts/testflight.sh
+  s_2a22d2c73c07e5::t_095879d362796d 249
+apps/web/generator/artifacts.test.ts
+  s_2a22d2c73c07e5::t_1551c33473a5b6 9
+apps/web/generator/entities/child-tables.ts
+  s_2a22d2c73c07e5::t_fa1bcf82a9df8e 4
+apps/web/generator/entities/compile.ts
+  s_2a22d2c73c07e5::t_a414623d6f27b8 1,3-4,8,13-14,18
+apps/web/generator/entities/declarations.ts
+  s_2a22d2c73c07e5::t_4ff77a940964fe 1,26,29
+apps/web/generator/entities/import-boundary.ts
+  s_2a22d2c73c07e5::t_d4c5a5d050dbda 34,91
+apps/web/generator/entities/presentation.ts
+  s_2a22d2c73c07e5::t_506d15adf07fda 1,6
+apps/web/generator/entities/render/browser-routes.ts
+  s_2a22d2c73c07e5::t_1d2817cab4a76c 1
+apps/web/generator/entities/render/children.ts
+  s_2a22d2c73c07e5::t_ae30ecfc2e98ea 1
+apps/web/generator/entities/render/image-policy.ts
+  s_2a22d2c73c07e5::t_c0bc70596a2281 5-6,345
+apps/web/generator/entities/render/index.ts
+  s_2a22d2c73c07e5::t_eba98606728caa 1,5
+apps/web/generator/entities/render/manifest-wire.ts
+  s_2a22d2c73c07e5::t_c8d327621ab8a4 7
+apps/web/generator/entities/render/routes.ts
+  s_2a22d2c73c07e5::t_2e8e628609ad81 12
+apps/web/generator/entities/render/schema-wrappers.ts
+  s_2a22d2c73c07e5::t_f012294d9af4ee 1,73
+apps/web/generator/entities/render/search.ts
+  s_2a22d2c73c07e5::t_31c84920dccb31 4
+apps/web/generator/entities/render/structured-value-schemas.ts
+  s_2a22d2c73c07e5::t_bcc1bdd90300e4 1
+apps/web/generator/entities/render/swift-catalog.ts
+  s_2a22d2c73c07e5::t_41aaadce266ad7 2-3,7,15-16,20,27-28
+apps/web/generator/entities/render/swift-shared-constants.ts
+  s_2a22d2c73c07e5::t_d6876e0d01cda3 4,12-15,19-20
+apps/web/generator/entities/render/tables.ts
+  s_2a22d2c73c07e5::t_4b2a52c5ab05d5 5,7
+apps/web/generator/entities/render/value-schema.ts
+  s_2a22d2c73c07e5::t_9ef6933295d222 1,9
+apps/web/generator/entities/shortcode-registry.ts
+  s_2a22d2c73c07e5::t_2ac4d32e3d2c14 1
+apps/web/generator/entities/table-storage.ts
+  s_2a22d2c73c07e5::t_eef8e3cabc4fd7 1,4
+apps/web/generator/http-api/discriminator-registration.ts
+  s_2a22d2c73c07e5::t_f9a9326059fe2f 8
+apps/web/generator/http-api/entity-kernel.ts
+  s_2a22d2c73c07e5::t_326788e7f1e4fb 2-7
+apps/web/generator/http-api/native.ts
+  s_2a22d2c73c07e5::t_ae3faec858c2db 5-6,12
+apps/web/generator/http-api/openapi.ts
+  s_2a22d2c73c07e5::t_453151043f9ea8 7,14,42
+apps/web/generator/http-api/schema-names.ts
+  s_2a22d2c73c07e5::t_35a40f634a9000 1,8
+apps/web/generator/http-api/swift-operations.ts
+  s_2a22d2c73c07e5::t_2da120a581ba66 354
+apps/web/generator/main.ts
+  s_2a22d2c73c07e5::t_9fe1a1fe832713 1-2,11,45,149
+apps/web/generator/start-operations/collect.ts
+  s_2a22d2c73c07e5::t_a07b9a7cfb3212 13
+apps/web/generator/start-operations/mcp-tools.ts
+  s_2a22d2c73c07e5::t_6c2d0ca170b870 1,5-6
+apps/web/package.json
+  s_2a22d2c73c07e5::t_f428158092a381 30-31
+apps/web/src/entity/entity-field-provenance-compiler.unit.test.ts
+  s_2a22d2c73c07e5::t_e39963b331f753 8
+apps/web/src/entity/model/view-manifest.unit.test.tsx
+  s_2a22d2c73c07e5::t_8621f4153b2dfb 32
+apps/web/src/entity/override-registry-shrink.unit.test.tsx
+  s_2a22d2c73c07e5::t_36d5d49e933f69 3
+apps/web/src/lib/http-api/generator-artifacts.unit.test.ts
+  s_2a22d2c73c07e5::t_7afbb564b86e00 7
+apps/web/src/lib/http-api/openapi-document.unit.test.ts
+  s_2a22d2c73c07e5::t_c00efdb8297deb 9-10
+apps/web/src/lib/request-id.ts
+  s_2a22d2c73c07e5::t_7fbbc1a83da7b5 7
+apps/web/src/routes/auth.$authView.tsx
+  s_2a22d2c73c07e5::t_0f05a12759f64d 60
+apps/web/src/server/worker-bindings.ts
+  s_2a22d2c73c07e5::t_dd5d1dc11a8b81 2
+apps/web/src/ui/footer.tsx
+  s_2a22d2c73c07e5::t_b647be208152b0 31
+apps/web/tooling/build-cf.ts
+  s_2a22d2c73c07e5::t_fbd1ea3ff96529 29-30
+apps/web/tooling/checks/apple-preview-fixtures.ts
+  s_2a22d2c73c07e5::t_19ccce4b3bbdf0 40
+apps/web/tooling/checks/check-client-bundle.ts
+  s_2a22d2c73c07e5::t_b0ab13fe52ecea 13
+apps/web/tooling/checks/worker-type-imports.ts
+  s_2a22d2c73c07e5::t_ff2666e99296a6 14
+apps/web/tooling/child-table-generator.unit.test.ts
+  s_2a22d2c73c07e5::t_d9498fe3754de8 3-5
+apps/web/tooling/dev/index.ts
+  s_2a22d2c73c07e5::t_7f4c2bb40c3ce2 6
+apps/web/tooling/entity-declaration-import-boundary.unit.test.ts
+  s_2a22d2c73c07e5::t_60250e75cff374 3,26
+apps/web/tooling/entity-generator-classification-policies.unit.test.ts
+  s_2a22d2c73c07e5::t_ea2dc803e5ba3e 4-5
+apps/web/tooling/entity-generator-data-quality.unit.test.ts
+  s_2a22d2c73c07e5::t_8eead89b81c640 4-5
+apps/web/tooling/entity-generator-spans.unit.test.ts
+  s_2a22d2c73c07e5::t_0e00ab9385921b 4
+apps/web/tooling/entity-generator-suggest-prune.unit.test.ts
+  s_2a22d2c73c07e5::t_f3f4a6f6da31de 4
+apps/web/tooling/entity-generator-value-schema.unit.test.ts
+  s_2a22d2c73c07e5::t_2f02dabe1d40cb 5-6,11
+apps/web/tooling/entity-generator.unit.test.ts
+  s_2a22d2c73c07e5::t_d7bf2957ec3386 17,22-27,32
+apps/web/tooling/entity-relation-coverage.unit.test.ts
+  s_2a22d2c73c07e5::t_8a8e670eac9c71 2,6,10
+apps/web/tooling/mac-import-driver.ts
+  s_2a22d2c73c07e5::t_24c8669050583d 14
+apps/web/tooling/mac-import-e2e.ts
+  s_2a22d2c73c07e5::t_555ce946cc8f05 3
+apps/web/tooling/mcp-tools-generator.unit.test.ts
+  s_2a22d2c73c07e5::t_8a8cd2018854d1 6
+apps/web/tooling/openapi-document-passes.unit.test.ts
+  s_2a22d2c73c07e5::t_3493dee7d1cdbc 8
+apps/web/tooling/override-comparisons.unit.test.ts
+  s_2a22d2c73c07e5::t_73df39b3a1db83 7-8
+apps/web/tooling/sim-e2e.ts
+  s_2a22d2c73c07e5::t_1cace296c4416e 15,43
+apps/web/tooling/start-operation-discovery.unit.test.ts
+  s_2a22d2c73c07e5::t_dd320202f37d9d 7
+apps/web/tooling/web-build-provenance.ts
+  s_2a22d2c73c07e5::t_3df593a1905f37 107
+apps/web/tsconfig.json
+  s_2a22d2c73c07e5::t_d6745d050ebd14 2,4
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_5244c6da910088 12-13,51
+docs/entities.md
+  s_2a22d2c73c07e5::t_0b7d7b1ce80492 98-99,102-103,146,336,383,1156
+docs/infrastructure.md
+  s_2a22d2c73c07e5::t_9ca7b93bef1573 168
+docs/plans/household-ledger-attribution-followups.md
+  s_2a22d2c73c07e5::t_16021fd76d1cb7 71
+docs/runbooks/recover-r2-orphans.md
+  s_2a22d2c73c07e5::t_4462289237995c 12
+docs/todos.md
+  s_2a22d2c73c07e5::t_330ccbba31b78f 1705
+knip.json
+  s_2a22d2c73c07e5::t_12a3d0871108d3 9-11,33,71,79,83
+package.json
+  s_2a22d2c73c07e5::t_44698cae55aba7 30,39
+packages/schemas/src/entity-definitions/definition.ts
+  s_2a22d2c73c07e5::t_78f4621d575be3 1635,1729
+packages/schemas/src/photo-categories.ts
+  s_2a22d2c73c07e5::t_a9ad37506fe0be 10
+project.json
+  s_2a22d2c73c07e5::t_cf3a5d23c8a827 10,16,20-21
+scripts/apple/agent-device-occlusion.test.ts
+  s_2a22d2c73c07e5::t_0d718480b28564 25
+scripts/apple/apple-inputs.ts
+  s_2a22d2c73c07e5::t_0906bd9cc1bf66 6,36
+scripts/apple/apple-release.ts
+  s_2a22d2c73c07e5::t_48a74eb542cb89 7-8,11,16,256
+scripts/apple/apple-simulator-selection.ts
+  s_2a22d2c73c07e5::t_a2a9db77e3ba60 1
+scripts/apple/apple-validation.test.ts
+  s_2a22d2c73c07e5::t_c107bbfd9779d6 35,56
+scripts/apple/apple-validation.ts
+  s_2a22d2c73c07e5::t_f73f69b56c4886 2
+scripts/apple/apple.ts
+  s_2a22d2c73c07e5::t_78c446f37e31f3 26-27,33,40,42
+scripts/apple/lib/apple-container.ts
+  s_2a22d2c73c07e5::t_4a0bb3fb887e33 4
+scripts/apple/mac-presentation-helper.ts
+  s_2a22d2c73c07e5::t_4eaacdbec721fc 13
+scripts/apple/shared-device-command.test.ts
+  s_2a22d2c73c07e5::t_7f4b127348cbaf 57
+scripts/ci-lanes.ts
+  s_2a22d2c73c07e5::t_ba3cfe183a8c04 110
+scripts/dev-db.ts
+  s_2a22d2c73c07e5::t_3d6958acc64a2a 6
+scripts/ensure.ts
+  s_2a22d2c73c07e5::t_adcc2451f7e07d 53
+scripts/lib/dev-container.ts
+  s_2a22d2c73c07e5::t_f2f4b53823935f 5
+scripts/test-services.ts
+  s_2a22d2c73c07e5::t_4cdb3e9601981c 24
+tools/oxlint/anti-slop/anti-slop-rules.test.ts
+  s_2a22d2c73c07e5::t_33852b11bcc02f 9-10
+tsconfig.json
+  s_2a22d2c73c07e5::t_8d9a5ee336e381 3-4,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c1d5c9bd4ed8764f4a350f0872384503ac926333",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
