@@ -401,6 +401,7 @@ export const runChildren = [
         kind: "jsonb",
         type: "CommitPhotoGroupProductCreate",
       },
+      /** Category FK for a new draft or an existing Product's selected category edit. */
       {
         key: "productCreateCategoryId",
         kind: "uuid",
@@ -424,6 +425,8 @@ export const runChildren = [
         reference: { table: "ledgerParty", column: "id" },
       },
       { key: "evidence", kind: "text" },
+      /** Null on legacy drafts: identity must be explicitly reviewed before approval. */
+      { key: "review", kind: "jsonb", type: "PhotoGroupReview" },
       /** Last writer of the payload (`photoGroupProposalOrigin`); null = not recorded. */
       {
         key: "origin",
@@ -466,6 +469,7 @@ export const runChildren = [
           "CommitPhotoGroupProductCreate",
           "PhotoGroupStoredInventory",
           "PhotoGroupProposalOrigin",
+          "PhotoGroupReview",
         ],
       },
     ],

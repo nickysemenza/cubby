@@ -194,14 +194,18 @@ struct RunPhotoBatchSlot: View {
             let itemID = ImageCode("IMG-2345")
             let labelID = ImageCode("IMG-2346")
             let group = PhotoGroupProposal(
-                groupKey: "work-shirt", state: .proposed,
+                groupKey: "work-shirt",
+                review: .init(
+                    observedName: "Canvas pocket T-shirt · navy", unresolvedReason: nil,
+                    stockIntent: .evidence),
+                state: .proposed,
                 images: [.init(id: itemID, purpose: .item), .init(id: labelID, purpose: .label)],
                 skip: [],
                 product: .create(
                     .init(
                         kind: .create,
                         create: .init(name: "Canvas pocket T-shirt · navy", manufacturer: "ForgeWear"))),
-                evidence: "The shirt and neck label show one garment. Confirm the size before approval.",
+                evidence: "The shirt and neck label show one garment with matching identity.",
                 missingImageCount: 0, updatedAt: "2026-09-24T12:00:00Z")
             let images: [PhotoRunImage] = [
                 .init(

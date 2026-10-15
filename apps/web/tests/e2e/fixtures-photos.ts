@@ -451,6 +451,11 @@ export async function seedPhotoGroupReviewRun(
   const groups: PhotoGroupProposalGroup[] = [
     {
       groupKey: "g1",
+      review: {
+        observedName: "Gray crew t-shirt — M",
+        unresolvedReason: null,
+        stockIntent: "receive",
+      },
       images: [{ id: itemImage.shortcode, purpose: "item" }],
       skip: [{ id: labelImage.shortcode, reason: "Tag photo needs review" }],
       product: { kind: "create", create: { name: "Gray crew t-shirt — M" } },
@@ -461,6 +466,11 @@ export async function seedPhotoGroupReviewRun(
     },
     {
       groupKey: "g2",
+      review: {
+        observedName: `${name} solo find`,
+        unresolvedReason: null,
+        stockIntent: "evidence",
+      },
       images: [{ id: soloImage.shortcode, purpose: "item" }],
       product: { kind: "create", create: { name: `${name} solo find` } },
     },

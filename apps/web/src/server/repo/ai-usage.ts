@@ -3,6 +3,8 @@ import type {
   AiUsageRecentInput,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
+import { photoRunProcessor } from "@cubby/schemas/photo-run-input";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
@@ -186,8 +188,8 @@ const decodeRunUsageCursor = (value: string) =>
   runUsageCursor.parse(JSON.parse(decodeBase64UrlText(value)));
 
 /**
- * Every AI call one Run grouped, newest first, with the full-run subtotal.
- * Any run purpose: import runs and AI-only runs (no member party) alike.
+ * Recorded calls attributed to a Run, its descendants and their image jobs.
+ * EXISTS membership deduplicates calls carrying both run and attempt lineage.
  */
 export async function listAiUsageForRun(
   db: Database,
@@ -202,13 +204,38 @@ export async function listAiUsageForRun(
     .parse(options.limit ?? 25);
   const cursor = options.cursor ? decodeRunUsageCursor(options.cursor) : null;
   const database = getDb(db);
-  const [totals, rows] = await Promise.all([
+  const scope = sql`WITH RECURSIVE run_scope(id) AS (
+    SELECT id FROM "Run" WHERE id = ${runId} AND "deletedAt" IS NULL
+    UNION SELECT child.id FROM "Run" child JOIN run_scope parent ON child."parentRunId" = parent.id
+      WHERE child."deletedAt" IS NULL
+  ) SELECT id FROM run_scope`;
+  const attributed = sql`(${aiUsage.runId} IN (${scope}) OR EXISTS (
+    SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND j."runId" IN (${scope}) AND (
+      (${aiUsage.jobKind} = 'image_processing_attempt' AND ${aiUsage.jobId} IN (
+        SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
+      OR (${aiUsage.jobKind} = j.kind AND ${aiUsage.jobId} = j.id::text)
+    )))`;
+  const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
+    WHERE r.id IN (${scope}) AND r."deletedAt" IS NULL AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
+  const missingImageCoverage = (allowDeviceCharge: boolean) => sql`EXISTS (
+    SELECT 1 FROM "ImageProcessingJob" j
+    WHERE j."deletedAt" IS NULL AND j."runId" IN (${scope}) AND (
+      (NOT EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id)
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."deletedAt" IS NULL
+          AND u."jobKind" = j.kind AND u."jobId" = j.id::text))
+      OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+        AND NOT coalesce(${allowDeviceCharge} AND a.executor->>${"kind"} = ${"device"} AND a.state IN (${imageProcessingAttemptState.enum.ready}, ${imageProcessingAttemptState.enum.skipped}), false)
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" = a.id::text)
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text AND u.attempt = a.number)))))
+  )`;
+  const [totals, rows, coverage] = await Promise.all([
     database
       .select({
         ...aiCostSummarySql(),
       })
       .from(aiUsage)
-      .where(and(eq(aiUsage.runId, runId), notDeleted(aiUsage))),
+      .where(and(attributed, notDeleted(aiUsage))),
     database
       .select({
         id: aiUsage.id,
@@ -235,7 +262,7 @@ export async function listAiUsageForRun(
       .from(aiUsage)
       .where(
         and(
-          eq(aiUsage.runId, runId),
+          attributed,
           notDeleted(aiUsage),
           cursor
             ? or(
@@ -250,6 +277,12 @@ export async function listAiUsageForRun(
       )
       .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
       .limit(limit + 1),
+    database.execute<{
+      chargedIncomplete: boolean;
+      standardIncomplete: boolean;
+    }>(sql`SELECT
+      (${externalCoverage} OR ${missingImageCoverage(true)}) AS "chargedIncomplete",
+      (${externalCoverage} OR ${missingImageCoverage(false)}) AS "standardIncomplete"`),
   ]);
   const records = rows.slice(0, limit);
   const last = records.at(-1);
@@ -264,6 +297,12 @@ export async function listAiUsageForRun(
       count: 0,
       billingReasons: [],
     }),
+    chargedComplete:
+      !coverage.rows[0]?.chargedIncomplete &&
+      (totals[0]?.chargedUnpricedCount ?? 0) === 0,
+    standardComplete:
+      !coverage.rows[0]?.standardIncomplete &&
+      (totals[0]?.standardUnpricedCount ?? 0) === 0,
     records,
     nextCursor:
       rows.length > limit && last

@@ -345,6 +345,9 @@ function AgentWorkOverview({
       </p>
       {usage.data ? (
         <div className="mt-1" aria-live="polite">
+          <p className="text-xs text-muted-foreground">
+            Run and all nested work
+          </p>
           <AiCost cost={usage.data} />
         </div>
       ) : null}

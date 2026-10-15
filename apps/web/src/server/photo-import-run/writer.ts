@@ -34,6 +34,7 @@ import {
   run as runTable,
   photoRunImage,
   inventoryEntry,
+  photoGroupProposal,
   product,
 } from "~/server/db/schema";
 import { assertRunCapability } from "~/server/purchase-import/capabilities";
@@ -79,6 +80,27 @@ type ResolvedSkip = {
   imageId: ImageId;
   reason: string;
 };
+
+export function assertPhotoGroupReviewIntent(
+  input: Pick<CommitPhotoGroupInput, "product" | "review" | "inventory">,
+  phase: "draft" | "apply" = "apply",
+): void {
+  if (!input.review) return;
+  if (
+    phase === "apply" &&
+    input.review.stockIntent === "receive" &&
+    !input.inventory
+  )
+    throw new Error("A receive decision requires Inventory");
+  if (input.review.stockIntent !== "receive" && input.inventory)
+    throw new Error("Only a receive decision can change Inventory");
+  if (
+    input.product.kind !== "existing" &&
+    input.review.productChanges &&
+    Object.keys(input.review.productChanges).length
+  )
+    throw new Error("Selected field changes require an existing Product");
+}
 
 /**
  * Live Products whose `name` or an `aliases[]` entry exactly (case-insensitive)
@@ -282,7 +304,20 @@ async function resolveProduct(
   actor: ActorContext,
 ): Promise<string> {
   if (input.product.kind === "existing") {
-    await resolveOrThrow(txDb, "product", input.product.existingId);
+    const id = await resolveOrThrow(txDb, "product", input.product.existingId);
+    if (
+      input.review?.productChanges &&
+      Object.keys(input.review.productChanges).length
+    ) {
+      // This bounded patch excludes image/object fields: updateProduct cannot
+      // delete stored objects while this transaction remains open.
+      const crud = buildCrudServices(txDb);
+      await createProductWriteActions(txDb, crud.usdaClient).updateProduct(
+        id,
+        input.review.productChanges,
+        actor,
+      );
+    }
     return input.product.existingId;
   }
   const crud = buildCrudServices(txDb);
@@ -543,6 +578,10 @@ async function doCommit(
   scope: RunScope,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
+  proposalRevision?: Pick<
+    typeof photoGroupProposal.$inferSelect,
+    "id" | "updatedAt"
+  >,
 ): Promise<CommitPhotoGroupOutput> {
   const attaches = await resolveAttaches(txDb, input.images);
   const skips = await resolveSkips(txDb, input.skip ?? []);
@@ -558,6 +597,30 @@ async function doCommit(
     .where(eq(runTable.id, scope.public.runId))
     .for("update");
   const runStatus = lockedRun?.status ?? scope.public.status;
+
+  if (proposalRevision) {
+    const [current] = await getDb(txDb)
+      .select({
+        updatedAt: photoGroupProposal.updatedAt,
+        state: photoGroupProposal.state,
+      })
+      .from(photoGroupProposal)
+      .where(
+        and(
+          eq(photoGroupProposal.id, proposalRevision.id),
+          eq(photoGroupProposal.runId, scope.public.runId),
+          eq(photoGroupProposal.groupKey, input.groupKey),
+        ),
+      );
+    if (
+      !current ||
+      current.state !== "proposed" ||
+      current.updatedAt.getTime() !== proposalRevision.updatedAt.getTime()
+    )
+      throw new Error(
+        "Photo group review changed; reload before approving this group",
+      );
+  }
 
   const { targetByImageId, allReplayed } = await lockTargets(
     txDb,
@@ -655,8 +718,15 @@ export async function commitPhotoGroup(
   db: Database,
   rawInput: z.input<typeof commitPhotoGroupInput>,
   actor: ActorContext,
+  proposalRevision?: Pick<
+    typeof photoGroupProposal.$inferSelect,
+    "id" | "updatedAt"
+  >,
 ): Promise<CommitPhotoGroupOutput> {
   const input = commitPhotoGroupInput.parse(rawInput);
+  assertPhotoGroupReviewIntent(input);
+  if (input.review?.unresolvedReason)
+    throw new Error(input.review.unresolvedReason);
   const scope = await loadRunScopeByShortcode(db, input.runId);
   assertRunCapability(scope.public.purpose, "photo_commit");
   // NOT gated on `status === "running"` here: a crash-window retry (see
@@ -706,6 +776,7 @@ export async function commitPhotoGroup(
           scope,
           input,
           actorInRun(actor, runEntityId.parse(scope.public.runId)),
+          proposalRevision,
         ),
       ),
   );

@@ -12,7 +12,9 @@ struct PhotoImportFlowTests {
     @Test func stoppedPhotoRunCanReviewUnresolvedGroupWithoutAcceptingStalePhotos() {
         let imageID = ImageCode("IMG-2345")
         let group = PhotoGroupProposal(
-            groupKey: "work-shirt", state: .proposed,
+            groupKey: "work-shirt",
+            review: .init(observedName: "Canvas shirt", unresolvedReason: nil, stockIntent: .evidence),
+            state: .proposed,
             images: [.init(id: imageID, purpose: .item)], skip: [],
             product: .create(
                 .init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
@@ -34,12 +36,29 @@ struct PhotoImportFlowTests {
                 group: group, images: [settled], runStatus: .needsReview) != nil)
     }
 
+    // Legacy and ambiguous proposals must be explicitly resolved before approval.
+    @Test func identityReviewBlocksUntilConfirmed() throws {
+        let review = RunReviewPreviewFixture.model().review
+        var group = try #require(review?.review.proposals.first)
+        group.review = nil
+        #expect(PhotoReviewPolicy.approvalBlocker(group: group, images: [], runStatus: .running) != nil)
+        group.review = .init(
+            observedName: "Canvas shirt", unresolvedReason: "Choose the size", stockIntent: .evidence)
+        #expect(
+            PhotoReviewPolicy.approvalBlocker(group: group, images: [], runStatus: .running)
+                == "Choose the size")
+        group.review?.unresolvedReason = nil
+        #expect(PhotoReviewPolicy.approvalBlocker(group: group, images: [], runStatus: .running) == nil)
+    }
+
     @Test func selectedApprovalExcludesSettledOrBlockedGroups() {
         let readyImage = PhotoRunImage(
             id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
             describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
         let ready = PhotoGroupProposal(
-            groupKey: "shirt", state: .proposed,
+            groupKey: "shirt",
+            review: .init(observedName: "Canvas shirt", unresolvedReason: nil, stockIntent: .evidence),
+            state: .proposed,
             images: [.init(id: readyImage.id, purpose: .item)], skip: [],
             product: .create(
                 .init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),

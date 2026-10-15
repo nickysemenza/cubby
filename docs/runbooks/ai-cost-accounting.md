@@ -32,7 +32,14 @@ coverage flags rather than inventing calls. The external cookbook extractor
 currently reports a single cost estimate: fresh reports identify it as a caller
 estimate, retained legacy reports as historical, and their standard comparison
 remains unknown without equivalent pricing evidence. A linked image job is a component of its parent Run's cost;
-displaying both does not create additional spend.
+displaying both does not create additional spend. Run totals include every
+transitive descendant Run and linked image-processing attempt, including failed
+attempts. Each usage row contributes once even if both lineage and a job link
+reach it; never sum inclusive child totals into their parent. Pagination limits
+only the displayed call list, not the subtotal. Missing usage on any attempt or
+an external processor makes coverage incomplete; device-completed work proves
+zero charge but does not invent a standard-cost comparison. Reads never call a
+model or count budget reservations as spend.
 
 Current queued messages retain their captured prices through retries. Raw legacy
 in-flight messages without captured costs receive one compatibility upgrade at
