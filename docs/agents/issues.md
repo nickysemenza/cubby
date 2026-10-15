@@ -150,9 +150,15 @@ their Sentry histories. GitHub closure on merge does not prove deployment and
 does not resolve Sentry: resolve a Sentry issue only when an identifiable deployed
 fix addresses its failure. No recent events is not evidence of a fix.
 
-Sentry Developer does not provide the paid native tracker linking/status sync.
-Agents can read Sentry through the existing integration and update GitHub through
-`gh`; links are the connection, and no custom synchronizer is required.
+The Sentry organization uses a Sponsored plan. Its installed GitHub integration
+shows Team-level issue linking, assignee/comment synchronization, and stack-trace
+linking enabled; Business-level capabilities still show an upgrade requirement.
+Check live integration settings rather than inferring entitlements from the
+sponsored label or treating it as Developer Free. Availability does not mean
+synchronization is configured: preserve Sentry URLs and inspect the existing
+configuration before relying on native links or enabling data synchronization.
+Agents can also read Sentry through the existing integration and update GitHub
+through `gh`; no custom synchronizer is required.
 
 Cubby's repository issues are public even when the Project is private. Use
 synthetic engineering examples and keep raw household evidence, live entity
