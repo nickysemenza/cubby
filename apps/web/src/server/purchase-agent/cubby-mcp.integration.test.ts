@@ -93,7 +93,7 @@ describe("purchase agent Cubby MCP client", () => {
       entity: "vendor",
     });
     expect(refused.isError).toBe(true);
-    expect(JSON.stringify(refused.content)).toContain(
+    expect(JSON.stringify(refused.output)).toContain(
       "does not mount entity_read.list",
     );
 

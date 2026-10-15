@@ -41,11 +41,11 @@ function result(
   output: JsonValue,
   terminate = false,
 ): ToolExecutionResult & {
-  content: NonNullable<ToolExecutionResult["content"]>;
+  output: NonNullable<ToolExecutionResult["output"]>;
 } {
   const content = [{ type: "text" as const, text: JSON.stringify(output) }];
-  if (!terminate) return { content };
-  return { content, control: { terminate: true } };
+  if (!terminate) return { output: content };
+  return { output: content, control: { terminate: true } };
 }
 
 type JsonSchema = z.core.JSONSchema._JSONSchema;

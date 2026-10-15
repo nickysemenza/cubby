@@ -111,6 +111,8 @@ only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential, including across active sessions on a constrained host.
+Finish cold artifact preparation before launching checks that consume it:
+concurrent wasm-pack invocations can race installation of the shared wasm-bindgen CLI.
 Reuse valid input-hash results at handoff. Finish edits and commits, including staged formatting hooks, before starting
 immutable-build verification. The web stamp records HEAD as well as source bytes:
 even a commit with unchanged runtime content invalidates it. Wait for commit hooks

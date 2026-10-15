@@ -101,6 +101,14 @@ checked-in configuration is part of `apps/web/wrangler.jsonc`:
   shim disables parallel tool calls: pi ends a run on a terminating tool only
   when it is the round's sole call.
 
+pi-durable owns migrations of its stored tool tasks. Validate preservation of
+live call identities, arguments, and replay checkpoints when upgrading it.
+The host discards a failed in-memory harness after it closes and reopens the
+same SQLite store on next use. An older session's late close cannot discard
+its replacement.
+After a task migration, a rollback must retain an SDK that can read the migrated
+state.
+
 **The trust boundary.** The agent reads untrusted mail and photos, so prompt injection must not reach anything beyond the run it serves.
 It was a separate Worker with no database credential for that reason; it now
 runs in this Worker behind an in-process boundary enforced by construction:

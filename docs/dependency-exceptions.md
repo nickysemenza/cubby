@@ -12,9 +12,11 @@ deduplication are dependency maintenance, not validation gates.
   lags the compiler Cubby verifies.
 - Wrangler and Sentry declare different Workers Types peer majors. Regenerate
   bindings and typecheck when changing either; the workspace owns the accepted range.
-- The isolated workerd test package pins the Vitest version required by
-  Cloudflare's plugin because it uses Vitest internals. Application/library
-  tests use their own manifest versions.
+- Sentry's bundler plugin requires Babel 7; its package extension supplies that
+  major separately from Vite's Babel 8 dependency.
+- Agents' PiHarness patch invalidates failed pi-durable sessions at its cache
+  boundary, with ownership checks so an old session cannot discard a replacement
+  during startup. Remove it when upstream provides equivalent recovery.
 - Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
   dependencies remain upstream maintenance concerns. A blanket override can
   replace an API with an incompatible major inside another package.

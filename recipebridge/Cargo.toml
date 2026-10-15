@@ -41,13 +41,13 @@ tsify-next = { version = "0.5", features = ["js"] }
 # the pinned rev CI uses.
 # `wasm` only derives Tsify on upstream boundary types (`Confidence`,
 # `IngredientUsage`, `RecipeTimes`) so they cross as-is; it adds no exports.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", features = [
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", features = [
   "wasm",
 ] }
-recipe-types = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", features = [
+recipe-types = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", features = [
   "wasm",
 ] }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # The same HTML parser recipe-scraper already compiles in; `page.rs` walks a
@@ -55,13 +55,13 @@ serde_json = "1.0"
 scraper = { version = "0.27.0", optional = true }
 url = { version = "2", optional = true }
 serde-wasm-bindgen = "0.6"
-wasm-tracing = "2.0.0"
-tracing = "0.1.41"
+wasm-tracing = "2.1.0"
+tracing = "0.1.44"
 console_error_panic_hook = "0.1.7"
 # Only the model catalog, usage parsing, and pricing (`ai_usage.rs`). Never the
 # `wasm` feature: every `#[wasm_bindgen]` fn it adds would be exported from
 # this module too, putting the EPUB pipeline back in the Worker.
-cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", default-features = false, optional = true }
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", default-features = false, optional = true }
 
 
 [features]

@@ -12,11 +12,11 @@ let package = Package(
         .executable(name: "cubby", targets: ["cubby"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-openapi-generator", exact: "1.13.1"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.12.1"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.3.1"),
+        .package(url: "https://github.com/apple/swift-openapi-generator", exact: "1.14.1"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.13.0"),
+        .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.3.2"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
-        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.1.5"),
+        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.1.7"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
     ],
     targets: [

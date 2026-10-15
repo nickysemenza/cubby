@@ -1,0 +1,31 @@
+diff --git a/dist/harness/pi/index.js b/dist/harness/pi/index.js
+index 9fceb9c0621a5a06202e235877184deb45d1d029..3129fd07aef7bc09eacf17509546adc121035835 100644
+--- a/dist/harness/pi/index.js
++++ b/dist/harness/pi/index.js
+@@ -520,10 +520,22 @@ async function _waitForIdle(conversation) {
+ */
+ async function _open() {
+ 	await this.lifecycle.ready();
+-	_classPrivateFieldGet2(_opening, this) ?? _classPrivateFieldSet2(_opening, this, _assertClassBrand(_PiHarness_brand, this, _doOpen).call(this).catch((error) => {
+-		_classPrivateFieldSet2(_opening, this, void 0);
+-		throw error;
+-	}));
++	if (!_classPrivateFieldGet2(_opening, this)) {
++		const opening = _assertClassBrand(_PiHarness_brand, this, _doOpen).call(this).then((opened) => {
++			// A failed session cannot serve another request. Only its own opening
++			// may be invalidated; a replacement may still be initializing storage.
++			void opened.pi.closed.then((end) => {
++				if (end.reason === "failed" && _classPrivateFieldGet2(_opening, this) === opening)
++					_classPrivateFieldSet2(_opening, this, void 0);
++			});
++			return opened;
++		}).catch((error) => {
++			if (_classPrivateFieldGet2(_opening, this) === opening)
++				_classPrivateFieldSet2(_opening, this, void 0);
++			throw error;
++		});
++		_classPrivateFieldSet2(_opening, this, opening);
++	}
+ 	return _classPrivateFieldGet2(_opening, this);
+ }
+ async function _doOpen() {
