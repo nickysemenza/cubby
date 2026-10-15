@@ -85,10 +85,11 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                 {MAILBOX_CLASSIFICATION_LABEL[result.classification]} ·{" "}
                 {result.model ?? result.stage}
               </p>
-              <p>{result.reason}</p>
               <details className="text-xs text-muted-foreground">
                 <summary>Technical details</summary>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 py-2">
+                  <dt>Classification reason</dt>
+                  <dd className="min-w-0 break-words">{result.reason}</dd>
                   <dt>Decision model</dt>
                   <dd>
                     {result.triage.model ?? "No model call"}:{" "}
