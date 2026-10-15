@@ -23,7 +23,8 @@
   implementation it guards; prefer E2E as the sole automated test when it
   covers those failures.
 - Bound tool output before returning it: targeted `rg`, file regions, selected
-  JSON fields, and failure excerpts. Save verbose logs under ignored
+  JSON fields, and failure excerpts. Use `rg --max-columns` when generated
+  files may contain large single-line records. Save verbose logs under ignored
   `artifacts/` and retrieve relevant regions; a truncated dump is not evidence.
   Batch independent reads within one shared output budget. Reuse unchanged
   reads. Use absolute paths, `git -C`, and `pnpm --dir`; never `cd`.

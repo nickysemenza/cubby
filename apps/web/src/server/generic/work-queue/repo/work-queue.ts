@@ -48,7 +48,6 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import {
-  email,
   expense,
   financialAccount,
   financialTransaction,
@@ -73,7 +72,10 @@ import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import {
+  gapCondition,
+  qualityFilterSource,
+} from "~/server/generic/data-quality/repo/sql";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { attentionStatePredicate } from "~/server/generic/work-queue/repo/work-attention";
 import { additionalWorkProblemSelections } from "~/server/generic/work-queue/repo/work-queue-problems";
@@ -222,7 +224,7 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "email",
-        table: sql`${email}`,
+        table: qualityFilterSource("email"),
         id: sql`"Email".shortcode`,
         name: sql`coalesce("Email".subject, 'Email')`,
         owners: sql`ARRAY["Email"."ledgerPartyId"]`,

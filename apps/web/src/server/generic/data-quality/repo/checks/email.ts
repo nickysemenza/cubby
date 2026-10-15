@@ -1,11 +1,12 @@
 import { mailboxClassification } from "@cubby/schemas/mailbox-research";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 
 import { email } from "~/server/db/schema";
 import {
   automatedStagesSql,
   emailLinkedSql,
+  emailCompletedImportReadSql,
+  emailHasCompletedImportSql,
   emailMemberClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
 
@@ -41,6 +42,8 @@ const retainedContent = sql`(
 export const emailChecks = defineEntityChecks({
   entity: "email",
   table: email,
+  derivedRead: emailCompletedImportReadSql,
+  filterRead: emailCompletedImportReadSql,
   checks: {
     email_relevance_undecided: {
       missing: (t: Email) => sql`${t.classification} = ${uncertain}`,
@@ -66,16 +69,12 @@ export const emailChecks = defineEntityChecks({
     },
     email_not_imported: {
       expected: (t: Email) => sql`${t.classification} = ${related}`,
-      missing: () => sql`NOT ${emailLinkedSql()} AND NOT EXISTS (
-        SELECT 1 FROM "Run" import
-        WHERE import."purpose" = ${runPurpose.enum.mail_import}
-          AND import."status" = ${runStatus.enum.completed}
-          AND import."deletedAt" IS NULL
-          AND import."ledgerPartyId" = "Email"."ledgerPartyId"
-          AND import."input" @> jsonb_build_object(
-            'sources', jsonb_build_array(jsonb_build_object('orderMailId', "Email"."orderMailId"::text))
-          )
-      )`,
+      missing: (_t: Email, context) =>
+        sql`NOT ${emailLinkedSql()} AND NOT ${
+          context
+            ? sql`${sql.identifier(context.derivedAlias)}."completedImport"`
+            : emailHasCompletedImportSql()
+        }`,
     },
   },
 });
