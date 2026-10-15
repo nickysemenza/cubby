@@ -137,6 +137,28 @@ each image in the body by its local path and pass the same path to
 `main` or a run before the first edit) helps when the change is a comparison.
 Do not open the images to check them: attaching a saved file costs no context.
 
+## Native PR stacks
+
+Publish dependent PRs as a native GitHub stack. After opening each layer against
+its predecessor, register the PRs in bottom-to-top order:
+
+```sh
+gh stack link --base main <bottom-pr-url> <next-pr-url>
+```
+
+Append later layers with `gh stack link <stack-number> <new-pr-url>`. Verify the
+native stack and its member order on GitHub; chained base branches and T3's
+derived chain do not complete registration. Link every layer to the T3 thread.
+Independent changes stay in separate PRs.
+
+Native stacks apply the trunk's branch protection and Actions branch filters to
+every member ([GitHub rules](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)).
+After changing a lower layer, rebase its dependents and verify their final heads.
+The merge gate below applies to every included PR. Merge the ready group with
+`gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
+merge instead of issuing individual-PR merge requests. Stack registration does
+not replace final-head CI or independent review.
+
 ## Commit, push, and merge
 
 Inspect CI logs and annotations before editing. Fix only change-caused failures;

@@ -90,6 +90,9 @@ Use one owning skill; add another only for a distinct concern.
 - **iOS/macOS native app, `CubbyKit`, `cubby-ffi`, or UniFFI:**
   [apps/apple/AGENTS.md](apps/apple/AGENTS.md).
 
+Use the [native PR stack workflow](docs/agents/validation.md#native-pr-stacks)
+for dependent PRs. Keep independent changes in separate PRs.
+
 Open PRs ready for review unless the work is intentionally incomplete or the
 user asks for a draft.
 
