@@ -39,7 +39,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import {
   householdDaysAgo,
@@ -59,9 +58,8 @@ import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { listActionableTasks } from "~/server/domains/task/repo/actionable";
+import { readTaskActionability } from "~/server/domains/task/repo/actionable";
 import { effectiveTaskProjectSql } from "~/server/domains/task/repo/task-project-inheritance";
-import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   loadProjectSubtreeRollups,
@@ -254,7 +252,7 @@ export async function computeAttentionItems(
               }),
         ),
       ),
-    listActionableTasks(db),
+    readTaskActionability(db),
   ]);
 
   // 1. overdue_task — one item per open top-level task past its effective
@@ -460,42 +458,17 @@ export async function computeAttentionItems(
 
   // 6. blocked_work — in_progress project with >=1 blocked task and zero
   // unblocked `next` tasks (no available next action).
-  //
-  // `actionable`'s tasks carry the public `projectId` (a shortcode); resolve
-  // the ones in play back to the uuid this file's Sets/`inProjectScope` key
-  // on, in ONE batched lookup rather than per-task.
-  const appendBlockedProjects = async () => {
-    const actionableProjectCodes = uniq(
-      [
-        ...actionable.next.map((row) => row.projectId),
-        ...actionable.blocked.map((row) => row.task.projectId),
-      ].filter((code): code is NonNullable<typeof code> => code != null),
-    );
-    const actionableProjectRefs = await resolveShortcodes(
-      db,
-      actionableProjectCodes,
-    );
-    const toProjectUuid = (code: string): ProjectId | null => {
-      const ref = actionableProjectRefs.get(code);
-      return ref?.entity === "project" ? ref.id : null;
-    };
+  const appendBlockedProjects = () => {
     const projectsWithNext = new Set<ProjectId>();
-    for (const row of actionable.next) {
-      const projectId = row.projectId ? toProjectUuid(row.projectId) : null;
-      if (projectId && inProjectScope(projectId))
-        projectsWithNext.add(projectId);
-    }
     const blockedTaskCounts = new Map<ProjectId, number>();
-    for (const row of actionable.blocked) {
-      const projectId = row.task.projectId
-        ? toProjectUuid(row.task.projectId)
-        : null;
-      if (projectId && inProjectScope(projectId)) {
+    for (const row of actionable) {
+      if (!row.projectId || !inProjectScope(row.projectId)) continue;
+      if (row.state === "next") projectsWithNext.add(row.projectId);
+      if (row.state === "blocked")
         blockedTaskCounts.set(
-          projectId,
-          (blockedTaskCounts.get(projectId) ?? 0) + 1,
+          row.projectId,
+          (blockedTaskCounts.get(row.projectId) ?? 0) + 1,
         );
-      }
     }
     for (const row of inProgressProjectRows) {
       const blockedTasks = blockedTaskCounts.get(row.id) ?? 0;
@@ -515,7 +488,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  await appendBlockedProjects();
+  appendBlockedProjects();
 
   // 7. date_window_drift — a manual startDate/endDate override that now hides
   // real derived work (own tasks/expenses, folded up through live
