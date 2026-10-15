@@ -226,6 +226,7 @@ export type EntityField = Readonly<{
     width: "xs" | "sm" | "md" | "lg" | null;
     readPath: string | null;
     labelPath: string | null;
+    emptyLabel?: EntityFieldModelMetadata["fields"][number]["display"]["emptyLabel"];
     detailLabelPath?: string | null;
     itemsPath?: string | null;
     format: DisplayFormat | null;

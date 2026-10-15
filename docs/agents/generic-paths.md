@@ -9,7 +9,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 ## Entity spine
 
 - Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, metadata
-  schema in `definition.ts`, compiled by `scripts/generator/entities/*`.
+  schema in `definition.ts`, compiled by `scripts/generator/entities/*`. Presentation metadata changes also update the compiled contract in
+  `scripts/generator/entities/declarations.ts`, the web field-model emitter, and
+  the native wire/catalog projection. Generation checks structure; the web/test
+  typecheck verifies those contracts agree.
 - Reference names and composed display labels: use the typed `display.labelPath`
   contract in [entities](../entities.md), consumed by `readReferenceField` on
   web and `FieldResolutionPresentation.referenceName` on native. Declare
