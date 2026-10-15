@@ -85,7 +85,10 @@ import {
 import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 import { taskList } from "./lookup";
-import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
+import {
+  effectiveTaskProjectSql,
+  hydrateTaskInheritanceRows,
+} from "./task-project-inheritance";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
 type OpenTaskNode = {
@@ -283,78 +286,59 @@ function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
   return a.task.name.localeCompare(b.task.name);
 }
 
-export async function listActionableTasks(
-  db: Database,
-  filters: TaskFilters = {},
-): Promise<ActionableTasksOut> {
-  // Membership is delegated to the ordinary list predicate. The actionable
-  // renderer then adds its disclosed open/top-level semantics while retaining
-  // the full graph below to explain why a matching row is blocked.
-  const matching = await listAll((pagination) =>
-    taskList(
-      db,
-      { ...filters, completion: "open", topLevelOnly: true },
-      [],
-      pagination,
-      "page",
-    ),
-  );
-  const matchingShortcodes = new Set<string>(
-    matching.data.map((row) => row.id),
-  );
-  if (matchingShortcodes.size === 0) {
-    return { next: [], later: [], blocked: [] };
-  }
-
-  const [
-    openTaskRows,
+async function loadTaskDependencyGraph(db: Database) {
+  const [taskEdgeRows, openProjectRows, projectEdgeRows, allProjectParentRows] =
+    await Promise.all([
+      getDb(db)
+        .select({
+          taskId: entityLink.fromEntityId,
+          blockedByTaskId: entityLink.toEntityId,
+        })
+        .from(entityLink)
+        .where(liveLinks("taskDependency"))
+        .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
+      getDb(db)
+        .select({
+          id: project.id,
+          shortcode: project.shortcode,
+          name: project.name,
+          status: project.status,
+        })
+        .from(project)
+        .where(and(notDeleted(project), ne(project.status, "done"))),
+      getDb(db)
+        .select({
+          projectId: entityLink.fromEntityId,
+          blockedByProjectId: entityLink.toEntityId,
+        })
+        .from(entityLink)
+        .where(liveLinks("projectDependency"))
+        .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
+      // ALL live projects (any status) — just enough to walk `parentProjectId`
+      // up from a task's project; done-ness is checked separately against
+      // `projectsById` per ancestor (see module doc comment).
+      getDb(db)
+        .select({ id: project.id, parentProjectId: project.parentProjectId })
+        .from(project)
+        .where(notDeleted(project)),
+    ]);
+  return {
     taskEdgeRows,
     openProjectRows,
     projectEdgeRows,
     allProjectParentRows,
-  ] = await Promise.all([
-    getDb(db).query.task.findMany({
-      where: and(notDeleted(task), ne(task.status, "done")),
-      ...relations.task.withProject,
-    }),
-    getDb(db)
-      .select({
-        taskId: entityLink.fromEntityId,
-        blockedByTaskId: entityLink.toEntityId,
-      })
-      .from(entityLink)
-      .where(liveLinks("taskDependency"))
-      .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
-    getDb(db)
-      .select({
-        id: project.id,
-        shortcode: project.shortcode,
-        name: project.name,
-        status: project.status,
-      })
-      .from(project)
-      .where(and(notDeleted(project), ne(project.status, "done"))),
-    getDb(db)
-      .select({
-        projectId: entityLink.fromEntityId,
-        blockedByProjectId: entityLink.toEntityId,
-      })
-      .from(entityLink)
-      .where(liveLinks("projectDependency"))
-      .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
-    // ALL live projects (any status) — just enough to walk `parentProjectId`
-    // up from a task's project; done-ness is checked separately against
-    // `projectsById` per ancestor (see module doc comment).
-    getDb(db)
-      .select({ id: project.id, parentProjectId: project.parentProjectId })
-      .from(project)
-      .where(notDeleted(project)),
-  ]);
+  };
+}
 
-  const hydratedOpenTaskRows = await hydrateTaskInheritanceRows(
-    db,
-    openTaskRows,
-  );
+function taskBlockerResolver(
+  hydratedOpenTaskRows: readonly OpenTaskNode[],
+  {
+    taskEdgeRows,
+    openProjectRows,
+    projectEdgeRows,
+    allProjectParentRows,
+  }: Awaited<ReturnType<typeof loadTaskDependencyGraph>>,
+) {
   const tasksById = new Map<TaskId, OpenTaskNode>(
     hydratedOpenTaskRows.map((row) => [
       row.id,
@@ -395,46 +379,7 @@ export async function listActionableTasks(
     allProjectParentRows.map((row) => [row.id, row.parentProjectId]),
   );
 
-  // Subtask counts must include done subtasks, which `openTaskRows` (non-done
-  // only) can't supply — a separate grouped query over ALL live subtasks.
-  const [subtaskCounts, dataQualities] = await Promise.all([
-    taskSubtaskCounts(
-      db,
-      hydratedOpenTaskRows.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "task",
-      hydratedOpenTaskRows.map((row) => row.id),
-    ),
-  ]);
-
-  // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
-  // values above are the OTHER side's uuid regardless of its open/done
-  // state, so they aren't all covered by `tasksById` — one batched reverse
-  // lookup for whichever ones are actually referenced.
-  const referencedTaskIds = [
-    ...new Set([...blockedByIds.values(), ...blockingIds.values()].flat()),
-  ];
-  const taskRefs: EntityRef[] = referencedTaskIds.map((id) => ({
-    entity: "task",
-    id,
-  }));
-  const taskShortcodesById = await lookupShortcodes(db, taskRefs);
-  const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
-    ids.map((id) =>
-      parseShortcodeFor(
-        "task",
-        taskShortcodesById.get(entityRefKey("task", id)) ?? "",
-      ),
-    );
-
-  const next: ActionableTaskOut[] = [];
-  const later: ActionableTaskOut[] = [];
-  const blocked: BlockedTaskOut[] = [];
-  const today = householdLocalDate();
-
-  const blockedReasonsFor = (row: (typeof hydratedOpenTaskRows)[number]) => {
+  const blockedReasonsFor = (row: OpenTaskNode) => {
     const reasons: BlockedReason[] = [];
     if (row.status === "blocked") reasons.push({ kind: "manual", chain: [] });
     for (const blockerId of taskEdgesByOwner.get(row.id) ?? []) {
@@ -482,10 +427,124 @@ export async function listActionableTasks(
     return reasons;
   };
 
+  return { blockedReasonsFor, blockedByIds, blockingIds };
+}
+
+/** Dependency state without Task presentation, quality, media, or public-ID hydration. */
+export async function readTaskActionability(db: Database) {
+  const [rows, graph] = await Promise.all([
+    getDb(db)
+      .select({
+        id: task.id,
+        shortcode: task.shortcode,
+        name: task.name,
+        status: task.status,
+        projectId: effectiveTaskProjectSql(),
+        parentTaskId: task.parentTaskId,
+      })
+      .from(task)
+      .where(and(notDeleted(task), ne(task.status, "done"))),
+    loadTaskDependencyGraph(db),
+  ]);
+  const { blockedReasonsFor } = taskBlockerResolver(rows, graph);
+  return rows
+    .filter((row) => !row.parentTaskId)
+    .map((row) => ({
+      id: row.id,
+      shortcode: row.shortcode,
+      projectId: row.projectId,
+      state:
+        blockedReasonsFor(row).length > 0
+          ? ("blocked" as const)
+          : row.status === "later"
+            ? ("later" as const)
+            : ("next" as const),
+    }));
+}
+
+export async function listActionableTasks(
+  db: Database,
+  filters: TaskFilters = {},
+): Promise<ActionableTasksOut> {
+  // Membership is delegated to the ordinary list predicate. The actionable
+  // renderer then adds its disclosed open/top-level semantics while retaining
+  // the full graph below to explain why a matching row is blocked.
+  const matching = await listAll((pagination) =>
+    taskList(
+      db,
+      { ...filters, completion: "open", topLevelOnly: true },
+      [],
+      pagination,
+      "page",
+    ),
+  );
+  const matchingShortcodes = new Set<string>(
+    matching.data.map((row) => row.id),
+  );
+  if (matchingShortcodes.size === 0) {
+    return { next: [], later: [], blocked: [] };
+  }
+
+  const [openTaskRows, graph] = await Promise.all([
+    getDb(db).query.task.findMany({
+      where: and(notDeleted(task), ne(task.status, "done")),
+      ...relations.task.withProject,
+    }),
+    loadTaskDependencyGraph(db),
+  ]);
+
+  const hydratedOpenTaskRows = await hydrateTaskInheritanceRows(
+    db,
+    openTaskRows,
+  );
+  const { blockedReasonsFor, blockedByIds, blockingIds } = taskBlockerResolver(
+    hydratedOpenTaskRows,
+    graph,
+  );
+
+  // Subtask counts must include done subtasks, which `openTaskRows` (non-done
+  // only) can't supply — a separate grouped query over ALL live subtasks.
+  const [subtaskCounts, dataQualities] = await Promise.all([
+    taskSubtaskCounts(
+      db,
+      hydratedOpenTaskRows.map((row) => row.id),
+    ),
+    loadDataQualities(
+      db,
+      "task",
+      hydratedOpenTaskRows.map((row) => row.id),
+    ),
+  ]);
+
+  // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
+  // values above are the OTHER side's uuid regardless of its open/done
+  // state, so they aren't all covered by the open-task graph — one batched reverse
+  // lookup for whichever ones are actually referenced.
+  const referencedTaskIds = [
+    ...new Set([...blockedByIds.values(), ...blockingIds.values()].flat()),
+  ];
+  const taskRefs: EntityRef[] = referencedTaskIds.map((id) => ({
+    entity: "task",
+    id,
+  }));
+  const taskShortcodesById = await lookupShortcodes(db, taskRefs);
+  const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
+    ids.map((id) =>
+      parseShortcodeFor(
+        "task",
+        taskShortcodesById.get(entityRefKey("task", id)) ?? "",
+      ),
+    );
+
+  const next: ActionableTaskOut[] = [];
+  const later: ActionableTaskOut[] = [];
+  const blocked: BlockedTaskOut[] = [];
+  const today = householdLocalDate();
+
   const appendActionableRow = (row: (typeof hydratedOpenTaskRows)[number]) => {
     // Checklist items are represented via their parent, not surfaced as
     // independent actionable/blocked rows (they can still appear inside a
-    // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
+    // why-chain through the shared blocker resolver — its graph stays
     // unfiltered).
     if (row.parentTaskId) return;
     if (!matchingShortcodes.has(row.shortcode)) return;

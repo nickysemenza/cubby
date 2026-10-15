@@ -1284,6 +1284,11 @@ Purchases with live Expense lines all marked `future`. Purchase has no stored
 lines remain eligible, and an undated Purchase without lines is unknown rather
 than planned. The same exclusion applies to the record-detail queue.
 
+Project attention reads Task dependency state through the same blocker resolver
+as the actionable Task list, using five narrow graph queries. It retains project
+UUIDs and excludes checklist rows from the result while keeping them in the
+blocker graph; it does not hydrate Task quality, media, or presentation fields.
+
 Research and Email rows carry structured `gaps` (`{check, message}`): the
 record's live gaps among the checks its saved view's `dataGaps` declares
 (`workQueueGapChecks`). Every other row carries none and keeps its `reason`

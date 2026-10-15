@@ -3,13 +3,16 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog } from "~/server/db/schema";
+import { auditLog, entityLink } from "~/server/db/schema";
 import { taskBulkReorderWorkflow } from "~/server/domains/task/operations.server";
-import { listActionableTasks } from "~/server/domains/task/repo/actionable";
+import {
+  listActionableTasks,
+  readTaskActionability,
+} from "~/server/domains/task/repo/actionable";
 import {
   getTaskByShortcode,
   updateTask,
@@ -23,6 +26,7 @@ import {
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -170,6 +174,143 @@ describe("task repository — scoped list search", () => {
 
 describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
+
+  // Attention needs the same blocker policy without loading Task media,
+  // quality, inherited presentation, or converting project UUIDs twice.
+  it("reads attention membership with the same blocker states in five queries", async () => {
+    const { output: next } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic next",
+      trade: "other",
+    });
+    const { output: later } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic later",
+      trade: "other",
+      status: "later",
+    });
+    const { output: blocked } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic blocked",
+      trade: "other",
+    });
+    const { output: manual } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic manual",
+      trade: "other",
+      status: "blocked",
+    });
+    const { output: child } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic checklist",
+      trade: "other",
+      parentTaskId: blocked.id,
+    });
+    const { output: done } = await createRepoEntity(ctx, "task", {
+      name: "Synthetic done",
+      trade: "other",
+      status: "done",
+    });
+    await updateTask(
+      ctx.db,
+      blocked.id,
+      { blockedByIds: [next.id] },
+      ctx.actor,
+    );
+    await updateTask(ctx.db, next.id, { blockedByIds: [done.id] }, ctx.actor);
+    const measured = await countTestDbQueries(() =>
+      readTaskActionability(ctx.db),
+    );
+    const states = new Map(
+      measured.result.map((row) => [row.shortcode, row.state]),
+    );
+    expect(states.get(next.id)).toBe("next");
+    expect(states.get(later.id)).toBe("later");
+    expect(states.get(blocked.id)).toBe("blocked");
+    expect(states.get(manual.id)).toBe("blocked");
+    expect(states.has(child.id)).toBe(false);
+    expect(states.has(done.id)).toBe(false);
+    const full = await listActionableTasks(ctx.db);
+    expect(
+      measured.result.map((row) => [row.shortcode, row.state]).sort(),
+    ).toEqual(
+      [
+        ...full.next.map((row) => [row.id, "next"]),
+        ...full.later.map((row) => [row.id, "later"]),
+        ...full.blocked.map((row) => [row.task.id, "blocked"]),
+      ].sort(),
+    );
+    expect(measured.queryCount).toBe(5);
+  });
+
+  it("keeps ancestor blockers across a done intermediate project without inheriting its own edges", async () => {
+    const blocker = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic blocker",
+      status: "in_progress",
+    });
+    const ancestor = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic ancestor",
+      status: "in_progress",
+    });
+    const middle = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic completed middle",
+      status: "done",
+      parentProjectId: ancestor.id,
+    });
+    const leaf = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic leaf",
+      status: "in_progress",
+      parentProjectId: middle.id,
+    });
+    const doneRoot = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic completed root",
+      status: "done",
+    });
+    const openLeaf = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic open leaf",
+      status: "in_progress",
+      parentProjectId: doneRoot.id,
+    });
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values([
+        {
+          kind: "projectDependency",
+          fromKind: "project",
+          toKind: "project",
+          fromEntityId: ancestor.id,
+          toEntityId: blocker.id,
+        },
+        {
+          kind: "projectDependency",
+          fromKind: "project",
+          toKind: "project",
+          fromEntityId: doneRoot.id,
+          toEntityId: blocker.id,
+        },
+      ]);
+    const inherited = await insertWithShortcode(ctx.db, "task", {
+      name: "Synthetic inherited blocker",
+      projectId: leaf.id,
+      status: "not_started",
+      trade: "other",
+    });
+    const ready = await insertWithShortcode(ctx.db, "task", {
+      name: "Synthetic ready",
+      projectId: openLeaf.id,
+      status: "not_started",
+      trade: "other",
+    });
+    const states = await readTaskActionability(ctx.db);
+    expect(states.find((row) => row.id === inherited.id)).toMatchObject({
+      projectId: leaf.id,
+      state: "blocked",
+    });
+    expect(states.find((row) => row.id === ready.id)).toMatchObject({
+      projectId: openLeaf.id,
+      state: "next",
+    });
+    const full = await listActionableTasks(ctx.db);
+    expect(
+      full.blocked.find((row) => row.task.id === inherited.shortcode)?.reasons,
+    ).toMatchObject([{ kind: "project", chain: [{ id: blocker.shortcode }] }]);
+    expect(full.next.some((row) => row.id === ready.shortcode)).toBe(true);
+  });
 
   it("builds the transitive chain (A blocked by B, B blocked by C -> A's chain = [B, C])", async () => {
     const { output: c } = await createRepoEntity(ctx, "task", {
