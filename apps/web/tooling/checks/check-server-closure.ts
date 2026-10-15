@@ -33,6 +33,7 @@ const MB = 1_000_000;
 const ENTRY_BUDGET = 2 * MB;
 // The browser API bootstrap was 3.80 MB before title-column generation removed
 // the full field model from shortcode resolution (2026-10).
+// After generation it measures 3.13 MB / 156 files; keep that saving guarded.
 const BROWSER_DISPATCH_BUDGET = 3.25 * MB;
 // Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
@@ -189,6 +190,10 @@ if (invokedPath === import.meta.url) {
       `Sentry build-time instrumentation reached the Worker bundle (${orchestrion.join(", ")}). Keep buildTimeInstrumentation: false in vite.config.ts; it adds ~1.1 MB of CommonJS Sentry code to the first request.`,
     );
   const report = measureServerClosure(serverRoot);
+  if (report.browserDispatch.files.length === report.entry.files.length)
+    throw new Error(
+      "Browser dispatch chunk was not reached from the Worker entry. Update BROWSER_DISPATCH_CHUNK to match the emitted adapter before measuring its budget.",
+    );
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
   console.log(
     `[check-server-closure] entry ${mb(report.entry.bytes)} (${report.entry.files.length} files), browser dispatch ${mb(report.browserDispatch.bytes)} (${report.browserDispatch.files.length} files), first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,

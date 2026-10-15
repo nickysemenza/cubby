@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -26,6 +28,20 @@ function dist(files: Record<string, string>) {
 }
 
 describe("measureServerClosure", () => {
+  it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
+    const cwd = dist({
+      "dist/server/index.js":
+        'const b=()=>import("./assets/api-adapter-1.js");',
+      "dist/server/assets/api-adapter-1.js": "export const adapter=1;",
+    });
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
+      { cwd, encoding: "utf8" },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Browser dispatch chunk was not reached");
+  });
   it("counts the request path through the server entry and router chunk, not other lazy chunks", () => {
     const report = measureServerClosure(
       dist({

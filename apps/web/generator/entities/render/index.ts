@@ -1072,6 +1072,12 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
   const shortcodeTableEntities = entities
     .flatMap((entity) => {
       const { dbTable } = entity.descriptor;
+      if (
+        entity.shortcode === null ||
+        dbTable === null ||
+        dbTable === undefined
+      )
+        return [];
       const title = entity.fieldModel.fields.find(
         (field) => field.readKey === entity.inspector.titleField,
       );
@@ -1079,17 +1085,13 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         ? (entity.fieldModel.storage.find((entry) => entry.key === title.key)
             ?.column ?? null)
         : null;
-      return entity.shortcode === null ||
-        dbTable === null ||
-        dbTable === undefined
-        ? []
-        : [
-            {
-              key: entity.key,
-              dbTable: stringValue(dbTable, `${entity.key}.descriptor.dbTable`),
-              titleColumn,
-            },
-          ];
+      return [
+        {
+          key: entity.key,
+          dbTable: stringValue(dbTable, `${entity.key}.descriptor.dbTable`),
+          titleColumn,
+        },
+      ];
     })
     .sort((left, right) => left.key.localeCompare(right.key));
   const shortcodeTableImportNames = [
