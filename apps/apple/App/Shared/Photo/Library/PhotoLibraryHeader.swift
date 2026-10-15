@@ -248,16 +248,16 @@ enum PhotoLibraryStages {
 /// Replaces `PhotoLibraryBrowser.controls`: that stack was up to twelve lines of chrome (a
 /// segmented filter, a category chip row, a mini spinner literally captioned "Loading photo
 /// library", a bare refresh button, a six-line monospaced debug dump, and a two-line explainer)
-/// above every grid the Photos screen ever shows. This collapses the idle case to one row and
-/// keeps everything else to at most three: filter+chips, a status line (only while something is
-/// worth reporting), and a footnote (only under the "Not in Cubby" filter or an active category).
+/// above every grid the Photos screen ever shows. Filters and the thumbnail dimming preference
+/// stay visible; progress and filter caveats appear only while relevant.
 struct PhotoLibraryHeader: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var filter: PhotoLibraryFilter
     @Binding var selectedCategory: PhotoCategory?
+    @Binding var dimPhotosInCubby: Bool
     @State private var showsBadgeKey = false
-    /// `!picker` — the picker sheet's browser instance shows the ownership filter alone, with no
+    /// `!picker` — the picker sheet's browser instance shows the ownership filter with no
     /// category chips and no per-category footnote.
     let showsCategories: Bool
     let unanalysedCount: Int
@@ -323,6 +323,12 @@ struct PhotoLibraryHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             filterRow
+            Toggle("Dim photos in Cubby", isOn: $dimPhotosInCubby)
+                #if os(iOS)
+                    .frame(minHeight: 44)
+                #endif
+                .accessibilityIdentifier("photos.dimInCubby")
+                .help("Greys out strong Cubby matches. Photos remain selectable.")
             PhotoLibraryStagePanel(
                 status: status, stages: stages,
                 reduceMotion: reduceMotion, barWidth: barWidth)
@@ -613,11 +619,13 @@ struct CategoryChip: View {
     }
 }
 
-#Preview("Idle — one row", traits: .modifier(SignedInPreview())) {
+#Preview("Idle — filters and dimming", traits: .modifier(SignedInPreview())) {
     @Previewable @State var filter: PhotoLibraryFilter = .all
     @Previewable @State var category: PhotoCategory?
+    @Previewable @State var dimPhotosInCubby = false
     PhotoLibraryHeader(
-        filter: $filter, selectedCategory: $category, showsCategories: true, unanalysedCount: 0)
+        filter: $filter, selectedCategory: $category, dimPhotosInCubby: $dimPhotosInCubby,
+        showsCategories: true, unanalysedCount: 0)
 }
 
 #Preview("Filter row — wide vs. compact", traits: .modifier(SignedInPreview())) {
@@ -626,13 +634,15 @@ struct CategoryChip: View {
     VStack(alignment: .leading, spacing: 24) {
         Text("Wide (700pt)").font(.caption).foregroundStyle(.secondary)
         PhotoLibraryHeader(
-            filter: $filter, selectedCategory: $category, showsCategories: true, unanalysedCount: 0
+            filter: $filter, selectedCategory: $category, dimPhotosInCubby: .constant(false),
+            showsCategories: true, unanalysedCount: 0
         )
         .frame(width: 700)
         .border(Color.secondary.opacity(0.3))
         Text("Compact (320pt)").font(.caption).foregroundStyle(.secondary)
         PhotoLibraryHeader(
-            filter: $filter, selectedCategory: $category, showsCategories: true, unanalysedCount: 0
+            filter: $filter, selectedCategory: $category, dimPhotosInCubby: .constant(true),
+            showsCategories: true, unanalysedCount: 0
         )
         .frame(width: 320)
         .border(Color.secondary.opacity(0.3))
