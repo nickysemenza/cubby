@@ -53,6 +53,7 @@ import { formatCurrency } from "~/lib/utils";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Picker } from "~/ui/combobox/picker";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -898,6 +899,12 @@ function ProductPanel({
         unresolvedReason:
           next.kind === "existing" ? null : review.unresolvedReason,
         stockIntent: review.stockIntent,
+        productChanges:
+          next.kind === "existing" &&
+          proposal.product.kind === "existing" &&
+          next.existingId === proposal.product.existing?.id
+            ? review.productChanges
+            : undefined,
       },
     }));
   };
@@ -1310,7 +1317,13 @@ function PhotoProductSuggestions({
                             data={{ id: line.expenseId, name: line.name }}
                             displayImage={null}
                           />{" "}
-                          · {line.date ?? "Undated"} ·{" "}
+                          ·{" "}
+                          {line.date ? (
+                            <DateDisplay start={line.date} />
+                          ) : (
+                            "Undated"
+                          )}{" "}
+                          ·{" "}
                           {line.cost == null
                             ? "Cost unknown"
                             : formatCurrency(line.cost)}
@@ -1347,9 +1360,17 @@ function InventoryFields({
       { enabled: Boolean(inventory?.existingEntryId) },
     ),
   );
+  const destination =
+    proposal.product.kind === "existing" ? proposal.product.existing?.id : null;
+  useEffect(() => setEntryError(null), [destination]);
+  const saveStock: SaveGroup = (build) =>
+    save(build).then((success) => {
+      if (success) setEntryError(null);
+      return success;
+    });
   const review = reviewDecision(proposal);
   const changeIntent = (stockIntent: PhotoGroupDecision["stockIntent"]) =>
-    save(() => ({
+    saveStock(() => ({
       ...toGroupInput(proposal, {
         inventory:
           stockIntent === "receive"
@@ -1402,7 +1423,7 @@ function InventoryFields({
                 label="location"
                 value={selected}
                 setValue={(item) =>
-                  save(() => ({
+                  saveStock(() => ({
                     ...toGroupInput(proposal, {
                       inventory: item
                         ? {
@@ -1541,7 +1562,7 @@ function InventoryFields({
                 disabled={busy}
                 placeholder="Choose an owner"
                 setValue={(item) =>
-                  save(() => ({
+                  saveStock(() => ({
                     ...toGroupInput(proposal, {
                       inventory: {
                         ...toGroupInput(proposal).inventory!,
@@ -1561,7 +1582,7 @@ function InventoryFields({
                 size="sm"
                 disabled={busy}
                 onClick={() =>
-                  save(() => ({
+                  saveStock(() => ({
                     ...toGroupInput(proposal, {
                       inventory: {
                         ...toGroupInput(proposal).inventory!,
@@ -2120,7 +2141,7 @@ function ExpenseLinkReview({
                   />
                 </p>
                 <p className="text-muted-foreground">
-                  {line.date ?? "Undated"} ·{" "}
+                  {line.date ? <DateDisplay start={line.date} /> : "Undated"} ·{" "}
                   {line.cost == null
                     ? "Cost unknown"
                     : `${formatCurrency(line.cost)}`}{" "}
@@ -2290,7 +2311,6 @@ export function PhotoGroupReview({
   runStatus: string;
   hasAgent: boolean;
 }) {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [batchKeys, setBatchKeys] = useState<Set<string>>(() => new Set());
   const [batchQueued, setBatchQueued] = useState(false);
   const [pendingEdits, setPendingEdits] = useState(0);
@@ -2307,14 +2327,6 @@ export function PhotoGroupReview({
     [query.data?.review.proposals],
   );
   useIndexedSubsections("photo-batch", groupSections);
-  useEffect(() => {
-    if (selectedKey) return;
-    const first =
-      query.data?.review.proposals.find(
-        (proposal) => proposal.state === "proposed",
-      ) ?? query.data?.review.proposals[0];
-    if (first) setSelectedKey(first.groupKey);
-  }, [selectedKey, query.data]);
   const action = useReviewAction(runId);
   // A focused field saves on blur. Safari can drop the following click when
   // that save rerenders the button, so approval waits for the save explicitly.
@@ -2507,10 +2519,6 @@ export function PhotoGroupReview({
       groupByImage.set(entry.id, proposal.groupKey);
     }
   const busy = action.isPending || pendingEdits > 0;
-  const selected =
-    review.proposals.find((proposal) => proposal.groupKey === selectedKey) ??
-    proposed[0] ??
-    settled[0];
 
   return (
     <Stack gap="lg">
@@ -2688,7 +2696,7 @@ export function PhotoGroupReview({
           )
         ) : null}
       </Section>
-      {selected ? (
+      {review.proposals.length > 0 ? (
         <div className="min-w-0">
           <div className="min-w-0 space-y-6">
             {review.proposals.map((selected, index) => (
