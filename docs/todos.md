@@ -1715,6 +1715,10 @@ consume the declarations.
   response timeouts from pool-slot exhaustion. Correlate request/release and Hyperdrive
   diagnostics; retire unusable clients and preserve committed operation results before
   any retry.
+  For remaining Run detail pool-slot failures, measure origin occupancy and query
+  duration before tuning connection limits; background contention is unproven.
+  Browser read admission and transient recovery are owned by
+  [web runtime rules](agents/web-runtime.md).
   Sentry: `CUBBY-15V`, `CUBBY-15Z`, `CUBBY-162`, `CUBBY-169`, `CUBBY-17N`, `CUBBY-17T`,
   `CUBBY-17W`, `CUBBY-17X`, `CUBBY-180`, `CUBBY-184`, `CUBBY-192`, `CUBBY-198`,
   `CUBBY-19E`, `CUBBY-19F`, `CUBBY-19G`, `CUBBY-19H`, `CUBBY-19V`, `CUBBY-1A7`,

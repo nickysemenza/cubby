@@ -8,7 +8,7 @@ import { startPhotoGroupingForActor } from "~/server/photo-import-run/grouping";
 import {
   admitPhotoRunBatch,
   excludeFailedPhotoRunImages,
-  readPhotoRunLifecycle,
+  readPhotoRunSnapshot,
   sealPhotoRunBatch,
   setPhotoRunProcessor,
 } from "~/server/photo-import-run/lifecycle";
@@ -62,17 +62,15 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const [review, images, settings, lifecycle] = await Promise.all([
-        listPhotoGroupProposals(context.db, input.runId),
-        listPhotoRunImages(context.db, input.runId),
+      const [snapshot, settings] = await Promise.all([
+        readPhotoRunSnapshot(context.db, input.runId),
         readImageProcessingSettings(context.db),
-        readPhotoRunLifecycle(context.db, input.runId),
       ]);
       return {
-        review,
-        images,
+        review: snapshot.review,
+        images: snapshot.images,
         imageProcessingPaused: settings.paused,
-        lifecycle,
+        lifecycle: snapshot.lifecycle,
       };
     },
     candidates: async (context, input) => {

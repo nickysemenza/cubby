@@ -37,6 +37,7 @@ import {
   EXCLUDED_FAILED_DESCRIPTION_REASON,
   excludeFailedPhotoRunImages,
   readPhotoRunLifecycle,
+  readPhotoRunSnapshot,
   sealPhotoRunBatch,
   setPhotoRunProcessor,
 } from "./lifecycle";
@@ -568,9 +569,12 @@ describe("photo run lifecycle", () => {
         },
       })
       .where(eq(runTable.id, run.id));
-    expect((await readPhotoRunLifecycle(ctx.db, run.shortcode)).phase).toBe(
-      "ready_for_review",
-    );
+    const snapshot = await readPhotoRunSnapshot(ctx.db, run.shortcode);
+    expect(snapshot.lifecycle.phase).toBe("ready_for_review");
+    expect(
+      snapshot.review.proposals.map((proposal) => proposal.groupKey),
+    ).toEqual(["ready"]);
+    expect(snapshot.images).toHaveLength(codes.length);
   });
 
   it("refuses to dispatch on readiness judged against a superseded input", async () => {
