@@ -1,0 +1,19 @@
+docs/plans/repo-restructure.md
+  s_2a22d2c73c07e5::t_df6c31693e949b 3-6,27-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "14727c8d526975b1e2ed7d1f9ed8bf4dee7652cf",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
