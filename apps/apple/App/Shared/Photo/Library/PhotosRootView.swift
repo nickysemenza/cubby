@@ -165,6 +165,7 @@ private struct PhotoLibraryBrowser: View {
         self.onSelection = onSelection
     }
     @State private var filter: Filter = .all
+    @AppStorage("dimPhotosInCubby") private var dimPhotosInCubby = false
     @State private var pickerIDs: [String] = []
     @State private var preview: AssetPreview?
     @State private var session = UUID()
@@ -197,7 +198,8 @@ private struct PhotoLibraryBrowser: View {
         VStack(spacing: 0) {
             if library.hasFullAccess {
                 PhotoLibraryHeader(
-                    filter: $filter, selectedCategory: $selectedCategory, showsCategories: !picker,
+                    filter: $filter, selectedCategory: $selectedCategory,
+                    dimPhotosInCubby: $dimPhotosInCubby, showsCategories: !picker,
                     unanalysedCount: unanalysedCount)
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -210,7 +212,8 @@ private struct PhotoLibraryBrowser: View {
                                 MonthSection(
                                     month: month, assets: monthAssets(month),
                                     columns: columns, selectionNumbers: selectionNumbers,
-                                    library: library, preview: $preview, onToggle: toggle
+                                    library: library, dimPhotosInCubby: dimPhotosInCubby,
+                                    preview: $preview, onToggle: toggle
                                 )
                                 .id(month.id)
                                 .onAppear {
@@ -654,6 +657,7 @@ private struct MonthSection: View {
     let columns: [GridItem]
     let selectionNumbers: [String: Int]
     let library: PhotoLibraryStore
+    let dimPhotosInCubby: Bool
     @Binding var preview: AssetPreview?
     let onToggle: (String) -> Void
 
@@ -672,7 +676,10 @@ private struct MonthSection: View {
     }
 
     private func cell(for asset: PHAsset) -> some View {
-        PhotoLibraryCell(asset: asset, selection: selectionNumbers[asset.localIdentifier]) {
+        PhotoLibraryCell(
+            asset: asset, selection: selectionNumbers[asset.localIdentifier],
+            dimPhotosInCubby: dimPhotosInCubby
+        ) {
             library.scrollID = asset.localIdentifier
             onToggle(asset.localIdentifier)
         } onShowDetails: {
@@ -702,6 +709,7 @@ private struct PhotoLibraryCell: View {
     @Environment(\.developerOverlays) private var developerOverlays
     let asset: PHAsset
     let selection: Int?
+    let dimPhotosInCubby: Bool
     let onTap: () -> Void
     let onShowDetails: () -> Void
     @State private var image: CGImage?
@@ -718,6 +726,8 @@ private struct PhotoLibraryCell: View {
                 .overlay {
                     if let image {
                         Image(decorative: image, scale: 1).resizable().scaledToFill()
+                            .saturation(dimPhotosInCubby && cellState.represented ? 0 : 1)
+                            .brightness(dimPhotosInCubby && cellState.represented ? -0.25 : 0)
                     } else {
                         Image(systemName: "photo").foregroundStyle(.secondary)
                     }
