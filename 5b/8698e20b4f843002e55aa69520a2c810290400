@@ -1,0 +1,77 @@
+apps/web/src/server/domains/image-processing/repo/image-processing-wakeups.ts
+  s_2a22d2c73c07e5::t_19bcb7dc5e65f7 1-24
+apps/web/src/server/domains/image-processing/service/cloud-description.ts
+  s_2a22d2c73c07e5::t_274e9bdb3370c3 82
+apps/web/src/server/domains/image-processing/service/image-processing-maintenance.ts
+  s_2a22d2c73c07e5::t_aa6c7318aedbd3 24-26
+apps/web/src/server/domains/image-processing/service/image-processing.service.ts
+  s_2a22d2c73c07e5::t_12bb4367e86f84 1-3,6,11-12,14-16,18-19,22
+apps/web/src/server/domains/image/service/image-description.service.ts
+  s_2a22d2c73c07e5::t_0959ab6499e1a8 31
+apps/web/src/server/domains/image/service/image-identification.service.ts
+  s_2a22d2c73c07e5::t_babb63bed16b5b 33
+apps/web/src/server/domains/image/service/image-storage.service.ts
+  s_2a22d2c73c07e5::t_c28482c87abd8b 63
+apps/web/src/server/domains/image/service/image-verification.service.ts
+  s_2a22d2c73c07e5::t_3e174120b4fd81 11
+apps/web/src/server/domains/photo-import/operations/photo-import.server.ts
+  s_2a22d2c73c07e5::t_cd94ead8f211aa 36
+apps/web/src/server/domains/photo-import/repo/photo-import-commit.integration.test.ts
+  s_2a22d2c73c07e5::t_a47db50fc1dda4 11
+apps/web/src/server/domains/photo-import/repo/photo-import-commit.ts
+  s_2a22d2c73c07e5::t_12be01c9cbe982 17
+apps/web/src/server/domains/photo-import/repo/photo-import-commit.unit.test.ts
+  s_2a22d2c73c07e5::t_d2b9fa7ea80ac2 12
+apps/web/src/server/domains/photo-import/repo/run/lifecycle.integration.test.ts
+  s_2a22d2c73c07e5::t_258c40895d42db 23
+apps/web/src/server/domains/photo-import/repo/run/proposals.integration.test.ts
+  s_2a22d2c73c07e5::t_e5aa17f3cac5ab 36-37,40
+apps/web/src/server/domains/photo-import/service/photo-import-route.adapter.ts
+  s_2a22d2c73c07e5::t_d883f64d9101aa 37
+apps/web/src/server/domains/purchase-import/operations/agent-services.ts
+  s_2a22d2c73c07e5::t_c3fc2715449514 239,243-244,275-276
+apps/web/src/server/domains/purchase-import/operations/import-orders.ts
+  s_2a22d2c73c07e5::t_5964a129f76ae3 94-96
+apps/web/src/server/domains/purchase-import/operations/run-review.ts
+  s_2a22d2c73c07e5::t_fa467f3bc5b2cc 1-579
+apps/web/src/server/domains/purchase-import/repo/audit-batch.integration.test.ts
+  s_2a22d2c73c07e5::t_8d24f038d1277b 12-14
+apps/web/src/server/domains/purchase-import/repo/import-order-convergence.integration.test.ts
+  s_2a22d2c73c07e5::t_8c5c39de000e13 43
+apps/web/src/server/domains/purchase-import/repo/photo-inventory-run.integration.test.ts
+  s_2a22d2c73c07e5::t_c26dfa10cd5947 26
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_2a22d2c73c07e5::t_c59f553a7bd32b 64
+apps/web/src/server/domains/purchase-import/repo/run-service.integration.test.ts
+  s_2a22d2c73c07e5::t_e7f9f6638e6c11 22-25
+apps/web/src/server/domains/purchase-import/repo/run-service.ts
+  s_2a22d2c73c07e5::t_dc83d0f4f0ee36 1,3-9,12,14-15,17,20-21,26-30,33,36,913,916,923
+apps/web/src/server/domains/purchase-import/service/run-progress-state.integration.test.ts
+  s_2a22d2c73c07e5::t_41627918017a97 14-16
+apps/web/src/server/domains/vendor/service/vendor-logo.service.ts
+  s_2a22d2c73c07e5::t_c6861e90f855ef 27
+apps/web/src/server/domains/vendor/service/vendor-logo.service.unit.test.ts
+  s_2a22d2c73c07e5::t_eb3b83a1ec2c48 5
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_2a22d2c73c07e5::t_de140fa9361497 31-33
+apps/web/src/server/workflows/catch-up.ts
+  s_2a22d2c73c07e5::t_07924907f88f4f 58
+apps/web/tooling/scenarios/tester-army-coupled.ts
+  s_2a22d2c73c07e5::t_89dbb2c56160bc 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5b8698e20b4f843002e55aa69520a2c810290400",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
