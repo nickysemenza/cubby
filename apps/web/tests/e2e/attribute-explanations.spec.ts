@@ -72,7 +72,14 @@ test("product location context preserves links and explains the same partial gap
     .getByRole("button", { name: "How owner is determined", exact: true })
     .first()
     .click();
-  await page.getByText("Inputs and source settings", { exact: true }).click();
+  const ownerPanel = page.locator('[data-slot="popover-content"]:visible');
+  await ownerPanel
+    .locator("summary")
+    .filter({ hasText: `${name} shelf` })
+    .click();
+  await ownerPanel
+    .getByText("Inputs and source settings", { exact: true })
+    .click();
   const beneficiaries = page.getByRole("button", {
     name: "How beneficiaries is determined",
     exact: true,
