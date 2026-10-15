@@ -252,6 +252,7 @@ export const mailTriagePreviewOut = z.object({
   imageEvidence: mailImageEvidence.nullable(),
   usage: z.object({
     calls: z.number().int().nonnegative(),
+    accountingPending: z.boolean(),
     elapsedMs: z.number().nonnegative(),
     standardCost: z.number().nullable(),
     chargedCost: z.number().nullable(),

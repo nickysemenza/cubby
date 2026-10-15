@@ -77,7 +77,9 @@ only after uncertainty, using the production image preparation and completeness
 guards. The response separates the initial decision from the final outcome and
 includes image counts, byte sizes, refusal diagnostics, readability, detail retry,
 elapsed time and priced usage (unpriced costs stay unknown). The UI folds these
-diagnostics under Technical details. A preview records only its diagnostic Run
+diagnostics under Technical details. Usage telemetry is asynchronous: missing
+call receipts leave costs unknown with accounting pending, never a false zero;
+the diagnostic Run exposes usage after its telemetry arrives. A preview records only its diagnostic Run
 and model usage; it publishes no Email classification, observation, retained
 content, import or member grade. Existing Gmail execution approval is required;
 preview never grants import authority or bypasses paid-request admission.

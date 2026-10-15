@@ -94,10 +94,27 @@ describe("full read-only Email preview", () => {
         .select()
         .from(email)
         .where(eq(email.id, saved.id));
-      vi.spyOn(runners, "productionMailTriage").mockReturnValue(
-        async () => classification,
+      vi.spyOn(runners, "productionMailTriage").mockImplementation(
+        (_db, _run, onCall) => async () => {
+          onCall?.({
+            model: "typesafe/jev",
+            promptVersion: "synthetic-preview",
+            operation: "mailbox-triage",
+          });
+          return classification;
+        },
       );
-      vi.spyOn(runners, "productionMailRelevance").mockReturnValue(relevance);
+      vi.spyOn(runners, "productionMailRelevance").mockImplementation(
+        (_db, _run, onCall) => async (request) => {
+          const result = await relevance(request);
+          onCall?.({
+            model: "gpt-6-luna",
+            promptVersion: "synthetic-preview",
+            operation: "mailbox-relevance",
+          });
+          return result;
+        },
+      );
       const result =
         classification === "uncertain"
           ? mailTriagePreviewOut.parse(
@@ -139,6 +156,21 @@ describe("full read-only Email preview", () => {
         classification === "uncertain" ? "model" : "decision",
       );
       expect(result.triage.classification).toBe(classification);
+      expect(result.usage).toMatchObject(
+        classification === "uncertain"
+          ? {
+              calls: 2,
+              accountingPending: true,
+              standardCost: null,
+              chargedCost: null,
+            }
+          : {
+              calls: 0,
+              accountingPending: false,
+              standardCost: 0,
+              chargedCost: 0,
+            },
+      );
       expect(result.relevance?.classification).toBe(
         classification === "uncertain" ? "unrelated" : undefined,
       );

@@ -147,6 +147,7 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                     {result.usage.chargedCost === null
                       ? "Unknown"
                       : formatSmallCurrency(result.usage.chargedCost)}
+                    {result.usage.accountingPending && " (accounting pending)"}
                   </dd>
                   <dt>Diagnostic Run</dt>
                   <dd>{result.runId}</dd>

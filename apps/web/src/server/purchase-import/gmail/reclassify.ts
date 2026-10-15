@@ -406,12 +406,15 @@ export async function previewMailTriage(
     );
     const message = await provider.getMessage(email.messageId);
     let model: MailTriagePreviewOut["triage"]["model"] = null;
+    let triageCalls = 0;
+    let relevanceCalls = 0;
     const triage =
       ports.triage ??
       (await import("./triage-model")).productionMailTriage(
         db,
         created.id,
         (call) => {
+          triageCalls++;
           model = supportedDecisionModelSchema.parse(call.model);
         },
         input.decisionModel,
@@ -432,6 +435,7 @@ export async function previewMailTriage(
           db,
           created.id,
           (call) => {
+            relevanceCalls++;
             relevanceModel = call.model;
           },
         );
@@ -449,7 +453,15 @@ export async function previewMailTriage(
         },
       );
     }
-    const usage = await listAiUsageForRun(db, created.id, { limit: 1 });
+    const usage = await listAiUsageForRun(db, created.id, { limit: 100 });
+    // Usage is queued telemetry; a missing row is not a free model call.
+    const recordedCalls = (operation: string) =>
+      usage.records.filter(
+        (call) => call.operation === operation && call.status === "succeeded",
+      ).length;
+    const accountingPending =
+      recordedCalls("mailbox-triage") < triageCalls ||
+      recordedCalls("mailbox-relevance") < relevanceCalls;
     await finishReclassifyRun(db, created.id, []);
     return mailTriagePreviewOut.parse({
       ...(relevance
@@ -467,10 +479,17 @@ export async function previewMailTriage(
       relevance,
       imageEvidence,
       usage: {
-        calls: usage.count,
+        calls: triageCalls + relevanceCalls,
+        accountingPending,
         elapsedMs: Date.now() - startedAt,
-        standardCost: usage.standardUnpricedCount ? null : usage.standardCost,
-        chargedCost: usage.chargedUnpricedCount ? null : usage.chargedCost,
+        standardCost:
+          accountingPending || usage.standardUnpricedCount
+            ? null
+            : usage.standardCost,
+        chargedCost:
+          accountingPending || usage.chargedUnpricedCount
+            ? null
+            : usage.chargedCost,
       },
       view,
     });
