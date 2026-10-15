@@ -30,9 +30,11 @@ import {
   importSourceOrder,
   importSourceProduct,
   externalSource,
+  feedback,
   product,
   inventoryEntry,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -57,6 +59,7 @@ import {
   groundedVariantEvidence,
   variantLiteral,
 } from "~/server/repo/product-variant-evidence";
+import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -670,6 +673,116 @@ describe("stored Product identity pairs", () => {
       )[0]?.subject,
     ).toEqual(historical!.subject);
   });
+  // Every Product merge entry point must fence current or unresolved conflicts, including loser–loser pairs.
+  it.each(
+    [false, true].flatMap((multiway) =>
+      ["current", "stale", "excluded"].map((evidence) => ({
+        multiway,
+        evidence,
+      })),
+    ),
+  )(
+    "refuses a generic merge atomically across every combined pair: %j",
+    async ({ multiway, evidence }) => {
+      const { products, ids, runId, decisionPort } = await boundVariantPair(
+        [
+          "Synthetic blue medium shirt, pack of 2",
+          "Synthetic red medium shirt, pack of 2",
+        ],
+        undefined,
+        [
+          { color: "blue", size: "medium", pack: "2" },
+          { color: "red", size: "medium", pack: "2" },
+        ],
+      );
+      await publishProductIdentity(
+        ctx.db,
+        await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
+      );
+      const neutral = await productFixture(
+        ctx,
+        "Synthetic neutral merge keeper",
+      );
+      const neutralId = await recordId(ctx.db, neutral.id, "product");
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Synthetic guarded merge shelf" }),
+        ctx.actor,
+      );
+      for (const [index, id] of ids.entries())
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId: id,
+            locationId: location.entityId,
+            amount: { value: index + 2, unit: "each" },
+          },
+          ctx.actor,
+        );
+      if (evidence === "stale") {
+        const sources = await getDb(ctx.db)
+          .select()
+          .from(entitySource)
+          .where(eq(entitySource.entityId, ids[1]!));
+        const source = sources.find((row) => row.fieldPath === "name")!;
+        await getDb(ctx.db)
+          .update(entitySource)
+          .set({ quote: "Synthetic edited source without variant facts" })
+          .where(eq(entitySource.id, source.id));
+      }
+      if (evidence === "excluded")
+        await getDb(ctx.db)
+          .update(product)
+          .set({ name: "Misc" })
+          .where(eq(product.id, ids[1]!));
+      const neutralPairs = await Promise.all(
+        ids.map((id) => prepareProductIdentityPair(ctx.db, [neutralId, id])),
+      );
+      expect(
+        neutralPairs.every(
+          (pair) =>
+            pair === null ||
+            (!pair.conflict && pair.verification !== "pending_verification"),
+        ),
+      ).toBe(true);
+      const readPreserved = () =>
+        Promise.all([
+          getDb(ctx.db).select().from(product).orderBy(product.id),
+          getDb(ctx.db)
+            .select()
+            .from(inventoryEntry)
+            .orderBy(inventoryEntry.id),
+          getDb(ctx.db).select().from(assessment).orderBy(assessment.id),
+          getDb(ctx.db)
+            .select()
+            .from(assessmentState)
+            .orderBy(assessmentState.id),
+          getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+          getDb(ctx.db).select().from(entitySource).orderBy(entitySource.id),
+          getDb(ctx.db)
+            .select()
+            .from(importSourceProduct)
+            .orderBy(importSourceProduct.id),
+        ]);
+      const before = await readPreserved();
+      const input = {
+        keepId: multiway ? neutral.id : products[0]!.id,
+        mergeIds: multiway ? products.map((row) => row.id) : [products[1]!.id],
+      };
+      await expect(
+        executeEntity(kernelCtx(ctx), {
+          action: "merge",
+          entity: "product",
+          data: input,
+        }),
+      ).rejects.toThrow(/conflict|verification/);
+      expect(await readPreserved()).toEqual(before);
+      await expect(mergeProducts(ctx.db, input, ctx.actor)).rejects.toThrow(
+        /conflict|verification/,
+      );
+      expect(await readPreserved()).toEqual(before);
+    },
+  );
   it("keeps model conflict history pending until current Source-bound model values agree", async () => {
     const { products, ids, runId, decisionPort } = await boundVariantPair([
       "Synthetic model item A",

@@ -59,6 +59,7 @@ import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   amountToColumns,
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
@@ -1370,6 +1371,36 @@ export const mergeProducts = async (
         entityKind: "product",
       })),
     );
+
+    // Parent locks precede evidence reads; all combined pairs include loser–loser conflicts.
+    const { prepareProductIdentityPair } =
+      await import("~/server/ai/product-identity");
+    const transactionDb = databaseForTransaction(tx);
+    const combinedIds = [keepId, ...loserIds].sort();
+    for (let first = 0; first < combinedIds.length; first++) {
+      for (let second = first + 1; second < combinedIds.length; second++) {
+        const pair = await prepareProductIdentityPair(
+          transactionDb,
+          [combinedIds[first]!, combinedIds[second]!],
+          { includeExcluded: true },
+        );
+        if (!pair)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Product identity evidence is unavailable for merge targets",
+          );
+        if (pair.conflict)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Confirmed variant conflict prevents Product merging",
+          );
+        if (pair.verification === "pending_verification")
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Historical variant conflict requires fresh current verification before merging",
+          );
+      }
+    }
 
     // Rebuild after the locks: preview is advisory, while this is the plan the
     // executor is allowed to trust.

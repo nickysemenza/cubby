@@ -269,7 +269,10 @@ export const preparedProductIdentityPair = z.object({
 export async function prepareProductIdentityPair(
   db: Database,
   ids: readonly [ProductId, ProductId],
-  options: { variantEvidence?: z.infer<ReturnType<typeof z.json>> } = {},
+  options: {
+    variantEvidence?: z.infer<ReturnType<typeof z.json>>;
+    includeExcluded?: boolean;
+  } = {},
 ) {
   const [aId, bId] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
   if (aId === bId)
@@ -278,7 +281,12 @@ export async function prepareProductIdentityPair(
     productIdentitySnapshot(db, aId!),
     productIdentitySnapshot(db, bId!),
   ]);
-  if (!first?.eligible || !second?.eligible) return null;
+  if (
+    !first ||
+    !second ||
+    (!options.includeExcluded && (!first.eligible || !second.eligible))
+  )
+    return null;
   const a = identityFacts.parse(first.snapshot),
     b = identityFacts.parse(second.snapshot);
   const registeredClaims = (facts: typeof a) =>
