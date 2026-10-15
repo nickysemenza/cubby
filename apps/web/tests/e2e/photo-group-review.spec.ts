@@ -188,6 +188,9 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Apply changes", exact: true })
     .click();
+  await group
+    .getByRole("heading", { name: `Approved · ${name} shirt`, exact: true })
+    .click();
   await expect(
     group.getByText("No Inventory write", { exact: true }),
   ).toBeVisible();
