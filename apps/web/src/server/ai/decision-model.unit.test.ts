@@ -816,3 +816,86 @@ describe("runDecisionChoices", () => {
     ).toEqual([1]);
   });
 });
+
+describe("shared-image decision batches", () => {
+  it("sends shared media once, preserves vision routing and reuses individual cache entries", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoice, runDecisionChoices } =
+      await import("./decision-model");
+    const base64 = "AAAA".repeat(20_000);
+    let count = 0;
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      count++;
+      const { model, input } = JSON.parse(String(init?.body));
+      expect(model).toBe("@cf/cloudflare/clef");
+      expect(input.images).toEqual([{ content_type: "image/png", base64 }]);
+      expect(Object.keys(input.questions)).toHaveLength(2);
+      return Response.json({
+        answers: Object.fromEntries(
+          Object.keys(input.questions).map((id) => [
+            id,
+            {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.9,
+              probabilities: { c0: 0.9, none: 0.1 },
+            },
+          ]),
+        ),
+      });
+    });
+    const inputs = ["composition", "scope"].map((subject) => ({
+      ...base,
+      subject: `synthetic ${subject} ${crypto.randomUUID()}`,
+      feature: FIELD_SUGGESTION_FEATURE,
+      choices: ["one"],
+      decisionModel: "typesafe/jev" as const,
+      images: [{ content_type: "image/png" as const, base64 }],
+    }));
+    const results = await runDecisionChoices(inputs);
+    expect(count).toBe(1);
+    expect(await runDecisionChoice(inputs[1]!)).toEqual(results[1]);
+    expect(count).toBe(1);
+  });
+
+  it("keeps different media and text questions in separate requests", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoices } = await import("./decision-model");
+    const media: unknown[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const { input } = JSON.parse(String(init?.body));
+      media.push(input.images ?? null);
+      return Response.json({
+        answers: Object.fromEntries(
+          Object.keys(input.questions).map((id) => [
+            id,
+            {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.9,
+              probabilities: { c0: 0.9, none: 0.1 },
+            },
+          ]),
+        ),
+      });
+    });
+    const make = (subject: string) => ({
+      ...base,
+      subject,
+      choices: ["one"],
+      decisionModel: "@cf/cloudflare/clef" as const,
+    });
+    const results = await runDecisionChoices([
+      { ...make("first"), images: ["data:image/png;base64,AAAA"] },
+      { ...make("second"), images: ["data:image/png;base64,AQAA"] },
+      make("text"),
+    ]);
+    expect(results).toHaveLength(3);
+    expect(media).toHaveLength(3);
+    expect(media).toContainEqual(["data:image/png;base64,AAAA"]);
+    expect(media).toContainEqual(["data:image/png;base64,AQAA"]);
+    expect(media).toContainEqual(null);
+  });
+});

@@ -34,6 +34,7 @@ import {
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
   DecisionRequestBatch,
+  decisionInputFitsContext as inputFitsContext,
   type DecisionQuestionsInput,
   type DecisionQuestionsResponse,
 } from "./decision-request-batch";
@@ -403,15 +404,6 @@ export function buildChoiceInput(
   };
 }
 
-function inputFitsContext(input: DecisionChoiceInput): boolean {
-  // Media has its own decoded-byte and body limits; the text context bound stays unchanged.
-  const { images: _images, ...textInput } = input;
-  return (
-    new TextEncoder().encode(JSON.stringify(textInput)).byteLength <=
-    DECISION_CONTEXT_BYTE_LIMIT
-  );
-}
-
 /** Decide overflow before requesting the decision model, using the same envelope as the transport. */
 export function decisionChoiceFitsContext(args: DecisionChoicePrompt): boolean {
   return (
@@ -557,11 +549,10 @@ async function runDecisionChoiceInternal(
       return recordApplicationCacheHit(feature, args.usage, durationMs);
     },
     compute: async (applicationCacheStatus) => {
-      if (args.port || input.images?.length)
-        pending?.batch.ready(pending.index);
+      if (args.port) pending?.batch.ready(pending.index);
       const response = await (args.port
         ? args.port(input)
-        : pending && !input.images?.length
+        : pending
           ? pending.batch.request(
               pending.index,
               JSON.stringify([feature, pending.usageGroup]),

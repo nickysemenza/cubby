@@ -94,43 +94,58 @@ const JEV_DEFAULT_LABEL = new Map([
   ["product-variant-relation", "color unknown; size unknown"],
 ]);
 
+const decisionRequest = z.object({
+  state: z.string(),
+  questions: z.record(
+    z.string(),
+    z.object({
+      instructions: z.string().default(""),
+      criteria: z.record(z.string(), z.string()),
+    }),
+  ),
+});
+
 function jevChoice(feature: string, body: unknown) {
-  const input = body as {
-    state: string;
-    questions: { selection: { criteria: Record<string, string> } };
-  };
-  const criteria = input.questions.selection.criteria;
-  const configured = fixture.decisions?.find(
-    (entry) => entry.feature === feature && input.state.includes(entry.match),
-  );
-  const label = configured?.label ?? JEV_DEFAULT_LABEL.get(feature);
-  if (configured && !Object.values(criteria).includes(configured.label))
-    throw new Error(
-      "Configured decision label is absent from the actual request choices.",
+  const input = decisionRequest.parse(body);
+  const selected = Object.entries(input.questions).map(([id, question]) => {
+    const { criteria } = question;
+    const context = `${input.state}\n${question.instructions}`;
+    const configured = fixture.decisions?.find(
+      (entry) => entry.feature === feature && context.includes(entry.match),
     );
-  const key = Object.entries(criteria).find(
-    ([, value]) => value === label,
-  )?.[0];
-  if (!key)
-    throw new Error(
-      `No configured deterministic answer for gateway feature ${feature}.`,
-    );
-  return {
-    label: label ?? null,
-    response: {
-      answers: {
-        selection: {
-          type: "choice",
-          choice: key,
-          confidence: 1,
-          probabilities: Object.fromEntries(
-            Object.keys(criteria).map((entry) => [
-              entry,
-              entry === key ? 1 : 0,
-            ]),
-          ),
-        },
+    const label = configured?.label ?? JEV_DEFAULT_LABEL.get(feature);
+    if (configured && !Object.values(criteria).includes(configured.label))
+      throw new Error(
+        "Configured decision label is absent from the actual request choices.",
+      );
+    const key = Object.entries(criteria).find(
+      ([, value]) => value === label,
+    )?.[0];
+    if (!key)
+      throw new Error(
+        `No configured deterministic answer for gateway feature ${feature}.`,
+      );
+    return {
+      id,
+      label: label ?? null,
+      answer: {
+        type: "choice",
+        choice: key,
+        confidence: 1,
+        probabilities: Object.fromEntries(
+          Object.keys(criteria).map((entry) => [entry, entry === key ? 1 : 0]),
+        ),
       },
+    };
+  });
+  return {
+    label: selected.every((entry) => entry.label === selected[0]?.label)
+      ? (selected[0]?.label ?? null)
+      : null,
+    response: {
+      answers: Object.fromEntries(
+        selected.map(({ id, answer }) => [id, answer]),
+      ),
       usage: { input_tokens: 1, output_tokens: 1 },
     },
   };

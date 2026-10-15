@@ -462,9 +462,11 @@ payloads and retry policies. Gateway cache verdicts describe upstream billing;
 application `cacheStatus` continues to describe the caller's own cache.
 
 Decision assignment, caching, request bounds and response envelopes belong to
-the shared decision runner. Independent text decisions use `runDecisionChoices`:
+the shared decision runner. Independent decisions use `runDecisionChoices`:
 cache hits retain their individual keys, while owned cache misses share requests
-only within the same feature, sampled model, and usage context. Batches carry
+only within the same feature, sampled model, usage context, and embedded image
+content. Shared images are sent once per batch; different media and text-only
+questions stay in separate requests. Batches carry
 at most 64 independently scoped questions and stay within the runner's serialized
 text budget; larger sets split without dropping candidates. Waiting on another
 request's cache lease does not hold up owned misses. Each upstream batch records
@@ -482,7 +484,8 @@ turns, scores synthetic cases, and saves revision/replay/results under
 own the replay command. Mail import still needs controlled model comparison
 ([backlog](todos.md#import-pipeline-architecture)).
 
-Image decisions route to vision-capable Clef independently of the text-only Jev
+Image composition and identity-scope questions share a batch before dependent
+category and catalog work. Image decisions route to vision-capable Clef independently of the text-only Jev
 trial. Photo identification prepares renditions before the shared adapter
 checks embedded media and uses the existing gateway, retry, cache and usage
 paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
