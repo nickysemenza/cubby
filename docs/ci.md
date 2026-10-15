@@ -199,6 +199,12 @@ for the merged commit: it embeds source identity and uploads source maps, so a
 PR's `dist` cannot simply be deployed as main. Current-main checks remain both
 before build and before publication.
 
+Sentry owns browser and Worker source-map uploads. The SSR build explicitly
+emits maps, while Wrangler's duplicate upload is disabled to avoid Cloudflare's
+compressed source-map size limit. Client maps are deleted after Sentry's upload;
+server maps remain available for generated output references and Wrangler path
+validation, outside the public asset directory.
+
 ## Local verification
 
 `pnpm verify:local` is an optional local diagnostic; commands and when to use

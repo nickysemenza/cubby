@@ -1,6 +1,9 @@
 {
   "name": "cubby",
   "main": "src/cf-server.ts",
+  // Sentry owns source-map upload. Cloudflare's duplicate upload exceeds its
+  // compressed map limit; maps remain in the build for Sentry and path validation.
+  "upload_source_maps": false,
   // 2026-06-16 is the minimum for the cloudflare:workers `tracing.enterSpan` custom-spans
   // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
   "compatibility_date": "2026-09-19",

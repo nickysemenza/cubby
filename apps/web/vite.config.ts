@@ -343,6 +343,8 @@ export default defineConfig(async ({ command }) => {
       },
       ssr: {
         build: {
+          // Emit maps for Sentry even though Wrangler's duplicate upload is off.
+          sourcemap: true,
           // Vite leaves server output unminified by default; minified, the
           // Worker upload drops from ~30 MB to ~16 MB. Names are kept so error
           // names and stack frames stay readable.
