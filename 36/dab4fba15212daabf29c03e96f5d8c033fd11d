@@ -1,0 +1,45 @@
+apps/web/src/server/ai/feature-routing-eval.live-eval.ts
+  s_2a22d2c73c07e5::t_9780427ebe2bc1 66-67,80
+apps/web/src/server/ai/features.ts
+  s_2a22d2c73c07e5::t_a9a712e4835e37 91,409,414
+apps/web/src/server/ai/repo/feature-identity.ts
+  s_2a22d2c73c07e5::t_09a05f3f646769 130-135
+apps/web/src/server/domains/expense/operations.server.ts
+  s_2a22d2c73c07e5::t_243af8de21e20d 31,45,48
+apps/web/src/server/domains/expense/repo/charge-context.ts
+  s_2a22d2c73c07e5::t_364d9acc049477 1-70
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_2a22d2c73c07e5::t_6d091b32be755e 30-32
+apps/web/src/server/domains/purchase/repo/purchase-inheritance.integration.test.ts
+  s_2a22d2c73c07e5::t_b4029f114bb263 8-10
+apps/web/src/server/domains/recipe/operations/recipe.server.ts
+  s_2a22d2c73c07e5::t_9d431e239d885b 46-48
+apps/web/src/server/domains/recipe/repo/recipe-flow-state.ts
+  s_2a22d2c73c07e5::t_54ec86a2692721 1-168
+apps/web/src/server/domains/recipe/service/recipe-flow/recipe-flow.service.ts
+  s_2a22d2c73c07e5::t_497bdcb5701d09 14,18-25,37,50,159-160,168
+apps/web/src/server/domains/recipe/service/recipe-flow/recipe-flow.service.unit.test.ts
+  s_2a22d2c73c07e5::t_f226814a71aa23 26-28
+apps/web/src/server/generic/entity-report/repo/expense-settlement.ts
+  s_2a22d2c73c07e5::t_71beedfbc5688b 12
+apps/web/src/server/generic/entity-report/repo/recipe-walkthrough.ts
+  s_2a22d2c73c07e5::t_66b9e55db597d9 18
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_2a22d2c73c07e5::t_6cbd09c37ec350 80-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "36dab4fba15212daabf29c03e96f5d8c033fd11d",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
