@@ -1,0 +1,63 @@
+apps/web/src/server/domains/image/operations/image.server.ts
+  s_2a22d2c73c07e5::t_60fc8d45c7d608 39
+apps/web/src/server/domains/image/repo/image-import.ts
+  s_2a22d2c73c07e5::t_f32b17f956069f 11
+apps/web/src/server/domains/image/repo/image-storage.unit.test.ts
+  s_2a22d2c73c07e5::t_5e57b063cfdd89 15
+apps/web/src/server/domains/inventory/service/scan-into-location.service.ts
+  s_2a22d2c73c07e5::t_4274d547a70a46 36
+apps/web/src/server/domains/photo-import/operations/run/writer.ts
+  s_2a22d2c73c07e5::t_dc510ffd78c987 51-52
+apps/web/src/server/domains/photo-import/service/photo-import-stage.service.ts
+  s_2a22d2c73c07e5::t_e815ffb92836ae 9
+apps/web/src/server/domains/product/operations/product.server.ts
+  s_2a22d2c73c07e5::t_dea51ce9efb33d 70,77
+apps/web/src/server/domains/product/repo/create-atomicity.integration.test.ts
+  s_2a22d2c73c07e5::t_a17639fe467e4d 7
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_2a22d2c73c07e5::t_40108981eab46a 7
+apps/web/src/server/domains/product/repo/ownership-evidence.integration.test.ts
+  s_2a22d2c73c07e5::t_a3e7a4b7f7b952 12
+apps/web/src/server/domains/product/repo/repository.ts
+  s_2a22d2c73c07e5::t_ce334cdb1e4998 13-14
+apps/web/src/server/domains/product/repo/unit-mapping-provenance.integration.test.ts
+  s_2a22d2c73c07e5::t_31cb5f72da9c42 8
+apps/web/src/server/domains/product/repo/write/product-orchestration.integration.test.ts
+  s_2a22d2c73c07e5::t_448b11ea1d119c 14,31
+apps/web/src/server/domains/product/repo/write/product-orchestration.ts
+  s_2a22d2c73c07e5::t_dd8d133dab55c1 41,54,64
+apps/web/src/server/domains/product/repo/write/product-writes.ts
+  s_2a22d2c73c07e5::t_ee8efecdc46d63 44-48
+apps/web/src/server/domains/purchase-import/operations/line-thumbnails.ts
+  s_2a22d2c73c07e5::t_386c49ea82a225 13
+apps/web/src/server/domains/purchase-import/operations/mail-tool.ts
+  s_2a22d2c73c07e5::t_f229f54c3d29d4 60
+apps/web/src/server/domains/recipe/operations/recipe-cookbook-photo.integration.test.ts
+  s_2a22d2c73c07e5::t_17057c35fed43e 12
+apps/web/src/server/domains/recipe/operations/recipe-import.server.ts
+  s_2a22d2c73c07e5::t_cd2659b3a50c34 65,70,74
+apps/web/src/server/domains/usda-food/service/usda-link-advance.service.ts
+  s_2a22d2c73c07e5::t_b0d7c18f8c1c9b 7-8
+apps/web/src/server/generic/problems/repo/detectors-coverage.ts
+  s_2a22d2c73c07e5::t_3650dec3bed640 23,91-95
+apps/web/src/server/generic/problems/service/problems.service.ts
+  s_2a22d2c73c07e5::t_6acbde2f3cf9c1 62,85,1291
+packages/schemas/src/product.ts
+  s_2a22d2c73c07e5::t_af3f819f746ee7 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "984ce12a3b4e064c81f2632cf73d2d5663b07e30",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
