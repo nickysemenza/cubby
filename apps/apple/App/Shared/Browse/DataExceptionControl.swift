@@ -51,7 +51,8 @@ struct DataExceptionControl: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(
                                 working || reason == nil
-                                    || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            )
                             .accessibilityIdentifier("field.explanation.exception.confirm.\(draft.check)")
                         Button("Cancel") { accepting = false }.buttonStyle(.bordered)
                     }
