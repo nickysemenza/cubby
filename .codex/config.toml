@@ -3,23 +3,26 @@
 # apps/web/AGENTS.md; Claude Code >= 2.1.277 falls back to AGENTS.md when a
 # folder has no CLAUDE.md. One canonical rules file, shared by both, no drift —
 # do not add a CLAUDE.md pointer, it would shadow AGENTS.md for Claude Code.
-# No `model` / `model_reasoning_effort` pinned here on purpose. Pinning them
-# forced every main task on this repo onto one frontier model at high effort
-# (248 of 255 measured turns) and overrode the user-level default, which made
-# choosing a cheaper tier for routine work a fight with the repo. The model now
-# comes from the user/session level; `/model` still selects per session.
-#
-# `tool_output_token_limit` caps how much of any single tool result is retained.
-# Screenshots and whole-file dumps are the dominant context intake, and unlike a
-# prose rule this is enforced by the runtime.
-tool_output_token_limit = 24000
+# Keep the main model user/session-owned. Low effort overrides the user-level
+# effort default for this repo; explicit session choices and the escalation
+# rules in model-routing.md win.
+model_reasoning_effort = "low"
+
+# Filter before returning output; retain full logs in ignored artifacts/ for
+# targeted read-back. This history cap is a fallback, not a diagnostic summary.
+tool_output_token_limit = 4000
+
+# Bound catalog overhead without deleting installed skills. Hosts that inject
+# their own catalog must manage that budget separately.
+[skills]
+max_context_tokens = 4000
 
 # Subagents are for parallel, read-heavy work; see docs/agents/model-routing.md.
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 3
-default_subagent_model = "gpt-5.6-terra"
-default_subagent_reasoning_effort = "medium"
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "low"
 
 [mcp_servers.cubby-localhost]
 url = "http://localhost:3000/api/mcp"

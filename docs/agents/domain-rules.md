@@ -1,5 +1,18 @@
 # Domain and server rules
 
+## Breaking changes
+
+One trusted household uses Cubby, and we ship and refresh every client (web,
+iOS/macOS, HTTP, MCP connections), so change contracts in place:
+
+- Change an API, RPC, MCP tool, manifest, or stored shape directly, update
+  every client in the same change, and delete the old shape. A client running
+  old code reloads, reconnects, or updates; a wire break for the native app
+  bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
+  `packages/shared/src/apple-client-version.ts` (shared by the server minimum
+  and generated Apple marketing version).
+- Household data is real: carry it through a migration that transforms it.
+
 ## Production changes
 
 For staged expand/contract commands and exact `--through` boundaries, follow the
@@ -8,7 +21,8 @@ For staged expand/contract commands and exact `--through` boundaries, follow the
 Serialize production schema changes: one owner verifies the migration and no
 application overlaps another session. Inspect constraints/data, run relevant checks,
 and transform existing rows in the same migration that changes their shape;
-clients update with the change ([breaking changes](../../AGENTS.md#breaking-changes)).
+clients update with the change ([breaking changes](#breaking-changes)).
+Establish data preservation before pushing, then verify the applied schema.
 Schema reaches every database only through
 committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
 (drizzle-kit for `schema.ts`, plus a custom migration when the derived DDL in

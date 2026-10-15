@@ -7,6 +7,18 @@ and reports readiness only after the database, fixtures, and Worker agree.
 
 ## Start and discover
 
+### Cursor Cloud
+
+The Cloud Agent environment starts Docker and `pnpm dev` on boot. Readiness is
+`http://localhost:3000/__dev/ready`; sign in at `http://localhost:3000/__dev/login`.
+On this Linux image the dev server accepts `localhost` (IPv6) and refuses
+`127.0.0.1`. Test Postgres/IntegreSQL is separate from that dev database. On
+Linux/CI start it with `docker compose -p cubby up -d --wait`; on macOS
+`pnpm test:postgres` starts its own Apple `container` services on first use
+([development](development.md)), so do not pre-check for Docker.
+
+### Checkout runtime
+
 Install dependencies with `pnpm install`. On macOS, local development defaults
 to Apple `container`; run `container system start`. Linux defaults to Docker.
 To use Docker on macOS, start its daemon and export

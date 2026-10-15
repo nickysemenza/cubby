@@ -155,6 +155,11 @@ staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
+The `commit-msg` hook and CI `Plan` job run the
+[outward-text check](../../scripts/check-outward-text.ts) on commit messages
+and PR text respectively. They reject live entity codes; `4K7M` is the one
+allowed example body. Use synthetic examples when correcting a rejection.
+
 Checkout and merge hooks run no builds: build, test and dev entry points ensure
 the artifacts they consume. After a branch switch, use `pnpm apple gen` before
 opening the generated Xcode project directly.
