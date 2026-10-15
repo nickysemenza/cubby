@@ -253,6 +253,8 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       review_assessments: mcpAction({
         op: assessmentContract.ops.reviewBatch,
+        project: (items) => ({ items }),
+        output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
         description:
           "Review Assessments independently; each item returns its own outcome.",
       }),

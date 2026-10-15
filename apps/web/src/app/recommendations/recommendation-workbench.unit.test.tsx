@@ -205,14 +205,14 @@ describe("RecommendationWorkbench product matches", () => {
       {
         source: "agent" as const,
         assessmentId: "66666666-6666-4666-8666-666666666666",
-        fingerprint: null,
+        fingerprint: "d".repeat(64),
         identityConflict: false,
         review: {
           assessmentId: "66666666-6666-4666-8666-666666666666",
           suppression: {
             scope: "product_match",
             candidateKey: `product-match:${keeperId}:${photoId}`,
-            fingerprint: null,
+            fingerprint: "d".repeat(64),
           },
         },
         keeper: side(keeperId, "Crew tee, grey", "purchase"),

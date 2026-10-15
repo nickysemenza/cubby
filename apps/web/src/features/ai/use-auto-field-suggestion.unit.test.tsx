@@ -4,6 +4,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { sleep } from "@cubby/shared/retry";
 import {
   act,
@@ -23,10 +24,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
-import {
-  ai,
-  assessment,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -38,6 +37,7 @@ import { FormFieldResolution } from "./form-field-resolution";
 import { useAutoFieldSuggestion } from "./use-auto-field-suggestion";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
+let restoreDispatch: () => void;
 let calls: FieldSuggestionsInput[];
 let reviewCalls: {
   assessmentId?: string;
@@ -55,20 +55,27 @@ beforeEach(() => {
   harness = createBrowserTestHarness();
   calls = [];
   reviewCalls = [];
-  assessment.review.withTransport(async ({ input }) => {
-    const { assessmentId, intent, application } = input;
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation !== "assessment.review")
+      throw new Error(`Unexpected operation: ${operation}`);
+    const { assessmentId, intent, application } =
+      assessmentReviewInput.parse(input);
     if (!assessmentId) throw new Error("Review requires an assessment ID.");
     reviewCalls.push({ assessmentId, intent, application });
     return {
-      assessmentId,
-      feedbackId: crypto.randomUUID(),
-      status: "recorded",
-      applied: intent === "apply",
+      ok: true,
+      data: {
+        assessmentId,
+        feedbackId: crypto.randomUUID(),
+        status: "recorded",
+        applied: intent === "apply",
+      },
     };
   });
 });
 
 afterEach(() => {
+  restoreDispatch();
   harness.dispose();
 });
 
@@ -971,7 +978,7 @@ describe("useAutoFieldSuggestion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply trade" }));
 
-    expect(form.getValues("trade")).toBe("cabinetry");
+    await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
     expect(isDirtyText("trade")).toBe("true");
     await waitFor(() =>
       expect(reviewCalls).toContainEqual(

@@ -13,6 +13,7 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
+  PRODUCT_IDENTITY_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
@@ -55,6 +56,12 @@ export const AI_SMOKE_CASES = {
     label: "Image provenance",
     description:
       "Classify weak origin evidence without replacing authoritative facts",
+    group: "Product research",
+  },
+  productIdentity: {
+    feature: PRODUCT_IDENTITY_FEATURE,
+    label: "Product identity",
+    description: "Compare exact claims with known and unknown variant evidence",
     group: "Product research",
   },
   productVariantRelation: {

@@ -23,6 +23,7 @@ import {
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   IMAGE_IDENTIFICATION_FEATURE,
+  PRODUCT_IDENTITY_FEATURE,
   ENTITY_EMBEDDING_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
@@ -35,6 +36,7 @@ import {
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { productIdentityPrompt } from "~/server/ai/product-identity";
 import {
   runStructuredFeature,
   type StructuredRunPorts,
@@ -445,6 +447,20 @@ async function runCase(
             analysisSummary: null,
           },
           usage: { db, runId, operation: "smoke.imageProvenance" },
+        }),
+      };
+    }
+    case "productIdentity": {
+      const { fixture } = aiSmokeInputs.productIdentity.parse(raw);
+      const subject =
+        fixture === "standard"
+          ? "Two synthetic shirts share manufacturer Example, model Crew and exact ASIN B000000001. Both retained retailer Sources explicitly confirm blue, medium, pack of one."
+          : "Two synthetic shirts share manufacturer Example and model Crew. The first is blue medium; the second has no retained color or size evidence. No exact identifier is shared.";
+      return {
+        result: await runDecisionChoice({
+          ...productIdentityPrompt(subject),
+          feature: PRODUCT_IDENTITY_FEATURE,
+          usage: { db, runId, operation: "smoke.productIdentity" },
         }),
       };
     }

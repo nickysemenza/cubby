@@ -865,6 +865,7 @@ describe("record suggestions", () => {
       orderId: null,
       date: null,
     };
+    let saved = false;
     const commands: EntityBrowserMutationInput[] = [];
     const calls: FieldSuggestionsInput[] = [];
     const operations: EntitySuggestionsOperations = {
@@ -895,10 +896,13 @@ describe("record suggestions", () => {
           "productId",
         ]}
         operations={operations}
-        readRecord={async () => record}
+        readRecord={async () =>
+          saved ? { ...record, costType: "tools" } : record
+        }
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
             commands.push(command);
+            saved = true;
             return {
               action: "update",
               entity: "expense",

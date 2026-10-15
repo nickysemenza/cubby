@@ -632,7 +632,19 @@ export function FieldSuggestionProvider({
       acknowledgeSaved,
       applyFinanceCategory: async (suggestion) => {
         try {
-          return await applyFinanceCategory(suggestion);
+          if (!suggestion.assessmentId)
+            throw new Error("Suggestion Assessment is missing");
+          const saved = await applyFinanceCategory(suggestion);
+          const receipt = await assessment.review.call({
+            assessmentId: suggestion.assessmentId,
+            operationId: crypto.randomUUID(),
+            verdict: "correct",
+            intent: "apply",
+            application: { kind: "saved_field", recordId: saved.entityId },
+          });
+          if (!receipt.applied)
+            throw new Error("Saved suggestion feedback was not recorded.");
+          return saved;
         } catch (error) {
           await Promise.all([refetchSuggested(), refetchAlternatives()]);
           throw error;
@@ -688,8 +700,21 @@ export function FieldSuggestionProvider({
       batch.map(({ key }) => [key, form.getValues(paths?.[key] ?? key)]),
     );
     try {
-      await financeApply.applyMany(batch.map(({ proposal }) => proposal));
+      const saved = await financeApply.applyMany(
+        batch.map(({ proposal }) => proposal),
+      );
       for (const { key, proposal } of batch) {
+        if (!proposal.assessmentId)
+          throw new Error("Suggestion Assessment is missing");
+        const receipt = await assessment.review.call({
+          assessmentId: proposal.assessmentId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "saved_field", recordId: saved.entityId },
+        });
+        if (!receipt.applied)
+          throw new Error("Saved suggestion feedback was not recorded.");
         const path = paths?.[key] ?? key;
         const latestDraft = form.getValues(path);
         const changedDuringApply =
