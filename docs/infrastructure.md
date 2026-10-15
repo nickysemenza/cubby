@@ -482,7 +482,7 @@ The opt-in feature eval uses production prompts, schema, validation and repair
 turns, scores synthetic cases, and saves revision/replay/results under
 `artifacts/feature-routing-eval/`. Its package script and environment options
 own the replay command. Mail import still needs controlled model comparison
-([backlog](todos.md#import-pipeline-architecture)).
+([backlog](https://github.com/nickysemenza/cubby/issues/2151)).
 
 Image composition and identity-scope questions share a batch before dependent
 category and catalog work. Image decisions route to vision-capable Clef independently of the text-only Jev

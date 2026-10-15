@@ -294,7 +294,9 @@ Further docs:
 - [docs/development.md](docs/development.md): architecture, commands, testing,
   deployment and the HTTP API.
 - [docs/local-development.md](docs/local-development.md): the dev session.
-- [docs/todos.md](docs/todos.md): the backlog.
+- [GitHub Issues](https://github.com/nickysemenza/cubby/issues): the backlog;
+  [Project board](https://github.com/users/nickysemenza/projects/2) and
+  [agent workflow](docs/agents/issues.md).
 - [docs/README.md](docs/README.md): everything else.
 
 ## Import and Burn-down flows

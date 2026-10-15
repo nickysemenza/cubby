@@ -69,7 +69,7 @@ was bought. A delivered email and a card charge do not receive inventory.
 ### Coverage and remaining work
 
 The [local journey coverage map](../agents/core-journey-e2e.md) owns executable
-checks and their limits; the [work list](../todos.md) owns remaining software
+checks and their limits; the [GitHub Issues](https://github.com/nickysemenza/cubby/issues) owns remaining software
 and live acceptance. A deterministic import test does not verify live Gmail,
 retailer changes, model quality or physical-device background behavior.
 

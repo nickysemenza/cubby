@@ -8,7 +8,7 @@ SwiftUI household workflows backed by CubbyKit, the generated HTTP client, and
 shared Rust computation. Agent rules, including the generated-file list, live in
 [AGENTS.md](AGENTS.md). The app includes Today, catalog/search, capture/recount,
 photos, Garden, links, and App Intents. See [DESIGN.md](DESIGN.md) for native UX
-contracts and [the backlog](../../docs/todos.md) for deeper inventory and web parity.
+contracts and [GitHub Issues](https://github.com/nickysemenza/cubby/issues) for deeper inventory and web parity.
 
 ## Toolchain and device requirements
 

@@ -288,8 +288,8 @@ No tests for chart rendering.
 
 - `README.md` capabilities: the Financial accounts section gains category
   analytics, the Sankey, transfer-pair acceptance, and the cash-flow page.
-- `docs/todos.md`: remove the "Household cash-flow projection" entry once
-  Phase 2 ships.
+- [Finance analytics and cash-flow work](https://github.com/nickysemenza/cubby/issues/2347): close completed
+  slices once their acceptance criteria are met; preserve any deferred remainder.
 
 ## 9. Later, enabled by this plan
 

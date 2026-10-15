@@ -113,7 +113,7 @@ allocations. `mail.resolve` can link a lifecycle Email to several existing
 Purchases through `purchaseIds`.
 
 The contracts above are deployed. Remaining live acceptance work belongs in
-[the backlog](todos.md#import-pipeline-architecture). Deployment, stored fields
+[the acceptance issue](https://github.com/nickysemenza/cubby/issues/2137). Deployment, stored fields
 and terminal Runs alone do not establish source-specific acceptance: blocked
 bindings still need public writer/readback verification, and missing original
 preparations remain evidence gaps. Historical restart readiness requires

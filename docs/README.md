@@ -16,7 +16,8 @@ the repository.
 - [CI](ci.md), [Infrastructure](infrastructure.md), and the operational
   runbooks cover operations. Check the relevant code and deployed
   state before following an operational procedure.
-- [Work list](todos.md) is the active backlog. Items there are proposals until
+- [GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the active backlog;
+  [issue workflow](agents/issues.md) explains selection and updates. Items are proposals until
   implementation evidence says otherwise.
 
 ## Document roles
@@ -36,7 +37,7 @@ Keep each fact at one authoritative home. Executable declarations, manifests,
 lockfiles and configuration own versions, command composition, rosters and
 numeric settings; prose links to those sources and records the rationale or trap
 they cannot explain. Maintained behavior docs own contracts, ADRs own decisions,
-and the work list owns remaining work. A pointer names the condition for loading
+and GitHub Issues owns remaining work. A pointer names the condition for loading
 its target instead of copying the rule.
 
 Delete completed plans and dated reports after moving durable rationale to its

@@ -9,7 +9,7 @@ requests, so a request timeout or disconnect can strand authorized work.
 Automatic AI refresh already has durable target claims, retry state and atomic
 publication receipts. Reusing that machinery and the Run lifecycle gives manual
 work automatic continuation and recovery with a bounded migration. Remaining
-work lives in [the work list](../todos.md).
+work lives in [GitHub Issues](https://github.com/nickysemenza/cubby/issues).
 
 ## Decision
 
