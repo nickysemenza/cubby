@@ -123,7 +123,11 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               },
               () =>
                 withDb(async (db) => {
-                  const admitted = (await claimWorkflowRun(db, event.payload))
+                  const admitted = (await claimWorkflowRun(
+                    db,
+                    event.payload,
+                    "id",
+                  ))
                     ? await executeAiWorkTarget(db, id, event.payload.runId)
                     : false;
                   return { id, admitted };
