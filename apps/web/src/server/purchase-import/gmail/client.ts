@@ -86,7 +86,7 @@ export const createGmailApiClient = ({
   const request = async <T>(
     path: string,
     params?: URLSearchParams,
-    maxBytes = 4 * 1024 * 1024,
+    maxBytes = 36 * 1024 * 1024,
   ): Promise<T> => {
     const response = await retryWithBackoff(
       () =>
@@ -152,8 +152,6 @@ export const createGmailApiClient = ({
     ): Promise<GmailAttachmentPayload> {
       return await request<GmailAttachmentPayload>(
         `users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
-        undefined,
-        36 * 1024 * 1024,
       );
     },
   };

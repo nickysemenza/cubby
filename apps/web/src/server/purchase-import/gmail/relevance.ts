@@ -252,7 +252,7 @@ function relevanceWithEvidence(
     failures: string[];
   },
 ): MailboxRelevanceDecision {
-  if (!evidence.attempted && !evidence.prepared)
+  if (!evidence.attempted && !evidence.prepared && !evidence.failures.length)
     return classification === decision.classification
       ? decision
       : { classification };
@@ -261,6 +261,15 @@ function relevanceWithEvidence(
     classification,
     reason: `${decision.reason ?? `Relevance model returned ${decision.classification}`}. Evidence: ${evidence.supplied}/${evidence.candidates} content images supplied; ${evidence.sourceBytes} source bytes; ${evidence.requestBytes} model-request bytes; image readability ${decision.imageReadability ?? "unreported"}${evidence.complete ? "" : "; omitted evidence"}.${evidence.failures.length ? ` Image acquisition failures: ${evidence.failures.join("; ")}` : ""}`,
   };
+}
+
+function imageInputRefusal(error: unknown) {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "number" &&
+    [9402, 9412, 9413, 9520, 9523].includes(error.code)
+  );
 }
 
 /** Unsupported, absent, or oversized bytes cannot justify a negative verdict. */
@@ -273,7 +282,7 @@ export async function interpretMailRelevance(
   ports: RelevanceImagePorts = {},
 ): Promise<MailboxRelevanceDecision> {
   const view = readableMailView(normalized.mail);
-  const prepare =
+  const imagePreparer =
     ports.prepareImage ?? (getImages() ? prepareModelImage : undefined);
   let complete =
     originalComplete &&
@@ -282,6 +291,28 @@ export async function interpretMailRelevance(
       normalized.mail.bodyHtml?.trim() ||
       normalized.attachments.length,
     );
+  const imageFailures: string[] = [];
+  const prepare =
+    imagePreparer &&
+    (async (bytes: Uint8Array, detail: "standard" | "detail") => {
+      try {
+        const image = await imagePreparer(bytes, detail);
+        if (!image)
+          imageFailures.push(
+            "Image rendition exceeds the model image byte budget",
+          );
+        return image;
+      } catch (error) {
+        if (!imageInputRefusal(error)) throw error;
+        complete = false;
+        imageFailures.push(
+          scrubErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+        return null;
+      }
+    });
   const content: MailContentPart[] = [{ type: "text", content: view.original }];
   const availableContentIds = new Set<string>();
   const suppliedSources = new Set<string>();
@@ -379,7 +410,6 @@ export async function interpretMailRelevance(
       )
     : [];
   let attempted = 0;
-  const imageFailures: string[] = [];
   if (prepare)
     for (const src of candidates.slice(0, MAX_IMAGES)) {
       if (

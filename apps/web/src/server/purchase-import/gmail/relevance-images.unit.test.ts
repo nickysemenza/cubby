@@ -204,6 +204,69 @@ describe("bounded Email image evidence", () => {
     expect(ports.fetcher).not.toHaveBeenCalled();
   });
 
+  it.each([9402, 9412, 9413, 9520, 9523])(
+    "keeps image-input refusal %s incomplete while preserving independent positive evidence",
+    async (code) => {
+      const attached = normalizeMessage("synthetic-mailbox", {
+        id: "synthetic-source",
+        payload: {
+          parts: [
+            {
+              mimeType: "text/plain",
+              body: {
+                data: Buffer.from(
+                  "Order SYN-123 confirmed; paid $42 for two towels.",
+                ).toString("base64url"),
+              },
+            },
+            {
+              mimeType: "image/png",
+              filename: "synthetic.png",
+              body: { data: bytes.toString("base64url"), size: bytes.length },
+            },
+          ],
+        },
+      });
+      const ports = {
+        ...imagePorts(),
+        prepareImage: vi.fn(async () => {
+          throw Object.assign(new Error("Synthetic image input refused"), {
+            code,
+          });
+        }),
+      };
+      for (const classification of ["related", "unrelated"] as const) {
+        const result = await interpretMailRelevance(
+          provider,
+          attached,
+          async () => ({ classification }),
+          true,
+          undefined,
+          ports,
+        );
+        expect(result.classification).toBe(
+          classification === "related" ? "related" : "uncertain",
+        );
+        expect(result.reason).toContain("Synthetic image input refused");
+      }
+      ports.prepareImage.mockImplementation(async () => {
+        throw Object.assign(new Error("Synthetic service unavailable"), {
+          code: 9432,
+        });
+      });
+      await expect(
+        interpretMailRelevance(
+          provider,
+          attached,
+          async () => ({ classification: "unrelated" }),
+          true,
+          undefined,
+          ports,
+        ),
+      ).rejects.toThrow("Synthetic service unavailable");
+    },
+  );
+
   it("caps supplied attachment images and keeps the omitted seventh image uncertain", async () => {
     const ports = imagePorts();
     const many = normalizeMessage("synthetic-mailbox", {

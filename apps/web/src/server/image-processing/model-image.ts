@@ -16,11 +16,13 @@ export async function prepareModelImage(
     detail === "detail"
       ? [
           { width: 2048, height: 4096, quality: 85 },
-          { width: 1536, height: 3072, quality: 65 },
+          { width: 2048, height: 4096, quality: 45 },
+          { width: 1536, height: 3072, quality: 45 },
         ]
       : [
           { width: 1280, height: 2048, quality: 75 },
-          { width: 960, height: 1536, quality: 55 },
+          { width: 1280, height: 2048, quality: 50 },
+          { width: 960, height: 1536, quality: 50 },
         ];
   for (const { width, height, quality } of renditions) {
     const input = new ReadableStream<Uint8Array>({
@@ -39,8 +41,6 @@ export async function prepareModelImage(
         mimeType: rendition.contentType(),
       };
     } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === 9412)
-        return null;
       if (
         error instanceof ExternalFetchError &&
         error.code === "body-too-large"

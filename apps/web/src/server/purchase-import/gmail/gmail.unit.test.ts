@@ -31,10 +31,13 @@ describe("Gmail retrieval diagnostics", () => {
 it("bounds Gmail JSON retrieval before parsing", async () => {
   const client = createGmailApiClient({
     accessToken: "synthetic-token",
-    fetcher: async () => new Response("x".repeat(4 * 1024 * 1024 + 1)),
+    fetcher: async () =>
+      new Response("Synthetic oversized source", {
+        headers: { "content-length": String(36 * 1024 * 1024 + 1) },
+      }),
   });
   await expect(client.getMessage("synthetic-source")).rejects.toThrow(
-    "External response exceeds 4194304 bytes",
+    "External response exceeds 37748736 bytes",
   );
 });
 
