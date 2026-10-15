@@ -1,4 +1,5 @@
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import type { ProductCategoryOut } from "@cubby/schemas/product-category";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -21,14 +22,10 @@ import { WithVendorShortcodeSearch } from "./with-vendor-search";
 
 /** `useProductCategories()`'s own list row shape — just what the tree/search
  * projections below read off it. */
-export interface ProductCategoryRow {
-  id: string;
-  name: string;
-  parentId: string | null;
-  aliases: readonly string[];
-  description: string | null;
-  path: ReadonlyArray<{ id: string; name: string }>;
-}
+export type ProductCategoryRow = Pick<
+  ProductCategoryOut,
+  "id" | "name" | "parentId" | "aliases" | "description" | "path"
+>;
 
 /**
  * The pure "categories + query -> picker items" projection, split out from
@@ -82,12 +79,7 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
   const onSearchChange = useCallback((next: string) => setQuery(next), []);
 
   const items = useMemo<ComboboxItem[]>(
-    () =>
-      // SAFETY: `entityListFor("productCategory")` rows always carry these
-      // manifest fields (`id`, `name`, `parentId`, `aliases`, `description`,
-      // `path`) — narrowed here rather than imported because the generated
-      // list-row type is a wide cross-entity union `Map.get` can't index by.
-      productCategorySearchItems(categories as ProductCategoryRow[], query),
+    () => productCategorySearchItems(categories, query),
     [categories, query],
   );
 

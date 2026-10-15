@@ -1,11 +1,13 @@
 import type { ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { z } from "zod";
 
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
+import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { defaultPagination } from "~/ui/data-table/tableUtils";
 
 import { getEntityFilters } from "./filter-manifest";
@@ -26,6 +28,7 @@ import {
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
+import type { ListEnrichmentGroup, ListReadRow } from "./list-read-fields";
 
 export type EntityListParams<E extends ListEntity> =
   EntityListParamsByEntity[E];
@@ -222,29 +225,110 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
       },
     };
   };
+  const baseInfiniteQueryOptions = (input: EntityListParams<E>) => {
+    const firstPage = {
+      ...input,
+      pagination: { ...input.pagination, pageIndex: 0 },
+    };
+    const plan = listQueryPlan(firstPage);
+    return infiniteQueryOptions({
+      queryKey: infiniteOperationQueryKey(plan.queryKey),
+      meta: plan.meta,
+      ...base.policy(inputFor(firstPage)).freshness,
+      queryFn: ({ pageParam, signal }) =>
+        listQueryPlan({
+          ...firstPage,
+          pagination: { ...firstPage.pagination, pageIndex: pageParam },
+        }).execute(signal),
+      initialPageParam: 0,
+      getNextPageParam: (lastPage) => {
+        const { pageIndex, pageSize, totalCount } = lastPage.meta;
+        return (pageIndex + 1) * pageSize < totalCount
+          ? pageIndex + 1
+          : undefined;
+      },
+    });
+  };
   return {
     listQueryPlan,
-    infiniteQueryOptions: (input: EntityListParams<E>) => {
+    infiniteQueryOptions: baseInfiniteQueryOptions,
+    /** Complete vocabularies need their declared fields, not full media/quality hydration.
+     * Base page size and the enrichment schema's ID cap must stay aligned:
+     * each page is completed by one enrichment call. */
+    projectedInfiniteQueryOptions: <
+      Schema extends z.ZodObject<{ id: z.ZodString }>,
+    >(
+      input: EntityListParams<E>,
+      groups: readonly ListEnrichmentGroup[],
+      schema: Schema,
+    ) => {
+      const selected = [...new Set(groups)].sort();
       const firstPage = {
         ...input,
         pagination: { ...input.pagination, pageIndex: 0 },
       };
-      const plan = listQueryPlan(firstPage);
+      const firstPlan = listQueryPlan(firstPage);
+      const baseKey = firstPlan.queryKey;
+      const payload = {
+        ...baseKey[2],
+        projection: {
+          groups: selected,
+          fields: Object.keys(schema.shape).sort(),
+        },
+      };
+      type BasePage = Awaited<ReturnType<typeof firstPlan.execute>>;
+      type ProjectedPage = Omit<BasePage, "items"> & {
+        items: z.output<Schema>[];
+      };
+      const parsePage = (
+        page: Omit<BasePage, "items"> & { items: ListReadRow[] },
+      ): ProjectedPage => ({
+        ...page,
+        items: schema.array().parse(page.items),
+      });
       return infiniteQueryOptions({
-        queryKey: infiniteOperationQueryKey(plan.queryKey),
-        meta: plan.meta,
+        queryKey: infiniteOperationQueryKey([baseKey[0], baseKey[1], payload]),
+        meta: firstPlan.meta,
         ...base.policy(inputFor(firstPage)).freshness,
-        queryFn: ({ pageParam, signal }) =>
-          listQueryPlan({
-            ...firstPage,
-            pagination: { ...firstPage.pagination, pageIndex: pageParam },
-          }).execute(signal),
         initialPageParam: 0,
-        getNextPageParam: (lastPage) => {
+        getNextPageParam: (lastPage: ProjectedPage) => {
           const { pageIndex, pageSize, totalCount } = lastPage.meta;
           return (pageIndex + 1) * pageSize < totalCount
             ? pageIndex + 1
             : undefined;
+        },
+        queryFn: async ({ pageParam, signal }): Promise<ProjectedPage> => {
+          const plan = listQueryPlan({
+            ...firstPage,
+            pagination: { ...firstPage.pagination, pageIndex: pageParam },
+          });
+          const page = await plan.execute(signal);
+          const requested = selected.filter((id) =>
+            page.deferredGroups.some((group) => group.id === id),
+          );
+          if (page.items.length === 0 || requested.length === 0)
+            return parsePage(page);
+          const response = await plan.progressive.enrich(
+            page.items.map((row) => row.id),
+            requested,
+            signal,
+          );
+          const patches = new Map<string, ListReadRow>();
+          for (const id of requested) {
+            const group = response.groups.find((entry) => entry.id === id);
+            if (!group) throw new Error(`No ${id} enrichment returned`);
+            if (group.state === "error")
+              throw new StartOperationError(group.error);
+            for (const row of group.data)
+              patches.set(row.id, { ...patches.get(row.id), ...row });
+          }
+          const missing = new Set(response.missingIds);
+          return parsePage({
+            ...page,
+            items: page.items
+              .filter((row) => !missing.has(row.id))
+              .map((row) => ({ ...row, ...patches.get(row.id) })),
+          });
         },
       });
     },

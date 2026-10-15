@@ -1,4 +1,6 @@
 import { startOperation } from "./start-operation";
+import { dispatchOperations } from "./dispatch-wire";
+import { z } from "zod";
 import type { Fixture as TestGatewayFixture } from "./harness-services/purchase-import-test-gateway";
 import {
   seedProductPrerequisite,
@@ -307,6 +309,28 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     e2eRuntime.objectStorageUrl,
   );
   const g2Name = `${name} solo find`;
+  const categoryAlias = `${name} taxonomy alias`;
+  const { db } = await createEvidenceHarnessContext(page);
+  await getDb(db)
+    .update(schema.productCategory)
+    .set({ aliases: [categoryAlias] })
+    .where(eq(schema.productCategory.shortcode, seed.category.id));
+  const categoryReads: { operation: string; groups?: string[] }[] = [];
+  page.on("request", (request) => {
+    for (const item of dispatchOperations(request)) {
+      const input = z
+        .object({
+          entity: z.literal("productCategory"),
+          groups: z.array(z.string()).optional(),
+        })
+        .safeParse(item.input);
+      if (input.success)
+        categoryReads.push({
+          operation: item.operation,
+          groups: input.data.groups,
+        });
+    }
+  });
 
   await gotoAuthenticatedPage(
     page,
@@ -380,9 +404,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
-  await g1Card
-    .getByRole("combobox", { name: "category" })
-    .fill(`${name} apparel`);
+  await g1Card.getByRole("combobox", { name: "category" }).fill(categoryAlias);
   await page.getByRole("option", { name: `${name} apparel` }).click();
   await expect
     .poll(async () => {
@@ -395,6 +417,19 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       )?.product.create.categoryId;
     })
     .toBe(seed.category.id);
+  // The complete searchable taxonomy needs identity and hierarchy, not every
+  // category's galleries, quality assessments, or derived table fields.
+  expect(
+    categoryReads.filter((read) => read.operation === "entity.list"),
+  ).toHaveLength(0);
+  expect(
+    categoryReads.some((read) => read.operation === "entity.listBase"),
+  ).toBeTruthy();
+  const enrichment = categoryReads.filter(
+    (read) => read.operation === "entity.listEnrichment",
+  );
+  expect(enrichment.length).toBeGreaterThan(0);
+  for (const read of enrichment) expect(read.groups).toEqual(["relations"]);
   if (recordingVideo) await page.waitForTimeout(1_500);
 
   // The Photos table lists every seeded image.
