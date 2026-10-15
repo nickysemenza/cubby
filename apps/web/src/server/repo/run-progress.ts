@@ -11,11 +11,8 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
-import {
-  getDb,
-  notDeleted,
-  withTransaction,
-} from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers/core";
+import { notDeleted } from "~/server/repo/database-helpers/query";
 import {
   isWorkflowRunPurpose,
   workflowInstanceId,

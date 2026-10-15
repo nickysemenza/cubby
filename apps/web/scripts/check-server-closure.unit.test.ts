@@ -39,6 +39,9 @@ describe("measureServerClosure", () => {
         "assets/openapi-1.js": "y".repeat(1000),
       }),
     );
+    // Every invocation pays the static entry cost; page/router imports belong
+    // only to the later page path, even when their combined closure is valid.
+    expect(report.entry.files.sort()).toEqual(["assets/db-1.js", "index.js"]);
     expect(report.firstRequest.files.sort()).toEqual([
       "assets/auth-1.js",
       "assets/db-1.js",
@@ -47,6 +50,13 @@ describe("measureServerClosure", () => {
       "index.js",
     ]);
     expect(report.total.files).toContain("assets/openapi-1.js");
+    // Entry failures must not point at larger chunks loaded only for pages.
+    expect(report.largest(1, "entry")[0]?.file).toBe("index.js");
+    expect(report.chainTo("assets/auth-1.js", "entry")).toEqual([]);
+    expect(report.chainTo("assets/db-1.js", "entry")).toEqual([
+      "index.js",
+      "assets/db-1.js",
+    ]);
   });
 
   it("names the import chain that pulls a chunk onto the request path", () => {
