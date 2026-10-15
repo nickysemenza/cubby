@@ -8,6 +8,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
+import { installFeatures } from "~/features/registry";
 
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
@@ -17,6 +18,8 @@ import {
   entityActionCatalogDescriptors,
   useEntityActions,
 } from "./entity-actions";
+
+installFeatures();
 
 function entityProps(entity: "product" | "task") {
   return { entity };
@@ -39,7 +42,7 @@ const stubHandles = (
 
 describe("production entity action catalog", () => {
   it("derives the correct copy action for every routed entity", () => {
-    const copyCodes = entityActionCatalogDescriptors.find(
+    const copyCodes = entityActionCatalogDescriptors().find(
       (action) => action.verb === "copyCodes",
     );
     expect(copyCodes?.entities).toEqual(shortcodeEntities);
@@ -50,7 +53,7 @@ describe("production entity action catalog", () => {
     });
 
     for (const entity of browserRoutedEntities) {
-      const copyAction = entityActionCatalogDescriptors.find(
+      const copyAction = entityActionCatalogDescriptors().find(
         (action) =>
           action.entities.includes(entity) &&
           (action.verb === "copyCodes" || action.verb === "copyIdentifiers"),
@@ -62,7 +65,7 @@ describe("production entity action catalog", () => {
   it.each(browserRoutedEntities)(
     "%s has a collision-free real action roster on every declared surface",
     (entity) => {
-      const actions = entityActionCatalogDescriptors.filter((action) =>
+      const actions = entityActionCatalogDescriptors().filter((action) =>
         action.entities.includes(entity),
       );
       expect(actions.length, `${entity} action count`).toBeGreaterThan(0);
@@ -95,7 +98,7 @@ describe("production entity action catalog", () => {
   );
 
   it("adapts every supported lifecycle delete without inventing USDA deletion", () => {
-    const deleteActions = entityActionCatalogDescriptors.filter(
+    const deleteActions = entityActionCatalogDescriptors().filter(
       (action) => action.verb === "delete",
     );
     const deletableEntities = new Set(
@@ -126,7 +129,7 @@ describe("production entity action catalog", () => {
   // category to merge in and a permanently disabled Merge button.
   it("offers spending category merge only for a multi-selection", () => {
     expect(
-      entityActionCatalogDescriptors.find(
+      entityActionCatalogDescriptors().find(
         (action) =>
           action.verb === "merge" &&
           action.entities.includes("spendingCategory"),

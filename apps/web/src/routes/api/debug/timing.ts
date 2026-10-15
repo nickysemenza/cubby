@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { db } from "~/server/db";
-import { requestUsdaRelease } from "~/server/domains/usda-release/client";
+import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import {
   countProducts as countProductsRepo,
   pingDb,

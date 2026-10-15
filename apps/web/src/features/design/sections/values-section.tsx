@@ -1,6 +1,6 @@
 import { type ComponentProps, useState } from "react";
 
-import { GapChipCluster } from "~/features/work-queue/work-queue-display";
+import { GapChipCluster } from "~/entity/work-queue/work-queue-display";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { FilterBar } from "~/ui/data-table/filter-bar";

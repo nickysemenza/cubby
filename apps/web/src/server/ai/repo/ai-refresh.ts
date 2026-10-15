@@ -6,7 +6,7 @@ import {
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
+import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";
@@ -92,7 +92,7 @@ export async function activateAiRefresh(
     ) {
       resetCursor = true;
       const { ensureRun, systemActor } =
-        await import("~/server/domains/run/service/ensure-run");
+        await import("~/server/domains/run/repo/ensure-run");
       activation.discoveryRunId = await ensureRun(tx, systemActor(), {
         purpose: "ai_refresh",
         trigger: "scheduled",

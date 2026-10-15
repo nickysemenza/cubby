@@ -15,7 +15,7 @@ import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { expandListGroups } from "~/server/generic/list/repo/list-projection";
-import { withListReadTracing } from "~/server/generic/list/repo/list-read-tracing";
+import { withListReadTracing } from "~/server/observability/list-read-tracing";
 import { withTrace } from "~/server/observability/tracing";
 import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
 

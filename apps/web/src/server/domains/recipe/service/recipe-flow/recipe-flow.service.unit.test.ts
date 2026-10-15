@@ -18,10 +18,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
 import { Database } from "~/server/db";
+import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 
 import {
   generateRecipeFlow,
-  getRecipeFlowState,
   type RecipeFlowPorts,
 } from "./recipe-flow.service";
 

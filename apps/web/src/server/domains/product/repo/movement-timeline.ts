@@ -47,7 +47,7 @@ import {
 } from "~/server/db/schema";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/contracts";
+import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/service/contracts";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   buildConfidentOwnershipIntervals,

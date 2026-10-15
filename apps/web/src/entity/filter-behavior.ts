@@ -3,7 +3,7 @@ import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
 
 import type { FilterPatch } from "~/entity/filters";
-import { resolveDueRange } from "~/features/task/task-options";
+import { resolveDueRange } from "~/entity/presentation/task-options";
 
 interface ProductPurchaseDateRangeFilters {
   purchaseDateFrom?: string;

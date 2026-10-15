@@ -13,7 +13,7 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

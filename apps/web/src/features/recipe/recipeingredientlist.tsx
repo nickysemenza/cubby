@@ -31,15 +31,16 @@ import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import { createActionsColumnBase } from "../../ui/data-table/column-helpers";
+import { getIngredientName } from "../../entity/presentation/recipe-utils";
+import { createActionsColumnBase } from "../../entity/table/column-helpers";
+import RTable from "../../entity/table/table";
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
-import RTable from "../../ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
-import { tryFormatAmount } from "../inventory/format-amount";
+import { tryFormatAmount } from "../../ui/text/format-amount";
 import { UnitMappingDisplay } from "../units/unit-mapping-display";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
@@ -50,7 +51,6 @@ import {
   formatScalingPct,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
-import { getIngredientName } from "./recipe-utils";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as

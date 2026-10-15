@@ -54,7 +54,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     "",
     ...(entity.route.create === "dialog"
       ? [
-          'import { CreateDialogAction } from "~/ui/forms/create-dialog-action";',
+          'import { CreateDialogAction } from "~/entity/editing/create-dialog-action";',
         ]
       : []),
     'import { listPage } from "~/entity/routing/list-page";',
@@ -127,7 +127,7 @@ const renderDetailRoute = (entity: RoutedEntity): string => {
     'import { ensureDetailRecord } from "~/entity/routing/detail-loader";',
     'import { detailPage, notFoundPage } from "~/entity/routing/detail-page";',
     'import { RouteErrorComponent } from "~/ui/feedback/route-error";',
-    'import { DetailPagePending } from "~/ui/feedback/route-pending";',
+    'import { DetailPagePending } from "~/entity/navigation/route-pending";',
     'import { entityDetailFor } from "~/entity/entity-detail";',
     'import { shortcodeHead } from "~/lib/page-title";',
   ];

@@ -5,7 +5,7 @@ import { getDb } from "~/server/db/helpers";
 import type {
   CalDavResource,
   CalendarProjection,
-} from "~/server/domains/calendar/caldav-types";
+} from "~/server/domains/calendar/repo/caldav-types";
 import { getMealByID } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";

@@ -34,8 +34,15 @@ import {
 } from "~/ui/primitives/command";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { completeNavLeaves } from "../../ui/navigation/nav-items";
-import type { NavItem } from "../../ui/navigation/nav-items";
+import { completeNavLeaves } from "../../entity/navigation/nav-items";
+import type { NavItem } from "../../entity/navigation/nav-items";
+import {
+  entityKindMap,
+  getSearchMatchText,
+  getSearchResultRoute,
+  SearchResultMedia,
+} from "../../entity/presentation/search-utils";
+import { installFeatures } from "../registry";
 import {
   type ExpandedFamilies,
   ProductFamilyChildContent,
@@ -47,12 +54,6 @@ import {
   ProductFamilyToggle,
   useExpandedFamilies,
 } from "../search/product-family";
-import {
-  entityKindMap,
-  getSearchMatchText,
-  getSearchResultRoute,
-  SearchResultMedia,
-} from "../search/search-utils";
 import { recordCommandMenuOpened } from "./command-menu-loader";
 import {
   EntityPaletteActionGroup,
@@ -65,6 +66,10 @@ import type { QuickAction } from "./quick-actions";
 import { parseCommandSearchScope } from "./search-scope";
 import { useConversionAnswer } from "./use-conversion-answer";
 import { useGlobalSearch } from "./use-global-search";
+
+// The palette opens on public pages too, outside the authenticated route chunk
+// that otherwise installs the feature registry; its entity actions read it.
+installFeatures();
 
 /**
  * "Go to" destinations — every authed navbar leaf, so the palette covers the

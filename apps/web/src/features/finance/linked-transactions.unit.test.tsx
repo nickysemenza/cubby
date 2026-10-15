@@ -4,12 +4,15 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityListFor } from "~/entity/entity-list";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   type LinkedTransactionsOperations,
   LinkedTransactions,
 } from "./linked-transactions";
+
+installFeatures();
 
 const transactionList = entityListFor("financialTransaction");
 

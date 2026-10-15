@@ -6,6 +6,7 @@ import type { RunDetail } from "~/contracts/run.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import {
   run as runOperations,
   photoImport,
@@ -17,7 +18,6 @@ import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Progress } from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/primitives/status-text";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";

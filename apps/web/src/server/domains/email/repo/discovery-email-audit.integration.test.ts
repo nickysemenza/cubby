@@ -14,11 +14,11 @@ import {
   email,
   run,
 } from "~/server/db/schema";
-import { originalChecksum } from "~/server/domains/purchase-import/gmail/checksum";
-import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/gmail/discovery";
-import { ingestGmailMessages } from "~/server/domains/purchase-import/gmail/ingest";
-import { normalizeMessage } from "~/server/domains/purchase-import/gmail/normalize";
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/mail-source-identity";
+import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/operations/gmail/discovery";
+import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { loadMailDiscoveryRead } from "~/server/domains/run/repo/run-discovery-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -283,7 +283,7 @@ it("does not count candidate extraction publication as another handled Email", a
     },
   };
   const { ingestGmailMessages } =
-    await import("~/server/domains/purchase-import/gmail/ingest");
+    await import("~/server/domains/purchase-import/service/gmail/ingest");
   await ingestGmailMessages(
     ctx.db,
     {

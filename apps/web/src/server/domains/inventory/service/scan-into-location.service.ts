@@ -33,7 +33,7 @@ import {
   getProductStockRows,
   markInventoryEntryVerified,
 } from "~/server/domains/inventory/repo/scan";
-import { findOrCreateByCode } from "~/server/domains/product/service/product-orchestration.service";
+import { findOrCreateByCode } from "~/server/domains/product/repo/write/product-orchestration";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";

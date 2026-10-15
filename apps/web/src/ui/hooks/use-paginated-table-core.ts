@@ -2,8 +2,11 @@ import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { TableStateReturn } from "../data-table/use-table-state";
-import type { DeferredListGroup, LoadListEnrichment } from "./progressive-list";
+import type {
+  DeferredListGroup,
+  LoadListEnrichment,
+} from "../../entity/hooks/progressive-list";
+import type { TableStateReturn } from "../../entity/table/use-table-state";
 
 /** Full-filtered-set aggregates: column sums and the declared totals' server text. */
 export interface ListTotals {

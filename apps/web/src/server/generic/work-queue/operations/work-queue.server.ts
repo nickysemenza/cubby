@@ -2,7 +2,7 @@ import { workQueueContract } from "~/contracts/work-queue.contract";
 import {
   readRecordWorkQueue,
   readWorkQueue,
-} from "~/server/generic/work-queue/repo/work-queue";
+} from "~/server/generic/work-queue/service/work-queue-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {

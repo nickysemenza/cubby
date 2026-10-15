@@ -3,13 +3,13 @@ import type { ProductCategoryId, ProductId } from "@cubby/schemas/identifiers";
 import { and, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
 import {
   type CategoryStockTracking,
   categoryStockTrackingSql,
   productStockTrackedSql,
-} from "~/server/domains/product-category/repo/product-category-sql";
+} from "~/server/db/computed/product-category-sql";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { product } from "~/server/db/schema";
 
 /**
  * ADR 0013: a record's own stock-tracking decision wins; otherwise the

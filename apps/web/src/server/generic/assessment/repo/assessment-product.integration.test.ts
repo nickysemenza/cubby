@@ -8,17 +8,11 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
-import { enqueueProductIdentityPair } from "~/server/ai/product-identity";
 import {
   evaluateProductIdentity,
   publishProductIdentity,
-  productIdentitySnapshot,
-  prepareProductIdentityPair,
-  preparedProductIdentityPair,
   retrieveProductIdentityCandidates,
 } from "~/server/ai/product-identity";
-import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
 import {
   claimAiEvaluation,
   publishAiEvaluation,
@@ -27,6 +21,8 @@ import {
   activateAiRefresh,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
+import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -44,22 +40,28 @@ import {
   inventoryEntry,
 } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
-import { mergeProducts } from "~/server/domains/product/repo/merge";
-import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import {
+  enqueueProductIdentityPair,
+  productIdentitySnapshot,
+  prepareProductIdentityPair,
+  preparedProductIdentityPair,
+} from "~/server/domains/product/repo/match/product-identity-snapshot";
 import {
   listProductMatchRows,
   publishProductPair,
-} from "~/server/domains/product/repo/product-match-candidate";
+} from "~/server/domains/product/repo/match/product-match-candidate";
+import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
+import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import {
   groundedVariantEvidence,
   variantLiteral,
 } from "~/server/domains/product/repo/product-variant-evidence";
-import { getProductMatchQueue } from "~/server/domains/product/service/product-match.service";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefresh,
   executeAiRefreshTarget,
 } from "~/server/domains/run/service/ai-refresh";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
 import {
   kernelCtx,
   productFixture,

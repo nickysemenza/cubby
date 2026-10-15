@@ -29,6 +29,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import type { PreviewPresentation } from "~/entity/hooks/use-entity-preview";
 import { type ProjectImageSummaries } from "~/entity/image-queries";
+import { SavedViewsMenu } from "~/entity/table/data-table-views";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/features/project/project-portfolio-analytics-view";
 import {
   image,
@@ -37,7 +38,6 @@ import {
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import { SavedViewsMenu } from "~/ui/data-table/data-table-views";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";

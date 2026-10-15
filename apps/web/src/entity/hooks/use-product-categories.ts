@@ -3,8 +3,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityListBaseFor, type EntityListParams } from "~/entity/entity-list";
+import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
-import { useLoadAllPages } from "~/ui/hooks/use-all-entity-records";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 const vocabulary = productCategoryOut.pick({

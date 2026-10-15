@@ -13,8 +13,8 @@ import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
 
-import { useHydratedProductImages } from "../product/product-image-summaries";
-import { LocationIcon } from "./location-icons";
+import { LocationIcon } from "../../entity/presentation/location-icons";
+import { useHydratedProductImages } from "../../entity/presentation/product-image-summaries";
 import { LocationVisual } from "./location-visual";
 
 type ProductPreview = {

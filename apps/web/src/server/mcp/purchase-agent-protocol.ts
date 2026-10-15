@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { auditLog, run as runTable, runApproval } from "~/server/db/schema";
-import { recordRunWrites } from "~/server/domains/purchase-import/run-audit";
+import { recordRunWrites } from "~/server/domains/purchase-import/repo/run-audit";
 import {
   completeOperation,
   insertOperation,

@@ -45,9 +45,9 @@ import {
   emailLinkedSql,
   emailMemberClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
-import { decideEmailPurchase } from "~/server/domains/purchase-import/email-purchase-decision";
-import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/gmail/observations";
-import { syntheticRetainedMail } from "~/server/domains/purchase-import/gmail/retained-mail.fixtures";
+import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
+import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";

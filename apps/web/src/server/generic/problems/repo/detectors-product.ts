@@ -36,6 +36,10 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
+import {
+  categoryFeatureSql,
+  categorySummarySql,
+} from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -51,20 +55,16 @@ import {
 } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import {
-  categoryFeatureSql,
-  categorySummarySql,
-} from "~/server/domains/product-category/repo/product-category-sql";
-import {
   loadPrimaryGtins,
   productHasAnyGtin,
 } from "~/server/domains/product/repo/gtin";
+import { loadProductMatchSides } from "~/server/domains/product/repo/match/product-match";
+import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
   loadProductOwnershipTimelines,
   ownershipExitExpensePredicate,
 } from "~/server/domains/product/repo/ownership";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
-import { loadProductMatchSides } from "~/server/domains/product/repo/product-match";
-import { listProductMatchRows } from "~/server/domains/product/repo/product-match-candidate";
 import { unitMappingSides } from "~/server/domains/product/repo/unit-mappings";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { buildTimelineGates } from "~/server/domains/project/repo/tools";

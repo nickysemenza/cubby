@@ -38,7 +38,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { makeProductInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { ensureRun } from "./ensure-run";
+import { ensureRun } from "../repo/ensure-run";
 import {
   startSuggestionSweep as startSweep,
   resumeSuggestionSweep as resumeSweep,

@@ -7,9 +7,9 @@ import { locationChildGroupLabel } from "~/lib/location-child-label";
 import { formatCurrency } from "~/lib/number-format";
 import { formatPricingCountsSummary } from "~/lib/pricing-counts";
 import type { Database } from "~/server/db";
+import { placementCondition } from "~/server/db/computed/inventory-placement";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
-import { placementCondition } from "~/server/domains/inventory/repo/placement";
 import {
   inventoryValuationSql,
   loadInventoryValuations,

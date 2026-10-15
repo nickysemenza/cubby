@@ -10,11 +10,11 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Page } from "~/entity/page/page";
 import { SmartCollectionPage } from "~/features/collection/smart-collection-page";
 import { useSmartCollections } from "~/features/collection/smart-collection-state";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   q: urlStringParam,

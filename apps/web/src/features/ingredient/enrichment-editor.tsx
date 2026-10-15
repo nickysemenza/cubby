@@ -19,14 +19,14 @@ import { toast } from "sonner";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useEntityActionMutation } from "~/entity/hooks/use-action-mutation";
+import { buildProductComboboxItem } from "~/entity/picker/combobox-builders";
+import { Picker } from "~/entity/picker/picker";
 import { ConversionCapabilities } from "~/features/units/conversion-capabilities";
 import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import { buildProductComboboxItem } from "~/ui/combobox/combobox-builders";
-import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";

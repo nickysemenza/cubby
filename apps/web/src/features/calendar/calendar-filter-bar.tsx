@@ -1,6 +1,6 @@
 import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import { ManifestFilterBar } from "~/ui/data-table/manifest-filter-bar";
+import { ManifestFilterBar } from "~/entity/table/manifest-filter-bar";
 
 import {
   calendarFilterSpecs,

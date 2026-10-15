@@ -5,40 +5,41 @@ import {
   mailReclassificationCheckpoint,
 } from "@cubby/schemas/email-actions";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  runStatus,
-  suggestionSweepRunProgress,
-} from "@cubby/schemas/run-fields";
-import {
-  MAX_AUTOMATIC_WORKFLOW_FAILURES,
-  workflowRecoveryProgress,
-} from "@cubby/schemas/workflow-runs";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
+import { workflowRecoveryProgress } from "@cubby/schemas/workflow-runs";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import {
   aiEvaluationProgress,
   claimAiEvaluation,
-  guardAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   requestedAiEvaluations,
   PENDING_AI_STATES,
 } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
-import { aiEvaluation, run } from "~/server/db/schema";
+import { reclassificationSnapshot } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import {
   executeReclassificationTarget,
-  reclassificationSnapshot,
   type ReclassificationPorts,
-} from "~/server/domains/purchase-import/gmail/reclassification-work";
-import { ExecutionBudgetError } from "~/server/domains/run/service/execution-authorization";
+} from "~/server/domains/purchase-import/service/gmail/reclassification-target";
+import {
+  aiEvaluationsForRun,
+  completeRecoveredAiWorkRun,
+  guardAiEvaluationAttempt,
+  pauseRunForExecutionAuthorization,
+  readAiEvaluation,
+  readAiEvaluationReceipt,
+  readRun,
+  readRunStatus,
+  recordAiEvaluationAttemptFailure,
+  recoverableManualAiWorkRuns,
+  writeRunningAttemptProgress,
+  type AiEvaluationRow,
+  type RunRow,
+} from "~/server/domains/run/repo/ai-work-state";
+import { ExecutionBudgetError } from "~/server/domains/run/repo/execution-authorization";
 import { buildCrudServices } from "~/server/http/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
@@ -92,10 +93,7 @@ export async function advanceAiWorkRun(
       },
     });
     // Preparation preserves the active Workflow attempt.
-    const [prepared] = await getDb(db)
-      .select()
-      .from(run)
-      .where(eq(run.id, owner.id));
+    const prepared = await readRun(db, owner.id);
     if (!prepared) return null;
     Object.assign(owner, prepared);
   }
@@ -114,29 +112,20 @@ export async function advanceAiWorkRun(
     pending.length === 0,
   );
   const failed = items.some((item) => item.state === "failed");
-  await getDb(db)
-    .update(run)
-    .set({
-      progress,
-      ...(pending.length
-        ? {}
-        : {
-            status: failed ? "failed" : "completed",
-            endedAt: new Date(),
-            failureCode: failed ? "ai_work_failed" : null,
-            dispatchError:
-              items
-                .flatMap((item) => (item.error ? [item.error] : []))
-                .join("\n") || null,
-          }),
-    })
-    .where(
-      and(
-        eq(run.id, owner.id),
-        eq(run.status, "running"),
-        sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${params.attempt}`,
-      ),
-    );
+  await writeRunningAttemptProgress(db, owner.id, params.attempt, {
+    progress,
+    ...(pending.length
+      ? {}
+      : {
+          status: failed ? "failed" : "completed",
+          endedAt: new Date(),
+          failureCode: failed ? "ai_work_failed" : null,
+          dispatchError:
+            items
+              .flatMap((item) => (item.error ? [item.error] : []))
+              .join("\n") || null,
+        }),
+  });
   return pending
     .sort(
       (a, b) =>
@@ -145,15 +134,9 @@ export async function advanceAiWorkRun(
     )
     .slice(0, 2);
 }
-export async function aiWorkItems(
-  db: Database,
-  owner: typeof run.$inferSelect,
-) {
+export async function aiWorkItems(db: Database, owner: RunRow) {
   const items = await (owner.purpose === "ai_refresh"
-    ? getDb(db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.runId, owner.id))
+    ? aiEvaluationsForRun(db, owner.id)
     : requestedAiEvaluations(db, owner.id));
   return items.filter(
     (item) =>
@@ -168,26 +151,18 @@ export async function executeAiWorkTarget(
   requestingRunId: string,
   ports: AiWorkPorts = {},
 ) {
-  const [read] = await getDb(db)
-    .select()
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.id, id));
+  const read = await readAiEvaluation(db, id);
   if (!read) return false;
   if (read.executionKind === "ai_refresh")
     return executeAiRefreshTarget(db, id);
   const item = await claimAiEvaluation(db, id, requestingRunId);
   if (!item?.attemptToken) return false;
   try {
-    await withTransactionDatabase(db, (tx) =>
-      guardAiEvaluation(tx, id, item.attemptToken!),
-    );
+    await guardAiEvaluationAttempt(db, id, item.attemptToken);
     if (item.executionKind === "mail_reclassify")
       await executeReclassificationTarget(db, item, ports.reclassification);
     else {
-      const [owner] = await getDb(db)
-        .select()
-        .from(run)
-        .where(eq(run.id, item.runId));
+      const owner = await readRun(db, item.runId);
       if (!owner) throw new Error("Suggestion sweep Run no longer exists");
       const context = ports.sweep?.context ?? {
         ...buildCrudServices(db),
@@ -213,11 +188,7 @@ export async function executeAiWorkTarget(
       /execution approval|execution authorization|approval.*(?:expired|revoked|budget)|mailbox.*connected/i.test(
         message,
       );
-    const [owner] = await getDb(db)
-      .select({ status: run.status })
-      .from(run)
-      .where(eq(run.id, item.runId));
-    const paused = owner?.status === "paused";
+    const paused = (await readRunStatus(db, item.runId)) === "paused";
     const fenced = /attempt is obsolete|generation or Run is obsolete/.test(
       message,
     );
@@ -228,9 +199,10 @@ export async function executeAiWorkTarget(
       message.includes("AI Gateway admission is waiting");
     const obsolete =
       !fenced && /changed during inference|no longer exists/.test(message);
-    await getDb(db)
-      .update(aiEvaluation)
-      .set({
+    await recordAiEvaluationAttemptFailure(
+      db,
+      { id, attemptToken: item.attemptToken },
+      {
         state:
           obsolete && !paused
             ? "obsolete"
@@ -242,49 +214,17 @@ export async function executeAiWorkTarget(
         nextAttemptAt: new Date(
           Date.now() + 60_000 * Math.max(1, item.attempts),
         ),
-        deadlineAt: null,
         ...(budget && item.executionKind === "mail_reclassify"
-          ? {
-              snapshot: sql`jsonb_set(${aiEvaluation.snapshot}, '{minimumBudgetMicroUSD}', to_jsonb(${budget.minimumBudgetMicroUSD}::bigint))`,
-            }
+          ? { minimumBudgetMicroUSD: budget.minimumBudgetMicroUSD }
           : {}),
-      })
-      .where(
-        and(
-          eq(aiEvaluation.id, id),
-          eq(aiEvaluation.attemptToken, item.attemptToken),
-          inArray(aiEvaluation.state, ["running", "result_ready"]),
-        ),
-      );
+      },
+    );
     if (unauthorized)
-      await getDb(db)
-        .update(run)
-        .set({
-          status: "paused_auth",
-          endedAt: null,
-          failureCode: "execution_authorization_unavailable",
-          dispatchError: message,
-        })
-        .where(
-          and(
-            eq(run.id, item.runId),
-            or(
-              eq(run.status, "running"),
-              and(
-                eq(run.status, "needs_review"),
-                eq(run.failureCode, "execution_limit"),
-              ),
-            ),
-          ),
-        );
+      await pauseRunForExecutionAuthorization(db, item.runId, message);
   }
-  const [settled] = await getDb(db)
-    .select({ receipt: aiEvaluation.receipt })
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.id, id));
   const continuations = z
     .object({ continuationRunIds: z.array(z.uuid()) })
-    .safeParse(settled?.receipt);
+    .safeParse(await readAiEvaluationReceipt(db, id));
   if (continuations.success)
     for (const next of continuations.data.continuationRunIds)
       await launchWorkflowRun(
@@ -300,8 +240,8 @@ export async function executeAiWorkTarget(
 }
 
 function aiWorkProgress(
-  owner: typeof run.$inferSelect,
-  items: readonly (typeof aiEvaluation.$inferSelect)[],
+  owner: RunRow,
+  items: readonly AiEvaluationRow[],
   attempt: number,
   complete = false,
 ) {
@@ -426,29 +366,7 @@ export async function recoverManualAiWork(
     await (
       await import("./reclassification-recovery")
     ).recoverHistoricalReclassification(db);
-  const candidates = await getDb(db)
-    .select()
-    .from(run)
-    .where(
-      and(
-        inArray(run.purpose, ["mail_reclassify", "suggestion_sweep"]),
-        notDeleted(run),
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        sql`(${run.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
-        runIds
-          ? inArray(
-              run.id,
-              runIds.map((id) => runEntityId.parse(id)),
-            )
-          : undefined,
-        or(
-          eq(run.status, "failed"),
-          eq(run.status, "dispatch_failed"),
-          eq(run.status, "paused_auth"),
-          eq(run.status, "running"),
-        ),
-      ),
-    );
+  const candidates = await recoverableManualAiWorkRuns(db, runIds);
   for (const owner of candidates) {
     if (owner.status === "running") {
       const attempt = z
@@ -468,10 +386,7 @@ export async function recoverManualAiWork(
             message: `Workflow startup handoff ended (${instance.state})${instance.error ? `: ${instance.error}` : ""}`,
           },
         );
-        const [reconciled] = await getDb(db)
-          .select()
-          .from(run)
-          .where(and(eq(run.id, owner.id), notDeleted(run)));
+        const reconciled = await readRun(db, owner.id, { live: true });
         if (
           !reconciled ||
           reconciled.status !== "failed" ||
@@ -504,36 +419,22 @@ export async function recoverManualAiWork(
       if (
         (items.length || owner.purpose === "suggestion_sweep") &&
         !items.some((item) => item.state === "failed")
-      )
-        await getDb(db)
-          .update(run)
-          .set({
-            status: "completed",
-            endedAt: new Date(),
-            failureCode: null,
-            dispatchError: null,
-            progress: aiWorkProgress(
-              owner,
-              items,
-              z
-                .object({ attempt: z.number().default(0) })
-                .parse(owner.progress ?? {}).attempt,
-              true,
-            ),
-          })
-          .where(
-            and(
-              eq(run.id, owner.id),
-              eq(run.status, owner.status),
-              sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${z.object({ attempt: z.number().default(0) }).parse(owner.progress ?? {}).attempt}`,
-              sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-            ),
-          );
+      ) {
+        const attempt = z
+          .object({ attempt: z.number().default(0) })
+          .parse(owner.progress ?? {}).attempt;
+        await completeRecoveredAiWorkRun(
+          db,
+          owner,
+          attempt,
+          aiWorkProgress(owner, items, attempt, true),
+        );
+      }
       continue;
     }
     if (owner.status === "paused_auth" && owner.purpose === "mail_reclassify") {
       const { mailboxApproval } =
-        await import("~/server/domains/purchase-import/gmail/reclassify");
+        await import("~/server/domains/purchase-import/service/gmail/reclassify");
       const { mailReclassifyRunInput } =
         await import("@cubby/schemas/run-fields");
       const input = mailReclassifyRunInput.parse(owner.input);

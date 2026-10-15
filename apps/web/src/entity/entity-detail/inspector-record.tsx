@@ -24,10 +24,10 @@ import {
 } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
-import { RecordWorkQueue } from "~/features/work-queue/record-work-queue";
+import { PreviewQuery } from "~/entity/preview/preview-query";
+import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
+import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { SectionHeading, Stack } from "~/ui/layout";
-import { PreviewQuery } from "~/ui/preview/preview-query";
 import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";

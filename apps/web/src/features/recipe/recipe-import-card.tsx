@@ -11,6 +11,7 @@ import { uniq } from "es-toolkit";
 import { memo, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
@@ -22,7 +23,6 @@ import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
 import { Spinner } from "~/ui/primitives/spinner";
 import { StatusText } from "~/ui/primitives/status-text";
-import { MarkdownText } from "~/ui/text/markdown";
 
 import {
   entityDisplayImageKey,

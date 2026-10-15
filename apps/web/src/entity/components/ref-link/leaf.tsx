@@ -20,13 +20,13 @@ import {
   type EntityDetailRoute,
 } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { cn } from "~/lib/utils";
-import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
-} from "~/ui/preview/preview-entities";
+} from "~/entity/preview/preview-entities";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
+import { cn } from "~/lib/utils";
+import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   PreviewCard,
   PreviewCardContent,

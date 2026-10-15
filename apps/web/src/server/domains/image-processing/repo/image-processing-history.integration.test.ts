@@ -21,6 +21,7 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   scheduleImageProcessingJobs,
   completeCompanionImageProcessingResult,
@@ -50,7 +51,6 @@ import {
   createImageProcessingSubmission,
   findImageProcessingDeviceAssignment,
 } from "./image-processing-history";
-import { updateImageProcessingSettings } from "./image-processing-maintenance";
 
 describe("image execution history conservation", () => {
   const ctx = withTestDb();

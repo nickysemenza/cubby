@@ -21,14 +21,14 @@ import {
   countImagesStaleMetadata,
   selectImagesForMetadataExtraction,
 } from "~/server/domains/image/repo/image";
-import { buildImageMetadataExtractionTasks } from "~/server/domains/image/service/image-metadata-extraction.service";
-import { cullPendingImageStorage } from "~/server/domains/image/service/image-storage.service";
+import { buildImageMetadataExtractionTasks } from "~/server/domains/image/repo/image-metadata-tasks";
+import { cullPendingImageStorage } from "~/server/domains/image/repo/pending-image-cull";
 import {
   countStaleRecipeTotals,
   selectAllStaleRecipeIds,
 } from "~/server/domains/recipe/repo/totals";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/semantic/embeddings";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import {
   countUnembeddedSearchDocuments,
   selectUnembeddedSearchDocumentRefs,

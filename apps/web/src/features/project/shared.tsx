@@ -12,17 +12,17 @@ import { VendorCell } from "~/entity/components/vendor-cell";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
+import {
+  type VendorName,
+  WithVendorSearch,
+} from "~/entity/picker/with-vendor-search";
+import { createTextColumn } from "~/entity/table/column-helpers";
+import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import {
-  type VendorName,
-  WithVendorSearch,
-} from "~/ui/combobox/with-vendor-search";
 import { entityCellData, specFromCellData } from "~/ui/data-table/cell-data";
-import { createTextColumn } from "~/ui/data-table/column-helpers";
-import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
 import {
   type CubbyColumnHelper as ColumnHelper,
   type CubbyFilterFn as FilterFn,
@@ -32,7 +32,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { badgeVariantColor } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-export { TASK_STATUS_LABELS } from "~/features/task/task-options";
+export { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 export {
   nivoBarChrome,
   nivoChartTheme,

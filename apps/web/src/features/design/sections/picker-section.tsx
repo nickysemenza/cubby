@@ -5,10 +5,10 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { PickerField } from "~/entity/forms/picker-field";
+import { Picker } from "~/entity/picker/picker";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Stack } from "~/ui/layout";
 
 import { Demo, DemoGrid } from "../components/design-section";

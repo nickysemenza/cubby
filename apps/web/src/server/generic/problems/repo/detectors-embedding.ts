@@ -46,7 +46,7 @@ import {
   vendor,
   wish,
 } from "~/server/db/schema";
-import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
+import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 
 // Sample cap for the section's item rows. The true figure comes from
 // `countEntitiesMissingEmbeddings` — the section shows a sample, the button

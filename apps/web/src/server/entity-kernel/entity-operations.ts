@@ -20,10 +20,10 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
+import { deleteStoredObjects } from "~/server/clients/s3";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { assessmentState as suggestionTable } from "~/server/db/schema";
-import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
 import {
   withListEntityMedia,
   withUniversalEntityMedia,

@@ -15,7 +15,7 @@ export async function recipeWalkthroughReport(
   id: RecipeId,
 ): Promise<ReportBlock[]> {
   const [{ getRecipeFlowState }, { getRecipeByID }] = await Promise.all([
-    import("~/server/domains/recipe/service/recipe-flow/recipe-flow.service"),
+    import("~/server/domains/recipe/repo/recipe-flow-state"),
     import("~/server/domains/recipe/repo/crud"),
   ]);
   const [state, recipe] = await Promise.all([

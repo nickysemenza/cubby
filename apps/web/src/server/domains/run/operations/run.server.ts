@@ -9,41 +9,41 @@ import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
+import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
+import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
 import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "~/server/domains/purchase-import/agent-auth";
-import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/agent-proxy";
+} from "~/server/domains/purchase-import/repo/agent-auth";
 import {
   dispatchRunEvent,
   dispatchStartedRun,
-} from "~/server/domains/purchase-import/dispatch";
-import { startMailDiscovery } from "~/server/domains/purchase-import/gmail/discovery";
-import { commitPurchaseImport } from "~/server/domains/purchase-import/import-orders";
+} from "~/server/domains/purchase-import/repo/dispatch";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
-} from "~/server/domains/purchase-import/merchant-vendor-rules";
+} from "~/server/domains/purchase-import/repo/merchant-vendor-rules";
 import {
   approvalWakeEvent,
   controlRun,
   loadRunDetail,
   loadRunLog,
   pauseAuthorizedRuns,
-} from "~/server/domains/purchase-import/run-service";
+} from "~/server/domains/purchase-import/repo/run-service";
 import {
   listRuns,
   listProductRuns,
   reportRunTargetDeviceWork,
   resolveProductImportTarget,
   resolvePurchaseImportTarget,
-} from "~/server/domains/purchase-import/run-target";
+} from "~/server/domains/purchase-import/repo/run-target";
+import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/service/agent-proxy";
+import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import {
   findOwnedMailDiscovery,
   loadMailDiscoveryRead,
 } from "~/server/domains/run/repo/run-discovery-read";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
-import { issueExecutionAuthorization } from "~/server/domains/run/service/execution-authorization";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";

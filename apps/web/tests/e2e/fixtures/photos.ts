@@ -22,7 +22,7 @@ import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import {
   seedProductCategoryPrerequisite,
   seedLocationPrerequisite,

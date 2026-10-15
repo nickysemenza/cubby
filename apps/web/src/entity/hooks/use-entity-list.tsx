@@ -18,14 +18,20 @@ import {
   filterGetterFromColumnFilters,
   summarizeListState,
 } from "~/entity/filters";
+import type { ListGroupState } from "~/entity/hooks/progressive-list";
+import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
+import type { RowLinkResolver } from "~/entity/table/column-helpers";
+import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
+import { problemWorklistState } from "~/entity/table/problem-worklist";
+import type {
+  TableStateReturn,
+  useTableState,
+} from "~/entity/table/use-table-state";
 import { formatCount } from "~/lib/number-format";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
-import type { RowLinkResolver } from "~/ui/data-table/column-helpers";
-import type { ServerListWorkbenchModel } from "~/ui/data-table/list-workbench";
-import { problemWorklistState } from "~/ui/data-table/problem-worklist";
 import { reconcileRowSelection } from "~/ui/data-table/row-selection";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import type { CubbyColumnCollection } from "~/ui/data-table/table-features";
@@ -35,14 +41,8 @@ import {
 } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
-import type {
-  TableStateReturn,
-  useTableState,
-} from "~/ui/data-table/use-table-state";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
-import type { ListGroupState } from "~/ui/hooks/progressive-list";
 import { useDocumentTitle } from "~/ui/hooks/use-document-title";
-import { useInfiniteTableList } from "~/ui/hooks/use-infinite-table-list";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import {
   serverTreeRowCanExpand,
@@ -240,10 +240,10 @@ export interface UseEntityListReturn<
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
   summaryState?: ListGroupState;
-  enrichmentFailures?: import("~/ui/hooks/progressive-list").ListEnrichmentFailure[];
+  enrichmentFailures?: import("~/entity/hooks/progressive-list").ListEnrichmentFailure[];
   retryEnrichment?: (
     pageIndex: number,
-    group: import("~/ui/hooks/progressive-list").ListReadGroup,
+    group: import("~/entity/hooks/progressive-list").ListReadGroup,
   ) => Promise<void>;
   retrySummary?: () => void;
   enrichmentState?: (id: string, field: string) => ListGroupState | undefined;

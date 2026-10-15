@@ -1,4 +1,3 @@
-import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { ImageId } from "@cubby/schemas/identifiers";
 import type { StoredImageEmbeddedMetadata } from "@cubby/schemas/image";
 
@@ -13,14 +12,10 @@ import {
   extractImageMetadata,
   type ImageEmbeddedMetadata,
 } from "~/server/domains/image/service/image-metadata";
-import { publishInBackground } from "~/server/workflows/background-tasks/publish";
 
 /** A container's leading bytes hold every tag this parser reads; never worth
  * fetching more than a few MiB even for a multi-hundred-megabyte original. */
 const MAX_METADATA_FETCH_BYTES = 4 * 1024 * 1024;
-
-export const isImageContentType = (contentType: string): boolean =>
-  contentType.toLowerCase().startsWith("image/");
 
 /** `null` on a 404 (object missing — leave the stale marker as-is for a
  * later retry rather than mask a lost object as "no metadata"); throws on any
@@ -87,35 +82,3 @@ export async function extractAndStoreImageMetadata(
   await ports.apply(db, imageId, toStoredMetadata(parsed));
   return "succeeded";
 }
-
-const imageMetadataExtractTask = (imageId: ImageId): BackgroundTaskInput => ({
-  kind: "image-metadata.extract",
-  requestedAt: new Date().toISOString(),
-  imageId,
-});
-
-/**
- * The wakeup every image-finalize seam publishes: presigned-upload finalize,
- * `createOrReuseAttachedImage` (MCP/native attach), URL import, and the
- * photo-import commit's per-item activation. Fire-and-forget like every other
- * post-mutation publish — `Image.metadataRevision` is the durable stale
- * marker a lost message doesn't threaten (repaired by "Settle now" or the
- * `backfillImageMetadata` maintenance sweep).
- */
-export async function publishImageMetadataExtraction(
-  db: Database,
-  imageId: ImageId,
-  contentType: string,
-  source: string,
-): Promise<void> {
-  if (!isImageContentType(contentType)) return;
-  await publishInBackground(db, [imageMetadataExtractTask(imageId)], {
-    source,
-  });
-}
-
-/** The same task, for a caller (photo-import commit) that must defer
- * publication until after its own write transaction commits. */
-export const buildImageMetadataExtractionTasks = (
-  imageIds: readonly ImageId[],
-): BackgroundTaskInput[] => imageIds.map((id) => imageMetadataExtractTask(id));

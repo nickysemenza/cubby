@@ -2,8 +2,6 @@ import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { useMemo } from "react";
 
-import { ChartEmpty } from "~/features/project/charts/chart-empty";
-import { ChartTooltip } from "~/features/project/charts/chart-tooltip";
 import { monthLabel } from "~/features/project/project-formatting";
 import {
   nivoBarChrome,
@@ -11,6 +9,8 @@ import {
   nivoCurrencyAxis,
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 
 type MonthDatum = {

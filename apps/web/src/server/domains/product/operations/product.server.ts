@@ -30,7 +30,7 @@ import {
   productContract,
   productStreamsContract,
 } from "~/contracts/product.contract";
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/service/expense-pricing.service";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import { verifyProductImages } from "~/server/domains/image/service/image-verification.service";
 import { previewProductAddToInventory } from "~/server/domains/product/repo/add-to-inventory-preview";
 import {
@@ -67,14 +67,14 @@ import {
   lookupUPC,
   selectUpcImageBackfill,
   summarizeUpcImageBackfill,
-} from "~/server/domains/product/service/product-orchestration.service";
+} from "~/server/domains/product/repo/write/product-orchestration";
 import {
   createProductWithFood,
   createProductWriteActions,
   getProductSummaries,
   getProductWithFood,
   updateProductWithFood,
-} from "~/server/domains/product/service/product.service";
+} from "~/server/domains/product/repo/write/product-writes";
 import {
   listProductProjectUses,
   setProductProjectUses,
@@ -84,8 +84,8 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { shouldUseSemanticComboboxFallback } from "~/server/generic/embedding/semantic/combobox-fallback";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
+import { shouldUseSemanticComboboxFallback } from "~/server/generic/embedding/service/semantic/combobox-fallback";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,

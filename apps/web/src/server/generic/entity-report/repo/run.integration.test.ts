@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { auditLog, run as runTable } from "~/server/db/schema";
-import { startImportRunFixture } from "~/server/domains/purchase-import/import-run.fixtures";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {

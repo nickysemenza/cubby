@@ -17,6 +17,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
+import RTable from "~/entity/table/table";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
   ai,
@@ -31,7 +32,6 @@ import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -47,7 +47,10 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
-import { SuggestionBody, suggestionBasisLabels } from "./suggestion-body";
+import {
+  SuggestionBody,
+  suggestionBasisLabels,
+} from "../../entity/suggestions/suggestion-body";
 import {
   suggestionReviewFiltersSchema,
   type SuggestionReviewFilters,

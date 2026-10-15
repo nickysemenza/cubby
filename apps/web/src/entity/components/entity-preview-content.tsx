@@ -31,9 +31,9 @@ import {
   type BodyBlock,
   ManifestCard,
   type ManifestCardProps,
-} from "../../ui/preview/manifest-card";
-import type { HoverPreviewEntity } from "../../ui/preview/preview-entities";
-import { PreviewQuery } from "../../ui/preview/preview-query";
+} from "../preview/manifest-card";
+import type { HoverPreviewEntity } from "../preview/preview-entities";
+import { PreviewQuery } from "../preview/preview-query";
 
 type CompactPreviewPresentation = {
   showOpenAction?: boolean;

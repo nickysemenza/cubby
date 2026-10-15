@@ -19,12 +19,11 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-
-import { stockOnly } from "./placement";
 
 /**
  * Both id forms travel together on purpose: the planner and the wire speak

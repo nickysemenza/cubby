@@ -1,7 +1,7 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { type AnyColumn, sql, type SQL } from "drizzle-orm";
 
-import { normalizeSearchText } from "~/server/generic/embedding/semantic/text";
+import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 
 /**
  * `SearchDocument` does not store the public code: an exact code hit is the

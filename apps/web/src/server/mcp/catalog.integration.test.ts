@@ -14,8 +14,8 @@ import {
   assessmentState as suggestion,
   runFinding,
 } from "~/server/db/schema";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

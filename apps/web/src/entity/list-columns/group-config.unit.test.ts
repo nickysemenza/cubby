@@ -15,8 +15,8 @@
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { describe, expect, it } from "vitest";
 
-import { LOCATION_GROUP_CONFIG } from "./location";
-import { PRODUCT_GROUP_CONFIG } from "./product";
+import { LOCATION_GROUP_CONFIG } from "../../features/location/list-columns";
+import { PRODUCT_GROUP_CONFIG } from "../../features/product/list-columns";
 
 describe("declared list GroupConfig.field is server-groupable", () => {
   it.each([

@@ -62,11 +62,11 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
   resolveRunFinding: async (context, input) =>
     (
-      await import("~/server/domains/purchase-import/findings")
+      await import("~/server/domains/purchase-import/repo/findings")
     ).resolveRunFinding(context.db, input, context.actorContext),
   resolveArrivedFindings: async (context, input) =>
     (
-      await import("~/server/domains/purchase-import/findings")
+      await import("~/server/domains/purchase-import/repo/findings")
     ).resolveArrivedFindingsForPurchase(
       context.db,
       {

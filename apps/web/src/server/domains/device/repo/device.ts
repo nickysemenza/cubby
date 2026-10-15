@@ -28,7 +28,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
-import { deriveAndStoreImageCapture } from "~/server/domains/image/service/image-capture-derivation";
+import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import {
   asActor,
   defineRepository,

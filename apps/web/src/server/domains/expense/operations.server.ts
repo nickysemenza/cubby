@@ -1,10 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  type expenseShortcode,
-  type PurchaseId,
-  parseEntityId,
-} from "@cubby/schemas/identifiers";
-import {
   confirmInventoryExpenseBeneficiaryInput,
   expenseInventoryOwnershipContextInput,
 } from "@cubby/schemas/inventory-ownership";
@@ -33,7 +28,7 @@ import {
   readyExpenseAnalysisOutput,
 } from "~/server/domains/expense/repo/analyze";
 import { loadVendorAttributionDefaults } from "~/server/domains/expense/repo/attribution-defaults";
-import { getExpenseByID } from "~/server/domains/expense/repo/crud";
+import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
   buildExpenseWhereClause,
@@ -43,25 +38,14 @@ import { matchExpenses } from "~/server/domains/expense/repo/match";
 import { loadEffectiveInventoryOwnershipById } from "~/server/domains/inventory/repo/ownership";
 import { confirmInventoryExpenseBeneficiary } from "~/server/domains/inventory/repo/ownership-mutations";
 import {
-  getPurchaseExpenses,
-  getPurchaseLinkIdentityByID,
-} from "~/server/domains/purchase/repo/purchase";
-import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { listAll } from "~/server/generic/list/repo/list-all";
-import {
-  resolveLiveShortcode,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames } from "~/server/observability/tracing";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import {
-  bindWorkflow,
-  tracedWorkflow,
-  workflow,
-} from "~/server/workflows/runtime";
+import { tracedWorkflow, workflow } from "~/server/workflows/runtime";
 
 export {
   expenseAnalyzeInput,
@@ -308,58 +292,6 @@ async function confirmInventoryBeneficiary(
   );
   return { expenseId: input.expenseId, ...result };
 }
-
-type ChargeContextInput = z.output<typeof expenseShortcode>;
-const requirePurchase = (id: PurchaseId | null): PurchaseId => {
-  if (id === null)
-    throw new Error("Charge-context purchase branch received null");
-  return id;
-};
-
-export const expenseChargeContextWorkflow = bindWorkflow(
-  workflow<Database, ChargeContextInput>("expense.chargeContext")
-    .call("resolveExpense", ({ context }, { input }) =>
-      resolveOrThrow(context, "expense", input),
-    )
-    .call("loadExpense", ({ context }, { resolveExpense }) =>
-      getExpenseByID(context, resolveExpense),
-    )
-    .call("resolvePurchase", async ({ context }, { loadExpense }) => {
-      if (!loadExpense.purchaseId) return null;
-      const id = await resolveLiveShortcode(
-        context,
-        loadExpense.purchaseId,
-        "purchase",
-      );
-      return id === null ? null : parseEntityId("purchase", id);
-    })
-    .branch("purchaseAvailable", {
-      when: async (_, { resolvePurchase }) => resolvePurchase !== null,
-      whenTrue: (branch) =>
-        branch
-          .parallel("chargeReads", 2, {
-            purchase: ({ context }, { input: { resolvePurchase } }) =>
-              getPurchaseLinkIdentityByID(
-                context,
-                requirePurchase(resolvePurchase),
-              ),
-            lines: ({ context }, { input: { resolvePurchase } }) =>
-              getPurchaseExpenses(context, requirePurchase(resolvePurchase)),
-          })
-          .output(({ input, chargeReads }) =>
-            chargeReads.purchase
-              ? {
-                  purchase: chargeReads.purchase,
-                  siblings: chargeReads.lines.filter(
-                    (row) => row.id !== input.input,
-                  ),
-                }
-              : null,
-          ),
-      whenFalse: (branch) => branch.output(() => null),
-    })
-    .output(({ purchaseAvailable }) => purchaseAvailable),
-);
 
 export const expenseHandlers = implementOperationDomain(expenseContract, {
   chartData: (context, input) => expenseChartDataWorkflow(context.db, input),

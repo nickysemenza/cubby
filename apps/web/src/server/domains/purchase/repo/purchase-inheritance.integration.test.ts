@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { expenseChargeContextWorkflow } from "~/server/domains/expense/operations.server";
+import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import {
   getExpenseByShortcode,
   updateExpense,

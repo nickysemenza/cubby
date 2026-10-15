@@ -475,7 +475,7 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
     const [scenario, processing, dispatch, schemas] = await Promise.all([
       import("./scenarios/context"),
       import("~/server/domains/image-processing/repo/image-processing"),
-      import("~/server/domains/image-processing/dispatch"),
+      import("~/server/domains/image-processing/service/dispatch"),
       import("@cubby/schemas/image-processing"),
     ]);
     const db = scenario.buildScenarioDatabase(pool);
@@ -915,7 +915,7 @@ async function runHeadlessPhotoScenario(
       await Promise.all([
         import("./scenarios/simulator"),
         import("./scenarios/context"),
-        import("~/server/domains/image-processing/repo/image-processing-maintenance"),
+        import("~/server/domains/image-processing/service/image-processing-maintenance"),
       ]);
     await seedSimulatorPhotoActor(pool, userId);
     await maintenance.updateImageProcessingSettings(

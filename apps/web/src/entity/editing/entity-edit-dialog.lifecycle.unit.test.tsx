@@ -4,6 +4,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
+import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -13,6 +14,8 @@ import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contra
 import { EntityEditDialog } from "./entity-edit-dialog";
 import type { EntityMutationPort } from "./types";
 import { createEntityMutationPort } from "./use-entity-commands";
+
+installFeatures();
 
 const record = mock(vendorOut, {
   seed: 7,

@@ -13,16 +13,16 @@ import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import { useMemo } from "react";
 
 import {
+  type AllEntityRecords,
+  useAllEntityRecords,
+} from "~/entity/hooks/use-all-entity-records";
+import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/features/schedule/schedule-grid";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import {
-  type AllEntityRecords,
-  useAllEntityRecords,
-} from "~/ui/hooks/use-all-entity-records";
 import { Stack } from "~/ui/layout";
 import {
   Table,

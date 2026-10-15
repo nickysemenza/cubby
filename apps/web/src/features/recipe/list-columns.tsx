@@ -1,0 +1,192 @@
+import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { countLabel } from "@cubby/shared/pluralize";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { formatYield } from "~/entity/presentation/recipe-yield";
+import { EditableCell } from "~/entity/table/editable-cell";
+import { EditableTagsCell } from "~/features/recipe/editable-tags-cell";
+import { RecipeTag } from "~/features/recipe/recipe-tag";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { PickerOption } from "~/ui/combobox/picker-option";
+import {
+  numberCellData,
+  specFromCellData,
+  tagsCellData,
+} from "~/ui/data-table/cell-data";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useTagOptions } from "~/ui/hooks/use-entity-options";
+import { NoneValue } from "~/ui/primitives/none-value";
+import { TruncatedList } from "~/ui/truncated-list";
+
+import { defineListOverride } from "../../entity/list-columns/types";
+
+type RecipeFilters = EntityListParamsByEntity["recipe"]["filters"];
+
+const columnHelper = createCubbyColumnHelper<RecipeListItem>();
+const NO_INGREDIENT_OPTIONS: PickerOption[] = [];
+
+export const recipeListOverride = defineListOverride<
+  RecipeListItem,
+  RecipeFilters
+>({
+  use() {
+    const { options: tagOptions } = useTagOptions("recipe");
+    const ingredientOptionsQuery = useQuery(
+      relatedData.options.queryOptions({
+        relationKey: "recipe.ingredients",
+        limit: 100,
+      }),
+    );
+    const ingredientOptions = useMemo<PickerOption[]>(
+      () =>
+        ingredientOptionsQuery.data?.map(({ id, label, count }) => ({
+          value: id,
+          label,
+          hint: String(count),
+        })) ?? NO_INGREDIENT_OPTIONS,
+      [ingredientOptionsQuery.data],
+    );
+    const filterOptions = useFilterOptions({
+      tags: tagOptions,
+      recipeIngredients: ingredientOptions,
+    });
+
+    const updateRecipeMutation = useUpdateMutation({
+      mutationFn: entityMutationOptionsFactory("recipe", "update"),
+      entity: "recipe",
+    });
+    // Its own config, not the contract default: a recipe write from this
+    // table only moves `recipe.list`, not the meal rollups.
+    const deletable = useDeletableConfig({
+      mutationFn: entityMutationOptionsFactory("recipe", "delete"),
+      entityLabel: "Recipe",
+      entity: "recipe",
+    });
+
+    const overrides = useMemo(() => {
+      // The cellData drives both the range copy/paste engine and the
+      // focused-cell clipboard — one source of truth for tag save semantics.
+      const saveTags = async (
+        row: RecipeListItem,
+        nextTags: string[] | null,
+      ) => {
+        await updateRecipeMutation.mutateAsync({
+          id: row.id,
+          data: { tags: nextTags },
+        });
+      };
+      const tagsCellDataDef = tagsCellData<RecipeListItem>(
+        (row) => row.tags ?? null,
+        saveTags,
+      );
+      // Yield falls back to inline-editable `servings` only when the recipe
+      // has no structured yield; copy/paste is available on exactly those rows.
+      const saveServings = async (
+        row: RecipeListItem,
+        value: number | null,
+      ) => {
+        if (row.yield) {
+          throw new Error(
+            "This recipe has a structured yield — edit servings on its detail page.",
+          );
+        }
+        await updateRecipeMutation.mutateAsync({
+          id: row.id,
+          data: { servings: value === null ? null : Math.round(value) },
+        });
+      };
+      const servingsCellDataDef = numberCellData<RecipeListItem>(
+        "number",
+        (row) => (row.yield ? null : (row.servings ?? null)),
+        saveServings,
+      );
+      const renderTags = (tags: string[] | null) => {
+        if (!tags?.length) return <NoneValue />;
+        return (
+          <TruncatedList
+            items={tags}
+            maxItems={2}
+            renderItem={(tag) => <RecipeTag key={tag} tag={tag} size="sm" />}
+          />
+        );
+      };
+      return createCubbyColumnCollection<RecipeListItem>((add) => {
+        add(
+          columnHelper.accessor("tags", {
+            id: "tags",
+            header: "Tags",
+            enableSorting: true,
+            meta: attachCubbyColumnMeta({
+              className: "w-48",
+              mobile: { slot: "subtitle", priority: 10 },
+              cellData: tagsCellDataDef,
+            }),
+            cell: (info) => {
+              const recipe = info.row.original;
+              return (
+                <EditableTagsCell
+                  value={recipe.tags ?? null}
+                  renderValue={renderTags}
+                  clipboard={specFromCellData(tagsCellDataDef, recipe)}
+                  onSave={(nextTags) => saveTags(recipe, nextTags)}
+                />
+              );
+            },
+          }),
+        );
+        // Accessor (not display) so it sorts server-side on `servings`.
+        add(
+          columnHelper.accessor((row) => row.servings ?? undefined, {
+            id: "servings",
+            meta: attachCubbyColumnMeta({
+              numeric: true,
+              className: "w-24",
+              mobile: { slot: "trailing", priority: 5, interactive: true },
+              cellData: servingsCellDataDef,
+            }),
+            cell: (info) => {
+              const recipe = info.row.original;
+              // A structured yield is owned by the detail page's editor.
+              if (recipe.yield) return formatYield(recipe.yield);
+              return (
+                <EditableCell
+                  value={recipe.servings ?? null}
+                  config={{ type: "number" }}
+                  clipboard={specFromCellData(servingsCellDataDef, recipe)}
+                  renderValue={(servings) =>
+                    servings == null ? (
+                      <NoneValue />
+                    ) : (
+                      countLabel(servings, "serving")
+                    )
+                  }
+                  onSave={(newValue) => saveServings(recipe, newValue)}
+                />
+              );
+            },
+          }),
+        );
+      });
+      // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
+    }, []);
+
+    const list = useMemo(
+      () => ({
+        deletable,
+        filterOptions,
+      }),
+      [deletable, filterOptions],
+    );
+    return { overrides, list };
+  },
+});

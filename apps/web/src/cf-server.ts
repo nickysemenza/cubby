@@ -3,7 +3,7 @@
  * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
  *   TanStack Start.
  * - `handler.queue`: `cubby-purchase-agent` (the purchase agent's consumer,
- *   `server/domains/purchase-agent/queue`), `cubby-telemetry`, then background tasks
+ *   `server/domains/purchase-agent/service/queue`), `cubby-telemetry`, then background tasks
  *   (`server/workflows/background-tasks/consume`).
  * - `handler.scheduled`: the one daily maintenance cron.
  * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
@@ -43,8 +43,8 @@ import {
   withDatabaseRequestMetrics,
 } from "./server/db/db-observability";
 import { recordDatabaseWrite } from "./server/db/freshness/client";
-import type { PurchaseAgentQueueBatch } from "./server/domains/purchase-agent/environment";
-import { purchaseAgentQueueEnvironment } from "./server/domains/purchase-import/agent-host";
+import type { PurchaseAgentQueueBatch } from "./server/domains/purchase-agent/service/environment";
+import { purchaseAgentQueueEnvironment } from "./server/domains/purchase-import/operations/agent-host";
 import {
   reportServerError,
   withErrorReporting,
@@ -266,7 +266,7 @@ const handler = {
                           ctx,
                           async () =>
                             (
-                              await import("./server/domains/calendar/client")
+                              await import("./server/domains/calendar/repo/client")
                             ).handleCalDavRequest(request),
                           url.origin,
                         );
@@ -288,8 +288,8 @@ const handler = {
                             async () => {
                               const [{ createCalendarFeedHandler }, calendar] =
                                 await Promise.all([
-                                  import("./server/domains/calendar/feed"),
-                                  import("./server/domains/calendar/client"),
+                                  import("./server/domains/calendar/service/feed"),
+                                  import("./server/domains/calendar/repo/client"),
                                 ]);
                               return createCalendarFeedHandler(
                                 calendar.externalCalendarFeedStateFor,
@@ -327,7 +327,7 @@ const handler = {
                                     ctx,
                                     async () =>
                                       (
-                                        await import("./server/domains/image-processing/direct-socket-route")
+                                        await import("./server/domains/image-processing/service/direct-socket-route")
                                       ).handleImageProcessingSocketUpgrade(
                                         request,
                                       ),
@@ -574,9 +574,9 @@ const handler = {
       async () => {
         if (batch.queue === "cubby-purchase-agent") {
           // The agent's consumer holds no database client: each Run service it
-          // calls opens its own (`server/domains/purchase-import/agent-services`).
+          // calls opens its own (`server/domains/purchase-import/operations/agent-services`).
           const { consumePurchaseAgentQueue } =
-            await import("./server/domains/purchase-agent/queue");
+            await import("./server/domains/purchase-agent/service/queue");
           await consumePurchaseAgentQueue(
             batch,
             purchaseAgentQueueEnvironment(env, ctx),
@@ -610,7 +610,7 @@ const handler = {
               ? {
                   handleTask: async (db, task) =>
                     (
-                      await import("./server/domains/image-processing/cloud-queue")
+                      await import("./server/domains/image-processing/service/cloud-queue")
                     ).handleCloudImageTask(db, task),
                 }
               : {}),
@@ -674,7 +674,7 @@ const handler = {
                     { claimCatchUp, discoverPurchases, recoverMissedWork },
                   ] = await Promise.all([
                     import("./server/db"),
-                    import("./server/generic/work-queue/service/catch-up.service"),
+                    import("./server/workflows/catch-up"),
                   ]);
                   const claimedAt = new Date();
                   if (await claimCatchUp(db, claimedAt)) {
@@ -709,7 +709,7 @@ const handler = {
                 async () =>
                   await (
                     await (
-                      await import("./server/domains/calendar/client")
+                      await import("./server/domains/calendar/repo/client")
                     ).calendarFeedStateFor(env.APP_ORIGIN)
                   ).refreshNow("cron.daily"),
                 { "cubby.scheduled.job": "calendar-feed" },
@@ -780,7 +780,7 @@ const handler = {
                 "cf.scheduled.job",
                 async (span) => {
                   const { semanticEmbeddingsConfigured } =
-                    await import("./server/generic/embedding/semantic/embeddings");
+                    await import("./server/generic/embedding/service/semantic/embeddings");
                   if (!semanticEmbeddingsConfigured()) {
                     span.setAttribute("cubby.vectorReconcile.skipped", true);
                     return;
@@ -795,7 +795,7 @@ const handler = {
                       ] = await Promise.all([
                         import("./server/db"),
                         import("./server/generic/embedding/repo/entity-embedding-cleanup"),
-                        import("./server/generic/embedding/semantic/vector-store"),
+                        import("./server/generic/embedding/service/semantic/vector-store"),
                       ]);
                       const since = new Date(
                         Date.now() - 7 * 24 * 60 * 60 * 1000,
@@ -855,16 +855,16 @@ const handler = {
 // Named exports: `wrangler types` finds Durable Object classes by reading them.
 export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "./server/ai/chatgpt/durable-object";
-export { CalendarFeedDurableObject } from "./server/domains/calendar/durable-object";
-export { DatabaseFreshnessDurableObject } from "./server/db/freshness/durable-object";
-export { ImageProcessingDurableObject } from "./server/domains/image-processing/durable-object";
-export { PurchaseImportRunAgent } from "./server/domains/purchase-import/agent-host";
-export { UsdaReleaseDurableObject } from "./server/domains/usda-release/durable-object";
+export { CalendarFeedDurableObject } from "./server/domains/calendar/operations/durable-object";
+export { DatabaseFreshnessDurableObject } from "./server/generic/problems/operations/database-freshness-durable-object";
+export { ImageProcessingDurableObject } from "./server/domains/image-processing/operations/durable-object";
+export { PurchaseImportRunAgent } from "./server/domains/purchase-import/operations/agent-host";
+export { UsdaReleaseDurableObject } from "./server/domains/usda-release/operations/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/workflows/search-index-repair-workflow";
 export { MailDiscoveryWorkflow } from "./server/workflows/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);
 
-export { AiGatewayEgressDurableObject } from "./server/ai/gateway-egress-durable-object";
+export { AiGatewayEgressDurableObject } from "./server/domains/run/operations/gateway-egress-durable-object";
 
 export { AiRefreshWorkflow } from "./server/workflows/ai-refresh-workflow";

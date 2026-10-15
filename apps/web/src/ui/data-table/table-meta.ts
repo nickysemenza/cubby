@@ -1,13 +1,15 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { parseShortcode } from "@cubby/shared";
+import { humanize, parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { z } from "zod";
 
+import type { PickerOption } from "~/ui/combobox/picker-option";
+
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
-import type { PickerOption } from "./editable-cell";
+import type { CubbyColumn } from "./table-features";
 
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
@@ -163,4 +165,21 @@ export interface CubbyTableMeta {
    * without threading a new argument.
    */
   scrollRestorationId?: string;
+}
+
+/** A column's label on a phone: its mobile label, its header text, or its humanized id. */
+export function mobileColumnLabel<TItem extends RowData>(
+  column: CubbyColumn<TItem, unknown>,
+): string {
+  const meta = column.columnDef.meta;
+  const header = column.columnDef.header;
+  if (meta?.mobile?.label) return meta.mobile.label;
+  if (isNonEmptyHeaderLabel(header)) return header;
+  return humanize(column.id);
+}
+
+function isNonEmptyHeaderLabel<TItem extends RowData>(
+  header: CubbyColumn<TItem, unknown>["columnDef"]["header"],
+): header is string {
+  return typeof header === "string" && header.trim().length > 0;
 }

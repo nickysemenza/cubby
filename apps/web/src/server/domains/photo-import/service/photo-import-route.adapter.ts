@@ -34,7 +34,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import type {
   PhotoImportRouteAdapter,
   PhotoImportRouteCommitResult,
-} from "./photo-import-commit.service";
+} from "../repo/photo-import-commit";
 
 type Route = ImageIngressRoute;
 type CreateBody = PhotoImportCommitInput["creates"][number]["body"];

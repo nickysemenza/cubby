@@ -22,7 +22,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "../../entity/entity-media/entity-display-images";
-import { formatAmounts } from "../inventory/format-amount";
+import { formatAmounts } from "../../ui/text/format-amount";
 import { DriftIndicator } from "./parse-drift-indicator";
 
 export type UsageRow = RecipeUsage & {

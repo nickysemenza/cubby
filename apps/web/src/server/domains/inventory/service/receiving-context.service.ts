@@ -10,7 +10,7 @@ import {
   getProductExpectedQuantity,
   listProductStock,
 } from "~/server/domains/inventory/repo/product-stock";
-import { getProductMatchQueue } from "~/server/domains/product/service/product-match.service";
+import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { deriveReceivingGuidance } from "./receiving-guidance";

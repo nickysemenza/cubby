@@ -6,7 +6,7 @@ import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import {
   loadRunDetail,
   loadRunLog,
-} from "~/server/domains/purchase-import/run-service";
+} from "~/server/domains/purchase-import/repo/run-service";
 import { getRunByID } from "~/server/domains/run/repo/run";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";

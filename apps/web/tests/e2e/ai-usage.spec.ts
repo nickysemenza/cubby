@@ -6,7 +6,7 @@ import {
 import { sql } from "drizzle-orm";
 
 import { getDb } from "~/server/db/helpers";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 import {

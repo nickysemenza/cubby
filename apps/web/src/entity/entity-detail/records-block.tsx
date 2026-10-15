@@ -1,6 +1,7 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { type ReactNode, Suspense, useState } from "react";
 
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -8,7 +9,6 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import {
   DetailAction,

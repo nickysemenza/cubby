@@ -16,6 +16,7 @@ import type { CellData, SortingState } from "@tanstack/react-table";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import RTable from "~/entity/table/table";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import {
@@ -27,7 +28,6 @@ import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

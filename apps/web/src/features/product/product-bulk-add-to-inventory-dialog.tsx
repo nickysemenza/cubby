@@ -36,28 +36,28 @@ import { type FC, useEffect, useMemo, useRef } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/features/inventory/amount-field-group";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
 import {
   inventory,
   product as productOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Spinner } from "~/ui/primitives/spinner";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 const formSchema = z.object({
   location: requiredLocationCode,

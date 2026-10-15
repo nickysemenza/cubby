@@ -15,8 +15,7 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-
-import { traceListGroup } from "./list-read-tracing";
+import { traceListGroup } from "~/server/observability/list-read-tracing";
 
 export type ListReadRow = ReturnType<typeof projectListRows>[number];
 

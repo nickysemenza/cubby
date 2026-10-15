@@ -54,16 +54,17 @@ import {
   type ListOverrideContext,
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
-import { getAppErrorDetails } from "~/lib/error-utils";
+import { usePageCount } from "~/entity/page/page";
 import {
   createImageColumn,
   isImageColumnId,
   hasDisplayImages,
-} from "~/ui/data-table/column-helpers";
+} from "~/entity/table/column-helpers";
+import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
+import { TableEmptyState } from "~/entity/table/entity-empty-states";
+import { ListWorkbench } from "~/entity/table/list-workbench";
+import { getAppErrorDetails } from "~/lib/error-utils";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
-import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
-import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
-import { ListWorkbench } from "~/ui/data-table/list-workbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -71,7 +72,6 @@ import {
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
-import { usePageCount } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";

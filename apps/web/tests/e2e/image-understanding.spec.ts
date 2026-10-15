@@ -12,7 +12,7 @@ import {
   saveImageDescriptionAnalysis,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
-import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/description-policy";
+import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import {
   IMAGE_IDENTIFICATION_MODEL,
   IMAGE_IDENTIFICATION_PROMPT_REVISION,
@@ -20,7 +20,7 @@ import {
 } from "@cubby/schemas/image-identification";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,

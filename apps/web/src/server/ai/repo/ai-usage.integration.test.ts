@@ -22,7 +22,7 @@ import {
   run as runTable,
 } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 

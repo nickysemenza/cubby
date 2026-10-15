@@ -6,11 +6,14 @@ import { shortcode } from "@cubby/schemas/identifiers";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { DetailActionProvider } from "./detail-action-bar";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
+
+installFeatures();
 
 const RUN_ID = shortcode("RUN-4K7M");
 const EMAIL_ID = shortcode("EML-4K7M");

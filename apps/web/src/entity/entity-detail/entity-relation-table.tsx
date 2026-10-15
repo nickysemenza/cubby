@@ -51,7 +51,6 @@ import {
   useSectionCount,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
-import { ListWorkbench } from "../../ui/data-table/list-workbench";
 import {
   createCubbyColumnHelper,
   createCubbyColumnCollection,
@@ -60,6 +59,7 @@ import {
 import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
 import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
 import { useEntityFieldSave } from "../hooks/use-update-mutation";
+import { ListWorkbench } from "../table/list-workbench";
 import { connectionRefs, RecordPaths } from "./connected-records-table";
 import { RelationScopeContext } from "./relation-scope";
 import {

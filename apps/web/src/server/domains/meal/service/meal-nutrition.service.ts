@@ -11,7 +11,7 @@ import {
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
-import { getIngredientsByIDs } from "~/server/domains/ingredient/service";
+import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getMealNutritionRows } from "~/server/domains/meal/repo/food";
 import {
   batchTotalsFor,
@@ -19,12 +19,12 @@ import {
 } from "~/server/domains/meal/repo/portions";
 import { getProductsByShortcodes } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
-import type { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/service/repair-stale-recipes-for-read";
+import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
 import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
-} from "~/server/domains/usda-food/service/usda-helpers";
+} from "~/server/domains/usda-food/repo/usda-helpers";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export async function getMealNutrition(

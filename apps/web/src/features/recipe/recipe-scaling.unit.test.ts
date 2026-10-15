@@ -7,8 +7,8 @@ import {
 } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import { getEffectiveServings } from "../../entity/presentation/recipe-utils";
 import { scaleRecipe } from "./recipe-scaling";
-import { getEffectiveServings } from "./recipe-utils";
 
 const row = (id: string, amounts: Amount[]) =>
   ({

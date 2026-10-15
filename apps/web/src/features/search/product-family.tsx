@@ -10,14 +10,14 @@ import { type ReactNode, useCallback, useState } from "react";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { entities } from "~/entity/entities";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { cn } from "~/lib/utils";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import {
   entityKindMap,
   getSearchMatchText,
   SearchResultMedia,
-} from "./search-utils";
+} from "../../entity/presentation/search-utils";
 
 /**
  * One Product family as both the full search page and the command menu show

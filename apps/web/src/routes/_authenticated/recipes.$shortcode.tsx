@@ -10,13 +10,13 @@ import { z } from "zod";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { DetailPagePending } from "~/entity/navigation/route-pending";
+import { Page } from "~/entity/page/page";
 import { ensureDetailRecord } from "~/entity/routing/detail-loader";
 import { detailPage, notFoundPage } from "~/entity/routing/detail-page";
 import EditRecipeForm from "~/features/recipe/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { DetailPagePending } from "~/ui/feedback/route-pending";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 /**

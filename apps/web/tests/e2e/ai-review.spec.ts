@@ -14,7 +14,7 @@ import {
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {

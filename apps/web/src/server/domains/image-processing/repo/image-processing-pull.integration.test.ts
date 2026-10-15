@@ -9,6 +9,7 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -21,7 +22,6 @@ import {
   releaseAssignedImageProcessingJob,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
-import { updateImageProcessingSettings } from "./image-processing-maintenance";
 
 // A connected device must claim waiting work before the queue's no-device cooldown expires,
 // without bypassing pending retry backoff. Background claims must not steal cloud jobs.

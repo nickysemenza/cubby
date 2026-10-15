@@ -79,7 +79,7 @@ import {
 // A kit's most recent acquisition remains narrower than identity relations,
 // which also include exits and planned Expenses.
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
-import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/service/usda-helpers";
+import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {

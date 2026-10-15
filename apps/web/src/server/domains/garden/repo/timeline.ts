@@ -9,10 +9,10 @@ import {
   guideBandMonthsFor,
   resolveGardenGuideKey,
   plantDisplayName,
-} from "~/server/domains/plant/service/windows";
+} from "~/server/domains/plant/repo/windows";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/contracts";
-import { defaultTimelinePage } from "~/server/generic/entity-timeline/default-timeline";
+import { defaultTimelinePage } from "~/server/generic/entity-timeline/repo/default-timeline";
+import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/service/contracts";
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 const lastDayOfMonth = (year: number, month: number) =>

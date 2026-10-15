@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import type { ReferenceSuggestSpec } from "./registry";
 import { suggestFields } from "./suggest-fields";

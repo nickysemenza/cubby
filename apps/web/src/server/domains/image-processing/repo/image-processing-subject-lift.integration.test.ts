@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
-import { prepareCompanionImageCommand } from "~/server/domains/image-processing/dispatch";
+import { prepareCompanionImageCommand } from "~/server/domains/image-processing/service/dispatch";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -15,7 +16,6 @@ import {
   createTransparentDerivativeAndJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
-import { updateImageProcessingSettings } from "./image-processing-maintenance";
 
 // Subject lift must reach Apple even without a cloud description or when cloud eligibility is
 // uncertain/negative. Apple, rather than a cloud classifier, decides whether a subject exists.

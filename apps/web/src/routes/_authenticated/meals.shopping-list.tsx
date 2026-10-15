@@ -6,6 +6,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 
+import { Page } from "~/entity/page/page";
 import {
   parseExcludedMeals,
   type ShoppingListView,
@@ -17,7 +18,6 @@ import { ShoppingListPage } from "~/features/meal/shopping-list-page";
 import { pageTitle } from "~/lib/page-title";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Page } from "~/ui/layout/page";
 
 const VIEW_OPTIONS: readonly (PickerOption & { value: ShoppingListView })[] = [
   { value: "list", label: "List", icon: <ListIcon className="size-4" /> },

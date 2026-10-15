@@ -62,7 +62,7 @@ JSONL routes    →  cancellable workflow streams
   (one Durable Object per Run), and a member's Claude/Codex Burn-down through
   the public MCP tools ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)).
   The map of queue events, Run services and owning files is
-  [`apps/web/src/server/domains/purchase-import/README.md`](../apps/web/src/server/domains/purchase-import/README.md).
+  [`apps/web/src/server/domains/purchase-import/service/README.md`](../apps/web/src/server/domains/purchase-import/service/README.md).
 - OpenAI Responses calls use the household's ChatGPT plan when connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings

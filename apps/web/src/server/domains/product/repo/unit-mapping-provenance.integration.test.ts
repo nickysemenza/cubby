@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getProductSummariesWorkflow } from "~/server/domains/product/operations/product.server";
-import { getProductWithFood } from "~/server/domains/product/service/product.service";
+import { getProductWithFood } from "~/server/domains/product/repo/write/product-writes";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import {

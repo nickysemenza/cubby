@@ -16,7 +16,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { device, image, imageSighting } from "~/server/db/schema";
-import { deriveAndStoreImageCapture } from "~/server/domains/image/service/image-capture-derivation";
+import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

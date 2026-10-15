@@ -26,18 +26,17 @@ import {
   type EntityPreviewRendererProps,
   useEntityPreview,
 } from "~/entity/hooks/use-entity-preview";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
-import { Picker } from "~/ui/combobox/picker";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   GroupedFlow,
   type GroupedFlowGroup,
   groupedFlowSectionId,
   shelfGridClass,
-} from "~/ui/data-table/shelf";
+} from "~/entity/table/shelf";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCurrency } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Badge } from "~/ui/primitives/badge";
@@ -53,6 +52,7 @@ import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 const PAGE_SIZE = 60;
 const DIRECT_GROUP_JUMP_LIMIT = 10;

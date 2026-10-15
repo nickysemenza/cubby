@@ -24,7 +24,7 @@ import {
   gradeEmailAccuracyItem,
   listBlindEmailAccuracyItems,
 } from "~/server/domains/email/repo/email-accuracy";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";

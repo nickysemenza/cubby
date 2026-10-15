@@ -27,11 +27,12 @@ import {
   type ReadConsistencyDecision,
 } from "~/server/db/read-consistency";
 import { device } from "~/server/db/schema";
+import type { ExpenseLineRoleClassifier } from "~/server/domains/expense/repo/line-role-classifier";
 import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
+import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { AvailabilityService } from "~/server/domains/recipe/service/availability.service";
-import type { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { createAppError } from "~/server/errors/app-error";
 import { deferredService } from "~/server/http/deferred-service";
 import type { RequestOrigin } from "~/server/http/workload";
@@ -75,6 +76,12 @@ const deferredRequestServices = (
         async () => (await loaded()).services.recipeCosting,
         database,
       ),
+      expenseLineRole: (async (db, actor, evidence) =>
+        (await loaded()).services.expenseLineRole(
+          db,
+          actor,
+          evidence,
+        )) satisfies ExpenseLineRoleClassifier,
     },
   };
 };
@@ -100,7 +107,7 @@ export const buildCrudServices = (
       new (await import("~/server/clients/usda")).USDAClient(
         opts?.usdaRelease ??
           (
-            await import("~/server/domains/usda-release/client")
+            await import("~/server/domains/usda-release/service/client")
           ).requestUsdaRelease(),
       ),
     () => ({}),

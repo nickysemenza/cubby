@@ -32,7 +32,7 @@ import {
 } from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { processTelemetryQueueBatch } from "~/server/observability/telemetry-queue";
 import {
@@ -209,7 +209,7 @@ describe("AiUsage accounting", () => {
       ),
     );
     const { embedTexts } =
-      await import("~/server/generic/embedding/semantic/embeddings");
+      await import("~/server/generic/embedding/service/semantic/embeddings");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
 
     await embedTexts(["eggs", "flour"], {

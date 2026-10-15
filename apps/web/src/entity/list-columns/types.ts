@@ -9,7 +9,7 @@ import type {
   UseEntityListOptions,
   UseEntityListReturn,
 } from "~/entity/hooks/use-entity-list";
-import type { ListWorkbenchProps } from "~/ui/data-table/list-workbench";
+import type { ListWorkbenchProps } from "~/entity/table/list-workbench";
 import type {
   createCubbyColumnCollection,
   CubbyColumnDef,

@@ -20,6 +20,7 @@ import {
   imageProcessingOrphan,
   searchDocument,
 } from "~/server/db/schema";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import {
   createUploadedImageRecord,
   deleteImages,
@@ -48,7 +49,6 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
 import { loadImageProcessingIssues } from "./image-processing-issues";
-import { updateImageProcessingSettings } from "./image-processing-maintenance";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
 
 describe("durable image representations", () => {

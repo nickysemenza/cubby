@@ -9,8 +9,8 @@ import { z } from "zod";
 import { expenseCaptureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { featureRegistry } from "~/entity/feature-registry";
 
-import { ProductDiscardDialog } from "../../features/product/product-discard-dialog";
 import { useUpdateMutation } from "../hooks/use-update-mutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import { useBulkEditEntityAction } from "./bulk-edit-entity-action";
@@ -89,6 +89,7 @@ const discardableProduct = z.object({
 type DiscardableProduct = z.infer<typeof discardableProduct>;
 
 function useDiscardProductAction(): EntityActionHandles {
+  const { ProductDiscardDialog } = featureRegistry().components;
   const [product, setProduct] = useState<DiscardableProduct | null>(null);
   // An unstocked product still discards: the dialog records a ledger-only exit
   // when `inventoryEntry` is empty, which is the post-import "don't have this

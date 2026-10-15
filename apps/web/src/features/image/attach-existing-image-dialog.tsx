@@ -6,13 +6,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityLabel } from "~/entity/entities";
+import { buildSearchHitComboboxItem } from "~/entity/picker/combobox-builders";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   image as imageOperations,
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { buildSearchHitComboboxItem } from "~/ui/combobox/combobox-builders";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

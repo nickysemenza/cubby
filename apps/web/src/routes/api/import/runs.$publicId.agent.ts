@@ -20,7 +20,7 @@ async function handler(input: {
     );
   // Loaded on request: the proxy reaches run-service and the AI SDK stack.
   const { proxyPurchaseAgentRequest } =
-    await import("~/server/domains/purchase-import/agent-proxy");
+    await import("~/server/domains/purchase-import/service/agent-proxy");
   return await proxyPurchaseAgentRequest({
     request: input.request,
     publicId: input.params.publicId,

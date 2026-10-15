@@ -46,7 +46,7 @@ import { RecordMark } from "~/entity/components/record-mark";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
-} from "~/features/product/product-image-summaries";
+} from "~/entity/presentation/product-image-summaries";
 import type { ToolMatrixSearch } from "~/features/tools/tool-search";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";

@@ -16,6 +16,9 @@ import { useCallback, useMemo, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
+import { DetailPagePending } from "~/entity/navigation/route-pending";
+import { Page } from "~/entity/page/page";
+import { getRecipeNutritionBasis } from "~/entity/presentation/recipe-utils";
 import { CopyDebugButton } from "~/features/recipe/copy-debug-button";
 import {
   buildDisplayQuantities,
@@ -29,7 +32,6 @@ import { RecipePrepSheetView } from "~/features/recipe/recipe-prep-sheet-view";
 import { RecipeScaleControl } from "~/features/recipe/recipe-scale-control";
 import { scaleRecipe } from "~/features/recipe/recipe-scaling";
 import { RecipeSpecView } from "~/features/recipe/recipe-spec-view";
-import { getRecipeNutritionBasis } from "~/features/recipe/recipe-utils";
 import { useRecipeTree } from "~/features/recipe/use-recipe-tree";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { pageTitle } from "~/lib/page-title";
@@ -37,10 +39,8 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { DetailPagePending } from "~/ui/feedback/route-pending";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
 import { Row } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";

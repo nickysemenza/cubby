@@ -79,7 +79,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
-  rollups select `expenseAggregateFields` (`server/domains/expense/repo/expense-aggregate-sql.ts`);
+  rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);
   all money is `SUM(Expense.cost)`.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
@@ -99,7 +99,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Provider failures retain HTTP status, full upstream response bodies, and
   original causes after bounded retries. UPC partial failures preserve successful
   lookups while carrying the failed provider diagnostic through the batch error.
-- Purchase-agent proxy: `server/domains/purchase-import/agent-proxy.ts` forwards the
+- Purchase-agent proxy: `server/domains/purchase-import/service/agent-proxy.ts` forwards the
   caller's abort signal to its Durable Object request. Internal disconnects still
   propagate as failures; cancellation does not replace the Run's abort command.
 - Calendar days: `householdLocalDate`, `householdDateTime`, `householdDaysAgo`/
@@ -122,7 +122,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `reclaimOperation`, `completeOperation`, `setOperationResult`,
   `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
   the ledger transaction use the leased policy `executeLeasedOperation`
-  (`server/domains/run/service/operation.ts`); writers whose row commits with their business
+  (`server/domains/run/repo/operation.ts`); writers whose row commits with their business
   writes (purchase prepare, commit, validate, Product enrichment, validation
   corrections) use the atomic policy `executeAtomicOperation` there, which
   replays only a completed row and calls any other "outcome is uncertain".
@@ -195,7 +195,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   "3 nouns", `pluralize(noun, count)` for the noun alone. The
   `cubby/no-hand-rolled-plural` lint rule flags `n === 1 ? "" : "s"` and its
   suffix variants.
-- Search results: `features/search/search-utils.tsx` (routes, media, match
+- Search results: `entity/presentation/search-utils.tsx` (routes, media, match
   text) and `features/search/product-family.tsx`, the one Product-family
   model (summary, child rows, destinations, keys, disclosure) behind both the
   search page and the command menu. Each surface keeps its own outer element
@@ -205,7 +205,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   variant, and shared trailing formats. Detail-page connected records read
   `entity.connectedRecordsPreview` once per record; `/connections` and
   relation-table evidence page `entity.connectedRecords` per view. Audit
-  bursts fold through `foldAuditEntries` (`features/audit-log/audit-log-fold.ts`).
+  bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`, and

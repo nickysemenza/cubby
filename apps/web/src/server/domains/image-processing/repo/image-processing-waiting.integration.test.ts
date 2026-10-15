@@ -10,7 +10,8 @@ import {
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
-import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/dispatch";
+import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -18,10 +19,7 @@ import {
   createTransparentDerivativeAndJob,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
-import {
-  pruneExecutorlessWaitingAttempts,
-  updateImageProcessingSettings,
-} from "./image-processing-maintenance";
+import { pruneExecutorlessWaitingAttempts } from "./image-processing-maintenance";
 
 describe("waiting for a device records no attempt", () => {
   const ctx = withTestDb();

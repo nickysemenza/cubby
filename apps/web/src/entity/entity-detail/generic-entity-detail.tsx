@@ -38,12 +38,16 @@ import {
   readRecordField,
   readDisplayReferenceField,
 } from "~/entity/entity-references";
+import { featureRegistry } from "~/entity/feature-registry";
 import { FieldExplanation } from "~/entity/fields/field-explanation";
-import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
-import { RecordWorkQueue } from "~/features/work-queue/record-work-queue";
+import { Page } from "~/entity/page/page";
+import type {
+  DetailHeroActions,
+  DetailHeroStat,
+} from "~/entity/page/page-hero";
+import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
+import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import { Page } from "~/ui/layout/page";
-import type { DetailHeroActions, DetailHeroStat } from "~/ui/layout/page-hero";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -55,11 +59,6 @@ import {
 import { DetailEditAction } from "~/ui/primitives/detail-edit-action";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { EntityPhotosSection } from "../../features/image/entity-photos-section";
-import {
-  type DetailSection,
-  DetailSections,
-} from "../../ui/data-table/detail-page";
 import { DocumentViewerList } from "../../ui/document-viewer-list";
 import {
   actionVerbs,
@@ -68,6 +67,7 @@ import {
 } from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
 import EntityImageList from "../components/entity-image-list";
+import { type DetailSection, DetailSections } from "../table/detail-page";
 import {
   EntityTimeline,
   type EntityTimelineOperations,
@@ -540,6 +540,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   // Derived from capabilities, never declared: a gallery's photos edit
   // inline; a cover/logo shows what is attached; documents get a viewer.
   if (isGalleryEntity(entity) && isGeneratedBrowserCrudEntity(entity)) {
+    const { EntityPhotosSection } = featureRegistry().components;
     // SAFETY: `isGalleryEntity` proves the entity stores a gallery, and a
     // gallery entity's detail id is its own branded shortcode; the record
     // schema above only widens it to string.

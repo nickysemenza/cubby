@@ -26,16 +26,16 @@ import {
   markImageUploaded,
   setImagePerceptualHashes,
 } from "~/server/domains/image/repo/image";
+import { publishImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata-tasks";
 import { recordImageSightings } from "~/server/domains/image/repo/image-sighting";
-import { publishImageMetadataExtraction } from "~/server/domains/image/service/image-metadata-extraction.service";
 import {
   attachFileToEntity,
   createFileUpload,
-  cullPendingImageStorage,
   importImageFromUrl,
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
-} from "~/server/domains/image/service/image-storage.service";
+} from "~/server/domains/image/repo/image-storage";
+import { cullPendingImageStorage } from "~/server/domains/image/repo/pending-image-cull";
 import {
   type EntityKernelContext,
   executeEntityAs,

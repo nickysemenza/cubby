@@ -18,9 +18,11 @@ import { toast } from "sonner";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entities, entityDetailParams } from "~/entity/entities";
-import { useEntitySuggestionsQuery } from "~/features/ai/field-suggestion";
-import { FieldSuggestionHint } from "~/features/ai/field-suggestion-hint";
-import { SuggestionVisitProvider } from "~/features/ai/suggestion-review";
+import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
+import { Picker } from "~/entity/picker/picker";
+import { useEntitySuggestionsQuery } from "~/entity/suggestions/field-suggestion";
+import { FieldSuggestionHint } from "~/entity/suggestions/field-suggestion-hint";
+import { SuggestionVisitProvider } from "~/entity/suggestions/suggestion-review";
 import {
   entityMutation,
   ai,
@@ -28,9 +30,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
-import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

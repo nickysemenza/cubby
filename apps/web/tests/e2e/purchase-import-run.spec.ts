@@ -1,5 +1,5 @@
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { loadRunDetail } from "~/server/domains/purchase-import/run-service";
+import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { emailImportOut } from "@cubby/schemas/email-actions";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
@@ -11,7 +11,7 @@ import {
   authorizeSyntheticBackfill,
   authorizePurchaseAgent,
   workerdDiagnostic,
-} from "~/server/domains/purchase-import/purchase-agent-workerd.fixtures";
+} from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { getDb } from "~/server/db/helpers";
 

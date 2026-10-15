@@ -8,6 +8,7 @@ import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/features"
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, expenseAttribution } from "~/server/db/schema";
+import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -203,14 +204,16 @@ describe("split and attach checks against the ledger", () => {
         ctx.db,
         input,
         ctx.actor,
-        decisionPort ??
-          (async (request) => {
-            const evidence = JSON.parse(request.state) as { name: string };
-            const role = /shipping/i.test(evidence.name)
-              ? "shipping"
-              : "principal";
-            return roleDecision(role)(request);
-          }),
+        expenseLineRoleClassifier(
+          decisionPort ??
+            (async (request) => {
+              const evidence = JSON.parse(request.state) as { name: string };
+              const role = /shipping/i.test(evidence.name)
+                ? "shipping"
+                : "principal";
+              return roleDecision(role)(request);
+            }),
+        ),
       );
     async function original(cost: number) {
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
@@ -416,7 +419,7 @@ describe("split and attach checks against the ledger", () => {
             })),
           },
           ctx.actor,
-          decisionPort,
+          expenseLineRoleClassifier(decisionPort),
         ),
       ).rejects.toThrow("no purchase attached");
       expect(decisionPort).not.toHaveBeenCalled();

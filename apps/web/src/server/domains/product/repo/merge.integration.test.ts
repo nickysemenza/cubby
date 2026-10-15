@@ -23,6 +23,11 @@ import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
+  listProductMatchRows,
+  productPairKey,
+  upsertAgentProductMatch,
+} from "~/server/domains/product/repo/match/product-match-candidate";
+import {
   mergeProducts,
   previewMergeProducts,
   previewProductMergeDecisions,
@@ -31,11 +36,6 @@ import {
   attachProductComponents,
   listProductComponents,
 } from "~/server/domains/product/repo/product-components";
-import {
-  listProductMatchRows,
-  productPairKey,
-  upsertAgentProductMatch,
-} from "~/server/domains/product/repo/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";

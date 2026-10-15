@@ -13,6 +13,12 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { Page } from "~/entity/page/page";
+import {
+  buildRecordComboboxItem,
+  buildVendorComboboxItem,
+} from "~/entity/picker/combobox-builders";
+import { Picker } from "~/entity/picker/picker";
 import { ChatGptPlanCard } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
@@ -32,16 +38,10 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
-import {
-  buildRecordComboboxItem,
-  buildVendorComboboxItem,
-} from "~/ui/combobox/combobox-builders";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import {
   Card,

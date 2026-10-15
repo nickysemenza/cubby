@@ -2,7 +2,7 @@ import { buildActorContext } from "@cubby/schemas/context";
 import type { UserId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { buildCrudServices, currentParty } from "~/server/http/request-context";
 import type { RequestOrigin } from "~/server/http/workload";
 

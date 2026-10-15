@@ -13,7 +13,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { CategoryLabel } from "~/features/product/category-label";
+import { CategoryLabel } from "~/entity/presentation/category-label";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 

@@ -61,6 +61,7 @@ import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
+import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -79,7 +80,6 @@ import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/product-category-sql";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
 import {
   effectiveTaskProjectSql,

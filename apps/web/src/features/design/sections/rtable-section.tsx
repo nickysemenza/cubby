@@ -2,9 +2,6 @@ import { capitalize } from "@cubby/shared";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 
-import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
-import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
-import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
 import {
   createCurrencyColumn,
   createImageColumn,
@@ -14,11 +11,14 @@ import {
   createTextColumn,
   createTimestampColumn,
   rowImages,
-} from "~/ui/data-table/column-helpers";
+} from "~/entity/table/column-helpers";
+import { EditableCell } from "~/entity/table/editable-cell";
+import RTable from "~/entity/table/table";
+import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
+import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
+import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import { EditableCell } from "~/ui/data-table/editable-cell";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

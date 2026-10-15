@@ -17,23 +17,23 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorMark } from "~/entity/components/vendor-cell";
+import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 
-import { createCurrencyColumn } from "../../ui/data-table/column-helpers";
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
-import RTable from "../../ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnDef,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
-import type { InfiniteScrollControls } from "../../ui/hooks/use-infinite-table-list";
+import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import { createCurrencyColumn } from "../table/column-helpers";
+import RTable from "../table/table";
 
 const PAGE_SIZE = 25;
 

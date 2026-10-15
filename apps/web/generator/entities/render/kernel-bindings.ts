@@ -154,7 +154,7 @@ export const renderKernelBindingsArtifacts = (
         'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
         'import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";\n' +
-        'import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/contracts";\n\n' +
+        'import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/service/contracts";\n\n' +
         'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
         `${runtimeAdapterImportSource}\n` +
         `${timelineImportSource}\n\n` +

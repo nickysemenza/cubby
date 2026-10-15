@@ -9,8 +9,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createTextColumn } from "~/entity/table/column-helpers";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { createTextColumn } from "~/ui/data-table/column-helpers";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
   barFieldFromConfig,

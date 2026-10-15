@@ -1,0 +1,175 @@
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import type { ProductCategoryOut } from "@cubby/schemas/product-category";
+import type { ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
+
+import { EntityIcon } from "~/entity/entities";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/entity/entity-media/entity-display-images";
+import { useProductCategories } from "~/entity/hooks/use-product-categories";
+
+import type {
+  ComboboxItem,
+  PickerEntity,
+} from "../../ui/combobox/combobox-types";
+import { isReferencePickerEntity } from "../../ui/combobox/reference-picker-entities";
+import { treePickerItems } from "../../ui/combobox/tree-items";
+import {
+  useEntityListSource,
+  type EntitySearchEntity,
+  type SearchProviderProps,
+} from "./with-search-hook";
+import { WithVendorShortcodeSearch } from "./with-vendor-search";
+
+/** `useProductCategories()`'s own list row shape — just what the tree/search
+ * projections below read off it. */
+export type ProductCategoryRow = Pick<
+  ProductCategoryOut,
+  "id" | "name" | "parentId" | "aliases" | "description" | "path"
+>;
+
+/**
+ * The pure "categories + query -> picker items" projection, split out from
+ * `WithProductCategorySearch` so it is directly unit-testable — no query
+ * client, no React tree. A blank query renders the grouped-list +
+ * breadcrumb tree (the whole taxonomy read as a tree rather than 29+
+ * same-looking rows); a typed query keeps today's flat full-path search
+ * rows, matched against name/aliases/description/path.
+ */
+export function productCategorySearchItems(
+  categories: readonly ProductCategoryRow[],
+  query: string,
+): ComboboxItem[] {
+  if (query.trim() === "") {
+    return treePickerItems(categories, {
+      idOf: (category) => category.id,
+      parentIdOf: (category) => category.parentId,
+      labelOf: (category) => category.name,
+    });
+  }
+  const needle = query.toLowerCase();
+  return categories
+    .filter((category) =>
+      [
+        category.name,
+        ...category.aliases,
+        category.description,
+        category.path.map((node) => node.name).join(" / "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    )
+    .flatMap((category) => {
+      const parsedId = productCategoryShortcode.safeParse(category.id);
+      if (!parsedId.success) return [];
+      return [
+        {
+          id: parsedId.data,
+          name: category.path.map((node) => node.name).join(" / "),
+          detail: category.description ?? undefined,
+        },
+      ];
+    });
+}
+
+function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
+  const [query, setQuery] = useState("");
+  const { categories, isLoading } = useProductCategories();
+  const onSearchChange = useCallback((next: string) => setQuery(next), []);
+
+  const items = useMemo<ComboboxItem[]>(
+    () => productCategorySearchItems(categories, query),
+    [categories, query],
+  );
+
+  const images = useEntityDisplayImages(
+    items.map((item) => ({ entityKind: "productCategory", entityId: item.id })),
+  );
+  const illustratedItems = items.map((item) => {
+    const imageUrl =
+      images[
+        entityDisplayImageKey({
+          entityKind: "productCategory",
+          entityId: item.id,
+        })
+      ]?.url ?? null;
+    // Category rows come from the taxonomy tree, which carries no images.
+    return {
+      ...item,
+      thumb: {
+        imageUrl,
+        fallback: <EntityIcon entity="productCategory" size={14} colored />,
+      },
+    };
+  });
+  return children({
+    items: illustratedItems,
+    onSearchChange,
+    isLoading,
+    onOpenChange: (open) => {
+      if (!open) setQuery("");
+    },
+  });
+}
+
+/** The generic (non-vendor, non-productCategory) picker's search provider: a
+ * direct `useEntityListSource` call in the render-prop shape `PickerEntity`'s
+ * other providers share. */
+function GenericEntitySearch({
+  entity,
+  scope,
+  children,
+}: { entity: EntitySearchEntity } & SearchProviderProps<string>): ReactNode {
+  const { dialog, ...search } = useEntityListSource(entity, { scope });
+  return (
+    <>
+      {dialog}
+      {children(search)}
+    </>
+  );
+}
+
+type SearchProvider = (props: SearchProviderProps<string>) => ReactNode;
+
+/** One provider component per generic entity. Callers look a provider up
+ * during render and mount it as an element type, so a fresh function per
+ * lookup would remount the picker, dropping its search state and the label
+ * of the item it just selected or created. */
+const genericSearchProviders = new Map<PickerEntity, SearchProvider>();
+
+/** One manifest target -> one established picker/search path. The picker is
+ * intentionally ID-based at the write boundary; labels are display-only. */
+export function referenceEntitySearch(entity: PickerEntity): SearchProvider {
+  switch (entity) {
+    case "productCategory":
+      return WithProductCategorySearch;
+    case "vendor":
+      // SAFETY: this is the persisted-shortcode vendor provider, not the
+      // name-minting picker used by the specialized expense editor.
+      return WithVendorShortcodeSearch as never;
+    default: {
+      const cached = genericSearchProviders.get(entity);
+      if (cached) return cached;
+      // SAFETY: the switch removed all specialized providers; remaining
+      // PickerEntity literals are exactly EntitySearchEntity's union.
+      const provider: SearchProvider = (props) => (
+        <GenericEntitySearch entity={entity as never} {...props} />
+      );
+      genericSearchProviders.set(entity, provider);
+      return provider;
+    }
+  }
+}
+
+/** The lookup for a manifest-declared reference target that arrives as a plain
+ * string; a target with no picker is a declaration bug, so it throws. */
+export function requireReferenceEntitySearch(entity: string): SearchProvider {
+  if (!isReferencePickerEntity(entity)) {
+    throw new Error(`No reference picker for ${entity}`);
+  }
+  return referenceEntitySearch(entity);
+}

@@ -35,24 +35,34 @@ domains between `src/app/` and `src/features/` under different names.
   `repo`, `service`, or `operations`: a `<role>.ts` file (`repo.ts`,
   `service.ts`, `operations.server.ts`) when the role holds one module, a
   `<role>/` folder keeping the original file names when it holds more. Entity
-  domain folders contain only role entries; feature-domain folders may also
-  hold role-less workflow files. Tests sit beside their file.
+  and capability folders contain only role entries, feature domains
+  included. Tests sit beside their file.
   Existing `.server.ts` suffixes stay; nothing keys on them.
 - **Layer direction.** `cubby/domain-layers` (oxlint) allows imports only to the
   same or a lower role — `operations` → `service` → `repo` → `db` — in any
-  domain; `repo` never imports `ai/`; a service imports neither
-  `db/schema` nor `db/helpers` (it reaches tables through a repo); platform and generic code never import a domain's `service`
-  or `operations`. Role-less feature-domain files are not ranked yet
-  (`docs/todos.md`). On the client, `ui/` imports neither `entity/` nor
-  `features/`, and `entity/` does not import `features/`. Violations that
-  existed when the rule landed are counted per file in
-  `tools/oxlint/cubby/domain-layers-baseline.json`, which may only shrink.
+  domain. The entry points `http/`, `mcp/`, and `workflows/` import like
+  `operations` but are imported as platform infrastructure
+  (`workflows/runtime`, `http/request-context`). `repo` never imports `ai/`
+  except `ai/repo/`. A service value-imports nothing from `db/` but
+  `db/freshness/`, and never imports `db/helpers` or a `db/*schema*` file,
+  even for types; it reaches tables through a repo, and computed SQL lives
+  in `db/computed/`. Other platform code and `generic/*` never import a
+  domain's `service` or `operations`; where they must call one, the domain
+  registers a callback at startup. On the client, `ui/` imports neither
+  `entity/` nor `features/`, and `entity/` does not import `features/`. The
+  rule has no baseline: the codebase is at zero violations.
 - **Client.** `src/app/` and `src/features/` merged into
   `src/features/<domain>/` using the server's domain names; `src/entity/` is
   the generic entity platform (including `display/`, `fields/`, `model/`,
-  `problems/`, `hooks/`, and the developer screens in `platform/`), `src/ui/`
-  the shared kit. Client and server trees
-  stay separate.
+  `problems/`, `hooks/`, the entity-aware `table/`, `picker/`, `navigation/`,
+  `preview/`, and `suggestions/`, and the developer screens in `platform/`);
+  `src/ui/` is the entity-free kit. Per-entity slot fills (list columns,
+  actions, renderers, detail sections) live in their `features/<domain>/`
+  folder; `features/registry.tsx` composes them into the registry typed in
+  `entity/feature-registry.ts`, and `installFeatures()` runs from the
+  code-split `_authenticated` layout, the home route, and the command menu so
+  the tables stay out of the Worker's first-request chunk. Client and server
+  trees stay separate.
 - **Naming and shape guards.** Under `apps/web/{src,tests,generator}`, TS/TSX
   files and all folders are kebab-case,
   except TanStack route files (their `$param` names are URL contract). No new
@@ -70,5 +80,5 @@ domains between `src/app/` and `src/features/` under different names.
 - Git history for moved files needs rename detection (`git log --follow`); the
   restructure's squash commit goes in `.git-blame-ignore-revs` right after it
   merges.
-- Burn-down work (layer baseline, oversized files, remaining barrels, client
-  boundary inversions) is tracked in `docs/todos.md`.
+- Remaining burn-down work (oversized files, remaining barrels) is tracked in
+  `docs/todos.md`.

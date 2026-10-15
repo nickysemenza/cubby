@@ -1,8 +1,8 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { countLabel } from "@cubby/shared/pluralize";
 
-import { AiProvenance } from "~/features/ai/ai-proposal-card";
-import { AiProposalList } from "~/features/ai/ai-proposal-list";
+import { AiProvenance } from "~/entity/suggestions/ai-proposal-card";
+import { AiProposalList } from "~/entity/suggestions/ai-proposal-list";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";

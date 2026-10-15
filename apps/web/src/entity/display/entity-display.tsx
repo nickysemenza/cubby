@@ -31,11 +31,14 @@ import {
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
-import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
+import { renderOptionCell } from "~/entity/table/column-helpers";
+import { EditableCell, type PickerOption } from "~/entity/table/editable-cell";
+import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
@@ -54,9 +57,6 @@ import {
   textCellData,
   timestampCellData,
 } from "~/ui/data-table/cell-data";
-import { renderOptionCell } from "~/ui/data-table/column-helpers";
-import { EditableCell, type PickerOption } from "~/ui/data-table/editable-cell";
-import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -70,7 +70,7 @@ import { ExternalLinkText } from "~/ui/external-link";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { NoneValue } from "~/ui/primitives/none-value";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { columnHeaderFor } from "../column-header";
 import { recordFieldClearing } from "../editing/field-clearing";

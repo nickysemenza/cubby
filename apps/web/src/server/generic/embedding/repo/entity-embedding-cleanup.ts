@@ -20,6 +20,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import {
   notDeleted,
   unwrapDb,
@@ -48,7 +49,6 @@ import {
   wish,
 } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-import { categoryDescendantsSql } from "~/server/domains/product-category/repo/product-category-sql";
 import {
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,

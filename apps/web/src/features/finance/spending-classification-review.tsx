@@ -12,11 +12,11 @@ import type { VendorOut } from "@cubby/schemas/vendor";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
+import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

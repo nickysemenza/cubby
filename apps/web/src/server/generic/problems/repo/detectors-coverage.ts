@@ -20,10 +20,10 @@ import type { CoverageTotals } from "@cubby/schemas/problems";
 import { and, eq, exists, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { Database } from "~/server/db";
+import { type Database, withConnection } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, location } from "~/server/db/schema";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
 import { findCheckCoverageTotals } from "~/server/generated/coverage-totals.gen";
 
 const COUNT = sql<number>`count(*)::int`;
@@ -88,3 +88,8 @@ export const findCoverageTotals = async (
     staleLocations: first(stockedLocations),
   };
 };
+
+/** The six coverage counts on one pooled connection. */
+export const findCoverageTotalsOnConnection = (
+  db: Database,
+): Promise<CoverageTotals> => withConnection(db, findCoverageTotals);

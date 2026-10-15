@@ -19,13 +19,13 @@ import {
   generateImageKey,
   uploadToS3,
 } from "~/server/clients/s3";
+import { deleteStoredObjects } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import {
   filenameForContentType,
   type InspectedImageFile,
   inspectImageFile,
-} from "~/server/domains/image/service/image-integrity";
-import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
+} from "~/server/domains/image/repo/image-integrity";
 import {
   getVendorByShortcode,
   replaceVendorLogo,

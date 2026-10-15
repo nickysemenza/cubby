@@ -105,12 +105,12 @@ import {
   statementRow,
 } from "~/server/db/schema";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
-import { publishProductPair } from "~/server/domains/product/repo/product-match-candidate";
+import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
   retainedMailFixture,
   sourceOrderObservationFixture,
-} from "~/server/domains/purchase-import/order-import.fixtures";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
+} from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,

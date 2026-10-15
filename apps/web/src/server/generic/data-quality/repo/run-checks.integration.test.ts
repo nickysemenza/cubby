@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
-import { loadRunDetail } from "~/server/domains/purchase-import/run-service";
+import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { listRunsRead } from "~/server/domains/run/repo/run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 

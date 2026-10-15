@@ -11,6 +11,8 @@ import type {
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   cookbook,
@@ -41,12 +43,10 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { solePurchaseForTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
-import { locationAiDescriptionExtras } from "~/server/domains/location/repo/ai-description";
 import {
   plantDisplayName,
   plantingDisplayName,
-} from "~/server/domains/plant/service/windows";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
+} from "~/server/domains/plant/repo/windows";
 import { loadAllGtins } from "~/server/domains/product/repo/gtin";
 import {
   effectiveProjectLocationsSql,
@@ -54,8 +54,7 @@ import {
   effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
 } from "~/server/domains/task/repo/task-project-inheritance";
-import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { embeddingTextHash } from "~/server/generic/embedding/semantic/hash";
+import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import {
   buildCookbookEmbeddingText,
   buildExpenseEmbeddingText,
@@ -76,7 +75,8 @@ import {
   buildVendorEmbeddingText,
   buildWishEmbeddingText,
   normalizeSearchText,
-} from "~/server/generic/embedding/semantic/text";
+} from "~/server/generic/embedding/repo/semantic/text";
+import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 

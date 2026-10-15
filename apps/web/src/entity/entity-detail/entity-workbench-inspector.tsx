@@ -8,12 +8,12 @@ import {
   EntityActionButtons,
   type EntityActionRow,
 } from "~/entity/actions/entity-actions";
+import { AuditLogList } from "~/entity/audit-log/audit-log-list";
 import { EntityCover } from "~/entity/components/entity-cover";
 import {
   detailEntities,
   type DetailEntity,
 } from "~/entity/generated/entity-details.gen";
-import { AuditLogList } from "~/features/audit-log/audit-log-list";
 import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
 
 import { EntityPreviewContent } from "../components/entity-preview-content";

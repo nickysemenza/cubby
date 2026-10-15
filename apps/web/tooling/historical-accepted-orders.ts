@@ -19,7 +19,7 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
-import { promoteHistoricalAcceptedObservation } from "~/server/domains/purchase-import/reconciliation-observations";
+import { promoteHistoricalAcceptedObservation } from "~/server/domains/purchase-import/repo/reconciliation-observations";
 import {
   databaseForTransaction,
   getDb,

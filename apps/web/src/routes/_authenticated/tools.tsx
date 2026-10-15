@@ -6,6 +6,7 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
+import { Page } from "~/entity/page/page";
 import { ToolMatrixPage } from "~/features/project/tool-matrix-page";
 import {
   ToolGalleryPage,
@@ -19,7 +20,6 @@ import {
 import { pageTitle } from "~/lib/page-title";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Page } from "~/ui/layout/page";
 
 type ToolsView = ToolGalleryPresentation | "usage";
 

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import { buildIntegrityCatalog } from "~/server/generic/integrity/service/entity-integrity.service";
+import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 
 describe("integrity catalog", () => {
   const catalog = buildIntegrityCatalog();

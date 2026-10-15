@@ -23,13 +23,13 @@ import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
-import { ProductImageSummariesProvider } from "../product/product-image-summaries";
+import { LocationIcon } from "../../entity/presentation/location-icons";
+import { ProductImageSummariesProvider } from "../../entity/presentation/product-image-summaries";
 import { type EmptyFilter, GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
 import { LocationGalleryCard } from "./location-gallery-card";
 import { buildLocationGalleryData } from "./location-gallery-data";
-import { LocationIcon } from "./location-icons";
 
 type InventoryItem = InventoryItemForTree;
 interface LocationFilterResult {

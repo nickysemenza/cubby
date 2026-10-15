@@ -8,7 +8,7 @@ import {
   getProductByID,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
-import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import {
   createProductFixture,
   createSystemUserFixture,

@@ -5,29 +5,29 @@ import {
   gradeEmailAccuracyItem,
   getEmailAccuracyReport,
 } from "~/server/domains/email/repo/email-accuracy";
-import { startEmailImport } from "~/server/domains/purchase-import/email-actions";
-import { decideEmailPurchase } from "~/server/domains/purchase-import/email-purchase-decision";
-import {
-  previewMailTriage,
-  reclassifyEmails,
-  rerunEmailPreview,
-} from "~/server/domains/purchase-import/gmail/reclassify";
-import { correctEmailRelevance } from "~/server/domains/purchase-import/gmail/relevance-correction";
 import {
   commitPurchaseImport,
   preparePurchaseImport,
   purchaseImportOperationStatus,
-} from "~/server/domains/purchase-import/import-orders";
+} from "~/server/domains/purchase-import/operations/import-orders";
 import {
   readMail,
   resolveMail,
   searchMail,
-} from "~/server/domains/purchase-import/mail-tool";
-import { confirmMerchantVendorRule } from "~/server/domains/purchase-import/merchant-vendor-rules";
+} from "~/server/domains/purchase-import/operations/mail-tool";
+import { startEmailImport } from "~/server/domains/purchase-import/repo/email-actions";
+import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { correctEmailRelevance } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
+import { confirmMerchantVendorRule } from "~/server/domains/purchase-import/repo/merchant-vendor-rules";
 import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
-} from "~/server/domains/purchase-import/reconciliation";
+} from "~/server/domains/purchase-import/repo/reconciliation";
+import {
+  previewMailTriage,
+  reclassifyEmails,
+  rerunEmailPreview,
+} from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { emailAccuracyViewReport } from "~/server/generic/entity-report/repo/email";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 

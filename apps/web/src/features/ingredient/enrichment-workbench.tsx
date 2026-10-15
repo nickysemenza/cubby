@@ -23,7 +23,9 @@ import {
   useEntityPreview,
 } from "~/entity/hooks/use-entity-preview";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
-import { confidenceColor } from "~/features/ai/ai-proposal-card";
+import { confidenceColor } from "~/entity/suggestions/ai-proposal-card";
+import { createNameColumn } from "~/entity/table/column-helpers";
+import { ListWorkbench } from "~/entity/table/list-workbench";
 import { CoverageChips } from "~/features/problems/components/unit-coverage-fix";
 import {
   createManyProductsStream,
@@ -39,8 +41,6 @@ import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import { createNameColumn } from "~/ui/data-table/column-helpers";
-import { ListWorkbench } from "~/ui/data-table/list-workbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

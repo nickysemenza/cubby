@@ -8,8 +8,9 @@ import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type { EntitySuggestionsOperations } from "~/features/ai/field-suggestion";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import type { EntitySuggestionsOperations } from "~/entity/suggestions/field-suggestion";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
+import { installFeatures } from "~/features/registry";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
@@ -22,6 +23,8 @@ import {
   type PrimitiveFieldModel,
 } from "./entity-primitive-fields";
 import { entitySelectOptionsFor } from "./select-options";
+
+installFeatures();
 
 /** A minimal synthetic field — `buildFieldGroups` only reads `key`, so a
  * grouping test doesn't need a real manifest field's full generated shape. */

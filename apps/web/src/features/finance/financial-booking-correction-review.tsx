@@ -7,10 +7,10 @@ import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

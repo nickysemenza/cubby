@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
-import { PreviewQuery } from "../../ui/preview/preview-query";
+import { PreviewQuery } from "../preview/preview-query";
 import { manifestPreviewCard } from "./entity-preview-content";
 
 const withMedia = <T,>(value: T, url?: string) => ({

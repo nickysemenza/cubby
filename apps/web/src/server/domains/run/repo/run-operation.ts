@@ -1,7 +1,7 @@
 /**
  * Storage for the RunOperation replay ledger. Every write to the table goes
  * through these primitives; the replay policy (lease, atomic, approval,
- * browser command) stays with its caller (`server/domains/run/service/operation.ts` and the
+ * browser command) stays with its caller (`server/domains/run/repo/operation.ts` and the
  * owning writers).
  *
  * Identity is frozen for rows already written: the `(runId, operationId)`

@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
-import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
+import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";

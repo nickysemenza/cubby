@@ -2,13 +2,13 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
-import { CategoryLabel } from "~/features/product/category-label";
+import { CategoryLabel } from "~/entity/presentation/category-label";
+import { tradeOptions } from "~/entity/presentation/trade-options";
 import { TradeBadge } from "~/features/project/trade-badge";
-import { tradeOptions } from "~/features/project/trade-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
-import { renderOptionCell } from "./column-helpers";
+import { renderOptionCell } from "../../entity/table/column-helpers";
 
 afterEach(cleanup);
 

@@ -6,7 +6,7 @@ import { entityRecordsInputSchema } from "~/contracts/entity-records.schema";
 import { getDb } from "~/server/db/helpers";
 import { product, run as runTable } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   buildEntityRecordsQuery,
   listEntityRecords,

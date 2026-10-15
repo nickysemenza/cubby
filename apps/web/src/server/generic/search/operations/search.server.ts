@@ -11,7 +11,7 @@ import {
   isCloudflareRuntime,
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/operations/semantic-similarity.server";
+import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import {
   findGroupedSearchHits,
   findRelatedSearchGroups,

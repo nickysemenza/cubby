@@ -31,11 +31,11 @@ import {
   UpcBatchDeferredError,
   UpcLookupUnavailableError,
 } from "~/server/domains/product/repo/upc-lookup-cache";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   ensureRun,
   aiCallRunInput,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import type { DecideOfferComparability } from "./price";

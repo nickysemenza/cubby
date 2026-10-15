@@ -38,7 +38,7 @@ export default defineEntity({
   names: { singular: "Image", plural: "Images" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/image",
+      module: "~/features/image/list-columns",
       export: "imageListOverride",
     },
     basePath: "images",

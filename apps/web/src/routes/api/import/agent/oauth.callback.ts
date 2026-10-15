@@ -18,8 +18,8 @@ import {
   type PurchaseAgentConnectionStatus,
   readCookie,
   verifyPurchaseAgentOAuthState,
-} from "~/server/domains/purchase-import/agent-auth";
-import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/run-service";
+} from "~/server/domains/purchase-import/repo/agent-auth";
+import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
 import {
   createRequestContext,
   requireActor,
@@ -92,12 +92,12 @@ const callbackDependencies: CallbackDependencies = {
   // Loaded on request: run-service reaches the AI SDK stack.
   resumeRuns: async (db, userId) =>
     (
-      await import("~/server/domains/purchase-import/run-service")
+      await import("~/server/domains/purchase-import/repo/run-service")
     ).resumeAuthorizedRuns(db, userId),
   getQueue: getPurchaseAgentQueue,
   recordDispatch: async (db, input) =>
     (
-      await import("~/server/domains/purchase-import/dispatch")
+      await import("~/server/domains/purchase-import/repo/dispatch")
     ).recordRunDispatchAttempt(db, input),
   verifyState(token) {
     return verifyPurchaseAgentOAuthState(token, env.BETTER_AUTH_SECRET);

@@ -23,7 +23,7 @@ import { Label } from "~/ui/primitives/label";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { useUpdateMutation } from "../../entity/hooks/use-update-mutation";
-import { NutrientsSummary } from "./nutrients-summary";
+import { NutrientsSummary } from "../../entity/presentation/nutrients-summary";
 
 interface ServingAliasFieldProps {
   productId: ProductShortcode;

@@ -15,19 +15,19 @@ import { useMemo, useState } from "react";
 import type { z } from "zod";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { purchaseLabel } from "~/lib/purchase-label";
 import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
   rowImages,
-} from "~/ui/data-table/column-helpers";
+} from "~/entity/table/column-helpers";
 import {
   ListWorkbench,
   useBoundedListWorkbench,
-} from "~/ui/data-table/list-workbench";
+} from "~/entity/table/list-workbench";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,

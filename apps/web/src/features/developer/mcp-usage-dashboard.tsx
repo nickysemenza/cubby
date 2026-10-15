@@ -16,6 +16,8 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
+import RTable from "~/entity/table/table";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatTimestamp } from "~/lib/date-format";
@@ -26,13 +28,11 @@ import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
-import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
-import type { InfiniteScrollControls } from "~/ui/hooks/use-infinite-table-list";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

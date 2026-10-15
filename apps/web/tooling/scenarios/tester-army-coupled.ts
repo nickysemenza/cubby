@@ -1,4 +1,4 @@
-import { retainedMailFixture } from "~/server/domains/purchase-import/order-import.fixtures";
+import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { imageShortcode, runShortcode } from "@cubby/schemas/identifiers";
@@ -20,15 +20,15 @@ import {
 import {
   authorizePurchaseAgent,
   authorizeSyntheticBackfill,
-} from "~/server/domains/purchase-import/purchase-agent-workerd.fixtures";
+} from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
 import type {
   PhotoImportFinalizeInput,
   PhotoImportStageInput,
 } from "~/contracts/photo-import.contract";
 import { getDb } from "~/server/db/helpers";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { inspectImageFile } from "~/server/domains/image/service/image-integrity";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { LIVE_IMPORT } from "../tester-army/names";

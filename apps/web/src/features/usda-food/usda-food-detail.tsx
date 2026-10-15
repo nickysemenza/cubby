@@ -8,6 +8,7 @@ import { ScrollIcon } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { Page } from "~/entity/page/page";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
@@ -16,7 +17,6 @@ import {
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import {
   Table,
   TableBody,
@@ -30,7 +30,7 @@ import { EntityActionButtons } from "../../entity/actions/entity-actions";
 import {
   type DetailSection,
   DetailSections,
-} from "../../ui/data-table/detail-page";
+} from "../../entity/table/detail-page";
 import { FullNutrientBreakdown } from "../nutrition/full-nutrient-breakdown";
 import { NutrientDensityStats } from "../nutrition/nutrient-density-stats";
 import { NutritionLabel } from "../nutrition/nutrition-label";

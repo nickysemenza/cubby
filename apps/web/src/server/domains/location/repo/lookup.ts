@@ -28,10 +28,10 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

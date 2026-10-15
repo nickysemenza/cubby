@@ -30,12 +30,12 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationOptionsFactory,
 } from "~/entity/entity-contracts";
+import { featureRegistry } from "~/entity/feature-registry";
 import {
   EntityRecommendations,
   type EntityRecommendationOperations,
 } from "~/entity/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
-import { useInventoryPlacementAction } from "~/features/inventory/inventory-placement-suggestion";
 import {
   inventory,
   entityGraph,
@@ -499,6 +499,7 @@ function RelationshipRecommendations({
   exclude?: readonly EntityRecommendationGroup["kind"][];
 }) {
   const expenseUpdate = useMutation(actionOperations.expenseUpdate());
+  const { useInventoryPlacementAction } = featureRegistry().components;
   const inventoryPlacement = useInventoryPlacementAction({
     moveOperation: actionOperations.inventoryMove,
   });

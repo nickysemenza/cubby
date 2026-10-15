@@ -35,6 +35,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 
 import EntityImageList from "../../entity/components/entity-image-list";
 import { useRecipeCostingData } from "../../entity/hooks/use-recipe-costing-data";
+import {
+  getIngredientName,
+  getRecipeNutritionBasis,
+} from "../../entity/presentation/recipe-utils";
 import { NutritionLabel } from "../nutrition/nutrition-label";
 import { RecipeTotalsCoverageButton } from "./recipe-costing-coverage";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
@@ -48,7 +52,6 @@ import {
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeSpecView } from "./recipe-spec-view";
 import { RecipeTagList } from "./recipe-tag";
-import { getIngredientName, getRecipeNutritionBasis } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { useRecipeTree } from "./use-recipe-tree";
 

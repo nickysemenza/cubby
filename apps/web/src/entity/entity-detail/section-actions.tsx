@@ -1,6 +1,8 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { SectionActionId } from "@cubby/schemas/entity-section-actions";
-import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
+import type { FunctionComponent, LazyExoticComponent } from "react";
+
+import { featureRegistry } from "~/entity/feature-registry";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
@@ -15,49 +17,13 @@ interface SectionActionProps<E extends GenericDetailEntity> {
 export type SectionActionComponent<E extends GenericDetailEntity> =
   FunctionComponent<SectionActionProps<E>>;
 
-type ActionModule<E extends GenericDetailEntity> = Promise<{
-  default: SectionActionComponent<E>;
-}>;
-const action = <E extends GenericDetailEntity>(
-  load: () => ActionModule<E>,
-): LazyExoticComponent<SectionActionComponent<E>> => lazy(load);
-
 /**
  * The web run of every verb a `summary` or `recordList` section declares. Web implements them
  * all (native classifies the rest in `native-coverage.ts`); each calls the operation the verb
- * names, behind the server's `disabledReason`, never a rule of its own.
+ * names, behind the server's `disabledReason`, never a rule of its own. `features/registry.tsx`
+ * fills it.
  */
-const sectionActions = {
-  purchase: {
-    matchStatement: action(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.MatchStatementAction,
-      })),
-    ),
-    linkExpenses: action(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.LinkExpensesAction,
-      })),
-    ),
-    linkProducts: action(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.LinkProductsAction,
-      })),
-    ),
-  },
-  expense: {
-    splitExpense: action(() =>
-      import("~/features/expense/section-actions").then((m) => ({
-        default: m.SplitExpenseAction,
-      })),
-    ),
-    receiveExpense: action(() =>
-      import("~/features/expense/section-actions").then((m) => ({
-        default: m.ReceiveExpenseAction,
-      })),
-    ),
-  },
-} satisfies {
+export type SectionActionTable = {
   [E in GenericDetailEntity]?: Partial<
     Record<SectionActionId, LazyExoticComponent<SectionActionComponent<E>>>
   >;
@@ -71,6 +37,7 @@ export const sectionActionsFor = (
     Record<SectionActionId, LazyExoticComponent<SectionActionComponent<never>>>
   >
 > => {
+  const sectionActions = featureRegistry().sectionActions;
   if (!Object.hasOwn(sectionActions, entity)) return {};
   // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys. The erased components
   // are rendered only with the record loaded for this same entity.

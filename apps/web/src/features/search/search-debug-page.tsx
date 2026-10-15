@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "~/ui/primitives/table";
 
-import { getSearchResultRoute } from "./search-utils";
+import { getSearchResultRoute } from "../../entity/presentation/search-utils";
 
 function SearchResultEntityLink({ item }: { item: SearchHit }) {
   return <Link {...getSearchResultRoute(item)}>{item.title}</Link>;

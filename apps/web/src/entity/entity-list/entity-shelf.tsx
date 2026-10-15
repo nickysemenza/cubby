@@ -6,11 +6,11 @@ import { z } from "zod";
 
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
 import { entities, entityDetailParams } from "~/entity/entities";
-import { EntityEmptyState } from "~/ui/data-table/entity-empty-states";
-import { ShelfCard, ShelfGrid } from "~/ui/data-table/shelf";
+import type { ListGroupState } from "~/entity/hooks/progressive-list";
+import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
+import { EntityEmptyState } from "~/entity/table/entity-empty-states";
+import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import type { ListGroupState } from "~/ui/hooks/progressive-list";
-import type { InfiniteScrollControls } from "~/ui/hooks/use-infinite-table-list";
 
 import { DeferredListValue } from "./deferred-list-value";
 

@@ -47,8 +47,8 @@ import {
   recipe,
 } from "~/server/db/schema";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
-import type { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/service/repair-stale-recipes-for-read";
+import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {

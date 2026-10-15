@@ -9,6 +9,7 @@ import { type ReactNode, Suspense, useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -23,9 +24,8 @@ import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
-import { collectionActions } from "./collection-actions";
+import { collectionActionFor } from "./collection-actions";
 import { DetailAction } from "./detail-action-bar";
 import { type ChoiceAnswerState, ChoiceControl } from "./report-choices";
 import { CommandButton, type ReportCommands } from "./report-commands";
@@ -45,7 +45,7 @@ export function ReportVerb({
   record: object;
   row?: ReportRecordRow | null;
 }) {
-  const Verb = collectionActions[action];
+  const Verb = collectionActionFor(action);
   // SAFETY: a report builder offers a verb only on the slot of the entity its plan names, and
   // `record` is that entity's loaded detail record.
   const typed = record as never;

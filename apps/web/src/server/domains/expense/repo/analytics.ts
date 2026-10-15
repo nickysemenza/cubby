@@ -14,7 +14,7 @@ import type { CostType } from "@cubby/schemas/expense-fields";
  *
  * The aggregate column set (`actual`/`committed`/`credits`/`net`/`count`) and
  * the month-bucket expression are shared with `project/portfolio-analytics.ts`
- * — see `~/server/domains/expense/repo/expense-aggregate-sql` for the definitions and why
+ * — see `~/server/db/computed/expense-aggregate-sql` for the definitions and why
  * they live there instead of in either directory. Mirrors
  * project/analytics.ts's `projectRollups` split (`spent := sum(cost)` is the
  * same identity as this file's `net`).
@@ -33,13 +33,13 @@ import { and, eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, type SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { expense, project, purchase, vendor } from "~/server/db/schema";
 import {
   EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
   expenseAggregateFields,
   expenseShareAggregateFields,
-} from "~/server/domains/expense/repo/expense-aggregate-sql";
+} from "~/server/db/computed/expense-aggregate-sql";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { expense, project, purchase, vendor } from "~/server/db/schema";
 
 import {
   executeExpenseDerivedBatch,

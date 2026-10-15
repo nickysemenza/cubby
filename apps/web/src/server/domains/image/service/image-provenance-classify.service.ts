@@ -23,7 +23,7 @@ import {
 import {
   aiCallRunInput,
   ensureRun,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type ImageDecision = Awaited<

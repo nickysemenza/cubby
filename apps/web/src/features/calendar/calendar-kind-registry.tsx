@@ -26,12 +26,12 @@ import { entities } from "~/entity/entities";
 import { statusTone } from "~/lib/status-tone";
 import type { BadgeVariant } from "~/ui/primitives/badge";
 
+import { TASK_STATUS_LABELS } from "../../entity/presentation/task-options";
 import {
   mealKindBadgeVariant,
   mealTypeIcon,
   mealTypeTimeLabel,
 } from "../meal/meal-options";
-import { TASK_STATUS_LABELS } from "../task/task-options";
 import { KIND_ICONS } from "./calendar-icons";
 import { itemSpanLabel } from "./calendar-span";
 

@@ -4,10 +4,10 @@ import { sql, type SQL, type SQLWrapper, type Subquery } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 
-import { expenseAggregateFields } from "./expense-aggregate-sql";
 import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
 import {
   expenseAllocationScopeConditionSql,

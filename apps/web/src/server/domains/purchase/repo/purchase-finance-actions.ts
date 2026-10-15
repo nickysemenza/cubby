@@ -17,7 +17,6 @@ import type {
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
-import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -28,7 +27,10 @@ import {
 } from "~/server/db/schema";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
-import { classifyExpenseLineRole } from "~/server/domains/expense/repo/expense-line-role";
+import {
+  requireLineRoleClassifier,
+  type ExpenseLineRoleClassifier,
+} from "~/server/domains/expense/repo/line-role-classifier";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -201,7 +203,7 @@ export async function checkSplitFor(
   db: Database,
   input: SplitCheckInput,
   actor: ActorContext,
-  decisionPort?: DecisionPort,
+  classifyLineRole?: ExpenseLineRoleClassifier,
 ): Promise<SplitCheckOut> {
   const original = await loadSplitOriginal(db, input.expenseId);
   const result = checkSplitDraft(original, input);
@@ -232,12 +234,11 @@ export async function checkSplitFor(
                 lineKind: part.lineKind,
                 productId,
               })
-            : await classifyExpenseLineRole(
-                db,
-                actor,
-                { name: part.name, cost: part.cost, notes: part.notes ?? null },
-                decisionPort,
-              );
+            : await requireLineRoleClassifier(classifyLineRole)(db, actor, {
+                name: part.name,
+                cost: part.cost,
+                notes: part.notes ?? null,
+              });
         const preparedPart = { ...part, lineKind };
         const classification = resolveSplitPartClassification({
           originalSpendingCategoryId: original.spendingCategoryId,

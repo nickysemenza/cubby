@@ -12,8 +12,8 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
 import { readDiscoveryEmailAudit } from "~/server/domains/email/repo/discovery-email-audit";
-import { loadGmailCursor } from "~/server/domains/purchase-import/gmail/persistence";
-import { readExecutionAuthorizationEvidence } from "~/server/domains/run/service/execution-authorization";
+import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { readExecutionAuthorizationEvidence } from "~/server/domains/run/repo/execution-authorization";
 
 /** A Workflow's persisted read needs its member owner, never an agent session. */
 export async function findOwnedMailDiscovery(

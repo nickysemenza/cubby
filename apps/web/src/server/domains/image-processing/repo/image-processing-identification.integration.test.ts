@@ -16,7 +16,8 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
-import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/dispatch";
+import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 
@@ -29,7 +30,6 @@ import {
   markImageProcessingWaitingForDevice,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
-import { updateImageProcessingSettings } from "./image-processing-maintenance";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
 
 // Device absence, unavailable descriptions, stale sources/leases, and failed

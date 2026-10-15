@@ -10,7 +10,7 @@ import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
   type FieldSuggestionSource,
-} from "~/features/ai/field-suggestion";
+} from "~/entity/suggestions/field-suggestion";
 import type { ScalarDisplayValue } from "~/ui/common/scalar-value";
 
 import {

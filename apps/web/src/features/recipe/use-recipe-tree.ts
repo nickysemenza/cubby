@@ -4,8 +4,8 @@ import { useMemo } from "react";
 
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 
+import { getIngredientName } from "../../entity/presentation/recipe-utils";
 import { buildRecipeTree } from "./recipe-tree";
-import { getIngredientName } from "./recipe-utils";
 import { WASM_YIELD_PORTS } from "./yield-ports";
 
 /**

@@ -4,7 +4,6 @@ import { count, eq } from "drizzle-orm";
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { precomputeEnrichmentProposalsWorkflow } from "~/server/ai/ai.server";
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
@@ -20,6 +19,7 @@ import {
   resolveOrCreateIngredients,
 } from "~/server/domains/ingredient/operations.server";
 import { deleteRecipes } from "~/server/domains/recipe/repo/crud";
+import { precomputeEnrichmentProposalsWorkflow } from "~/server/domains/run/operations/ai.server";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";

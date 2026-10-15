@@ -2,10 +2,10 @@ import { searchTypeSchema } from "@cubby/schemas/search";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Page } from "~/entity/page/page";
 import { SearchPage } from "~/features/search/search-page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   q: urlStringParam,

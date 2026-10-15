@@ -9,7 +9,7 @@ import { Database } from "~/server/db/database";
 import * as schema from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { getProductMatchQueue } from "~/server/domains/product/service/product-match.service";
+import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { randomBytes } from "node:crypto";

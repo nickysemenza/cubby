@@ -4,7 +4,7 @@ import {
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
-import { preparePurchaseImport } from "~/server/domains/purchase-import/import-orders";
+import { preparePurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
 import {
   sha256Hex,
   syntheticOrderIds,

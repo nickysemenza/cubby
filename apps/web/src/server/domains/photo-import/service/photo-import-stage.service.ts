@@ -6,7 +6,7 @@ import type {
   PhotoImportStageOutput,
 } from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
-import { initiateImageUploadWithoutEntity } from "~/server/domains/image/service/image-storage.service";
+import { initiateImageUploadWithoutEntity } from "~/server/domains/image/repo/image-storage";
 import { findReusableImagesBySha256 } from "~/server/domains/photo-import/repo/photo-import";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

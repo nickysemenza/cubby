@@ -7,7 +7,6 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { inferFieldAssessments } from "~/server/ai/ai.server";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -17,6 +16,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { executeEntity } from "~/server/entity-kernel";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -32,7 +32,7 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { aiCallRunInput, ensureRun } from "./ensure-run";
+import { aiCallRunInput, ensureRun } from "../repo/ensure-run";
 import {
   PAIRED_MODEL,
   PRIMARY_MODEL,

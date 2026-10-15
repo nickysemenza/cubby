@@ -6,8 +6,9 @@ import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 
+import { PickerField } from "~/entity/forms/picker-field";
+import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { cn } from "~/lib/utils";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -20,7 +21,6 @@ import {
 import { Input } from "~/ui/primitives/input";
 import { QuantityInput } from "~/ui/primitives/quantity-input";
 
-import { useEntityListSource } from "../../../ui/combobox/with-search-hook";
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";
 

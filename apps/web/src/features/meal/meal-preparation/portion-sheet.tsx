@@ -7,10 +7,10 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
+import { Picker } from "~/entity/picker/picker";
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
-import { buildRecordComboboxItem } from "~/ui/combobox/combobox-builders";
-import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

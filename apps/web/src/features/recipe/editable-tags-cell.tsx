@@ -7,14 +7,14 @@ import { useCallback, useState } from "react";
 
 import { Button } from "~/ui/primitives/button";
 
-import type { CellClipboardSpec } from "../../ui/data-table/cell-clipboard";
-import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
-import { CellEditorOverlay } from "../../ui/data-table/cell-editor-overlay";
 import {
   useCellEditState,
   useEditorCommit,
   useOptimisticDisplayValue,
-} from "../../ui/data-table/editable-cell";
+} from "../../entity/table/editable-cell";
+import type { CellClipboardSpec } from "../../ui/data-table/cell-clipboard";
+import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
+import { CellEditorOverlay } from "../../ui/data-table/cell-editor-overlay";
 import { TagInput } from "./recipe-form/tag-input";
 
 /**

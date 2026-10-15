@@ -6,7 +6,7 @@ import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helper
 import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
-} from "~/server/domains/usda-food/service/usda-helpers";
+} from "~/server/domains/usda-food/repo/usda-helpers";
 
 type ProductListEnrichmentInput = Pick<
   ProductListItem,

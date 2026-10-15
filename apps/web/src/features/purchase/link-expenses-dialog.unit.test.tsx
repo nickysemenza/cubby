@@ -4,11 +4,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
 import { LinkExpensesDialog } from "./link-expenses-dialog";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;

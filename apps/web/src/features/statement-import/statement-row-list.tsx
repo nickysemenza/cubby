@@ -13,6 +13,7 @@ import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
+import { usePageCount } from "~/entity/page/page";
 import { PossibleVendor } from "~/features/finance/possible-vendor";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -22,7 +23,6 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { usePageCount } from "~/ui/layout/page";
 import { badgeVariantColor } from "~/ui/primitives/badge";
 import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 import { Input } from "~/ui/primitives/input";
@@ -37,14 +37,14 @@ import {
   createCurrencyColumn,
   createPlainDateColumn,
   renderOptionCell,
-} from "../../ui/data-table/column-helpers";
-import RTable from "../../ui/data-table/table";
+} from "../../entity/table/column-helpers";
+import RTable from "../../entity/table/table";
+import { useTableState } from "../../entity/table/use-table-state";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "../../ui/data-table/table-features";
 import { useTableConfig } from "../../ui/data-table/use-table-config";
-import { useTableState } from "../../ui/data-table/use-table-state";
 
 const route = getRouteApi("/_authenticated/statement-rows/");
 

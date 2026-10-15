@@ -12,7 +12,7 @@ import {
   getActiveAssessmentSuppressionKeys,
   assessmentCandidateKey,
 } from "~/server/generic/assessment/repo/assessment-state";
-import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/operations/semantic-similarity.server";
+import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 

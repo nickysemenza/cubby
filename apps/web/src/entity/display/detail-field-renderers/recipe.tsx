@@ -1,4 +1,7 @@
-import { RecipeSourceLink, sourceLabel } from "~/features/recipe/recipe-source";
+import {
+  RecipeSourceLink,
+  sourceLabel,
+} from "~/entity/presentation/recipe-source";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

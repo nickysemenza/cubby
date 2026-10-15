@@ -5,13 +5,13 @@ import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/semantic/constants";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
-} from "~/server/generic/embedding/semantic/embeddings";
-import { productionVectorStore } from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/embeddings";
+import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
 import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.service";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 

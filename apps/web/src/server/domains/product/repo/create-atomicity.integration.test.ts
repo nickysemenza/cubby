@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
-import { createProductWithFood } from "~/server/domains/product/service/product.service";
+import { createProductWithFood } from "~/server/domains/product/repo/write/product-writes";
 import { AppError } from "~/server/errors/app-error";
 import { makeProductInput } from "~/server/testing/repo.fixtures";
 

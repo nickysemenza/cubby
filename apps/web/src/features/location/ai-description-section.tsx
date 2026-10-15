@@ -8,8 +8,8 @@ import {
   AiProposalCard,
   AiProvenance,
   AiTextDiff,
-} from "~/features/ai/ai-proposal-card";
-import { useAiProposal } from "~/features/ai/use-ai-proposal";
+} from "~/entity/suggestions/ai-proposal-card";
+import { useAiProposal } from "~/entity/suggestions/use-ai-proposal";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

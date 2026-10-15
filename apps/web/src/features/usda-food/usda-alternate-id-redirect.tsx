@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { Page } from "~/entity/page/page";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/layout/page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Skeleton } from "~/ui/primitives/skeleton";
 

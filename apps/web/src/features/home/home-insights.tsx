@@ -6,10 +6,10 @@ import { ShareNetworkIcon } from "@phosphor-icons/react/dist/csr/ShareNetwork";
 import { useState } from "react";
 
 import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-panel";
+import { HierarchySunburst } from "~/features/product-category/hierarchy-view";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
 import { Grid, Stack } from "~/ui/layout";
 import { DashboardCard } from "~/ui/layout/dashboard-card";
-import { HierarchySunburst } from "~/ui/visualizations/hierarchy-view";
 import IngredientNetwork from "~/ui/visualizations/ingredient-network";
 
 /** Exploration-only visualizations, requested only when Insights opens. */

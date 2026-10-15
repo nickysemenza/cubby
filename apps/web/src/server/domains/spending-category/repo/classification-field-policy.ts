@@ -16,7 +16,7 @@ import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fie
 import { inArray, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { categoryFeatureInSql } from "~/server/domains/product-category/repo/product-category-sql";
+import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

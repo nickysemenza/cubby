@@ -11,7 +11,7 @@ import {
   runFinding,
 } from "~/server/db/schema";
 import { discardProductUnits } from "~/server/domains/product/repo/discard";
-import { resolveRunFinding } from "~/server/domains/purchase-import/findings";
+import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import {
   linkExpensesToPurchase,
   mergePurchases,

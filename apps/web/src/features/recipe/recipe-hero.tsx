@@ -13,8 +13,8 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { Row } from "~/ui/layout";
 import { Image } from "~/ui/primitives/image";
 
-import { RecipeSourceLink } from "./recipe-source";
-import { recipeTimeEntries } from "./recipe-utils";
+import { RecipeSourceLink } from "../../entity/presentation/recipe-source";
+import { recipeTimeEntries } from "../../entity/presentation/recipe-utils";
 
 /**
  * The recipe's own source badge(s): where it came from (book/website/notion/

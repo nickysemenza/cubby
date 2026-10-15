@@ -27,7 +27,7 @@ import {
 import {
   startPhotoInventoryRun,
   markRunFailed,
-} from "~/server/domains/purchase-import/run-service";
+} from "~/server/domains/purchase-import/repo/run-service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { seedBaseWorld, BASE_HOME_SHORTCODE } from "../factories/base-world";
 import {

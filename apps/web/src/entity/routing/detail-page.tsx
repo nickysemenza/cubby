@@ -10,8 +10,8 @@ import { entities } from "~/entity/entities";
 import { type GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import { readRecordField } from "~/entity/entity-references";
+import { Page } from "~/entity/page/page";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import {
   Empty,

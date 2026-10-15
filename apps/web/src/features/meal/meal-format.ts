@@ -8,11 +8,11 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 
+import { formatCalendarDay } from "~/lib/date-format";
 import {
   tryFormatAmount,
   tryFormatAmountShopper,
-} from "~/features/inventory/format-amount";
-import { formatCalendarDay } from "~/lib/date-format";
+} from "~/ui/text/format-amount";
 
 import { formatCostEstimate } from "./meal-nutrition";
 import type { ShoppingRow } from "./shopping-model";

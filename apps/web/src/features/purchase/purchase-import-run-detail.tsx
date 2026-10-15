@@ -24,7 +24,8 @@ import { z } from "zod";
 import type { RunDetail } from "~/contracts/run.contract";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { runHref } from "~/features/purchase/purchase-import-links";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { runHref } from "~/entity/routing/purchase-import-links";
 import {
   agentUrl,
   runHasAgent,
@@ -51,7 +52,6 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { AgentContextPerCall } from "./agent-context-breakdown";
 import {

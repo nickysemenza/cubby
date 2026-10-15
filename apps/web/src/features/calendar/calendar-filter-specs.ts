@@ -7,7 +7,7 @@ import { createElement } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { getEntityFilters, type FilterSpec } from "~/entity/filter-manifest";
-import { tradeOptions } from "~/features/project/trade-options";
+import { tradeOptions } from "~/entity/presentation/trade-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import { KIND_ICONS } from "./calendar-icons";

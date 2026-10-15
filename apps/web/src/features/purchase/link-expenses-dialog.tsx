@@ -20,18 +20,18 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import {
+  createCurrencyColumn,
+  createNameColumn,
+} from "~/entity/table/column-helpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/entity/table/list-workbench";
 import { TradeBadge } from "~/features/project/trade-badge";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { Picker } from "~/ui/combobox/picker";
-import {
-  createCurrencyColumn,
-  createNameColumn,
-} from "~/ui/data-table/column-helpers";
-import {
-  ListWorkbench,
-  useBoundedListWorkbench,
-} from "~/ui/data-table/list-workbench";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,

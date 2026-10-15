@@ -9,7 +9,7 @@ import { useCallback } from "react";
 
 import { type EntityListParams, entityListFor } from "~/entity/entity-list";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
-import type { EntityListRecord } from "~/ui/hooks/use-all-entity-records";
+import type { EntityListRecord } from "~/entity/hooks/use-all-entity-records";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import {
   type ServerTreeRow,

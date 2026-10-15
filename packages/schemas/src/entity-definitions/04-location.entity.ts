@@ -19,7 +19,7 @@ export default defineEntity({
   names: { singular: "Location", plural: "Locations" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/location",
+      module: "~/features/location/list-columns",
       export: "locationListOverride",
     },
     basePath: "locations",
@@ -779,7 +779,7 @@ Rules:
           export: "locationType",
         },
         optionsRef: {
-          module: "~/features/location/location-icons",
+          module: "~/entity/presentation/location-icons",
           export: "locationTypeOptionsWithTheme",
         },
       },

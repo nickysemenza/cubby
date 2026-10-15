@@ -6,7 +6,7 @@ import { setCfEnv } from "~/server/cf-env";
 import {
   createInMemoryVectorizeIndex,
   productionVectorStore,
-} from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/vector-store";
 
 import { findSimilarEntities } from "./entity-embedding-search";
 

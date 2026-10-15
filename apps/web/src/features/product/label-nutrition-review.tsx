@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { imageProcessing } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
@@ -23,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/ui/primitives/table";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 const labelValue = (nutrition: ProductLabelNutrition, key: NutrientKey) => {
   const measured = nutrition.nutrients[key];

@@ -173,6 +173,30 @@ export const deleteS3Object = async (key: string): Promise<void> => {
   }
 };
 
+const storageLog = createLogger("image-storage");
+
+/**
+ * Best-effort R2 cleanup for rows already removed from the DB. A failed object
+ * delete only strands bytes in the bucket — never fail the mutation over it.
+ *
+ * Callers drain keys here after their transaction commits: repos hand reaped
+ * keys up (`detachImagesFromEntity`) rather than deleting objects mid-write.
+ */
+export const deleteStoredObjects = async (
+  keys: readonly string[],
+  deleteObject: (key: string) => Promise<void> = deleteS3Object,
+): Promise<void> => {
+  for (const key of keys) {
+    try {
+      await deleteObject(key);
+    } catch (error) {
+      // SILENT: see the function doc above — best-effort R2 cleanup for a row
+      // already removed from the DB; a failed delete only strands bytes.
+      storageLog.error("Error deleting image from R2", { error });
+    }
+  }
+};
+
 /** Read an R2 object through the signed S3 endpoint. Deliberately used only by
  * explicit verification workflows; normal entity reads must not fetch storage. */
 export const getS3Object = async (key: string): Promise<Response> =>

@@ -53,7 +53,6 @@ import {
 import { uniq } from "es-toolkit";
 
 import { purchaseLabel } from "~/lib/purchase-label";
-import type { DecisionPort } from "~/server/ai/decision-model";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -68,7 +67,6 @@ import {
   notDeleted,
   presenceCondition,
   relations,
-  syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -96,12 +94,15 @@ import {
   expenseInheritanceReadExtras,
   validateExpenseInheritance,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { classifyExpenseLineRole } from "~/server/domains/expense/repo/expense-line-role";
 import { hydrateExpenseProjectAllocations } from "~/server/domains/expense/repo/expense-project-allocation";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
 } from "~/server/domains/expense/repo/helpers";
+import {
+  requireLineRoleClassifier,
+  type ExpenseLineRoleClassifier,
+} from "~/server/domains/expense/repo/line-role-classifier";
 import {
   calculateFinancialReconciliation,
   postedRefundTotalSql,
@@ -116,6 +117,7 @@ import {
   readAllocations,
   transactionIdsAllocatedTo,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
@@ -1380,7 +1382,7 @@ export const splitExpense = async (
   db: Database,
   input: SplitExpenseInput,
   actor: ActorContext,
-  decisionPort?: DecisionPort,
+  classifyLineRole?: ExpenseLineRoleClassifier,
 ): Promise<{
   items: ExpenseOut[];
   priceAffectedProductIds: ProductId[];
@@ -1417,16 +1419,11 @@ export const splitExpense = async (
     const lineKind =
       part.lineKind !== undefined || productId !== null
         ? resolveExpenseLineKind({ lineKind: part.lineKind, productId })
-        : await classifyExpenseLineRole(
-            db,
-            actor,
-            {
-              name: part.name,
-              cost: part.cost,
-              notes: part.notes ?? null,
-            },
-            decisionPort,
-          );
+        : await requireLineRoleClassifier(classifyLineRole)(db, actor, {
+            name: part.name,
+            cost: part.cost,
+            notes: part.notes ?? null,
+          });
     parts.push({ ...part, lineKind });
   }
 

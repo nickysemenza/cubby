@@ -47,7 +47,7 @@ export default defineEntity({
   names: { singular: "Product", plural: "Products" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/product",
+      module: "~/features/product/list-columns",
       export: "productListOverride",
     },
     basePath: "products",

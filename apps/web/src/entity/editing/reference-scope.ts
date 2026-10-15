@@ -1,7 +1,7 @@
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
 
-import type { EntitySearchScope } from "~/ui/combobox/entity-search-hooks";
+import type { EntitySearchScope } from "~/entity/picker/entity-search-hooks";
 
 import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 

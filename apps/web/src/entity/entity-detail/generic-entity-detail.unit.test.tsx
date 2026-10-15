@@ -20,6 +20,7 @@ import {
   getEntityDetailOutputSchema,
 } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
+import { installFeatures } from "~/features/registry";
 import {
   fieldExplanation,
   entityList,
@@ -32,6 +33,8 @@ import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrat
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
+
+installFeatures();
 
 const genericDetailEntities: readonly GenericDetailEntity[] = [
   ...detailEntities,

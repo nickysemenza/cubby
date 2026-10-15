@@ -1,9 +1,9 @@
 import { calendarContract } from "~/contracts/calendar.contract";
-import { calendarFeedStateFor } from "~/server/domains/calendar/client";
 import {
   getCalendarRange,
   getCalendarSchedule,
 } from "~/server/domains/calendar/repo/calendar";
+import { calendarFeedStateFor } from "~/server/domains/calendar/repo/client";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 function calendarOrigin(headers: Headers): string {

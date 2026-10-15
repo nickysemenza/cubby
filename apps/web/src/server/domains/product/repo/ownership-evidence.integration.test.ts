@@ -9,8 +9,8 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { getProductWithFood } from "../service/product.service";
 import { attachProductComponents } from "./product-components";
+import { getProductWithFood } from "./write/product-writes";
 
 describe("Product ownership evidence scope", () => {
   const ctx = withTestDb();

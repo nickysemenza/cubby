@@ -17,7 +17,7 @@ import {
 } from "~/server/domains/email/repo/email";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/gmail/persistence";
+import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { emailReviewReport } from "~/server/generic/entity-report/repo/email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 

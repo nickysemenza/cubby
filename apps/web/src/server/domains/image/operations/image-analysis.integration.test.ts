@@ -10,7 +10,7 @@ import {
   readImageAnalysis,
   recordImageAnalysis,
 } from "~/server/domains/image/operations/image-analysis.server";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { AppError } from "~/server/errors/app-error";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

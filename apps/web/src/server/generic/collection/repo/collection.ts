@@ -28,6 +28,7 @@ import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -44,7 +45,6 @@ import {
   getLocationCoverImageUrlsByLocationIds,
   updateLocation,
 } from "~/server/domains/location/repo/crud";
-import { categorySummarySql } from "~/server/domains/product-category/repo/product-category-sql";
 import {
   getProductCoverImageUrlsByProductIds,
   updateProduct,

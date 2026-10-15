@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-entity-list";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { listChromePage } from "~/entity/routing/list-page";
+import { installFeatures } from "~/features/registry";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -13,6 +14,8 @@ import {
   USDAFoodList,
   withUSDAListIdentity,
 } from "./usdafoodlist";
+
+installFeatures();
 
 const food = foodSummaryWithLinkedProducts.parse({
   fdc_id: 12345,

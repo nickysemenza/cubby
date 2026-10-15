@@ -11,10 +11,10 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities } from "~/entity/entities";
+import { Picker } from "~/entity/picker/picker";
+import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";

@@ -6,10 +6,10 @@ import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/number-format";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
-import { ChartEmpty } from "./chart-empty";
-import { ChartTooltip } from "./chart-tooltip";
 import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 type Datum = {

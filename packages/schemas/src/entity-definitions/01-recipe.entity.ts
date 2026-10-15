@@ -25,7 +25,7 @@ export default defineEntity({
   names: { singular: "Recipe", plural: "Recipes" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/recipe",
+      module: "~/features/recipe/list-columns",
       export: "recipeListOverride",
     },
     basePath: "recipes",

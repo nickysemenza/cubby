@@ -17,7 +17,6 @@ import {
 } from "react-hook-form";
 import { toast } from "sonner";
 
-import { AutoSuggestSlot } from "~/features/ai/auto-suggest-slot";
 import { FLAGS } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
@@ -689,7 +688,7 @@ export function UnifiedTextField<
   nullable = false,
   getIcon,
   focusOnMount = false,
-  suggestField,
+  suggestion,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
@@ -701,7 +700,8 @@ export function UnifiedTextField<
   getIcon?: (value: string | null) => ReactNode;
   /** Focus this field on mount — e.g. a quick-add dialog's name field. */
   focusOnMount?: boolean;
-  suggestField?: string;
+  /** Rendered under the input — an entity field's AI suggestion slot. */
+  suggestion?: ReactNode;
 }) {
   const descriptionId = useId();
   return (
@@ -746,9 +746,7 @@ export function UnifiedTextField<
                 </span>
               )}
             </div>
-            {suggestField && (
-              <AutoSuggestSlot form={form} name={name} field={suggestField} />
-            )}
+            {suggestion}
           </FormFieldGroup>
         );
       }}

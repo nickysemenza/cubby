@@ -1,9 +1,9 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 
+import { Page } from "~/entity/page/page";
 import { EntitySchemaDetail } from "~/entity/platform/entity-schema-inspector";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/layout/page";
 import { buttonVariants } from "~/ui/primitives/button";
 
 export const Route = createFileRoute(

@@ -34,6 +34,10 @@ import { z } from "zod";
 
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import {
+  EXPENSE_MONTH_BUCKET,
+  expenseShareAggregateFields,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -42,10 +46,6 @@ import {
   spendingCategory,
   vendor,
 } from "~/server/db/schema";
-import {
-  EXPENSE_MONTH_BUCKET,
-  expenseShareAggregateFields,
-} from "~/server/domains/expense/repo/expense-aggregate-sql";
 import {
   executeExpenseDerivedBatch,
   executeExpenseDerivedBatches,

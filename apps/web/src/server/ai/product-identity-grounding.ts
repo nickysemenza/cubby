@@ -9,7 +9,7 @@ import {
   DECISION_MAX_CANDIDATES,
   type DecisionPort,
 } from "~/server/ai/decision-model";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import type { Database } from "~/server/db";
 import {
   groundedVariantEvidence,
@@ -75,7 +75,7 @@ export async function groundProductIdentityVariants(input: {
   provenance?: AiProvenance;
 }) {
   const { producingAiManifest } = await import("~/server/ai/repo/ai-refresh");
-  const { dependencyStamps } = await import("~/server/ai/refresh-policy");
+  const { dependencyStamps } = await import("~/server/ai/repo/refresh-policy");
   const sides = [
     variantSourceSide.parse(input.first),
     variantSourceSide.parse(input.second),

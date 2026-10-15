@@ -7,13 +7,13 @@ import type {
 
 import type { Database } from "~/server/db";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
-import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
-import { embeddingTextHash } from "~/server/generic/embedding/semantic/hash";
-import { normalizeSearchText } from "~/server/generic/embedding/semantic/text";
+import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
+import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
+import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import type {
   VectorMatch,
   VectorStorePort,
-} from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/vector-store";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 
 /** Same shape as {@link VectorMatch}; aliased so repo callers don't import the store's type directly. */

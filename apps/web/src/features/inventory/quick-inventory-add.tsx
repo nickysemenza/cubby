@@ -21,19 +21,19 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { EntityIntentFields } from "~/entity/editing/entity-primitive-fields";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { PickerField } from "~/entity/forms/picker-field";
+import { useEntityListSource } from "~/entity/picker/with-search-hook";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   getOptionalProductShortcode,
   requiredProductField,
 } from "~/ui/forms/form-fields";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

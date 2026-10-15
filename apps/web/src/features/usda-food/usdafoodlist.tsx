@@ -16,13 +16,13 @@ import {
   filterGetterFromColumnFilters,
 } from "~/entity/filters";
 import { useEntityList } from "~/entity/hooks/use-entity-list";
+import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
+import { TableEmptyState } from "~/entity/table/entity-empty-states";
+import { ListWorkbench } from "~/entity/table/list-workbench";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
-import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
-import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
-import { ListWorkbench } from "~/ui/data-table/list-workbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -31,11 +31,11 @@ import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import { createEntityInlineLinkColumn } from "../../ui/data-table/column-helpers";
-import type { TableStateReturn } from "../../ui/data-table/use-table-state";
+import { CoreNutrientCoverage } from "../../entity/presentation/core-nutrient-coverage";
+import { createEntityInlineLinkColumn } from "../../entity/table/column-helpers";
+import type { TableStateReturn } from "../../entity/table/use-table-state";
 import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
 import { UnitMappingDisplay } from "../units/unit-mapping-display";
-import { CoreNutrientCoverage } from "./core-nutrient-coverage";
 
 type USDAListRow = UsdaFoodListRow & {
   id: string;

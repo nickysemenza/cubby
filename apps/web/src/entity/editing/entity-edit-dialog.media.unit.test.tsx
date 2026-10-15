@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -22,6 +23,8 @@ import {
 import type { EntityEditRequest } from "./types";
 import { createEntityMutationPort } from "./use-entity-commands";
 import { useEntityEditSession } from "./use-entity-edit-session";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

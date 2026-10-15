@@ -31,6 +31,7 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
@@ -64,7 +65,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { categoryMappingSql } from "./category-connections";
 import { loadCategoryConnections } from "./category-connections";
-import { categoryDescendantsSql } from "./product-category-sql";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {

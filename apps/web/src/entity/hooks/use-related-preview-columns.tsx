@@ -12,8 +12,8 @@ import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
+import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { RelatedPreviewCell } from "~/ui/data-table/related-preview-cell";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,

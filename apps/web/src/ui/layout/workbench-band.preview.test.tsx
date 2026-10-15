@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
-import { usePageWorkbenchTarget } from "~/ui/layout/page";
+import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 

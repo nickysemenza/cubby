@@ -2,6 +2,7 @@ import { relatedSummaryOutput } from "@cubby/schemas/related-view";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -9,6 +10,8 @@ import {
   type RelationshipSummaryOperations,
   RelationshipSummaryTable,
 } from "./relationship-summary-table";
+
+installFeatures();
 
 const summary = relatedSummaryOutput.parse({
   data: [

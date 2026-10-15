@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 
+import { featureRegistry } from "~/entity/feature-registry";
 import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -59,17 +60,9 @@ import {
   type EntityActionPlacement,
   type EntityActionSurface,
 } from "./entity-action-definition";
-import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
-import { recipeEntityActionDefinitions } from "./recipe-entity-actions";
 import { specialistLifecycleEntityActionDefinitions } from "./specialist-lifecycle-entity-actions";
-import {
-  useCreateProjectFromTasksAction,
-  useMarkExpensePurchasedAction,
-} from "./tracker-entity-actions";
-import { useAddToInventoryAction } from "./use-add-to-inventory-action";
-import { useDiscardInventoryAction } from "./use-discard-inventory-action";
 
 /**
  * Entity action implementations own their dialog state and mutation;
@@ -272,159 +265,125 @@ export interface EntityActionHandles {
  * the generic "Copy codes" and before the contract's "Delete" (see
  * `useListBulkActions`).
  */
-const entityActions: readonly EntityActionDefinition[] = [
-  defineEntityAction({
-    id: "copy-shortcodes",
-    verb: "copyCodes",
-    entities: shortcodeEntities,
-    arity: "both",
-    surfaces: ["row", "selection", "inspector", "detail"],
-    group: "primary",
-    priority: 0,
-    placement: { inspector: "overflow", detail: "overflow" },
-    preserveSelection: true,
-    use: () => {
-      const clipboard = useContext(EntityActionClipboardContext);
-      return {
-        run: async (rows) => ({
-          success: await clipboard.copyShortcodes(rows.map((row) => row.id)),
-        }),
-        rowMenuItem: (row) => (
-          <VerbMenuItem
-            verb="copyCodes"
-            onSelect={() => void clipboard.copyShortcodes([row.id])}
-          />
-        ),
-        dialog: null,
-      };
-    },
-  }),
-  defineEntityAction({
-    verb: "copyIdentifiers",
-    entities: ["usda-food"],
-    arity: "both",
-    surfaces: ["row", "selection", "inspector", "detail"],
-    group: "primary",
-    priority: 0,
-    placement: { inspector: "overflow", detail: "overflow" },
-    preserveSelection: true,
-    use: () => {
-      const clipboard = useContext(EntityActionClipboardContext);
-      return {
-        run: async (rows) => ({
-          success: await clipboard.copyIdentifiers(rows.map((row) => row.id)),
-        }),
-        rowMenuItem: (row) => (
-          <VerbMenuItem
-            verb="copyIdentifiers"
-            onSelect={() => void clipboard.copyIdentifiers([row.id])}
-          />
-        ),
-        dialog: null,
-      };
-    },
-  }),
-  defineEntityAction({
-    verb: "addToInventory",
-    entities: ["product"],
-    // A selection shares its location while retaining per-row quantities.
-    arity: "both",
-    // Cancelling the staged location and quantities leaves selection intact.
-    preserveSelection: true,
-    group: "primary",
-    priority: 100,
-    surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
-    use: useAddToInventoryAction,
-  }),
-  defineEntityAction({
-    verb: "discard",
-    // `inventory`, not `product`: an entry names its amount and its shelf, so a
-    // selection of entries is already a complete instruction. A product row is
-    // not — a product on two shelves still owes a per-row choice — which is why
-    // `productlist` keeps its own single-row discard and this never reaches it.
-    entities: ["inventory"],
-    arity: "both",
-    group: "lifecycle",
-    priority: 100,
-    // Cancelling staged discard details leaves selection intact.
-    preserveSelection: true,
-    use: useDiscardInventoryAction,
-  }),
-  ...recipeEntityActionDefinitions,
-  ...inventoryLocationEntityActionDefinitions,
-  ...mergeEntityActionDefinitions,
-  ...productRosterEntityActionDefinitions,
-  ...specialistLifecycleEntityActionDefinitions,
-  ...declaredEntityActionDefinitions,
-  deleteEntityActionDefinition,
-  defineEntityAction({
-    verb: "markPurchased",
-    entities: ["expense"],
-    arity: "single",
-    surfaces: ["row", "inspector", "detail"],
-    group: "primary",
-    priority: 50,
-    use: useMarkExpensePurchasedAction,
-  }),
-  defineEntityAction({
-    verb: "bulkEdit",
-    entities: bulkEditEntities,
-    arity: "both",
-    group: "organize",
-    priority: 200,
-    use: useBulkEditEntityAction,
-  }),
-  defineEntityAction({
-    id: "create-project",
-    verb: "createProjectFrom",
-    entities: ["task"],
-    arity: "both",
-    surfaces: ["selection"],
-    group: "organize",
-    priority: 500,
-    preserveSelection: true,
-    use: useCreateProjectFromTasksAction,
-  }),
-  defineEntityAction({
-    id: "reclassify-emails",
-    verb: "reclassify",
-    entities: ["email"],
-    arity: "both",
-    surfaces: ["selection"],
-    group: "organize",
-    priority: 500,
-    availability: reclassifyEmailsAvailability,
-    use: useReclassifyEmailsAction,
-  }),
-  // Pair actions: they appear only inside a Purchase's Emails section.
-  defineEntityAction({
-    id: "link-email-purchase",
-    verb: "linkToPurchase",
-    entities: ["email"],
-    arity: "single",
-    surfaces: ["row"],
-    readFields: EMAIL_PAIR_READ_FIELDS,
-    group: "primary",
-    priority: 10,
-    use: useLinkEmailToPurchaseAction,
-  }),
-  defineEntityAction({
-    id: "dismiss-email-purchase",
-    verb: "dismissForPurchase",
-    entities: ["email"],
-    arity: "single",
-    surfaces: ["row"],
-    readFields: EMAIL_PAIR_READ_FIELDS,
-    group: "primary",
-    priority: 11,
-    use: useDismissEmailForPurchaseAction,
-  }),
-];
+const buildEntityActions = (): readonly EntityActionDefinition[] => {
+  const features = featureRegistry().entityActions;
+  return [
+    defineEntityAction({
+      id: "copy-shortcodes",
+      verb: "copyCodes",
+      entities: shortcodeEntities,
+      arity: "both",
+      surfaces: ["row", "selection", "inspector", "detail"],
+      group: "primary",
+      priority: 0,
+      placement: { inspector: "overflow", detail: "overflow" },
+      preserveSelection: true,
+      use: () => {
+        const clipboard = useContext(EntityActionClipboardContext);
+        return {
+          run: async (rows) => ({
+            success: await clipboard.copyShortcodes(rows.map((row) => row.id)),
+          }),
+          rowMenuItem: (row) => (
+            <VerbMenuItem
+              verb="copyCodes"
+              onSelect={() => void clipboard.copyShortcodes([row.id])}
+            />
+          ),
+          dialog: null,
+        };
+      },
+    }),
+    defineEntityAction({
+      verb: "copyIdentifiers",
+      entities: ["usda-food"],
+      arity: "both",
+      surfaces: ["row", "selection", "inspector", "detail"],
+      group: "primary",
+      priority: 0,
+      placement: { inspector: "overflow", detail: "overflow" },
+      preserveSelection: true,
+      use: () => {
+        const clipboard = useContext(EntityActionClipboardContext);
+        return {
+          run: async (rows) => ({
+            success: await clipboard.copyIdentifiers(rows.map((row) => row.id)),
+          }),
+          rowMenuItem: (row) => (
+            <VerbMenuItem
+              verb="copyIdentifiers"
+              onSelect={() => void clipboard.copyIdentifiers([row.id])}
+            />
+          ),
+          dialog: null,
+        };
+      },
+    }),
+    features.addToInventory,
+    features.discardInventory,
+    ...features.recipe,
+    ...features.inventoryLocation,
+    ...mergeEntityActionDefinitions,
+    ...productRosterEntityActionDefinitions,
+    ...specialistLifecycleEntityActionDefinitions,
+    ...declaredEntityActionDefinitions,
+    deleteEntityActionDefinition,
+    features.markExpensePurchased,
+    defineEntityAction({
+      verb: "bulkEdit",
+      entities: bulkEditEntities,
+      arity: "both",
+      group: "organize",
+      priority: 200,
+      use: useBulkEditEntityAction,
+    }),
+    features.createProjectFromTasks,
+    defineEntityAction({
+      id: "reclassify-emails",
+      verb: "reclassify",
+      entities: ["email"],
+      arity: "both",
+      surfaces: ["selection"],
+      group: "organize",
+      priority: 500,
+      availability: reclassifyEmailsAvailability,
+      use: useReclassifyEmailsAction,
+    }),
+    // Pair actions: they appear only inside a Purchase's Emails section.
+    defineEntityAction({
+      id: "link-email-purchase",
+      verb: "linkToPurchase",
+      entities: ["email"],
+      arity: "single",
+      surfaces: ["row"],
+      readFields: EMAIL_PAIR_READ_FIELDS,
+      group: "primary",
+      priority: 10,
+      use: useLinkEmailToPurchaseAction,
+    }),
+    defineEntityAction({
+      id: "dismiss-email-purchase",
+      verb: "dismissForPurchase",
+      entities: ["email"],
+      arity: "single",
+      surfaces: ["row"],
+      readFields: EMAIL_PAIR_READ_FIELDS,
+      group: "primary",
+      priority: 11,
+      use: useDismissEmailForPurchaseAction,
+    }),
+  ];
+};
+
+let registeredActions: readonly EntityActionDefinition[] | undefined;
+
+/** The registry, built on first use: feature-owned actions come from the installed feature registry. */
+const entityActions = () => (registeredActions ??= buildEntityActions());
 
 /** The row fields `entity`'s registered row actions read beyond its columns. */
 export const rowActionReadFields = (entity: Entity): readonly string[] => [
   ...new Set(
-    entityActions.flatMap((definition) =>
+    entityActions().flatMap((definition) =>
       definition.entities.includes(entity) &&
       (definition.surfaces ?? DEFAULT_SURFACES).includes("row")
         ? (definition.readFields ?? [])
@@ -441,11 +400,12 @@ export interface EntityActionCatalogDescriptor extends Omit<
 }
 
 /** Read-only production roster for audits and contract tests; hooks stay private. */
-export const entityActionCatalogDescriptors: readonly EntityActionCatalogDescriptor[] =
-  entityActions.map(({ use: _use, surfaces, ...definition }) => ({
-    ...definition,
-    surfaces: surfaces ?? DEFAULT_SURFACES,
-  }));
+export const entityActionCatalogDescriptors =
+  (): readonly EntityActionCatalogDescriptor[] =>
+    entityActions().map(({ use: _use, surfaces, ...definition }) => ({
+      ...definition,
+      surfaces: surfaces ?? DEFAULT_SURFACES,
+    }));
 
 const appliesTo = (
   definition: EntityActionDefinition,
@@ -546,7 +506,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
    * depending on which verbs happen to be declared. Like `entity`, it fixes
    * which hooks run, so it must be constant for a component instance.
    */
-  registry: readonly EntityActionDefinition[] = entityActions,
+  registry: readonly EntityActionDefinition[] = entityActions(),
   /** Surface-owned lifecycle adapters, such as optimistic list deletion. */
   additionalDefinitions: readonly EntityActionDefinition[] = NO_ADDITIONAL_ACTIONS,
 ): UseEntityActionsReturn<TRow> {

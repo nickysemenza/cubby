@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/nutrition";
 import { useEffect, useId, useMemo, useState } from "react";
 
-import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { wasm } from "~/lib/wasm";
@@ -13,6 +12,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 export type FoodAmountSourceKind =
   | "product"

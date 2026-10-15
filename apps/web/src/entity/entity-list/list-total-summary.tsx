@@ -3,7 +3,7 @@ import type { EntitySummary } from "@cubby/schemas/entity-summary";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Button } from "~/ui/primitives/button";
 
-import type { ListGroupState } from "../../ui/hooks/progressive-list";
+import type { ListGroupState } from "../hooks/progressive-list";
 
 type ListTotalDescriptor = Pick<
   EntitySummary["list"]["totals"][number],

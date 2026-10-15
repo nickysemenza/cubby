@@ -5,15 +5,14 @@ import type {
   DetailRecordOf,
   GenericDetailEntity,
 } from "~/entity/entity-detail/detail-record";
+import { featureRegistry } from "~/entity/feature-registry";
 import {
   implemented,
   type PresentationCoverage,
 } from "~/entity/presentation-coverage";
 
 import type { DetailFieldRenderer } from "../entity-display";
-import { expenseDetailFields } from "./expense";
 import { financialAccountDetailFields } from "./financial-account";
-import { financialTransactionDetailFields } from "./financial-transaction";
 import { imageDetailFields } from "./image-capture";
 import { inventoryDetailFields } from "./inventory";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
@@ -44,77 +43,91 @@ type EntityDetailRendererCoverage<E extends DetailRendererEntity> = Readonly<
  * (`renderDetailFieldValue`); a JSON field with no entry here shows as
  * readable JSON rather than failing.
  */
-export const detailRendererCoverage = {
-  inventory: {
-    ownerLedgerPartyId: implemented(inventoryDetailFields.ownerLedgerPartyId),
-  },
-  expense: {
-    "expense-spending-category": implemented(
-      expenseDetailFields["expense-spending-category"],
-    ),
-    "expense-project": implemented(expenseDetailFields["expense-project"]),
-  },
-  product: {
-    "product-id": implemented(productDetailFields["product-id"]),
-    "product-category": implemented(productDetailFields["product-category"]),
-    "product-primary-gtin": implemented(
-      productDetailFields["product-primary-gtin"],
-    ),
-    "product-fdc-id": implemented(productDetailFields["product-fdc-id"]),
-    "product-ingredient": implemented(
-      productDetailFields["product-ingredient"],
-    ),
-    "product-external-ids": implemented(
-      productDetailFields["product-external-ids"],
-    ),
-    "product-tags": implemented(productDetailFields["product-tags"]),
-  },
-  recipe: {
-    "recipe-source": implemented(recipeDetailFields["recipe-source"]),
-  },
-  run: {
-    "run-failure-details": implemented(runDetailFields["run-failure-details"]),
-  },
-  financialAccount: {
-    "financial-account-identity": implemented(
-      financialAccountDetailFields["financial-account-identity"],
-    ),
-  },
-  purchase: {
-    "spending-category-summary": implemented((record) => ({
-      value: renderSpendingCategorySummary(record.spendingCategorySummary),
-    })),
-  },
-  financialTransaction: {
-    "spending-category-summary": implemented(
-      financialTransactionDetailFields["spending-category-summary"],
-    ),
-    "financial-transaction-vendor-inference": implemented(
-      financialTransactionDetailFields[
-        "financial-transaction-vendor-inference"
-      ],
-    ),
-    "financial-transaction-allocations": implemented(
-      financialTransactionDetailFields["financial-transaction-allocations"],
-    ),
-  },
-  ledgerTransfer: {
-    "ledger-transfer-classification": implemented(
-      ledgerTransferDetailFields["ledger-transfer-classification"],
-    ),
-  },
-  wish: {
-    "wish-candidates": implemented(wishDetailFields["wish-candidates"]),
-  },
-  image: {
-    "image-capture-location": implemented(
-      imageDetailFields["image-capture-location"],
-    ),
-    "image-sightings": implemented(imageDetailFields["image-sightings"]),
-  },
-} satisfies {
-  [E in DetailRendererEntity]: EntityDetailRendererCoverage<E>;
+const buildDetailRendererCoverage = () => {
+  const {
+    expense: expenseDetailFields,
+    financialTransaction: financialTransactionDetailFields,
+  } = featureRegistry().detailFieldRenderers;
+  return {
+    inventory: {
+      ownerLedgerPartyId: implemented(inventoryDetailFields.ownerLedgerPartyId),
+    },
+    expense: {
+      "expense-spending-category": implemented(
+        expenseDetailFields["expense-spending-category"],
+      ),
+      "expense-project": implemented(expenseDetailFields["expense-project"]),
+    },
+    product: {
+      "product-id": implemented(productDetailFields["product-id"]),
+      "product-category": implemented(productDetailFields["product-category"]),
+      "product-primary-gtin": implemented(
+        productDetailFields["product-primary-gtin"],
+      ),
+      "product-fdc-id": implemented(productDetailFields["product-fdc-id"]),
+      "product-ingredient": implemented(
+        productDetailFields["product-ingredient"],
+      ),
+      "product-external-ids": implemented(
+        productDetailFields["product-external-ids"],
+      ),
+      "product-tags": implemented(productDetailFields["product-tags"]),
+    },
+    recipe: {
+      "recipe-source": implemented(recipeDetailFields["recipe-source"]),
+    },
+    run: {
+      "run-failure-details": implemented(
+        runDetailFields["run-failure-details"],
+      ),
+    },
+    financialAccount: {
+      "financial-account-identity": implemented(
+        financialAccountDetailFields["financial-account-identity"],
+      ),
+    },
+    purchase: {
+      "spending-category-summary": implemented((record) => ({
+        value: renderSpendingCategorySummary(record.spendingCategorySummary),
+      })),
+    },
+    financialTransaction: {
+      "spending-category-summary": implemented(
+        financialTransactionDetailFields["spending-category-summary"],
+      ),
+      "financial-transaction-vendor-inference": implemented(
+        financialTransactionDetailFields[
+          "financial-transaction-vendor-inference"
+        ],
+      ),
+      "financial-transaction-allocations": implemented(
+        financialTransactionDetailFields["financial-transaction-allocations"],
+      ),
+    },
+    ledgerTransfer: {
+      "ledger-transfer-classification": implemented(
+        ledgerTransferDetailFields["ledger-transfer-classification"],
+      ),
+    },
+    wish: {
+      "wish-candidates": implemented(wishDetailFields["wish-candidates"]),
+    },
+    image: {
+      "image-capture-location": implemented(
+        imageDetailFields["image-capture-location"],
+      ),
+      "image-sightings": implemented(imageDetailFields["image-sightings"]),
+    },
+  } satisfies {
+    [E in DetailRendererEntity]: EntityDetailRendererCoverage<E>;
+  };
 };
+
+let detailCoverage: ReturnType<typeof buildDetailRendererCoverage> | undefined;
+
+/** Every detail renderer disposition; the expense and transaction fills come from the feature registry. */
+export const detailRendererCoverage = () =>
+  (detailCoverage ??= buildDetailRendererCoverage());
 
 type ErasedDetailCoverage = Readonly<
   Record<string, PresentationCoverage<DetailFieldRenderer<never>>>
@@ -123,29 +136,30 @@ type ErasedDetailCoverage = Readonly<
 const detailCoverageFor = (
   entity: GenericDetailEntity,
 ): ErasedDetailCoverage | undefined => {
+  const coverage = detailRendererCoverage();
   switch (entity) {
     case "inventory":
-      return detailRendererCoverage.inventory;
+      return coverage.inventory;
     case "expense":
-      return detailRendererCoverage.expense;
+      return coverage.expense;
     case "product":
-      return detailRendererCoverage.product;
+      return coverage.product;
     case "recipe":
-      return detailRendererCoverage.recipe;
+      return coverage.recipe;
     case "run":
-      return detailRendererCoverage.run;
+      return coverage.run;
     case "financialAccount":
-      return detailRendererCoverage.financialAccount;
+      return coverage.financialAccount;
     case "purchase":
-      return detailRendererCoverage.purchase;
+      return coverage.purchase;
     case "financialTransaction":
-      return detailRendererCoverage.financialTransaction;
+      return coverage.financialTransaction;
     case "ledgerTransfer":
-      return detailRendererCoverage.ledgerTransfer;
+      return coverage.ledgerTransfer;
     case "wish":
-      return detailRendererCoverage.wish;
+      return coverage.wish;
     case "image":
-      return detailRendererCoverage.image;
+      return coverage.image;
     default:
       return undefined;
   }

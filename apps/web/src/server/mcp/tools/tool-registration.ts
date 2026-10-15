@@ -18,8 +18,8 @@ import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { getDb } from "~/server/db/helpers";
 import { type ReadPolicy, readPolicyFor } from "~/server/db/read-policy";
 import { run as runTable } from "~/server/db/schema";
-import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/client";
-import { assertPurchaseAgentAction } from "~/server/domains/purchase-import/capabilities";
+import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
+import { assertPurchaseAgentAction } from "~/server/domains/purchase-import/repo/capabilities";
 import { AppError, toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,

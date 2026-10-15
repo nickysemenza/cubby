@@ -16,10 +16,10 @@ import {
   TableRow,
 } from "~/ui/primitives/table";
 
+import { HeaderLabel } from "../../entity/table/table-header-layout";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 import { ROW_DENSITY } from "./density";
 import { RowActiveProvider } from "./row-activity";
-import { HeaderLabel } from "./table-header-layout";
 import { useCellSpill } from "./use-cell-spill";
 
 // Failure modes guarded here, all at a fixed 32px row:

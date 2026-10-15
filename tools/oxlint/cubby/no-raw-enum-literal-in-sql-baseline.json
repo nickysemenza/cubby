@@ -1,7 +1,7 @@
 {
   "apps/web/src/server/db/schema.ts": 17,
   "apps/web/src/server/db/shape-constraints.integration.test.ts": 2,
-  "apps/web/src/server/domains/purchase-import/retained-settlement.ts": 2,
+  "apps/web/src/server/domains/purchase-import/repo/retained-settlement.ts": 2,
   "apps/web/src/server/domains/product-category/repo/category-connections.ts": 11,
   "apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/financial-transaction.ts": 13,
@@ -60,7 +60,7 @@
   "apps/web/src/server/domains/statement-import/repo/statement-row.ts": 10,
   "apps/web/src/server/generic/entity-graph/repo/entity-graph.ts": 3,
   "apps/web/src/server/domains/expense/repo/analyze.ts": 4,
-  "apps/web/src/server/domains/location/repo/ai-description.ts": 1,
+  "apps/web/src/server/db/computed/location-ai-description.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/product-category.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/planting.ts": 5,
   "apps/web/src/server/generic/data-quality/repo/sql.ts": 5,
@@ -75,6 +75,6 @@
   "apps/web/src/server/domains/product/repo/crud.ts": 1,
   "apps/web/src/server/generic/embedding/repo/entity-embedding-cleanup.ts": 5,
   "apps/web/src/server/domains/product/repo/orphan-condition.ts": 1,
-  "apps/web/src/server/domains/run/service/ensure-run.ts": 2,
+  "apps/web/src/server/domains/run/repo/ensure-run.ts": 2,
   "apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts": 2
 }

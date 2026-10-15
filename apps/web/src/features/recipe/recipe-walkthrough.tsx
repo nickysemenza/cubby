@@ -7,10 +7,10 @@ import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useRef, useState } from "react";
 
+import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { MarkdownText } from "~/ui/text/markdown";
 
 import { FlowSourceContent } from "./recipe-flow-renderers";
 

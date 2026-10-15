@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { renderOptionCell } from "~/ui/data-table/column-helpers";
+import { renderOptionCell } from "~/entity/table/column-helpers";
 
 import { financialAccountDetailFields } from "./detail-field-renderers/financial-account";
 import { fieldEnumOptions } from "./enum-field-display";

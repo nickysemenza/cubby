@@ -10,7 +10,7 @@ import { aiAnalysis, image, assessmentState } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
-} from "~/server/domains/image-processing/description-policy";
+} from "~/server/domains/image-processing/repo/description-policy";
 
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
 export async function loadSelectedDescriptions(

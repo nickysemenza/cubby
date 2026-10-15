@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
-import { selectUpcImageBackfill } from "~/server/domains/product/service/product-orchestration.service";
+import { selectUpcImageBackfill } from "~/server/domains/product/repo/write/product-orchestration";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { findProductsWithUpcGaps } from "~/server/generic/problems/repo/detectors-product";
 import {

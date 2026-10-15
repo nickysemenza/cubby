@@ -22,7 +22,7 @@ import {
 
 import type { Page } from "@playwright/test";
 import { and, eq, sql } from "drizzle-orm";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import * as schema from "~/server/db/schema";

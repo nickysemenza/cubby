@@ -1,8 +1,8 @@
 import { memo } from "react";
 
+import { formatYield } from "../../entity/presentation/recipe-yield";
 import { IngredientComponentGrid } from "./ingredient-component-grid";
 import type { RecipeTreeNode } from "./recipe-tree";
-import { formatYield } from "./recipe-yield";
 
 // The standalone ingredient × component matrix, used by the print/export sheet.
 // The grid itself lives in the shared {@link IngredientComponentGrid} (also used

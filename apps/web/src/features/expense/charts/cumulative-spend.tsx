@@ -2,8 +2,8 @@ import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
 import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo } from "react";
 
-import { ChartEmpty } from "~/features/project/charts/chart-empty";
 import { monthLabel } from "~/features/project/project-formatting";
+import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { SpendTrend } from "~/ui/charts/kit";
 
 /**

@@ -5,13 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { image, imageProcessingJob } from "~/server/db/schema";
-import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
-
 import {
   backfillImageProcessing,
   updateImageProcessingSettings,
-} from "./image-processing-maintenance";
+} from "~/server/domains/image-processing/service/image-processing-maintenance";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 describe("backfillImageProcessing", () => {
   const ctx = withTestDb();

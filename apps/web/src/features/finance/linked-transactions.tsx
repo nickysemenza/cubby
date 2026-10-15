@@ -11,8 +11,8 @@ import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { entityListFor } from "~/entity/entity-list";
 import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
+import { ListWorkbench } from "~/entity/table/list-workbench";
 import { formatCurrency } from "~/lib/number-format";
-import { ListWorkbench } from "~/ui/data-table/list-workbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

@@ -19,7 +19,7 @@ import {
   aiCallRunInput,
   ensureRun,
   systemActor,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 
 const unreachableFallback = (): never => {
   throw new Error("An orphaned AI usage row always opens a fallback run");

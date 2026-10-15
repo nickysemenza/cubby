@@ -9,9 +9,9 @@ import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { useHydratedProductImages } from "~/features/product/product-image-summaries";
+import { useHydratedProductImages } from "~/entity/presentation/product-image-summaries";
 import { cn } from "~/lib/utils";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { ArrangeMoveTo } from "./arrange-move-to";
 import { ArrangeThumb } from "./arrange-thumb";

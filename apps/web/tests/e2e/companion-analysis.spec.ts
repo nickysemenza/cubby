@@ -17,14 +17,14 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
-import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/description-policy";
+import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
 

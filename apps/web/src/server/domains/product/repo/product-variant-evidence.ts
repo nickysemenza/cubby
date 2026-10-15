@@ -6,7 +6,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
@@ -265,7 +265,8 @@ export async function readVariantVerification(
     return parsed.success ? [{ ...parsed.data, id: row.id }] : [];
   });
   const { producingAiManifest } = await import("~/server/ai/repo/ai-refresh");
-  const { dependenciesCurrent } = await import("~/server/ai/refresh-policy");
+  const { dependenciesCurrent } =
+    await import("~/server/ai/repo/refresh-policy");
   const manifest = await producingAiManifest(db);
   const currentEvidence = async (
     raw: z.infer<ReturnType<typeof z.json>> | undefined,

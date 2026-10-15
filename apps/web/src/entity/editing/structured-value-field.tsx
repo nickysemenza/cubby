@@ -17,8 +17,9 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { PickerField } from "~/entity/forms/picker-field";
+import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { Picker } from "~/ui/combobox/picker";
-import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
@@ -27,7 +28,6 @@ import {
   PlainDateField,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";

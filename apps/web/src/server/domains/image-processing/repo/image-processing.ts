@@ -53,7 +53,7 @@ import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
   preferredImageDescriptionPolicy,
-} from "~/server/domains/image-processing/description-policy";
+} from "~/server/domains/image-processing/repo/description-policy";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -1198,7 +1198,7 @@ export async function completeImageProcessingJob(
   // attention); the advance runs after commit and never fails this write.
   if (settledPhotoRunId) {
     const { advancePhotoRunQuietly } =
-      await import("~/server/domains/photo-import/run/lifecycle");
+      await import("~/server/domains/photo-import/repo/run/lifecycle");
     await advancePhotoRunQuietly(db, settledPhotoRunId);
   }
   return completion;

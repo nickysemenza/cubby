@@ -4,7 +4,8 @@ import type {
 } from "@cubby/schemas/purchase-import";
 
 import type { AiMessage, AiChatRequest } from "~/server/ai/run-feature";
-import { purchaseImportPromptText } from "~/server/domains/purchase-import/agents/prompt-text.gen";
+
+import { purchaseImportPromptText } from "./purchase-import-prompt-text.gen";
 
 export const purchaseExtractionPrompt = (capture: BrowserCapture) => ({
   systemPrompts: [

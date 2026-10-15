@@ -29,7 +29,7 @@ import type { z } from "zod";
 
 import { inventoryContract } from "~/contracts/inventory.contract";
 import type { Database } from "~/server/db";
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/service/expense-pricing.service";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import {
   addInventoryEntries,
   bulkMoveInventoryEntries,
@@ -50,7 +50,7 @@ import {
 } from "~/server/domains/inventory/service/scan-into-location.service";
 import { findDuplicateUniqueProducts } from "~/server/domains/product/repo/analytics";
 import { discardFromInventoryEntries } from "~/server/domains/product/repo/discard";
-import type { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
+import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,

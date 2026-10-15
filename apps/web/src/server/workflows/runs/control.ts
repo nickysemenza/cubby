@@ -6,7 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/service/ensure-run";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 import { workflowInstanceId, type WorkflowRunPurpose } from "./contract";
 import { productionWorkflowLauncher, type WorkflowLauncher } from "./launcher";

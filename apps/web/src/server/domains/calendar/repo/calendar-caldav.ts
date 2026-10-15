@@ -16,8 +16,8 @@ import {
   type CalDavWrite,
   type CalendarProjection,
   CalDavError,
-} from "~/server/domains/calendar/caldav-types";
-import { UID_DOMAIN } from "~/server/domains/calendar/contracts";
+} from "~/server/domains/calendar/repo/caldav-types";
+import { UID_DOMAIN } from "~/server/domains/calendar/repo/contracts";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { buildCrudServices } from "~/server/http/request-context";

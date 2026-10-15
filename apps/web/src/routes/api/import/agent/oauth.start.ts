@@ -9,7 +9,7 @@ import {
   purchaseAgentAuthorizeURL,
   purchaseAgentOAuthCookie,
   purchaseAgentConnectionRedirect,
-} from "~/server/domains/purchase-import/agent-auth";
+} from "~/server/domains/purchase-import/repo/agent-auth";
 import {
   createRequestContext,
   requireActor,

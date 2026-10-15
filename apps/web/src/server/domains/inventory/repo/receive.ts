@@ -13,7 +13,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { expense, inventoryEntry, product } from "~/server/db/schema";
-import { resolveArrivedFindingsForPurchase } from "~/server/domains/purchase-import/findings";
+import { resolveArrivedFindingsForPurchase } from "~/server/domains/purchase-import/repo/findings";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

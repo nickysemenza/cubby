@@ -6,11 +6,11 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 
+import { DetailPagePending } from "~/entity/navigation/route-pending";
+import { Page } from "~/entity/page/page";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { DetailPagePending } from "~/ui/feedback/route-pending";
-import { Page } from "~/ui/layout/page";
 
 /** Lazy: it pulls in the stock and discard dialogs, which almost no cold load needs. */
 const ShelfTriageWorkbench = lazy(() =>

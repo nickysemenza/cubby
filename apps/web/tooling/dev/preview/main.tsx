@@ -22,6 +22,7 @@ import {
   getContext,
   Provider,
 } from "~/integrations/tanstack-query/root-provider";
+import { installFeatures } from "~/features/registry";
 import { Picker } from "~/ui/combobox/picker";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { Label } from "~/ui/primitives/label";
@@ -36,6 +37,8 @@ import {
   type PreviewEntity,
   type PreviewState,
 } from "./fixtures";
+
+installFeatures();
 
 /**
  * Dev-only fixture preview, served by `tooling/dev/worker.ts` at

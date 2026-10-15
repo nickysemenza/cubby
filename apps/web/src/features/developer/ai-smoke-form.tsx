@@ -7,11 +7,11 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
+import type { PickerSearchEntity } from "~/entity/picker/entity-search-hooks";
+import { Picker } from "~/entity/picker/picker";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
-import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Textarea } from "~/ui/primitives/textarea";

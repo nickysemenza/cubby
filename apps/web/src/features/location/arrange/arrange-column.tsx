@@ -6,7 +6,7 @@ import type {
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
-import { LocationIcon } from "~/features/location/location-icons";
+import { LocationIcon } from "~/entity/presentation/location-icons";
 import { cn } from "~/lib/utils";
 
 import { ArrangeItemChip } from "./arrange-item-chip";

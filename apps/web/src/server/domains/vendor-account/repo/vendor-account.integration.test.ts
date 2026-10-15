@@ -10,7 +10,7 @@ import {
   vendor as vendorTable,
   vendorAccount,
 } from "~/server/db/schema";
-import { startImportRunFixture } from "~/server/domains/purchase-import/import-run.fixtures";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { getVendorAccountByShortcode } from "~/server/domains/vendor-account/repo/vendor-account";
 import {
   findOrCreateWithShortcode,

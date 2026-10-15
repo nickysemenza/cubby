@@ -1,0 +1,805 @@
+import {
+  aiSmokeInputs,
+  aiSmokeRunInput,
+  type AiSmokeScenario,
+} from "@cubby/schemas/ai-smoke";
+import { type RunId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  extractedPurchaseLine,
+  browserCapture,
+  type ExtractedPurchaseLine,
+} from "@cubby/schemas/purchase-import";
+import { and, eq, inArray } from "drizzle-orm";
+import type { z } from "zod";
+
+import {
+  DECISION_MAX_CANDIDATES,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
+import { suggestIngredientMergeBatch } from "~/server/ai/enrichment/ingredient-merge";
+import {
+  suggestUsdaFood,
+  suggestUsdaFoodBatch,
+} from "~/server/ai/enrichment/usda-match";
+import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
+import {
+  IMAGE_IDENTIFICATION_FEATURE,
+  ENTITY_EMBEDDING_FEATURE,
+  MAILBOX_TRIAGE_FEATURE,
+  MAILBOX_RELEVANCE_FEATURE,
+  PURCHASE_IMPORT_EXTRACTION_FEATURE,
+  PURCHASE_IMPORT_MAIL_FEATURE,
+  PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
+  PURCHASE_IMPORT_REPAIR_FEATURE,
+  SEMANTIC_QUERY_FEATURE,
+  SETTLEMENT_CANDIDATE_RANK_FEATURE,
+  USDA_FOOD_SUGGEST_FEATURE,
+} from "~/server/ai/features";
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { productIdentityPrompt } from "~/server/ai/product-identity";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
+import {
+  runStructuredFeature,
+  type StructuredRunPorts,
+} from "~/server/ai/run-feature";
+import { runAiSelection } from "~/server/ai/selection";
+import {
+  decideUpcOfferComparability,
+  decideImageProvenance,
+  decideProductVariantComparison,
+} from "~/server/ai/semantic-decisions";
+import { getAiClient } from "~/server/clients/ai";
+import { getR2PublicUrl } from "~/server/clients/r2-public-url";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { aiUsage, image, run as runTable } from "~/server/db/schema";
+import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
+import { getUploadedImageProcessingSource } from "~/server/domains/image-processing/repo/image-processing";
+import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
+import { imageAnalysisRenditionUrl } from "~/server/domains/image/service/image-description.service";
+import {
+  imageIdentificationCompositionPrompt,
+  readImageIdentificationRendition,
+} from "~/server/domains/image/service/image-identification.service";
+import { getLocationById } from "~/server/domains/location/repo/crud";
+import { getProductByID } from "~/server/domains/product/repo/crud";
+import {
+  auditPurchaseImportBatch,
+  extractPurchaseEvidence,
+} from "~/server/domains/purchase-import/operations/agents/extract";
+import { shouldPromoteMailAttachment } from "~/server/domains/purchase-import/operations/mail-attachment-purpose";
+import { loadPurchaseAuditBatch } from "~/server/domains/purchase-import/repo/audit-batch";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import { interpretMailRelevance } from "~/server/domains/purchase-import/service/gmail/relevance";
+import { chooseLineStage } from "~/server/domains/purchase-import/service/line-stage";
+import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
+import { flowPromptInput } from "~/server/domains/recipe/repo/recipe-flow-state";
+import { assessRecipeFlowCandidate } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { embedTexts } from "~/server/generic/embedding/service/semantic/embeddings";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+
+import { finishSmokeAttempt, withSmokeUsage } from "../ai/smoke-attempt";
+import { AI_SMOKE_CASES } from "../ai/smoke-catalog";
+
+const purchaseLine = (
+  fixture: "standard" | "ambiguous",
+): ExtractedPurchaseLine =>
+  extractedPurchaseLine.parse(
+    fixture === "standard"
+      ? {
+          title: "Cordless drill kit",
+          amount: 79.95,
+          quantity: 1,
+          sku: "DRILL-20",
+        }
+      : { title: "Adjustment for returned item", amount: -12.5, quantity: 1 },
+  );
+
+const purchaseCapture = (fixture: "standard" | "ambiguous") =>
+  browserCapture.parse({
+    url: "https://example.com/orders/example",
+    title: "Example order",
+    text:
+      fixture === "standard"
+        ? "Order: cordless drill kit $79.95. Total: $79.95 USD."
+        : "Order adjustment: $12.50 refund. Other lines unavailable.",
+    links: [],
+    images: [],
+    capturedAt: "2026-01-01T12:00:00.000Z",
+  });
+
+async function imageSources(
+  db: AuthenticatedStartOperationContext["db"],
+  shortcodes: string[],
+) {
+  const ids = await Promise.all(
+    shortcodes.map((code) => resolveOrThrow(db, "image", code)),
+  );
+  const rows = await getDb(db)
+    .select({
+      id: image.id,
+      key: image.key,
+      status: image.status,
+      contentType: image.contentType,
+    })
+    .from(image)
+    .where(and(inArray(image.id, ids), notDeleted(image)));
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  if (
+    rows.length !== ids.length ||
+    rows.some((row) => !row.key || row.status !== "UPLOADED")
+  )
+    throw new Error("Select uploaded images with available source files.");
+  return ids.map((id) => {
+    const source = byId.get(id)!;
+    return { url: getR2PublicUrl(source.key), contentType: source.contentType };
+  });
+}
+
+async function ingredientSources(
+  db: AuthenticatedStartOperationContext["db"],
+  shortcodes: string[],
+) {
+  return Promise.all(
+    shortcodes.map(async (code) => {
+      const id = await resolveOrThrow(db, "ingredient", code);
+      const row = await getDb(db).query.ingredient.findFirst({
+        where: (table, { eq }) => eq(table.id, id),
+        columns: { name: true },
+      });
+      if (!row) throw new Error("Ingredient was not found.");
+      return {
+        id,
+        shortcode: parseShortcodeFor("ingredient", code),
+        name: row.name,
+      };
+    }),
+  );
+}
+
+type CaseResult = { result: unknown; noModelCall?: boolean };
+type SmokeJson = z.infer<typeof aiSmokeRunInput>["input"];
+
+// The switch lists caller shapes; each branch delegates its work to a production AI helper.
+// eslint-disable-next-line complexity
+async function runCase(
+  context: AuthenticatedStartOperationContext,
+  scenario: AiSmokeScenario,
+  raw: SmokeJson,
+  runId: RunId,
+  structuredPorts?: StructuredRunPorts,
+): Promise<CaseResult> {
+  const db = context.db;
+  switch (scenario) {
+    case "fieldSuggestions": {
+      const input = aiSmokeInputs.fieldSuggestions.parse(raw);
+      const result = await suggestFields(db, runId, input);
+      return {
+        result,
+        noModelCall: Object.values(result.outcomes ?? {}).every(
+          (outcome) => outcome.kind === "skipped",
+        ),
+      };
+    }
+    case "externalIdKind": {
+      const { fixture } = aiSmokeInputs.externalIdKind.parse(raw);
+      const input =
+        fixture === "barcode"
+          ? {
+              source: "retailer",
+              identifier: "012345678905",
+              url: null,
+              productName: null,
+              manufacturer: null,
+            }
+          : {
+              source: "manufacturer",
+              identifier: "DRILL-20",
+              url: null,
+              productName: "cordless drill",
+              manufacturer: "Example Tools",
+            };
+      return {
+        result: await suggestExternalIdKind(input, {
+          db,
+          runId,
+          operation: "smoke.externalIdKind",
+        }),
+        noModelCall: fixture === "barcode",
+      };
+    }
+    case "usdaFood": {
+      const { ingredientId } = aiSmokeInputs.usdaFood.parse(raw);
+      const [source] = await ingredientSources(db, [ingredientId]);
+      if (!source) throw new Error("Ingredient was not found.");
+      const result = await suggestUsdaFood(
+        context.usdaService,
+        db,
+        source.name,
+        { runId, ingredientId: source.id },
+      );
+      return {
+        result,
+        noModelCall: result.reasoning === "No USDA candidates found.",
+      };
+    }
+    case "usdaFoodBatch": {
+      const { ingredientIds } = aiSmokeInputs.usdaFoodBatch.parse(raw);
+      const sources = await ingredientSources(db, ingredientIds);
+      const result = await suggestUsdaFoodBatch(
+        context.usdaService,
+        db,
+        sources,
+        runId,
+      );
+      return {
+        result,
+        noModelCall: result.every(
+          (item) => item.reasoning === "No USDA candidates found.",
+        ),
+      };
+    }
+    case "ingredientMerge": {
+      const { ingredientIds } = aiSmokeInputs.ingredientMerge.parse(raw);
+      const result = await suggestIngredientMergeBatch(
+        db,
+        await ingredientSources(db, ingredientIds),
+        runId,
+      );
+      return { result };
+    }
+    case "selectionOverflow": {
+      const { fixture } = aiSmokeInputs.selectionOverflow.parse(raw);
+      const candidates = Array.from(
+        { length: DECISION_MAX_CANDIDATES + 1 },
+        (_, index) => ({
+          id: `item-${index + 1}`,
+          label: `Example item ${index + 1}`,
+        }),
+      );
+      return {
+        result: await runAiSelection(
+          {
+            feature: USDA_FOOD_SUGGEST_FEATURE,
+            rules:
+              fixture === "standard"
+                ? "Choose Example item 1."
+                : "Choose none if no item fits.",
+            idOf: (c) => c.id,
+            renderLine: (c) => `${c.id}: ${c.label}`,
+            maxCandidates: candidates.length,
+          },
+          {
+            subject:
+              fixture === "standard"
+                ? "Find Example item 1"
+                : "Find a non-existent item",
+            candidates,
+            usage: { db, runId, operation: "smoke.selectionOverflow" },
+          },
+        ),
+      };
+    }
+    case "settlementCandidateRank": {
+      const { fixture } = aiSmokeInputs.settlementCandidateRank.parse(raw);
+      const lines = [
+        "purchase | $42.50 | posted 2026-03-04 | merchant Example Hardware North",
+        "purchase | $42.50 | posted 2026-03-09 | merchant Example Hardware South",
+      ];
+      return {
+        result: await runAiSelection(
+          {
+            feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
+            rules:
+              "Choose the statement transaction most likely to be the payment for this vendor order.",
+            idOf: (line) => line,
+            renderLine: (line) => line,
+            maxCandidates: lines.length,
+          },
+          {
+            subject:
+              fixture === "standard"
+                ? "Order dated 2026-03-03 from Example Hardware North, total $42.50"
+                : "Order dated 2026-01-15 from Example Garden, total $12.00",
+            candidates: lines,
+            usage: { db, runId, operation: "smoke.settlementCandidateRank" },
+          },
+        ),
+      };
+    }
+    case "productIdentification": {
+      const { imageIds } = aiSmokeInputs.productIdentification.parse(raw);
+      return {
+        result: await getAiClient().identifyProduct(
+          (await imageSources(db, imageIds)).map((source) => source.url),
+          { db, runId, operation: "smoke.identifyProduct" },
+        ),
+      };
+    }
+    case "locationDescription":
+    case "inventoryDetection": {
+      const { locationId } = aiSmokeInputs[scenario].parse(raw);
+      const id = await resolveOrThrow(db, "location", locationId);
+      const location = await getLocationById(db, id);
+      const urls = (location.images ?? []).slice(0, 5).map((item) => item.url);
+      if (!urls.length) throw new Error("Select a location with images.");
+      const usage = {
+        db,
+        runId,
+        operation: `smoke.${scenario}`,
+        entity: { entityKind: "location", entityId: id },
+      };
+      return {
+        result:
+          scenario === "locationDescription"
+            ? await getAiClient().describeLocation(urls, location.name, usage)
+            : await getAiClient().detectInventoryItems(
+                urls,
+                location.name,
+                usage,
+              ),
+      };
+    }
+    case "imageIdentification": {
+      const { imageId } = aiSmokeInputs.imageIdentification.parse(raw);
+      const id = await resolveOrThrow(db, "image", imageId);
+      const source = await getUploadedImageProcessingSource(db, id);
+      if (!source)
+        throw new Error(
+          "Select an uploaded image that passed integrity checks.",
+        );
+      const normalizedKey =
+        source.contentType === "image/avif"
+          ? await getVerifiedImageRenditionKey(db, id)
+          : null;
+      if (source.contentType === "image/avif" && !normalizedKey)
+        throw new Error("Waiting for verified Apple JPEG normalization");
+      const { media } = await readImageIdentificationRendition(
+        getR2PublicUrl(normalizedKey ?? source.key),
+      );
+      return {
+        result: await runDecisionChoice({
+          ...imageIdentificationCompositionPrompt(media),
+          feature: IMAGE_IDENTIFICATION_FEATURE,
+          usage: {
+            db,
+            runId,
+            operation: "smoke.imageIdentification",
+            entity: { entityKind: "image", entityId: id },
+          },
+        }),
+      };
+    }
+    case "imageDescription": {
+      const { imageId } = aiSmokeInputs.imageDescription.parse(raw);
+      const id = await resolveOrThrow(db, "image", imageId);
+      const source = await getUploadedImageProcessingSource(db, id);
+      if (!source)
+        throw new Error(
+          "Select an uploaded image that passed integrity checks.",
+        );
+      const url = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
+      const { IMAGE_DESCRIPTION_FEATURE } =
+        await import("~/server/ai/features");
+      return {
+        result: await runStructuredFeature(
+          IMAGE_DESCRIPTION_FEATURE,
+          IMAGE_DESCRIPTION_FEATURE.request(url),
+          {
+            db,
+            runId,
+            operation: "smoke.imageDescription",
+            entity: { entityKind: "image", entityId: id },
+          },
+          structuredPorts,
+        ),
+      };
+    }
+    case "recipeFlow": {
+      const { recipeId } = aiSmokeInputs.recipeFlow.parse(raw);
+      const id = await resolveOrThrow(db, "recipe", recipeId);
+      const recipe = await getRecipeByID(db, id);
+      if (!recipe) throw new Error("Recipe was not found.");
+      return {
+        result: await getAiClient().generateRecipeFlow(
+          JSON.stringify(flowPromptInput(recipe), null, 2),
+          null,
+          {
+            db,
+            runId,
+            operation: "smoke.recipeFlow",
+            entity: { entityKind: "recipe", entityId: id },
+            validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
+          },
+        ),
+      };
+    }
+    case "upcOfferComparability": {
+      const input = aiSmokeInputs.upcOfferComparability.parse(raw);
+      return {
+        result: await decideUpcOfferComparability({
+          ...input,
+          usage: { db, runId, operation: "smoke.upcOfferComparability" },
+        }),
+      };
+    }
+    case "imageProvenance": {
+      const { fixture } = aiSmokeInputs.imageProvenance.parse(raw);
+      return {
+        result: await decideImageProvenance({
+          input: {
+            filename: "image.jpg",
+            width: 1200,
+            height: 1200,
+            sourceAssetUrl:
+              fixture === "standard"
+                ? "https://catalog.example/image.jpg"
+                : null,
+            sourcePageUrl:
+              fixture === "standard" ? "https://catalog.example/item" : null,
+            sourceName: fixture === "standard" ? "Example catalog" : null,
+            sightingSourceTypes: [],
+            hasExifCamera: false,
+            hasExifCaptureTime: false,
+            analysisSummary: null,
+          },
+          usage: { db, runId, operation: "smoke.imageProvenance" },
+        }),
+      };
+    }
+    case "productIdentity": {
+      const { fixture } = aiSmokeInputs.productIdentity.parse(raw);
+      const subject =
+        fixture === "standard"
+          ? "Two synthetic shirts share manufacturer Example, model Crew and exact ASIN B000000001. Both retained retailer Sources explicitly confirm blue, medium, pack of one."
+          : "Two synthetic shirts share manufacturer Example and model Crew. The first is blue medium; the second has no retained color or size evidence. No exact identifier is shared.";
+      return {
+        result: await runDecisionChoice({
+          ...productIdentityPrompt(subject),
+          feature: PRODUCT_IDENTITY_FEATURE,
+          usage: { db, runId, operation: "smoke.productIdentity" },
+        }),
+      };
+    }
+    case "productVariantRelation": {
+      const input = aiSmokeInputs.productVariantRelation.parse(raw);
+      return {
+        result: await decideProductVariantComparison({
+          ...input,
+          usage: { db, runId, operation: "smoke.productVariantRelation" },
+        }),
+      };
+    }
+    case "mailAttachmentPurpose": {
+      const { fixture } = aiSmokeInputs.mailAttachmentPurpose.parse(raw);
+      const bodyText =
+        fixture === "shipping_label"
+          ? "Print the attached carrier label and affix it to your parcel. Postage cost $8.50."
+          : fixture === "receipt"
+            ? "The attached receipt itemizes your $8.50 postage payment; your printable carrier label is available separately."
+            : "Documents are attached. Their purpose is not described.";
+      return {
+        result: {
+          promote: await shouldPromoteMailAttachment(
+            {
+              sender: "orders@shipping.example",
+              subject: "Shipping paperwork",
+              rawChecksum: "a".repeat(64),
+              content: { bodyText, bodyHtml: null, snippet: null },
+            },
+            {
+              filename: "document.pdf",
+              mimeType: "application/octet-stream",
+              checksum: "b".repeat(64),
+            },
+            { db, runId, operation: "smoke.mailAttachmentPurpose" },
+          ),
+        },
+      };
+    }
+    case "mailboxTriage":
+    case "mailboxRelevance": {
+      const { fixture } = aiSmokeInputs[scenario].parse(raw);
+      const body =
+        fixture === "standard"
+          ? "Your order for a cordless drill kit is confirmed. Total $79.95 USD."
+          : "An account update is available; the message does not identify a purchase.";
+      const original = normalizeMessage("synthetic-mailbox", {
+        id: "synthetic-message",
+        payload: {
+          mimeType: "text/plain",
+          headers: [{ name: "Subject", value: "Example account notice" }],
+          body: { data: Buffer.from(body).toString("base64url") },
+        },
+      });
+      if (scenario === "mailboxTriage") {
+        return {
+          result: await runDecisionChoice({
+            ...MAILBOX_TRIAGE_FEATURE.prompt(
+              JSON.stringify({
+                headers: original.mail.headers,
+                body: original.mail.bodyText,
+                attachments: [],
+              }),
+            ),
+            feature: MAILBOX_TRIAGE_FEATURE,
+            usage: { db, runId, operation: "smoke.mailboxTriage" },
+          }),
+        };
+      }
+      return {
+        result: await interpretMailRelevance(
+          {
+            getProfile: async () => ({ historyId: "100" }),
+            listMessages: async () => ({ messages: [] }),
+            getMessage: async (id) => ({ id }),
+            listHistory: async () => ({ historyId: "100" }),
+            getAttachment: async () => ({}),
+          },
+          original,
+          (request) =>
+            runStructuredFeature(
+              MAILBOX_RELEVANCE_FEATURE,
+              request,
+              {
+                db,
+                runId,
+                operation: "smoke.mailboxRelevance",
+                subscriptionRequired: true,
+              },
+              structuredPorts,
+            ),
+        ),
+      };
+    }
+    case "purchaseExpenseLineRole": {
+      const { fixture } = aiSmokeInputs.purchaseExpenseLineRole.parse(raw);
+      const line = purchaseLine(fixture);
+      return {
+        result: await decideExpenseLineRole(
+          { name: line.title, cost: line.amount, notes: null },
+          { db, runId, operation: "smoke.expenseLineRole" },
+        ),
+      };
+    }
+    case "purchaseKitDetection":
+    case "purchaseProductPromotion":
+    case "purchaseReversalKind": {
+      const { fixture } = aiSmokeInputs[scenario].parse(raw);
+      const stage = {
+        purchaseKitDetection: "kit",
+        purchaseProductPromotion: "promotion",
+        purchaseReversalKind: "reversal",
+      } as const;
+      return {
+        result: await chooseLineStage(
+          db,
+          runId,
+          0,
+          purchaseLine(fixture),
+          stage[scenario],
+        ),
+      };
+    }
+    case "purchaseProductIdentity": {
+      const { fixture, productId } =
+        aiSmokeInputs.purchaseProductIdentity.parse(raw);
+      const chosen = productId
+        ? await getProductByID(
+            db,
+            await resolveOrThrow(db, "product", productId),
+          )
+        : null;
+      const line = purchaseLine(fixture);
+      const labels = chosen
+        ? [
+            `${chosen.name} | manufacturer=${chosen.manufacturer || "unknown"} | model=${chosen.model ?? "unknown"}`,
+          ]
+        : [
+            "Cordless drill kit | manufacturer=Example Tools | model=DRILL-20",
+            "Garden rake | manufacturer=Example Tools | model=RAKE-10",
+          ];
+      return {
+        result: await runDecisionChoice({
+          feature: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
+          subject: JSON.stringify({
+            title: line.title,
+            sku: line.sku ?? null,
+            seller: line.seller ?? null,
+            productUrl: line.productUrl ?? null,
+          }),
+          rules: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE.rules,
+          choices: labels,
+          usage: { db, runId, operation: "smoke.purchaseProductIdentity" },
+        }),
+      };
+    }
+    case "purchaseExtraction": {
+      const { fixture } = aiSmokeInputs.purchaseExtraction.parse(raw);
+      return {
+        result: await runStructuredFeature(
+          PURCHASE_IMPORT_EXTRACTION_FEATURE,
+          PURCHASE_IMPORT_EXTRACTION_FEATURE.request(purchaseCapture(fixture)),
+          { db, runId, operation: "smoke.purchaseExtraction" },
+          structuredPorts,
+        ),
+      };
+    }
+    case "purchaseReceipt": {
+      const { imageId } = aiSmokeInputs.purchaseReceipt.parse(raw);
+      const [source] = await imageSources(db, [imageId]);
+      if (!source) throw new Error("Select an uploaded receipt image.");
+      return {
+        result: await extractPurchaseEvidence({
+          db,
+          runId,
+          evidenceUrl: source.url,
+          mediaType: source.contentType,
+        }),
+      };
+    }
+    case "purchaseMail": {
+      const { fixture } = aiSmokeInputs.purchaseMail.parse(raw);
+      const { orderMailRequest } =
+        await import("~/server/ai/prompts/purchase-import");
+      return {
+        result: await runStructuredFeature(
+          PURCHASE_IMPORT_MAIL_FEATURE,
+          orderMailRequest({
+            sender: "orders@example.com",
+            subject:
+              fixture === "standard"
+                ? "Your order shipped"
+                : "About your order",
+            receivedAt: "2026-01-01T12:00:00.000Z",
+            content:
+              fixture === "standard"
+                ? "Order example-1 shipped."
+                : "Please contact support.",
+          }),
+          { db, runId, operation: "smoke.purchaseMail" },
+          structuredPorts,
+        ),
+        // A caller-supplied `structuredPorts` only ever comes from a test
+        // double (see `StructuredRunPorts`'s doc comment): with a real
+        // model call now recording its own usage row unconditionally
+        // (`runStructuredFeature`'s one-writer invariant), a faked
+        // transport is the only remaining signal that no model was really
+        // called — unlike the other cases above, this one has no
+        // result-shape heuristic to fall back on.
+        noModelCall: structuredPorts !== undefined,
+      };
+    }
+    case "purchaseAudit": {
+      const {
+        source,
+        fixture,
+        runId: sourceRunCode,
+      } = aiSmokeInputs.purchaseAudit.parse(raw);
+      const renderedBatch =
+        source === "run"
+          ? await loadPurchaseAuditBatch(
+              db,
+              await resolveOrThrow(db, "run", sourceRunCode ?? ""),
+            )
+          : [
+              {
+                id: "example-purchase",
+                orderId: "example-1",
+                statedTotal: fixture === "standard" ? 79.95 : 80,
+                displayLabel: "Example order",
+                expenses: [
+                  {
+                    id: "example-expense",
+                    name: "Cordless drill kit",
+                    amount: 79.95,
+                    lineKind: "principal",
+                    quantity: 1,
+                    product: null,
+                  },
+                ],
+                paymentEvidence: [],
+              },
+            ];
+      if (renderedBatch.length === 0)
+        throw new Error("Select a Run that imported purchases to audit.");
+      return {
+        result: await auditPurchaseImportBatch({
+          db,
+          runId,
+          renderedBatch,
+        }),
+      };
+    }
+    case "purchaseRepair": {
+      const { fixture } = aiSmokeInputs.purchaseRepair.parse(raw);
+      const { purchaseRepairRequest } =
+        await import("~/server/ai/prompts/purchase-import");
+      return {
+        result: await runStructuredFeature(
+          PURCHASE_IMPORT_REPAIR_FEATURE,
+          purchaseRepairRequest(purchaseCapture(fixture)),
+          { db, runId, operation: "smoke.purchaseRepair" },
+          structuredPorts,
+        ),
+      };
+    }
+    case "semanticQuery": {
+      const { fixture } = aiSmokeInputs.semanticQuery.parse(raw);
+      const [vector] = await embedTexts(
+        [fixture === "standard" ? "cordless drill" : "garden tool"],
+        {
+          db,
+          runId,
+          feature: SEMANTIC_QUERY_FEATURE.feature,
+          operation: "smoke.semanticQuery",
+        },
+      );
+      return {
+        result: {
+          dimensions: vector?.length ?? 0,
+          sample: vector?.slice(0, 5) ?? [],
+        },
+      };
+    }
+    case "entityEmbedding": {
+      const { productId } = aiSmokeInputs.entityEmbedding.parse(raw);
+      const id = await resolveOrThrow(db, "product", productId);
+      const product = await getProductByID(db, id);
+      if (!product) throw new Error("Product was not found.");
+      const [vector] = await embedTexts(
+        [`${product.name} ${product.manufacturer ?? ""}`.trim()],
+        {
+          db,
+          runId,
+          feature: ENTITY_EMBEDDING_FEATURE.feature,
+          operation: "smoke.entityEmbedding",
+          entity: { entityKind: "product", entityId: id },
+        },
+      );
+      return {
+        result: {
+          dimensions: vector?.length ?? 0,
+          sample: vector?.slice(0, 5) ?? [],
+        },
+      };
+    }
+  }
+}
+
+export async function runAiSmoke(
+  context: AuthenticatedStartOperationContext,
+  scenario: AiSmokeScenario,
+  raw: SmokeJson,
+  structuredPorts?: StructuredRunPorts,
+) {
+  // Reject malformed input before opening a Run. Every accepted attempt has a link.
+  aiSmokeInputs[scenario].parse(raw);
+  const spec = AI_SMOKE_CASES[scenario];
+  const runId = await ensureRun(
+    context.db,
+    { ...context.actorContext, runId: null },
+    // Unkeyed: each smoke attempt links its own Run.
+    { purpose: "ai_suggest" },
+  );
+  const [run] = await getDb(context.db)
+    .select({ shortcode: runTable.shortcode })
+    .from(runTable)
+    .where(eq(runTable.id, runId))
+    .limit(1);
+  if (!run) throw new Error("Smoke Run was not found after creation.");
+  const attempt = await finishSmokeAttempt(spec.feature, run.shortcode, () =>
+    runCase(context, scenario, raw, runId, structuredPorts),
+  );
+  const usages = await getDb(context.db)
+    .select({
+      feature: aiUsage.feature,
+      model: aiUsage.model,
+      cacheStatus: aiUsage.cacheStatus,
+      applicationCacheStatus: aiUsage.applicationCacheStatus,
+    })
+    .from(aiUsage)
+    .where(eq(aiUsage.runId, runId));
+  return withSmokeUsage(attempt, usages);
+}

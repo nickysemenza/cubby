@@ -19,7 +19,7 @@ import {
 } from "~/entity/components/record-mark";
 import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";
-import { LocationIcon } from "~/features/location/location-icons";
+import { LocationIcon } from "~/entity/presentation/location-icons";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";

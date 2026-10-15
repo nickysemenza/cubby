@@ -7,6 +7,7 @@ import type {
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
+import type { TableStateReturn } from "../../entity/table/use-table-state";
 import { useTableColumnLayout } from "./column-layout";
 import {
   type CubbyColumnCollection,
@@ -16,7 +17,6 @@ import {
   useCubbyTable,
 } from "./table-features";
 import type { ServerTotals } from "./table-meta";
-import type { TableStateReturn } from "./use-table-state";
 
 interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];

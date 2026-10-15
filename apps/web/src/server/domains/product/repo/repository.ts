@@ -10,8 +10,8 @@ import type { Database } from "~/server/db";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
-} from "~/server/domains/product/service/product-orchestration.service";
-import { createProductWriteActions } from "~/server/domains/product/service/product.service";
+} from "~/server/domains/product/repo/write/product-orchestration";
+import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,

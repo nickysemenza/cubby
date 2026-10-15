@@ -30,7 +30,7 @@ import {
   type InventoryValuations,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
-import { rollupLocationValuations } from "~/server/domains/location/service/location-valuation-rollup";
+import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 
 interface ValuationInventoryRow {

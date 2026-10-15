@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { type ComponentType, lazy, useEffect } from "react";
+import { type ComponentType, useEffect } from "react";
 
 import { entityDetailParams } from "~/entity/entities";
+import { featureRegistry } from "~/entity/feature-registry";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
@@ -15,7 +16,7 @@ export type DetailEditOverride<TRecord> = ComponentType<{
  * Recipe editing is a page-level workflow (`?edit=true` on the recipe route
  * swaps the whole body for `EditRecipeForm`), not a dialog.
  */
-function RecipeEditRedirect({
+export function RecipeEditRedirect({
   record,
   onClose,
 }: {
@@ -40,28 +41,19 @@ function RecipeEditRedirect({
  * contract, so they edit through their own operation. Product now opens the generic dialog too — its rich fields
  * (`unitMappings`, `labelNutrition`, external IDs) have specialized
  * renderers (`entity-primitive-fields.tsx`'s `controlRendererCoverage`).
+ * `features/registry.tsx` fills it.
  */
-export const detailEditOverrides = {
-  recipe: RecipeEditRedirect,
-  cookbook: lazy(() =>
-    import("~/features/cookbook/cookbook-edit-dialog").then((module) => ({
-      default: module.CookbookEditDialog,
-    })),
-  ),
-  image: lazy(() =>
-    import("~/features/image/image-edit-dialog").then((module) => ({
-      default: module.ImageEditDialog,
-    })),
-  ),
-} satisfies {
+export type DetailEditOverrideTable = {
   [E in GenericDetailEntity]?: DetailEditOverride<DetailRecordOf<E>>;
 };
 
 /** The edit override for one entity, read through the erased map. */
 export const detailEditOverrideFor = (
   entity: GenericDetailEntity,
-): DetailEditOverride<never> | undefined =>
-  Object.hasOwn(detailEditOverrides, entity)
-    ? // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys.
-      detailEditOverrides[entity as keyof typeof detailEditOverrides]
-    : undefined;
+): DetailEditOverride<never> | undefined => {
+  const detailEditOverrides = featureRegistry().detailEditOverrides;
+  if (!Object.hasOwn(detailEditOverrides, entity)) return undefined;
+  // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys; the
+  // erased override renders only with this same entity's record.
+  return detailEditOverrides[entity] as DetailEditOverride<never> | undefined;
+};

@@ -5,12 +5,20 @@ import { memo, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { Row, Stack } from "~/ui/layout";
-import { MarkdownText } from "~/ui/text/markdown";
 
+import {
+  formatMakes,
+  getIngredientName,
+  getServingBasis,
+  gramText,
+  recipeMacroSegments,
+} from "../../entity/presentation/recipe-utils";
+import { formatYield } from "../../entity/presentation/recipe-yield";
 import { IngredientComponentGrid } from "./ingredient-component-grid";
 import {
   buildDisplayQuantities,
@@ -29,14 +37,6 @@ import {
   type RecipeTreeRow,
   recipeTreeDisplayImage,
 } from "./recipe-tree";
-import {
-  formatMakes,
-  getIngredientName,
-  getServingBasis,
-  gramText,
-  recipeMacroSegments,
-} from "./recipe-utils";
-import { formatYield } from "./recipe-yield";
 import { StepNumberBadge, StubWarning, TreeRowNameLink } from "./spec-markers";
 
 // Prep sheet: the recipe broken into one block per component (every sub-recipe

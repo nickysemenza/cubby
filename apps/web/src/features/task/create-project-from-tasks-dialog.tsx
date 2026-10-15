@@ -8,8 +8,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
@@ -18,7 +19,6 @@ import {
   PlainDateField,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 const quickAddSchema = z.object({

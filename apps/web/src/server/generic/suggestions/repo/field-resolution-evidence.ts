@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
+import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import {
   getDb,
   notDeleted,
@@ -38,7 +39,6 @@ import {
   loadInventoryOwnershipTraces,
   inventoryOwnerResolution,
 } from "~/server/domains/inventory/repo/ownership";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/product-category-sql";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import {

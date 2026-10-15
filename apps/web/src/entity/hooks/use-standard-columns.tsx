@@ -12,8 +12,8 @@ import type { EntityActionSubject } from "~/entity/actions/entity-actions";
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
+import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
-import { createUnitMappingsColumn } from "~/features/units/unit-mappings-column";
 import {
   createActionsColumn,
   createImageColumn,
@@ -22,7 +22,7 @@ import {
   createTimestampColumn,
   multiSelectFilterFn,
   type RowLinkResolver,
-} from "~/ui/data-table/column-helpers";
+} from "~/entity/table/column-helpers";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
@@ -257,10 +257,14 @@ export function useStandardColumns<TData extends BaseListRow>({
       }),
       mappings:
         shouldUseMappings && hasMappings
-          ? createUnitMappingsColumn(columnHelper, mappingsFor, {
-              id: mappingsId,
-              enableSorting: false,
-            })
+          ? featureRegistry().components.createUnitMappingsColumn(
+              columnHelper,
+              mappingsFor,
+              {
+                id: mappingsId,
+                enableSorting: false,
+              },
+            )
           : null,
       createdAt: createTimestampColumn(columnHelper, "createdAt"),
       updatedAt: createTimestampColumn(columnHelper, "updatedAt"),

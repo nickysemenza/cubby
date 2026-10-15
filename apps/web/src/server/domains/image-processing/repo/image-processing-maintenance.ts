@@ -18,12 +18,8 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";
-import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
 
 import {
-  reclaimExpiredImageProcessingLeases,
-  findImageProcessingDispatchRepairs,
-  retryFailedImageProcessingJobs,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
@@ -34,7 +30,7 @@ import {
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000071";
 const DEFAULTS = { enabled: false, paused: true };
 
-const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
+export const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
   "describe_image",
   "identify_image",
   "subject_lift",
@@ -72,7 +68,7 @@ export async function mayClaimImageProcessingJob(
   return !(await readImageProcessingSettings(tx, { lock: true })).paused;
 }
 
-export async function updateImageProcessingSettings(
+export async function writeImageProcessingSettings(
   db: Database,
   settings: z.infer<typeof imageProcessingSettings>,
 ) {
@@ -91,16 +87,6 @@ export async function updateImageProcessingSettings(
       .set({ metadata: settings })
       .where(eq(appSettings.id, SETTINGS_ID));
   });
-  if (!settings.paused) {
-    const { publishImageProcessingWakeups } =
-      await import("~/server/domains/image-processing/service/image-processing.service");
-    await reclaimExpiredImageProcessingLeases(db);
-    await publishImageProcessingWakeups(
-      db,
-      await findImageProcessingDispatchRepairs(db, 100),
-    );
-  }
-  return settings;
 }
 
 export async function imageProcessingMaintenanceSummary(db: Database) {
@@ -136,32 +122,12 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
   return { settings, description, cutout };
 }
 
-export async function backfillImageProcessing(
+/** Shortcodes of uploaded images missing a current job of one of `kinds`. */
+export async function imagesMissingCurrentProcessing(
   db: Database,
-  input: {
-    batchSize: number;
-    retryFailures: boolean;
-    kinds?: readonly ImageProcessingJobKind[];
-  },
-) {
-  const kinds = input.kinds ?? ALL_IMAGE_PROCESSING_KINDS;
-  const { scheduleImageProcessingJobs, publishImageProcessingWakeups } =
-    await import("~/server/domains/image-processing/service/image-processing.service");
-  const settings = await readImageProcessingSettings(db);
-  if (settings.paused) return { scheduled: 0, paused: true };
-  const submission = await createImageProcessingSubmission(db);
-  if (input.retryFailures) {
-    const jobs = await retryFailedImageProcessingJobs(db, input.batchSize, {
-      submissionId: submission.id,
-      kinds,
-    });
-    await publishImageProcessingWakeups(db, jobs);
-    return {
-      scheduled: jobs.length,
-      paused: false,
-      submissionId: submission.publicId,
-    };
-  }
+  kinds: readonly ImageProcessingJobKind[],
+  batchSize: number,
+): Promise<string[]> {
   // A batch contains only images missing a current job of a requested kind.
   // Existing failed/skipped work is not silently reclassified or retried.
   const missing = kinds.map(
@@ -180,25 +146,12 @@ export async function backfillImageProcessing(
     WHERE i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED}
       AND i.sha256 IS NOT NULL AND i."contentType" LIKE 'image/%'
       AND (${sql.join(missing, sql` OR `)})
-    ORDER BY i."createdAt", i.id LIMIT ${input.batchSize}
+    ORDER BY i."createdAt", i.id LIMIT ${batchSize}
   `);
-  const rows = z.array(z.object({ shortcode: z.string() })).parse(result.rows);
-  const jobs: string[] = [];
-  for (const row of rows) {
-    const scheduled = await scheduleImageProcessingJobs(db, {
-      id: row.shortcode,
-      kinds,
-      publish: false,
-      submission,
-    });
-    jobs.push(...scheduled.jobIds);
-  }
-  await publishImageProcessingWakeups(db, jobs);
-  return {
-    scheduled: rows.length,
-    paused: false,
-    submissionId: submission.publicId,
-  };
+  return z
+    .array(z.object({ shortcode: z.string() }))
+    .parse(result.rows)
+    .map((row) => row.shortcode);
 }
 
 /**
@@ -239,20 +192,4 @@ export async function pruneExecutorlessWaitingAttempts(
     SELECT count(*)::int AS pruned FROM deleted`);
   return z.array(z.object({ pruned: z.number() })).parse(result.rows)[0]!
     .pruned;
-}
-
-export async function repairImageProcessingWork(db: Database) {
-  const {
-    cleanupExpiredImageProcessingOrphans,
-    publishImageProcessingWakeups,
-  } =
-    await import("~/server/domains/image-processing/service/image-processing.service");
-  await cleanupExpiredImageProcessingOrphans(db, 100);
-  await pruneExecutorlessWaitingAttempts(db, 500);
-  if ((await readImageProcessingSettings(db)).paused) return;
-  await reclaimExpiredImageProcessingLeases(db);
-  await publishImageProcessingWakeups(
-    db,
-    await findImageProcessingDispatchRepairs(db, 100),
-  );
 }

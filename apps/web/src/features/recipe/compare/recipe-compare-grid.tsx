@@ -10,6 +10,15 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 
+import {
+  RecipeSourceLink,
+  sourceLabel,
+} from "~/entity/presentation/recipe-source";
+import {
+  getServingBasis,
+  perUnitSuffix,
+} from "~/entity/presentation/recipe-utils";
+import { formatYield } from "~/entity/presentation/recipe-yield";
 import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/number-format";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
@@ -23,9 +32,6 @@ import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
 import { Image } from "~/ui/primitives/image";
 
 import { compactRound } from "../recipe-scaling-pct";
-import { RecipeSourceLink, sourceLabel } from "../recipe-source";
-import { getServingBasis, perUnitSuffix } from "../recipe-utils";
-import { formatYield } from "../recipe-yield";
 import {
   buildCompareRows,
   type CompareBasis,

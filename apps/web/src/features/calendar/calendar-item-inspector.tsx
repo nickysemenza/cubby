@@ -9,7 +9,8 @@ import { fieldClearing } from "~/entity/editing/field-clearing";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityEditSession } from "~/entity/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entity/entities";
-import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { PickerField } from "~/entity/forms/picker-field";
+import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { formatCurrency } from "~/lib/number-format";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
@@ -18,7 +19,6 @@ import {
   PlainDateField,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

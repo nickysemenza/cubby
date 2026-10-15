@@ -5,9 +5,9 @@ import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
 import { generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";
+import { deleteStoredObjects } from "~/server/clients/s3";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,

@@ -15,18 +15,18 @@ import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { startMailDiscovery } from "~/server/domains/purchase-import/gmail/discovery";
-import { productionMailTriage } from "~/server/domains/purchase-import/gmail/triage-model";
+import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
+import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
-import { ensureRun } from "./ensure-run";
+import { ensureRun } from "../repo/ensure-run";
 import {
   issueExecutionAuthorization,
   revokeExecutionAuthorization,
-} from "./execution-authorization";
-import { withRunExecutionAuthorization } from "./execution-context";
+} from "../repo/execution-authorization";
+import { withRunExecutionAuthorization } from "../repo/execution-context";
 import { paidResearchPreflight } from "./execution-transport";
 
 // A catalog cached by another integration file must not bypass this file's

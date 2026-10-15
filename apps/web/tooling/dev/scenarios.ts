@@ -6,7 +6,7 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
   markRunFailed,
   startPhotoInventoryRun,
-} from "~/server/domains/purchase-import/run-service";
+} from "~/server/domains/purchase-import/repo/run-service";
 import * as schema from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseEntityId } from "@cubby/schemas/identifiers";

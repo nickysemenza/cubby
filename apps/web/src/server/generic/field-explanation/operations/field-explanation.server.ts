@@ -23,7 +23,7 @@ import { z } from "zod";
 
 import { fieldExplanationContract } from "~/contracts/field-explanation.contract";
 import { getCookbookSummary } from "~/server/domains/cookbook/repo/cookbook";
-import { RecipeCostingService } from "~/server/domains/recipe/service/recipe-costing.service";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import {
   executeEntityAs,
   type EntityKernelContext,

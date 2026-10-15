@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Page } from "~/entity/page/page";
 import { AiUsagePage } from "~/features/ai/ai-usage-page";
 import { DecisionsCatalog } from "~/features/ai/decisions-catalog";
 import { suggestionReviewFiltersSchema } from "~/features/ai/suggestion-review-filters";
@@ -8,7 +9,6 @@ import { SuggestionReviewList } from "~/features/ai/suggestion-review-list";
 import { AiSmokeTest } from "~/features/developer/ai-smoke-test";
 import { pageTitle } from "~/lib/page-title";
 import { useTabParam } from "~/ui/hooks/use-tab-param";
-import { Page } from "~/ui/layout/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum(["decisions", "review", "smoke", "usage"]);

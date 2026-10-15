@@ -25,7 +25,7 @@ import {
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
-import { Page } from "~/ui/layout/page";
+import { Page } from "~/entity/page/page";
 import type { PageLayout } from "~/ui/layout/page-wrapper";
 import { Button } from "~/ui/primitives/button";
 import {

@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import { installFeatures } from "~/features/registry";
 import {
   entityGraph,
   recommendations,
@@ -12,6 +13,8 @@ import {
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
+
+installFeatures();
 
 const VENDOR_ID = testShortcode("vendor", "VEN-WORK");
 const IMAGE_ID = testShortcode("image", "IMG-WORK");

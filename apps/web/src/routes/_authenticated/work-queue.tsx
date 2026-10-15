@@ -2,10 +2,10 @@ import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { RoutePending } from "~/entity/navigation/route-pending";
 import { WorkQueuePage } from "~/features/work-queue/work-queue-page";
 import { pageTitle } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { RoutePending } from "~/ui/feedback/route-pending";
 
 export const Route = createFileRoute("/_authenticated/work-queue")({
   validateSearch: workQueueHouseholdInput

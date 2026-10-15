@@ -18,9 +18,9 @@ import {
   requiredFieldModel,
 } from "~/entity/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entity/entities";
+import { PickerField } from "~/entity/forms/picker-field";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
-import { PickerField } from "~/ui/forms/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

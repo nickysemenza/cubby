@@ -7,11 +7,11 @@ import { DashboardCard } from "~/ui/layout/dashboard-card";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { AuditLogList } from "../audit-log/audit-log-list";
+import { AuditLogList } from "../../entity/audit-log/audit-log-list";
 import type {
   AuditLogListOperations,
   AuditLogSession,
-} from "../audit-log/audit-log-list";
+} from "../../entity/audit-log/audit-log-list";
 
 export interface RecentActivityFeedOperations {
   readonly auditLog: AuditLogListOperations;

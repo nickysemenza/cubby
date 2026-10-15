@@ -17,6 +17,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
@@ -37,7 +38,6 @@ import {
 } from "~/ui/primitives/dialog";
 import { Image } from "~/ui/primitives/image";
 import { Textarea } from "~/ui/primitives/textarea";
-import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { workStateLabel } from "./image-processing-state";
 

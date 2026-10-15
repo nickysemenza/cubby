@@ -12,6 +12,7 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
+import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrency } from "~/lib/number-format";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -24,8 +25,12 @@ import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { sectionRuleClass } from "~/ui/primitives/section-rule";
-import { MarkdownText } from "~/ui/text/markdown";
 
+import {
+  buildRecipeKicker,
+  getEffectiveServings,
+  getIngredientName,
+} from "../../entity/presentation/recipe-utils";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -35,11 +40,6 @@ import {
 } from "./ingredient-quantities";
 import { RecipeHero } from "./recipe-hero";
 import { RecipeInstructions } from "./recipe-instructions";
-import {
-  buildRecipeKicker,
-  getEffectiveServings,
-  getIngredientName,
-} from "./recipe-utils";
 import { SectionHeading } from "./section-heading";
 
 // Macro split for the vitals card: each macro's color (warm chart ramp) + its

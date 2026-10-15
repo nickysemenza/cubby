@@ -1,8 +1,8 @@
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
+import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
 import { product } from "~/server/db/schema";
-import { expenseAcquisitionSql } from "~/server/domains/expense/repo/expense-aggregate-sql";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { orphanedProductCondition } from "~/server/domains/product/repo/orphan-condition";
 import { derivedPriceFilterSql } from "~/server/domains/product/repo/pricing";

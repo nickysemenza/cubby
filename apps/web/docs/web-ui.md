@@ -52,7 +52,7 @@ layout repeats or encodes a real decision. `gap` is for flex/grid siblings;
 `space-y` is for plain block stacks. Dense exceptions are rare `/* tight */`.
 
 Every value choice renders through the one `Picker`
-(`ui/combobox/picker.tsx`); `PickerField` (`ui/forms/form-utils/picker-field.tsx`) is
+(`ui/combobox/picker.tsx`); `PickerField` (`entity/forms/picker-field.tsx`) is
 its only react-hook-form binding. Native `<select>` (`cubby/no-native-select`)
 and raw Base UI combobox/select/toggle-group or the toggle-group primitive
 (`cubby/no-raw-value-control`) are banned outside it. Choose the mode

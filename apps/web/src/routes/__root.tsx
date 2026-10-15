@@ -18,11 +18,14 @@ import { createClientOnlyFn } from "@tanstack/react-start";
 import * as React from "react";
 import { z } from "zod";
 
+import { BottomNav } from "~/entity/navigation/bottom-nav";
 import {
   loadCommandMenu,
   markCommandMenuOpen,
   preloadCommandMenu,
 } from "~/features/command-menu/command-menu-loader";
+import { AuthenticatedAppShell } from "~/features/shell/authenticated-app-shell";
+import { MainNav } from "~/features/shell/main-nav";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { buildMetadataQueryOptions } from "~/lib/build-metadata";
@@ -39,9 +42,6 @@ import { RouteNotFound } from "~/ui/feedback/route-not-found";
 import { AppFooter } from "~/ui/footer";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
-import { AuthenticatedAppShell } from "~/ui/navigation/authenticated-app-shell";
-import { BottomNav } from "~/ui/navigation/bottom-nav";
-import { MainNav } from "~/ui/navigation/main-nav";
 import { Toaster } from "~/ui/primitives/sonner";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";

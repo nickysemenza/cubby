@@ -27,7 +27,7 @@ import {
   getEntityEmbeddingDeletedAtForRef,
   seedEntityEmbedding,
 } from "~/server/generic/embedding/repo/entity-embedding";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,

@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
 
-import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/service";
+import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,

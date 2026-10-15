@@ -18,16 +18,16 @@ import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadRecordEmojiReferences } from "~/server/entity-kernel/repo/entity-emoji";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
-import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/semantic/constants";
+import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
+import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
-} from "~/server/generic/embedding/semantic/embeddings";
-import { normalizeSearchText } from "~/server/generic/embedding/semantic/text";
+} from "~/server/generic/embedding/service/semantic/embeddings";
 import {
   productionVectorStore,
   type VectorStorePort,
-} from "~/server/generic/embedding/semantic/vector-store";
+} from "~/server/generic/embedding/service/semantic/vector-store";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
 import {
   buildPrefixTsQuery,

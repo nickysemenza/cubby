@@ -4,10 +4,10 @@ import type { InventoryItemForTree } from "@cubby/schemas/location";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
-import { stockOnly } from "~/server/domains/inventory/repo/placement";
 
 /**
  * The one loader behind a location payload's `inventoryItems` AND its

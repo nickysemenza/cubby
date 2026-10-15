@@ -7,13 +7,13 @@ import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { renderOptionCell } from "~/entity/table/column-helpers";
 import {
   ContributionGapsTable,
   MoneyCell,
 } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { renderOptionCell } from "~/ui/data-table/column-helpers";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";

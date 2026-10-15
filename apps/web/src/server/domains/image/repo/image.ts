@@ -132,11 +132,11 @@ import {
   loadImageProcessingIssues,
 } from "~/server/domains/image-processing/repo/image-processing-issues";
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
-import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import type {
   DeriveImageCaptureCurrent as ImageCaptureStateRow,
   DeriveImageCaptureSighting as SightingCaptureRow,
-} from "~/server/domains/image/service/image-capture-derivation";
+} from "~/server/domains/image/repo/image-capture-derivation";
+import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { provenanceEvidenceLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";

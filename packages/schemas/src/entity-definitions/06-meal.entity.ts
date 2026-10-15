@@ -20,7 +20,7 @@ export default defineEntity({
   names: { singular: "Meal", plural: "Meals" },
   route: {
     listColumns: {
-      module: "~/entity/list-columns/meal",
+      module: "~/features/meal/list-columns",
       export: "mealListOverride",
     },
     basePath: "meals",

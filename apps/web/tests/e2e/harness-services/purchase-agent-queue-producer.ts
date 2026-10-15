@@ -2,7 +2,7 @@ import type { DurableObjectNamespace } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { dispatchInputForEvent } from "../../../src/server/domains/purchase-agent/queue-dispatch";
+import { dispatchInputForEvent } from "../../../src/server/domains/purchase-agent/service/queue-dispatch";
 import type { PurchaseImportRunAgent } from "../../../src/server/worker-bindings";
 
 export default {

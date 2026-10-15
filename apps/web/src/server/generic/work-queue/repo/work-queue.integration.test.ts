@@ -11,13 +11,13 @@ import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { runFinding, assessmentState as suggestion } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   readRecordWorkQueue,
   readWorkQueue,
-} from "~/server/generic/work-queue/repo/work-queue";
+} from "~/server/generic/work-queue/service/work-queue-read";
 import {
   createProductFixture,
   makeProductInput,

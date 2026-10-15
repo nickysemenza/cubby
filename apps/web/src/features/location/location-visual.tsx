@@ -8,8 +8,8 @@ import { cn } from "~/lib/utils";
 import { Badge } from "~/ui/primitives/badge";
 import { Image } from "~/ui/primitives/image";
 
-import { LocationIcon } from "./location-icons";
-import { resolveLocationVisual } from "./location-visual-resolver";
+import { LocationIcon } from "../../entity/presentation/location-icons";
+import { resolveLocationVisual } from "../../entity/presentation/location-visual-resolver";
 
 type LocationVisualVariant = "hero" | "card" | "compact";
 

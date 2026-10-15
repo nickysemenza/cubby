@@ -218,7 +218,7 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
       progressive: {
         enrich: (
           ids: string[],
-          groups: import("~/ui/hooks/progressive-list").ListReadGroup[],
+          groups: import("~/entity/hooks/progressive-list").ListReadGroup[],
           signal: AbortSignal,
         ) => enrichment.call({ entity, ids, groups }, { signal }),
         summary: async (signal: AbortSignal) => {

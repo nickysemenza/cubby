@@ -24,8 +24,8 @@ import {
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
-import { PhotoGrid } from "./photo-grid";
-import { PhotoViewer } from "./photo-viewer";
+import { PhotoGrid } from "../../entity/entity-media/photo-grid";
+import { PhotoViewer } from "../../entity/entity-media/photo-viewer";
 import { type UploadedImage, useImageUpload } from "./use-image-upload";
 
 /**

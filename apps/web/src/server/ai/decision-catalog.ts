@@ -32,7 +32,6 @@ import {
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,
-  PRODUCT_IDENTITY_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
@@ -42,6 +41,7 @@ import {
   type ResolvedBasis,
 } from "~/server/ai/field-suggest/registry";
 import { prunePrompt } from "~/server/ai/field-suggest/suggest-fields";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import { selectionPrompt } from "~/server/ai/selection";
 import {
   renderSettlementSubject,

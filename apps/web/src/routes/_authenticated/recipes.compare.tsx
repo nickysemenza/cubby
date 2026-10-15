@@ -13,19 +13,19 @@ import { z } from "zod";
 import { entityDetailFor } from "~/entity/entity-detail";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
+import { Page } from "~/entity/page/page";
+import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import {
+  getEffectiveServings,
+  getIngredientName,
+} from "~/entity/presentation/recipe-utils";
 import {
   type ComparedRecipe,
   RecipeCompareGrid,
 } from "~/features/recipe/compare/recipe-compare-grid";
-import {
-  getEffectiveServings,
-  getIngredientName,
-} from "~/features/recipe/recipe-utils";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
-import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
-import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent } from "~/ui/primitives/card";
 

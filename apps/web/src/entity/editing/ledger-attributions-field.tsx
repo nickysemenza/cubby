@@ -11,9 +11,9 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { Picker } from "~/entity/picker/picker";
+import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { Picker } from "~/ui/combobox/picker";
-import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 

@@ -3,8 +3,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { describe, expect, it } from "vitest";
 
+import { PickerField } from "../../entity/forms/picker-field";
 import { UnifiedTextField } from "./form-utils";
-import { PickerField } from "./form-utils/picker-field";
 
 interface Values {
   name: string;

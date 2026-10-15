@@ -12,7 +12,7 @@ import { image, imageProcessingJob } from "~/server/db/schema";
 import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/http/direct-socket-paths";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { updateImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { updateImageProcessingSettings } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { persistAppleImageDescriptionSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";

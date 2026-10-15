@@ -11,7 +11,8 @@ import {
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/service/expense-pricing.service";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
+import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import {
   getPurchaseByShortcode,
   linkExpensesToPurchase,
@@ -37,7 +38,7 @@ import { startSplitDraft } from "~/server/domains/purchase/repo/purchase-split-d
 import {
   aiCallRunInput,
   ensureRun,
-} from "~/server/domains/run/service/ensure-run";
+} from "~/server/domains/run/repo/ensure-run";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -77,7 +78,12 @@ export const splitExpenseWorkflow = bindWorkflow(
     "purchase.split",
   )
     .commit("split", ({ context }, { input }) =>
-      splitExpense(context.db, input, context.actorContext),
+      splitExpense(
+        context.db,
+        input,
+        context.actorContext,
+        expenseLineRoleClassifier(),
+      ),
     )
     .effect("references", async ({ context }, { input, split }) => {
       const originalRef = await resolveShortcode(context.db, input.expenseId);
@@ -216,7 +222,12 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   splitStart: async (context, input) =>
     startSplitDraft(await loadSplitOriginal(context.db, input.expenseId)),
   checkSplit: (context, input) =>
-    checkSplitFor(context.db, input, context.actorContext),
+    checkSplitFor(
+      context.db,
+      input,
+      context.actorContext,
+      expenseLineRoleClassifier(),
+    ),
   linkExpenseCandidates: (context, input) =>
     listLinkExpenseCandidates(context.db, input),
   checkLinkExpenses: (context, input) =>

@@ -58,8 +58,8 @@ export class MailDiscoveryWorkflow
             failMailDiscovery,
           },
         ] = await Promise.all([
-          import("~/server/domains/purchase-import/gmail/mail-workflows"),
-          import("~/server/domains/purchase-import/gmail/discovery"),
+          import("~/server/domains/purchase-import/operations/gmail/mail-workflows"),
+          import("~/server/domains/purchase-import/operations/gmail/discovery"),
         ]);
         await runMailDiscovery(durableSteps(step), {
           begin: () => withDb((db) => beginMailDiscovery(db, params)),
