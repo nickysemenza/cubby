@@ -1,3 +1,4 @@
+import { mailboxClassification } from "@cubby/schemas/mailbox-research";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -5,6 +6,7 @@ import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { emailClassificationObservation, feedback } from "~/server/db/schema";
+import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -160,14 +162,21 @@ describe("Email review quality planning", () => {
           assessmentId: assessment.id,
           operationId: `synthetic-review-${scenario}`,
           verdict:
-            scenario === "missing-correction" || scenario === "corrected"
+            scenario === "missing-correction" ||
+            scenario === "corrected" ||
+            scenario === "resolution"
               ? "wrong"
               : "correct",
           correction:
-            scenario === "corrected" || scenario === "uncertain-correction"
+            scenario === "corrected" ||
+            scenario === "uncertain-correction" ||
+            scenario === "resolution"
               ? {
                   present: true,
-                  value: scenario === "corrected" ? "unrelated" : "uncertain",
+                  value:
+                    scenario === "corrected" || scenario === "resolution"
+                      ? "unrelated"
+                      : "uncertain",
                 }
               : { present: false },
           intent: "history",
@@ -197,10 +206,19 @@ describe("Email review quality planning", () => {
           });
       const result = await getDb(ctx.db).execute(sql`SELECT
         ${gapCondition("email", "email_relevance_unreviewed")} AS scalar,
-        ${gapCondition("email", "email_relevance_unreviewed", undefined, qualityFilterContext("email"))} AS bulk
+        ${gapCondition("email", "email_relevance_unreviewed", undefined, qualityFilterContext("email"))} AS bulk,
+        ${emailMemberClassificationSql()} AS "scalarClassification",
+        dq_filter."memberClassification" AS "bulkClassification"
         FROM ${qualityFilterSource("email")} WHERE "Email".id = ${message.id}`);
       const [row] = z
-        .array(z.object({ scalar: z.boolean(), bulk: z.boolean() }))
+        .array(
+          z.object({
+            scalar: z.boolean(),
+            bulk: z.boolean(),
+            scalarClassification: mailboxClassification.nullable(),
+            bulkClassification: mailboxClassification.nullable(),
+          }),
+        )
         .parse(result.rows);
       const gap = [
         "missing-correction",
@@ -208,9 +226,21 @@ describe("Email review quality planning", () => {
         "evaluation",
         "stale",
       ].includes(scenario);
+      const classification = gap
+        ? null
+        : scenario === "corrected"
+          ? "unrelated"
+          : scenario === "uncertain-correction"
+            ? "uncertain"
+            : "related";
       expect({ scenario, result: row }).toEqual({
         scenario,
-        result: { scalar: gap, bulk: gap },
+        result: {
+          scalar: gap,
+          bulk: gap,
+          scalarClassification: classification,
+          bulkClassification: classification,
+        },
       });
     }
   });

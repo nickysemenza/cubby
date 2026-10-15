@@ -26,6 +26,8 @@ export const emailFeedbackObservationIdSql = (label: SQL) => sql<
  SELECT a.subject->>'observationId' FROM "Assessment" a
  WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
 )`;
+/** A supplied Assessment alias must already join this Feedback by id and
+ * restrict its family to email_relevance. */
 export const emailFeedbackClassificationSql = (
   label: SQL,
   assessment?: SQL,
@@ -160,9 +162,17 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
  * The member's own Relevance for the current original: a resolution, else the
  * owner's latest independent review label on a prediction of this checksum.
  */
-export const emailMemberClassificationSql =
-  () => sql<MailboxClassification | null>`
-  CASE WHEN "Email"."classificationStage" = ${resolution} THEN "Email"."classification" ELSE (
+const memberClassificationWithResolutionSql = (email: SQL, reviewed: SQL) =>
+  sql<MailboxClassification | null>`CASE
+    WHEN ${email}."classificationStage" = ${resolution} THEN ${email}.classification
+    ELSE ${reviewed} END`;
+
+// Keep ownership/checksum/latest-valid policy aligned with emailMemberReviewReadSql;
+// email-review-quality.integration.test.ts compares their returned values.
+export const emailMemberClassificationSql = () =>
+  memberClassificationWithResolutionSql(
+    sql`"Email"`,
+    sql`(
     SELECT ${emailFeedbackClassificationSql(sql`label`)}
     FROM "Feedback" label
     INNER JOIN "EmailClassificationObservation" prediction ON prediction."id"::text = ${emailFeedbackObservationIdSql(sql`label`)}
@@ -173,8 +183,8 @@ export const emailMemberClassificationSql =
       AND ${emailFeedbackHasClassificationSql(sql`label`)}
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
-  ) END
-`;
+  )`,
+  );
 /** The latest rule, decision-model or relevance-model result for the current original. */
 const emailAutomatedClassificationSql = () => sql`
   COALESCE(
@@ -199,7 +209,10 @@ export const emailLinkedSql = () =>
 
 /** Resolve immutable Feedback lineage once before the mailbox join. Without
  * this boundary, join reordering can repeat the Assessment lookup for every
- * Email × Feedback pair, even though each review names one Assessment. */
+ * Email × Feedback pair, even though each review names one Assessment.
+ * Page IDs constrain the prediction join; bounded hydration still resolves
+ * immutable Feedback lineage once, outside that join. Keep policy aligned with
+ * emailMemberClassificationSql; email-review-quality.integration.test.ts pins parity. */
 const emailMemberReviewReadSql = (ids?: SQL) => sql`
   WITH eligible_feedback AS MATERIALIZED (
     SELECT label.id, label."createdAt", label."actorUserId",
@@ -228,8 +241,7 @@ const emailMemberReviewReadSql = (ids?: SQL) => sql`
  * repeated imports or duplicate sources from multiplying Email rows. */
 export const emailQualityReadSql = (ids?: SQL) => sql`
   SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
-    CASE WHEN candidate."classificationStage" = ${resolution} THEN candidate.classification
-      ELSE member_review.classification END AS "memberClassification"
+    ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification"
   FROM "Email" candidate
   LEFT JOIN (${emailMemberReviewReadSql(ids)}) member_review ON member_review."entityId" = candidate.id
   LEFT JOIN (

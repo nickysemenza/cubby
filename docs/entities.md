@@ -1206,7 +1206,7 @@ and emit no migration.
 
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
-score sorting, and bounded hydration join a deduplicated source-membership
+score sorting, and bounded hydration join a shared, deduplicated Email quality
 relation before evaluating the check, so ordinary join planning can spill rather
 than rescanning a source set per Email when a hashed SubPlan exceeds memory.
 The data-quality registry owns both the relation and the predicate context;
