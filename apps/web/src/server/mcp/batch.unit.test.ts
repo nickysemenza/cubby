@@ -1,7 +1,9 @@
+import { entityRecordSourceInputs } from "@cubby/schemas/entity-source";
 import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
@@ -60,6 +62,50 @@ function createBatchServer(): McpServer {
 }
 
 describe("MCP batch actions", () => {
+  it("attributes a batch with parsed Source dates before invoking its members", async () => {
+    const server = new McpServer({ name: "batch-test", version: "1.0.0" });
+    const input = z.object({
+      entityId: z.string(),
+      sources: entityRecordSourceInputs,
+    });
+    const run = vi.fn(
+      async (_context: unknown, item: z.output<typeof input>) => ({
+        id: item.entityId,
+        value: 1,
+      }),
+    );
+    registerTestTool(server, {
+      name: "attach_files",
+      kind: "mutation",
+      input,
+      output: itemOutputSchema,
+      spec: {
+        batch: { reference: (item) => itemOutputSchema.parse(item).id },
+        telemetryEntity: MCP_TOOLS.image.actions.attach_files.telemetryEntity,
+      },
+      run,
+    });
+
+    const response = await callMcpTool(server, "attach_files", {
+      action: "run",
+      items: [
+        {
+          entityId: "PRD-4K7M",
+          sources: [
+            { quote: "Exact item", observedAt: "2026-07-20T12:00:00.000Z" },
+          ],
+        },
+      ],
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[1].sources[0].observedAt).toBeInstanceOf(Date);
+    expect(batchResultSchema.parse(response.structuredContent).summary).toEqual(
+      { requested: 1, succeeded: 1, failed: 0 },
+    );
+  });
+
   it("preserves distinct capture references through the MCP batch output schema", async () => {
     const capture = vi.fn(() => crypto.randomUUID());
     const response = await withErrorReporting(

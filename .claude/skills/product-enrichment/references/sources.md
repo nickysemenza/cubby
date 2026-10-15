@@ -133,11 +133,13 @@ the whole file.
   width/height/crop params). Bare-tool and kit SKUs have separate pages and
   UPCs; outlet `VN`/`VNM` variants have none; ended eBay listings expose no MPN
   or barcode.
-- Kit-packed tools are the non-`B` model; the standalone retail SKU is the `B`
-  variant — use it for image and HD identifiers, keep the kit's model, and do
-  not copy its UPC.
-- Garden-center nursery SKUs (plants, herbs) return zero results online — local
-  store stock with no listing; leave them imageless with a note.
+- A bare-tool suffix can distinguish a retail package from a kit component;
+  verify the maker's exact component model instead of deriving it by removing
+  a suffix. A kit model or multipack SKU identifies its package, not each part.
+- Garden-center stock can be local or have competing public size variants.
+  Inspect exact listings and structured SKUs before declaring one unavailable.
+  Equivalent labels such as "1 gal" and "1 gallon" can name different SKUs;
+  retain that ambiguity until the original or label selects one.
 - Milwaukee near-identical models (PACKOUT wall plates one digit apart) are
   distinct products; HD import titles often omit "PACKOUT". Search by
   `modelFilter`.
@@ -158,8 +160,8 @@ the whole file.
   or item number and needs a real navigate + ~4 s wait (fetch returns
   pre-render HTML). Proximity to `"itemNumber":"<n>"` in embedded JSON is a last
   resort that can capture a **neighbour** — corroborate with a page title,
-  model or UPC prefix. A sibling SKU with adjacent item numbers can rescue an
-  unverifiable one.
+  model or UPC prefix. Adjacent item numbers and sibling listings are discovery
+  hints, not proof of the purchased SKU.
 - Regex `Model\s*#\s*(\S+)` grabs the next word (`…Best`, `…Shop`); strip it.
 - Blue Hawk → Project Source in place under the same item number; house brands
   exist nowhere else. Home Depot is the fallback for national brands only.
@@ -190,6 +192,14 @@ the attachment workflow sniffs). The filename often encodes the maker SKU — a 
 a `model` value. A store's `/products.json?limit=250` is the whole catalog with
 per-variant `featured_image`; parse it in the in-app browser (Chrome's JSON
 viewer mangles `innerText`).
+
+Before concluding that no identifier is published, inspect the exact product's
+`.js` or catalog JSON and embedded structured variant data for `sku` and
+`barcode`. Match options (colour, size, generation and pack quantity) to the
+original order; a default selected variant proves only itself. A numeric
+Shopify variant `id` is an internal handle, not a retailer SKU. A supplier family
+or configurator number does not establish a maker model. Preserve competing
+variants as unresolved rather than recording an unavailable exception.
 
 ## IKEA
 

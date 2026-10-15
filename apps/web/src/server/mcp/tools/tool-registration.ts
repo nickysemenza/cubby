@@ -424,8 +424,10 @@ type CompiledAction = {
 };
 
 const entityOf = z.object({ entity: z.string() });
-const batchItems = z.object({ items: z.array(z.json()) });
-const commandItems = z.object({ commands: z.array(z.json()) });
+// Inputs have already been parsed into domain values (including Dates).
+// JSON validation here would discard the entire batch before attribution.
+const batchItems = z.object({ items: z.array(z.unknown()) });
+const commandItems = z.object({ commands: z.array(z.unknown()) });
 
 /** The first item of a batch input, whose entity names the call for telemetry. */
 const firstItem = (input: ActionValue) =>
