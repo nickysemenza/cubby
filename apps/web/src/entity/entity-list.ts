@@ -1,5 +1,6 @@
 import type { ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { z } from "zod";
 
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
@@ -251,10 +252,13 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
   return {
     listQueryPlan,
     infiniteQueryOptions: baseInfiniteQueryOptions,
-    /** Complete vocabularies need their declared fields, not full media/quality hydration. */
-    projectedInfiniteQueryOptions: (
+    /** Complete vocabularies need their declared fields, not full media/quality hydration.
+     * Base page size and the enrichment schema's ID cap must stay aligned:
+     * each page is completed by one enrichment call. */
+    projectedInfiniteQueryOptions: <Schema extends z.ZodObject>(
       input: EntityListParams<E>,
       groups: readonly ListEnrichmentGroup[],
+      schema: Schema,
     ) => {
       const selected = [...new Set(groups)].sort();
       const firstPage = {
@@ -263,9 +267,23 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
       };
       const firstPlan = listQueryPlan(firstPage);
       const baseKey = firstPlan.queryKey;
-      const payload = { ...baseKey[2], projection: selected };
+      const payload = {
+        ...baseKey[2],
+        projection: {
+          groups: selected,
+          fields: Object.keys(schema.shape).sort(),
+        },
+      };
       type BasePage = Awaited<ReturnType<typeof firstPlan.execute>>;
-      type ProjectedPage = Omit<BasePage, "items"> & { items: ListReadRow[] };
+      type ProjectedPage = Omit<BasePage, "items"> & {
+        items: z.output<Schema>[];
+      };
+      const parsePage = (
+        page: Omit<BasePage, "items"> & { items: ListReadRow[] },
+      ): ProjectedPage => ({
+        ...page,
+        items: schema.array().parse(page.items),
+      });
       return infiniteQueryOptions({
         queryKey: infiniteOperationQueryKey([baseKey[0], baseKey[1], payload]),
         meta: firstPlan.meta,
@@ -286,7 +304,8 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
           const requested = selected.filter((id) =>
             page.deferredGroups.some((group) => group.id === id),
           );
-          if (page.items.length === 0 || requested.length === 0) return page;
+          if (page.items.length === 0 || requested.length === 0)
+            return parsePage(page);
           const response = await plan.progressive.enrich(
             page.items.map((row) => row.id),
             requested,
@@ -302,12 +321,12 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
               patches.set(row.id, { ...patches.get(row.id), ...row });
           }
           const missing = new Set(response.missingIds);
-          return {
+          return parsePage({
             ...page,
             items: page.items
               .filter((row) => !missing.has(row.id))
               .map((row) => ({ ...row, ...patches.get(row.id) })),
-          };
+          });
         },
       });
     },

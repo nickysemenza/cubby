@@ -8,17 +8,15 @@ import { flattenUniquePageItems } from "./infinite-page-utils";
 import { useLoadAllPages } from "./useAllEntityRecords";
 import { useHydratedLoading } from "./useHydrated";
 
-const vocabulary = productCategoryOut
-  .pick({
-    id: true,
-    name: true,
-    parentId: true,
-    aliases: true,
-    description: true,
-    path: true,
-    feature: true,
-  })
-  .array();
+const vocabulary = productCategoryOut.pick({
+  id: true,
+  name: true,
+  parentId: true,
+  aliases: true,
+  description: true,
+  path: true,
+  feature: true,
+});
 const groups = ["relations"] as const;
 const input = {
   filters: {},
@@ -33,11 +31,12 @@ export function useProductCategories() {
     entityListBaseFor("productCategory").projectedInfiniteQueryOptions(
       input,
       groups,
+      vocabulary,
     ),
   );
   useLoadAllPages(query);
   const categories = useMemo(
-    () => vocabulary.parse(flattenUniquePageItems(query.data?.pages)),
+    () => flattenUniquePageItems(query.data?.pages),
     [query.data],
   );
   return {
