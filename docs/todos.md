@@ -638,6 +638,16 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Tasks, projects & garden
 
+- 🟢 🐛 **Read Tasks without a resolved trade.** A Task whose stored trade,
+  eligible parent trade, and Project default are all unset produces SQL null,
+  but `hydrateTaskInheritanceRows` parses it with the nonnullable trade enum;
+  the manifest's Task read validation is also nonnullable while create/update
+  accept null. This crashes reads and field explanations for an otherwise valid
+  Task. Carry the unresolved value through the declaration, hydration, generated
+  clients, and downstream consumers; retain a real create/read/explain regression
+  for a synthetic Task with no eligible default. Do not substitute an invented
+  `other` trade. This requires a coordinated read-contract and consumer sweep.
+
 - 🔭 ✨ **Grow-to-table loop.** Beds and plantings, harvests received into pantry
   inventory, and what the yard can supply this week.
 

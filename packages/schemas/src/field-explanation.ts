@@ -117,6 +117,10 @@ export const fieldExplanationOutput = z.object({
        */
       chain: reportRecordsBlock,
       fallbackSource: fieldResolutionSourceSchema.nullable(),
+      /** Null effective values can mean different things; the server owns that distinction. */
+      outcome: z.enum(["resolved", "mixed", "unset", "blocked"]).optional(),
+      /** Independent contributors, each with its own precedence chain. */
+      contributors: z.array(reportRecordsBlock).optional(),
     })
     .nullable()
     .optional(),

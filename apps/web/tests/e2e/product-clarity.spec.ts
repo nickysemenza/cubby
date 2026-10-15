@@ -477,7 +477,17 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
   await expect(popover.getByText("Inherited", { exact: true })).toBeVisible();
   // The chain reads nearest source first: this category unset, its parent used.
   await expect(
-    popover.getByText("Inherits from", { exact: true }),
+    popover.getByRole("heading", { name: "Resolution order", exact: true }),
+  ).toBeVisible();
+  await expect(
+    popover.getByText("This product category", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    popover
+      .getByRole("listitem")
+      .locator(
+        `a[href="/product-categories/${taxonomyShortcode("household")}"]`,
+      ),
   ).toBeVisible();
   await expect(popover.getByText("Not set", { exact: true })).toBeVisible();
   await expect(popover.getByText("Used", { exact: true })).toBeVisible();

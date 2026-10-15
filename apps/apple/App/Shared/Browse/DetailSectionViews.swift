@@ -538,7 +538,9 @@ struct FieldExplanationLabel: View {
                 } else if let resolved {
                     explanationSectionLabel("What this means")
                     if let interpretation = resolved.interpretation {
-                        Text(interpretation.result).font(.headline)
+                        if resolved.resolution == nil {
+                            Text(interpretation.result).font(.headline)
+                        }
                         Text(interpretation.summary).font(.body)
                         ForEach(interpretation.caveats, id: \.self) { caveat in
                             Text(caveat).font(.callout).foregroundStyle(.secondary)
@@ -549,7 +551,8 @@ struct FieldExplanationLabel: View {
                                 Text(step).font(.callout)
                             }
                         }
-                    } else if let value = try? JSONValue(encoding: resolved.value) {
+                    } else if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value)
+                    {
                         if let code = value.stringValue,
                             let option = field.valueOptions?.first(where: { $0.value == code })
                         {
@@ -565,19 +568,21 @@ struct FieldExplanationLabel: View {
                             intentional: field.resolution?.redundancy == "intentional")
                         HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                             Text(
-                                display(resolution.value)
-                                    ?? FieldResolutionPresentation.emptyLabel(resolution, field: field)
+                                resolutionValueLabel(resolved)
                             )
                             .font(.fieldGuideData.weight(.semibold))
                             .accessibilityIdentifier("field.explanation.effective-value")
                             Spacer(minLength: FieldGuideTokens.Space.sm)
-                            Label(state.label, systemImage: state.systemImage)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(
-                                    state.tone == .redundant
-                                        ? FieldGuideTokens.warning : FieldGuideTokens.graphiteSecondary
-                                )
-                                .accessibilityIdentifier("field.explanation.state")
+                            Label(
+                                state.label,
+                                systemImage: state.systemImage
+                            )
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(
+                                state.tone == .redundant
+                                    ? FieldGuideTokens.warning : FieldGuideTokens.graphiteSecondary
+                            )
+                            .accessibilityIdentifier("field.explanation.state")
                         }
                         if resolution.mode == .inherit || resolution.mode == .allocated,
                             let source = resolution.sourceEntity,
@@ -655,11 +660,28 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
-                    if let chain = resolved.resolutionEvidence?.chain, !chain.rows.isEmpty {
+                    if let evidence = resolved.resolutionEvidence {
                         Divider()
-                        if chain.title == nil { explanationSectionLabel("Resolution order") }
-                        RecordsBlockView(records: ReportPresentation.records(chain), host: nil)
+                        explanationSectionLabel(evidence.chain.title ?? "Resolution order")
+                        resolutionSteps(evidence.chain)
                             .accessibilityIdentifier("field.explanation.chain")
+                        if let contributors = evidence.contributors, !contributors.isEmpty {
+                            if !evidence.chain.rows.isEmpty || !evidence.chain.empty.isEmpty {
+                                explanationSectionLabel("Contributing records")
+                            }
+                            ForEach(Array(contributors.prefix(6).enumerated()), id: \.offset) {
+                                _, contributor in
+                                resolutionContributor(contributor)
+                            }
+                            if contributors.count > 6 {
+                                DisclosureGroup("Show \(contributors.count - 6) more contributors") {
+                                    ForEach(Array(contributors.dropFirst(6).enumerated()), id: \.offset) {
+                                        _, contributor in
+                                        resolutionContributor(contributor)
+                                    }
+                                }
+                            }
+                        }
                     }
                     if !resolved.verifications.isEmpty {
                         Divider()
@@ -793,6 +815,66 @@ struct FieldExplanationLabel: View {
     private func sourceFacts(_ value: JSONValue, reference: String?) -> JSONValue {
         guard let reference, let facts = value.objectValue else { return value }
         return .object(facts.filter { $0.key != "name" && $0.value.stringValue != reference })
+    }
+
+    private func resolutionOutcomeLabel(_ explanation: FieldExplanationOutput) -> String? {
+        switch explanation.resolutionEvidence?.outcome?.rawValue {
+        case "mixed": "Mixed"
+        case "unset": field.resolution?.labels?.unresolved ?? "Not set"
+        case "blocked": "Blocked"
+        default: nil
+        }
+    }
+
+    private func resolutionValueLabel(_ explanation: FieldExplanationOutput) -> String {
+        guard let resolution = explanation.resolution else { return "Not set" }
+        if explanation.resolutionEvidence?.outcome?.rawValue == "mixed" { return "Mixed" }
+        if resolution.mode == .allocated, display(resolution.value) == nil,
+            explanation.resolutionEvidence?.outcome?.rawValue == "resolved"
+        {
+            return "Allocated"
+        }
+        return display(resolution.value)
+            ?? resolutionOutcomeLabel(explanation)
+            ?? FieldResolutionPresentation.emptyLabel(resolution, field: field)
+    }
+
+    @ViewBuilder
+    private func resolutionSteps(_ block: ReportRecordsBlock) -> some View {
+        if !block.rows.isEmpty || !block.empty.isEmpty {
+            let first = resolutionBlock(block, rows: 0..<min(6, block.rows.count))
+            RecordsBlockView(records: ReportPresentation.records(first), host: nil)
+            if block.rows.count > 6 {
+                DisclosureGroup("Show \(block.rows.count - 6) more resolution steps") {
+                    RecordsBlockView(
+                        records: ReportPresentation.records(
+                            resolutionBlock(block, rows: 6..<block.rows.count)),
+                        host: nil)
+                }
+            }
+        }
+    }
+
+    private func resolutionBlock(_ block: ReportRecordsBlock, rows: Range<Int>) -> ReportRecordsBlock {
+        var result = block
+        result.title = nil
+        if rows.lowerBound > 0 { result.footer = nil }
+        result.rows = Array(block.rows[rows])
+        return result
+    }
+
+    private func resolutionContributor(_ block: ReportRecordsBlock) -> some View {
+        DisclosureGroup {
+            resolutionSteps(block)
+        } label: {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                Text(block.title ?? block.rows.first?.title ?? "Contributor")
+                    .font(.callout.weight(.medium))
+                if let trailing = block.rows.first?.trailing {
+                    Text(trailing).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private func display(_ value: JsonValue) -> String? {

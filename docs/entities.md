@@ -1529,6 +1529,19 @@ and inheritance: the result and interpretation lead, followed by applicable chec
 and source evidence, then technical metadata. Check rows distinguish missing data,
 defects, and accepted exceptions with labeled semantic badges; weights and caps stay inline; check identifiers and raw evidence remain available in Technical details. Satisfied checks collapse into a green labeled summary; gaps use amber and defects red, with labels carrying the meaning. Repeated owner gaps are shown once through the check rows, while related-record gaps remain separate. Inheritance ladders align source, value,
 and precedence, allow long values to wrap, and emphasize the winning source.
+Resolution order uses the shared records block's `timeline` presentation for
+precedence, not chronological history. Every nonempty chain remains visible,
+including a single subject or steps without record links. Explanations include
+unset candidates and overridden fallbacks; allocated values expose contributing
+records with each record's own expandable precedence chain. The server supplies
+the outcome so mixed contributions, unset values, and blocked mappings do not
+collapse into the same null display. Intentional domain nulls retain their field
+labels. Clients collapse long chains and contributor lists and disclose bounded
+evidence even when no ordinary source rows exist. Evidence and authoritative
+resolution are read in the same snapshot; clients never reconstruct precedence.
+Structured resolution evidence owns the readable value: do not repeat its raw
+object or resolved-list payload underneath it. Owner rollups show one readable
+row per Inventory entry instead of nested label/reference/boolean facts.
 Reset and navigation actions remain in the popover footer, while exception actions
 stay with their check. Tables retain their compact rows and lazy explanations.
 The sticky footer stays wholly inside the scrollport so its actions retain their

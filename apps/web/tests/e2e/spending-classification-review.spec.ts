@@ -313,7 +313,10 @@ test("reviews historical item classification and preserves explicit purpose", as
     // Short attempts: an early click can miss hydration, and the default
     // expect timeout would spend the whole budget before the retry click.
     await expect(
-      openPopover.getByText("Inherits from", { exact: true }),
+      openPopover.getByRole("heading", {
+        name: "Resolution order",
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   // The timeline reads nearest source first; the category that supplies the
@@ -345,7 +348,10 @@ test("reviews historical item classification and preserves explicit purpose", as
     // Short attempts: an early click can miss hydration, and the default
     // expect timeout would spend the whole budget before the retry click.
     await expect(
-      openPopover.getByText("Inherits from", { exact: true }),
+      openPopover.getByRole("heading", {
+        name: "Resolution order",
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   expect(
@@ -368,8 +374,17 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(async () => {
     if (!(await openPopover.isVisible())) await phoneExplanation.click();
     await expect(
-      openPopover.getByText("Inherits from", { exact: true }),
+      openPopover.getByRole("heading", {
+        name: "Resolution order",
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 2_000 });
   }).toPass();
-  await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
+  const blockedSource = openPopover.getByRole("listitem").filter({
+    has: page.locator(`a[href="/product-categories/${storage}"]`),
+  });
+  await expect(
+    blockedSource.getByText("Blocked", { exact: true }),
+  ).toBeVisible();
+  await expect(blockedSource.getByTitle("Used", { exact: true })).toBeVisible();
 });
