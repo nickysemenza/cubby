@@ -12,7 +12,7 @@ import {
   purchase,
   product,
 } from "~/server/db/schema";
-import { lookupProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
 import { amazonAsin } from "~/server/domains/purchase-import/writer";
 
 export const retainedProductIdentifierClaim = z.object({
@@ -73,7 +73,7 @@ export async function loadProductIdentifierClaims(
       ),
     )
     .orderBy(importSourceProduct.id);
-  const claims = [];
+  const candidates = [];
   for (const row of rows) {
     const original = acceptedSourceOrder.safeParse(row.original);
     if (!original.success || original.data.extraction.status !== "ready")
@@ -88,10 +88,26 @@ export async function loadProductIdentifierClaims(
       ...(asin ? [{ kind: "asin", externalId: asin, exactVariant: true }] : []),
     ];
     if (!identifiers.length) continue;
-    const source = await lookupProductIdentifierSource(db, {
+    candidates.push({
+      row,
+      checksum: original.data.checksum,
+      line,
+      identifiers,
+    });
+  }
+  const sources = await lookupProductIdentifierSources(
+    db,
+    candidates.map(({ row, line }) => ({
       url: line.productUrl,
       vendorId: row.vendorId,
-    });
+    })),
+  );
+  const claims = [];
+  for (const [
+    index,
+    { row, checksum, line, identifiers },
+  ] of candidates.entries()) {
+    const source = sources[index];
     if (!source) continue;
     for (const identifier of identifiers)
       claims.push(
@@ -100,7 +116,7 @@ export async function loadProductIdentifierClaims(
           source,
           kind: identifier.kind,
           value: identifier.externalId,
-          originalChecksum: original.data.checksum,
+          originalChecksum: checksum,
           productUrl: line.productUrl ?? null,
           exactVariant: identifier.exactVariant,
           variant: null,

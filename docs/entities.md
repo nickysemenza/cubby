@@ -1799,6 +1799,9 @@ Problems independently of model availability. Registered identifiers retain thei
 single owner: only accepted originals with actual Product bindings establish
 additional claims. Shared model/style names, URLs and partial variant text remain
 retrieval or recommendation evidence.
+Retained claim loads resolve issuer ownership from one operation-local Vendor and
+source-registry read, rather than repeating those reads for each accepted line.
+Later operations and registration writes read current registry ownership.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

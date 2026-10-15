@@ -33,25 +33,44 @@ const hostSource = (host: string) =>
     ).join("")}`,
   );
 
+type IdentifierSourceInput = {
+  url?: string;
+  vendorId?: typeof vendor.$inferSelect.id;
+};
+const issuerFields = {
+  id: vendor.id,
+  website: vendor.website,
+  browserDomains: vendor.browserDomains,
+};
+type RegisteredSource = Pick<
+  typeof externalSource.$inferSelect,
+  "slug" | "vendorId"
+>;
+type IssuerRegistry = {
+  vendors: Pick<
+    typeof vendor.$inferSelect,
+    "id" | "website" | "browserDomains"
+  >[];
+  sourcesByVendor: Map<string, RegisteredSource[]>;
+  sourcesBySlug: Map<string, RegisteredSource>;
+};
+
 /** Resolve and register the issuer once for exact lookup, grouping and learning. */
 async function productIdentifierSource(
   db: Database | DrizzleTransaction,
-  input: {
-    url?: string;
-    vendorId?: typeof vendor.$inferSelect.id;
-  },
-  register: boolean,
+  input: IdentifierSourceInput,
+  mode: { register: true } | { register: false; registry: IssuerRegistry },
 ): Promise<string | null> {
+  const register = mode.register;
+  const registry = mode.register ? undefined : mode.registry;
   const database = unwrapDb(db);
   const pageHost = input.url ? canonicalHost(input.url) : null;
-  const vendors = await database
-    .select({
-      id: vendor.id,
-      website: vendor.website,
-      browserDomains: vendor.browserDomains,
-    })
-    .from(vendor)
-    .where(notDeleted(vendor));
+  const vendors =
+    registry?.vendors ??
+    (await database
+      .select(issuerFields)
+      .from(vendor)
+      .where(notDeleted(vendor)));
   const owners = pageHost
     ? vendors.filter((row) =>
         issuerDomains(row).some((domain) => belongsTo(pageHost, domain)),
@@ -65,10 +84,12 @@ async function productIdentifierSource(
       "Identifier issuer requires a live canonical Vendor or page URL.",
     );
   if (owner) {
-    const sources = await database
-      .select()
-      .from(externalSource)
-      .where(eq(externalSource.vendorId, owner.id));
+    const sources = registry
+      ? (registry.sourcesByVendor.get(owner.id) ?? [])
+      : await database
+          .select()
+          .from(externalSource)
+          .where(eq(externalSource.vendorId, owner.id));
     if (sources.length > 1)
       throw new Error(
         "Identifier issuer has competing canonical source registrations.",
@@ -86,25 +107,58 @@ async function productIdentifierSource(
       .insert(externalSource)
       .values({ slug, label: issuerHost ?? slug, vendorId: owner?.id ?? null })
       .onConflictDoNothing();
-  const [registered] = await database
-    .select()
-    .from(externalSource)
-    .where(eq(externalSource.slug, slug));
+  const registered = registry
+    ? registry.sourcesBySlug.get(slug)
+    : (
+        await database
+          .select()
+          .from(externalSource)
+          .where(eq(externalSource.slug, slug))
+      )[0];
   if (!registered && !register) return null;
   if (!registered || registered.vendorId !== (owner?.id ?? null))
     throw new Error("Identifier issuer has incompatible source ownership.");
   return registered.slug;
 }
 
-export const lookupProductIdentifierSource = (
+/** Registry reads belong to one claim-loading operation; registration writes
+ * always read current state and never use this read-only batch snapshot. */
+export const lookupProductIdentifierSources = async (
   db: Database | DrizzleTransaction,
-  input: Parameters<typeof productIdentifierSource>[1],
-) => productIdentifierSource(db, input, false);
+  inputs: readonly IdentifierSourceInput[],
+) => {
+  if (!inputs.length) return [];
+  const database = unwrapDb(db);
+  const [vendors, sources] = await Promise.all([
+    database.select(issuerFields).from(vendor).where(notDeleted(vendor)),
+    database
+      .select({ slug: externalSource.slug, vendorId: externalSource.vendorId })
+      .from(externalSource),
+  ]);
+  const registry: IssuerRegistry = {
+    vendors,
+    sourcesByVendor: new Map(),
+    sourcesBySlug: new Map(),
+  };
+  for (const source of sources) {
+    registry.sourcesBySlug.set(source.slug, source);
+    if (source.vendorId) {
+      const owned = registry.sourcesByVendor.get(source.vendorId) ?? [];
+      owned.push(source);
+      registry.sourcesByVendor.set(source.vendorId, owned);
+    }
+  }
+  return Promise.all(
+    inputs.map((input) =>
+      productIdentifierSource(db, input, { register: false, registry }),
+    ),
+  );
+};
 export async function resolveProductIdentifierSource(
   db: Database | DrizzleTransaction,
   input: Parameters<typeof productIdentifierSource>[1],
 ): Promise<string> {
-  const source = await productIdentifierSource(db, input, true);
+  const source = await productIdentifierSource(db, input, { register: true });
   if (!source)
     throw new Error("Identifier issuer registration returned no source");
   return source;

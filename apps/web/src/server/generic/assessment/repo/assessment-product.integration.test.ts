@@ -2,8 +2,8 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { eq, inArray } from "drizzle-orm";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -45,6 +45,7 @@ import {
 } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import {
   listProductMatchRows,
   publishProductPair,
@@ -369,6 +370,64 @@ describe("stored Product identity pairs", () => {
       ),
     };
   };
+  // Claim loading must share issuer reads across accepted lines, while a later
+  // operation must observe current registry ownership instead of a stale cache.
+  it("loads retained identifier issuers in a constant query budget", async () => {
+    const { ids } = await boundVariantPair(
+      ["Synthetic batch identity alpha", "Synthetic batch identity beta"],
+      "SYNTHETIC-SHARED-SKU",
+    );
+    const other = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic second issuer",
+      website: "https://other.example.test",
+    });
+    await getDb(ctx.db).insert(externalSource).values({
+      slug: "synthetic-second-issuer",
+      label: "Synthetic second issuer",
+      vendorId: other.id,
+    });
+    const [order] = await getDb(ctx.db).select().from(importSourceOrder);
+    const original = acceptedSourceOrder.parse(order!.originalOrder);
+    if (original.extraction.status !== "ready")
+      throw new Error("Synthetic accepted order is not ready");
+    original.extraction.candidate.lines[1]!.productUrl =
+      "https://other.example.test/p/1";
+    await getDb(ctx.db)
+      .update(importSourceOrder)
+      .set({ originalOrder: original })
+      .where(eq(importSourceOrder.id, order!.id));
+    const { result, queryCount } = await countTestDbQueries(() =>
+      loadProductIdentifierClaims(ctx.db),
+    );
+    expect(
+      result.map(({ productId, source, value }) => ({
+        productId,
+        source,
+        value,
+      })),
+    ).toEqual(
+      expect.arrayContaining(
+        ids.map((productId, index) => ({
+          productId,
+          source: index ? "synthetic-second-issuer" : "synthetic-variant",
+          value: "SYNTHETIC-SHARED-SKU",
+        })),
+      ),
+    );
+    expect(result).toHaveLength(2);
+    expect(queryCount).toBeLessThanOrEqual(3);
+    await getDb(ctx.db)
+      .update(externalSource)
+      .set({ vendorId: null })
+      .where(
+        inArray(externalSource.slug, [
+          "synthetic-variant",
+          "synthetic-second-issuer",
+        ]),
+      );
+    expect(await loadProductIdentifierClaims(ctx.db)).toEqual([]);
+  });
+
   it("keeps an agent propose_match conflict through the queue and actual merge", async () => {
     const { products, ids, decisionPort } = await boundVariantPair(
       [
