@@ -1823,6 +1823,7 @@ function ProposalCard({
             variant="outline"
             size="sm"
             disabled={working}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => void approve(proposal.groupKey)}
           >
             Recover applied result
@@ -1867,6 +1868,7 @@ function ProposalCard({
               : "No Inventory entry or possession claim."}
           </p>
           <Button
+            onMouseDown={(event) => event.preventDefault()}
             disabled={
               approvalQueued ||
               (action.isPending && action.variables?.action !== "save") ||
@@ -2413,6 +2415,10 @@ export function PhotoGroupReview({
     );
   };
   const flushEdits = async (groupKeys: string[]) => {
+    // Keep mouse-down from blurring and moving Apply before its click arrives.
+    // Then blur explicitly so the focused field's save joins this barrier.
+    if (document.activeElement instanceof HTMLElement)
+      document.activeElement.blur();
     while (pendingSaves.current.size) await Promise.all(pendingSaves.current);
     // Blur saves acknowledge local drafts in a promise continuation. Flush that
     // acknowledgement before inspecting the DOM, including in hidden tabs.
@@ -2721,6 +2727,7 @@ export function PhotoGroupReview({
                 </Button>
               ) : null}
               <Button
+                onMouseDown={(event) => event.preventDefault()}
                 disabled={
                   selectedBatch.length === 0 ||
                   blockedBatch ||
