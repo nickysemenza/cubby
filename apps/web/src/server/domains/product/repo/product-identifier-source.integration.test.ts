@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { externalSource } from "~/server/db/schema";
-import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import {
+  lookupProductIdentifierSources,
+  resolveProductIdentifierSource,
+} from "~/server/domains/product/repo/product-identifier-source";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Registry ownership is a DB boundary: name-only registrations cannot authorize
@@ -34,6 +37,22 @@ describe("Product identifier issuer registry", () => {
         }),
       ).toBe("retained-catalog");
     }
+    expect(
+      await lookupProductIdentifierSources(ctx.db, [
+        { url: "https://www.example.test/p/1" },
+        { url: "https://catalog.example.test/p/2" },
+        { vendorId: issuer.id },
+        { url: "https://unregistered.example.test/p/3" },
+        { url: "https://unregistered.invalid.test/p/4" },
+      ]),
+    ).toEqual([
+      "retained-catalog",
+      "retained-catalog",
+      "retained-catalog",
+      "retained-catalog",
+      null,
+    ]);
+    expect(await getDb(ctx.db).select().from(externalSource)).toHaveLength(1);
   });
   it("preserves unowned legacy prefixes and distinguishes punctuation in full hosts", async () => {
     await getDb(ctx.db)
@@ -47,6 +66,12 @@ describe("Product identifier issuer registry", () => {
     });
     expect(first).toBe("host-73686f702e616c7068612e6578616d706c652e74657374");
     expect(second).toBe("host-73686f702d616c7068612e6578616d706c652e74657374");
+    expect(
+      await lookupProductIdentifierSources(ctx.db, [
+        { url: "https://shop.alpha.example.test/p/1" },
+        { url: "https://shop-alpha.example.test/p/1" },
+      ]),
+    ).toEqual([first, second]);
     expect(
       await getDb(ctx.db)
         .select()
@@ -66,6 +91,11 @@ describe("Product identifier issuer registry", () => {
         url: "https://example.test/p/1",
       }),
     ).rejects.toThrow("ambiguous");
+    await expect(
+      lookupProductIdentifierSources(ctx.db, [
+        { url: "https://example.test/p/1" },
+      ]),
+    ).rejects.toThrow("ambiguous");
   });
   it("refuses competing sources for one canonical Vendor", async () => {
     const issuer = await insertWithShortcode(ctx.db, "vendor", {
@@ -83,6 +113,11 @@ describe("Product identifier issuer registry", () => {
         url: "https://example.test/p/1",
       }),
     ).rejects.toThrow("competing");
+    await expect(
+      lookupProductIdentifierSources(ctx.db, [
+        { url: "https://example.test/p/1" },
+      ]),
+    ).rejects.toThrow("competing");
   });
   it("refuses an encoded full-host registration bound to an incompatible Vendor", async () => {
     const other = await insertWithShortcode(ctx.db, "vendor", {
@@ -98,6 +133,11 @@ describe("Product identifier issuer registry", () => {
       resolveProductIdentifierSource(ctx.db, {
         url: "https://example.test/p/1",
       }),
+    ).rejects.toThrow("incompatible");
+    await expect(
+      lookupProductIdentifierSources(ctx.db, [
+        { url: "https://example.test/p/1" },
+      ]),
     ).rejects.toThrow("incompatible");
     expect(await getDb(ctx.db).select().from(externalSource)).toMatchObject([
       { vendorId: other.id },
