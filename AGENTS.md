@@ -33,6 +33,8 @@
 
 ## Breaking changes
 
+Ask before deleting a database or resetting data.
+
 Change contracts in place and carry stored data through migrations. For API,
 RPC, MCP, manifest, stored-shape, or native wire changes, load
 [breaking changes](docs/agents/domain-rules.md#breaking-changes).

@@ -12,7 +12,6 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   `packages/shared/src/apple-client-version.ts` (shared by the server minimum
   and generated Apple marketing version).
 - Household data is real: carry it through a migration that transforms it.
-  Ask before deleting a database or resetting data.
 
 ## Production changes
 

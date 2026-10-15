@@ -50,7 +50,8 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   the client to reject an unknown response key.
 - The server refuses outdated `cubby-apple` builds with 426 and
   `reason: CLIENT_UPDATE_REQUIRED`; `RequestTrace` latches it and `RootView`
-  shows `UpdateRequiredView`. Follow the shared version rule in root AGENTS.md
+  shows `UpdateRequiredView`. Follow the shared
+  [version rule](../../docs/agents/domain-rules.md#breaking-changes)
   and [release policy](../../docs/ci.md#apple-testflight-release).
 - The generated client encodes every optional with `encodeIfPresent`, so a typed request body
   cannot carry `null`. A body the app composes as `JSONValue` (editor create/update, hero-action
