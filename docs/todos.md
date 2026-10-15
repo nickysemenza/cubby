@@ -1126,6 +1126,31 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   Relationships section is the graph explorer alone (`EntityRelations
   placement="detail"`), with a find box and list toggle but no depth picker.
   Offer depth 2–3 there; depth 1 repeats the record's relation tables.
+- 🤔 🛠️ 🔵 **Replace ancestor-sniffing class overrides on shared cell editors.**
+  `CELL_EDIT_PENCIL_CLASS`, `CELL_EDIT_GROUP_CLASS` (`cell-frame.tsx`) and
+  `CellEditTrigger` default to table geometry, then undo it for detail pages
+  with long runs of `in-data-[slot=basic-info-value]:` and
+  `in-data-[slot=table-cell]:` utilities. A detail-page layout fix means
+  appending more overrides to a single line. Readers can't review those diffs,
+  and a missed override goes unnoticed: the pencil sat at the far right edge,
+  then overlapped the value text, which was fixed by adding `ms-0` on top of
+  the trigger's `-ms-2`. Options, cheapest first:
+  1. Declare `@custom-variant ledger` and `@custom-variant table-cell` for the
+     two slot selectors so overrides read `ledger:static ledger:ms-0`. This is
+     mechanical and doesn't change behavior, but the stacking is still there.
+  2. Make each surface an explicit variant. `BasicInfo` and table cells
+     provide a `CellSurface` context (`"table" | "ledger"`), and the shared
+     pieces choose a `cva` variant (`cellEditPencil({ surface })`). Each
+     surface's classes are listed once, with nothing to override, and a test
+     can render both variants.
+  3. Make inline the default. The pencil becomes a static sibling after the
+     value, and only table cells opt into the absolute hover overlay. This
+     removes most of the ledger overrides. It pairs with option 2.
+  4. Move the per-surface geometry into `ledger.css`, keyed on a
+     `data-cell-edit` attribute. Each surface's rules then live in one place,
+     but a component's styling is split across TSX and CSS.
+     Recommended: option 2 with option 3. Close this out once no shared editor
+     class uses an `in-data-[slot=…]` override.
 - 🤔 🐛 🟡 **Review behaviour changes from the RecordList migration.**
   - The home meals card links only the meal label rather than the whole row
     (`features/home/MealsCard.tsx`); decide whether the row is the target.
