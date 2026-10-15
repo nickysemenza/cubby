@@ -267,6 +267,27 @@ describe("bounded Email image evidence", () => {
     },
   );
 
+  it("propagates Images billing failures after successful remote acquisition", async () => {
+    const ports = {
+      ...imagePorts(),
+      prepareImage: vi.fn(async () => {
+        throw Object.assign(new Error("Synthetic Images billing unavailable"), {
+          code: 9432,
+        });
+      }),
+    };
+    await expect(
+      interpretMailRelevance(
+        provider,
+        original,
+        async () => ({ classification: "unrelated" }),
+        true,
+        undefined,
+        ports,
+      ),
+    ).rejects.toThrow("Synthetic Images billing unavailable");
+  });
+
   it("caps supplied attachment images and keeps the omitted seventh image uncertain", async () => {
     const ports = imagePorts();
     const many = normalizeMessage("synthetic-mailbox", {

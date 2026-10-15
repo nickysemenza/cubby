@@ -69,7 +69,7 @@ export function ExceptionControls({
           {check.exception.state === "stale"
             ? "Evidence changed since this exception was recorded: "
             : "Recorded as "}
-          {dataExceptionReasonLabel[check.exception.reason]} —{" "}
+          {dataExceptionReasonLabel[check.exception.reason]}
           <MarkdownText className="text-xs">
             {check.exception.note}
           </MarkdownText>

@@ -174,7 +174,6 @@ async function acquireRemoteImage(
   src: string,
   availableBytes: number,
   fetcher: typeof fetch | undefined,
-  prepare: typeof prepareModelImage,
 ) {
   let response: Response | undefined;
   let consumedBytes = 0;
@@ -184,7 +183,7 @@ async function acquireRemoteImage(
     if (!response.ok) {
       const diagnostic = await readResponseWithLimit(response, 32 * 1024);
       throw new Error(
-        `Email content image fetch failed: HTTP ${response.status} ${response.statusText}\n${new TextDecoder().decode(diagnostic)}`,
+        `${response.statusText}\n${new TextDecoder().decode(diagnostic)}`,
       );
     }
     assertResponseContentType(response, ["image/"]);
@@ -193,7 +192,6 @@ async function acquireRemoteImage(
     consumedBytes = bytes.byteLength;
     return {
       bytes,
-      image: await prepare(bytes, "standard"),
       consumedBytes,
       failure: null,
     };
@@ -206,7 +204,6 @@ async function acquireRemoteImage(
       consumedBytes = availableBytes;
     return {
       bytes: null,
-      image: null,
       consumedBytes,
       failure: `${sanitizeExternalUrl(src)}: ${response ? `HTTP ${response.status}: ` : ""}${scrubErrorMessage(error instanceof Error ? error.message : String(error))}`,
     };
@@ -263,7 +260,7 @@ function relevanceWithEvidence(
   return {
     ...decision,
     classification,
-    reason: `${decision.reason ?? `Relevance model returned ${decision.classification}`}. Evidence: ${evidence.supplied}/${evidence.candidates} content images supplied; ${evidence.sourceBytes} source bytes; ${evidence.requestBytes} model-request bytes; image readability ${decision.imageReadability ?? "unreported"}${evidence.complete ? "" : "; omitted evidence"}.${evidence.failures.length ? ` Image acquisition failures: ${evidence.failures.join("; ")}` : ""}`,
+    reason: `${decision.reason ?? `Relevance model returned ${decision.classification}`}. Evidence: ${evidence.supplied}/${evidence.candidates} content images supplied; ${evidence.sourceBytes} source bytes; ${evidence.requestBytes} model-request bytes; image readability ${decision.imageReadability ?? "unreported"}${evidence.complete ? "" : "; omitted evidence"}.${evidence.failures.length ? ` Image evidence diagnostics: ${evidence.failures.join("; ")}` : ""}`,
   };
 }
 
@@ -303,7 +300,7 @@ export async function interpretMailRelevance(
         const image = await imagePreparer(bytes, detail);
         if (!image)
           imageFailures.push(
-            "Image rendition exceeds the model image byte budget",
+            `${detail} image rendition exceeds the model image byte budget`,
           );
         return image;
       } catch (error) {
@@ -429,7 +426,7 @@ export async function interpretMailRelevance(
         prepare,
       );
       acquiredBytes += acquired.consumedBytes;
-      if (!acquired.image || !acquired.bytes) {
+      if (!acquired.bytes) {
         complete = false;
         if (acquired.failure) imageFailures.push(acquired.failure);
         continue;
@@ -440,8 +437,8 @@ export async function interpretMailRelevance(
           type: "image",
           source: {
             type: "inline",
-            value: Buffer.from(acquired.image.bytes).toString("base64"),
-            mimeType: acquired.image.mimeType,
+            value: Buffer.from(image.bytes).toString("base64"),
+            mimeType: image.mimeType,
           },
         },
       ];
