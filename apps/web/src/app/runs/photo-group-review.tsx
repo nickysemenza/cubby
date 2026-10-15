@@ -1481,8 +1481,8 @@ function InventoryFields({
             </p>
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">
-              No location selected: approval attaches photos only, with no
-              possession or Inventory claim.
+              Choose a location to receive stock, or choose a stock decision
+              that leaves Inventory unchanged.
             </p>
           )}
           {proposal.product.kind === "existing" && proposal.product.existing ? (

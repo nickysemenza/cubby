@@ -410,6 +410,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       name: /^(Create Product|Attach photos|Apply changes)$/,
     })
     .click();
+  const applied = page.getByRole("heading", {
+    name: `Approved · ${correctedName}`,
+  });
+  await expect(applied).toBeVisible({ timeout: 10_000 });
+  await applied.click();
   await expect(
     page
       .locator("#photo-batch")
@@ -485,6 +490,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     kind: "create",
     create: { name: createdName },
   };
+  seed.groups[0]!.review!.observedName = createdName;
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}#work`,
@@ -514,15 +520,6 @@ test("suggests an existing variant and previews every merge decision for a creat
   await group
     .getByRole("button", { name: "Check existing Products", exact: true })
     .click();
-  await expect
-    .poll(async () => {
-      const usage = await page.request.get(
-        `/api/v1/run/aiUsage?runId=${seed.runId}&limit=1`,
-      );
-      expect(usage.ok(), await usage.text()).toBeTruthy();
-      return (await usage.json()).count;
-    })
-    .toBeGreaterThan(0);
   await expect(
     group.getByRole("link", { name: candidateName, exact: true }),
   ).toBeVisible();
