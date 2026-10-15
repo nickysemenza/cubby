@@ -59,7 +59,7 @@ const callResult = z.object({
 
 function toolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);
-  const content: NonNullable<ToolExecutionResult["content"]> = [];
+  const content: NonNullable<ToolExecutionResult["output"]> = [];
   for (const block of parsed.content) {
     const text = textBlock.safeParse(block);
     if (text.success) content.push({ type: "text", text: text.data.text });
@@ -72,7 +72,7 @@ function toolResult(raw: unknown): ToolExecutionResult {
   if (original.success) {
     const { dataBase64, ...descriptor } = original.data.originalAttachment;
     return {
-      content: [
+      output: [
         {
           type: "text",
           text: JSON.stringify({
@@ -90,7 +90,7 @@ function toolResult(raw: unknown): ToolExecutionResult {
       type: "text",
       text: JSON.stringify(parsed.structuredContent),
     });
-  return { content, isError: parsed.isError === true };
+  return { output: content, isError: parsed.isError === true };
 }
 
 /**

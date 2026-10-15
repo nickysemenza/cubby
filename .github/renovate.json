@@ -15,17 +15,6 @@
       "groupSlug": "all-deps"
     },
     {
-      "description": "The Cloudflare dev toolchain is last-green pinned and Wrangler carries an exact-version pnpm patch",
-      "matchPackageNames": ["@cloudflare/vite-plugin", "wrangler"],
-      "enabled": false
-    },
-    {
-      "description": "Cloudflare's Vitest plugin uses Vitest 4 internals; only the isolated Worker harness stays on 4",
-      "matchFileNames": ["apps/web-worker-tests/package.json"],
-      "matchPackageNames": ["vitest"],
-      "enabled": false
-    },
-    {
       "matchUpdateTypes": ["patch", "digest"],
       "enabled": false
     },

@@ -41,7 +41,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Decide
@@ -110,7 +110,7 @@ jobs:
           ref: ${{ needs.plan.outputs.sha }}
       - uses: ./.github/actions/setup-node-with-deps
       - run: pnpm generate:if-stale
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-generated
           if-no-files-found: error
@@ -145,7 +145,7 @@ jobs:
       - name: Resolve output directory
         run: echo "TESTFLIGHT_OUTPUT_DIR=$RUNNER_TEMP/CubbyTestFlight" >> "$GITHUB_ENV"
 
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apple-generated
           path: apps/apple
@@ -162,7 +162,7 @@ jobs:
         run: apps/apple/scripts/prepare-project.sh
 
       # The pre-upload guard in testflight.sh is a Node builtins-only script.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
@@ -194,7 +194,7 @@ jobs:
 
       - name: Download provisioning profile
         id: profile
-        uses: apple-actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6
+        uses: apple-actions/download-provisioning-profiles@230860ab5f632551a5f9a5e1d98a774485463888 # v7.0.0
         with:
           bundle-id: com.nickysemenza.cubby
           profile-type: ${{ matrix.platform == 'ios' && 'IOS_APP_STORE' || 'MAC_APP_STORE' }}
@@ -205,7 +205,7 @@ jobs:
       - name: Download Live Activity provisioning profile
         id: live-activity-profile
         if: matrix.platform == 'ios'
-        uses: apple-actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6
+        uses: apple-actions/download-provisioning-profiles@230860ab5f632551a5f9a5e1d98a774485463888 # v7.0.0
         with:
           bundle-id: com.nickysemenza.cubby.LiveActivity
           profile-type: IOS_APP_STORE
@@ -259,7 +259,7 @@ jobs:
 
       - name: Preserve exports and symbols
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Cubby-${{ matrix.platform }}-${{ needs.plan.outputs.build }}
           path: |

@@ -34,33 +34,6 @@ const oauthResourceOptions = {
   clientRegistrationAllowedResources: [MCP_RESOURCE],
 } satisfies Partial<Parameters<typeof oauthProvider>[0]>;
 
-/**
- * Better Auth 1.7 seeds configured resources from its plugin init hook. Worker
- * module initialization has no request-scoped database, so let the provider's
- * own lazy seed run on the first resource request instead. Keeping the options
- * after init preserves resource validation and dynamic-client defaults.
- */
-function oauthProviderWithRequestScopedResourceSeed(
-  options: Parameters<typeof oauthProvider>[0],
-) {
-  const plugin = oauthProvider(options);
-  const init = plugin.init;
-  return {
-    ...plugin,
-    init: init
-      ? async (...args: Parameters<NonNullable<typeof init>>) => {
-          const configuredResources = plugin.options.resources;
-          plugin.options.resources = [];
-          try {
-            return await init(...args);
-          } finally {
-            plugin.options.resources = configuredResources;
-          }
-        }
-      : undefined,
-  };
-}
-
 async function getAuthorizedGoogleUserInfo(
   tokens: Parameters<typeof authorizeGoogleUserInfo>[0],
   clientId: string,
@@ -229,7 +202,9 @@ export const auth = betterAuth({
     // registration is required because neither can be given a client_id ahead
     // of time; registering is harmless on its own, since a token still requires
     // an interactive login + consent from the (single) account owner.
-    oauthProviderWithRequestScopedResourceSeed({
+    // Startup can precede request-scoped database access. The provider leaves a
+    // failed seed retryable and seeds configured resources on first lookup.
+    oauthProvider({
       loginPage: "/auth/sign-in",
       consentPage: "/oauth/consent",
       allowDynamicClientRegistration: true,

@@ -1,6 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { validateToolArguments } from "@earendil-works/pi-ai";
-import type { ToolExecutionApi } from "@earendil-works/pi-durable";
+import { ToolTask, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -23,6 +23,20 @@ const tools = (services: RunServices) =>
     async () => ({ generation: "synthetic-generation", sequence: 1 }),
   );
 describe("run agent tool behavior", () => {
+  it("preserves a live v1 tool call's identity and replay checkpoint", () => {
+    const input = { assistant: 1, callId: "synthetic-call" };
+    const checkpoint = {
+      phase: "execute",
+      arguments: { quantity: 2 },
+      replay: "safe",
+    };
+    expect(ToolTask.definition.migrate?.(input, checkpoint, 1)).toEqual({
+      input: { kind: "model", ...input },
+      checkpoint,
+    });
+    expect(input).toEqual({ assistant: 1, callId: "synthetic-call" });
+  });
+
   it("ends the submission when a claim finds the run already stopped", async () => {
     const tool = tools(
       fromPartial<RunServices>({
@@ -33,10 +47,14 @@ describe("run agent tool behavior", () => {
       }),
     ).find((candidate) => candidate.name === "claim_next_import_work");
     if (!tool) throw new Error("Missing photo work claim");
-    expect(
-      (await tool.execute({}, fakeApi(), BACKGROUND_CONTEXT)).control
-        ?.terminate,
-    ).toBe(true);
+    const result = await tool.execute({}, fakeApi(), BACKGROUND_CONTEXT);
+    expect(result.control?.terminate).toBe(true);
+    expect(result.output).toEqual([
+      {
+        type: "text",
+        text: JSON.stringify({ kind: "stopped", status: "needs_review" }),
+      },
+    ]);
   });
   it("converts loosely typed scalars as TypeBox always has", () => {
     const tool = tools(fromPartial<RunServices>({})).find(
