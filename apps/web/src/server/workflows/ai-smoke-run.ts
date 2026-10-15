@@ -37,8 +37,8 @@ import {
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { productIdentityPrompt } from "~/server/ai/product-identity";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import { imageIdentificationCompositionPrompt } from "~/server/ai/prompts/image-identification";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import {
   runStructuredFeature,
   type StructuredRunPorts,

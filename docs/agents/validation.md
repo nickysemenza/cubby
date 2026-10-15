@@ -154,6 +154,9 @@ Independent changes stay in separate PRs.
 Native stacks apply the trunk's branch protection and Actions branch filters to
 every member ([GitHub rules](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)).
 After changing a lower layer, rebase its dependents and verify their final heads.
+After resolving source conflicts, run `pnpm exec nx run cubby-checks:format`
+before publishing: `git rebase --continue` does not run the staged formatting
+hook. Fix formatting through a normal commit so that hook owns the edits.
 The merge gate below applies to every included PR. Merge the ready group with
 `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
 merge instead of issuing individual-PR merge requests. Stack registration does
