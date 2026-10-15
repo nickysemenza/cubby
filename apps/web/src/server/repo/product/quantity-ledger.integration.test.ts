@@ -5,6 +5,8 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { product } from "~/server/db/schema";
+
 import { getDb } from "../database-helpers";
 import { attachProductComponents } from "../product-components";
 import {
@@ -16,6 +18,8 @@ import {
   makeProductInput,
 } from "../repo.fixtures";
 import {
+  hasUnknownQuantityLinesSql,
+  hasUnknownAcquisitionLinesSql,
   loadProductDetailQuantityLedgers,
   loadProductPickerQuantities,
   loadProductQuantityLedgers,
@@ -113,6 +117,14 @@ describe("loadProductQuantityLedgers", () => {
     ).get(part.entityId);
     expect(batch?.unknownAcquisitionLines).toBe(1);
     expect(detail).toEqual(batch);
+    const matches = await getDb(ctx.db).execute(
+      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND ${hasUnknownQuantityLinesSql(product.id)} AND ${hasUnknownAcquisitionLinesSql(product.id)}`,
+    );
+    expect(matches.rows).toHaveLength(1);
+    const excluded = await getDb(ctx.db).execute(
+      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND NOT ${hasUnknownQuantityLinesSql(product.id)}`,
+    );
+    expect(excluded.rows).toHaveLength(0);
   });
 
   it("keeps non-count units and incomplete history incomparable in SQL and hydrated summaries", async () => {

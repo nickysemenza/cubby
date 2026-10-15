@@ -258,7 +258,10 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
   expect(() =>
     fieldExplanationOutput.shape.resolutionEvidence.parse(result.evidence),
   ).not.toThrow();
-  expect(result.evidence?.steps).toEqual(
+  expect(
+    result.evidence?.contributors?.flatMap((block) => block.steps ?? []) ??
+      result.evidence?.steps,
+  ).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         source: "inherited_beneficiary",
@@ -273,15 +276,21 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     ]),
   );
   expect(
-    result.evidence?.chain.rows.some(
+    (
+      result.evidence?.contributors?.flatMap((block) => block.chain.rows) ??
+      result.evidence?.chain.rows ??
+      []
+    ).some(
       (row) =>
         row.title === "Vendor account default" && row.state?.label === "Used",
     ),
   ).toBe(false);
   expect(
-    result.evidence?.chain.rows.find(
-      (row) => row.title === "Vendor account default",
-    )?.lines,
+    (
+      result.evidence?.contributors?.flatMap((block) => block.chain.rows) ??
+      result.evidence?.chain.rows ??
+      []
+    ).find((row) => row.title === "Vendor account default")?.lines,
   ).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
@@ -421,7 +430,7 @@ it("distinguishes no acquisition, multiple acquisitions, and explicit Household 
     )
   ).evidence;
   expect(branches?.branches).toEqual({ total: 3, shown: 3, omitted: 0 });
-  expect(branches?.steps).toEqual(
+  expect(branches?.contributors?.flatMap((block) => block.steps ?? [])).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         branch: { entityKind: "inventory", entityId: entry.shortcode },
@@ -483,9 +492,10 @@ it("reports omitted ownership branches and keeps the full stack for each include
     omitted: 1,
   });
   expect(
-    result.evidence?.steps?.filter(
-      (step) => step.reason === "acquisition_absent",
-    ),
+    (
+      result.evidence?.contributors?.flatMap((block) => block.steps ?? []) ??
+      result.evidence?.steps
+    )?.filter((step) => step.reason === "acquisition_absent"),
   ).toHaveLength(50);
 });
 

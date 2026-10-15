@@ -1533,7 +1533,10 @@ Resolvers return the selected value and its evaluation trace together. Traces di
 used sources, unresolved decisions that block fallback, absent or disabled sources that
 permit fallback, and alternatives evaluated but overridden. Observed inputs retain source
 links and current policy settings; they do not invent historical intent. Coverage reports
-shown and omitted rows, inventory branches, and inputs. The same generic evidence view
+shown and omitted rows, inventory branches, and inputs. Each independent contributor
+contains its own chain, typed decision steps, and coverage; row indexes address that
+contributor chain, including its summary row. Ownership evidence includes at most
+50 inventory contributors, 50 rows per chain, and 50 observations per step. The same generic evidence view
 serves populated and empty fields on list and detail surfaces, with exact inputs available
 under Technical details. Observation `fields` name declared source fields whose own
 explanation and controls are available alongside the record link. Editable stored fields
@@ -1558,6 +1561,19 @@ disposal, and disabled tracking never removes manual inventory. Declared relatio
 may place unique detail `contextFields` above their table; Stocked at uses this for the same
 inventory status and its expandable evidence.
 
+Resolution order uses the shared records block's `timeline` presentation for
+precedence, not chronological history. Every nonempty chain remains visible,
+including a single subject or steps without record links. Explanations include
+unset candidates and overridden fallbacks; allocated values expose contributing
+records with each record's own expandable precedence chain. The server supplies
+the outcome so mixed contributions, unset values, and blocked mappings do not
+collapse into the same null display. Intentional domain nulls retain their field
+labels. Clients collapse long chains and contributor lists and disclose bounded
+evidence even when no ordinary source rows exist. Evidence and authoritative
+resolution are read in the same snapshot; clients never reconstruct precedence.
+Structured resolution evidence owns the readable value: do not repeat its raw
+object or resolved-list payload underneath it. Owner rollups show one readable
+row per Inventory entry instead of nested label/reference/boolean facts.
 Reset and navigation actions remain in the popover footer, while exception actions
 stay with their check. Tables retain their compact rows and lazy explanations.
 The sticky footer stays wholly inside the scrollport so its actions retain their

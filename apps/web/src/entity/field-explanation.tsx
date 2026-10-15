@@ -46,7 +46,7 @@ import {
 } from "./field-resolution";
 import {
   ResolutionExplanation,
-  FieldEvaluationEvidence,
+  ResolutionEvidence,
   ResolutionHeadline,
   sectionLabelClassName,
 } from "./field-resolution-explanation";
@@ -468,11 +468,18 @@ function ExplanationResult({
   field,
   resolution,
   value,
+  evidence,
 }: Pick<FieldExplanationProps, "entity" | "field" | "resolution"> & {
   value: ExplanationValue;
+  evidence?: FieldExplanationOutput["resolutionEvidence"];
 }) {
   return resolution ? (
-    <ResolutionHeadline entity={entity} field={field} resolution={resolution} />
+    <ResolutionHeadline
+      entity={entity}
+      field={field}
+      resolution={resolution}
+      evidence={evidence}
+    />
   ) : (
     <p className="text-sm leading-snug font-semibold break-words">
       <ReadableExplanationValue value={value} />
@@ -608,6 +615,7 @@ export function FieldExplanationContents({
                   entity={entity}
                   field={field}
                   resolution={result.data.resolution}
+                  evidence={result.data.resolutionEvidence}
                   value={result.data.interpretation.result}
                 />
                 <p className="text-sm leading-5">
@@ -648,9 +656,7 @@ export function FieldExplanationContents({
             ) : result.data.resolutionEvidence ? (
               // A rollup (a Product's owners) has one chain row per record
               // rather than a single resolution.
-              <FieldEvaluationEvidence
-                evidence={result.data.resolutionEvidence}
-              />
+              <ResolutionEvidence evidence={result.data.resolutionEvidence} />
             ) : !result.data.interpretation &&
               (result.data.value !== null ||
                 !result.data.sources.some(
@@ -669,9 +675,11 @@ export function FieldExplanationContents({
               entityId={id}
             />
           ) : null}
-          {!explanationScalar.safeParse(result.data.value).success &&
+          {result.data.interpretation &&
+          !explanationScalar.safeParse(result.data.value).success &&
           result.data.value !== null &&
           !result.data.resolution &&
+          !result.data.resolutionEvidence &&
           !result.data.qualityBreakdown ? (
             <ReadableExplanationValue value={result.data.value} />
           ) : null}
@@ -706,13 +714,13 @@ export function FieldExplanationContents({
                   </Ledger>
                 </details>
               ) : null}
-              {result.data.truncated ? (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Evidence is bounded; the displayed sources are not an
-                  exhaustive list.
-                </p>
-              ) : null}
             </section>
+          ) : null}
+          {result.data.truncated ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              Evidence is bounded; the displayed sources are not an exhaustive
+              list.
+            </p>
           ) : null}
           <FieldVerificationEvidence
             verifications={result.data.verifications}

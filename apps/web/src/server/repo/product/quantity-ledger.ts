@@ -153,22 +153,17 @@ export const onHandUnitsFilterSql = (productId: AnyColumn) =>
                 WHERE ohu_ol."productId" = ${productId}
                   AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
 
-/** Does this product carry any product-linked Expense with no quantity? */
+/** Quantity gaps include inherited kit lines, matching the displayed ledger. */
 export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
-  sql`EXISTS (SELECT 1 FROM "Expense" uq_e
-               WHERE uq_e."productId" = ${productId}
-                 AND uq_e."deletedAt" IS NULL
-                 AND uq_e."future" = false
-                 AND uq_e."productQuantity" IS NULL)`;
+  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0
+    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
-/** Does this product carry an acquisition whose quantity is unknown? */
+/** An unknown acquisition anywhere in the kit ancestry keeps disposal uncertain. */
 export const hasUnknownAcquisitionLinesSql = (productId: AnyColumn) =>
-  sql`EXISTS (SELECT 1 FROM "Expense" uaq_e
-               WHERE uaq_e."productId" = ${productId}
-                 AND uaq_e."deletedAt" IS NULL
-                 AND uaq_e."future" = false
-                 AND uaq_e."productQuantity" IS NULL
-                 AND (uaq_e."cost" IS NULL OR uaq_e."cost" >= 0))`;
+  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines"), 0) > 0
+    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 const ownershipQuantityEvidenceRow = z.object({
   productId,

@@ -66,23 +66,43 @@ export function ResolutionHeadline({
   entity,
   field,
   resolution,
+  evidence,
 }: {
   entity: Entity;
   field: string;
   resolution: FieldResolution;
+  evidence?: FieldExplanationOutput["resolutionEvidence"];
 }) {
+  const policy = resolutionPolicyFor(entity, field);
   const { tone, label, Icon } = resolutionState(resolution, {
-    intentional:
-      resolutionPolicyFor(entity, field)?.redundancy === "intentional",
+    intentional: policy?.redundancy === "intentional",
   });
+  const emptyLabel =
+    resolution.mode === "inherit"
+      ? policy?.labels?.unresolved
+      : policy?.labels?.none;
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
       <span className="min-w-0 text-base leading-snug font-semibold break-words">
-        <ResolutionValue
-          entity={entity}
-          field={field}
-          value={resolution.value}
-        />
+        {evidence?.outcome && evidence.outcome !== "resolved" ? (
+          {
+            mixed: "Mixed",
+            unset: policy?.labels?.unresolved ?? "Not set",
+            blocked: "Blocked",
+          }[evidence.outcome]
+        ) : resolution.value === null &&
+          resolution.mode === "allocated" &&
+          evidence?.outcome === "resolved" ? (
+          "Allocated"
+        ) : resolution.value === null && emptyLabel ? (
+          emptyLabel
+        ) : (
+          <ResolutionValue
+            entity={entity}
+            field={field}
+            value={resolution.value}
+          />
+        )}
       </span>
       <Badge variant={toneBadge[tone]}>
         <Icon aria-hidden="true" />
@@ -198,6 +218,7 @@ export function ResolutionExplanation({
           entity={entity}
           field={field}
           resolution={resolution}
+          evidence={evidence}
         />
       ) : null}
       {stats.length > 0 ? (
@@ -210,26 +231,115 @@ export function ResolutionExplanation({
           ))}
         </dl>
       ) : null}
-      {/* A chain of just the subject repeats the headline. */}
-      {evidence &&
-      (evidence.chain.rows.length > 1 ||
-        evidence.steps?.length ||
-        evidence.chain.rows.some((row) => row.id !== null)) ? (
-        <section className="grid gap-2 border-t border-border pt-3">
-          <h3 className={sectionLabelClassName}>Evaluation</h3>
-          <FieldEvaluationEvidence evidence={evidence} />
-        </section>
-      ) : null}
+      <ResolutionEvidence evidence={evidence} />
     </div>
   );
 }
 
+/** A link is optional evidence, never the condition for showing a decision. */
+export function ResolutionEvidence({
+  evidence,
+}: {
+  evidence?: FieldExplanationOutput["resolutionEvidence"];
+}) {
+  if (!evidence) return null;
+  const contributors = evidence.contributors ?? [];
+  return (
+    <section className="grid min-w-0 gap-2 border-t border-border pt-3">
+      <h3 className={sectionLabelClassName}>
+        {evidence.chain.title ?? "Resolution order"}
+      </h3>
+      <ResolutionChain block={{ ...evidence.chain, title: undefined }} />
+      <FieldEvaluationInputs evidence={evidence} />
+      {contributors.length > 0 ? (
+        <>
+          {evidence.chain.rows.length > 0 || evidence.chain.empty ? (
+            <h4 className={sectionLabelClassName}>Contributing records</h4>
+          ) : null}
+          {contributors.slice(0, 6).map((block) => (
+            <Contributor
+              key={block.chain.key ?? JSON.stringify(block.chain)}
+              block={block}
+            />
+          ))}
+          {contributors.length > 6 ? (
+            <details>
+              <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
+                Show {contributors.length - 6} more contributors
+              </summary>
+              {contributors.slice(6).map((block) => (
+                <Contributor
+                  key={block.chain.key ?? JSON.stringify(block.chain)}
+                  block={block}
+                />
+              ))}
+            </details>
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+type Chain = Evidence["chain"];
+
+function Contributor({
+  block: contributor,
+}: {
+  block: NonNullable<Evidence["contributors"]>[number];
+}) {
+  const block = contributor.chain;
+  return (
+    <details className="min-w-0 border-t border-border pt-2">
+      <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium break-words md:min-h-0">
+        {block.title ?? "Contributor"}
+        {block.rows[0]?.trailing ? (
+          <span className="ml-2 text-muted-foreground">
+            {block.rows[0].trailing}
+          </span>
+        ) : null}
+      </summary>
+      <ResolutionChain block={{ ...block, title: undefined }} />
+      <FieldEvaluationInputs
+        evidence={{
+          chain: block,
+          steps: contributor.steps,
+          coverage: contributor.coverage,
+          fallbackSource: null,
+        }}
+      />
+    </details>
+  );
+}
+
+function ResolutionChain({ block }: { block: Chain }) {
+  return (
+    <>
+      <RecordsBlockView block={{ ...block, rows: block.rows.slice(0, 6) }} />
+      {block.rows.length > 6 ? (
+        <details>
+          <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
+            Show {block.rows.length - 6} more resolution steps
+          </summary>
+          <RecordsBlockView
+            block={{
+              ...block,
+              title: undefined,
+              footer: undefined,
+              rows: block.rows.slice(6),
+            }}
+          />
+        </details>
+      ) : null}
+    </>
+  );
+}
+
 /** Render the resolver's trace verbatim; an unresolved winner still blocks later sources. */
-export function FieldEvaluationEvidence({ evidence }: { evidence: Evidence }) {
+function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
   const [inputsOpen, setInputsOpen] = useState(false);
   return (
     <div className="grid min-w-0 gap-2">
-      <RecordsBlockView block={evidence.chain} />
       {evidence.coverage && evidence.coverage.omitted > 0 ? (
         <p className="text-xs text-muted-foreground">
           Showing {evidence.coverage.shown} of {evidence.coverage.total}{" "}

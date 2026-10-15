@@ -8,7 +8,10 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { externalSource } from "~/server/db/schema";
+import {
+  externalSource,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -184,8 +187,14 @@ describe("derived field explanations against canonical records", () => {
     const explicit = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture gifts",
     });
+    const root = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture older mapping",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: explicit.id,
+    });
     const parent = await insertWithShortcode(ctx.db, "productCategory", {
       name: "Fixture tools",
+      parentId: root.id,
       spendingCategoryMode: "mapped",
       spendingCategoryId: mapped.id,
     });
@@ -220,7 +229,15 @@ describe("derived field explanations against canonical records", () => {
       explanation.resolutionEvidence?.chain.rows.flatMap((row) =>
         row.id ? [row.id] : [],
       ),
-    ).toEqual([child.shortcode, parent.shortcode]);
+    ).toEqual([child.shortcode, parent.shortcode, root.shortcode]);
+    expect(
+      explanation.resolutionEvidence?.chain.rows.find(
+        (row) => row.id === root.shortcode,
+      ),
+    ).toMatchObject({
+      trailing: "Fixture gifts",
+      state: { kind: "skipped", label: "Evaluated · overridden" },
+    });
     expect(explanation.resolutionEvidence).toMatchObject({
       fallbackSource: {
         entityKind: "productCategory",
@@ -319,6 +336,256 @@ describe("derived field explanations against canonical records", () => {
     });
   });
 
+  it("explains mixed adjustment shares through each contributing principal", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic shared project",
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic share supplier",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      orderId: "SYNTHETIC-SHARES",
+      vendorId: vendor.id,
+      defaultProjectId: project.id,
+    });
+    const first = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture first principal",
+      purchaseId: purchase.id,
+      lineKind: "principal",
+      date: "2026-09-01",
+      cost: 30,
+      trade: "building",
+      costType: "materials",
+    });
+    const second = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture second principal",
+      purchaseId: purchase.id,
+      lineKind: "principal",
+      date: "2026-09-01",
+      cost: 10,
+      trade: "plumbing",
+      costType: "services",
+    });
+    const adjustment = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture shared shipping",
+      purchaseId: purchase.id,
+      lineKind: "shipping",
+      date: "2026-09-01",
+      cost: 8,
+      costType: "materials",
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "expense",
+      entityId: parseShortcodeFor("expense", adjustment.shortcode),
+      field: "trade",
+      surface: "list",
+    });
+    expect(explanation.resolution?.mode).toBe("allocated");
+    expect(explanation.resolutionEvidence?.outcome).toBe("mixed");
+    expect(
+      explanation.resolutionEvidence?.contributors
+        ?.map((block) => block.chain.rows[0]?.id)
+        .sort(),
+    ).toEqual([first.shortcode, second.shortcode].sort());
+    expect(
+      explanation.resolutionEvidence?.contributors?.every((block) =>
+        block.chain.rows.some((row) => row.state?.kind === "done"),
+      ),
+    ).toBe(true);
+    expect(
+      explanation.resolutionEvidence?.contributors
+        ?.flatMap((block) => block.chain.rows[0]?.lines ?? [])
+        .map((line) => line.text)
+        .join(" "),
+    ).toContain("positive");
+    const projects = await explainField(context(), {
+      entityKind: "expense",
+      entityId: parseShortcodeFor("expense", adjustment.shortcode),
+      field: "projectId",
+      surface: "list",
+    });
+    expect(projects.resolution?.value).toBeNull();
+    expect(projects.resolutionEvidence?.outcome).toBe("resolved");
+    expect(
+      projects.resolutionEvidence?.contributors?.map(
+        (block) => block.chain.rows[0]?.trailing,
+      ),
+    ).toEqual(["Synthetic shared project", "Synthetic shared project"]);
+  });
+
+  it("keeps a known allocated trade resolved beside an unknown contributor", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic partial supplier",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      orderId: "SYNTHETIC-PARTIAL",
+      vendorId: vendor.id,
+    });
+    for (const trade of ["building", null] as const) {
+      await insertWithShortcode(ctx.db, "expense", {
+        name: "Fixture partial principal",
+        purchaseId: purchase.id,
+        lineKind: "principal",
+        date: "2026-09-01",
+        cost: 10,
+        trade,
+        costType: "materials",
+      });
+    }
+    const adjustment = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture partial shipping",
+      purchaseId: purchase.id,
+      lineKind: "shipping",
+      date: "2026-09-01",
+      cost: 2,
+      costType: "materials",
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "expense",
+      entityId: parseShortcodeFor("expense", adjustment.shortcode),
+      field: "trade",
+      surface: "list",
+    });
+    expect(explanation.resolution?.value).toBe("building");
+    expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
+    expect(explanation.resolutionEvidence?.contributors).toHaveLength(2);
+  });
+
+  it("keeps Recipe yield and Purchase policy fallbacks visible behind overrides", async () => {
+    const recipe = await insertWithShortcode(ctx.db, "recipe", {
+      name: "Fixture serving override",
+      servings: 2,
+      yield: { value: 4, unit: "servings" },
+    });
+    const serving = await explainField(context(), {
+      entityKind: "recipe",
+      entityId: parseShortcodeFor("recipe", recipe.shortcode),
+      field: "servings",
+      surface: "list",
+    });
+    expect(serving.resolutionEvidence?.chain.rows).toEqual([
+      expect.objectContaining({
+        state: { kind: "done", label: "Used" },
+        trailing: "2",
+      }),
+      expect.objectContaining({
+        trailing: "4",
+        state: { kind: "skipped", label: "Evaluated · overridden" },
+      }),
+    ]);
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture policy category",
+      itemizationExpectation: "not_expected",
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fixture policy vendor",
+      itemizationExpectation: "required",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      orderId: "SYNTHETIC-POLICY",
+      vendorId: vendor.id,
+      spendingCategoryId: category.id,
+      itemizationExpectation: "unknown",
+    });
+    const policy = await explainField(context(), {
+      entityKind: "purchase",
+      entityId: parseShortcodeFor("purchase", purchase.shortcode),
+      field: "itemizationExpectation",
+      surface: "list",
+    });
+    expect(policy.resolutionEvidence?.chain.rows.map((row) => row.id)).toEqual([
+      null,
+      vendor.shortcode,
+      category.shortcode,
+      null,
+    ]);
+    expect(policy.resolutionEvidence?.fallbackSource?.entityId).toBe(
+      vendor.shortcode,
+    );
+  });
+
+  it("preserves an inherited nobody decision and excludes Task grandparents", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Fixture assigned project",
+      assigneeMode: "explicit",
+      assigneeId: null,
+    });
+    const grandparent = await insertWithShortcode(ctx.db, "task", {
+      name: "Fixture unused grandparent",
+      trade: "electrical",
+    });
+    const parent = await insertWithShortcode(ctx.db, "task", {
+      name: "Fixture nobody parent",
+      parentTaskId: grandparent.id,
+      assigneeMode: "explicit",
+      assigneeId: null,
+    });
+    const child = await insertWithShortcode(ctx.db, "task", {
+      name: "Fixture inherited child",
+      trade: "other",
+      parentTaskId: parent.id,
+      projectMode: "explicit",
+      projectId: project.id,
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "task",
+      entityId: parseShortcodeFor("task", child.shortcode),
+      field: "assigneeId",
+      surface: "list",
+    });
+    expect(explanation.resolution?.value).toBeNull();
+    expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
+    expect(explanation.resolutionEvidence?.chain.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: parent.shortcode,
+          state: { kind: "done", label: "Used" },
+        }),
+      ]),
+    );
+    const trade = await explainField(context(), {
+      entityKind: "task",
+      entityId: parseShortcodeFor("task", child.shortcode),
+      field: "trade",
+      surface: "list",
+    });
+    expect(
+      trade.resolutionEvidence?.chain.rows.map((row) => row.id),
+    ).not.toContain(grandparent.shortcode);
+    expect(trade.resolution?.value).toBe("other");
+    expect(trade.resolutionEvidence?.chain.rows[0]?.state?.kind).toBe("done");
+  });
+
+  it("shows the full stock tracking fallback behind a Product override", async () => {
+    const parent = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tracking parent",
+      stockTracked: false,
+    });
+    const child = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tracking child",
+      parentId: parent.id,
+    });
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture tracking override",
+      manufacturer: "Fixture",
+      categoryId: child.id,
+      stockTracked: true,
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "product",
+      entityId: parseShortcodeFor("product", product.shortcode),
+      field: "stockTracked",
+      surface: "list",
+    });
+    expect(
+      explanation.resolutionEvidence?.chain.rows.map((row) => row.id),
+    ).toEqual([null, child.shortcode, parent.shortcode]);
+    expect(explanation.resolutionEvidence?.fallbackSource?.entityId).toBe(
+      parent.shortcode,
+    );
+    expect(explanation.resolutionEvidence?.chain.rows[2]?.trailing).toBe("No");
+  });
+
   it("explains manual price precedence and links the records behind an expense count", async () => {
     const product = await createProductFixture(
       ctx.db,
@@ -358,6 +625,19 @@ describe("derived field explanations against canonical records", () => {
       canReset: true,
     });
     expect(price.sources).toEqual([]);
+    expect(price.resolutionEvidence?.contributors?.[0]?.chain.rows[0]?.id).toBe(
+      expense.output.id,
+    );
+    expect(price.resolutionEvidence?.chain.rows).toEqual([
+      expect.objectContaining({
+        trailing: "20",
+        state: { kind: "done", label: "Used" },
+      }),
+      expect.objectContaining({
+        trailing: "6",
+        state: { kind: "skipped", label: "Evaluated · overridden" },
+      }),
+    ]);
 
     const count = await explainField(requestContext, {
       entityKind: "product",
@@ -463,6 +743,108 @@ describe("derived field explanations against canonical records", () => {
     expect(linkedExpenses.length).toBeGreaterThan(0);
     expect(linkedExpenses.length).toBeLessThan(31);
     expect(result.truncated).toBe(true);
+  });
+
+  it("shows a reimbursement's stored policy as overridden rather than unset", async () => {
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic reimbursement account",
+      identity: { kind: "cash" },
+    });
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        amount: -10,
+        kind: "income",
+        status: "posted",
+        postedDate: "2026-09-01",
+        itemizationExpectation: "required",
+      },
+    );
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic reimbursed booking",
+      lineKind: "principal",
+      cost: -10,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+      economicRole: "reimbursement",
+      lineBasis: "allocation",
+      bookingTransactionCode: transaction.shortcode,
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "financialTransaction",
+      entityId: parseShortcodeFor(
+        "financialTransaction",
+        transaction.shortcode,
+      ),
+      field: "itemizationExpectation",
+      surface: "list",
+    });
+    expect(explanation.resolution).toMatchObject({
+      mode: "allocated",
+      storedValue: "required",
+      value: "not_expected",
+    });
+    expect(explanation.resolutionEvidence?.chain.rows[1]).toMatchObject({
+      trailing: "Expected",
+      state: { kind: "skipped", label: "Evaluated · overridden" },
+    });
+  });
+
+  it("keeps the full linked policy aggregate when contributor evidence is bounded", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic policy supplier",
+    });
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic policy account",
+      identity: { kind: "cash" },
+    });
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        amount: 21,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-09-01",
+      },
+    );
+    for (let index = 0; index < 21; index++) {
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        orderId: `SYNTHETIC-POLICY-${index}`,
+        vendorId: vendor.id,
+        itemizationExpectation: index === 20 ? "required" : "not_expected",
+      });
+      await getDb(ctx.db).insert(financialTransactionAllocation).values({
+        transactionId: transaction.id,
+        purchaseId: purchase.id,
+        amount: 1,
+      });
+    }
+    const explanation = await explainField(context(), {
+      entityKind: "financialTransaction",
+      entityId: parseShortcodeFor(
+        "financialTransaction",
+        transaction.shortcode,
+      ),
+      field: "itemizationExpectation",
+      surface: "list",
+    });
+    expect(explanation.resolution?.value).toBe("required");
+    expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
+    expect(explanation.resolutionEvidence?.contributors).toHaveLength(20);
+    expect(explanation.truncated).toBe(true);
+    expect(
+      explanation.resolutionEvidence?.chain.rows.find(
+        (row) => row.state?.kind === "done",
+      ),
+    ).toMatchObject({
+      title: "Linked Purchase policies",
+      trailing: "Expected",
+    });
   });
 
   it("explains an explicit expense trade override as a typed resolution, not the declared source trio", async () => {

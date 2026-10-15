@@ -166,6 +166,18 @@ export const fieldExplanationOutput = z.object({
       /** Coverage of inventory branches, independently of their decision rows. */
       branches: fieldEvidenceCoverage.optional(),
       fallbackSource: fieldResolutionSourceSchema.nullable(),
+      /** Null effective values can mean different things; the server owns that distinction. */
+      outcome: z.enum(["resolved", "mixed", "unset", "blocked"]).optional(),
+      /** Independent contributors, each with its own precedence chain. */
+      contributors: z
+        .array(
+          z.object({
+            chain: reportRecordsBlock,
+            steps: z.array(fieldDecisionStep).optional(),
+            coverage: fieldEvidenceCoverage.optional(),
+          }),
+        )
+        .optional(),
     })
     .nullable()
     .optional(),
