@@ -175,6 +175,10 @@ infers `text` and fails the update. An interpolated column renders **unqualified
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
 use explicit table aliases and literal qualified names for that correlation.
+Keep a `PgTable` object when passing a plain table to `.from()`: raw SQL
+interpolation of an aliased table emits only its alias, losing the underlying
+table declaration. Derived SQL sources must not convert plain-table fallbacks
+into SQL fragments.
 A repeated SELECT/GROUP BY expression must use identical constants: separate
 bind parameters make PostgreSQL treat its copies as different expressions.
 Inline compile-time schema enum values with `sql.raw`, keeping user input bound;

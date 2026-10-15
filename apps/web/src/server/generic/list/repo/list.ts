@@ -424,9 +424,9 @@ export function listScaffold<
   // list at once rather than beside each repo's own conditions.
   const scored = isScoredEntity(entity) ? entity : null;
   const qualityContext = scored ? qualityFilterContext(scored) : undefined;
-  const qualitySource = scored
+  const qualitySource: PgTable | SQL = scored
     ? qualityFilterSource(scored, table)
-    : sql`${table}`;
+    : table;
   const scoreSort = scored
     ? dataQualitySortResolver(scored, table, qualityContext)
     : null;
@@ -584,7 +584,9 @@ export function listScaffold<
         scored !== null &&
         (hasDataQualityFilter(request.filters) ||
           request.sorts.some((sort) => sort.orderBy === "dataQuality"));
-      const source = readsQuality ? qualitySource : sql`${table}`;
+      // Keep the PgTable object: interpolating an aliased table into SQL
+      // emits only its alias, while Drizzle's FROM builder names its origin.
+      const source: PgTable | SQL = readsQuality ? qualitySource : table;
       const filtered =
         "where" in spec ? spec.where : scaffold.where(request.filters);
       const nesting = listNestingFromFilters(request.filters);

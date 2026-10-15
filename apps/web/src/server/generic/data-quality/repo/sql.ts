@@ -15,7 +15,7 @@ import {
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { getTableName, type SQL, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, type PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { type DataQualityEntries, dataQualityEntries } from "./entries";
@@ -61,9 +61,9 @@ export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
 export const qualityFilterSource = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-): SQL => {
+): PgTable | SQL => {
   const join = qualityFilterJoin(entity, t);
-  return join ? sql`${t} LEFT JOIN ${join.relation} ON ${join.on}` : sql`${t}`;
+  return join ? sql`${t} LEFT JOIN ${join.relation} ON ${join.on}` : t;
 };
 
 const bindingFor = (
