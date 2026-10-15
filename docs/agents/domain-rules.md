@@ -112,6 +112,9 @@ re-check transactionally regardless.
 compatibility/ecosystem tokens only — never the manufacturer, a classification
 word, or a path node, which belong in `manufacturer`/`categoryId`; a tag that
 merely restates one of those is flagged for removal, not silently dropped. The
+maker named as a third-party fitting's target can identify compatibility rather
+than the fitting's own manufacturer. A single occurrence alone does not make a
+compatibility token redundant. The
 shared rule lives in `redundantTokens` (`@cubby/shared/redundant-tokens`) —
 both the browser form's deterministic chip marking and the server's
 `ArrayPruneSuggestSpec` entries (`apps/web/src/server/ai/field-suggest/registry.ts`)
