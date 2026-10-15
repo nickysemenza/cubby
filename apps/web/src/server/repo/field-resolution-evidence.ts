@@ -106,10 +106,7 @@ async function ancestors(
   const parent = sql.identifier(config.parent);
   let value: SQL;
   let assigned: SQL;
-  if (
-    kind === "productCategory" &&
-    (field === "feature" || field === "stockTracked")
-  ) {
+  if (kind === "productCategory" && field === "feature") {
     const column = sql.identifier(field);
     value = sql`to_jsonb(p.${column})`;
     assigned = sql`p.${column} IS NOT NULL`;
@@ -546,37 +543,6 @@ async function expenseProjectSteps(
   };
 }
 
-async function stockTrackingSteps(
-  db: Database,
-  entity: "product" | "productCategory",
-  shortcode: string,
-  resolution: FieldResolution,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
-  const field = "stockTracked";
-  const subject = { entity, id: shortcode };
-
-  const nodes = await ancestors(
-    db,
-    "productCategory",
-    entity === "product"
-      ? sql`(SELECT "categoryId" FROM "Product" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`
-      : sql`(SELECT id FROM "ProductCategory" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
-    field,
-  );
-  return {
-    steps: [
-      ...(entity === "product" ? [selfStep(entity, resolution)] : []),
-      ...nodeSteps("productCategory", nodes, subject),
-    ],
-    fallbackSource: source(
-      "productCategory",
-      nodes.find(
-        (node) => node.assigned && (entity === "product" || node.depth > 0),
-      ),
-    ),
-  };
-}
-
 type FieldSteps = { steps: Step[]; fallbackSource: Evidence["fallbackSource"] };
 
 function evaluatedFieldSteps(
@@ -706,11 +672,6 @@ async function fieldSteps(
   }
   if (entity === "task" && field === "assigneeId")
     return taskAssigneeSteps(db, shortcode, resolution);
-  if (
-    (entity === "product" || entity === "productCategory") &&
-    field === "stockTracked"
-  )
-    return stockTrackingSteps(db, entity, shortcode, resolution);
   if (entity === "expense" && field === "spendingCategoryId")
     return expenseCategorySteps(db, shortcode, resolution);
   if (entity === "expense" && field === "projectId")
