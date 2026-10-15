@@ -21,11 +21,17 @@ export async function claimAiEvaluation(
 ) {
   return withTransactionDatabase(db, async (tx) => {
     const now = new Date();
-    // Claims share one short admission transaction; activation is refresh policy,
+    // Busy claims defer to the existing Workflow retry without consuming an
+    // origin connection waiting behind admission. Activation remains policy,
     // not a prerequisite for member-requested execution.
-    await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext('cubby-ai-admission'))`,
-    );
+    const admission = z
+      .object({ rows: z.tuple([z.object({ admitted: z.boolean() })]) })
+      .parse(
+        await getDb(tx).execute(
+          sql`SELECT pg_try_advisory_xact_lock(hashtext('cubby-ai-admission')) AS admitted`,
+        ),
+      );
+    if (!admission.rows[0].admitted) return null;
     const [existing] = await getDb(tx)
       .select()
       .from(aiEvaluation)

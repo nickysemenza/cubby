@@ -632,7 +632,10 @@ confident Emails, member resolutions, applied values and rejected history remain
 protected. Eligible unknown legacy provenance is evaluated once. Successful
 ambiguity or missing evidence is terminal for that fingerprint; transient or
 interrupted inference gets three attempts. Two independent refresh targets may
-run globally, with dependent calls sequential. Email Runs freeze at most 200
+run globally, with dependent calls sequential. An execution claim defers immediately
+when global admission is busy, preserving queued work and its attempt count for
+the existing Workflow retry instead of occupying an origin connection in a lock
+wait. Email Runs freeze at most 200
 items and retain the mailbox's existing execution authorization. Reused Email
 stages require current source checksum and feature provenance. The
 [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
