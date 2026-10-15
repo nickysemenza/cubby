@@ -8,7 +8,9 @@ const HOUR = 60 * MINUTE;
 export const IDEMPOTENT_MUTATION_RETRY = 2;
 
 /**
- * App-wide transport and recovery policy. Domain descriptors choose a cache
+ * Query-cache and mutation replay defaults. Browser query transport owns
+ * transient database recovery before a result reaches the cache.
+ * Domain descriptors choose a cache
  * profile below; they do not restate these defaults.
  *
  * Cached queries are deliberately passive after their first load. Explicit

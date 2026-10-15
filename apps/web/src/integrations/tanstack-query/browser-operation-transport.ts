@@ -1,8 +1,10 @@
 import { type BatchResult, batchResultSchema } from "@cubby/schemas/batch";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import superjson from "superjson";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { createRequestBatcher } from "~/lib/request-batcher";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import {
@@ -23,6 +25,26 @@ type DispatchItem = {
 };
 
 type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
+
+// One page can flush reads in separate tasks or header groups. Every query
+// HTTP request, including singletons and fallback, shares the same budget.
+const queryRequests = createConcurrencyLimiter(4);
+
+function isTransientDatabaseFailure(result: DispatchResult): boolean {
+  if (result.ok || result.error.code !== "INTERNAL_SERVER_ERROR") return false;
+  const diagnostics = result.error.diagnostics;
+  if (!diagnostics || !["context", "run"].includes(diagnostics.stage))
+    return false;
+  return diagnostics.causes.some(
+    ({ code, message }) =>
+      (code === "58000" &&
+        message === "Timed out while waiting for an open slot in the pool.") ||
+      ["08000", "08003", "08006", "57P01", "57P02", "57P03"].includes(
+        code ?? "",
+      ) ||
+      (!code && message === "Connection terminated unexpectedly"),
+  );
+}
 
 /**
  * The batch could not answer this item (one queued alone, an HTTP failure, a
@@ -147,12 +169,12 @@ function queryBatcherFor(headers: HeadersInit) {
   if (!batcher) {
     batcher = createRequestBatcher(
       async (batch: DispatchItem[], signal, deliver) => {
-        await streamDispatch(batch, entries, signal, deliver).catch(
-          (error: Error) => {
+        await queryRequests
+          .run(() => streamDispatch(batch, entries, signal, deliver), signal)
+          .catch((error: Error) => {
             if (signal.aborted) throw error;
             throw new BatchFallback();
-          },
-        );
+          });
       },
       {
         max: 20,
@@ -173,14 +195,34 @@ export async function dispatchBrowserOperation(
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ): Promise<DispatchResult> {
   if (startOperationDefinitionFor(operation)?.kind === "query") {
-    try {
-      return await queryBatcherFor(transport.headers).load(
-        { operation, input },
-        transport.signal ?? new AbortController().signal,
-      );
-    } catch (error) {
-      if (!(error instanceof BatchFallback)) throw error;
-    }
+    const signal = transport.signal ?? new AbortController().signal;
+    // Query declarations already permit replay after a broken batch. Retry
+    // only explicit transient database diagnostics, on a fresh request scope;
+    // a partial write must never enter this recovery path.
+    return retryWithBackoff(
+      async () => {
+        signal.throwIfAborted();
+        try {
+          return await queryBatcherFor(transport.headers).load(
+            { operation, input },
+            signal,
+          );
+        } catch (error) {
+          if (!(error instanceof BatchFallback)) throw error;
+        }
+        return queryRequests.run(
+          () => postDispatch({ operation, input }, transport.headers, signal),
+          signal,
+        );
+      },
+      {
+        signal,
+        delayFor: (outcome, attempt) =>
+          attempt < 2 && outcome.ok && isTransientDatabaseFailure(outcome.value)
+            ? 250 * 2 ** attempt + Math.floor(Math.random() * 250)
+            : null,
+      },
+    );
   }
   return postDispatch(
     { operation, input },

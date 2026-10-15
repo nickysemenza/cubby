@@ -175,7 +175,7 @@ async function loadPhotoRun(db: Database, publicId: string) {
 }
 
 /** One read of everything the lifecycle derives from. */
-async function readPhotoRunSnapshot(db: Database, publicId: string) {
+export async function readPhotoRunSnapshot(db: Database, publicId: string) {
   const [run, images, review] = await Promise.all([
     loadPhotoRun(db, publicId),
     listPhotoRunImages(db, publicId),
@@ -184,6 +184,7 @@ async function readPhotoRunSnapshot(db: Database, publicId: string) {
   return {
     run,
     images,
+    review,
     lifecycle: derivePhotoRunLifecycle(run, images, review.proposals),
   };
 }
