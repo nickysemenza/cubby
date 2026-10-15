@@ -1,3 +1,4 @@
+import { readResponseWithLimit } from "@cubby/shared/external-fetch";
 import { retryWithBackoff, sleep as defaultSleep } from "@cubby/shared/retry";
 import { z } from "zod";
 
@@ -85,6 +86,7 @@ export const createGmailApiClient = ({
   const request = async <T>(
     path: string,
     params?: URLSearchParams,
+    maxBytes = 4 * 1024 * 1024,
   ): Promise<T> => {
     const response = await retryWithBackoff(
       () =>
@@ -106,9 +108,10 @@ export const createGmailApiClient = ({
       },
     );
     if (response.ok) {
-      // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
-      // normalization validates all fields before they cross into persistence.
-      return (await response.json()) as T;
+      // Model-message admission is separate from retaining original attachments.
+      const bytes = await readResponseWithLimit(response, maxBytes);
+      // SAFETY: Each caller supplies the owned Gmail response type; normalization validates persistence fields.
+      return JSON.parse(new TextDecoder().decode(bytes)) as T;
     }
     throw await parseError(response);
   };
@@ -149,6 +152,8 @@ export const createGmailApiClient = ({
     ): Promise<GmailAttachmentPayload> {
       return await request<GmailAttachmentPayload>(
         `users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+        undefined,
+        36 * 1024 * 1024,
       );
     },
   };

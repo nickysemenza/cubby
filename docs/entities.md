@@ -1207,6 +1207,14 @@ list per check (`EXCEPTION_REASONS` in `repo/data-quality/exception-reasons.ts`,
 explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
+Recording a finding requires a nonblank explanation of what was checked and
+what was found; include source references where available. Explanation notes render
+Markdown source links in web and Apple controls. Those controls
+never substitute the reason label for that explanation. Existing reason choices,
+evidence fingerprints, audit history and scoring remain shared across entities.
+Clearing removes the finding and reopens its gap; it does not block a later
+source-backed finding. Changes to the fingerprint evidence make a finding stale.
+
 Reference read surfaces display effective resolution, while editors retain the
 stored assignment baseline. Quality cells retain their semantic null state in
 phone cards (`mobile.showWhenEmpty`), so Not assessed is visible even though

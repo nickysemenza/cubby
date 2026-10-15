@@ -3,6 +3,7 @@
   "main": "tooling/calendar-test-worker.ts",
   "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat"],
+  "images": { "binding": "IMAGES" },
   "durable_objects": {
     "bindings": [
       {

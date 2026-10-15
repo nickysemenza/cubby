@@ -147,6 +147,9 @@ export type MailboxDiscoveryProgress = z.infer<typeof mailboxDiscoveryProgress>;
 /** Stateless relevance is resolved before original content enters a durable transcript. */
 export const mailboxRelevanceDecision = z.object({
   classification: mailboxClassification,
+  imageReadability: z
+    .enum(["sufficient", "needs_detail", "unreadable"])
+    .optional(),
   reason: z.string().optional(),
 });
 export type MailboxRelevanceDecision = z.infer<typeof mailboxRelevanceDecision>;

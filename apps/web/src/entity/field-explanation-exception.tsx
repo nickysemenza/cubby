@@ -10,6 +10,7 @@ import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { MarkdownText } from "~/ui/markdown";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
@@ -64,13 +65,15 @@ export function ExceptionControls({
         data-ledger-expanded
         className="flex basis-full flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground"
       >
-        <span className="min-w-0 flex-1 leading-5">
+        <div className="min-w-0 flex-1 leading-5">
           {check.exception.state === "stale"
             ? "Evidence changed since this exception was recorded: "
             : "Recorded as "}
           {dataExceptionReasonLabel[check.exception.reason]} —{" "}
-          {check.exception.note}
-        </span>
+          <MarkdownText className="text-xs">
+            {check.exception.note}
+          </MarkdownText>
+        </div>
         <Button
           size="xs"
           variant="outline"
@@ -97,12 +100,12 @@ export function ExceptionControls({
       className="grid w-full basis-full gap-2 border-t border-border pt-2"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!note.trim()) return;
         set.mutate({
           entityId: target,
           check: checkId,
           reason,
-          // The server requires a note; default to the reason's own label.
-          note: note.trim() || dataExceptionReasonLabel[reason],
+          note: note.trim(),
         });
       }}
     >
@@ -127,12 +130,17 @@ export function ExceptionControls({
         <Input
           id={`${fieldId}-note`}
           value={note}
-          placeholder="Optional"
+          required
+          placeholder="What did you check, and what did you find?"
           onChange={(event) => setNote(event.target.value)}
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="xs" type="submit" disabled={set.isPending}>
+        <Button
+          size="xs"
+          type="submit"
+          disabled={set.isPending || !note.trim()}
+        >
           Accept exception
         </Button>
         <Button

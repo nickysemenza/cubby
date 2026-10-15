@@ -36,6 +36,24 @@ within its context budget and marks omitted evidence explicitly. An unrelated
 verdict from a partial view becomes uncertain. Readable HTML is always a partial
 view because markup and visual evidence are omitted; retained originals and checksums
 remain complete. Sender domains never establish Purchase or Vendor associations.
+The exception-only Luna relevance path may acquire content images selected by
+that compactor when labels alone cannot explain them; tracking pixels are excluded.
+Guarded HTTP retrieval rejects private destinations. Optional remote-image
+failures leave evidence incomplete with diagnostics without aborting the batch.
+Gmail success JSON is bounded at 4 MiB before parsing; attachment endpoints allow
+36 MiB envelopes to preserve original retention independently of model admission. Decoded original
+mail and acquired attachment/remote-image evidence share a 3 MiB acquisition
+budget, with at most six supplied images. Private Cloudflare Images byte streams
+produce full-frame JPEG renditions (no public upload): standard 1280 by 2048,
+or one requested detail attempt at 2048 by 4096, each at most 128 KiB.
+An oversized encoding gets one smaller rendition (960 by 1536 standard,
+1536 by 3072 detail) before being marked unavailable. The complete
+serialized feature request is bounded at 256 KiB; provider envelope/schema overhead
+is outside that accounting. The model reports image readability. A still-unreadable
+or omitted image cannot justify a negative, while an independently established
+purchase stays related. Existing classification reasons include aggregate image,
+source-byte and request-byte diagnostics. Remote pixels are transient, not retained
+attachments; original attachment retention remains independent of model renditions.
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.
 A classifier-version refresh defers Emails already assigned to a frozen import

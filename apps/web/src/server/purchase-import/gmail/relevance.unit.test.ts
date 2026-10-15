@@ -68,6 +68,7 @@ describe("transient original attachment relevance", () => {
       });
     const interpret = vi.fn<MailRelevance>(async () => ({
       classification: "unrelated",
+      imageReadability: "sufficient",
     }));
     await expect(
       interpretMailRelevance(
@@ -75,7 +76,7 @@ describe("transient original attachment relevance", () => {
         make("synthetic-logo@example.test"),
         interpret,
       ),
-    ).resolves.toEqual({ classification: "unrelated" });
+    ).resolves.toMatchObject({ classification: "unrelated" });
     expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
       png,
     );
@@ -85,7 +86,7 @@ describe("transient original attachment relevance", () => {
         make("synthetic-logo@example.test", null),
         interpret,
       ),
-    ).resolves.toEqual({ classification: "unrelated" });
+    ).resolves.toMatchObject({ classification: "unrelated" });
     const longId = "synthetic-" + "x".repeat(520) + "@example.test";
     await expect(
       interpretMailRelevance(
@@ -93,7 +94,7 @@ describe("transient original attachment relevance", () => {
         make(longId, "logo.png", longId),
         interpret,
       ),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     await expect(
       interpretMailRelevance(
         gmail(500),
@@ -104,14 +105,14 @@ describe("transient original attachment relevance", () => {
         ),
         interpret,
       ),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     await expect(
       interpretMailRelevance(
         gmail(500),
         make("different-logo@example.test"),
         interpret,
       ),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     await expect(
       interpretMailRelevance(
         gmail(500),
@@ -119,7 +120,7 @@ describe("transient original attachment relevance", () => {
         interpret,
         false,
       ),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     const oversized = make("synthetic-logo@example.test");
     oversized.attachments = oversized.attachments.map((part) => ({
       ...part,
@@ -128,7 +129,7 @@ describe("transient original attachment relevance", () => {
     }));
     await expect(
       interpretMailRelevance(gmail(500), oversized, interpret),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     const unavailable = make("synthetic-logo@example.test");
     unavailable.attachments = unavailable.attachments.map((part) => ({
       ...part,
@@ -137,12 +138,12 @@ describe("transient original attachment relevance", () => {
     }));
     await expect(
       interpretMailRelevance(gmail(404), unavailable, interpret),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
     const missing = make("synthetic-logo@example.test");
     missing.attachments = [];
     await expect(
       interpretMailRelevance(gmail(404), missing, interpret),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toMatchObject({ classification: "uncertain" });
   });
 
   it("accepts an unrelated newsletter verdict despite decorative images", async () => {
@@ -326,7 +327,10 @@ describe("transient original attachment relevance", () => {
     }));
     await expect(
       interpretMailRelevance(gmail(500), normalized, interpret),
-    ).resolves.toEqual({ classification: "uncertain" });
+    ).resolves.toEqual({
+      classification: "uncertain",
+      reason: "Original model input exceeds the Email relevance byte budget",
+    });
     expect(interpret).not.toHaveBeenCalled();
   });
   it("accounts for inline attachment encoding before admitting model content and keeps omitted evidence uncertain", async () => {

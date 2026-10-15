@@ -161,6 +161,15 @@ const inputSchema = z
         body: z.string(),
         html: z.string().optional(),
         subject: z.string().optional(),
+        images: z
+          .array(
+            z.object({
+              mimeType: z.enum(["image/png", "image/jpeg"]),
+              dataBase64: z.string(),
+            }),
+          )
+          .max(6)
+          .optional(),
       })
       .refine(
         (entry) => Boolean(entry.body.trim() || entry.html?.trim()),
@@ -229,6 +238,19 @@ async function evaluateDecisions() {
         const parts = [
           part(entry.body, "text/plain"),
           ...(entry.html ? [part(entry.html, "text/html")] : []),
+          ...("images" in entry && entry.images
+            ? entry.images.map((image, index) => ({
+                partId: `synthetic-image-${index}`,
+                filename: `synthetic-image-${index}`,
+                mimeType: image.mimeType,
+                body: {
+                  data: Buffer.from(image.dataBase64, "base64").toString(
+                    "base64url",
+                  ),
+                  size: Buffer.from(image.dataBase64, "base64").length,
+                },
+              }))
+            : []),
         ];
         const raw = {
           id: "synthetic-evaluation",
@@ -417,6 +439,19 @@ async function evaluateRelevance() {
         parts: [
           part(entry.body, "text/plain"),
           ...(entry.html ? [part(entry.html, "text/html")] : []),
+          ...("images" in entry && entry.images
+            ? entry.images.map((image, index) => ({
+                partId: `synthetic-image-${index}`,
+                filename: `synthetic-image-${index}`,
+                mimeType: image.mimeType,
+                body: {
+                  data: Buffer.from(image.dataBase64, "base64").toString(
+                    "base64url",
+                  ),
+                  size: Buffer.from(image.dataBase64, "base64").length,
+                },
+              }))
+            : []),
           ...("inlineImage" in entry && entry.inlineImage
             ? [
                 {
