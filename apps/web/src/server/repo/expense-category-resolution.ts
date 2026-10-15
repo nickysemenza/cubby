@@ -125,7 +125,7 @@ const storedExpenseSpendingCategorySql = (
   );
 
 /** Stored Purchase defaults are inputs; derived Purchase summaries never are. */
-export function expenseSpendingCategoryResolutionSql(
+function expenseSpendingCategoryChoiceSql(
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
   ignoreOverride = false,
@@ -145,8 +145,7 @@ export function expenseSpendingCategoryResolutionSql(
   const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
   const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
-  return sql`(
-    WITH RECURSIVE ancestors AS (
+  return sql`WITH RECURSIVE ancestors AS (
       ${productCategorySpendingAncestorsSql(sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`, draft)}
     ), mapping AS (
       SELECT a.* FROM ancestors a WHERE a."spendingCategoryMode"<>'inherit' ORDER BY a.depth LIMIT 1
@@ -181,7 +180,17 @@ export function expenseSpendingCategoryResolutionSql(
         CASE WHEN ${unclassified} THEN NULL::uuid ELSE COALESCE(context_id,product_mapping_id,
           CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) END AS fallback_id
       FROM candidates f
-    )
+    )`;
+}
+
+export function expenseSpendingCategoryResolutionSql(
+  alias: string,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+  ignoreOverride = false,
+): SQL {
+  const principal = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}`;
+  const categoryCatalog = spendingCategoryCatalogSql(draft);
+  return sql`(${expenseSpendingCategoryChoiceSql(alias, draft, ignoreOverride)}
     SELECT jsonb_build_object(
       'categoryId',c.id,'fallbackCategoryId',fallback.id,
       'mode',CASE WHEN f.override_id IS NOT NULL THEN 'explicit' WHEN c.id IS NOT NULL THEN 'inherit' ELSE 'none' END,
@@ -208,9 +217,9 @@ export const effectiveExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL =>
-  sql`(${expenseSpendingCategoryResolutionSql(alias, draft)}->>'categoryId')::uuid`;
+  sql`(${expenseSpendingCategoryChoiceSql(alias, draft)} SELECT category_id FROM chosen)`;
 export const fallbackExpenseSpendingCategorySql = (alias: string): SQL =>
-  sql`(${expenseSpendingCategoryResolutionSql(alias, undefined, true)}->>'categoryId')::uuid`;
+  sql`(${expenseSpendingCategoryChoiceSql(alias, undefined, true)} SELECT category_id FROM chosen)`;
 export const parseExpenseCategoryResolution = (
   value: unknown,
 ): FieldResolution => fieldResolutionSchema.parse(value);

@@ -2,12 +2,22 @@ import { tradeSchema } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { unwrapDb } from "./database-helpers";
+import { expenseSpendingCategoryResolutionSql } from "./expense-category-resolution";
 import { effectiveExpenseTradeSql } from "./expense-inheritance";
 import { expenseSpendingAllocationSql } from "./expense-spending-allocation";
 import { effectiveExpenseSpendingCategorySql } from "./purchase-evidence-policy";
 import { insertWithShortcode } from "./shortcode-utils";
+
+const categoryPlanNode = z.object({
+  "Relation Name": z.string().optional(),
+  "Actual Loops": z.number().optional(),
+  get Plans() {
+    return z.array(categoryPlanNode).optional();
+  },
+});
 
 // Real SQL regressions: mixed retailer purchases must not flatten Product
 // classifications, blocked ancestors must remain unknown, and restaurant
@@ -73,10 +83,33 @@ describe("Expense category resolution", () => {
   }
   async function effective(id: string) {
     const rows = await unwrapDb(ctx.db).execute(
-      sql`SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id=${id}`,
+      sql`SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category,
+        ${expenseSpendingCategoryResolutionSql("e")}->>'categoryId' AS explained_category
+        FROM "Expense" e WHERE e.id=${id}`,
     );
+    expect(rows.rows[0]?.category).toBe(rows.rows[0]?.explained_category);
     return rows.rows[0]?.category;
   }
+  it("resolves category IDs without executing provenance projections", async () => {
+    const f = await fixture();
+    const result = await unwrapDb(ctx.db)
+      .execute(sql`EXPLAIN (ANALYZE, FORMAT JSON)
+      SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e`);
+    const plan = z
+      .array(z.object({ Plan: categoryPlanNode }))
+      .parse(result.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+    let catalogLookups = 0;
+    const inspect = (node: z.infer<typeof categoryPlanNode>) => {
+      if (node["Relation Name"] === "SpendingCategory")
+        catalogLookups += node["Actual Loops"] ?? 0;
+      node.Plans?.forEach(inspect);
+    };
+    inspect(plan);
+    // The four candidate catalog checks validate overrides and inherited IDs;
+    // scalar reads must not also load labels and fallback provenance.
+    expect(catalogLookups).toBeLessThanOrEqual(4);
+    expect(await effective(f.expense.id)).toBe(f.clothing.id);
+  });
   it("groups derived category and trade by the same database expression", async () => {
     await fixture();
     const category = effectiveExpenseSpendingCategorySql("e");
