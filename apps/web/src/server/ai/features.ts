@@ -238,7 +238,7 @@ export const FIELD_SUGGESTION_FEATURE = defineFeature({
   feature: "field-suggestion",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-09-18.1",
+  promptVersion: "2026-10-15.1",
 }) satisfies AiDecisionFeature;
 
 /**

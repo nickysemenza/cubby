@@ -662,7 +662,7 @@ describe("suggestFields", () => {
     expect(decisionPort).not.toHaveBeenCalled();
   });
 
-  it("rolls a split tree pick up to the branch that clears high confidence", async () => {
+  it("preserves a model's leaf pick and confidence when its branch has more probability", async () => {
     interface Node {
       id: string;
       name: string;
@@ -709,13 +709,11 @@ describe("suggestFields", () => {
       { decisionPort, registry: { "product.categoryId": spec } },
     );
     expect(out.suggestions.categoryId).toMatchObject({
-      value: "CAT-AAAA",
-      label: "Food",
-      confidence: "high",
+      value: "CAT-BBBB",
+      label: "Prepared",
+      confidence: "medium",
     });
-    expect(out.suggestions.categoryId?.probability).toBeCloseTo(0.88);
-    // The more specific guess stays on offer as the first runner-up.
-    expect(out.suggestions.categoryId?.alternatives[0]?.value).toBe("CAT-BBBB");
+    expect(out.suggestions.categoryId?.probability).toBeCloseTo(0.7);
   });
 
   it.each([
@@ -723,11 +721,6 @@ describe("suggestFields", () => {
       name: "a directly selected parent",
       choiceIndex: 0,
       probabilities: [0.9, 0.02, 0.03, 0.03, 0.02],
-    },
-    {
-      name: "a branch rollup",
-      choiceIndex: 1,
-      probabilities: [0.1, 0.7, 0.08, 0.1, 0.02],
     },
   ])(
     "does not propose an ancestor of the current category for $name",

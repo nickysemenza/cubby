@@ -1477,9 +1477,11 @@ surface opens the same suggestion body (`features/ai/suggestion-body.tsx`):
 Accept / Reject (with "Use a different value…"), confidence as "92% · high"
 (`formatConfidence`), the runner-up and its probability, the basis fields the
 model read, and a provenance caption (model, Run, time, AI usage). Jev and Clef
-return no prose, so those facts are the suggestion's reasoning; a branch
-roll-up's note is shown inline, never in a `title`. Weaker live proposals stay
-behind the cell's mark. Percentages describe model or branch confidence, not a
+return no prose, so those facts are the suggestion's reasoning. A tree suggestion
+keeps the model's selected category and confidence; ancestor probability is not
+substituted for a leaf decision. Ancestors of the current category stay suppressed
+as correction offers. Weaker live proposals stay
+behind the cell's mark. Percentages describe model confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
 enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
