@@ -1,4 +1,7 @@
-import type { MailboxRelevanceDecision } from "@cubby/schemas/mailbox-research";
+import type {
+  MailboxRelevanceDecision,
+  MailImageEvidence,
+} from "@cubby/schemas/mailbox-research";
 import {
   assertResponseContentType,
   ExternalFetchError,
@@ -170,6 +173,7 @@ const readAttachmentContext = async (
 export type RelevanceImagePorts = {
   fetcher?: typeof fetch;
   prepareImage?: typeof prepareModelImage;
+  onEvidence?: (evidence: MailImageEvidence) => void;
 };
 
 async function acquireRemoteImage(
@@ -247,16 +251,7 @@ async function upgradeImageDetail(
 function relevanceWithEvidence(
   decision: MailboxRelevanceDecision,
   classification: MailboxRelevanceDecision["classification"],
-  evidence: {
-    attempted: number;
-    prepared: number;
-    supplied: number;
-    candidates: number;
-    sourceBytes: number;
-    requestBytes: number;
-    complete: boolean;
-    failures: string[];
-  },
+  evidence: MailImageEvidence,
 ): MailboxRelevanceDecision {
   if (!evidence.attempted && !evidence.prepared && !evidence.failures.length)
     return classification === decision.classification
@@ -439,19 +434,46 @@ export async function interpretMailRelevance(
     preparedImages.push({ bytes: acquired.bytes, index: content.length - 1 });
     suppliedSources.add(src);
   }
-  if (modelBytes() > MAX_TRANSIENT_BYTES)
+  const evidence = (
+    decision: MailboxRelevanceDecision | null,
+    detailRetried: boolean,
+  ): MailImageEvidence => ({
+    attempted,
+    prepared: preparedImages.length,
+    supplied: suppliedImageCount,
+    candidates:
+      candidates.length +
+      normalized.attachments.filter((attachment) =>
+        attachment.mimeType?.startsWith("image/"),
+      ).length,
+    sourceBytes: acquiredBytes,
+    requestBytes: modelBytes(),
+    complete: complete && view.complete(availableContentIds, suppliedSources),
+    failures: imageFailures,
+    detailRetried,
+    imageReadability: decision?.imageReadability ?? null,
+    rawClassification: decision?.classification ?? null,
+  });
+  if (modelBytes() > MAX_TRANSIENT_BYTES) {
+    ports.onEvidence?.(evidence(null, false));
     return {
       classification: "uncertain",
       reason: "Original model input exceeds the Email relevance byte budget",
     };
+  }
   let decision = await interpret(MAILBOX_RELEVANCE_FEATURE.request(content));
+  let detailRetried = false;
   if (
     decision.classification !== "related" &&
     decision.imageReadability === "needs_detail" &&
     preparedImages.length
   ) {
-    if (await upgradeImageDetail(content, preparedImages, prepare, modelBytes))
+    if (
+      await upgradeImageDetail(content, preparedImages, prepare, modelBytes)
+    ) {
+      detailRetried = true;
       decision = await interpret(MAILBOX_RELEVANCE_FEATURE.request(content));
+    }
   }
   const readable =
     suppliedImageCount === 0 || decision.imageReadability === "sufficient";
@@ -462,14 +484,7 @@ export async function interpretMailRelevance(
       !view.complete(availableContentIds, suppliedSources))
       ? "uncertain"
       : decision.classification;
-  return relevanceWithEvidence(decision, classification, {
-    attempted,
-    prepared: preparedImages.length,
-    supplied: suppliedSources.size,
-    candidates: candidates.length,
-    sourceBytes: acquiredBytes,
-    requestBytes: modelBytes(),
-    complete,
-    failures: imageFailures,
-  });
+  const diagnostics = evidence(decision, detailRetried);
+  ports.onEvidence?.(diagnostics);
+  return relevanceWithEvidence(decision, classification, diagnostics);
 }

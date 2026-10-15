@@ -46,6 +46,7 @@ const imagePorts = () => ({
 describe("bounded Email image evidence", () => {
   it("supplies content pixels and excludes tracking pixels before accepting a negative", async () => {
     const ports = imagePorts();
+    const onEvidence = vi.fn();
     const interpret = vi.fn<MailRelevance>(async () => ({
       classification: "unrelated",
       imageReadability: "sufficient",
@@ -56,7 +57,7 @@ describe("bounded Email image evidence", () => {
       interpret,
       true,
       undefined,
-      ports,
+      { ...ports, onEvidence },
     );
     expect(result.classification).toBe("unrelated");
     expect(ports.fetcher).toHaveBeenCalledTimes(1);
@@ -64,10 +65,21 @@ describe("bounded Email image evidence", () => {
       INLINE_EMAIL_PNG_BASE64,
     );
     expect(result.reason).toContain("1/1 content images");
+    expect(onEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supplied: 1,
+        candidates: 1,
+        complete: true,
+        imageReadability: "sufficient",
+        detailRetried: false,
+        failures: [],
+      }),
+    );
   });
 
   it("reuses acquired pixels for one detail retry and keeps a still-unreadable negative uncertain", async () => {
     const ports = imagePorts();
+    const onEvidence = vi.fn();
     const interpret = vi.fn<MailRelevance>(async () => ({
       classification: "unrelated",
       imageReadability: "needs_detail",
@@ -78,11 +90,19 @@ describe("bounded Email image evidence", () => {
       interpret,
       true,
       undefined,
-      ports,
+      { ...ports, onEvidence },
     );
     expect(result.classification).toBe("uncertain");
     expect(interpret).toHaveBeenCalledTimes(2);
     expect(ports.fetcher).toHaveBeenCalledTimes(1);
+    expect(onEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supplied: 1,
+        imageReadability: "needs_detail",
+        detailRetried: true,
+        rawClassification: "unrelated",
+      }),
+    );
     expect(ports.prepareImage.mock.calls.map((call) => call[1])).toEqual([
       "standard",
       "detail",

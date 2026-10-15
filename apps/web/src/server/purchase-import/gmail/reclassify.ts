@@ -15,6 +15,7 @@ import {
   mailTriagePreviewOut,
   type MailTriagePreviewInput,
   type MailTriagePreviewOut,
+  type MailImageEvidence,
 } from "@cubby/schemas/mailbox-research";
 import {
   mailReclassifyRunInput,
@@ -27,6 +28,7 @@ import { groupBy } from "es-toolkit";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
+import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import {
   getDb,
   notDeleted,
@@ -47,7 +49,16 @@ import { normalizeMessage } from "./normalize";
 import { recordEmailCandidateObservation } from "./observations";
 import { gmailProviderForUser } from "./provider";
 import { prepareReclassification } from "./reclassification-work";
-import { routeGmailMessage, type MailTriage } from "./triage";
+import {
+  interpretMailRelevance,
+  type MailRelevance,
+  type RelevanceImagePorts,
+} from "./relevance";
+import {
+  gmailOriginalComplete,
+  routeGmailMessage,
+  type MailTriage,
+} from "./triage";
 
 type IngestPorts = Pick<
   Parameters<typeof ingestGmailMessages>[2],
@@ -348,15 +359,18 @@ export async function rerunEmailPreview(
 }
 
 /**
- * Mail triage on one owned Email's Gmail original, fetched as Reclassify
- * fetches it, without recording anything about the Email: no observation and
- * no Relevance change. Its Run only holds the decision model's usage.
+ * Preview the classification stages from the Gmail original without publication.
+ * Only the diagnostic Run and its model usage are persisted.
  */
 export async function previewMailTriage(
   db: Database,
   rawInput: MailTriagePreviewInput,
   actor: ActorContext,
-  ports: { triage?: MailTriage } = {},
+  ports: {
+    triage?: MailTriage;
+    relevance?: MailRelevance;
+    images?: RelevanceImagePorts;
+  } = {},
 ): Promise<MailTriagePreviewOut> {
   const input = mailTriagePreviewInput.parse(rawInput);
   const [row] = await ownedEmailRows(
@@ -383,6 +397,7 @@ export async function previewMailTriage(
       email.mailboxId,
     ),
   );
+  const startedAt = Date.now();
   try {
     const provider = await gmailProviderForUser(
       db,
@@ -390,24 +405,94 @@ export async function previewMailTriage(
       email.mailboxId,
     );
     const message = await provider.getMessage(email.messageId);
-    let model: MailTriagePreviewOut["model"] = null;
+    let model: MailTriagePreviewOut["triage"]["model"] = null;
+    let triageCalls = 0;
+    let relevanceCalls = 0;
     const triage =
       ports.triage ??
       (await import("./triage-model")).productionMailTriage(
         db,
         created.id,
         (call) => {
+          triageCalls++;
           model = supportedDecisionModelSchema.parse(call.model);
         },
         input.decisionModel,
       );
+    const normalized = normalizeMessage(email.mailboxId, message);
     const { decision, view } = await routeGmailMessage(
       message,
-      normalizeMessage(email.mailboxId, message),
+      normalized,
       triage,
     );
+    let relevance: MailTriagePreviewOut["relevance"] = null;
+    let relevanceModel: string | null = null;
+    let imageEvidence: MailImageEvidence | null = null;
+    if (decision.classification === "uncertain") {
+      const interpret =
+        ports.relevance ??
+        (await import("./triage-model")).productionMailRelevance(
+          db,
+          created.id,
+          (call) => {
+            relevanceCalls++;
+            relevanceModel = call.model;
+          },
+        );
+      relevance = await interpretMailRelevance(
+        provider,
+        normalized,
+        interpret,
+        gmailOriginalComplete(message, normalized),
+        undefined,
+        {
+          ...ports.images,
+          onEvidence: (evidence) => {
+            imageEvidence = evidence;
+          },
+        },
+      );
+    }
+    const usage = await listAiUsageForRun(db, created.id, { limit: 100 });
+    // Usage is queued telemetry; a missing row is not a free model call.
+    const recordedCalls = (operation: string) =>
+      usage.records.filter(
+        (call) => call.operation === operation && call.status === "succeeded",
+      ).length;
+    const accountingPending =
+      recordedCalls("mailbox-triage") < triageCalls ||
+      recordedCalls("mailbox-relevance") < relevanceCalls;
     await finishReclassifyRun(db, created.id, []);
-    return mailTriagePreviewOut.parse({ ...decision, model, view });
+    return mailTriagePreviewOut.parse({
+      ...(relevance
+        ? {
+            classification: relevance.classification,
+            stage: "model",
+            reason:
+              relevance.reason ??
+              `The relevance model classified the message ${relevance.classification}`,
+          }
+        : decision),
+      model: relevance ? relevanceModel : model,
+      runId: created.shortcode,
+      triage: { ...decision, model },
+      relevance,
+      imageEvidence,
+      usage: {
+        calls: triageCalls + relevanceCalls,
+        accountingPending,
+        elapsedMs: Date.now() - startedAt,
+        standardCost:
+          accountingPending || usage.standardUnpricedCount
+            ? null
+            : usage.standardCost,
+        chargedCost:
+          accountingPending || usage.chargedUnpricedCount
+            ? null
+            : usage.chargedCost,
+      },
+      view,
+    });
   } catch (error) {
     await finishReclassifyRun(db, created.id, [
       scrubErrorMessage(error instanceof Error ? error.message : String(error)),
