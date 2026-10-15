@@ -84,7 +84,7 @@ the Not in Cubby filter and require an explicit reuse/add decision in review.
 An unavailable server index leaves unmatched assets visibly unchecked. A
 recognition badge does not certify the resolution of an older upload.
 
-The Photos browser and attachment picker offer **Dim photos in Cubby** beside
+The Photos browser and attachment picker offer **Dim photos in Cubby** below
 the grid filters. It defaults off and remembers the choice on the device across
 both entry points. When enabled, only strong matches have desaturated, dimmed
 thumbnails, including images without an entity owner. Badges, selection numbers,

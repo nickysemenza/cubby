@@ -324,7 +324,9 @@ struct PhotoLibraryHeader: View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             filterRow
             Toggle("Dim photos in Cubby", isOn: $dimPhotosInCubby)
-                .frame(minHeight: 44)
+                #if os(iOS)
+                    .frame(minHeight: 44)
+                #endif
                 .accessibilityIdentifier("photos.dimInCubby")
                 .help("Greys out strong Cubby matches. Photos remain selectable.")
             PhotoLibraryStagePanel(
