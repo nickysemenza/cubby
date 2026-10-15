@@ -2574,7 +2574,11 @@ export function PhotoGroupReview({
     for (const entry of [...proposal.images, ...proposal.skip]) {
       groupByImage.set(entry.id, proposal.groupKey);
     }
-  const busy = action.isPending || pendingEdits > 0;
+  // The save counter settles before Apply focuses a dirty field. Mutation
+  // notifications can lag behind it and leave that field briefly disabled.
+  const busy =
+    (action.isPending && action.variables?.action !== "save") ||
+    pendingEdits > 0;
 
   return (
     <Stack gap="lg">
