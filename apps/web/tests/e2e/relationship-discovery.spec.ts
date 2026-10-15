@@ -1,23 +1,23 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 
 import {
   projectAssignment,
   relationshipDiscoveryContract,
-} from "./relationship-discovery-contract";
+} from "./support/relationship-discovery-contract";
 import {
   seedPlantPrerequisite,
   seedPlacementReviewPrerequisite,
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
-} from "./fixtures-catalog";
-import { seedRelationshipReviewPrerequisite } from "./fixtures-finance";
+} from "./fixtures/catalog";
+import { seedRelationshipReviewPrerequisite } from "./fixtures/finance";
 import {
   escapeRegExp,
   gotoAuthenticatedPage,
   readExpense,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 relationshipDiscoveryContract();
 

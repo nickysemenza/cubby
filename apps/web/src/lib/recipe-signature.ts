@@ -71,7 +71,7 @@ export function importRecipeSignature(
  *
  * A cookbook recipe never travels through `ImportRecipe` any more — the crate
  * hands the server the book tree and `cookbookRecipeToRecipeInput` (see
- * `~/server/repo/import-recipe-convert.ts`) persists it directly — so this
+ * `~/server/domains/recipe/repo/import-recipe-convert.ts`) persists it directly — so this
  * mirrors that converter field for field rather than reusing the import-recipe
  * path. Getting it wrong shows up as a recipe stuck on "will update" forever,
  * so the correspondences worth naming are:

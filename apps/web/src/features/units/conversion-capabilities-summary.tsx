@@ -10,7 +10,7 @@ import {
 import { Row, Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { CoverageChips, MacroChips } from "./CoverageChips";
+import { CoverageChips, MacroChips } from "./coverage-chips";
 import { KindIcon } from "./kind-icon";
 
 const TIER_LABEL = {

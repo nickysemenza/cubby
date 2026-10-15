@@ -4,7 +4,7 @@ This target has no committed Swift. swift-openapi-generator's SwiftPM build
 plugin (`OpenAPIGenerator`, declared in `CubbyKit/Package.swift`) generates the
 typed client from `openapi.json` and `openapi-generator-config.yaml` in this
 directory. Both are gitignored and written by `pnpm generate`
-(`scripts/generator/http-api/`), which install, the Xcode scheme pre-action
+(`apps/web/generator/http-api/`), which install, the Xcode scheme pre-action
 and `apps/apple/scripts/prepare-project.sh` run. The document is the whole
 HTTP API, which carries only the contract members flagged `native:`, so the
 generator config has no operation filter. The entity kernel operations and the

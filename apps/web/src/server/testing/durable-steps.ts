@@ -1,4 +1,4 @@
-import type { DurableSteps } from "~/server/workflow-runs/step";
+import type { DurableSteps } from "~/server/workflows/runs/step";
 
 /**
  * An in-memory `DurableSteps` with Cloudflare's replay semantics: a step

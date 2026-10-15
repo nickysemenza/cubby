@@ -10,8 +10,8 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location, productCategory } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
 
 describe("factories against the entity kernel", () => {
   const ctx = withTestDb();

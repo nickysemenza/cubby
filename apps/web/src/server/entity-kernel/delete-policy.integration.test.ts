@@ -73,6 +73,11 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 import {
+  databaseForTransaction,
+  getDb,
+  insertAndReturn,
+} from "~/server/db/helpers";
+import {
   purchase,
   entityExternalId,
   email as emailTable,
@@ -99,6 +104,13 @@ import {
   statementImport,
   statementRow,
 } from "~/server/db/schema";
+import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
+import { publishProductPair } from "~/server/domains/product/repo/product-match-candidate";
+import {
+  retainedMailFixture,
+  sourceOrderObservationFixture,
+} from "~/server/domains/purchase-import/order-import.fixtures";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -115,27 +127,15 @@ import {
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
-import {
-  retainedMailFixture,
-  sourceOrderObservationFixture,
-} from "~/server/purchase-import/order-import.fixtures";
-import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
-import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
-import {
-  databaseForTransaction,
-  getDb,
-  insertAndReturn,
-} from "~/server/repo/database-helpers";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
-import { linkValues } from "~/server/repo/entity-links";
-import { attachExistingImageToEntity } from "~/server/repo/image";
-import { publishProductPair } from "~/server/repo/product-match-candidate";
-import { createImageFixture } from "~/server/repo/repo.fixtures";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   insertWithShortcode,
   SHORTCODE_TABLE,
-} from "~/server/repo/shortcode-utils";
+} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 /**
  * Edges the seeded universe leaves without a live referencing row. Each is a

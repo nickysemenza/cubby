@@ -90,6 +90,19 @@ Traps, all seen for real:
 
 ## Data, layers, and deletion
 
+Server code is domain-first ([ADR 0019](../adr/0019-domain-first-server-layout.md)):
+`server/domains/<entity>/` (the kebab manifest name) or a cross-entity feature
+folder beside it, `server/generic/<capability>/` for entity-agnostic
+capabilities, and platform folders (`db/`, `http/`, `operation-runtime/`,
+`workflows/`, …). Inside a domain the role is the path segment: `repo`,
+`service`, `operations` — a `<role>.ts` file, or a `<role>/` folder once it
+holds more than one module; tests sit beside their file. `cubby/domain-layers`
+keeps imports flowing operations → service → repo → db, keeps `ai/` out of
+repos, and keeps platform and generic code off a domain's service and
+operations; existing violations are a shrink-only per-file baseline
+(`tools/oxlint/cubby/domain-layers-baseline.json`). No `index.ts` barrels in
+`domains/`, `generic/`, or client `features/` (`cubby/no-domain-barrel`).
+
 `Database` is a request-scoped handle: routers pass it onward, services
 orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
 Its callback receives a Drizzle transaction directly. Use
@@ -183,7 +196,7 @@ an instant happened on is `householdLocalDate(instant)` (`~/lib/household-date`)
 Timestamp columns are `timestamp without time zone` holding UTC wall time, so
 SQL `::date` and `date_trunc('day', …)` on them are UTC days: use
 `householdDaySql` and bound day filters with `householdDayRangeConditions`
-(`server/repo/database-helpers`). Deliberate UTC days — retained-settlement
+(`server/db/helpers`). Deliberate UTC days — retained-settlement
 payment keys that must match `chargedAt::date`, operational bucket keys — carry
 a disable comment with the reason.
 
@@ -192,7 +205,7 @@ transaction-bound context: a service still bound to the request pool that
 updates the row the transaction holds deadlocks silently, and only E2E on
 workerd exposes it. A data exception's fingerprint is declared per check in
 that check's registry binding (`CheckBinding.fingerprint(t)` in
-`apps/web/src/server/repo/data-quality/checks/<entity>.ts`) — the inputs it
+`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`) — the inputs it
 reads, for example the live Expense count or primary-document set — not
 `updatedAt`: unrelated edits must not reopen it, while changed evidence must.
 Hydration and the filter/sort SQL evaluate that same binding (one SQL

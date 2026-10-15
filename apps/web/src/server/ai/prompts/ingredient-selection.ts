@@ -1,6 +1,6 @@
+import type { MergeShortlistEntry } from "~/server/ai/enrichment/merge-shortlist";
+import type { UsdaShortlistEntry } from "~/server/ai/enrichment/usda-shortlist";
 import type { AiSelectionSpec } from "~/server/ai/selection";
-import type { MergeShortlistEntry } from "~/server/services/ai-enrichment/merge-shortlist";
-import type { UsdaShortlistEntry } from "~/server/services/ai-enrichment/usda-shortlist";
 
 const USDA_MATCH_RULES = `You map a recipe ingredient to the single best USDA FoodData Central entry, for nutrition and cost.
 

@@ -1,0 +1,851 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  FieldResolution,
+  FieldResolutions,
+} from "@cubby/schemas/field-resolution";
+import {
+  type ProductCategoryId,
+  type ProductCategoryShortcode,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import {
+  type ProductCategoryCreateInput,
+  type ProductCategoryFeature,
+  type ProductCategoryFilters,
+  type ProductCategoryOut,
+  type ProductCategorySummary,
+  type ProductCategoryUpdateData,
+  productCategoryOut,
+} from "@cubby/schemas/product-category";
+import {
+  PRODUCT_CATEGORY_MAX_DEPTH as MAX_PRODUCT_CATEGORY_DEPTH,
+  productCategoryFeature,
+  productCategorySummary,
+} from "@cubby/schemas/product-category-fields";
+import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import type { z } from "zod";
+
+import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { buildPartialUpdateValues } from "~/server/db/helpers";
+import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { product, productCategory } from "~/server/db/schema";
+import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
+import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import { categoryPathLabel } from "~/server/entity-kernel/repo/detail-display-labels";
+import {
+  asActor,
+  defineRepository,
+  listOn,
+  listReadOn,
+  onDb,
+} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { listScaffold } from "~/server/generic/list/repo/list";
+import {
+  hydrateListRead,
+  loadListGroup,
+  type ListProjection,
+  type ListReadRow,
+  wantsListGroup,
+} from "~/server/generic/list/repo/list-projection";
+import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import {
+  lookupEntityReferences,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+import { categoryMappingSql } from "./category-connections";
+import { loadCategoryConnections } from "./category-connections";
+import { categoryDescendantsSql } from "./product-category-sql";
+
+const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
+  "ProductCategory.parentId": {
+    code: "block-child-categories",
+    effect: "block",
+    description:
+      "Move or delete child categories before deleting their parent.",
+  },
+  "Product.categoryId": {
+    code: "block-products",
+    effect: "block",
+    description: "Products retain their selected category until reassigned.",
+  },
+  "PhotoGroupProposal.productCreateCategoryId": {
+    code: "clear-proposal-category",
+    effect: "detach",
+    description:
+      "Deleting a category clears it from a proposed photo group's new Product, which is then created unclassified.",
+  },
+} as const satisfies IncomingEdgePolicy<
+  "productCategory",
+  OperationDisposition
+>;
+
+type CategoryRow = typeof productCategory.$inferSelect;
+
+type CategoryPathRow = {
+  root: string;
+  path: Array<{
+    id: string;
+    name: string;
+    feature: string | null;
+    stockTracked: boolean | null;
+  }>;
+};
+
+const scaffold = listScaffold("productCategory", productCategory);
+
+const parseFeature = (feature: string | null): ProductCategoryFeature | null =>
+  productCategoryFeature.nullable().parse(feature);
+
+/**
+ * Maps a category with parent links to the compact, root-first Product shape.
+ * The bounded walk also keeps an accidentally-corrupt stored cycle from making
+ * a product read non-terminating.
+ */
+type CategorySummaryNode = {
+  shortcode: string;
+  name: string;
+  feature: ProductCategoryFeature | null;
+  parent?: CategorySummaryNode | null;
+};
+
+export const mapCategorySummary = (
+  node: CategorySummaryNode,
+): ProductCategorySummary => {
+  const path: Array<{ id: ProductCategoryShortcode; name: string }> = [];
+  let feature: ProductCategoryFeature | null = null;
+  let current: CategorySummaryNode | null | undefined = node;
+  let depth = 0;
+  while (current && depth < MAX_PRODUCT_CATEGORY_DEPTH) {
+    path.unshift({
+      id: parseShortcodeFor("productCategory", current.shortcode),
+      name: current.name,
+    });
+    feature ??= current.feature;
+    current = current.parent;
+    depth += 1;
+  }
+  return productCategorySummary.parse({
+    id: parseShortcodeFor("productCategory", node.shortcode),
+    name: node.name,
+    path,
+    feature,
+  });
+};
+
+/**
+ * The binding a category resolves to: its own, else the nearest ancestor's.
+ * `path` is root-first, so search from the leaf end — a nested binding
+ * (Tools › Tool consumables) must win over the root's.
+ */
+const closestPathFeature = (
+  path: CategoryPathRow["path"],
+): ProductCategoryFeature | null =>
+  parseFeature(
+    [...path].reverse().find(({ feature }) => feature !== null)?.feature ??
+      null,
+  );
+
+const pathsFor = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+): Promise<Map<string, CategoryPathRow["path"]>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db).execute<CategoryPathRow>(sql`
+    WITH RECURSIVE ancestors AS (
+      SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", c."feature", c."stockTracked", 0 AS depth,
+             ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c
+      WHERE c."id" IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+        AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", parent."stockTracked", a.depth + 1,
+             a.visited || parent."id"
+      FROM ancestors a
+      JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+      WHERE parent."deletedAt" IS NULL
+        AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
+        AND NOT parent."id" = ANY(a.visited)
+    )
+    SELECT root, json_agg(json_build_object('id', shortcode, 'name', name, 'feature', feature, 'stockTracked', "stockTracked") ORDER BY depth DESC) AS path
+    FROM ancestors
+    GROUP BY root
+  `);
+  return new Map(rows.rows.map((row) => [row.root, row.path]));
+};
+
+/**
+ * Live products in each category's subtree. One recursive walk seeded by
+ * every requested id, with the same depth bound and visited-array guard as
+ * `categoryDescendantsSql`, so a stored cycle cannot make a read loop.
+ */
+const productCountsFor = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+): Promise<Map<string, number>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db).execute<{ root: string; count: number }>(sql`
+    WITH RECURSIVE descendants AS (
+      SELECT c."id" AS root, c."id", ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c
+      WHERE c."id" IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+        AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT d.root, child."id", d.visited || child."id"
+      FROM descendants d
+      JOIN "ProductCategory" child ON child."parentId" = d."id"
+      WHERE child."deletedAt" IS NULL
+        AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+        AND NOT child."id" = ANY(d.visited)
+    )
+    SELECT d.root, count(p."id")::int AS count
+    FROM descendants d
+    JOIN "Product" p ON p."categoryId" = d."id" AND p."deletedAt" IS NULL
+    GROUP BY d.root
+  `);
+  return new Map(rows.rows.map((row) => [row.root, row.count]));
+};
+
+/** Keep stored decisions separate from the live ancestor fallback. */
+/** The nearest mapped ancestor (or this category) supplies the spending
+ * category; a direct mapping or a block is this category's own decision. */
+const spendingCategoryResolution = (
+  mapping: z.infer<typeof categoryMappingSchema> | undefined,
+): FieldResolution => {
+  const value = mapping?.category?.id ?? null;
+  const own = mapping?.state === "direct" || mapping?.state === "blocked";
+  return {
+    mode:
+      mapping?.state === "blocked"
+        ? "none"
+        : mapping?.state === "direct"
+          ? "explicit"
+          : "inherit",
+    storedValue: own ? value : null,
+    value,
+    fallbackValue: mapping?.state === "inherited" ? value : null,
+    source:
+      mapping?.state === "inherited" && mapping.source
+        ? mapping.source.name
+        : own
+          ? "Set on this category"
+          : "No mapped ancestor",
+    sourceEntity:
+      mapping?.state === "inherited" && mapping.source
+        ? {
+            entityKind: "productCategory",
+            entityId: mapping.source.id,
+            name: mapping.source.name,
+          }
+        : null,
+    matchesFallback: false,
+    canReset: false,
+  };
+};
+
+const categoryResolutions = (
+  row: CategoryRow,
+  path: CategoryPathRow["path"],
+): FieldResolutions => {
+  const source = path
+    .slice(0, -1)
+    .reverse()
+    .find((ancestor) => ancestor.feature !== null);
+  const storedValue = parseFeature(row.feature);
+  const fallbackValue = parseFeature(source?.feature ?? null);
+  const value = storedValue ?? fallbackValue;
+  return {
+    feature: {
+      mode: storedValue === null ? "inherit" : "explicit",
+      storedValue,
+      value,
+      fallbackValue,
+      source:
+        storedValue !== null
+          ? "Permanent feature binding"
+          : (source?.name ?? "No ancestor feature"),
+      sourceEntity:
+        storedValue === null && source
+          ? {
+              entityKind: "productCategory",
+              entityId: source.id,
+              name: source.name,
+            }
+          : null,
+      matchesFallback: value === fallbackValue,
+      canReset: false,
+    },
+    stockTracked: resolveStockTrackingField(
+      row.stockTracked,
+      (() => {
+        const ancestors = path.slice(0, -1).reverse();
+        const nearest = ancestors.find(
+          (ancestor) => ancestor.stockTracked !== null,
+        );
+        return ancestors.length === 0
+          ? null
+          : {
+              id: nearest?.id ?? null,
+              name: nearest?.name ?? null,
+              value: nearest?.stockTracked ?? null,
+              evaluation: ancestors.map((ancestor) => ({
+                entityKind: "productCategory" as const,
+                entityId: ancestor.id,
+                name: ancestor.name,
+                value: ancestor.stockTracked,
+                assigned: ancestor.stockTracked !== null,
+              })),
+            };
+      })(),
+      "category decision",
+    ),
+  };
+};
+
+const hydrateRead = async (
+  db: Database | DrizzleTransaction,
+  rows: CategoryRow[],
+  projection: ListProjection,
+): Promise<ListReadRow[]> => {
+  const ids = rows.map((row) => row.id);
+  return hydrateListRead(db, "productCategory", rows, projection, {
+    load: () =>
+      Promise.all([
+        loadCategoryConnections(db, ids),
+        loadListGroup(projection, ["relations", "derived"], () =>
+          pathsFor(db, ids),
+        ),
+        loadListGroup(projection, "derived", () => productCountsFor(db, ids)),
+        lookupEntityReferences(
+          db,
+          "spendingCategory",
+          rows.map((row) => row.spendingCategoryId),
+        ),
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "productCategory",
+            rows.map((row) => row.parentId),
+          ),
+        ),
+      ]),
+    mapRow: (
+      row,
+      { loaded: [mappings, paths, productCounts, spendingCategories, parents] },
+    ) => {
+      const path = paths?.get(row.id) ?? [];
+      const parent = row.parentId ? parents?.get(row.parentId) : undefined;
+      const spendingCategory = row.spendingCategoryId
+        ? spendingCategories.get(row.spendingCategoryId)
+        : undefined;
+      const result = {
+        ...row,
+        id: parseShortcodeFor("productCategory", row.shortcode),
+        feature: parseFeature(row.feature),
+        spendingCategoryMapping: mappings.get(row.id),
+        effectiveSpendingCategory: mappedCategoryIdentity(mappings.get(row.id)),
+        spendingCategoryName: spendingCategory?.name ?? null,
+        spendingCategoryEmoji: spendingCategory?.emoji ?? null,
+        spendingCategoryId: spendingCategory?.id ?? null,
+      };
+      if (wantsListGroup(projection, "relations"))
+        Object.assign(result, {
+          parentId: parent?.id ?? null,
+          parentName: parent?.name ?? null,
+          path: path.map((part) => ({
+            id: parseShortcodeFor("productCategory", part.id),
+            name: part.name,
+          })),
+          pathLabel: categoryPathLabel(path),
+        });
+      if (wantsListGroup(projection, "derived"))
+        Object.assign(result, {
+          fieldResolutions: {
+            ...categoryResolutions(row, path),
+            effectiveSpendingCategory: spendingCategoryResolution(
+              mappings.get(row.id),
+            ),
+          },
+          productCount: productCounts?.get(row.id) ?? 0,
+        });
+      return result;
+    },
+  });
+};
+function mappedCategoryIdentity(
+  mapping: z.infer<typeof categoryMappingSchema> | undefined,
+) {
+  if (!mapping?.category) return null;
+  const suffix =
+    mapping.state === "inherited"
+      ? ` (inherited from ${mapping.source?.name})`
+      : "";
+  return { ...mapping.category, name: `${mapping.category.name}${suffix}` };
+}
+
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: CategoryRow[],
+): Promise<ProductCategoryOut[]> =>
+  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+    productCategoryOut.parse(row),
+  );
+
+export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
+  scaffold.where(filters, [
+    filters.needsClassification === undefined
+      ? undefined
+      : sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->>'state' = 'unmapped') = ${filters.needsClassification}`,
+    filters.effectiveSpendingCategoryId?.length
+      ? sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->'category'->>'id') IN (${sql.join(
+          (Array.isArray(filters.effectiveSpendingCategoryId)
+            ? filters.effectiveSpendingCategoryId
+            : [filters.effectiveSpendingCategoryId]
+          ).map((code) => sql`${code}`),
+          sql`, `,
+        )})`
+      : undefined,
+  ]);
+
+export const listProductCategoriesRead = (
+  db: Database,
+  filters: ProductCategoryFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    {
+      where: buildProductCategoryWhere(filters),
+      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+    },
+  );
+
+export const listProductCategories = completeListReader(
+  productCategoryOut,
+  listProductCategoriesRead,
+);
+
+const crud = createEntityCrud({
+  table: productCategory,
+  entity: "productCategory",
+  fetchById: async (db, id) => {
+    const [row] = await unwrapDb(db)
+      .select()
+      .from(productCategory)
+      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+      .limit(1);
+    return row;
+  },
+  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  toUpdate: (values: Partial<typeof productCategory.$inferInsert>) => values,
+  auditUpdateFields: [...entityFieldModels.productCategory.audit],
+});
+
+export const getProductCategoryByShortcode = crud.getByShortcode;
+
+const cleanAliases = (aliases: string[]) => [
+  ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),
+];
+
+export const assertValidParent = async (
+  db: Database | DrizzleTransaction,
+  id: ProductCategoryId | null,
+  parentId: ProductCategoryId | null,
+) => {
+  if (!parentId) return;
+  if (id === parentId)
+    throw new Error("A product category cannot be its own parent");
+
+  let subtreeDepth = 1;
+  if (id) {
+    const descendants = await unwrapDb(db).execute<{
+      id: ProductCategoryId;
+      depth: number;
+    }>(sql`
+      WITH RECURSIVE descendants AS (
+        SELECT c."id", ARRAY[c."id"] AS visited FROM "ProductCategory" c WHERE c."id" = ${id}::uuid
+        UNION ALL
+        SELECT child."id", d.visited || child."id"
+        FROM descendants d JOIN "ProductCategory" child ON child."parentId" = d."id"
+        WHERE child."deletedAt" IS NULL AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+          AND NOT child."id" = ANY(d.visited)
+      ) SELECT "id", array_length(visited, 1) AS depth FROM descendants
+    `);
+    if (descendants.rows.some((row) => row.id === parentId)) {
+      throw new Error(
+        "A product category cannot move below one of its descendants",
+      );
+    }
+    subtreeDepth = Math.max(...descendants.rows.map((row) => row.depth));
+  }
+
+  const ancestors = await unwrapDb(db).execute<{ id: ProductCategoryId }>(sql`
+    WITH RECURSIVE ancestors AS (
+      SELECT c."id", c."parentId", ARRAY[c."id"] AS visited FROM "ProductCategory" c WHERE c."id" = ${parentId}::uuid
+      UNION ALL
+      SELECT parent."id", parent."parentId", a.visited || parent."id"
+      FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+      WHERE parent."deletedAt" IS NULL AND array_length(a.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+        AND NOT parent."id" = ANY(a.visited)
+    ) SELECT "id" FROM ancestors
+  `);
+  if (ancestors.rows.length + subtreeDepth > MAX_PRODUCT_CATEGORY_DEPTH) {
+    throw new Error(
+      `Product categories allow at most ${MAX_PRODUCT_CATEGORY_DEPTH} levels`,
+    );
+  }
+};
+
+/**
+ * A hierarchy change is transactional: it must leave every assigned Product
+ * admissible in its existing category and retain every effective trade. Product
+ * classification and inheritance own the cross-domain checks; late imports
+ * avoid their category-resolution cycles.
+ */
+const assertAffectedProductsRemainAdmissible = async (
+  tx: DrizzleTransaction,
+  categoryId: ProductCategoryId,
+) => {
+  const products = await unwrapDb(tx)
+    .select({ id: product.id, categoryId: product.categoryId })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`${product.categoryId} IN ${categoryDescendantsSql([categoryId])}`,
+      ),
+    );
+  const { assertProductCategoryChange } =
+    await import("~/server/domains/product/repo/classification");
+  for (const item of products) {
+    if (!item.categoryId) continue;
+    const resolved = await assertProductCategoryChange(
+      tx,
+      parseEntityId("product", item.id),
+      parseEntityId("productCategory", item.categoryId),
+    );
+    if (resolved !== item.categoryId) {
+      throw new Error(
+        "This category change would invalidate an assigned Product",
+      );
+    }
+  }
+  const { validateLiveInheritedPolicies } =
+    await import("~/server/generic/inheritance/repo/inheritance-validation");
+  await validateLiveInheritedPolicies(tx);
+};
+
+export async function createProductCategory(
+  db: Database,
+  data: ProductCategoryCreateInput,
+  actor: ActorContext,
+): Promise<{ output: ProductCategoryOut; entityId: ProductCategoryId }> {
+  const id = await withTransaction(db, async (tx) => {
+    const parentId = data.parentId
+      ? await resolveOrThrow(tx, "productCategory", data.parentId)
+      : null;
+    await assertValidParent(tx, null, parentId);
+    const spendingCategoryId = data.spendingCategoryId
+      ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
+      : null;
+    if (
+      (data.spendingCategoryMode === "mapped") !==
+      (spendingCategoryId !== null)
+    )
+      throw new Error(
+        "Mapped requires a spending category; inherit and blocked require none",
+      );
+    const row = await insertWithShortcode(tx, "productCategory", {
+      name: data.name.trim(),
+      aliases: cleanAliases(data.aliases),
+      description: data.description,
+      parentId,
+      sortOrder: data.sortOrder,
+      feature: data.feature,
+      stockTracked: data.stockTracked,
+      spendingCategoryMode: data.spendingCategoryMode,
+      spendingCategoryId,
+    });
+    await logAuditEntry(tx, actor, {
+      entityKind: "productCategory",
+      entityId: row.id,
+      action: "create",
+    });
+    return parseEntityId("productCategory", row.id);
+  });
+  return { output: await crud.getByID(db, id), entityId: id };
+}
+
+export async function updateProductCategory(
+  db: Database,
+  shortcode: ProductCategoryShortcode,
+  data: ProductCategoryUpdateData,
+  actor: ActorContext,
+): Promise<{ output: ProductCategoryOut; entityId: ProductCategoryId }> {
+  const id = await resolveOrThrow(db, "productCategory", shortcode);
+  if (
+    data.spendingCategoryMode !== undefined ||
+    data.spendingCategoryId !== undefined
+  ) {
+    const [current] = await unwrapDb(db)
+      .select({
+        mode: productCategory.spendingCategoryMode,
+        target: productCategory.spendingCategoryId,
+      })
+      .from(productCategory)
+      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+      .limit(1);
+    if (!current) throw new Error("Product category not found");
+    const target =
+      data.spendingCategoryId === undefined
+        ? current.target
+        : data.spendingCategoryId === null
+          ? null
+          : await resolveOrThrow(
+              db,
+              "spendingCategory",
+              data.spendingCategoryId,
+            );
+    if (
+      (data.spendingCategoryMode ?? current.mode) !== current.mode ||
+      target !== current.target
+    ) {
+      const affected = await unwrapDb(db)
+        .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
+        WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${categoryDescendantsSql([id])} LIMIT 1`);
+      if (affected.rows.length) assertReviewedSpendingClassification(db);
+    }
+  }
+  await withTransaction(db, async (tx) => {
+    const parentId =
+      data.parentId === undefined
+        ? undefined
+        : data.parentId === null
+          ? null
+          : await resolveOrThrow(tx, "productCategory", data.parentId);
+    if (parentId !== undefined) await assertValidParent(tx, id, parentId);
+    const [before] = await unwrapDb(tx)
+      .select()
+      .from(productCategory)
+      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+      .limit(1);
+    if (!before) throw new Error("Product category not found");
+    // A bound category may move anywhere in the tree — its own binding still
+    // wins over any ancestor's — but the binding itself is permanent.
+    if (
+      before.feature !== null &&
+      data.feature !== undefined &&
+      data.feature !== before.feature
+    ) {
+      throw new Error(
+        "A category behavior binding cannot be cleared or replaced",
+      );
+    }
+    const spendingCategoryId =
+      data.spendingCategoryId === undefined
+        ? undefined
+        : data.spendingCategoryId === null
+          ? null
+          : await resolveOrThrow(
+              tx,
+              "spendingCategory",
+              data.spendingCategoryId,
+            );
+    const spendingCategoryMode =
+      data.spendingCategoryMode ?? before.spendingCategoryMode;
+    if (
+      (spendingCategoryMode === "mapped") !==
+      ((spendingCategoryId === undefined
+        ? before.spendingCategoryId
+        : spendingCategoryId) !==
+        null)
+    )
+      throw new Error(
+        "Mapped requires a spending category; inherit and blocked require none",
+      );
+    const patch = {
+      spendingCategoryMode: data.spendingCategoryMode,
+      spendingCategoryId,
+      name: data.name?.trim(),
+      aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
+      description: data.description,
+      parentId,
+      sortOrder: data.sortOrder,
+      feature: data.feature,
+      stockTracked: data.stockTracked,
+    };
+    const values = buildPartialUpdateValues(patch);
+    if (Object.keys(values).length === 0) return;
+    await crud.update(tx, id, values, actor);
+    if (parentId !== undefined || data.feature !== undefined) {
+      await assertAffectedProductsRemainAdmissible(tx, id);
+    }
+  });
+  return { output: await crud.getByID(db, id), entityId: id };
+}
+
+/** A category bound to a behavior feature is structural; it cannot go. */
+const refuseBoundCategories = async (
+  tx: DrizzleTransaction,
+  ids: ProductCategoryId[],
+) => {
+  const bound = await tx
+    .select({ feature: productCategory.feature })
+    .from(productCategory)
+    .where(inArray(productCategory.id, ids));
+  if (bound.some((row) => row.feature !== null))
+    throw new Error("A category with a behavior binding cannot be deleted");
+};
+
+/** The inherited behavior binding for one category; null means no binding. */
+export async function getCategoryFeature(
+  db: Database | DrizzleTransaction,
+  categoryId: ProductCategoryId | null,
+): Promise<ProductCategoryFeature | null> {
+  if (!categoryId) return null;
+  const rows = await unwrapDb(db).execute<{
+    feature: ProductCategoryFeature | null;
+  }>(sql`
+    WITH RECURSIVE ancestors AS (
+      SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c WHERE c."id" = ${categoryId}::uuid AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
+      FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
+        AND NOT parent."id" = ANY(a.visited)
+    ) SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
+  `);
+  return rows.rows[0]?.feature ?? null;
+}
+
+/** SQL predicate: true only when the closest feature binding equals `feature`. */
+/**
+ * Keeps an already-selected compatible descendant. If none was selected (or it
+ * belongs to another feature tree), selects the category bound to that feature.
+ */
+export async function resolveProductCategory(
+  db: Database | DrizzleTransaction,
+  requestedId: ProductCategoryId | null,
+  requiredFeature: ProductCategoryFeature | null,
+): Promise<ProductCategoryId | null> {
+  if (
+    requestedId &&
+    (requiredFeature === null ||
+      (await getCategoryFeature(db, requestedId)) === requiredFeature)
+  ) {
+    return requestedId;
+  }
+  if (requiredFeature === null) return null;
+  const [root] = await unwrapDb(db)
+    .select({ id: productCategory.id })
+    .from(productCategory)
+    .where(
+      and(
+        eq(productCategory.feature, requiredFeature),
+        notDeleted(productCategory),
+      ),
+    )
+    .orderBy(asc(productCategory.sortOrder), asc(productCategory.name))
+    .limit(1);
+  return root ? parseEntityId("productCategory", root.id) : null;
+}
+
+export async function listProductCategoryTreeOptions(db: Database) {
+  const rows = await unwrapDb(db)
+    .select()
+    .from(productCategory)
+    .where(notDeleted(productCategory))
+    .orderBy(asc(productCategory.sortOrder), asc(productCategory.name));
+  const paths = await pathsFor(
+    db,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => {
+    const path = paths.get(row.id) ?? [];
+    return {
+      id: parseShortcodeFor("productCategory", row.shortcode),
+      name: row.name,
+      path: path.map(({ id, name }) => ({
+        id: parseShortcodeFor("productCategory", id),
+        name,
+      })),
+      aliases: row.aliases,
+      description: row.description,
+      ancestorIds: path
+        .slice(0, -1)
+        .map(({ id }) => parseShortcodeFor("productCategory", id)),
+      feature: closestPathFeature(path),
+    };
+  });
+}
+
+/** Features already bound to a live category; each binds at most one. */
+export async function listBoundCategoryFeatures(
+  db: Database,
+): Promise<ProductCategoryFeature[]> {
+  const rows = await unwrapDb(db)
+    .select({ feature: productCategory.feature })
+    .from(productCategory)
+    .where(
+      and(isNotNull(productCategory.feature), notDeleted(productCategory)),
+    );
+  return rows.flatMap(({ feature }) => parseFeature(feature) ?? []);
+}
+
+/** One batched summary map for callers that already have category ids in rows. */
+export async function loadCategorySummaries(
+  db: Database | DrizzleTransaction,
+): Promise<Map<ProductCategoryId, ProductCategorySummary>> {
+  const rows = await unwrapDb(db)
+    .select()
+    .from(productCategory)
+    .where(notDeleted(productCategory));
+  const paths = await pathsFor(
+    db,
+    rows.map((row) => row.id),
+  );
+  return new Map(
+    rows.map((row) => {
+      const path = paths.get(row.id) ?? [];
+      const summary = productCategorySummary.parse({
+        id: parseShortcodeFor("productCategory", row.shortcode),
+        name: row.name,
+        path: path.map(({ id, name }) => ({
+          id: parseShortcodeFor("productCategory", id),
+          name,
+        })),
+        feature: closestPathFeature(path),
+      });
+      return [parseEntityId("productCategory", row.id), summary] as const;
+    }),
+  );
+}
+
+export const productCategoryRepository = defineRepository("productCategory", {
+  lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
+  get: onDb(getProductCategoryByShortcode),
+  list: listOn(listProductCategories),
+  listRead: listReadOn(listProductCategoriesRead),
+  create: asActor(createProductCategory),
+  update: asActor(updateProductCategory),
+  deleteHooks: { beforeDelete: refuseBoundCategories },
+});

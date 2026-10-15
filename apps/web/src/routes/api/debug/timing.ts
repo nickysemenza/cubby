@@ -3,11 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { db } from "~/server/db";
+import { requestUsdaRelease } from "~/server/domains/usda-release/client";
 import {
   countProducts as countProductsRepo,
   pingDb,
-} from "~/server/repo/debug";
-import { requestUsdaRelease } from "~/server/usda-release/client";
+} from "~/server/entity-kernel/repo/debug";
 
 const timingResultSchema = z.object({
   label: z.string(),

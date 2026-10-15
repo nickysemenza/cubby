@@ -20,6 +20,7 @@ import {
   useState,
 } from "react";
 
+import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type {
   EditableEntity,
@@ -30,7 +31,6 @@ import {
   defaultSortFor,
   entities,
 } from "~/entity/entities";
-import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -44,22 +44,22 @@ import {
   entityList,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 
 import {
   useSectionCount,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
-import { ListWorkbench } from "../../ui/data-table/ListWorkbench";
+import { ListWorkbench } from "../../ui/data-table/list-workbench";
 import {
   createCubbyColumnHelper,
   createCubbyColumnCollection,
   type CubbyTable,
 } from "../../ui/data-table/table-features";
-import { type BaseListRow, useEntityList } from "../../ui/hooks/useEntityList";
-import type { ListQueryOptionsFn } from "../../ui/hooks/usePaginatedTableCore";
-import { useEntityFieldSave } from "../../ui/hooks/useUpdateMutation";
+import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
+import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
+import { useEntityFieldSave } from "../hooks/use-update-mutation";
 import { connectionRefs, RecordPaths } from "./connected-records-table";
 import { RelationScopeContext } from "./relation-scope";
 import {

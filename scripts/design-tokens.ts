@@ -156,7 +156,7 @@ function main() {
     check,
   );
   sync(
-    join(root, "apps/apple/App/Shared/Theme/FieldGuideMetrics.swift"),
+    join(root, "apps/apple/App/Shared/DesignSystem/FieldGuideMetrics.swift"),
     renderMetricsSwift(values),
     check,
   );

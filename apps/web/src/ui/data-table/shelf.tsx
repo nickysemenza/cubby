@@ -12,9 +12,9 @@ import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
-import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
-import { orderedGroupSections } from "./useGroupedList";
+import { useInfiniteScrollSentinel } from "../hooks/use-infinite-scroll-sentinel";
+import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import { orderedGroupSections } from "./use-grouped-list";
 
 export interface GroupedFlowGroup<T> {
   id: string;

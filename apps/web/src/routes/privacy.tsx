@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { LegalPage } from "~/app/legal/legal-page";
+import { LegalPage } from "~/features/legal/legal-page";
 import { pageTitle } from "~/lib/page-title";
 
 // Public by design: Google's OAuth consent screen requires an unauthenticated

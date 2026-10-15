@@ -1,18 +1,18 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 
 import {
   seedPlantPrerequisite,
   seedLocationPrerequisite,
   seedPlantingPrerequisite,
-} from "./fixtures-catalog";
-import { seedImagePrerequisite } from "./fixtures-photos";
+} from "./fixtures/catalog";
+import { seedImagePrerequisite } from "./fixtures/photos";
 import {
   selectComboboxItem,
   waitForAppHydration,
   gotoAuthenticatedPage,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 const createdItemSchema = z.object({ item: z.object({ id: z.string() }) });
 

@@ -16,29 +16,29 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { enumFieldLabel } from "~/entity/enum-field-display";
+import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
   ai,
   assessment,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
+import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
-import RTable from "~/ui/data-table/Table";
+import RTable from "~/ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useBulkActions } from "~/ui/data-table/useBulkActions";
+import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import { Row, Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import {

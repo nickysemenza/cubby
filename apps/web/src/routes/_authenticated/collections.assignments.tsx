@@ -4,10 +4,10 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 
-import { CollectionAssignmentMatrix } from "~/app/collections/collection-assignment-matrix";
-import { collectionAssignmentSearchSchema } from "~/app/collections/collection-assignment-search";
+import { CollectionAssignmentMatrix } from "~/features/collection/collection-assignment-matrix";
+import { collectionAssignmentSearchSchema } from "~/features/collection/collection-assignment-search";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/collections/assignments")(
   {

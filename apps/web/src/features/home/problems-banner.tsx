@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { cn, formatCount } from "~/lib/utils";
+import { formatCount } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 
 /**
  * Data-problems bar, shown only when something is outstanding. Ports the

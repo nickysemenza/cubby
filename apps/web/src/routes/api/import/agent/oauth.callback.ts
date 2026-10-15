@@ -18,9 +18,12 @@ import {
   type PurchaseAgentConnectionStatus,
   readCookie,
   verifyPurchaseAgentOAuthState,
-} from "~/server/purchase-import/agent-auth";
-import type { resumeAuthorizedRuns } from "~/server/purchase-import/run-service";
-import { createRequestContext, requireActor } from "~/server/request-context";
+} from "~/server/domains/purchase-import/agent-auth";
+import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/run-service";
+import {
+  createRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
 
 const tokenResponse = z.object({
   access_token: z.string().min(1),
@@ -88,14 +91,13 @@ const callbackDependencies: CallbackDependencies = {
   findGrant: findActivePurchaseAgentGrant,
   // Loaded on request: run-service reaches the AI SDK stack.
   resumeRuns: async (db, userId) =>
-    (await import("~/server/purchase-import/run-service")).resumeAuthorizedRuns(
-      db,
-      userId,
-    ),
+    (
+      await import("~/server/domains/purchase-import/run-service")
+    ).resumeAuthorizedRuns(db, userId),
   getQueue: getPurchaseAgentQueue,
   recordDispatch: async (db, input) =>
     (
-      await import("~/server/purchase-import/dispatch")
+      await import("~/server/domains/purchase-import/dispatch")
     ).recordRunDispatchAttempt(db, input),
   verifyState(token) {
     return verifyPurchaseAgentOAuthState(token, env.BETTER_AUTH_SECRET);

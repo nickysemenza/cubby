@@ -6,9 +6,9 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 
-import { entityApi } from "../tests/e2e/entity-api";
+import { entityApi } from "../tests/e2e/support/entity-api";
 import { buildEntity } from "./factories/build";
 import { retryStaleKeepAlive } from "./stale-keep-alive";
 import { withTestDb } from "./test-setup";

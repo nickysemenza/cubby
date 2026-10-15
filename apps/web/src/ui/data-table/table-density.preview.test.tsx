@@ -19,8 +19,8 @@ import {
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 import { ROW_DENSITY } from "./density";
 import { RowActiveProvider } from "./row-activity";
-import { HeaderLabel } from "./TableHeaderLayout";
-import { useCellSpill } from "./useCellSpill";
+import { HeaderLabel } from "./table-header-layout";
+import { useCellSpill } from "./use-cell-spill";
 
 // Failure modes guarded here, all at a fixed 32px row:
 // - a clipped value is unreadable without opening the record;

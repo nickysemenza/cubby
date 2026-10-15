@@ -337,7 +337,7 @@ transaction for it.
 - It is a **delta-only** job. Dedup is on `(source, externalId)` globally, so
   declare `rowCountDeclared` = the delta count (or `finance_read.imports`
   reports an unfinished chunked ingest). Compute `statementRowExternalId` with
-  `apps/web/src/server/repo/statement-row-identity.ts` — import it, never
+  `apps/web/src/server/domains/statement-import/repo/statement-row-identity.ts` — import it, never
   reimplement — and ask the DB which ids exist; a column-wise CSV diff does not
   work across export vintages. `StatementImport.fingerprint` is the sha256 of
   the file. Exclude `$0.00` placeholder rows (they re-present as new forever);

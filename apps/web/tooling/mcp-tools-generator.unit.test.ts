@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertMcpExposure,
   toolKind,
-} from "../../../scripts/generator/start-operations/mcp-tools";
+} from "../generator/start-operations/mcp-tools";
 
 // A read-only MCP tool is auto-approvable only while every action in it
 // reads; `pnpm generate` is the gate that keeps a write out of one.

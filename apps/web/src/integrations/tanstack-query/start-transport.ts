@@ -7,11 +7,11 @@ import type {
   PublicStartOperationError,
   StartOperationResult,
   UnparsedStartOperationData,
-} from "~/server/start-operation.contract";
+} from "~/server/operation-runtime/start-operation.contract";
 import {
   unparsedStartOperationDataSchema,
   unparsedStartOperationResultSchema,
-} from "~/server/start-operation.contract";
+} from "~/server/operation-runtime/start-operation.contract";
 
 import { dispatchBrowserOperation } from "./browser-operation-transport";
 import type { CubbyOperationMeta } from "./operation-meta";
@@ -118,8 +118,8 @@ async function dispatchServerOperation<Input>(
     { startOperationDispatchInput },
   ] = await Promise.all([
     import("@tanstack/react-start/server"),
-    import("~/server/start-operation-dispatch.server"),
-    import("~/server/start-operation-dispatch.contract"),
+    import("~/server/operation-runtime/start-operation-dispatch.server"),
+    import("~/server/operation-runtime/start-operation-dispatch.contract"),
   ]);
   const request = getRequest();
   const parsed = startOperationDispatchInput.parse({ operation, input });

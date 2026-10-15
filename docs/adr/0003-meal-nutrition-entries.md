@@ -1,4 +1,4 @@
-# Derive meal intake status from its date
+# ADR 0003: Derive meal intake status from its date
 
 Meal nutrition totals belong to the person and target Meal. A future Meal's
 entered portions are planned; today and earlier are logged, using the household

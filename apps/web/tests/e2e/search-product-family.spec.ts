@@ -1,17 +1,17 @@
 import { eq } from "drizzle-orm";
 
 import { entityLink, product } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { linkValues } from "~/server/repo/entity-links";
+import { getDb } from "~/server/db/helpers";
+import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 
 import {
   escapeRegExp,
   gotoAuthenticatedPage,
   openCommandPalette,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture, getFixtureDb } from "./fixtures-core";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture, getFixtureDb } from "./fixtures/core";
 
 // The full search page and the command menu render one Product family (its
 // direct placements, kit-content placements, and matched records) from the

@@ -1,5 +1,5 @@
-import { entityApi } from "./entity-api";
-import { chooseListView } from "./e2e-helpers";
+import { entityApi } from "./support/entity-api";
+import { chooseListView } from "./support/e2e-helpers";
 import { z } from "zod";
 
 import {
@@ -7,16 +7,16 @@ import {
   gotoAuthenticatedPage,
   SHORTCODE,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { seedLocationPrerequisite } from "./fixtures-catalog";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { seedLocationPrerequisite } from "./fixtures/catalog";
 
 const locationParentOut = z.object({
   parent: z.object({ id: z.string(), name: z.string() }).nullable(),
 });
 
 /**
- * The assignment-dialog picker lifecycle (`ui/form-utils/picker-field.tsx`),
+ * The assignment-dialog picker lifecycle (`ui/forms/form-utils/picker-field.tsx`),
  * driven through the bulk "Move under..." dialog. Failure modes: a selected
  * label degrades to its bare shortcode once the picker's search results stop
  * listing it (search away, or a just-created record the results never held);

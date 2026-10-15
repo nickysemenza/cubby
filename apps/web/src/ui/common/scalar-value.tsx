@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
-import JsonRenderer from "~/ui/json-renderer";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -11,6 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import JsonRenderer from "~/ui/text/json-renderer";
 
 export type ScalarDisplayValue =
   | { kind: "empty"; raw: null | undefined }

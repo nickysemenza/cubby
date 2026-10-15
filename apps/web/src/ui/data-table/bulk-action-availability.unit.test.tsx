@@ -8,10 +8,10 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import { BulkActionBar } from "./bulk-action-bar";
 import type { BulkAction } from "./bulk-actions.types";
-import { BulkActionBar } from "./BulkActionBar";
 import type { CubbyRow as Row } from "./table-features";
-import { useBulkActions } from "./useBulkActions";
+import { useBulkActions } from "./use-bulk-actions";
 
 interface TestRow {
   id: string;

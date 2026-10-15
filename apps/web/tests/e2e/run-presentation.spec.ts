@@ -1,12 +1,12 @@
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { eq } from "drizzle-orm";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { fixtureUserId, getFixtureDb } from "./fixtures-core";
-import { seedActivityHistory } from "./fixtures-photos";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { fixtureUserId, getFixtureDb } from "./fixtures/core";
+import { seedActivityHistory } from "./fixtures/photos";
 
 // A successful image result must not look queued; skipped work must explain the actual outcome.
 test("image jobs show completed status and an Apple skip reason", async ({

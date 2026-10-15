@@ -2,9 +2,9 @@ import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 
+import { formatCurrency } from "~/lib/number-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
-import { formatCurrency } from "~/lib/utils";
-import { useContainerDimensions } from "~/ui/hooks/useContainerDimensions";
+import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";

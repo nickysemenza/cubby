@@ -26,30 +26,30 @@ const slotsFrom =
     );
 
 const email = slotsFrom(() =>
-  import("~/app/emails/list-slots").then((m) => m.emailListSlots),
+  import("~/features/email/list-slots").then((m) => m.emailListSlots),
 );
 const expense = slotsFrom(() =>
-  import("~/app/expenses/list-slots").then((m) => m.expenseListSlots),
+  import("~/features/expense/list-slots").then((m) => m.expenseListSlots),
 );
 const location = slotsFrom(() =>
-  import("~/app/locations/list-slots").then((m) => m.locationListSlots),
+  import("~/features/location/list-slots").then((m) => m.locationListSlots),
 );
 const meal = slotsFrom(() =>
-  import("~/app/meals/list-slots").then((m) => m.mealListSlots),
+  import("~/features/meal/list-slots").then((m) => m.mealListSlots),
 );
 const planting = slotsFrom(() =>
-  import("~/app/plantings/list-slots").then((m) => m.plantingListSlots),
+  import("~/features/planting/list-slots").then((m) => m.plantingListSlots),
 );
 const productCategory = slotsFrom(() =>
-  import("~/app/product-categories/list-slots").then(
+  import("~/features/product-category/list-slots").then(
     (m) => m.productCategoryListSlots,
   ),
 );
 const project = slotsFrom(() =>
-  import("~/app/projects/list-slots").then((m) => m.projectListSlots),
+  import("~/features/project/list-slots").then((m) => m.projectListSlots),
 );
 const task = slotsFrom(() =>
-  import("~/app/tasks/list-slots").then((m) => m.taskListSlots),
+  import("~/features/task/list-slots").then((m) => m.taskListSlots),
 );
 
 /**

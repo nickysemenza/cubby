@@ -467,7 +467,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/device",
+        module: "~/server/domains/device/repo/device",
         export: "deviceRepository",
       },
     },

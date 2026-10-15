@@ -45,12 +45,12 @@ const headerActions: HeaderActionRegistry = {
     import("./report-slot").then((m) => ({ default: m.ExpenseDetailActions })),
   ),
   product: action<"product">(() =>
-    import("~/app/products/product-runs").then((m) => ({
+    import("~/features/product/product-runs").then((m) => ({
       default: m.ProductDetailActions,
     })),
   ),
   image: action<"image">(() =>
-    import("~/app/images/image-processing-panel").then((m) => ({
+    import("~/features/image/image-processing-panel").then((m) => ({
       default: m.ImageDetailActions,
     })),
   ),
@@ -58,20 +58,24 @@ const headerActions: HeaderActionRegistry = {
     import("./report-slot").then((m) => ({ default: m.RunDetailActions })),
   ),
   inventory: action<"inventory">(() =>
-    import("~/entity/detail-field-renderers/inventory-expense").then((m) => ({
-      default: m.InventoryRecordExpenseAction,
-    })),
+    import("~/entity/display/detail-field-renderers/inventory-expense").then(
+      (m) => ({
+        default: m.InventoryRecordExpenseAction,
+      }),
+    ),
   ),
   recipe: action<"recipe">(() =>
-    import("~/app/recipes/slots").then((m) => ({ default: m.RecipeActions })),
+    import("~/features/recipe/slots").then((m) => ({
+      default: m.RecipeActions,
+    })),
   ),
   cookbook: action<"cookbook">(() =>
-    import("~/app/cookbooks/slots").then((m) => ({
+    import("~/features/cookbook/slots").then((m) => ({
       default: m.CookbookActions,
     })),
   ),
   meal: action<"meal">(() =>
-    import("~/app/meals/slots").then((m) => ({ default: m.MealActions })),
+    import("~/features/meal/slots").then((m) => ({ default: m.MealActions })),
   ),
 };
 

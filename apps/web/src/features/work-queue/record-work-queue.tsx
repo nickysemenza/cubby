@@ -8,7 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { SectionHeading } from "~/ui/layout";
 
 import { GapChip, memberOptionsOf, WaitingForPill } from "./work-queue-display";

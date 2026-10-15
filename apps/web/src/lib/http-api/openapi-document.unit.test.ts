@@ -3,12 +3,12 @@ import { z } from "zod";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
 
+import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
 import {
   nameStructuralComponents,
   type JsonSchema,
-} from "../../../../../scripts/generator/http-api/document-passes";
-import { NATIVE_TYPED_RECORDS } from "../../../../../scripts/generator/http-api/type-overrides";
-import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
+} from "../../../generator/http-api/document-passes";
+import { NATIVE_TYPED_RECORDS } from "../../../generator/http-api/type-overrides";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
 

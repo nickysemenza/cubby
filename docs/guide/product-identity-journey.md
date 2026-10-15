@@ -29,7 +29,7 @@ as `expense_only` (no Product); software and subscriptions the household
 tracks or that ship goods keep their Product. A spending category with
 `productExpectation: not_allowed` (Restaurants) neither expects nor accepts a
 Product: every write that would leave a Product on such an Expense is refused
-(`repo/inheritance-validation.ts`), and a line-level category override is the
+(`generic/inheritance/repo/inheritance-validation.ts`), and a line-level category override is the
 way out. `not_expected` (Groceries) only drops the missing-Product gap. A
 delivered order asks to be received only when a principal line has a Product
 or its category allows a Product and the Purchase still has an open

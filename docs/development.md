@@ -21,11 +21,22 @@ JSONL routes    →  cancellable workflow streams
   unchanged. New-entity work starts at [entities](entities.md).
 - `executeEntity` is the baseline CRUD, filter, search and relation interface.
   Every other operation is a contract in `apps/web/src/contracts/`, implemented
-  once in `src/server/operations/<domain>.server.ts`. The browser, HTTP API and
-  MCP are adapters over it.
+  once in a domain's `operations` module
+  (`src/server/domains/<domain>/operations.server.ts` or `operations/*.server.ts`).
+  The browser, HTTP API and MCP are adapters over it.
+- The server is domain-first ([ADR 0019](adr/0019-domain-first-server-layout.md)):
+  `src/server/domains/<entity>/` per manifest entity plus cross-entity feature
+  folders (`purchase-import`, `photo-import`, `calendar`, …),
+  `src/server/generic/<capability>/` for entity-agnostic capabilities (merge,
+  removal, search, embedding, problems, list, …), and platform folders (`db/`,
+  `entity-kernel/`, `http/`, `operation-runtime/`, `workflows/`,
+  `observability/`, `mcp/`, `ai/`). The client mirrors the domain names in
+  `src/features/<domain>/`; `src/entity/` is the generic entity platform and
+  `src/ui/` the shared component kit.
 - Services own workflows and external enrichment. Repositories own
   transactions, invariants and entity-specific SQL. `Database` is a
   request-scoped handle, and repository helpers resolve its Drizzle client.
+  `cubby/domain-layers` keeps imports flowing operations → service → repo → db.
 - Unit conversion uses `@cubby/recipebridge`, which wraps Rust
   [ingredient-parser](https://github.com/nickysemenza/ingredient-parser). Call
   `wasm` from `~/lib/wasm` (sync) on the client and `wasmServer` (async) on the
@@ -51,7 +62,7 @@ JSONL routes    →  cancellable workflow streams
   (one Durable Object per Run), and a member's Claude/Codex Burn-down through
   the public MCP tools ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)).
   The map of queue events, Run services and owning files is
-  [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
+  [`apps/web/src/server/domains/purchase-import/README.md`](../apps/web/src/server/domains/purchase-import/README.md).
 - OpenAI Responses calls use the household's ChatGPT plan when connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings
@@ -201,7 +212,7 @@ native PostgreSQL installation remain owned by their existing runners.
 - **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
   application read/freshness timing is owned by
-  `apps/web/src/lib/hyperdrive-cache-policy.ts`. Missing freshness state or a
+  `apps/web/src/server/db/freshness/hyperdrive-cache-policy.ts`. Missing freshness state or a
   timeout falls back to strong reads.
 - **Background tasks are self-contained queue messages** on
   `cubby-background`. There is no execution table and no dead-letter queue.
@@ -246,7 +257,7 @@ Better-Auth (`better-auth/tanstack-start`), with config in
   `pnpm generate`). Component names come from `@cubby/schemas` exports or an
   explicit `.meta({ id })`.
 - **Test client.** `createCubbyClient({ baseUrl, apiKey? })` in
-  `apps/web/tests/e2e/http-api-client.ts` wraps the generated ts-rest router
+  `apps/web/tests/e2e/support/http-api-client.ts` wraps the generated ts-rest router
   `apps/web/src/lib/generated/http-contract.gen.ts`.
 - **After changes.** When contracts, declarations or schemas change, run
   `pnpm generate`. Wire schemas come from `toWire`

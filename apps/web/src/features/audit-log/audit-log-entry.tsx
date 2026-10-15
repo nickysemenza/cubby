@@ -5,8 +5,9 @@ import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
-import { cn, formatCount } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordDetail, RecordDot, RecordRow } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";

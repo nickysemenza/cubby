@@ -18,6 +18,7 @@ import {
 } from "~/ui/primitives/table";
 
 import { CellFrame, CELL_RAIL_BUTTON_CLASS } from "./cell-frame";
+import { createPlainDateColumn } from "./column-helpers";
 import { useTableColumnLayout } from "./column-layout";
 import {
   columnWidthVariables,
@@ -25,15 +26,14 @@ import {
   columnOffsetValue,
   resolvedTableColumnWidths,
 } from "./column-layout";
-import { createPlainDateColumn } from "./columnHelpers";
 import { ROW_DENSITY } from "./density";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "./table-features";
-import { HeaderLabel } from "./TableHeaderLayout";
-import { useRenderedColumnWidths } from "./useRenderedColumnWidths";
+import { HeaderLabel } from "./table-header-layout";
+import { useRenderedColumnWidths } from "./use-rendered-column-widths";
 
 const helper = createCubbyColumnHelper<{ id: string }>();
 const columns = helper.columns([

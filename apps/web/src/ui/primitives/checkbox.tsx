@@ -1,7 +1,7 @@
 
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 
-import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { cn } from "~/lib/utils";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";

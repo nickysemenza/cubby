@@ -12,12 +12,12 @@ import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detai
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { ensureDetailRecord } from "~/entity/routing/detail-loader";
 import { detailPage, notFoundPage } from "~/entity/routing/detail-page";
-import EditRecipeForm from "~/features/recipes/edit-recipe";
+import EditRecipeForm from "~/features/recipe/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { DetailPagePending } from "~/ui/feedback/route-pending";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { DetailPagePending } from "~/ui/route-pending";
 
 /**
  * Hand-written because the workflow slot's state (`view`, `scale`,

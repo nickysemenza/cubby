@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { getDb } from "~/server/db/helpers";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -16,15 +17,14 @@ import {
   purchase as purchaseTable,
   spendingCategory,
 } from "~/server/db/schema";
+import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { getDb } from "~/server/repo/database-helpers";
-import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { ensureRun } from "~/server/runs/ensure-run";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { suggestFields } from "./suggest-fields";

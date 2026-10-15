@@ -1,7 +1,7 @@
 import type { Icon } from "@phosphor-icons/react/lib";
 import type { ReactNode } from "react";
 
-import type { ListQueryPlan } from "~/ui/hooks/usePaginatedTableCore";
+import type { ListQueryPlan } from "~/ui/hooks/use-paginated-table-core";
 
 interface EntityRoutes {
   detail: string;

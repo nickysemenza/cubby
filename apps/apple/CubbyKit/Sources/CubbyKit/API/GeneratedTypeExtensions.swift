@@ -5,7 +5,7 @@ import Foundation
 /// The hand-written surface on the generated types: identities SwiftUI lists need, the few
 /// derived values screens read, and the converters between sibling wire shapes. Everything else
 /// about a generated type is its own; a divergence that needs more than a few lines belongs in the
-/// generator (see `scripts/generator/http-api/`), not here.
+/// generator (see `apps/web/generator/http-api/`), not here.
 
 // The branded codes and `PlainDate` live in `CubbyAPISupport` so the generated client can use
 // them; these aliases let the App name them through CubbyKit alone.

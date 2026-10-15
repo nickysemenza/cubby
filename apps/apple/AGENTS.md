@@ -38,12 +38,12 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   in the App or the CLI. There is no hand-written mapping layer: a screen reads the generated
   type, and the few derived values it needs (`stableKey`, `manufacturerOrNil`, `MacroSummary`,
   …) live as extensions in `API/GeneratedTypeExtensions.swift`. A wire type the generator gets
-  wrong is fixed in the generator (`scripts/generator/http-api/`), not re-typed by hand. The
+  wrong is fixed in the generator (`apps/web/generator/http-api/`), not re-typed by hand. The
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
   types for those schemas (`typeOverrides` in `Sources/CubbyAPI/openapi-generator-config.yaml`).
 - Response bodies are open: the OpenAPI emitter strips `additionalProperties: false` from
-  every output schema (`scripts/generator/http-api/openapi.ts`, guarded by
+  every output schema (`apps/web/generator/http-api/openapi.ts`, guarded by
   `openapi-document.unit.test.ts`), so the generated `init(from:)` ignores a field it does
   not know and an installed build survives a server deploy that adds one. Request bodies
   stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
@@ -63,18 +63,18 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   entry is `"/"`, which is not a usable absolute URL on its own.
 
 - Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from the OpenAPI
-  document by `scripts/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
+  document by `apps/web/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Entity reads
   and writes go through the four generic kernel operations (`entity.detail`, `entity.list`,
   `entity.mutate`, `entity.timeline`), dispatched by the hand-written
-  `Catalog/EntityKernel.swift` over the generated `Generated/entity-kernel.json` (per-entity
+  `Manifest/EntityKernel.swift` over the generated `Generated/entity-kernel.json` (per-entity
   actions, image attach/reorder, and every list/timeline filter name with its JSON kind). Not
   every entity has every action: read-only `image`, `cookbook` and `run` have no `create`;
   `usda-food`, the external USDA catalog, reads through its flagged `usdaFood.list`/`detail`
   RPCs. Kernel bodies and responses are untyped JSON on the wire; the server parses each with the
   entity's schema, and hand-written Swift decodes a typed record only through the short
-  `NATIVE_TYPED_RECORDS` keep-list (`scripts/generator/http-api/type-overrides.ts`).
+  `NATIVE_TYPED_RECORDS` keep-list (`apps/web/generator/http-api/type-overrides.ts`).
   `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
   confirmation behind the connection-impact preview. The HTTP API carries exactly the
   operations flagged `native: "<why>"` on their contract member
@@ -143,13 +143,13 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | Output                                                                                                                   | Generator                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                              |
-| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `scripts/generator/entities/render/swift-catalog.ts`                                                   |
-| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `scripts/generator/http-api/native.ts`, `swift-operations.ts`                                          |
-| `Generated/entity-kernel.json`                                                                                           | `scripts/generator/http-api/entity-kernel.ts`                                                          |
+| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                  |
+| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `apps/web/generator/http-api/native.ts`, `swift-operations.ts`                                         |
+| `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                         |
 | `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
 | `CubbyAPI` target                                                                                                        | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
 | `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                     |
-| `App/Shared/Previews/Fixtures/*.json`                                                                                    | `apps/web/scripts/apple-preview-fixtures.ts` (edit its overrides)                                      |
+| `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                               |
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
   which manifest renderer, slot, and hero-action ids native draws. A new web-only id is
@@ -171,7 +171,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - **Manifest wire.** `packages/schemas/src/manifest-wire.ts` owns descriptor storage, labels, raw
   values, conformances, and initializer defaults. Change it, run `pnpm generate`, preserve
   Codable envelopes and decode defaults, and verify `EntityManifestTests` and the structured
-  round-trip vectors. Native conveniences live in extensions in `Catalog/EntityManifest.swift`.
+  round-trip vectors. Native conveniences live in extensions in `Manifest/EntityManifest.swift`.
 - **Client methods.** A `CubbyClient` method that is exactly one call with its JSON body (or a
   GET's generated `Input.Query`) is a `CLIENT_PASSTHROUGH_METHODS` entry in
   `swift-operations.ts`, not hand-written Swift; anything that maps or branches stays in
@@ -208,14 +208,14 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
 - App builds prepare the xcframework through the shared preparation entrypoint.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `scripts/apple-check.sh`, the `apple:lint` Nx target) gates
+  `scripts/apple/apple-check.sh`, the `apple:lint` Nx target) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
   Keep copied Markdown fixtures/resources in the native build inputs; [CI](../../docs/ci.md) owns the
   hosted Apple lanes and cached-pass replay.
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
-  [docs/agents/xcode-mcp.md](../../docs/agents/xcode-mcp.md). Preferred over launching the app
+  [docs/xcode-mcp.md](docs/xcode-mcp.md). Preferred over launching the app
   to look at one screen.
 
 ### Universal links

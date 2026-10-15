@@ -1,6 +1,9 @@
 import type { CubbyMcpToolAction } from "@cubby/schemas/mcp-tools";
 
-import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import {
+  callMcpTool,
+  kernelRequestContext,
+} from "~/server/testing/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 
 import type { KernelContext } from "./context";

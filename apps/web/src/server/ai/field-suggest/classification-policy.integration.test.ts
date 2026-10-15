@@ -4,8 +4,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { createProductCategory } from "~/server/repo/product-category";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 
 import type { ReferenceSuggestSpec } from "./registry";
 import { suggestFields } from "./suggest-fields";

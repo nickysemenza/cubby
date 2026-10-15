@@ -3,7 +3,7 @@ import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { ENTITY_EDGE_SPECS } from "~/server/repo/entity-edge-source";
+import { ENTITY_EDGE_SPECS } from "~/server/generic/entity-links/repo/entity-edge-source";
 
 import { ENTITY_EDGE_OWNERS } from "./entity-edge-owners";
 import { INCOMING_EDGES } from "./entity-incoming-edges";

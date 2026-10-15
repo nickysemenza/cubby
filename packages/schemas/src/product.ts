@@ -162,7 +162,7 @@ export const productFindOrCreateByCodeInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("barcode"), value: upc }),
   // Plain string: check-digit validation + GTIN-14 normalization now
   // happen in `product.findOrCreateByCode`'s "isbn" arm
-  // (`apps/web/src/server/services/product-orchestration.service.ts`) —
+  // (`apps/web/src/server/domains/product/service/product-orchestration.service.ts`) —
   // `packages/schemas` cannot depend on the WASM boundary that needs.
   z.object({ kind: z.literal("isbn"), value: z.string().trim() }),
   z.object({ kind: z.literal("scan"), value: z.string().trim().min(1) }),

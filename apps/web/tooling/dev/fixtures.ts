@@ -16,7 +16,7 @@ const signUpResponseSchema = z.object({
 });
 
 /** Sign up the local dev user through the real better-auth flow, matching
- * production password hashing exactly (see tests/e2e/e2e-worker-runtime.ts's
+ * production password hashing exactly (see tests/e2e/support/e2e-worker-runtime.ts's
  * `authenticate`). Returns its real, database-backed user id. */
 async function ensureDevUser(baseURL: string): Promise<string> {
   const context = await request.newContext({

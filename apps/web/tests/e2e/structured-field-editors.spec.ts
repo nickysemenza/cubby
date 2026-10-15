@@ -1,6 +1,6 @@
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture } from "./fixtures/core";
 
 // The generic structured-value editor crosses the generated schema, the form, and the server's
 // own validation: each flow below fails if any of the three drifts.

@@ -4,9 +4,9 @@ import { eq } from "drizzle-orm";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { purchaseValidationResearchRunInput } from "@cubby/schemas/run-fields";
-import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/run-service";
 import { ledgerParty } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { createEntity } from "../factories/create";

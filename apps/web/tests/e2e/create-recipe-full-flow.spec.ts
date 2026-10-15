@@ -1,12 +1,12 @@
-import { seedCostedIngredientPrerequisite } from "./fixtures-recipes";
+import { seedCostedIngredientPrerequisite } from "./fixtures/recipes";
 import {
   SHORTCODE,
   fillInput,
   selectComboboxItem,
   uniqueName,
   waitForFormHydration,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test.describe("Create Recipe - Full Flow", () => {
   test("creates a recipe whose cost comes from the linked product", async ({

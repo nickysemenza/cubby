@@ -1,6 +1,6 @@
 /**
  * Fixture-tree coverage for the entity-declaration import-boundary check
- * (`scripts/generator/entities/import-boundary.ts`). That check walks the
+ * (`apps/web/generator/entities/import-boundary.ts`). That check walks the
  * real transitive imports of `packages/schemas/src/entity-definitions/*.entity.ts`
  * and fails `pnpm generate` when it reaches a file (staying within the
  * schemas package's `src`) that `.oxlintrc.json`'s hand-maintained
@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   computeEntityDeclarationImportBoundaryViolations,
   describeBoundaryViolation,
-} from "../../../scripts/generator/entities/import-boundary";
+} from "../generator/entities/import-boundary";
 
 const OVERRIDE_MARKER_GLOB = "packages/schemas/src/entity-definitions/**/*.ts";
 

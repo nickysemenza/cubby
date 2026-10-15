@@ -20,6 +20,8 @@ import { Suspense, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
+import { renderDetailFieldValue } from "~/entity/display/entity-display";
+import { heroChipLabel } from "~/entity/display/enum-field-display";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
   EntityEditDialog,
@@ -32,18 +34,16 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
-import { renderDetailFieldValue } from "~/entity/entity-display";
 import {
   readRecordField,
   readDisplayReferenceField,
 } from "~/entity/entity-references";
-import { heroChipLabel } from "~/entity/enum-field-display";
-import { FieldExplanation } from "~/entity/field-explanation";
+import { FieldExplanation } from "~/entity/fields/field-explanation";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
 import { RecordWorkQueue } from "~/features/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
+import type { DetailHeroActions, DetailHeroStat } from "~/ui/layout/page-hero";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -55,19 +55,19 @@ import {
 import { DetailEditAction } from "~/ui/primitives/detail-edit-action";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { EntityPhotosSection } from "../../features/photos/entity-photos-section";
+import { EntityPhotosSection } from "../../features/image/entity-photos-section";
 import {
   type DetailSection,
   DetailSections,
 } from "../../ui/data-table/detail-page";
-import { DocumentViewerList } from "../../ui/DocumentViewerList";
+import { DocumentViewerList } from "../../ui/document-viewer-list";
 import {
   actionVerbs,
   type ActionVerbId,
   verbDef,
 } from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
-import EntityImageList from "../components/EntityImageList";
+import EntityImageList from "../components/entity-image-list";
 import {
   EntityTimeline,
   type EntityTimelineOperations,

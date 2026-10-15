@@ -462,7 +462,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/image-job",
+        module: "~/server/domains/image-job/repo",
         export: "imageJobRepository",
       },
     },

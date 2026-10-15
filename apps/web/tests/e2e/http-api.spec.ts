@@ -1,18 +1,18 @@
 import { calendarContract } from "~/contracts/calendar.contract";
-import { startOperation } from "./start-operation";
-import { entityApi } from "./entity-api";
+import { startOperation } from "./support/start-operation";
+import { entityApi } from "./support/entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { createHash, randomBytes } from "node:crypto";
 import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
 
 import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
-import { createCubbyClient } from "./http-api-client";
+import { createCubbyClient } from "./support/http-api-client";
 import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 const keyResult = z.object({
   id: z.string(),

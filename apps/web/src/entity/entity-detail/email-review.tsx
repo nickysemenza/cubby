@@ -6,10 +6,10 @@ import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatSmallCurrency } from "~/lib/utils";
+import { formatSmallCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 
 import type { DetailRecordOf } from "./detail-record";

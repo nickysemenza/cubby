@@ -24,7 +24,7 @@ import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Input } from "~/ui/primitives/input";
@@ -32,7 +32,7 @@ import { Input } from "~/ui/primitives/input";
 import {
   type EntityPreviewRowData,
   useEntityPreview,
-} from "../../ui/hooks/useEntityPreview";
+} from "../../entity/hooks/use-entity-preview";
 import {
   ProductFamilyChildContent,
   productFamilyChildren,

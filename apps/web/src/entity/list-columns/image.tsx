@@ -1,16 +1,16 @@
 import type { ImageListFilters, ImageWithEntity } from "@cubby/schemas/image";
 import { useMemo } from "react";
 
-import { labeledFieldProvenance } from "~/entity/field-provenance";
-import { ImageAssociationLinks } from "~/features/images/image-associations";
+import { labeledFieldProvenance } from "~/entity/fields/field-provenance";
+import { useFilenameEditable } from "~/entity/hooks/use-name-editable";
+import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { ImageAssociationLinks } from "~/features/image/image-associations";
 import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
-import { useFilenameEditable } from "~/ui/hooks/useNameEditable";
-import { useImageUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 
 import { defineListOverride } from "./types";
 

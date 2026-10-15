@@ -1,8 +1,8 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { useMemo } from "react";
 
-import { useDeferredFilterOptions } from "~/ui/hooks/useDeferredFilterOptions";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
+import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 
 import { defineListOverride } from "./types";
 

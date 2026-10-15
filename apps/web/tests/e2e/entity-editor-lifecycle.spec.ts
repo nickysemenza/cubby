@@ -1,6 +1,9 @@
-import { seedVendorDisplayPrerequisite } from "./fixtures-catalog";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedVendorDisplayPrerequisite } from "./fixtures/catalog";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Browser focus restoration and canonical detail refresh cross the dialog/router boundary.
 test("generic editing closes unchanged saves and restores the updated record", async ({

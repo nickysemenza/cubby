@@ -481,7 +481,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/vendor-account",
+        module: "~/server/domains/vendor-account/repo/vendor-account",
         export: "vendorAccountRepository",
       },
     },

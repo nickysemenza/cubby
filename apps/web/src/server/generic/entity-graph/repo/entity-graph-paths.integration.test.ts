@@ -1,0 +1,173 @@
+import { testShortcode } from "@cubby/schemas/testing";
+import { createRepoEntity } from "tooling/factories/repo";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+
+import { getDb } from "~/server/db/helpers";
+import { inventoryEntry, location } from "~/server/db/schema";
+import { createExpense } from "~/server/domains/expense/repo/crud";
+import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { createVendor } from "~/server/domains/vendor/repo/vendor";
+import {
+  createImageFixture,
+  createProductFixture as createProduct,
+  makeExpenseInput,
+  makeProductInput,
+  insertEntityAttachments,
+} from "~/server/testing/repo.fixtures";
+
+import { getEntityGraphPaths } from "./entity-graph-paths";
+
+describe("entity graph path repository", () => {
+  const ctx = withTestDb();
+
+  it("finds parallel live evidence in bounded batches and hydrates only path nodes", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Path product" }),
+      ctx.actor,
+    );
+    const cover = await createImageFixture(ctx.db, "path-cover");
+    await insertEntityAttachments(ctx.db, {
+      entityId: product.entityId,
+      imageId: cover.id,
+    });
+    const vendor = await createVendor(
+      ctx.db,
+      {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
+        aliases: [],
+        name: "Path vendor",
+        website: null,
+        orderUrlTemplate: null,
+        itemizationExpectation: null,
+        orderEvidence: null,
+        orderEmailSenders: [],
+        browserDomains: [],
+        returnWindowDays: null,
+        agentHints: {
+          ordersListUrl: null,
+          pagination: null,
+          orderLinkPattern: null,
+          notes: [],
+        },
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      orderId: "PATH-ORDER",
+      displayLabel: "Path purchase",
+      date: "2026-09-08",
+      statedTotal: 10,
+      notes: null,
+    });
+    await Promise.all([
+      createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "Path expense",
+          productId: product.id,
+          purchaseId: purchase.output.id,
+        }),
+        ctx.actor,
+      ),
+      attachPurchaseProducts(
+        ctx.db,
+        purchase.entityId,
+        [product.entityId],
+        ctx.actor,
+      ),
+    ]);
+
+    const measured = await countTestDbQueries(() =>
+      getEntityGraphPaths(ctx.db, {
+        start: { entityKind: "product", entityId: product.id },
+        destination: {
+          entityKind: "purchase",
+          entityId: purchase.output.id,
+        },
+      }),
+    );
+    const responseBytes = new TextEncoder().encode(
+      JSON.stringify(measured.result),
+    ).byteLength;
+
+    expect(measured.result).toMatchObject({
+      completion: "exhausted",
+      shortestPathCertain: true,
+    });
+    expect(measured.result.nodes).toHaveLength(2);
+    expect(
+      measured.result.nodes.find((node) => node.entityKind === "product")?.image
+        ?.url,
+    ).toBe(cover.url);
+    expect(measured.result.paths).toHaveLength(1);
+    expect(
+      measured.result.paths.every((path) => path.edgeIds.length === 1),
+    ).toBe(true);
+    expect(measured.result.edges.map((edge) => edge.sourceKey).sort()).toEqual([
+      "expense",
+      "explicit",
+    ]);
+    // Image representations stay in the shared image query, never per node.
+    expect(measured.queryCount).toBe(13);
+    expect(responseBytes).toBeLessThan(10_000);
+  });
+
+  it("paginates a 60-neighbor frontier without per-record reads", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Wide path product" }),
+      ctx.actor,
+    );
+    const locations = await getDb(ctx.db)
+      .insert(location)
+      .values(
+        Array.from({ length: 60 }, (_, index) => ({
+          shortcode: testShortcode("location", `LOC-PATH-${index}`),
+          name: `Wide path location ${index}`,
+          type: "area" as const,
+        })),
+      )
+      .returning({ id: location.id });
+    const inventories = await getDb(ctx.db)
+      .insert(inventoryEntry)
+      .values(
+        locations.map((locationRow, index) => ({
+          shortcode: testShortcode("inventory", `INV-PATH-${index}`),
+          productId: product.entityId,
+          locationId: locationRow.id,
+          amountValue: 1,
+          amountUnit: "each",
+        })),
+      )
+      .returning({ shortcode: inventoryEntry.shortcode });
+    const destination = inventories.at(-1);
+    if (!destination) throw new Error("Wide path fixture is empty");
+
+    const measured = await countTestDbQueries(() =>
+      getEntityGraphPaths(ctx.db, {
+        start: { entityKind: "product", entityId: product.id },
+        destination: {
+          entityKind: "inventory",
+          entityId: destination.shortcode,
+        },
+      }),
+    );
+    const responseBytes = new TextEncoder().encode(
+      JSON.stringify(measured.result),
+    ).byteLength;
+
+    expect(measured.result).toMatchObject({
+      completion: "exhausted",
+      shortestPathCertain: true,
+      paths: [expect.objectContaining({ edgeIds: [expect.any(String)] })],
+    });
+    expect(measured.result.nodes).toHaveLength(2);
+    expect(measured.queryCount).toBe(21);
+    expect(responseBytes).toBeLessThan(10_000);
+  });
+});

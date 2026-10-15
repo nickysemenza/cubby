@@ -1,8 +1,8 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
-import { insertAndReturn } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { insertAndReturn } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
  * Insert a settlement transaction the way the write path would: with its

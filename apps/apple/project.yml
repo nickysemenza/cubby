@@ -70,6 +70,10 @@ targetTemplates:
       # Layered Liquid Glass icon (Icon Composer format). Same name as the PNG AppIcon set in
       # the asset catalog, which stays as the fallback for anything that cannot render layers.
       - path: App/AppIcon.icon
+      # `#Preview` JSON written by `pnpm generate` (gitignored); absent until it runs.
+      - path: Generated/PreviewFixtures
+        buildPhase: resources
+        optional: true
     info:
       path: App/${plat}/Info.plist
       properties:
@@ -180,6 +184,10 @@ targets:
     templateAttributes:
       plat: iOS
     platform: iOS
+    # The Live Activity attributes the app and its widget extension both compile.
+    # Appended to the template's sources.
+    sources:
+      - path: App/LiveActivity/Shared
     # Home-screen Quick Actions. `AppDelegate`/`SceneDelegate` (App/iOS/AppDelegate.swift) map
     # `shortcutItem.type` back through `CubbyLink`, so each type here must be a valid `cubby://`
     # link. iOS-only: merged (deep-merge, not replaced) with the shared template's `info.properties`.
@@ -219,8 +227,6 @@ targets:
     platform: iOS
     sources:
       - path: App/LiveActivity
-      - path: App/iOS/DeviceWorkAttributes.swift
-      - path: App/iOS/PhotoRunActivityAttributes.swift
     info:
       path: App/LiveActivity/Info.plist
       properties:
@@ -266,8 +272,8 @@ targets:
     platform: iOS
     sources:
       - path: App/Tests
-        excludes: ["Photos/Fixtures"]
-      - path: App/Tests/Photos/Fixtures
+        excludes: ["Photo/Fixtures"]
+      - path: App/Tests/Photo/Fixtures
         buildPhase: resources
       # The one test-double gate, shared with CubbyKit's tests.
       - path: CubbyKit/Tests/CubbyKitTests/Support/Gate.swift
@@ -293,14 +299,16 @@ targets:
     configFiles:
       Debug: Generated/MacDebugAppIdentity.xcconfig
     sources:
-      - path: App/Tests/Navigation
-      - path: App/Tests/CliAuth
-      - path: App/Tests/Browse
-      - path: App/Tests/Photos/PhotoImportRunPreparationTests.swift
-      - path: App/Tests/Photos/PhotoDestinationOptionTests.swift
-      - path: App/Tests/Photos/PhotoEntityChooserModelTests.swift
-      - path: App/Tests/Photos/PhotoTestStores.swift
-      - path: App/Tests/Participation/AppInstallationIDTests.swift
+      - path: App/Tests/AppShell/NavigationTests.swift
+      - path: App/Tests/Auth
+      - path: App/Tests/Entity
+      - path: App/Tests/DesignSystem/EntityWebURLTests.swift
+      - path: App/Tests/DesignSystem/RecordListRowRenderingTests.swift
+      - path: App/Tests/Photo/Import/PhotoImportRunPreparationTests.swift
+      - path: App/Tests/Photo/Review/PhotoDestinationOptionTests.swift
+      - path: App/Tests/Photo/Review/PhotoEntityChooserModelTests.swift
+      - path: App/Tests/Photo/PhotoTestStores.swift
+      - path: App/Tests/AppShell/AppInstallationIDTests.swift
       - path: CubbyKit/Tests/CubbyKitTests/Support/Gate.swift
     dependencies:
       - target: Cubby-macOS

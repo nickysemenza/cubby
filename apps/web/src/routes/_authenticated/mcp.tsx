@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { McpInspector } from "~/features/developer/mcp-inspector";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/mcp")({
   component: McpInspectorPage,

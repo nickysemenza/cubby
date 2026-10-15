@@ -79,6 +79,8 @@
     "cubby/no-unsafe-identifiers": "error",
     "cubby/no-raw-enum-literal-in-sql": "error",
     "cubby/no-hand-rolled-plural": "error",
+    "cubby/domain-layers": "error",
+    "cubby/no-domain-barrel": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",
     "typescript/no-explicit-any": "error",
@@ -121,35 +123,6 @@
     "vitest/require-to-throw-message": "error"
   },
   "overrides": [
-    {
-      "files": [
-        "apps/web/src/server/services/**/*.ts",
-        "apps/web/src/server/services/**/*.tsx"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "~/server/repo/database-helpers",
-                "message": "Services cannot access DB helpers directly. Use repo functions instead."
-              },
-              {
-                "name": "~/server/db/schema",
-                "message": "Services cannot access DB schema directly. Use repo functions instead."
-              }
-            ],
-            "patterns": [
-              {
-                "group": ["~/server/repo/database-helpers/*"],
-                "message": "Services cannot access DB helpers directly. Use repo functions instead."
-              }
-            ]
-          }
-        ]
-      }
-    },
     {
       "files": [
         "**/*.test.ts",
@@ -233,7 +206,7 @@
     {
       // The purchase agent reads untrusted content; it reaches Cubby only
       // through its narrowed environment (docs/infrastructure.md#purchase-agent).
-      "files": ["apps/web/src/server/purchase-agent/**/*.ts"],
+      "files": ["apps/web/src/server/domains/purchase-agent/**/*.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "cubby/purchase-agent-boundary": "error"
@@ -277,10 +250,10 @@
                   "../src/server/**",
                   "!../src/server/db/database",
                   "!../src/server/db/schema",
-                  "!../src/server/db-pg-tracing"
+                  "!../src/server/db/db-pg-tracing"
                 ],
                 "allowTypeImports": true,
-                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/schema, and db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
+                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/schema, and db/db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
               },
               {
                 "group": ["../src/env", "~/env", "~/server/**"],
@@ -458,22 +431,22 @@
         "apps/web/src/ui/charts/kit.tsx",
         "apps/web/src/features/developer/mcp-usage-dashboard.tsx",
         "apps/web/src/features/labels/label-summary.tsx",
-        "apps/web/src/features/nutrition/NutrientDensityStats.tsx",
+        "apps/web/src/features/nutrition/nutrient-density-stats.tsx",
         "apps/web/src/features/performance/index.tsx",
-        "apps/web/src/features/recipes/RecipeMagazineView.tsx",
-        "apps/web/src/features/recipes/compare/RecipeCompareGrid.tsx",
-        "apps/web/src/features/recipes/cookbook-import/run-report-panel.tsx",
-        "apps/web/src/features/units/NutrientsSummary.tsx",
+        "apps/web/src/features/recipe/recipe-magazine-view.tsx",
+        "apps/web/src/features/recipe/compare/recipe-compare-grid.tsx",
+        "apps/web/src/features/recipe/cookbook-import/run-report-panel.tsx",
+        "apps/web/src/features/units/nutrients-summary.tsx",
         "apps/web/src/ui/visualizations/recipe-cost-treemap.tsx",
         "apps/web/src/app/cookbooks/cookbook-run-report.tsx",
-        "apps/web/src/app/purchases/financial-settlement.tsx",
-        "apps/web/src/app/purchases/purchase-import-run-detail.tsx",
-        "apps/web/src/entity/detail-field-renderers/image-capture.tsx",
+        "apps/web/src/features/purchase/financial-settlement.tsx",
+        "apps/web/src/features/purchase/purchase-import-run-detail.tsx",
+        "apps/web/src/entity/display/detail-field-renderers/image-capture.tsx",
         "apps/web/src/lib/format-duration.ts",
         "apps/web/src/lib/wasm-execution.ts",
-        "apps/web/src/server/calendar/ics.ts",
-        "apps/web/src/server/repo/financial-transaction-allocations.ts",
-        "apps/web/src/server/services/product-match-ranking.ts"
+        "apps/web/src/server/domains/calendar/ics.ts",
+        "apps/web/src/server/domains/financial-transaction/repo/financial-transaction-allocations.ts",
+        "apps/web/src/server/domains/product/service/product-match-ranking.ts"
       ],
       "rules": {
         "cubby/no-ad-hoc-number-format": "off"
@@ -490,11 +463,11 @@
         "apps/web/src/entity/entity-detail/entity-relation-table.tsx",
         "apps/web/src/entity/merge/entity-merge-dialog.tsx",
         "apps/web/src/features/performance/index.tsx",
-        "apps/web/src/features/recipes/compare/RecipeCompareGrid.tsx",
-        "apps/web/src/app/docs/_components/GuideDoc.tsx",
-        "apps/web/src/app/projects/charts/task-status-board.tsx",
-        "apps/web/src/app/projects/tool-matrix-page.tsx",
-        "apps/web/src/ui/markdown.tsx",
+        "apps/web/src/features/recipe/compare/recipe-compare-grid.tsx",
+        "apps/web/src/features/docs/components/guide-doc.tsx",
+        "apps/web/src/features/project/charts/task-status-board.tsx",
+        "apps/web/src/features/project/tool-matrix-page.tsx",
+        "apps/web/src/ui/text/markdown.tsx",
         "apps/web/src/ui/matrix/cross-tab-table.tsx"
       ],
       "rules": {
@@ -503,10 +476,10 @@
     },
     {
       "files": [
-        "apps/web/src/app/collections/collection-assignment-matrix.tsx",
-        "apps/web/src/app/meals/meal-nutrition-summary.tsx",
-        "apps/web/src/features/recipes/RecipeMagazineView.tsx",
-        "apps/web/src/features/recipes/recipe-form/recipe-live-preview.tsx",
+        "apps/web/src/features/collection/collection-assignment-matrix.tsx",
+        "apps/web/src/features/meal/meal-nutrition-summary.tsx",
+        "apps/web/src/features/recipe/recipe-magazine-view.tsx",
+        "apps/web/src/features/recipe/recipe-form/recipe-live-preview.tsx",
         "apps/web/src/ui/navigation/application-directory.tsx"
       ],
       "rules": {

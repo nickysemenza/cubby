@@ -1,6 +1,6 @@
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { seedProjectContributionPrerequisite } from "./fixtures-finance";
+import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { seedProjectContributionPrerequisite } from "./fixtures/finance";
 
 test("project contribution shows credits as a negative adjustment, both party lists, and linked attribution gaps", async ({
   page,

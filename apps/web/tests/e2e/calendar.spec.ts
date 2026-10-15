@@ -1,7 +1,7 @@
-import { waitForDndMutation } from "./dnd-helpers";
-import { seedTaskPrerequisite } from "./fixtures-catalog";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { waitForDndMutation } from "./support/dnd-helpers";
+import { seedTaskPrerequisite } from "./fixtures/catalog";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("calendar events open an anchored editor, save atomically, and restore focus", async ({
   page,

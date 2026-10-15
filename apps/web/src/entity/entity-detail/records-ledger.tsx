@@ -23,7 +23,7 @@ import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
-import { ShortcodeProse } from "~/ui/shortcode-prose";
+import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 import { collectionActions } from "./collection-actions";
 import { DetailAction } from "./detail-action-bar";

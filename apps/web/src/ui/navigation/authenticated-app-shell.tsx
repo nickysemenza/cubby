@@ -19,14 +19,14 @@ import { z } from "zod";
 import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
-import { useHydrated } from "~/ui/hooks/useHydrated";
-import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import {
   useAppViewportBounds,
   useVirtualKeyboard,
-} from "~/ui/hooks/useVirtualKeyboard";
-import { MainNav } from "~/ui/MainNav";
-import { QuickActionsMenu } from "~/ui/navbar/quick-actions-menu";
+} from "~/ui/hooks/use-virtual-keyboard";
+import { MainNav } from "~/ui/navigation/main-nav";
+import { QuickActionsMenu } from "~/ui/navigation/quick-actions-menu";
 import { Button } from "~/ui/primitives/button";
 
 import {

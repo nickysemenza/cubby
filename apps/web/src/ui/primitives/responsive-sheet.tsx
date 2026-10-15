@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import {
   Sheet,
   SheetContent,

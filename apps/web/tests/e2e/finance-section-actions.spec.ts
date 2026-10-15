@@ -1,12 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { expense, entityLink } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { gotoDetailActions, chooseOption } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { getFixtureDb } from "./fixtures-core";
+import { gotoDetailActions, chooseOption } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { getFixtureDb } from "./fixtures/core";
 
 const line = {
   date: "2026-09-01",

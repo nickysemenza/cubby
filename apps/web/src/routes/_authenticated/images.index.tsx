@@ -1,9 +1,9 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
-import { UploadImageDialog } from "~/app/images/upload-image-dialog";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { imageListOverride } from "~/entity/list-columns/image";
 import { listPage } from "~/entity/routing/list-page";
+import { UploadImageDialog } from "~/features/image/upload-image-dialog";
 import { pageTitle } from "~/lib/page-title";
 
 // Hand-written (`route.list: null`) only for the upload dialog, this route's

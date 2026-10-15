@@ -1,0 +1,185 @@
+import { modulesChildren } from "../../../packages/schemas/src/child-tables/modules.ts";
+import { retainedTableExports } from "../../../packages/schemas/src/child-tables/retained.ts";
+import { readFile, writeFile } from "node:fs/promises";
+import { validateRetainedTableBoundary } from "./entities/child-table-boundary.ts";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { z } from "zod";
+import {
+  connectedViews,
+  derivedConnectedRelationship,
+} from "../../../packages/schemas/src/connected-view-definitions.ts";
+import type { CompiledEntity } from "./entities/declarations.ts";
+import {
+  ARTIFACT_MANIFEST,
+  removeExtraArtifacts,
+  writeArtifacts,
+} from "./artifacts.ts";
+import {
+  EntityDeclarationError,
+  loadEntityDeclarationBundle,
+} from "./entities/declarations.ts";
+import { renderOverrideComparisonArtifact } from "./entities/override-comparisons.ts";
+import { renderAgentPromptArtifact } from "./agent-prompts.ts";
+import type { EntityArtifacts } from "./entities/declarations.ts";
+import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts";
+import { renderFilterArtifacts } from "./entities/render/filters.ts";
+import {
+  entityOutputsFor,
+  kernelHttpActionsFor,
+  renderEntityArtifacts,
+} from "./entities/render/index.ts";
+import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
+import { renderRelationArtifacts } from "./entities/render/relations.ts";
+import { missingBrowserRouteFiles } from "./entities/render/routes.ts";
+import { writeRouteTree } from "./route-tree.ts";
+import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.ts";
+import { renderSearchArtifacts } from "./entities/render/search.ts";
+import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
+import { validateEntityDeclarationImportBoundary } from "./entities/import-boundary.ts";
+
+// `relationshipProvenanceSchema`'s local-path member; the schema module itself
+// imports generated files, which do not exist yet when this validation runs.
+const localPathProvenance = z.object({ kind: z.literal("local-path") });
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
+  const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+  for (const [source, views] of Object.entries(connectedViews)) {
+    if (!byKey.has(source))
+      throw new EntityDeclarationError(
+        `Unknown connected-view source ${source}`,
+      );
+    const keys = new Set<string>();
+    for (const view of views) {
+      if (keys.has(view.key))
+        throw new EntityDeclarationError(
+          `Duplicate connected view ${source}.${view.key}`,
+        );
+      keys.add(view.key);
+      for (const route of view.routes) {
+        if (route.length < ("evidence" in view && view.evidence ? 1 : 2))
+          throw new EntityDeclarationError(
+            `Connected view ${source}.${view.key} has too few relations for its presentation`,
+          );
+        let current = source;
+        for (const [index, key] of route.entries()) {
+          const relation = byKey
+            .get(current)
+            ?.relations.find((candidate) => candidate.key === key);
+          if (
+            !relation ||
+            (!localPathProvenance.safeParse(relation.provenance).success &&
+              !(
+                derivedConnectedRelationship(current, key)?.target ===
+                  relation.target && index === route.length - 1
+              ))
+          ) {
+            throw new EntityDeclarationError(
+              `Connected view ${source}.${view.key} has no local ${current}.${key} relation`,
+            );
+          }
+          current = relation.target;
+        }
+        if (current !== view.target)
+          throw new EntityDeclarationError(
+            `Connected view ${source}.${view.key} reaches ${current}, expected ${view.target}`,
+          );
+      }
+    }
+  }
+};
+
+/**
+ * `pnpm generate` writes every generated output; none is committed. The
+ * stages run in order because each later stage imports the earlier stages'
+ * files from disk (declarations import the shortcode registry; contracts
+ * runtime-import `~/entity/generated/*.gen.ts`; the OpenAPI stage imports
+ * `http-contract.gen.ts`), so the later stages load only after the earlier
+ * ones are written.
+ */
+const main = async () => {
+  const unknownArguments = process.argv.slice(2);
+  if (unknownArguments.length > 0) {
+    throw new EntityDeclarationError(
+      `Unknown arguments: ${unknownArguments.join(", ")}.`,
+    );
+  }
+
+  const written: EntityArtifacts[] = [];
+  const changed: string[] = [];
+  const settle = async (artifacts: readonly EntityArtifacts[]) => {
+    changed.push(...(await writeArtifacts(ROOT, artifacts)));
+    written.push(...artifacts);
+  };
+
+  validateEntityDeclarationImportBoundary();
+  validateRetainedTableBoundary(
+    await readFile(resolve(ROOT, "apps/web/src/server/db/schema.ts"), "utf8"),
+    new Set(retainedTableExports),
+  );
+  await settle(await renderShortcodeRegistryArtifacts());
+  const { entities, declarations } = await loadEntityDeclarationBundle();
+  validateConnectedViews(entities);
+  await settle([await renderAgentPromptArtifact(ROOT)]);
+  await settle([
+    ...renderEntityArtifacts(entities, modulesChildren),
+    renderOverrideComparisonArtifact(declarations, entities),
+    ...renderRelationArtifacts(entities),
+    ...renderKernelBindingsArtifacts(entities),
+    ...renderFilterArtifacts(entities),
+    ...renderSearchArtifacts(entities),
+    ...renderTimelineArtifacts(entities),
+    ...renderBrowserRouteArtifacts(entities),
+  ]);
+  const missingRoutes = missingBrowserRouteFiles(entities);
+  if (missingRoutes.length > 0) {
+    throw new EntityDeclarationError(
+      `Declared browser routes are missing hand-written route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
+    );
+  }
+
+  // The later stages import the earlier stages' artifacts, so they load only
+  // after those are on disk: a fresh checkout has no generated files at all.
+  const { renderStartOperationArtifacts } =
+    await import("./start-operations/render.ts");
+  const { renderHttpApiArtifacts } = await import("./http-api/openapi.ts");
+  const { renderApplePreviewFixtures } =
+    await import("../tooling/checks/apple-preview-fixtures.ts");
+  const { renderMcpToolArtifacts } =
+    await import("./start-operations/mcp-tools.ts");
+  const startOperations = await renderStartOperationArtifacts();
+  await settle(startOperations.artifacts);
+  await settle(await renderMcpToolArtifacts());
+  await settle(
+    await renderHttpApiArtifacts(
+      kernelHttpActionsFor(entities),
+      startOperations.nativeOperations,
+      entityOutputsFor(entities),
+    ),
+  );
+  await settle(renderApplePreviewFixtures());
+
+  // Extraneous files are judged once, over every stage: the stages share
+  // output directories, so a per-stage scan would remove the others' files.
+  const removed = await removeExtraArtifacts(ROOT, written);
+  await writeFile(
+    resolve(ROOT, ARTIFACT_MANIFEST),
+    `${JSON.stringify(written.map(({ relativePath }) => relativePath).sort(), null, 2)}\n`,
+  );
+  await writeRouteTree(ROOT);
+  console.log(
+    changed.length === 0 && removed.length === 0
+      ? "Generated artifacts are unchanged."
+      : [
+          `Generated ${changed.length} changed artifacts.`,
+          ...removed.map((path) => `Removed ${path}`),
+        ].join("\n"),
+  );
+};
+
+void main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

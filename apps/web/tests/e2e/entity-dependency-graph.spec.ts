@@ -1,15 +1,15 @@
 import {
   seedInventoryPrerequisites,
   seedTaskPrerequisite,
-} from "./fixtures-catalog";
-import { seedImagePrerequisite } from "./fixtures-photos";
+} from "./fixtures/catalog";
+import { seedImagePrerequisite } from "./fixtures/photos";
 import {
   chooseOption,
   gotoAuthenticatedPage,
   waitForAppHydration,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture } from "./fixtures/core";
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
   page,

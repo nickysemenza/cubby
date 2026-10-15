@@ -7,9 +7,9 @@ import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
-import { encodeAuditCursor } from "~/server/repo/audit-log";
+import { encodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
 
-import { callMcpTool, registerTestTool } from "./mcp-test-utils";
+import { callMcpTool, registerTestTool } from "../testing/mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
 import { mergeActionInputSchemas } from "./tools/action-schema";
@@ -657,7 +657,7 @@ describe("MCP catalog schemas", () => {
       "installationId",
     ]);
     const violations: string[] = [];
-    // Every published Ledger Party filter must accept `@me` (ADR 0015): the
+    // Every published Ledger Party filter must accept `@me` (ADR 0018): the
     // clients offer "Me" on each one, so a shortcode-only schema rejects it.
     const partyFiltersWithoutMe: string[] = [];
     const stillExceptional = new Set<string>();

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
-import { TaskBriefingEvidenceLine } from "./HouseCard";
+import { TaskBriefingEvidenceLine } from "./house-card";
 
 it("keeps each task summary item on one line in a narrow briefing", async () => {
   await page.viewport(402, 874);

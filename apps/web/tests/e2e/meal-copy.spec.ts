@@ -1,6 +1,10 @@
-import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
-import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { seedStaplePlanningPrerequisite } from "./fixtures/recipes";
+import {
+  escapeRegExp,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // `seedStaplePlanningPrerequisite` plans "<name> meal" on 2026-09-09, so the
 // week of 2026-09-16 is the following one.

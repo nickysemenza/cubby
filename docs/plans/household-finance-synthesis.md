@@ -89,7 +89,7 @@ Findings from the current dataset that shaped the design:
 
 ### 4.1 Category key on the allocator
 
-`expenseProjectAllocationSql` (`apps/web/src/server/repo/expense-project-allocation.ts`)
+`expenseProjectAllocationSql` (`apps/web/src/server/domains/expense/repo/expense-project-allocation.ts`)
 distributes ancillary cents across a purchase's live principal lines and emits
 `(expenseId, projectId, attributedCents, basis)`. Extend each output row with
 `rootCategoryId`: the root of the receiving principal line's
@@ -105,7 +105,7 @@ which principal receives a cent.
 
 ### 4.2 Category analytics and filter
 
-- `expenseAnalytics` (`apps/web/src/server/repo/expense/analytics.ts`) gains a
+- `expenseAnalytics` (`apps/web/src/server/domains/expense/repo/analytics.ts`) gains a
   `byRootCategory` breakdown over the allocator rows, with children available
   for drill-down.
 - The expense filter fields (`packages/schemas/src/project.ts`) gain
@@ -123,7 +123,7 @@ links for the current Ledger filters:
 
 1. **Funder**: each member party, the household party (joint accounts), and
    Unknown funder. Derived with the contribution ledger's allocation
-   (`apps/web/src/server/repo/household-contribution/allocation.ts`), split by
+   (`apps/web/src/server/domains/household-contribution/repo/allocation.ts`), split by
    its weights.
 2. **Project bucket**: the Household project, the top 8 other projects by flow,
    Other projects, and No project.
@@ -140,13 +140,13 @@ A Problems detector for completed projects whose estimate is far from their
 recorded spend: `status = done`, `costEstimate > 0`, no ancestor with its own
 estimate, and subtree actual below 10% of the estimate. Each finding links to
 the project. It reuses `loadProjectSubtreeRollups`
-(`apps/web/src/server/repo/project/subtree.ts`) so subtree semantics match the
+(`apps/web/src/server/domains/project/repo/subtree.ts`) so subtree semantics match the
 budget strip. The finding means "spend was recorded elsewhere or the estimate
 is wrong"; the detector does not guess which.
 
 ### 4.5 Accept a transfer pair
 
-New repo mutation in `apps/web/src/server/repo/ledger-transfer.ts`, exposed as
+New repo mutation in `apps/web/src/server/domains/ledger-transfer/repo.ts`, exposed as
 `accept_financial_transfer_pair` and a web action on suggestion rows:
 
 - Input: the outflow and inflow `FinancialTransaction` ids from a suggestion.
@@ -164,7 +164,7 @@ Same-owner pairs are accepted and produce a transfer with
 ### 4.6 Reporting same-owner transfers
 
 `householdContributionLedger`
-(`apps/web/src/server/repo/household-contribution/reports.ts`) excludes
+(`apps/web/src/server/domains/household-contribution/repo/reports.ts`) excludes
 `fromPartyId = toPartyId` rows from `transfersSent`/`transfersReceived` and
 adds a per-party `internalTransfers { count, amount }`. Position is unaffected
 either way (sent and received cancel), but excluding them keeps the sent and
@@ -233,7 +233,7 @@ are already subtracted from envelope remaining, so they are never counted twice.
 Scenario rows live in the URL as a compact, zod-validated search param. The
 page edits them inline; bookmarking is how a scenario set is saved. Structural
 presets — horizon, the not-started toggle, category subsets — are declared
-views in `apps/web/src/entity/view-manifest.ts`. Scenario amounts and dates
+views in `apps/web/src/entity/model/view-manifest.ts`. Scenario amounts and dates
 are never committed to the repository.
 
 ### 5.6 Page

@@ -5,9 +5,9 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { type FC, useEffect, useMemo } from "react";
 import { z } from "zod";
 
-import { useDebug } from "~/ui/hooks/useDebug";
-import { useHydrated } from "~/ui/hooks/useHydrated";
-import { usePageDetailContext } from "~/ui/page/Page";
+import { useDebug } from "~/ui/hooks/use-debug";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { usePageDetailContext } from "~/ui/layout/page";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 
 import {
@@ -16,7 +16,7 @@ import {
 } from "../../entity/relationships/entity-relations";
 import { relationshipsSectionIcon } from "../../entity/relationships/relationship-tree";
 import { AuditLogList } from "../../features/audit-log/audit-log-list";
-import JsonRenderer from "../json-renderer";
+import JsonRenderer from "../text/json-renderer";
 import {
   type IndexedSection,
   IndexedSections,

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -10,7 +10,7 @@ import {
   createProductFixture,
   makeLocationInput,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
+} from "~/server/testing/repo.fixtures";
 
 /**
  * Value-set columns that used to be pgEnums are text with a CHECK built from

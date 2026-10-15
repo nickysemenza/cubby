@@ -10,7 +10,7 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
-import { enumFieldLabel } from "~/entity/enum-field-display";
+import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 
 import { basisValueOf } from "./field-suggestion";

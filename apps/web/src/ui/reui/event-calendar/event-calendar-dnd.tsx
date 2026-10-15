@@ -24,7 +24,7 @@ import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
 } from "~/ui/dnd/accessibility";
-import { DragPreviewFrame } from "~/ui/dnd/DragPreviewFrame";
+import { DragPreviewFrame } from "~/ui/dnd/drag-preview-frame";
 import { createDndAutoScroller } from "~/ui/dnd/auto-scroll";
 import {
   createValidTargetKeyboardCoordinates,

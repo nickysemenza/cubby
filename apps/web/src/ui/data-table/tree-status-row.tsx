@@ -3,7 +3,7 @@ import { openErrorDetailsDialog } from "~/ui/feedback/error-details-store";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import type { ServerTreeChildStatus } from "../hooks/useServerTreeChildren";
+import type { ServerTreeChildStatus } from "../hooks/use-server-tree-children";
 
 /**
  * An expanded parent's children read, drawn after its loaded children: the

@@ -5,7 +5,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
 import { Row } from "~/ui/layout";
 import {
   Table,

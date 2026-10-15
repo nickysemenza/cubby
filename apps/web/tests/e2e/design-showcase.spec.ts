@@ -1,4 +1,4 @@
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 // The showcase renders the real components over synthetic fixtures. Failure
 // modes: a fixture evaluated at module scope (randomness, WASM) crashes SSR, a

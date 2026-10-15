@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { productCategoryFeatureOptions } from "~/app/product-categories/feature-options";
-import { tradeOptions } from "~/app/projects/trade-options";
-import { locationTypeOptionsWithTheme } from "~/features/locations/location-icons";
+import { locationTypeOptionsWithTheme } from "~/features/location/location-icons";
+import { productCategoryFeatureOptions } from "~/features/product-category/feature-options";
+import { tradeOptions } from "~/features/project/trade-options";
 import { colorizeSelectOptions } from "~/lib/select-options";
 
 /** One picker option: a value/label pair plus an optional leading icon or swatch color. */

@@ -5,7 +5,7 @@ import {
   integerLiterals,
   openTupleItems,
   type JsonSchema,
-} from "../../../scripts/generator/http-api/document-passes";
+} from "../generator/http-api/document-passes";
 
 /**
  * Regression coverage for PR #1024's fold bug: `JSON.stringify(value, keys)`

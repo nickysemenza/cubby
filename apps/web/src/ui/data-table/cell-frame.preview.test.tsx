@@ -15,10 +15,10 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
-import { ImageThumbnail } from "~/ui/table/ImageThumbnail";
 
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";

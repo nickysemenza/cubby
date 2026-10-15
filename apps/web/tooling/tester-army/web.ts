@@ -161,7 +161,7 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
 
 async function runStandard() {
   const { createE2EWorkerRuntime } =
-    await import("../../tests/e2e/e2e-worker-runtime");
+    await import("../../tests/e2e/support/e2e-worker-runtime");
   const runtime = await createE2EWorkerRuntime({
     authenticated: true,
     parallelIndex: 0,
@@ -244,7 +244,7 @@ async function runCoupled() {
     );
   const pricingCatalog = await catalog.text();
   const { createE2EWorkerRuntime } =
-    await import("../../tests/e2e/e2e-worker-runtime");
+    await import("../../tests/e2e/support/e2e-worker-runtime");
   const { seedCoupledJourneys } =
     await import("../scenarios/tester-army-coupled");
   const runtime = await createE2EWorkerRuntime({

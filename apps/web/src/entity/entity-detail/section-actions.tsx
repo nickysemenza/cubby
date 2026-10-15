@@ -30,29 +30,29 @@ const action = <E extends GenericDetailEntity>(
 const sectionActions = {
   purchase: {
     matchStatement: action(() =>
-      import("~/app/purchases/section-actions").then((m) => ({
+      import("~/features/purchase/section-actions").then((m) => ({
         default: m.MatchStatementAction,
       })),
     ),
     linkExpenses: action(() =>
-      import("~/app/purchases/section-actions").then((m) => ({
+      import("~/features/purchase/section-actions").then((m) => ({
         default: m.LinkExpensesAction,
       })),
     ),
     linkProducts: action(() =>
-      import("~/app/purchases/section-actions").then((m) => ({
+      import("~/features/purchase/section-actions").then((m) => ({
         default: m.LinkProductsAction,
       })),
     ),
   },
   expense: {
     splitExpense: action(() =>
-      import("~/app/expenses/section-actions").then((m) => ({
+      import("~/features/expense/section-actions").then((m) => ({
         default: m.SplitExpenseAction,
       })),
     ),
     receiveExpense: action(() =>
-      import("~/app/expenses/section-actions").then((m) => ({
+      import("~/features/expense/section-actions").then((m) => ({
         default: m.ReceiveExpenseAction,
       })),
     ),

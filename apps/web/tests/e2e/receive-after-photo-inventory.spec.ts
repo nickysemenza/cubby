@@ -1,25 +1,25 @@
 import { eq } from "drizzle-orm";
 
 import { inventoryEntry } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb } from "~/server/db/helpers";
+import { upsertAgentProductMatch } from "~/server/domains/product/repo/product-match-candidate";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   gotoDetailActions,
   selectComboboxItem,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 import {
   createEntityFixture,
   createEvidenceHarnessContext,
-} from "./fixtures-core";
+} from "./fixtures/core";
 import {
   seedLocationPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
+} from "./fixtures/catalog";
 
 // Failure modes: an imported purchase's Product that is probably the same item
 // as photo-counted stock is received blindly (double count); the dialog's

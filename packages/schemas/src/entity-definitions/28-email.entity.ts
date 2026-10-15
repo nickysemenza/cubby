@@ -761,7 +761,10 @@ export default defineEntity({
   },
   extensions: {
     ports: {
-      repository: { module: "~/server/repo/email", export: "emailRepository" },
+      repository: {
+        module: "~/server/domains/email/repo/email",
+        export: "emailRepository",
+      },
     },
   },
 });

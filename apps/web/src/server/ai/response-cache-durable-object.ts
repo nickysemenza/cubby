@@ -1,7 +1,7 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 
-import { withInvocationTrace } from "~/server/tracing";
+import { withInvocationTrace } from "~/server/observability/tracing";
 
 const LEASE_MS = 90_000;
 const DAY_MS = 86_400_000;

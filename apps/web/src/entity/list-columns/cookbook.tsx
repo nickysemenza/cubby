@@ -6,12 +6,12 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";

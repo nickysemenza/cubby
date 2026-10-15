@@ -19,12 +19,12 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
-import { promoteHistoricalAcceptedObservation } from "~/server/purchase-import/reconciliation-observations";
+import { promoteHistoricalAcceptedObservation } from "~/server/domains/purchase-import/reconciliation-observations";
 import {
   databaseForTransaction,
   getDb,
   withTransaction,
-} from "~/server/repo/database-helpers";
+} from "~/server/db/helpers";
 
 import { assertMigrationBookkeeping, MIGRATIONS_FOLDER } from "./db-migrate";
 

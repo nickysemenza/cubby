@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { problemQuery } from "~/entity/problem-registry";
+import { problemQuery } from "~/entity/problems/problem-registry";
 
 import { problemWorklistState } from "./problem-worklist";
 

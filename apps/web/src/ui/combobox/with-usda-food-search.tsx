@@ -11,14 +11,14 @@ import {
   usdaFood,
   ai,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
+import { parseUsdaFoodRef } from "~/ui/combobox/parse-usda-food-ref";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
-import { UsdaFoodResultRow } from "../../features/usda/usda-food-result-row";
+import { UsdaFoodResultRow } from "../../features/usda-food/usda-food-result-row";
 import type { ComboboxItem } from "./combobox-types";
 import { Picker } from "./picker";
 

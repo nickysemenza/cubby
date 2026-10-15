@@ -32,7 +32,7 @@ import {
 import {
   observePgPoolAndClientQueries,
   tracePool,
-} from "../src/server/db-pg-tracing";
+} from "../src/server/db/db-pg-tracing";
 import * as schema from "../src/server/db/schema";
 import type {
   EntityCreateInput,
@@ -387,10 +387,10 @@ const LOCK_POLL_TIMEOUT_MS = 5_000;
  */
 async function waitForLockWaiter(db: Database): Promise<void> {
   // Lazy: this module is also vitest's `globalSetup`, which runs in the main
-  // process before `test.env` applies, and `database-helpers/core` pulls in
+  // process before `test.env` applies, and `db/helpers/core` pulls in
   // `env.ts`, whose validation would fail there.
   // oxlint-disable-next-line no-restricted-imports -- lazy by design, see above
-  const { getDb } = await import("../src/server/repo/database-helpers/core");
+  const { getDb } = await import("../src/server/db/helpers/core");
   await pollUntil(
     async () => {
       const result = await getDb(db).execute(sql`
@@ -501,7 +501,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/testing/request-context"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
-    import("../src/server/request-context"),
+    import("../src/server/http/request-context"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-bindings.gen"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above

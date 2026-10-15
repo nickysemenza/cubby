@@ -15,7 +15,7 @@ enum PreviewFixtures {
     }
 
     /// A generated fixture: `Fixtures/<name>.json`, written by `pnpm generate` from the zod
-    /// schemas (`apps/web/scripts/apple-preview-fixtures.ts`) and bundled as a resource.
+    /// schemas (`apps/web/tooling/checks/apple-preview-fixtures.ts`) and bundled as a resource.
     nonisolated static func fixture<T: Decodable>(_ name: String) -> T {
         guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
             let data = try? Data(contentsOf: url)
@@ -141,7 +141,7 @@ enum PreviewFixtures {
 
     /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. `byType`'s
     /// keys are read straight off the `ProblemsCount` zod schema at generation time (see
-    /// `apps/web/scripts/apple-preview-fixtures.ts`), so a new check can never leave
+    /// `apps/web/tooling/checks/apple-preview-fixtures.ts`), so a new check can never leave
     /// this preview silently rendering a stale shape — a missing key fails generation instead.
     static let sampleTodayProblems: ProblemsCount = fixture("sampleTodayProblems")
 

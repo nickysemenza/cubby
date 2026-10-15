@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/purchase";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { SETTLEMENT_CANDIDATE_RANK_FEATURE } from "~/server/ai/features";
 import {

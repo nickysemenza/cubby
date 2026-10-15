@@ -29,12 +29,8 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 
-import {
-  SourceAliasesField,
-  SourceRefsField,
-} from "~/app/finance/financial-form-fields";
-import { enumFieldOptions } from "~/entity/enum-field-display";
-import { FieldProvenance } from "~/entity/field-provenance";
+import { enumFieldOptions } from "~/entity/display/enum-field-display";
+import { FieldProvenance } from "~/entity/fields/field-provenance";
 import {
   generic,
   implemented,
@@ -43,10 +39,14 @@ import {
 } from "~/entity/presentation-coverage";
 import { basisValueOf } from "~/features/ai/field-suggestion";
 import { FormFieldResolution } from "~/features/ai/form-field-resolution";
+import {
+  SourceAliasesField,
+  SourceRefsField,
+} from "~/features/finance/financial-form-fields";
 import type { EntitySearchScope } from "~/ui/combobox/entity-search-hooks";
 import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import { PickerField } from "~/ui/form-utils/picker-field";
+import { PickerField } from "~/ui/forms/form-utils/picker-field";
 
 const EntityEditFieldScopeContext = createContext<string | undefined>(
   undefined,
@@ -66,15 +66,15 @@ export function EntityEditFieldScopeProvider({
   );
 }
 import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
+import { AliasesField } from "~/ui/forms/aliases-field";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
+import { FormSection } from "~/ui/forms/form-section";
 import {
   NullableNumericField,
   PlainDateField,
   SideBySideFields,
   UnifiedTextField,
-} from "~/ui/form-utils";
-import { AliasesField } from "~/ui/forms/aliases-field";
-import { FormFieldGroup } from "~/ui/forms/form-field-group";
-import { FormSection } from "~/ui/forms/form-section";
+} from "~/ui/forms/form-utils";
 import { Row } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";

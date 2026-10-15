@@ -12,20 +12,20 @@ import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
 import {
   type ComparedRecipe,
   RecipeCompareGrid,
-} from "~/features/recipes/compare/RecipeCompareGrid";
+} from "~/features/recipe/compare/recipe-compare-grid";
 import {
   getEffectiveServings,
   getIngredientName,
-} from "~/features/recipes/recipe-utils";
+} from "~/features/recipe/recipe-utils";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
-import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent } from "~/ui/primitives/card";
 

@@ -12,6 +12,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { user } from "~/server/db/auth.schema";
+import { getDb } from "~/server/db/helpers";
 import {
   imageProcessingJob,
   financialAccount as financialAccountTable,
@@ -24,14 +25,19 @@ import {
   assessmentState as suggestion,
   vendorAccount,
 } from "~/server/db/schema";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
+import { proposePhotoGroups } from "~/server/domains/photo-import/run/proposals";
+import { resolveRunFinding } from "~/server/domains/purchase-import/findings";
+import { stopRunForReview } from "~/server/domains/purchase-import/run-service";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readWorkQueue } from "~/server/generic/work-queue/repo/work-queue";
+import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
-import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
-import { resolveRunFinding } from "~/server/purchase-import/findings";
-import { stopRunForReview } from "~/server/purchase-import/run-service";
-import { getDb } from "~/server/repo/database-helpers";
-import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/repo/image-processing";
+import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -40,13 +46,7 @@ import {
   createProductFixture,
   makeLocationInput,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { recordStatementRows } from "~/server/repo/statement-row";
-import { readWorkQueue } from "~/server/repo/work-queue";
-import { requireActor } from "~/server/request-context";
-import { ensureRun } from "~/server/runs/ensure-run";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failure modes: another member's private work leaks into an actionable page;

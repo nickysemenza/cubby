@@ -6,8 +6,8 @@ import {
   gotoAuthenticatedPage,
   openProductFromPalette,
   waitForFormHydration,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 const itemPhoto = fileURLToPath(
   new URL("./fixtures/synthetic-wardrobe-shirt.png", import.meta.url),

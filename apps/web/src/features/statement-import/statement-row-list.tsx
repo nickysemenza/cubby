@@ -1,0 +1,573 @@
+import type {
+  StatementRowDisposition,
+  StatementRowFilters,
+  StatementRowMatchState,
+  StatementRowOut,
+} from "@cubby/schemas/statement-row";
+import { statementRowSortableFields } from "@cubby/schemas/statement-row";
+import { capitalize } from "@cubby/shared";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
+import { getRouteApi, Link } from "@tanstack/react-router";
+import { uniq } from "es-toolkit";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
+
+import { PossibleVendor } from "~/features/finance/possible-vendor";
+import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCurrency } from "~/lib/number-format";
+import { statusTone } from "~/lib/status-tone";
+import { Picker } from "~/ui/combobox/picker";
+import type { PickerOption } from "~/ui/combobox/picker-option";
+import { DatePickerInput } from "~/ui/date-picker-input";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { usePageCount } from "~/ui/layout/page";
+import { badgeVariantColor } from "~/ui/primitives/badge";
+import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
+import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
+
+import {
+  createCurrencyColumn,
+  createPlainDateColumn,
+  renderOptionCell,
+} from "../../ui/data-table/column-helpers";
+import RTable from "../../ui/data-table/table";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../../ui/data-table/table-features";
+import { useTableConfig } from "../../ui/data-table/use-table-config";
+import { useTableState } from "../../ui/data-table/use-table-state";
+
+const route = getRouteApi("/_authenticated/statement-rows/");
+
+/** Client-only sentinel meaning "no matchState filter" — see the route file. */
+type MatchStateSearchValue = StatementRowMatchState | "all";
+
+// Stable defaults — a fresh `[]`/`{}` per render would destabilize every
+// memo downstream while a query is loading (apps/web/AGENTS.md's
+// `unstable-hook-default` rule).
+const NO_ROWS: StatementRowOut[] = [];
+const NO_SOURCES: string[] = [];
+
+const MATCH_STATE_VALUES = [
+  "matched",
+  "unmatched",
+  "superseded",
+  "ignored",
+] as const satisfies readonly StatementRowMatchState[];
+const matchStateSearchSchema = z.enum([...MATCH_STATE_VALUES, "all"] as const);
+
+const MATCH_STATE_OPTIONS: PickerOption[] = MATCH_STATE_VALUES.map((value) => ({
+  value,
+  label: capitalize(value),
+  color: badgeVariantColor[statusTone("statementMatch", value)],
+}));
+
+const DISPOSITION_VALUES = [
+  "open",
+  "ignored",
+] as const satisfies readonly StatementRowDisposition[];
+
+const DISPOSITION_OPTIONS: PickerOption[] = DISPOSITION_VALUES.map((value) => ({
+  value,
+  label: capitalize(value),
+  color: badgeVariantColor[statusTone("statementDisposition", value)],
+}));
+
+const MATCH_STATE_FILTER_OPTIONS: PickerOption[] = [
+  ...MATCH_STATE_OPTIONS,
+  { value: "all", label: "All" },
+];
+const DISPOSITION_FILTER_OPTIONS: PickerOption[] = [
+  { value: "", label: "Any disposition" },
+  ...DISPOSITION_OPTIONS,
+];
+
+/** Route search → server filters. `"all"` never reaches the wire — it's the
+ * client-only way to say "no matchState filter" (see the route file). */
+function buildFilters(search: {
+  matchState?: MatchStateSearchValue;
+  disposition?: StatementRowDisposition;
+  source?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+}): StatementRowFilters {
+  const matchState = search.matchState ?? "unmatched";
+  return {
+    matchState: matchState === "all" ? undefined : matchState,
+    disposition: search.disposition,
+    source: search.source,
+    dateFrom: search.dateFrom,
+    dateTo: search.dateTo,
+    search: search.q,
+  };
+}
+
+/** Debounced search box — writes to the URL 400ms after typing stops, rather
+ * than on every keystroke (this filter is server-side, unlike table filters). */
+function SearchBox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  const [debounced] = useDebouncedValue(text, { wait: 400 });
+  const lastRef = useRef(value);
+
+  useEffect(() => {
+    if (debounced === lastRef.current) return;
+    lastRef.current = debounced;
+    onChange(debounced);
+    // oxlint-disable-next-line react/exhaustive-deps -- onChange is the navigate callback, stable per render cycle; including it would refire on every parent render
+  }, [debounced]);
+
+  // External reset (e.g. a "Clear filters" action) — sync without fighting
+  // the user's in-flight typing.
+  if (value !== lastRef.current && value !== text) {
+    lastRef.current = value;
+    setText(value);
+  }
+
+  return (
+    <Input
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      placeholder="Search description..."
+      className="max-w-xs"
+    />
+  );
+}
+
+/**
+ * Total / matched / unmatched / ignored counts plus the unmatched dollar
+ * amount, computed over the active filters MINUS matchState — so the tiles
+ * show the full breakdown regardless of which state the table is currently
+ * showing, and each tile is a one-click way to switch to it (mirroring
+ * TasksStatsStrip).
+ */
+function StatementRowSummary({
+  filters,
+  matchState,
+  onSelectMatchState,
+}: {
+  filters: StatementRowFilters;
+  matchState: MatchStateSearchValue;
+  onSelectMatchState: (value: MatchStateSearchValue) => void;
+}) {
+  const summaryFilters = useMemo<StatementRowFilters>(
+    () => ({ ...filters, matchState: undefined }),
+    [filters],
+  );
+  const { data, isLoading, error } = useQuery(
+    statementRow.summary.queryOptions({ filters: summaryFilters }),
+  );
+
+  // A settled query with no data means it errored — `isLoading` alone would
+  // leave this stuck on the skeleton forever instead of surfacing the error.
+  if (error) return <ErrorDisplay error={error} />;
+  if (isLoading || !data) return <DrilldownMetricStrip loadingCount={5} />;
+
+  const selectable = (
+    label: string,
+    value: number,
+    target: MatchStateSearchValue,
+  ) => ({
+    label,
+    value,
+    active: matchState === target,
+    onSelect: () => onSelectMatchState(target),
+  });
+
+  return (
+    <DrilldownMetricStrip
+      metrics={[
+        selectable("Total", data.total, "all"),
+        selectable("Matched", data.matched, "matched"),
+        selectable("Unmatched", data.unmatched, "unmatched"),
+        selectable("Ignored", data.ignored, "ignored"),
+        {
+          label: "Unmatched $",
+          value: formatCurrency(data.unmatchedAmount),
+        },
+      ]}
+    />
+  );
+}
+
+function StatementRowFilterBar({
+  search,
+  onUpdate,
+}: {
+  search: {
+    matchState?: MatchStateSearchValue;
+    disposition?: StatementRowDisposition;
+    source?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+  };
+  onUpdate: (
+    patch: Partial<{
+      matchState: MatchStateSearchValue;
+      disposition: StatementRowDisposition | undefined;
+      source: string | undefined;
+      dateFrom: string | undefined;
+      dateTo: string | undefined;
+      q: string | undefined;
+    }>,
+  ) => void;
+}) {
+  const importsQuery = useQuery(statementRow.imports.queryOptions({}));
+  const sourcePickerOptions = useMemo(
+    (): PickerOption[] => [
+      { value: "", label: "All sources" },
+      ...(importsQuery.data
+        ? uniq(importsQuery.data.data.map((imp) => imp.source)).sort()
+        : NO_SOURCES
+      ).map((source) => ({ value: source, label: source })),
+    ],
+    [importsQuery.data],
+  );
+
+  return (
+    <Row gap="sm" wrap align="center">
+      <SearchBox
+        value={search.q ?? ""}
+        onChange={(q) => onUpdate({ q: q || undefined })}
+      />
+      <Picker
+        mode="choose"
+        label="Match state"
+        options={MATCH_STATE_FILTER_OPTIONS}
+        value={search.matchState ?? "unmatched"}
+        onValueChange={(next) =>
+          onUpdate({ matchState: matchStateSearchSchema.parse(next) })
+        }
+      />
+      <Picker
+        mode="choose"
+        label="Disposition"
+        options={DISPOSITION_FILTER_OPTIONS}
+        value={search.disposition ?? ""}
+        onValueChange={(next) =>
+          onUpdate({
+            disposition: next
+              ? (DISPOSITION_VALUES.find((value) => value === next) ??
+                undefined)
+              : undefined,
+          })
+        }
+      />
+      <Picker
+        label="Source"
+        className="w-48"
+        options={sourcePickerOptions}
+        value={search.source ?? ""}
+        onValueChange={(next) => onUpdate({ source: next || undefined })}
+      />
+      <Row align="center" gap="xs" className="text-sm text-muted-foreground">
+        <span>From</span>
+        <DatePickerInput
+          aria-label="Statement date from"
+          value={search.dateFrom ?? null}
+          clearable
+          onChange={(value) => onUpdate({ dateFrom: value ?? undefined })}
+          className="w-44"
+        />
+        <span>to</span>
+        <DatePickerInput
+          aria-label="Statement date to"
+          value={search.dateTo ?? null}
+          clearable
+          onChange={(value) => onUpdate({ dateTo: value ?? undefined })}
+          className="w-44"
+        />
+      </Row>
+    </Row>
+  );
+}
+
+const columnHelper = createCubbyColumnHelper<StatementRowOut>();
+
+type StatementRowSortField = (typeof statementRowSortableFields)[number];
+
+const isStatementRowSortField = (
+  value: string,
+): value is StatementRowSortField =>
+  statementRowSortableFields.some((field) => field === value);
+
+export function StatementRowList() {
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+
+  const updateFilter = useCallback(
+    (
+      patch: Partial<{
+        matchState: MatchStateSearchValue;
+        disposition: StatementRowDisposition | undefined;
+        source: string | undefined;
+        dateFrom: string | undefined;
+        dateTo: string | undefined;
+        q: string | undefined;
+      }>,
+    ) => {
+      void navigate({ search: (prev) => ({ ...prev, ...patch }) });
+    },
+    [navigate],
+  );
+
+  // Sort + pagination are local UI state, not URL-synced — mirroring
+  // usdafoodlist.tsx, the referenced non-entity RTable model. Only the filter
+  // state (above) needs to be linkable.
+  const tableState = useTableState({ initialSort: "statementDate" });
+
+  const filters = useMemo(() => buildFilters(search), [search]);
+
+  // Filters aren't routed through TanStack's columnFilters (they're custom
+  // URL state, not header-column filters), so they miss useTableState's
+  // built-in "reset to page 1 on filter change" behavior — do it explicitly,
+  // or switching filters mid-page-3 strands the user on a stale/empty page.
+  const filtersKey = JSON.stringify(filters);
+  const previousFiltersKey = useRef(filtersKey);
+  const { setPagination } = tableState;
+  useEffect(() => {
+    if (previousFiltersKey.current === filtersKey) return;
+    previousFiltersKey.current = filtersKey;
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [filtersKey, setPagination]);
+
+  const sortParams = tableState.getSortParams();
+  const sort: { orderBy: StatementRowSortField; direction: "asc" | "desc" } =
+    isStatementRowSortField(sortParams.orderBy)
+      ? {
+          orderBy: sortParams.orderBy,
+          direction: sortParams.direction,
+        }
+      : { orderBy: "statementDate", direction: sortParams.direction };
+
+  const listQuery = useQuery(
+    statementRow.list.queryOptions({
+      filters,
+      sort: [sort],
+      pagination: tableState.pagination,
+    }),
+  );
+  usePageCount(listQuery.data?.count);
+
+  // The amount column's footer would otherwise sum only the loaded PAGE
+  // (createCurrencyColumn falls back to a client-side reduction) — a second,
+  // cheap aggregate query over the same (matchState-inclusive) filters gives
+  // it the true full-filtered-set total instead.
+  const footerTotalsQuery = useQuery(
+    statementRow.summary.queryOptions({ filters }),
+  );
+
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<StatementRowOut>((add) => {
+        add(
+          createPlainDateColumn(columnHelper, "statementDate", {
+            header: "Date",
+            className: "w-24",
+          }),
+        );
+        add(
+          columnHelper.accessor("accountDescriptor", {
+            id: "accountDescriptor",
+            header: "Account",
+            enableSorting: true,
+            meta: { className: "w-48" },
+            cell: (info) => {
+              const row = info.row.original;
+              return (
+                <span
+                  className="block truncate"
+                  title={[row.accountDescriptor, row.accountName]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
+                  {row.accountDescriptor}
+                  {row.accountName && (
+                    <span className="ml-1.5 text-2xs text-muted-foreground">
+                      {row.accountName}
+                    </span>
+                  )}
+                </span>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("rawDescription", {
+            id: "rawDescription",
+            header: "Description",
+            enableSorting: true,
+            meta: { className: "w-72" },
+            cell: (info) => (
+              <Tooltip>
+                <TooltipTrigger render={<span className="block truncate" />}>
+                  {info.getValue()}
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  {info.getValue()}
+                </TooltipContent>
+              </Tooltip>
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("merchant", {
+            id: "merchant",
+            header: "Merchant",
+            enableSorting: false,
+            meta: { className: "w-40" },
+            cell: (info) => {
+              const value = info.getValue();
+              return value ? (
+                <span className="block truncate">{value}</span>
+              ) : (
+                <NoneValue />
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("vendorInference", {
+            id: "possibleVendor",
+            header: "Possible vendor",
+            enableSorting: false,
+            meta: {
+              className: "w-48",
+              mobile: {
+                slot: "meta",
+                priority: 15,
+                interactive: true,
+              },
+            },
+            cell: (info) =>
+              info.getValue() ? (
+                <PossibleVendor inference={info.getValue()} compact />
+              ) : (
+                <NoneValue />
+              ),
+          }),
+        );
+        add(
+          createCurrencyColumn(columnHelper, "amount", {
+            header: "Amount",
+            className: "w-24",
+            signedTone: true,
+          }),
+        );
+        add(
+          columnHelper.accessor("matchState", {
+            id: "matchState",
+            header: "Match",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            cell: (info) =>
+              renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
+          }),
+        );
+        add(
+          columnHelper.accessor("source", {
+            id: "source",
+            header: "Source",
+            enableSorting: false,
+            meta: { className: "w-24", mono: true },
+            cell: (info) => info.getValue(),
+          }),
+        );
+        add(
+          columnHelper.accessor("disposition", {
+            id: "disposition",
+            header: "Disposition",
+            enableSorting: false,
+            meta: { className: "w-32" },
+            cell: (info) => {
+              const row = info.row.original;
+              // The reason stays a hover title — it is free-form prose, not part of
+              // the taxonomy label.
+              return (
+                <span title={row.dispositionReason ?? undefined}>
+                  {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
+                </span>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("transactionId", {
+            id: "transactionId",
+            header: "Transaction",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            // This narrow projection only carries the transaction shortcode, not
+            // the displayName required by EntityRefLink.
+            cell: (info) => {
+              const transactionId = info.getValue();
+              if (!transactionId) return <NoneValue />;
+              return (
+                <Link
+                  to="/financial-transactions/$shortcode"
+                  params={{ shortcode: transactionId }}
+                  title={transactionId}
+                  className="block truncate font-mono text-primary hover:underline"
+                >
+                  {transactionId}
+                </Link>
+              );
+            },
+          }),
+        );
+      }),
+    [],
+  );
+
+  const totalCount = listQuery.data?.count ?? 0;
+  const amountTotal = footerTotalsQuery.data?.amountTotal;
+  const serverTotals = useMemo(
+    () =>
+      amountTotal === undefined
+        ? undefined
+        : { totalCount, sums: { amount: amountTotal } },
+    [totalCount, amountTotal],
+  );
+
+  const table = useTableConfig({
+    data: listQuery.data?.data ?? NO_ROWS,
+    columns,
+    tableState,
+    totalCount,
+    getRowId: (row) => `${row.source}:${row.externalId}`,
+    serverTotals,
+  });
+
+  return (
+    <Stack gap="md">
+      <StatementRowSummary
+        filters={filters}
+        matchState={search.matchState ?? "unmatched"}
+        onSelectMatchState={(matchState) => updateFilter({ matchState })}
+      />
+      <StatementRowFilterBar search={search} onUpdate={updateFilter} />
+      <RTable
+        table={table}
+        isLoading={listQuery.isLoading}
+        error={listQuery.error}
+        ariaLabel="Statement Rows Table"
+      />
+    </Stack>
+  );
+}

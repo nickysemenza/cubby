@@ -14,17 +14,17 @@ import {
 import { type FieldValues, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  FinancialTransactionFormFields,
-  type FinancialTransactionFormValues,
-} from "~/app/finance/financial-transaction-form";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityListFor } from "~/entity/entity-list";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import type { PendingImage } from "~/entity/entity-media/PendingImageUpload";
+import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
+import {
+  FinancialTransactionFormFields,
+  type FinancialTransactionFormValues,
+} from "~/features/finance/financial-transaction-form";
 import { formatDateSpan } from "~/lib/date-span";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";

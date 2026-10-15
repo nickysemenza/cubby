@@ -1,4 +1,4 @@
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 // Unregistered scanner endpoints and incomplete deep links must retain their
 // ordinary HTTP status instead of becoming server-error issue groups.

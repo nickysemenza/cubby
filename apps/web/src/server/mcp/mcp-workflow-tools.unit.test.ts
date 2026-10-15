@@ -25,15 +25,15 @@ import {
   addedMealRecipe,
   dailyIntake,
   mealPreparations,
-} from "~/server/operations/meal.server";
-import { pageProblemTypeSlice } from "~/server/operations/problems.server";
+} from "~/server/domains/meal/operations.server";
 import {
   buildRecipeNutrition,
   costingExplanation,
   effectiveRecipeServings,
-} from "~/server/operations/recipe.server";
+} from "~/server/domains/recipe/operations/recipe.server";
+import { pageProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
 
-import { callMcpTool } from "./mcp-test-utils";
+import { callMcpTool } from "../testing/mcp-test-utils";
 import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
 import { toolCallResultTraceAttributes } from "./tools/tool-call-telemetry";
 

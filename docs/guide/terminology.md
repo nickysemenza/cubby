@@ -367,7 +367,7 @@ Create/update inputs still **accept `vendor` as a plain name string** plus
 quick-add, and the purchase-import skill unchanged across the split. The ledger's
 vendor _filter_, by contrast, is now `vendorId`-based, not a free-text match.
 
-**Operations** (`repo/purchase.ts`): `linkExpensesToPurchase` (one invoice
+**Operations** (`domains/purchase/repo/purchase.ts`): `linkExpensesToPurchase` (one invoice
 spanning trades), `splitExpense` (replaces the old `(combo, saw portion)` row-name
 convention), `mergePurchases` (groups the order-less singletons the backfill
 couldn't join; refuses across vendors and refuses when both sides carry a
@@ -391,7 +391,7 @@ Two different "a recipe inside something" relationships — don't conflate them:
   `scale`, and optionally one physical preparation with expected and measured
   cooked yields. Repeating a Recipe or cooking it twice means two rows. No
   inventory is mutated, and planned meal totals are rolled up read-time as
-  `sum(recipe.totals × scale)` (see `meal/helpers.ts`).
+  `sum(recipe.totals × scale)` (see `domains/meal/repo/helpers.ts`).
 - **MealRecipePortion.** A gram amount from one source `MealRecipe`, assigned to
   one member or guest Ledger Party at a target `Meal`. It may target a later
   leftovers Meal; confirmation distinguishes projected from consumed calories.

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { DocsLayout } from "~/app/docs/docs-layout";
-import { Page } from "~/ui/page/Page";
+import { DocsLayout } from "~/features/docs/docs-layout";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/docs")({
   component: DocsLayoutRoute,

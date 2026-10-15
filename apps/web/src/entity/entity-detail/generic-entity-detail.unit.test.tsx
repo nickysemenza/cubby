@@ -27,7 +27,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
-import { buildQualityBreakdown } from "~/server/repo/data-quality/hydrate";
+import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

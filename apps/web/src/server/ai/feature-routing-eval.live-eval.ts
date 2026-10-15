@@ -71,11 +71,11 @@ const [
   },
   { runStructuredFeature },
 ] = await Promise.all([
-  import("~/server/agents/purchase-import/extract"),
+  import("~/server/domains/purchase-import/agents/extract"),
   import("~/server/ai/prompts/purchase-import"),
   import("~/server/ai/prompts/recipe-flow"),
   import("~/server/ai/adapters"),
-  import("~/server/services/recipe-flow/recipe-flow.service"),
+  import("~/server/domains/recipe/service/recipe-flow/recipe-flow.service"),
   import("./features"),
   import("./run-feature"),
 ]);

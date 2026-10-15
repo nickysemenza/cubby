@@ -1,7 +1,7 @@
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
-import { createFixture } from "./fixtures-core";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { createFixture } from "./fixtures/core";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("declared expectation colors and spending category navigation counts", async ({
   page,

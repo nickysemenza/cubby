@@ -1,0 +1,31 @@
+import type { SimulatorInventory } from "../../apps/web/tooling/simulator-inventory-schema.ts";
+
+export const iosSimulatorDeviceType =
+  "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
+
+// Type-only imports keep this available before pnpm installs dependencies.
+export function selectIOSSimulator(
+  inventory: SimulatorInventory,
+  preferred?: string,
+  options: { allowAnyPreferredPhone?: boolean } = {},
+) {
+  const phones = Object.entries(inventory.devices)
+    .filter(([runtime]) => {
+      const version = /\.iOS-(\d+)-/.exec(runtime);
+      return version !== null && Number(version[1]) >= 27;
+    })
+    .flatMap(([runtime, devices]) =>
+      devices.map((device) => ({ ...device, runtime })),
+    )
+    .filter(
+      (device) =>
+        device.name.includes("iPhone") &&
+        ((preferred && options.allowAnyPreferredPhone) ||
+          device.deviceTypeIdentifier === iosSimulatorDeviceType),
+    );
+  return preferred
+    ? phones.find(
+        (device) => device.name === preferred || device.udid === preferred,
+      )
+    : (phones.find((device) => device.state === "Booted") ?? phones[0]);
+}

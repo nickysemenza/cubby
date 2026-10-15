@@ -18,22 +18,22 @@ import { z } from "zod";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/number-format";
+import { ImageThumbnail } from "~/ui/data-table/image-thumbnail";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { ImageThumbnail } from "~/ui/table/ImageThumbnail";
 
+import { createCurrencyColumn } from "../../ui/data-table/column-helpers";
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
-import { createCurrencyColumn } from "../../ui/data-table/columnHelpers";
-import RTable from "../../ui/data-table/Table";
+import RTable from "../../ui/data-table/table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnDef,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
-import type { InfiniteScrollControls } from "../../ui/hooks/useInfiniteTableList";
+import type { InfiniteScrollControls } from "../../ui/hooks/use-infinite-table-list";
 
 const PAGE_SIZE = 25;
 

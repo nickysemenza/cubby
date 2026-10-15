@@ -19,12 +19,12 @@ import {
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { entities } from "~/entity/entities";
-import type { StandardEntity } from "~/entity/entity-contracts";
 import {
   createEntityDisplayColumns,
   entityListHiddenColumns,
-} from "~/entity/entity-display";
+} from "~/entity/display/entity-display";
+import { entities } from "~/entity/entities";
+import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListBaseFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
@@ -38,6 +38,15 @@ import {
   type TimelineEntity,
   timelineEntities,
 } from "~/entity/generated/entity-timelines.gen";
+import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
+import {
+  type BaseListRow,
+  type EntityListTreeConfig,
+  useEntityList,
+  type UseEntityListReturn,
+} from "~/entity/hooks/use-entity-list";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
 import {
   assertSpecialistColumnProvenance,
   type AnyEntityListOverride,
@@ -50,28 +59,19 @@ import {
   createImageColumn,
   isImageColumnId,
   hasDisplayImages,
-} from "~/ui/data-table/columnHelpers";
+} from "~/ui/data-table/column-helpers";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
 import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
 import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
-import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
+import { ListWorkbench } from "~/ui/data-table/list-workbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { ErrorDetails } from "~/ui/feedback/error-details";
-import { useDeferredReferenceFilterOptions } from "~/ui/hooks/useDeferredReferenceFilterOptions";
-import {
-  type BaseListRow,
-  type EntityListTreeConfig,
-  useEntityList,
-  type UseEntityListReturn,
-} from "~/ui/hooks/useEntityList";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
-import type { ListQueryOptionsFn } from "~/ui/hooks/usePaginatedTableCore";
-import { useEntityFieldSave } from "~/ui/hooks/useUpdateMutation";
+import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
-import { usePageCount } from "~/ui/page/Page";
+import { usePageCount } from "~/ui/layout/page";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";

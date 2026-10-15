@@ -1,8 +1,8 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
-import { createEntityFixture } from "./fixtures-core";
-import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures/core";
+import { chooseOption, gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("a no-ID posted tip requires reviewed attachment to the pending charge", async ({
   page,

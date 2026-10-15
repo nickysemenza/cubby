@@ -1,0 +1,253 @@
+import { connectedViews } from "@cubby/schemas/connected-views";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+
+import { getDb } from "~/server/db/helpers";
+import { product } from "~/server/db/schema";
+import { createExpense } from "~/server/domains/expense/repo/crud";
+import { createPlanting } from "~/server/domains/garden/repo/garden";
+import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { createVendor } from "~/server/domains/vendor/repo/vendor";
+import {
+  createPlantFixture,
+  createProductFixture,
+  makeExpenseInput,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
+
+import {
+  compiledConnectedRoutes,
+  getConnectedRecords,
+  getConnectedRecordsPreview,
+} from "./connected-records";
+
+describe("complete connected record tables", () => {
+  const ctx = withTestDb();
+
+  it("compiles every curated and existing relation table through local traversals", () => {
+    for (const source of allEntities) {
+      for (const view of connectedViews[source]) {
+        expect(
+          compiledConnectedRoutes(source, view.key).length,
+        ).toBeGreaterThan(0);
+      }
+      for (const section of entitySummary[source].detail.sections) {
+        if (section.kind !== "relation") continue;
+        const relation = entityManifest[source].relationships.find(
+          (candidate) => candidate.key === section.relation,
+        );
+        // A derived relation is its list filter; it has no edge path.
+        const routes = compiledConnectedRoutes(
+          source,
+          `relation:${section.relation}`,
+        ).length;
+        expect({ relation: section.relation, compiles: routes > 0 }).toEqual({
+          relation: section.relation,
+          compiles: relation?.provenance.kind !== "derived",
+        });
+      }
+    }
+  });
+
+  it("queries sources without a soft-delete column", async () => {
+    const page = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "run", entityId: "RUN-EXAMPLE" },
+      viewKey: "products",
+    });
+    expect(page.totalCount).toBe(0);
+  });
+
+  it("follows a planting task's inherited project assignment", async () => {
+    const plant = await createPlantFixture(
+      ctx.db,
+      { name: "Inherited crop" },
+      ctx.actor,
+    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Inherited project",
+    });
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Parent work",
+      trade: "other",
+      projectId: project.output.id,
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Child work",
+      trade: "other",
+      parentTaskId: parent.output.id,
+    });
+    await createPlanting(
+      ctx.db,
+      { plantId: plant.id, taskId: child.output.id, status: "planned" },
+      ctx.actor,
+    );
+
+    const result = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "plant", entityId: plant.id },
+      viewKey: "projects",
+    });
+    expect(
+      result.items.find((item) => item.target.entityId === project.output.id)
+        ?.paths,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.objectContaining({ entityKind: "planting" }),
+          expect.objectContaining({
+            entityKind: "task",
+            entityId: child.output.id,
+          }),
+        ]),
+      ]),
+    );
+  });
+
+  it("pages distinct Plant purchases and preserves every actual record path", async () => {
+    const plant = await createPlantFixture(
+      ctx.db,
+      { name: "Example crop" },
+      ctx.actor,
+    );
+    const seed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Example seeds", growsPlantId: plant.id }),
+      ctx.actor,
+    );
+    const starter = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Example starter", growsPlantId: plant.id }),
+      ctx.actor,
+    );
+    const vendor = await createVendor(
+      ctx.db,
+      {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
+        aliases: [],
+        name: "Example supplier",
+        website: null,
+        orderUrlTemplate: null,
+        itemizationExpectation: null,
+        orderEvidence: null,
+        orderEmailSenders: [],
+        browserDomains: [],
+        returnWindowDays: null,
+        agentHints: {
+          ordersListUrl: null,
+          pagination: null,
+          orderLinkPattern: null,
+          notes: [],
+        },
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const purchase = async (orderId: string) =>
+      createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        orderId,
+        displayLabel: orderId,
+        date: "2026-09-08",
+        statedTotal: 10,
+        notes: null,
+      });
+    const first = await purchase("example-order-one");
+    const second = await purchase("example-order-two");
+    await attachPurchaseProducts(
+      ctx.db,
+      first.entityId,
+      [seed.entityId],
+      ctx.actor,
+    );
+    await attachPurchaseProducts(
+      ctx.db,
+      second.entityId,
+      [starter.entityId],
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Example seed line",
+        productId: seed.id,
+        purchaseId: first.output.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Example second seed line",
+        productId: seed.id,
+        purchaseId: first.output.id,
+      }),
+      ctx.actor,
+    );
+
+    const source = { entityKind: "plant" as const, entityId: plant.id };
+    const page1 = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "purchases",
+      limit: 1,
+      offset: 0,
+    });
+    const page2 = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "purchases",
+      limit: 1,
+      offset: 1,
+    });
+    expect(page1.totalCount).toBe(2);
+    expect(page2.totalCount).toBe(2);
+    expect(
+      new Set(
+        [...page1.items, ...page2.items].map((item) => item.target.entityId),
+      ),
+    ).toEqual(new Set([first.output.id, second.output.id]));
+    const firstRecord = [...page1.items, ...page2.items].find(
+      (item) => item.target.entityId === first.output.id,
+    );
+    expect(firstRecord?.shortestHops).toBe(2);
+    expect(
+      firstRecord?.paths.map((path) => path.map((node) => node.entityKind)),
+    ).toEqual(
+      expect.arrayContaining([
+        ["plant", "product", "purchase"],
+        ["plant", "product", "expense", "purchase"],
+      ]),
+    );
+    expect(firstRecord?.paths.filter((path) => path.length === 4)).toHaveLength(
+      2,
+    );
+
+    // The detail page reads every view at once: totals stay complete while
+    // rows stop at the preview limit, in manifest order.
+    const preview = await getConnectedRecordsPreview(ctx.db, {
+      source,
+      limit: 1,
+    });
+    expect(preview.views.map((view) => view.viewKey)).toEqual(
+      connectedViews.plant.map((view) => view.key),
+    );
+    const purchases = preview.views.find(
+      (view) => view.viewKey === "purchases",
+    );
+    expect(purchases?.totalCount).toBe(2);
+    expect(purchases?.items).toEqual(page1.items);
+
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, starter.entityId));
+    const afterDelete = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "purchases",
+    });
+    expect(afterDelete.totalCount).toBe(1);
+    expect(afterDelete.items[0]?.target.entityId).toBe(first.output.id);
+  });
+});

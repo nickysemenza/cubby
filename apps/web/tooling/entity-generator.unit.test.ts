@@ -11,25 +11,22 @@ import {
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
-import {
-  generatedHeader,
-  removeExtraArtifacts,
-} from "../../../scripts/generator/artifacts";
+import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import {
   collectEntityOverrides,
   compileEntityDeclarations,
   validatePhotoCategoryLabels,
-} from "../../../scripts/generator/entities/compile";
-import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
-import { hasGenericListOperation } from "../../../scripts/generator/entities/list-capabilities";
-import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
-import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
-import { renderEntityTablesArtifact } from "../../../scripts/generator/entities/render/tables";
+} from "../generator/entities/compile";
+import { loadEntityDeclarations } from "../generator/entities/declarations";
+import { hasGenericListOperation } from "../generator/entities/list-capabilities";
+import { deriveImageDisplaySources } from "../generator/entities/derive";
+import { renderImagePolicyArtifacts } from "../generator/entities/render/image-policy";
+import { renderEntityTablesArtifact } from "../generator/entities/render/tables";
 import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
   missingBrowserRouteFiles,
-} from "../../../scripts/generator/entities/render/routes";
+} from "../generator/entities/render/routes";
 
 const temporaryRoots: string[] = [];
 

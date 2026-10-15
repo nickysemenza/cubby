@@ -5,27 +5,30 @@ import {
   entityAttachment,
   imageProcessingJob,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 import {
   createImageProcessingJob,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   saveImageDescriptionAnalysis,
-} from "~/server/repo/image-processing";
-import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
-import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
+} from "~/server/domains/image-processing/repo/image-processing";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
+import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/description-policy";
 import {
   IMAGE_IDENTIFICATION_MODEL,
   IMAGE_IDENTIFICATION_PROMPT_REVISION,
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-identification";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { getFixtureDb, fixtureUserId } from "./fixtures-core";
-import { seedImagePrerequisite } from "./fixtures-photos";
-import { seedProductPrerequisite } from "./fixtures-catalog";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { writeOutcomeReceipts } from "~/server/domains/purchase-import/run-outcome.fixtures";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { getFixtureDb, fixtureUserId } from "./fixtures/core";
+import { seedImagePrerequisite } from "./fixtures/photos";
+import { seedProductPrerequisite } from "./fixtures/catalog";
 
 // New device prose must not displace preferred cloud prose; identity observations never attach automatically.
 test("image results compare descriptions and require explicit attachment confirmation", async ({

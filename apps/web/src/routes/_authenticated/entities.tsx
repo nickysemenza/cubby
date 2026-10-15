@@ -14,13 +14,13 @@ import {
   entityRecordsInputSchema,
   type EntityRecordsInput,
 } from "~/contracts/entity-records.schema";
+import { EntityIntegrityTab } from "~/entity/platform/entity-integrity-tab";
+import { EntityManifestGrid } from "~/entity/platform/entity-manifest-grid";
+import { EntityRecordsTab } from "~/entity/platform/entity-records-tab";
+import { schemaSheetSchema } from "~/entity/platform/schema-sheet";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { EntityRelations } from "~/entity/relationships/entity-relations";
-import { EntityIntegrityTab } from "~/features/entity-platform/EntityIntegrityTab";
-import { EntityManifestGrid } from "~/features/entity-platform/EntityManifestGrid";
-import { EntityRecordsTab } from "~/features/entity-platform/EntityRecordsTab";
-import { schemaSheetSchema } from "~/features/entity-platform/schema-sheet";
-import { CookbookSelect } from "~/features/recipes/cookbook-select";
+import { CookbookSelect } from "~/features/recipe/cookbook-select";
 import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
   import("~/ui/visualizations/recipe-dependency-graph").then((module) => ({
@@ -33,9 +33,9 @@ const WorkDependencyGraph = lazy(() =>
   })),
 );
 import { pageTitle } from "~/lib/page-title";
-import { useTabParam } from "~/ui/hooks/useTabParam";
+import { useTabParam } from "~/ui/hooks/use-tab-param";
 import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum([

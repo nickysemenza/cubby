@@ -1,0 +1,359 @@
+/**
+ * ProductBulkAddToInventoryDialog — stock one product or a whole selection at
+ * one location.
+ *
+ * The products are fixed (the caller selected them), so the only shared
+ * question is where they go; quantities stay per row because units genuinely
+ * differ per product and each one's valuation resolves through its own
+ * unit-mapping graph.
+ *
+ * - **The AI location suggester needs exactly one product.**
+ *   `FieldSuggestionProvider` for `inventory.locationId` reads one product's
+ *   history as its basis; a mixed selection has no single basis, and picking
+ *   one row to stand for the rest would be a guess wearing a suggestion's
+ *   clothes.
+ * - **The merge is shown before it happens.** `(productId, locationId,
+ *   placement)` is a partial unique index, so an item whose slot is already
+ *   occupied sums into that row rather than creating a second one. Silently
+ *   summing is how a re-run doubles a shelf, so every already-stocked row says
+ *   what it will become.
+ */
+
+import type { Amount } from "@cubby/schemas/codec";
+import {
+  locationShortcode,
+  type ProductShortcode,
+  productShortcode,
+  shortcode,
+} from "@cubby/schemas/identifiers";
+import { positiveAmount } from "@cubby/schemas/inventory";
+import { countLabel } from "@cubby/shared/pluralize";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { useQuery } from "@tanstack/react-query";
+import { type FC, useEffect, useMemo, useRef } from "react";
+import { FormProvider, useFieldArray, useForm } from "react-hook-form";
+import { z } from "zod";
+
+import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import {
+  AmountFieldGroup,
+  DEFAULT_AMOUNT_UNIT,
+} from "~/features/inventory/amount-field-group";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
+import {
+  inventory,
+  product as productOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { requiredLocationCode } from "~/ui/forms/form-fields";
+import { PickerField } from "~/ui/forms/form-utils/picker-field";
+import { Row, Stack } from "~/ui/layout";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Spinner } from "~/ui/primitives/spinner";
+
+const formSchema = z.object({
+  location: requiredLocationCode,
+  items: z
+    .array(
+      z.object({
+        productId: productShortcode,
+        label: z.string(),
+        amount: positiveAmount,
+      }),
+    )
+    .min(1, "Keep at least one product"),
+});
+
+const LocationSearch = referenceEntitySearch("location");
+
+export interface BulkAddProduct {
+  id: ProductShortcode;
+  name: string;
+  /**
+   * Optional because a caller that reached this from a shortcode has a name
+   * and nothing else. It only disambiguates the label, so its absence costs a
+   * suffix rather than blocking the add.
+   */
+  manufacturer?: string | null;
+  /**
+   * The quantity to prefill, when the caller can say better than one unit —
+   * the shelf triage proposes what the ledger says is outstanding.
+   */
+  defaultAmount?: Amount;
+}
+
+interface ProductBulkAddToInventoryDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  products: readonly BulkAddProduct[];
+  /** Called after a successful add — the caller clears its row selection. */
+  onComplete?: () => void;
+}
+
+const rowsFor = (products: readonly BulkAddProduct[]) =>
+  products.map((product) => ({
+    productId: product.id,
+    label: product.manufacturer
+      ? `${product.name} (${product.manufacturer})`
+      : product.name,
+    amount: product.defaultAmount ?? {
+      value: 1,
+      unit: DEFAULT_AMOUNT_UNIT,
+    },
+  }));
+
+export const ProductBulkAddToInventoryDialog: FC<
+  ProductBulkAddToInventoryDialogProps
+> = ({ open, onOpenChange, products, onComplete }) => {
+  const sole = products.length === 1 ? products[0] : undefined;
+  const form = useForm<
+    z.input<typeof formSchema>,
+    unknown,
+    z.output<typeof formSchema>
+  >({
+    resolver: zodResolver(formSchema),
+    defaultValues: { location: "", items: rowsFor(products) },
+  });
+  const { fields, remove } = useFieldArray({
+    control: form.control,
+    name: "items",
+  });
+
+  // Reseed when the caller opens the dialog on a different selection. Keyed on
+  // the id list rather than the array identity: the products are resolved from
+  // live list data, so an unrelated invalidation hands back a new array for
+  // the same selection and would otherwise wipe in-progress quantity edits.
+  const selectionKey = products.map((product) => product.id).join(",");
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      location: form.getValues("location"),
+      items: rowsFor(products),
+    });
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
+  }, [selectionKey, open, form]);
+
+  const locationId =
+    locationShortcode.safeParse(form.watch("location")).data ?? null;
+  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
+    null,
+  );
+
+  // The server owns the proposed amount and the warnings (parts already
+  // account for every unit bought; stock already at this location), so web and
+  // native show one verdict. Multi-product selections have no single basis.
+  const { data: preview } = useQuery({
+    ...productOperations.addToInventoryPreview.queryOptions({
+      // A parseable placeholder keeps the disabled query's input valid.
+      productId: sole?.id ?? shortcode("PRD-2222"),
+      locationId,
+    }),
+    enabled: open && sole !== undefined,
+  });
+  const overAccounted = preview?.kitWarning ?? null;
+  const amountDirty =
+    form.formState.dirtyFields.items?.[0]?.amount !== undefined;
+  const serverDefaultAmount = preview?.defaultAmount;
+  useEffect(() => {
+    if (
+      sole &&
+      sole.defaultAmount === undefined &&
+      serverDefaultAmount &&
+      !amountDirty
+    ) {
+      form.setValue("items.0.amount", serverDefaultAmount);
+    }
+  }, [sole, serverDefaultAmount, amountDirty, form]);
+
+  // What is already on that shelf, so a row that will merge can say so. One
+  // query for the whole location — the selection is small, and this endpoint
+  // is unpaginated, unlike the entity list.
+  const { data: existing } = useQuery({
+    ...inventory.getByLocationIds.queryOptions({
+      locationIds: locationId ? [locationId] : [],
+    }),
+    enabled: open && locationId !== null,
+  });
+
+  // Stock only: an installed fixture occupies a different slot, so it is not
+  // what an added unit would merge into.
+  const onHandByProductId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of existing ?? []) {
+      if (entry.placement !== "stock") continue;
+      map.set(entry.product.id, tryFormatAmount(entry.amount));
+    }
+    return map;
+  }, [existing]);
+
+  const addMutation = useActionMutation({
+    mutationFn: inventory.bulkAdd.mutationOptions,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        data.mergedCount === 0
+          ? `Stocked ${countLabel(data.createdCount, "product")}`
+          : `Stocked ${countLabel(data.items.length, "product")} — ${data.mergedCount} merged into stock already there`,
+      ),
+    onSuccess: async (data) => {
+      if (sole && data.items.length === 1) {
+        try {
+          await receiptHandler.current?.(data.items[0]!.id);
+        } catch (error) {
+          showErrorToast(error, "Stocked, but suggestion receipt failed");
+        }
+      }
+      handleOpenChange(false);
+      onComplete?.();
+    },
+  });
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) form.reset({ location: "", items: rowsFor(products) });
+    onOpenChange(nextOpen);
+  };
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    await addMutation.mutateAsync({
+      locationId: values.location,
+      items: values.items.map((item) => ({
+        productId: item.productId,
+        amount: item.amount,
+      })),
+    });
+  });
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      size="lg"
+      title="Add to inventory"
+      description={`Stock ${countLabel(products.length, "product")} at one location.`}
+      footer={
+        <Button
+          type="button"
+          onClick={onSubmit}
+          disabled={addMutation.isPending || fields.length === 0}
+        >
+          {addMutation.isPending && <Spinner size="sm" />}
+          Add {fields.length} to inventory
+        </Button>
+      }
+    >
+      {/* `min-w-0` here and on every wrapper below is load-bearing, not tidying.
+          DialogContent is a `grid` whose items default to `min-width: auto`, so
+          one long product name sets a min-content width that spills past the
+          dialog's `max-w` — and the popup only scrolls on Y, so the overflow is
+          simply unreachable. Break the chain anywhere and `truncate` stops
+          working. */}
+      <Stack gap="md" className="min-w-0">
+        {overAccounted && (
+          <Alert variant="destructive">
+            <WarningIcon />
+            <AlertTitle>Already accounted for</AlertTitle>
+            <AlertDescription>
+              Its parts hold {overAccounted.accounted} of the{" "}
+              {overAccounted.expected} you bought. Adding one here counts a unit
+              you don't own — unless you have another still assembled or sealed.
+            </AlertDescription>
+          </Alert>
+        )}
+        {sole ? (
+          <FormProvider {...form}>
+            <FieldSuggestionProvider
+              entity="inventory"
+              mode="create"
+              receiptHandler={receiptHandler}
+              staticBasis={{ productId: sole.id }}
+              fieldKeys={["locationId"]}
+              paths={{ locationId: "location" }}
+            >
+              <PickerField
+                store="id"
+                form={form}
+                name="location"
+                label="Location"
+                entity="location"
+                SearchProvider={LocationSearch}
+                clearable
+                suggestField="locationId"
+              />
+            </FieldSuggestionProvider>
+          </FormProvider>
+        ) : (
+          <PickerField
+            store="id"
+            form={form}
+            name="location"
+            label="Location"
+            entity="location"
+            SearchProvider={LocationSearch}
+            clearable
+          />
+        )}
+
+        {locationId === null ? (
+          <Description>Pick a location to stock these products.</Description>
+        ) : (
+          <Stack gap="sm" className="min-w-0">
+            {fields.map((field, index) => {
+              const onHand = sole
+                ? (preview?.existingAtLocationLabel ?? undefined)
+                : onHandByProductId.get(field.productId);
+              return (
+                <Row
+                  key={field.id}
+                  gap="sm"
+                  // Stacks on narrow: side by side, the name compresses to
+                  // "Akro-Mils 3…" — which cannot tell two bin sizes apart —
+                  // and the remove control runs off the sheet.
+                  className="min-w-0 flex-col items-stretch rounded border p-1 sm:flex-row sm:items-end"
+                >
+                  <Stack gap="tight" className="min-w-0 flex-1">
+                    {/* The full name stays reachable on hover — a truncated
+                        "Akro-Mils 30210 Hang & Stack Storage Bin, Clear, 5-3/8
+                        in L…" is not enough to tell two bin sizes apart. */}
+                    <span className="truncate text-sm" title={field.label}>
+                      {field.label}
+                    </span>
+                    {onHand && (
+                      <Description size="xs">
+                        already {onHand} here — adds to that row
+                      </Description>
+                    )}
+                  </Stack>
+                  <div className="w-full sm:w-44 sm:shrink-0">
+                    <AmountFieldGroup
+                      form={form}
+                      valuePath={`items.${index}.amount.value`}
+                      unitPath={`items.${index}.amount.unit`}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove ${field.label}`}
+                    onClick={() => remove(index)}
+                    className="self-end sm:mb-1 sm:shrink-0"
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
+                </Row>
+              );
+            })}
+          </Stack>
+        )}
+      </Stack>
+    </ResponsiveDialog>
+  );
+};

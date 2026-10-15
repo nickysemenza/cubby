@@ -4,13 +4,13 @@ import {
   seedActiveResearchHistory,
   setResearchHistoryStatus,
   seedMailImportReportRun,
-} from "./fixtures-photos";
+} from "./fixtures/photos";
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("Runs list in the generic table, filter to attention, and open the record inspector", async ({
   page,

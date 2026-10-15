@@ -5,17 +5,17 @@ import {
 } from "@cubby/schemas/ai";
 import { sql } from "drizzle-orm";
 
-import { getDb } from "~/server/repo/database-helpers";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { getDb } from "~/server/db/helpers";
+import { ensureRun } from "~/server/domains/run/service/ensure-run";
 
-import { dispatchesOperation, operationResult } from "./dispatch-wire";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 import {
   chooseOption,
   gotoAuthenticatedPage,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEvidenceHarnessContext } from "./fixtures-core";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEvidenceHarnessContext } from "./fixtures/core";
 
 // Attribution must stay visible on failures; filtering must precede the recent
 // row limit so an older subscription call is not hidden by newer Gateway calls.

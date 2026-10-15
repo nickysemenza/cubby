@@ -1,16 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { TodayNutrition } from "~/app/meals/daily-nutrition";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
-import { TodayAttention } from "~/features/home/HouseCard";
-import { TodayMeals } from "~/features/home/MealsCard";
-import { PantryValueCard } from "~/features/home/PantryValueCard";
-import { PinnedViews } from "~/features/home/PinnedViews";
+import { TodayAttention } from "~/features/home/house-card";
+import { TodayMeals } from "~/features/home/meals-card";
+import { PantryValueCard } from "~/features/home/pantry-value-card";
+import { PinnedViews } from "~/features/home/pinned-views";
 import { ProblemsBanner } from "~/features/home/problems-banner";
-import { DailyPasses } from "~/features/home/QuickActionsCard";
-import { RecentActivityFeed } from "~/features/home/RecentActivityFeed";
-import { RecordedSpendCard } from "~/features/home/RecordedSpendCard";
+import { DailyPasses } from "~/features/home/quick-actions-card";
+import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
+import { RecordedSpendCard } from "~/features/home/recorded-spend-card";
+import { TodayNutrition } from "~/features/meal/daily-nutrition";
 import {
   expense,
   location,
@@ -21,10 +21,10 @@ import {
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
 import { CollapsibleSection, Grid, Section } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const HomeInsights = lazy(async () => {
-  const module = await import("~/features/home/HomeInsights");
+  const module = await import("~/features/home/home-insights");
   return { default: module.HomeInsights };
 });
 

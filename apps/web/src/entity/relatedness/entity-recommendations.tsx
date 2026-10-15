@@ -24,7 +24,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { RecordList } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

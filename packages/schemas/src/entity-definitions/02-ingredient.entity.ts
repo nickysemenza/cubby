@@ -648,7 +648,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/ingredient/repository",
+        module: "~/server/domains/ingredient/repo/repository",
         export: "ingredientRepository",
       },
       search: "document",

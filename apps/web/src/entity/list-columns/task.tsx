@@ -2,8 +2,8 @@ import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
-import { useDeferredFilterOptions } from "~/ui/hooks/useDeferredFilterOptions";
-import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
+import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
+import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { Badge } from "~/ui/primitives/badge";
 
 import { defineListOverride } from "./types";

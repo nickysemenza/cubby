@@ -11,8 +11,8 @@ import {
   inventoryDialogItemSchema,
 } from "../../features/inventory/dialog-item";
 import { MoveInventoryDialog } from "../../features/inventory/move-inventory-dialog";
-import { BulkReparentLocationsDialog } from "../../features/locations/bulk-reparent-locations-dialog";
-import { typeSupportsQrCode } from "../../features/locations/location-type-theme";
+import { BulkReparentLocationsDialog } from "../../features/location/bulk-reparent-locations-dialog";
+import { typeSupportsQrCode } from "../../features/location/location-type-theme";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";

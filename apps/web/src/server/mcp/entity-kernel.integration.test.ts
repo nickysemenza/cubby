@@ -10,22 +10,22 @@ import { z } from "zod";
 import { projectEntityResult } from "~/contracts/mcp-projections";
 import { mock } from "~/lib/test/mock-schema";
 import type { USDAClient } from "~/server/clients/usda";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
-import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import {
   createProductFixture,
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
-} from "~/server/repo/repo.fixtures";
-import { refreshSearchDocument } from "~/server/repo/search-document";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool, kernelRequestContext } from "./mcp-test-utils";
+import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 /** One kernel command through the published tools: reads go to entity_read. */

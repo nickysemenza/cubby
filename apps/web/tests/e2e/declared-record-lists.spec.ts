@@ -1,5 +1,5 @@
-import { entityApi } from "./entity-api";
-import { chooseListView } from "./e2e-helpers";
+import { entityApi } from "./support/entity-api";
+import { chooseListView } from "./support/e2e-helpers";
 import { formatInstant } from "~/lib/date-format";
 import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
 import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
@@ -7,15 +7,15 @@ import {
   seedVendorDisplayPrerequisite,
   seedLocationPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
-import { createFixture } from "./fixtures-core";
+} from "./fixtures/catalog";
+import { createFixture } from "./fixtures/core";
 import {
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
-} from "./fixtures-finance";
-import { seedRunHistoryDefaults } from "./fixtures-photos";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/finance";
+import { seedRunHistoryDefaults } from "./fixtures/photos";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("combined records retain server sorting, pagination, and filters after reload", async ({
   page,

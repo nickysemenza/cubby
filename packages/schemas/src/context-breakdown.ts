@@ -3,8 +3,8 @@ import { z } from "zod";
 /**
  * Per-model-call context breakdown the purchase agent attaches to each
  * response's metadata as `contextBreakdown` (writer:
- * apps/web/src/server/purchase-agent/context-breakdown.ts; reader:
- * apps/web/src/lib/agent-context-breakdown.ts). Section values are tokens
+ * apps/web/src/server/domains/purchase-agent/context-breakdown.ts; reader:
+ * apps/web/src/features/purchase/agent-context-breakdown.ts). Section values are tokens
  * scaled from request sizes so they sum to the call's reported input tokens.
  */
 const tokenCount = z.number().int().nonnegative();

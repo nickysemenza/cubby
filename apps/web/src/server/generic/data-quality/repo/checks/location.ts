@@ -1,0 +1,40 @@
+import type { LocationType } from "@cubby/shared/location-type-theme";
+import { sql } from "drizzle-orm";
+
+import { location } from "~/server/db/schema";
+import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
+import { locationAiDescriptionSql } from "~/server/domains/location/repo/ai-description";
+
+import { defineEntityChecks } from "../registry";
+
+type Location = typeof location;
+const furnitureLocationType: LocationType = "furniture";
+
+const hasDisplayableImage = (t: Location) => sql`EXISTS (
+  SELECT 1 FROM "EntityAttachment" dq_loc_img
+  JOIN "Image" dq_loc_i ON dq_loc_i."id" = dq_loc_img."imageId" AND dq_loc_i."deletedAt" IS NULL
+  WHERE dq_loc_img."entityId" = ${t.id} AND dq_loc_img."deletedAt" IS NULL
+    AND ${sql.raw(displayableImageRawSql("dq_loc_i"))}
+)`;
+
+export const locationChecks = defineEntityChecks({
+  entity: "location",
+  table: location,
+  checks: {
+    location_ai_description: {
+      // A description is only expected once there's a photo to describe.
+      expected: hasDisplayableImage,
+      missing: (t) =>
+        sql`(coalesce(trim(${locationAiDescriptionSql(t.id)}), '') = '')`,
+    },
+    location_furniture_counted: {
+      expected: (t) => sql`${t.type} = ${furnitureLocationType}`,
+      // Literal foreign-table SQL: the same alias-rewriting hazard as every
+      // correlated subquery in this registry.
+      missing: (t) => sql`EXISTS (
+        SELECT 1 FROM "InventoryEntry" dq_loc_ie
+        WHERE dq_loc_ie."productId" = ${t.productId} AND dq_loc_ie."deletedAt" IS NULL
+      )`,
+    },
+  },
+});

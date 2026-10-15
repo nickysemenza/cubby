@@ -4,7 +4,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { useDialogHeaderActionsRegistration } from "~/ui/primitives/responsive-dialog";
 import { Spinner } from "~/ui/primitives/spinner";
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 
 export interface DialogFormActionsProps {
   onCancel: () => void;

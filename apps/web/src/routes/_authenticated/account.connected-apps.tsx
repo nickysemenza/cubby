@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
+import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { OrphanedClientMaintenance } from "~/features/account/orphaned-client-maintenance";
 import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 import {
   AlertDialog,
   AlertDialogAction,

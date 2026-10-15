@@ -1310,7 +1310,7 @@ Rules:
           export: "projectResourceOut",
         },
         adapter: {
-          module: "~/server/repo/project/tools",
+          module: "~/server/domains/project/repo/tools",
           export: "projectResourcesRelationAdapter",
         },
         audiences: ["browser", "mcp"],
@@ -1529,7 +1529,7 @@ Rules:
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/project/repository",
+        module: "~/server/domains/project/repo/repository",
         export: "projectRepository",
       },
       search: "document",

@@ -14,6 +14,7 @@ import {
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import {
   financialAccount as financialAccountTable,
   planting as plantingTable,
@@ -21,10 +22,9 @@ import {
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { getDb } from "~/server/repo/database-helpers";
-import { createImageFixture } from "~/server/repo/repo.fixtures";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { requireActor } from "~/server/request-context";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { requireActor } from "~/server/http/request-context";
+import { createImageFixture } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Entities the kernel cannot create through `seedEntity` (createInput is

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { withErrorReporting } from "~/server/errors/report-error";
 
-import { callMcpTool, registerTestTool } from "./mcp-test-utils";
+import { callMcpTool, registerTestTool } from "../testing/mcp-test-utils";
 import { createMcpServer } from "./server";
 
 const itemInputSchema = z.object({

@@ -33,7 +33,7 @@ const AUDIT_LABELS = new Map([
  * mapped onto an icon and label; the tone comes from `statusTone`. Both domains
  * share this one map since their status enums are disjoint except for the
  * states they hold in common (not_started/in_progress/done). Human-facing
- * labels for these raw enum values live in `~/app/projects/shared.tsx`
+ * labels for these raw enum values live in `~/features/project/shared.tsx`
  * (`PROJECT_STATUS_LABELS`/`TASK_STATUS_LABELS`) — this map is presentation
  * (icon) only.
  */

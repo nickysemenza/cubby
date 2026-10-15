@@ -1,12 +1,12 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { setMemberLoginParty } from "~/server/repo/member-login";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { setMemberLoginParty } from "~/server/http/member-login";
 import {
   convergenceNames,
   createConvergenceFixtures,
@@ -15,15 +15,15 @@ import {
   createEntityFixture,
   createEvidenceHarnessContext,
   ensureMemberParty,
-} from "./fixtures-core";
+} from "./fixtures/core";
 import {
   chooseOption,
   escapeRegExp,
   gotoAuthenticatedPage,
   gotoDetailActions,
-} from "./e2e-helpers";
-import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
+import { expect, test } from "./support/e2e-test";
 
 // Signed refund/group allocations must conserve actual CSV activity without
 // auto-booking Expense, duplicating retries, or creating owned Inventory.

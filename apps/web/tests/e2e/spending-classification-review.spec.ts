@@ -1,4 +1,4 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-classification-review";
 import { z } from "zod";
 import {
@@ -6,9 +6,9 @@ import {
   gotoAuthenticatedPage,
   inlineExplanation,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { createEntityFixture } from "./fixtures-core";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { createEntityFixture } from "./fixtures/core";
 
 // One real browser/backend journey guards review freshness, live historical
 // mapping, explicit purpose precedence, reset and canonical cent totals.

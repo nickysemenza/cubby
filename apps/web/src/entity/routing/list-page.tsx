@@ -25,8 +25,8 @@ import {
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
+import { Page } from "~/ui/layout/page";
 import type { PageLayout } from "~/ui/layout/page-wrapper";
-import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,

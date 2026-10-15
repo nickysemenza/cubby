@@ -4,22 +4,22 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import { createRecipe } from "~/server/domains/recipe/repo/crud";
+import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
-import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
-import { createRecipe } from "~/server/repo/recipe/crud";
-import { selectStaleRecipeIds } from "~/server/repo/recipe/totals";
 import {
   createImageFixture,
   ingredientRef,
   insertEntityAttachments,
   makeRecipeInput,
-} from "~/server/repo/repo.fixtures";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { requireActor } from "~/server/request-context";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

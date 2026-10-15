@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
-import { valueSchemaForField } from "../../../scripts/generator/entities/render/structured-value-schemas";
+import { loadEntityDeclarations } from "../generator/entities/declarations";
+import { valueSchemaForField } from "../generator/entities/render/structured-value-schemas";
 import {
   type EntityForPrefix,
   valueSchemaOf,
   type ValueSchemaJSON,
-} from "../../../scripts/generator/entities/render/value-schema";
+} from "../generator/entities/render/value-schema";
 import { drawsFromValueSchema } from "../../../packages/schemas/src/native-coverage";
 
 const noEntity: EntityForPrefix = () => null;

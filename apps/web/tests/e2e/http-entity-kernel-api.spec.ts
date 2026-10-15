@@ -2,15 +2,15 @@ import { calendarContract } from "~/contracts/calendar.contract";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 
-import { entityApi } from "./entity-api";
-import { startOperation } from "./start-operation";
-import { createCubbyClient } from "./http-api-client";
+import { entityApi } from "./support/entity-api";
+import { startOperation } from "./support/start-operation";
+import { createCubbyClient } from "./support/http-api-client";
 import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,
-} from "./e2e-helpers";
+} from "./support/e2e-helpers";
 import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 const createdSchema = z.object({ item: z.object({ id: z.string() }) });
 const sessionSchema = z.object({

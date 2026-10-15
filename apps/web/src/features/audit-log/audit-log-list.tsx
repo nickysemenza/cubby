@@ -14,7 +14,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordHeading, RecordList } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {

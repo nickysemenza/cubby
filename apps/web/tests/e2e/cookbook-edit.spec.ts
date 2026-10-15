@@ -1,14 +1,14 @@
 import {
   seedCookbookSourcePrerequisite,
   seedStaplePlanningPrerequisite,
-} from "./fixtures-recipes";
+} from "./fixtures/recipes";
 import {
   gotoAuthenticatedPage,
   openDetailActions,
   uniqueName,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("a cookbook is retitled from its page and a recipe is re-pointed to it from the recipe editor", async ({
   page,

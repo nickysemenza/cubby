@@ -12,12 +12,12 @@ import {
   serializeExcludedMeals,
   shoppingListSearchDefaults,
   shoppingListSearchSchema,
-} from "~/app/meals/meal-search";
-import { ShoppingListPage } from "~/app/meals/shopping-list-page";
+} from "~/features/meal/meal-search";
+import { ShoppingListPage } from "~/features/meal/shopping-list-page";
 import { pageTitle } from "~/lib/page-title";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const VIEW_OPTIONS: readonly (PickerOption & { value: ShoppingListView })[] = [
   { value: "list", label: "List", icon: <ListIcon className="size-4" /> },

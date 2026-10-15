@@ -48,7 +48,7 @@ not be treated as ready merely because a fingerprint matches.
 
 ## Running
 
-`pnpm apple <command>` from the repo root ([scripts/apple.ts](../../scripts/apple.ts)) runs the
+`pnpm apple <command>` from the repo root ([scripts/apple.ts](../../scripts/apple/apple.ts)) runs the
 build order above lazily (the xcframework from the Nx cache; xcodegen with `--use-cache`, so a
 `project.yml` edit regenerates and an unchanged spec is a no-op), prints each step's wall-clock
 time, and then:

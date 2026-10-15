@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
+import { loadEntityDeclarations } from "../generator/entities/declarations";
 import type {
   CompiledEntity,
   DeclarationObject,
-} from "../../../scripts/generator/entities/declarations";
+} from "../generator/entities/declarations";
 import {
   deriveInverseRelations,
   deriveRelationSections,
-} from "../../../scripts/generator/entities/derive";
+} from "../generator/entities/derive";
 
 const edge = (direction: "incoming" | "outgoing"): DeclarationObject => ({
   edge: "Planting.taskId",

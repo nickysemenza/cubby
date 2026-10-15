@@ -4,8 +4,8 @@ import { z } from "zod";
 
 import { WorkQueuePage } from "~/features/work-queue/work-queue-page";
 import { pageTitle } from "~/lib/page-title";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { RoutePending } from "~/ui/route-pending";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { RoutePending } from "~/ui/feedback/route-pending";
 
 export const Route = createFileRoute("/_authenticated/work-queue")({
   validateSearch: workQueueHouseholdInput

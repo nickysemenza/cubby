@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 
-import { callMcpTool } from "./mcp-test-utils";
+import { callMcpTool } from "../testing/mcp-test-utils";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 import { compiledMcpTools } from "./tools/tool-registration";
 

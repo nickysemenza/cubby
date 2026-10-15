@@ -10,8 +10,8 @@ import { expenseCaptureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 
-import { ProductDiscardDialog } from "../../features/products/product-discard-dialog";
-import { useUpdateMutation } from "../../ui/hooks/useUpdateMutation";
+import { ProductDiscardDialog } from "../../features/product/product-discard-dialog";
+import { useUpdateMutation } from "../hooks/use-update-mutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import { useBulkEditEntityAction } from "./bulk-edit-entity-action";
 import { defineEntityAction } from "./entity-action-definition";

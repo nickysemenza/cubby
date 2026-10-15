@@ -13,14 +13,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import type { InventoryDialogItem } from "~/features/inventory/dialog-item";
-import { useInventoryInvalidation } from "~/features/inventory/hooks";
 import {
   LocationDestinationPicker,
   refuseSourceLocations,
-} from "~/features/locations/location-move-dialog";
+} from "~/features/location/location-move-dialog";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
+
+import { useInventoryInvalidation } from "./hooks/use-inventory-mutation";
 
 type InventoryItem = InventoryDialogItem;
 

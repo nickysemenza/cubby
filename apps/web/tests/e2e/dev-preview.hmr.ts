@@ -1,6 +1,6 @@
 import { entities } from "~/entity/entities";
 
-import { expect, test } from "./hmr-test";
+import { expect, test } from "./support/hmr-test";
 
 const recordLink = (prefix: string) =>
   `main a[href^="${prefix}/"]:not([href$="/new"])`;

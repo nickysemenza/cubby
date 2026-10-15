@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   containerCli as appleCli,
   type ContainerListEntry,
-} from "./apple-container.ts";
+} from "../apple/lib/apple-container.ts";
 import { spawnToExit } from "./run.ts";
 
 export function devContainerBackend(

@@ -17,7 +17,7 @@ import {
 
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { useContainerDimensions } from "~/ui/hooks/useContainerDimensions";
+import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";

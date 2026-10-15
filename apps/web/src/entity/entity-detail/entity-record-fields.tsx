@@ -5,19 +5,19 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import { useMemo } from "react";
 
-import { detailFieldRenderersFor } from "~/entity/detail-field-renderers";
-import {
-  entityMutationOptionsFactory,
-  isGeneratedBrowserCrudEntity,
-} from "~/entity/entity-contracts";
+import { detailFieldRenderersFor } from "~/entity/display/detail-field-renderers";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
   type DetailFieldRenderer,
-} from "~/entity/entity-display";
+} from "~/entity/display/entity-display";
+import {
+  entityMutationOptionsFactory,
+  isGeneratedBrowserCrudEntity,
+} from "~/entity/entity-contracts";
+import { useEntityActionMutation } from "~/entity/hooks/use-action-mutation";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 

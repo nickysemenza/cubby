@@ -5,17 +5,17 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
-import { getDb } from "~/server/repo/database-helpers";
+import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { requireActor } from "~/server/http/request-context";
 import {
   createProductFixture,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
-import { requireActor } from "~/server/request-context";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool } from "./mcp-test-utils";
+import { callMcpTool } from "../testing/mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { createMcpServer } from "./server";
 

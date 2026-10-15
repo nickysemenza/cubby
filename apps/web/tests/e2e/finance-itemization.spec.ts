@@ -1,8 +1,8 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 const created = z.object({ item: z.object({ id: z.string() }) });
 

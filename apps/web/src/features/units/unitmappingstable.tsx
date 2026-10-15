@@ -11,7 +11,7 @@ import {
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 import { StaticTable } from "~/ui/primitives/static-table";
 

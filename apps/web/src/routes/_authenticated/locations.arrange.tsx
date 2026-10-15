@@ -7,10 +7,10 @@ import {
 import { Suspense } from "react";
 import { z } from "zod";
 
-import { ArrangeSurface } from "~/app/locations/arrange/ArrangeSurface";
+import { ArrangeSurface } from "~/features/location/arrange/arrange-surface";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   view: z.enum(["board", "tree"]).optional().catch(undefined),

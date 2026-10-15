@@ -2,18 +2,18 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
 import { ingredient } from "~/server/db/schema";
+import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
 import {
   entityKernelContextSchema,
   executeEntity,
   resolveEntity,
 } from "~/server/entity-kernel";
-import { getDb } from "~/server/repo/database-helpers";
-import { resolveOrCreatePlants } from "~/server/repo/plant";
 import {
   createProductFixture,
   makeProductInput,
-} from "~/server/repo/repo.fixtures";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

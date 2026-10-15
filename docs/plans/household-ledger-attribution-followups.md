@@ -68,7 +68,7 @@ bulk id cap applies.
 1. **Declaration.** Declare nested replace fields separately from scalar columns
    so nothing can route them into `.set()` — for example
    `bulkUpdate: { fields: [...], nested: ["beneficiaries", "funders"] }`. Teach
-   the generator (`scripts/generator/`) to include declared nested fields in the
+   the generator (`apps/web/generator/`) to include declared nested fields in the
    emitted bulk input schema. Run `pnpm generate`; `pnpm check:clean` must
    pass.
 2. **Kernel.** The kernel stays unaware of nested semantics and passes the
@@ -161,12 +161,12 @@ Each must fail on a behavior regression the type system cannot catch;
 consolidate same-shape cases into table-driven tests.
 
 - **Bulk** (integration, alongside the existing `bulkUpdate` cases in
-  `apps/web/src/server/repo/expense.integration.test.ts`): both roles replaced
+  `apps/web/src/server/domains/expense/repo/expense.integration.test.ts`): both roles replaced
   on every id in one transaction; an omitted role untouched; `[]` clears; an
   unknown or deleted party fails the batch with no writes; scalar and nested
   fields in one call; audit written only for expenses that changed.
 - **Filter/report parity** (integration, with
-  `apps/web/src/server/repo/household-contribution/reports.integration.test.ts`):
+  `apps/web/src/server/domains/household-contribution/repo/reports.integration.test.ts`):
   a fixture that produces every gap code, run under project and household
   scopes. For per-expense codes the filtered ids equal `targetIds`; for
   aggregated codes the filtered count equals the report count. Table-driven over

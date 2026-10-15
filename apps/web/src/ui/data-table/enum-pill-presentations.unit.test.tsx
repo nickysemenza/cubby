@@ -1,14 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { TradeBadge } from "~/app/projects/trade-badge";
-import { tradeOptions } from "~/app/projects/trade-options";
-import { fieldEnumOptions } from "~/entity/enum-field-display";
-import { CategoryLabel } from "~/features/products/CategoryLabel";
+import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { CategoryLabel } from "~/features/product/category-label";
+import { TradeBadge } from "~/features/project/trade-badge";
+import { tradeOptions } from "~/features/project/trade-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
-import { renderOptionCell } from "./columnHelpers";
+import { renderOptionCell } from "./column-helpers";
 
 afterEach(cleanup);
 

@@ -19,7 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/ui/primitives/sheet";
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { cn } from "~/lib/utils";
 
 type DialogContentSize = NonNullable<

@@ -864,7 +864,7 @@ Rules:
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/product-category",
+        module: "~/server/domains/product-category/repo/product-category",
         export: "productCategoryRepository",
       },
     },

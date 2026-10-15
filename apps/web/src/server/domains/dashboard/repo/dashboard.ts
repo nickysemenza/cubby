@@ -1,0 +1,146 @@
+import {
+  dashboardLocalCounts,
+  type DashboardLocalCounts,
+} from "@cubby/schemas/dashboard";
+import { type SQL, and, ne, sql } from "drizzle-orm";
+
+import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/query";
+import {
+  run as runTable,
+  plant,
+  email as emailTable,
+  imageProcessingJob as imageJobTable,
+} from "~/server/db/schema";
+import { cookbookListWhere } from "~/server/domains/cookbook/repo/cookbook";
+import { buildDeviceWhere } from "~/server/domains/device/repo/device";
+import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
+import { buildFinancialAccountWhere } from "~/server/domains/financial-account/repo";
+import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import {
+  buildPlantingWhere,
+  buildGardenEntryWhere,
+} from "~/server/domains/garden/repo/garden";
+import { buildImageWhere } from "~/server/domains/image/repo/image";
+import { buildIngredientListWhere } from "~/server/domains/ingredient/repo/search";
+import { buildInventoryWhere } from "~/server/domains/inventory/repo/crud";
+import { buildLedgerPartyWhere } from "~/server/domains/ledger-party/repo/ledger-party";
+import { buildLedgerTransferWhere } from "~/server/domains/ledger-transfer/repo";
+import { buildLocationWhere } from "~/server/domains/location/repo/crud";
+import { buildMealWhere } from "~/server/domains/meal/repo/crud";
+import { buildProductCategoryWhere } from "~/server/domains/product-category/repo/product-category";
+import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
+import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
+import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
+import { buildSpendingCategoryWhere } from "~/server/domains/spending-category/repo/spending-category";
+import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { buildVendorAccountWhere } from "~/server/domains/vendor-account/repo/vendor-account";
+import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import { buildWishWhere } from "~/server/domains/wish/repo";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+/**
+ * The WHERE behind each entity's homepage/footer/`/entities` total.
+ *
+ * Every entry calls that entity's OWN list where-builder with an empty filter
+ * set, and that is stronger than it looks. A `productCountWhere()`
+ * returning `notDeleted(product)` would still be the CLAIM "with no filters the
+ * list's population is exactly this" — restated in a second place, checkable
+ * only by a test. `buildProductWhere(db, {})` makes no claim; it IS the list's
+ * population, computed by the list's own code, so nothing is left to drift.
+ *
+ * Arity is deliberately NOT normalized. Some builders are sync, some async,
+ * some need `db` for id-set subqueries. `await` on a non-promise is free, and a
+ * ceremonial unused `db` would be dead weight (Oxlint's `no-unused-vars` is
+ * an error). The contract that IS uniform: exported, returns the complete
+ * clause for the filters given, takes no caller-supplied predicate fragment,
+ * and `{}` means unfiltered. TypeScript checks each thunk against the real
+ * signature, so a drifted one is a compile error rather than a wrong number.
+ *
+ * `build-where.unit.test.ts` renders each `buildXWhere` to SQL and guards
+ * against a thunk drifting from its list's own filter clause.
+ */
+type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
+
+type LocalCountEntity = keyof DashboardLocalCounts;
+
+const COUNT_WHERE = {
+  product: (db) => buildProductWhere(db, {}),
+  recipe: (db) => buildRecipeWhere(db, {}),
+  ingredient: (db) => buildIngredientListWhere(db, {}),
+  cookbook: () => cookbookListWhere(),
+  location: (db) => buildLocationWhere(db, {}),
+  inventory: (db) => buildInventoryWhere(db, {}),
+  meal: (db) => buildMealWhere(db, {}),
+  project: (db) => buildProjectWhere(db, {}),
+  task: (db) => buildTaskWhere(db, {}),
+  vendor: () => buildVendorWhereClause({}),
+  purchase: (db) => buildPurchaseWhereClause(db, {}),
+  expense: (db) => buildExpenseWhereClause(db, {}),
+  financialAccount: () => buildFinancialAccountWhere({}),
+  financialTransaction: (db) => buildFinancialTransactionWhere(db, {}),
+  image: (db) => buildImageWhere(db, {}),
+  wish: (db) => buildWishWhere(db, {}),
+  plant: () => notDeleted(plant),
+  planting: () => buildPlantingWhere(),
+  gardenEntry: () => buildGardenEntryWhere(),
+  email: () => notDeleted(emailTable),
+  imageJob: () => notDeleted(imageJobTable),
+  run: () => and(notDeleted(runTable), ne(runTable.trigger, "ephemeral")),
+  ledgerParty: () => buildLedgerPartyWhere({}),
+  ledgerTransfer: (db) => buildLedgerTransferWhere(db, {}),
+  vendorAccount: () => buildVendorAccountWhere({}),
+  productCategory: () => buildProductCategoryWhere({}),
+  device: () => buildDeviceWhere({}),
+  spendingCategory: () => buildSpendingCategoryWhere({}),
+} satisfies Record<LocalCountEntity, CountWhere>;
+
+type EntityCounts = Record<LocalCountEntity, number>;
+
+const localCountEntities = dashboardLocalCounts.keyof().options;
+const entityCountsSchema = dashboardLocalCounts;
+
+/**
+ * Live row count for every local browser list, as one round-trip of cheap scalar
+ * `COUNT(*)` subqueries — NO list fetch and NO USDA enrichment. Driven by the
+ * shared dashboard local-count schema;
+ * one query (not N) because N parallel counts overran the per-request pool
+ * (max 5). The homepage still reads only `countableEntities` from this result.
+ * Filtered counts stay on the `*.list` procedures.
+ */
+export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
+  // Resolved SEQUENTIALLY, not `Promise.all`. None of these builders queries
+  // for an empty filter set — every id resolver short-circuits on empty input —
+  // but if one ever starts, 16 concurrent awaits would re-create the pool
+  // exhaustion this function exists to avoid. Serial degrades to slow; parallel
+  // degrades to 500s.
+  const whereByEntity = new Map<LocalCountEntity, SQL | undefined>();
+  for (const entity of localCountEntities) {
+    whereByEntity.set(entity, await COUNT_WHERE[entity](db));
+  }
+
+  const countCol = (entity: LocalCountEntity): SQL => {
+    const where = whereByEntity.get(entity);
+    const from = sql`${SHORTCODE_TABLE[entity]}`;
+    return where
+      ? sql`(SELECT count(*)::int FROM ${from} WHERE ${where})`
+      : sql`(SELECT count(*)::int FROM ${from})`;
+  };
+
+  const fragments = localCountEntities.map(
+    (entity) => sql`${countCol(entity)} AS ${sql.identifier(entity)}`,
+  );
+
+  const res = await getDb(db).execute<Record<string, number>>(
+    sql`SELECT ${sql.join(fragments, sql`, `)}`,
+  );
+  const row = res.rows[0];
+
+  return entityCountsSchema.parse(
+    Object.fromEntries(
+      localCountEntities.map((entity) => [entity, row?.[entity] ?? 0]),
+    ),
+  );
+};

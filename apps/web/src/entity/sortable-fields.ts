@@ -10,7 +10,7 @@ type GeneratedSortRoster =
  *
  * A leaf module on purpose: server validation reads it, and importing it from
  * the browser registry (`entities.tsx`) tied every server module to the route
- * tree for type checking (docs/reports/local-check-performance.md#typechecking).
+ * tree for type checking (`git show 18f8bd430:docs/reports/local-check-performance.md`).
  */
 export const generatedSortRoster = (
   entity: Entity,

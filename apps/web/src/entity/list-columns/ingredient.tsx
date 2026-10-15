@@ -12,12 +12,13 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
-import { relationshipFieldProvenance } from "~/entity/field-provenance";
+import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
+import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
   useProductFoodSummaries,
-} from "~/features/products/product-food-summaries";
+} from "~/features/product/product-food-summaries";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
   createCubbyColumnCollection,
@@ -25,7 +26,6 @@ import {
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
 import { Row } from "~/ui/layout";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -33,7 +33,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { TruncatedList } from "~/ui/TruncatedList";
+import { TruncatedList } from "~/ui/truncated-list";
 
 import { useStableIds } from "./stable-ids";
 import { defineListOverride } from "./types";

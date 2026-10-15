@@ -29,17 +29,17 @@ const action = <E extends GenericDetailEntity>(load: () => ActionModule<E>) =>
  */
 export const collectionActions = {
   analyzeLocation: action<"location">(() =>
-    import("~/app/locations/slots").then((m) => ({
+    import("~/features/location/slots").then((m) => ({
       default: m.AnalyzeLocationAction,
     })),
   ),
   attachImage: action<"image">(() =>
-    import("~/app/images/slots").then((m) => ({
+    import("~/features/image/slots").then((m) => ({
       default: m.AttachImageAction,
     })),
   ),
   reviewLabelNutrition: action<"product">(() =>
-    import("~/app/products/slots").then((m) => ({
+    import("~/features/product/slots").then((m) => ({
       default: m.ReviewLabelNutritionAction,
     })),
   ),

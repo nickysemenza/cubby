@@ -10,18 +10,18 @@ import { type JSONType, z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
+import { getDb } from "~/server/db/helpers";
 import { runApproval, run as runTable } from "~/server/db/schema";
+import { admitMailImport } from "~/server/domains/purchase-import/mail-import-run";
+import { retainedMailFixture } from "~/server/domains/purchase-import/order-import.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
-import { admitMailImport } from "~/server/purchase-import/mail-import-run";
-import { retainedMailFixture } from "~/server/purchase-import/order-import.fixtures";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import type { WorkflowRunParams } from "~/server/workflow-runs/contract";
+import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 
-import { callMcpTool } from "./mcp-test-utils";
+import { callMcpTool } from "../testing/mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { executePurchaseAgentMutation } from "./purchase-agent-protocol";
 import type { ToolExtra } from "./tools/tool-registration";

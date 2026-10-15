@@ -10,19 +10,19 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
+import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
-import { callMcpTool } from "~/server/mcp/mcp-test-utils";
-import { McpOperationContext } from "~/server/mcp/operation-context";
-import { createMcpServer } from "~/server/mcp/server";
-import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
-import { checkpointMailboxCoverage } from "~/server/purchase-import/gmail/persistence";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { requireActor } from "~/server/request-context";
+import { startMailDiscovery } from "~/server/domains/purchase-import/gmail/discovery";
+import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/gmail/persistence";
 import {
   issueExecutionAuthorization,
   reserveExecutionAuthorization,
-} from "~/server/runs/execution-authorization";
+} from "~/server/domains/run/service/execution-authorization";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
+import { McpOperationContext } from "~/server/mcp/operation-context";
+import { createMcpServer } from "~/server/mcp/server";
+import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failure modes: an owned Workflow Run incorrectly needs a coordinator session;

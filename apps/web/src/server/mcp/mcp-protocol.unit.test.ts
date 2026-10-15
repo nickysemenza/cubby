@@ -26,8 +26,11 @@ import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
 import { entityMcpReadCommandSchema } from "~/server/entity-kernel/contracts";
 
+import {
+  bindingsWithKernelExecutor,
+  callMcpTool,
+} from "../testing/mcp-test-utils";
 import type { McpEntityExecutor } from "./kernel-actions";
-import { bindingsWithKernelExecutor, callMcpTool } from "./mcp-test-utils";
 import {
   handleMcpRequest,
   listMcpResourceCatalog,

@@ -1,13 +1,13 @@
 import type { Route } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { seedMealNutritionPrerequisite } from "./fixtures-recipes";
+import { seedMealNutritionPrerequisite } from "./fixtures/recipes";
 import {
   openDetailActions,
   selectComboboxItem,
   gotoAuthenticatedPage,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("meal nutrition keeps entered product and ingredient amounts while deriving current estimates", async ({
   page,

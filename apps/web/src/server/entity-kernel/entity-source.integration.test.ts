@@ -11,14 +11,14 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { unwrapDb } from "~/server/db/helpers";
+import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import {
   entityKernelContextSchema,
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import { unwrapDb } from "~/server/repo/database-helpers";
-import { createOrReuseAttachedImage } from "~/server/repo/image";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

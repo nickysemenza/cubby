@@ -1,15 +1,15 @@
 import {
   seedLocationPrerequisite,
   seedProductCategoryPrerequisite,
-} from "./fixtures-catalog";
-import { seedLedgerProduct } from "./inventory-flow-fixtures";
+} from "./fixtures/catalog";
+import { seedLedgerProduct } from "./fixtures/inventory-flow";
 import {
   escapeRegExp,
   gotoAuthenticatedPage,
   selectComboboxItem,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("shelf triage stocks with the ledger default, parks in Unknown, and discards", async ({
   page,

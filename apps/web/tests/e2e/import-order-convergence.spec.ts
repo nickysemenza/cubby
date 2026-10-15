@@ -1,14 +1,14 @@
 import {
   BROWSER_SOURCE_ORDERS,
   createConvergenceHarness,
-} from "./import-order-convergence.helpers";
+} from "./support/import-order-convergence.helpers";
 import { eq, and } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { createEvidenceHarnessContext } from "./fixtures-core";
+import { getDb } from "~/server/db/helpers";
+import { createEvidenceHarnessContext } from "./fixtures/core";
 import { sha256Hex } from "../../tooling/convergence-harness";
-import { uniqueName } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { uniqueName } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 for (const order of BROWSER_SOURCE_ORDERS) {
   test(`Gmail, retailer, own photos and statement converge: ${order.join(" → ")}`, async ({

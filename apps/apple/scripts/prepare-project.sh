@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ensures CubbyFFI.xcframework/the UniFFI shim and the generated Swift are
 # current and regenerates Cubby.xcodeproj from apps/apple/project.yml, so
-# scripts/apple-check.sh and anything else that needs a ready-to-build checkout
+# scripts/apple/apple-check.sh and anything else that needs a ready-to-build checkout
 # share one path. `--sources` stops before the Xcode project, for SwiftPM-only
 # builds. Run from the workspace root.
 set -euo pipefail

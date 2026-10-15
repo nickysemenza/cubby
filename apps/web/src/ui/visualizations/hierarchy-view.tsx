@@ -9,22 +9,22 @@ import {
   useState,
 } from "react";
 
+import { entityDetailLink } from "~/entity/entities";
 import {
   CATEGORY_HIERARCHY_ROOT_ID,
   type CategoryHierarchyNode,
-} from "~/app/product-categories/category-tree";
+} from "~/features/product-category/category-tree";
 import {
   categoryNodeColor,
   useCategoryHierarchy,
-} from "~/app/product-categories/use-category-hierarchy";
-import { entityDetailLink } from "~/entity/entities";
+} from "~/features/product-category/use-category-hierarchy";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { useContainerDimensions } from "~/ui/hooks/useContainerDimensions";
+import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
 import {
   type LocationHierarchyNode,
   useLocationHierarchy,
-} from "~/ui/hooks/useLocationHierarchy";
+} from "~/ui/hooks/use-location-hierarchy";
 import { Grid } from "~/ui/layout";
 
 import { VisualizationPanel } from "./visualization-panel";

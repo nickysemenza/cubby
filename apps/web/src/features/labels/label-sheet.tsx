@@ -1,5 +1,5 @@
-import { getLocationTypeColor } from "~/features/locations/location-type-theme";
-import { getCategoryColor } from "~/features/products/category-theme";
+import { getLocationTypeColor } from "~/features/location/location-type-theme";
+import { getCategoryColor } from "~/features/product/category-theme";
 
 import type { LabelItem, SHEET_LAYOUTS, SheetFormat } from "./sheet-layouts";
 

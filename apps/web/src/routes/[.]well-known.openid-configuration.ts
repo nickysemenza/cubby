@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { openIdConfigHandler, preflightHandler } from "~/server/oauth/metadata";
+import {
+  openIdConfigHandler,
+  preflightHandler,
+} from "~/server/http/oauth/metadata";
 
 // OIDC discovery at the origin root. The canonical path-appended location
 // (`/api/auth/.well-known/openid-configuration`) is served by the plugin

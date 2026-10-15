@@ -452,7 +452,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/cookbook.repository",
+        module: "~/server/domains/cookbook/repo/cookbook.repository",
         export: "cookbookRepository",
       },
       search: "document",

@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { localSecret } from "../../../tooling/local-secret";
-import { INLINE_EMAIL_PNG_BASE64 } from "../purchase-import/gmail/email-html.fixtures";
+import { INLINE_EMAIL_PNG_BASE64 } from "../domains/purchase-import/gmail/email-html.fixtures";
 
 // The compactor's developer timing warning includes source snippets.
 // Evaluation output keeps timings but never prints the original arguments.
@@ -36,8 +36,10 @@ const { scrubErrorMessage } = await import("~/lib/error-diagnostics");
 const { runDecisionChoice } = await import("./decision-model");
 const { MAILBOX_TRIAGE_FEATURE, MAILBOX_RELEVANCE_FEATURE } =
   await import("./features");
-const { normalizeMessage } = await import("../purchase-import/gmail/normalize");
-const { routeGmailMessage } = await import("../purchase-import/gmail/triage");
+const { normalizeMessage } =
+  await import("../domains/purchase-import/gmail/normalize");
+const { routeGmailMessage } =
+  await import("../domains/purchase-import/gmail/triage");
 const { mailTriagePrompt, mailTriageChoices } = await import("./prompts/mail");
 
 // An optional full rules draft is compared without changing deployed routing.
@@ -401,7 +403,7 @@ async function evaluateRelevance() {
   const { runStructuredFeature } = await import("./run-feature");
   const { piCallTarget } = await import("./adapters");
   const { interpretMailRelevance } =
-    await import("../purchase-import/gmail/relevance");
+    await import("../domains/purchase-import/gmail/relevance");
   const fallbackCases = privateInput
     ? cases
     : [
@@ -414,7 +416,7 @@ async function evaluateRelevance() {
               mimeType: `image/${format}`,
               dataBase64: readFileSync(
                 new URL(
-                  `../purchase-import/gmail/fixtures/synthetic-seller-payout.${format}`,
+                  `../domains/purchase-import/gmail/fixtures/synthetic-seller-payout.${format}`,
                   import.meta.url,
                 ),
               ).toString("base64"),
@@ -430,7 +432,7 @@ async function evaluateRelevance() {
               mimeType: "image/png",
               dataBase64: readFileSync(
                 new URL(
-                  "../purchase-import/gmail/fixtures/synthetic-tall-receipt.png",
+                  "../domains/purchase-import/gmail/fixtures/synthetic-tall-receipt.png",
                   import.meta.url,
                 ),
               ).toString("base64"),
@@ -446,7 +448,7 @@ async function evaluateRelevance() {
               mimeType: "image/jpeg",
               dataBase64: readFileSync(
                 new URL(
-                  "../purchase-import/gmail/fixtures/synthetic-photographic-receipt.jpg",
+                  "../domains/purchase-import/gmail/fixtures/synthetic-photographic-receipt.jpg",
                   import.meta.url,
                 ),
               ).toString("base64"),

@@ -12,7 +12,7 @@ import {
   holdLock,
   NATIVE_DEVICE_LOCK,
 } from "../../../scripts/lib/harness-lock.ts";
-import { sharedDeviceCommand } from "../../../scripts/lib/shared-device-command.ts";
+import { sharedDeviceCommand } from "../../../scripts/apple/lib/shared-device-command.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -40,9 +40,9 @@ import { simulatorInventorySchema } from "./simulator-inventory-schema";
 import {
   iosSimulatorDeviceType,
   selectIOSSimulator,
-} from "../../../scripts/apple-simulator-selection.ts";
+} from "../../../scripts/apple/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
-import { startOperation } from "../tests/e2e/start-operation";
+import { startOperation } from "../tests/e2e/support/start-operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
@@ -429,7 +429,8 @@ async function assertNativePhotoImport(
           `Native uploaded photo bytes are unavailable for ${runID}`,
         );
     }
-    const processing = await import("~/server/repo/image-processing");
+    const processing =
+      await import("~/server/domains/image-processing/repo/image-processing");
     const expectedJobs = [
       `describe_image:${processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION}`,
       `describe_image:${processing.IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}`,
@@ -473,8 +474,8 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
   try {
     const [scenario, processing, dispatch, schemas] = await Promise.all([
       import("./scenarios/context"),
-      import("~/server/repo/image-processing"),
-      import("~/server/image-processing/dispatch"),
+      import("~/server/domains/image-processing/repo/image-processing"),
+      import("~/server/domains/image-processing/dispatch"),
       import("@cubby/schemas/image-processing"),
     ]);
     const db = scenario.buildScenarioDatabase(pool);
@@ -914,7 +915,7 @@ async function runHeadlessPhotoScenario(
       await Promise.all([
         import("./scenarios/simulator"),
         import("./scenarios/context"),
-        import("~/server/repo/image-processing-maintenance"),
+        import("~/server/domains/image-processing/repo/image-processing-maintenance"),
       ]);
     await seedSimulatorPhotoActor(pool, userId);
     await maintenance.updateImageProcessingSettings(

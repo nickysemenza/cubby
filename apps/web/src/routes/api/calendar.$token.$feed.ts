@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { externalCalendarFeedStateFor } from "~/server/calendar/client";
-import { createCalendarFeedHandler } from "~/server/calendar/feed";
+import { externalCalendarFeedStateFor } from "~/server/domains/calendar/client";
+import { createCalendarFeedHandler } from "~/server/domains/calendar/feed";
 
 /**
  * Published iCalendar feed: /api/calendar/<token>/<feed>.ics

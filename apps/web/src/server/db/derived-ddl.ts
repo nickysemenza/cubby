@@ -2,7 +2,7 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { getTableColumns, getTableName } from "drizzle-orm";
 
-import { SHORTCODE_TABLE } from "../repo/generated/shortcode-tables.gen";
+import { SHORTCODE_TABLE } from "../generated/shortcode-tables.gen";
 import {
   assessmentHistoryDdl,
   productIdentityInvalidationDdl,

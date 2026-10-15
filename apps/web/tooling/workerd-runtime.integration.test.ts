@@ -7,8 +7,8 @@ import {
 } from "./postgres-pool";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createE2EDatabase } from "../tests/e2e/e2e-database";
-import { createE2EWorkerRuntime } from "../tests/e2e/e2e-worker-runtime";
+import { createE2EDatabase } from "../tests/e2e/support/e2e-database";
+import { createE2EWorkerRuntime } from "../tests/e2e/support/e2e-worker-runtime";
 import { createE2EObjectStorage } from "./local-object-storage";
 import { prepareTemplate } from "./test-database-lease";
 import { withTestDb } from "./test-setup";

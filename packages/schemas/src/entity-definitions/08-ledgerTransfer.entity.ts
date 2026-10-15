@@ -508,7 +508,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/ledger-transfer",
+        module: "~/server/domains/ledger-transfer/repo",
         export: "ledgerTransferRepository",
       },
     },

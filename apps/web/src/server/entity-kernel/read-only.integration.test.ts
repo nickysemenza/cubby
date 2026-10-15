@@ -1,12 +1,12 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { upsertCookbook } from "~/server/repo/cookbook";
-import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
+import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

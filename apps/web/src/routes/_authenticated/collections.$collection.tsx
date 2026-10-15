@@ -7,10 +7,10 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { CollectionDetailPage } from "~/app/collections/collection-detail-page";
+import { CollectionDetailPage } from "~/features/collection/collection-detail-page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 const searchSchema = z.object({
   q: urlStringParam,

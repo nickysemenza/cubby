@@ -20,15 +20,14 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { deferPublications } from "~/server/background-tasks/publish";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { runAfterCommit } from "~/server/db/helpers/core";
 import { assessmentState as suggestionTable } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
-import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
-import { runAfterCommit } from "~/server/repo/database-helpers/core";
+import { deleteStoredObjects } from "~/server/domains/image/service/image-storage.service";
 import {
   withListEntityMedia,
   withUniversalEntityMedia,
-} from "~/server/repo/entity-display-image";
+} from "~/server/entity-kernel/repo/entity-display-image";
 import {
   normalizeRecordEmoji,
   repositoryRecordInput,
@@ -37,27 +36,28 @@ import {
   recordEmojiBeforeUpdate,
   auditRecordEmoji,
   normalizeSavedRecordEmoji,
-} from "~/server/repo/entity-emoji";
+} from "~/server/entity-kernel/repo/entity-emoji";
 import {
   describeUnresolvableCode,
   isShortcodeEntity,
   resolveEntityIdentity,
-} from "~/server/repo/entity-identity";
+} from "~/server/entity-kernel/repo/entity-identity";
 import {
   assertEntitySourceFieldPaths,
   entityDetailJson,
   recordEntitySources,
-} from "~/server/repo/entity-source";
-import { listTotalLabels } from "~/server/repo/list-display-labels";
-import { withChildCounts } from "~/server/repo/list-read-adapters";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
+} from "~/server/entity-kernel/repo/entity-source";
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
   refreshProjectionsForEvent,
   runMutationSideEffects,
-} from "~/server/services/mutation-side-effects";
-import { bindWorkflow, workflow } from "~/server/workflow-runtime";
+} from "~/server/entity-kernel/repo/mutation-side-effects";
+import { createAppError } from "~/server/errors/app-error";
+import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
+import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
+import { deferPublications } from "~/server/workflows/background-tasks/publish";
+import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 import type {
   EntityBindingSchemas,

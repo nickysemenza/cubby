@@ -131,7 +131,7 @@ export type SearchMatchField = z.infer<typeof searchMatchFieldSchema>;
  * are null. The coverage that keeps a new `searchable: true` entity from
  * silently dropping out of global search therefore lives with the projections,
  * not here — see the `satisfies Record<SearchableEntity, SQL>` branch map in
- * `apps/web/src/server/repo/search-document.ts` and `searchDocumentBuilders`
+ * `apps/web/src/server/generic/search/repo/search-document.ts` and `searchDocumentBuilders`
  * beside it, plus `entityKindMap` in `search/search-utils.tsx` for the client
  * route/icon side.
  */

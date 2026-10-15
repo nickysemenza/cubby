@@ -9,7 +9,7 @@ import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { productLookupResponseSchema } from "~/contracts/upc.schemas";
 
 import { DEV_USER_EMAIL } from "../../tooling/dev/state";
-import { expect, test } from "./hmr-test";
+import { expect, test } from "./support/hmr-test";
 
 // Runtime contracts of the local development Worker that only a live `pnpm dev`
 // session exposes: dev auth shortcuts mint real sessions, Vite HMR reaches the

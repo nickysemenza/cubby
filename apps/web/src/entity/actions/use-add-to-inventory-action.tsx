@@ -4,8 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 
-import type { BulkAddProduct } from "../../features/products/product-bulk-add-to-inventory-dialog";
-import { ProductBulkAddToInventoryDialog } from "../../features/products/product-bulk-add-to-inventory-dialog";
+import type { BulkAddProduct } from "../../features/product/product-bulk-add-to-inventory-dialog";
+import { ProductBulkAddToInventoryDialog } from "../../features/product/product-bulk-add-to-inventory-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 

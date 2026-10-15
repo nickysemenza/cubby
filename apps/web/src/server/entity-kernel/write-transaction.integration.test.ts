@@ -4,13 +4,13 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { selectStaleRecipeIds } from "~/server/repo/recipe/totals";
-import { makeRecipeInput } from "~/server/repo/repo.fixtures";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**

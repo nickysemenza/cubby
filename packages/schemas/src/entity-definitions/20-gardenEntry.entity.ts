@@ -547,7 +547,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/garden/repository",
+        module: "~/server/domains/garden/repo/repository",
         export: "gardenEntryRepository",
       },
       filters: null,

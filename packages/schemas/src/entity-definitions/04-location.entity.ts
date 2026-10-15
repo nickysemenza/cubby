@@ -779,7 +779,7 @@ Rules:
           export: "locationType",
         },
         optionsRef: {
-          module: "~/features/locations/location-icons",
+          module: "~/features/location/location-icons",
           export: "locationTypeOptionsWithTheme",
         },
       },
@@ -1098,7 +1098,7 @@ Rules:
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/location/repository",
+        module: "~/server/domains/location/repo/repository",
         export: "locationRepository",
       },
       search: "document",

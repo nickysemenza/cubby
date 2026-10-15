@@ -8,13 +8,13 @@ import { z } from "zod";
 
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Page } from "~/ui/page/Page";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { DetailPagePending } from "~/ui/route-pending";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { DetailPagePending } from "~/ui/feedback/route-pending";
+import { Page } from "~/ui/layout/page";
 
 /** Lazy: it pulls in the stock and discard dialogs, which almost no cold load needs. */
 const ShelfTriageWorkbench = lazy(() =>
-  import("~/app/inventory/triage/ShelfTriageWorkbench").then((m) => ({
+  import("~/features/inventory/triage/shelf-triage-workbench").then((m) => ({
     default: m.ShelfTriageWorkbench,
   })),
 );

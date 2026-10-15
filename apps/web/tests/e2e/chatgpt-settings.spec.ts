@@ -1,5 +1,5 @@
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("settings explains local authorization and exposes no model selectors", async ({
   page,

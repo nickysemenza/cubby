@@ -35,6 +35,8 @@ import {
 import { createPortal } from "react-dom";
 import { z } from "zod";
 
+import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
+import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
   EntityEditDialog,
@@ -47,9 +49,7 @@ import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { EntityEditValueBag } from "~/entity/editing/value-schema";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { renderSuggestedListFieldValue } from "~/entity/entity-display";
 import { readReferenceField } from "~/entity/entity-references";
-import { enumFieldLabel } from "~/entity/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
@@ -61,7 +61,7 @@ import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/useHydrated";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

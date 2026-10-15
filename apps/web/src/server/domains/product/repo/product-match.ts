@@ -1,0 +1,389 @@
+import { GTIN_SOURCE } from "@cubby/schemas/external-id";
+import {
+  type LedgerPartyId,
+  type ProductId,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
+import type {
+  ProductMatchSide,
+  productMatchSideRole,
+} from "@cubby/schemas/recommendations";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
+import type { z } from "zod";
+
+import { comparePlainDatesDescending } from "~/lib/household-date";
+import type { Database } from "~/server/db";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  entityAttachment,
+  entityExternalId,
+  entityLink,
+  expense,
+  image,
+  inventoryEntry,
+  ledgerParty,
+  product,
+  productCategory,
+  purchase,
+  vendor,
+  vendorAccount,
+} from "~/server/db/schema";
+import { expenseAcquisitionSql } from "~/server/domains/expense/repo/expense-aggregate-sql";
+import { loadInheritedProductOwners } from "~/server/domains/inventory/repo/ownership";
+import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+
+/** category id -> its top-level ancestor id (cycle- and depth-safe). */
+async function loadCategoryRoots(db: Database): Promise<Map<string, string>> {
+  const rows = await getDb(db)
+    .select({ id: productCategory.id, parentId: productCategory.parentId })
+    .from(productCategory)
+    .where(notDeleted(productCategory));
+  const parent = new Map(rows.map((row) => [row.id, row.parentId]));
+  const roots = new Map<string, string>();
+  for (const { id } of rows) {
+    let current = id;
+    const seen = new Set<string>();
+    for (;;) {
+      const next = parent.get(current);
+      if (!next || seen.has(next) || !parent.has(next)) break;
+      seen.add(current);
+      current = next;
+    }
+    roots.set(id, current);
+  }
+  return roots;
+}
+
+export type LoadedMatchSide = ProductMatchSide & {
+  entityId: ProductId;
+  rootCategoryId: string | null;
+  ownerPartyId: LedgerPartyId | null;
+};
+
+const individual = (kind: string) => kind === "member" || kind === "guest";
+
+type MatchParty = {
+  id: LedgerPartyId;
+  shortcode: string;
+  name: string;
+};
+
+function latestPurchaseByProduct<
+  T extends { productId: ProductId; date: typeof purchase.$inferSelect.date },
+>(links: readonly T[], expenses: readonly T[]): Map<ProductId, T> {
+  const latest = new Map<ProductId, T>();
+  for (const row of [...links, ...expenses]) {
+    const existing = latest.get(row.productId);
+    if (!existing || comparePlainDatesDescending(row.date, existing.date) < 0)
+      latest.set(row.productId, row);
+  }
+  return latest;
+}
+
+const sideRole = (
+  purchased: boolean,
+  stockEntries: number,
+  spent: boolean,
+): z.infer<typeof productMatchSideRole> =>
+  purchased ? "purchase" : stockEntries > 0 && !spent ? "photo" : "other";
+
+/** The one explicit owner every live stock row names, if there is exactly one. */
+function stockOwner(
+  entries: ReadonlyArray<{
+    ownershipMode: string;
+    ownerLedgerPartyId: LedgerPartyId | null;
+  }>,
+  partyById: ReadonlyMap<LedgerPartyId, MatchParty>,
+): MatchParty | null {
+  if (entries.some((entry) => entry.ownerLedgerPartyId === null)) return null;
+  const owners = uniq(entries.map((entry) => entry.ownerLedgerPartyId));
+  const [only] = owners;
+  return owners.length === 1 && only ? (partyById.get(only) ?? null) : null;
+}
+
+const sideOwner = (
+  role: z.infer<typeof productMatchSideRole>,
+  owners: {
+    stock: MatchParty | null;
+    inherited: MatchParty | null;
+    buyer: MatchParty | null;
+  },
+): MatchParty | null =>
+  role === "purchase"
+    ? (owners.inherited ?? owners.buyer ?? owners.stock)
+    : (owners.stock ?? owners.inherited);
+
+/**
+ * Everything the review card shows for each product, plus the internal ids the
+ * ranking compares. The owner is the explicit stock owner for a stocked
+ * product, otherwise the purchase-inherited owner, otherwise the buyer on the
+ * purchase's vendor account; null when none is determinable.
+ */
+export async function loadProductMatchSides(
+  db: Database,
+  productIds: readonly ProductId[],
+): Promise<Map<ProductId, LoadedMatchSide>> {
+  const ids = uniq(productIds);
+  if (ids.length === 0) return new Map();
+  const client = getDb(db);
+  const [
+    products,
+    stock,
+    latestPurchases,
+    expensePurchases,
+    lines,
+    spend,
+    externalIds,
+    roots,
+  ] = await Promise.all([
+    client
+      .select({
+        id: product.id,
+        shortcode: product.shortcode,
+        name: product.name,
+        categoryId: product.categoryId,
+        categoryName: productCategory.name,
+      })
+      .from(product)
+      .leftJoin(
+        productCategory,
+        and(
+          eq(productCategory.id, product.categoryId),
+          notDeleted(productCategory),
+        ),
+      )
+      .where(and(inArray(product.id, ids), notDeleted(product))),
+    client
+      .select({
+        productId: inventoryEntry.productId,
+        ownershipMode: inventoryEntry.ownershipMode,
+        ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
+      })
+      .from(inventoryEntry)
+      .where(
+        and(inArray(inventoryEntry.productId, ids), notDeleted(inventoryEntry)),
+      ),
+    client
+      .selectDistinctOn([entityLink.toEntityId], {
+        productId: entityLink.toEntityId,
+        purchaseId: purchase.id,
+        shortcode: purchase.shortcode,
+        date: purchase.date,
+        vendor: vendor.name,
+        buyerPartyId: vendorAccount.ledgerPartyId,
+      })
+      .from(entityLink)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .where(
+        and(inArray(entityLink.toEntityId, ids), liveLinks("purchaseProduct")),
+      )
+      .orderBy(
+        entityLink.toEntityId,
+        sql`${purchase.date} desc nulls last`,
+        purchase.id,
+      ),
+    client
+      .selectDistinctOn([product.id], {
+        productId: product.id,
+        purchaseId: purchase.id,
+        shortcode: purchase.shortcode,
+        date: purchase.date,
+        vendor: vendor.name,
+        buyerPartyId: vendorAccount.ledgerPartyId,
+      })
+      .from(expense)
+      .innerJoin(product, eq(product.id, expense.productId))
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .where(
+        and(
+          inArray(product.id, ids),
+          notDeleted(expense),
+          eq(expense.future, false),
+          sql.raw(expenseAcquisitionSql('"Expense"')),
+        ),
+      )
+      .orderBy(product.id, sql`${purchase.date} desc nulls last`, purchase.id),
+    client
+      .select({
+        productId: expense.productId,
+        purchaseId: expense.purchaseId,
+        name: expense.name,
+      })
+      .from(expense)
+      .where(
+        and(
+          inArray(expense.productId, ids),
+          isNotNull(expense.purchaseId),
+          notDeleted(expense),
+          eq(expense.future, false),
+          sql.raw(expenseAcquisitionSql('"Expense"')),
+        ),
+      ),
+    client
+      .select({ productId: expense.productId })
+      .from(expense)
+      .where(and(inArray(expense.productId, ids), notDeleted(expense)))
+      .groupBy(expense.productId),
+    client
+      .select({
+        productId: entityExternalId.entityId,
+        source: entityExternalId.source,
+        externalId: entityExternalId.externalId,
+      })
+      .from(entityExternalId)
+      .where(
+        and(
+          inArray(entityExternalId.entityId, ids),
+          notDeleted(entityExternalId),
+        ),
+      ),
+    loadCategoryRoots(db),
+  ]);
+
+  const purchaseByProduct = latestPurchaseByProduct(
+    latestPurchases.map((row) => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    })),
+    expensePurchases,
+  );
+  const inherited = await loadInheritedProductOwners(db, [
+    ...purchaseByProduct.keys(),
+  ]);
+  const explicitOwnerIds = uniq(
+    stock.flatMap((row) =>
+      row.ownershipMode === "explicit" && row.ownerLedgerPartyId
+        ? [row.ownerLedgerPartyId]
+        : [],
+    ),
+  );
+  const buyerIds = uniq(
+    [...purchaseByProduct.values()].flatMap((row) =>
+      row.buyerPartyId ? [row.buyerPartyId] : [],
+    ),
+  );
+  const partyIds = uniq([...explicitOwnerIds, ...buyerIds]);
+  const parties =
+    partyIds.length === 0
+      ? []
+      : await client
+          .select({
+            id: ledgerParty.id,
+            shortcode: ledgerParty.shortcode,
+            name: ledgerParty.name,
+            kind: ledgerParty.kind,
+          })
+          .from(ledgerParty)
+          .where(
+            and(inArray(ledgerParty.id, partyIds), notDeleted(ledgerParty)),
+          );
+  const partyById = new Map(
+    parties.filter((row) => individual(row.kind)).map((row) => [row.id, row]),
+  );
+  const spent = new Set(spend.map((row) => row.productId));
+
+  const out = new Map<ProductId, LoadedMatchSide>();
+  for (const row of products) {
+    const entries = stock.filter((entry) => entry.productId === row.id);
+    const latest = purchaseByProduct.get(row.id);
+    const role = sideRole(Boolean(latest), entries.length, spent.has(row.id));
+    const owner = sideOwner(role, {
+      stock: stockOwner(entries, partyById),
+      inherited: inherited.get(row.id) ?? null,
+      buyer: latest?.buyerPartyId
+        ? (partyById.get(latest.buyerPartyId) ?? null)
+        : null,
+    });
+    const ids = externalIds.filter((id) => id.productId === row.id);
+    out.set(row.id, {
+      entityId: row.id,
+      id: parseShortcodeFor("product", row.shortcode),
+      name: row.name,
+      role,
+      category: row.categoryName ?? null,
+      rootCategoryId: row.categoryId
+        ? (roots.get(row.categoryId) ?? null)
+        : null,
+      inventoryCount: entries.length,
+      owner: owner
+        ? {
+            id: parseShortcodeFor("ledgerParty", owner.shortcode),
+            name: owner.name,
+          }
+        : null,
+      ownerPartyId: owner?.id ?? null,
+      purchase: latest
+        ? {
+            id: parseShortcodeFor("purchase", latest.shortcode),
+            date: latest.date,
+            vendor: latest.vendor ?? null,
+            line:
+              lines.find(
+                (line) =>
+                  line.productId === row.id &&
+                  line.purchaseId === latest.purchaseId,
+              )?.name ?? null,
+          }
+        : null,
+      gtins: ids
+        .filter((id) => id.source === GTIN_SOURCE)
+        .map((id) => id.externalId)
+        .sort(),
+      sources: uniq(ids.map((id) => id.source)).sort(),
+    });
+  }
+  return out;
+}
+
+/** A product's live images in current display order, with what decides covers. */
+export async function loadProductImageOrderFacts(
+  db: Database,
+  productId: ProductId,
+) {
+  return await getDb(db)
+    .select({
+      shortcode: image.shortcode,
+      source: image.source,
+      purpose: entityAttachment.purpose,
+    })
+    .from(entityAttachment)
+    .innerJoin(
+      image,
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+    )
+    .where(
+      and(
+        eq(entityAttachment.entityId, productId),
+        notDeleted(entityAttachment),
+      ),
+    )
+    .orderBy(
+      asc(entityAttachment.sortOrder),
+      asc(entityAttachment.createdAt),
+      asc(entityAttachment.id),
+    );
+}

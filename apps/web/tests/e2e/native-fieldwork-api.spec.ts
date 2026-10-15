@@ -1,4 +1,4 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -13,10 +13,10 @@ import { z } from "zod";
 
 import { toWire } from "~/lib/http-api/wire";
 
-import { expect, test } from "./e2e-test";
-import { uniqueName } from "./e2e-helpers";
-import { seedProductPrerequisite } from "./fixtures-catalog";
-import { createEntityFixture } from "./fixtures-core";
+import { expect, test } from "./support/e2e-test";
+import { uniqueName } from "./support/e2e-helpers";
+import { seedProductPrerequisite } from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
 
 // The native app owns scan, recount, sweep, and the location photo pass; the
 // web screens that used to exercise these endpoints are gone. These tests keep

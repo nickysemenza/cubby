@@ -1,10 +1,10 @@
-import { seedTaskPrerequisite } from "./fixtures-catalog";
+import { seedTaskPrerequisite } from "./fixtures/catalog";
 import {
   gotoAuthenticatedPage,
   openCommandPalette,
   selectComboboxItem,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("command palette search deep-links a task straight to its detail page", async ({
   page,

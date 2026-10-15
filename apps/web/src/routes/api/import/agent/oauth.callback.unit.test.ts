@@ -2,7 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
-import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/purchase-import/agent-auth";
+import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/domains/purchase-import/agent-auth";
 
 import {
   type CallbackDependencies,

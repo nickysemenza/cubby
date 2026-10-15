@@ -3,7 +3,7 @@ import { useSearch } from "@tanstack/react-router";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
 import { z } from "zod";
 
-import { problemQueryDeclarations } from "~/entity/problem-registry";
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { Badge } from "~/ui/primitives/badge";
 
 const filterValueSchema = z.union([z.string(), z.array(z.string())]);

@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-import { useDuplicateRecipe } from "../../features/recipes/use-duplicate-recipe";
+import { useDuplicateRecipe } from "../../features/recipe/use-duplicate-recipe";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";

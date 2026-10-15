@@ -960,7 +960,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/image.repository",
+        module: "~/server/domains/image/repo/image.repository",
         export: "imageRepository",
       },
     },

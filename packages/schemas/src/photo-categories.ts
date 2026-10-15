@@ -7,7 +7,7 @@
  * These `classifierLabels` are each category's BASE vocabulary. The
  * *effective* labels a category matches against — base labels plus every
  * member entity's own `signals.classifierLabels` — are computed once, in the
- * generator (`scripts/generator/entities/render/image-policy.ts`), and
+ * generator (`apps/web/generator/entities/render/image-policy.ts`), and
  * emitted to both `image-policy.gen.ts` and `PhotoImportCatalog.swift`.
  * Neither TS nor Swift ever recomputes the union at runtime.
  *

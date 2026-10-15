@@ -1,4 +1,4 @@
-import { expect, test } from "./e2e-test";
+import { expect, test } from "./support/e2e-test";
 
 test.use({ signedIn: false });
 

@@ -15,7 +15,7 @@ import type { z } from "zod";
 import { captureRequest } from "~/entity/editing/editor-requests";
 import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
-import { useUpcAwareCreate } from "~/features/products/use-upc-aware-create";
+import { useUpcAwareCreate } from "~/features/product/use-upc-aware-create";
 import {
   location,
   product,

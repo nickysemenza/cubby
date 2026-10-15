@@ -1,6 +1,6 @@
-import { entityApi } from "./entity-api";
-import { expect, test } from "./e2e-test";
-import { clearExpenseDatesInBrowser } from "./unknown-expense-date-flow";
+import { entityApi } from "./support/entity-api";
+import { expect, test } from "./support/e2e-test";
+import { clearExpenseDatesInBrowser } from "./support/unknown-expense-date-flow";
 
 test("bulk expense clearing sends null with keyboard controls", async ({
   page,

@@ -42,7 +42,7 @@ export function importRunIdFromAgentIdentity(
   return runEntityId.safeParse(instanceId.slice(colon + 1)).data;
 }
 
-/** The host-owned tools every agent mounts (apps/web/src/server/purchase-agent/tools.ts). */
+/** The host-owned tools every agent mounts (apps/web/src/server/domains/purchase-agent/tools.ts). */
 const RUN_AGENT_TOOLS = [
   "claim_next_import_work",
   "report_agent_progress",

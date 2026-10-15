@@ -3,7 +3,7 @@ import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
 
-import { useIsMobile } from "~/ui/hooks/useMobile";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
-import TableLayoutCustomizer from "./TableLayoutCustomizer";
+import TableLayoutCustomizer from "./table-layout-customizer";
 
 const isStringHeader = (value: unknown): value is string =>
   typeof value === "string";

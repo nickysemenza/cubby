@@ -32,17 +32,17 @@ import {
   NativeRunEvidenceContext,
   NativeWorkspaceBridge,
 } from "~/lib/native-workspace";
-import { PerfProfiler } from "~/lib/perf/PerfProfiler";
+import { PerfProfiler } from "~/lib/perf/perf-profiler";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
+import { RouteErrorComponent } from "~/ui/feedback/route-error";
+import { RouteNotFound } from "~/ui/feedback/route-not-found";
 import { AppFooter } from "~/ui/footer";
-import { useDebug } from "~/ui/hooks/useDebug";
-import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
-import { MainNav } from "~/ui/MainNav";
+import { useDebug } from "~/ui/hooks/use-debug";
+import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { AuthenticatedAppShell } from "~/ui/navigation/authenticated-app-shell";
 import { BottomNav } from "~/ui/navigation/bottom-nav";
+import { MainNav } from "~/ui/navigation/main-nav";
 import { Toaster } from "~/ui/primitives/sonner";
-import { RouteErrorComponent } from "~/ui/route-error";
-import { RouteNotFound } from "~/ui/route-not-found";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";
 

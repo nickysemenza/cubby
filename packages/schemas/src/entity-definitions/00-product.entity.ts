@@ -155,7 +155,7 @@ export default defineEntity({
     },
     list: {
       savedViews: [
-        // `@me` is the viewing member (ADR 0015).
+        // `@me` is the viewing member (ADR 0018).
         {
           id: "bought-for-me",
           label: "Bought for me, not stocked",
@@ -811,7 +811,7 @@ Rules:
         },
         // Plain string: check-digit validation + GTIN-14 normalization now
         // happen at the repository boundary (`resolvePrimaryProductCodeInput`
-        // in `apps/web/src/server/repo/product/update-helpers.ts`), not here —
+        // in `apps/web/src/server/domains/product/repo/update-helpers.ts`), not here —
         // `packages/schemas` cannot depend on the WASM boundary that
         // validation needs (see `@cubby/recipebridge`).
         validation: {
@@ -3207,7 +3207,7 @@ Rules:
           export: "productComponentOut",
         },
         adapter: {
-          module: "~/server/repo/product-components",
+          module: "~/server/domains/product/repo/product-components",
           export: "productComponentsRelationAdapter",
         },
         audiences: ["browser", "mcp"],
@@ -3403,11 +3403,11 @@ Rules:
     ],
     ports: {
       repository: {
-        module: "~/server/repo/product/repository",
+        module: "~/server/domains/product/repo/repository",
         export: "productRepository",
       },
       timeline: {
-        module: "~/server/repo/product/movement-timeline",
+        module: "~/server/domains/product/repo/movement-timeline",
         export: "productTimeline",
       },
       search: "document",

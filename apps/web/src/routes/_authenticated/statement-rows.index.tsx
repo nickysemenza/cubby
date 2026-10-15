@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { listChromePage } from "~/entity/routing/list-page";
-import { StatementRowList } from "~/features/statement-rows/statement-row-list";
+import { StatementRowList } from "~/features/statement-import/statement-row-list";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { Button } from "~/ui/primitives/button";

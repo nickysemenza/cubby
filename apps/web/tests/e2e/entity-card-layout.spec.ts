@@ -1,13 +1,16 @@
-import { chooseListView } from "./e2e-helpers";
+import { chooseListView } from "./support/e2e-helpers";
 import {
   seedPlantPrerequisite,
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
-import { seedConcurrently } from "./fixtures-core";
-import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/catalog";
+import { seedConcurrently } from "./fixtures/core";
+import { seedCookbookSourcePrerequisite } from "./fixtures/recipes";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("product category and identifiers stay readable in cards and a plant's related table", async ({
   page,

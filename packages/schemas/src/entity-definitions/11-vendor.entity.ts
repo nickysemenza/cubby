@@ -1220,7 +1220,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/vendor.repository",
+        module: "~/server/domains/vendor/repo/vendor.repository",
         export: "vendorRepository",
       },
       search: "document",

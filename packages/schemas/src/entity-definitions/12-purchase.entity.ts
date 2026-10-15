@@ -1688,7 +1688,7 @@ export default defineEntity({
           export: "purchaseProductOut",
         },
         adapter: {
-          module: "~/server/repo/purchase-products",
+          module: "~/server/domains/purchase/repo/purchase-products",
           export: "purchaseProductsRelationAdapter",
         },
         audiences: ["browser", "mcp"],
@@ -1898,7 +1898,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/purchase.repository",
+        module: "~/server/domains/purchase/repo/purchase.repository",
         export: "purchaseRepository",
       },
       search: "document",

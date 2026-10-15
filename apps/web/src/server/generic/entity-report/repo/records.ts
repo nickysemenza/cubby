@@ -1,0 +1,462 @@
+import type { Amount } from "@cubby/schemas/codec";
+import type { CollectionActionId } from "@cubby/schemas/entity-definitions/collection-actions";
+import {
+  labelNutritionSource,
+  type ReportBlock,
+  type ReportCommand,
+  reportSlotActions,
+} from "@cubby/schemas/entity-report";
+import {
+  type EntityId,
+  type ProductId,
+  type LocationId,
+  type ImageId,
+  type IngredientId,
+  type LedgerPartyId,
+  parseEntityId,
+  parseShortcodeFor,
+  recipeShortcode,
+} from "@cubby/schemas/identifiers";
+import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
+import { runPurpose } from "@cubby/schemas/run-fields";
+import { and, asc, eq } from "drizzle-orm";
+
+import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
+import type { Database } from "~/server/db";
+import { getDb, mapImages, notDeleted } from "~/server/db/helpers";
+import {
+  cookbook,
+  entityAttachment,
+  image,
+  ingredient,
+  product,
+  recipe,
+} from "~/server/db/schema";
+import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
+import { getImageById } from "~/server/domains/image/repo/image";
+import { readImageIdentification } from "~/server/domains/image/repo/image-identification";
+import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
+import { readLocationAiDescription } from "~/server/domains/location/repo/ai-description";
+import {
+  listRuns,
+  listProductRuns,
+  listRunTargetOutcomes,
+} from "~/server/domains/purchase-import/run-target";
+import {
+  aiDescriptionItems,
+  cookbookItems,
+  imageAssociationItems,
+  labelImageItems,
+  recipeUsageItems,
+  runHistoryItems,
+  phaseLabel,
+  type UsageForItems,
+} from "~/server/generic/collection/repo/collection-items";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+/** Who is asking, for the reads that are scoped to a member's own ledger party. */
+export type ReportViewer = () => Promise<{ id: LedgerPartyId } | null>;
+
+/** The `records` block the slots below share. */
+const records = (
+  rows: Extract<ReportBlock, { kind: "records" }>["rows"],
+  empty: string,
+  actions: readonly CollectionActionId[] = [],
+  thumbnail: Extract<ReportBlock, { kind: "records" }>["thumbnail"] = "small",
+): ReportBlock[] => [
+  { kind: "records", rows, empty, actions: [...actions], thumbnail },
+];
+
+/**
+ * Loaded on demand: the WASM formatter (the one web and native share) is only needed once a
+ * report has recipe lines to word.
+ */
+export const amountFormatter = async () => {
+  const { wasm } = await import("~/lib/wasm");
+  return (amount: Amount) => {
+    const request: Parameters<typeof wasm.format_amount_labeled>[0] = {
+      value: amount.value,
+      unit: amount.unit,
+    };
+    if (amount.upperValue != null) request.upper_value = amount.upperValue;
+    return wasm.format_amount_labeled(request);
+  };
+};
+
+/**
+ * A label's detected nutrition is worth reviewing when its preferred analysis read some, and the
+ * product has not already saved that very reading (same rule web used to hide its button).
+ */
+const reviewableLabels = async (
+  db: Database,
+  labels: readonly { imageId: ImageId; code: string }[],
+  saved: { source?: string | null } | null,
+) => {
+  const reviewable = new Set<string>();
+  await Promise.all(
+    labels.map(async (label) => {
+      const status = await getImageProcessingReadProjection(db, label.imageId);
+      const analysis = status.analyses.find((entry) => entry.preferred);
+      if (!analysis?.result.nutritionFacts) return;
+      if (
+        saved?.source !==
+        labelNutritionSource(label.code, String(analysis.createdAt))
+      )
+        reviewable.add(label.code);
+    }),
+  );
+  return reviewable;
+};
+
+export const productLabelsReport = async (
+  db: Database,
+  productId: ProductId,
+) => {
+  const [saved] = await getDb(db)
+    .select({ labelNutrition: product.labelNutrition })
+    .from(product)
+    .where(and(eq(product.id, productId), notDeleted(product)));
+  const rows = await getDb(db)
+    .select({ image })
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
+    .where(
+      and(
+        eq(entityAttachment.entityId, productId),
+        notDeleted(entityAttachment),
+        eq(entityAttachment.purpose, "label"),
+        notDeleted(image),
+      ),
+    )
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt));
+  const labels = mapImages(rows.map((entry) => entry.image));
+  const reviewable = await reviewableLabels(
+    db,
+    rows.map((entry, index) => ({
+      imageId: parseEntityId("image", entry.image.id),
+      code: labels[index]?.id ?? "",
+    })),
+    saved?.labelNutrition ?? null,
+  );
+  return records(
+    labelImageItems(labels, reviewable),
+    "No labels on file.",
+    [],
+    "large",
+  );
+};
+
+export const productCookbooksReport = async (
+  db: Database,
+  productId: ProductId,
+) => {
+  const row = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { id: true },
+    with: {
+      cookbooks: {
+        where: notDeleted(cookbook),
+        orderBy: asc(cookbook.name),
+        with: {
+          recipes: { where: notDeleted(recipe), columns: { deletedAt: true } },
+        },
+      },
+    },
+  });
+  return records(
+    cookbookItems(
+      (row?.cookbooks ?? []).map((entry) => ({
+        id: parseShortcodeFor("cookbook", entry.shortcode),
+        name: entry.name,
+        recipeCount: entry.recipes.length,
+      })),
+    ),
+    "Not a cookbook copy.",
+  );
+};
+
+/**
+ * Lines a fresh parse would change, named by axis, with the one command that applies it; parsed
+ * once for the whole report. The command carries only the line's ids: the server re-parses and
+ * decides what to write (`reparseRecipeLine`), so no client composes a patch.
+ */
+const driftExtras = async (
+  usages: readonly UsageForItems[],
+  knownNames: readonly string[],
+) => {
+  const { wasm } = await import("~/lib/wasm");
+  const fresh = wasm.parse_ingredient_lines(
+    usages.map((usage) => usage.rawLine ?? ""),
+  );
+  const byUsage = new Map<UsageForItems, readonly string[]>();
+  usages.forEach((usage, index) => {
+    const parsed = fresh[index];
+    if (!usage.rawLine || !parsed) return;
+    const axes = driftAxes(
+      computeParseDrift(
+        {
+          knownNames,
+          amounts: usage.amounts,
+          modifier: usage.modifier ?? null,
+        },
+        parsed,
+      ),
+    );
+    if (axes.length > 0) byUsage.set(usage, axes);
+  });
+  return {
+    badgesOf: (usage: UsageForItems) => {
+      const axes = byUsage.get(usage);
+      return axes
+        ? [
+            {
+              label: `Re-parse changes ${axes.join(", ")}`,
+              tone: "warning" as const,
+            },
+          ]
+        : [];
+    },
+    commandsOf: (usage: UsageForItems): ReportCommand[] =>
+      byUsage.has(usage)
+        ? [
+            {
+              id: `reparse:${usage.id}`,
+              label: "Re-parse",
+              prominent: false,
+              confirm: `Re-parse this line in ${usage.recipe.name} with the current parser and apply the result to the recipe?`,
+              request: {
+                kind: "reparse-line",
+                recipeId: recipeShortcode.parse(usage.recipe.id),
+                lineId: usage.id,
+              },
+            },
+          ]
+        : [],
+  };
+};
+
+/** Every recipe line an ingredient is used in, each drifted one with its re-parse. */
+const recipeUsagesReport = async (
+  db: Database,
+  ingredient: { id: IngredientId; name: string; aliases: readonly string[] },
+) => {
+  const usages = (await getRecipeUsagesForIngredient(db, ingredient.id))
+    .recipeUsages;
+  if (usages.length === 0) return records([], "Not used in any recipes yet.");
+  const { badgesOf, commandsOf } = await driftExtras(usages, [
+    ingredient.name,
+    ...ingredient.aliases,
+  ]);
+  return records(
+    recipeUsageItems(usages, await amountFormatter(), badgesOf, commandsOf),
+    "Not used in any recipes yet.",
+  );
+};
+
+export const productRecipeAppearancesReport = async (
+  db: Database,
+  productId: ProductId,
+) => {
+  const row = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { id: true },
+    with: {
+      ingredient: {
+        columns: { id: true, name: true, aliases: true, deletedAt: true },
+      },
+    },
+  });
+  const linked = row?.ingredient?.deletedAt === null ? row.ingredient : null;
+  if (!linked) return records([], "Not used in any recipes yet.");
+  return recipeUsagesReport(db, linked);
+};
+
+export const ingredientRecipeUsagesReport = async (
+  db: Database,
+  code: string,
+) => {
+  const id = await resolveOrThrow(db, "ingredient", code);
+  const row = await getDb(db).query.ingredient.findFirst({
+    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
+    columns: { id: true, name: true, aliases: true },
+  });
+  if (!row) return records([], "Not used in any recipes yet.");
+  return recipeUsagesReport(db, row);
+};
+
+/** Suggestions remain separate from attachments and never offer a write. */
+export const imageIdentificationBlocks = (
+  identification: ImageIdentificationResult | null,
+): ReportBlock[] => {
+  if (!identification) return [];
+  const candidates =
+    (identification.identityScope === "single_identity" ||
+      (identification.identityScope === "unclear" &&
+        identification.subject === "single_object")) &&
+    identification.outcome === "suggestions"
+      ? identification.candidates
+      : [];
+  const abstentionNotes = {
+    suggestions: "No live Product suggestions remain from this identification.",
+    no_candidates:
+      "Identification abstained: no eligible Product candidates were available.",
+    no_match:
+      "Identification abstained: no Product match was sufficiently supported.",
+    not_single_identity:
+      "Identification abstained: this image does not support one catalog identity.",
+  };
+  const blocks: ReportBlock[] = candidates.length
+    ? [
+        {
+          kind: "records",
+          title: "Unconfirmed Product suggestions",
+          rows: candidates.map((candidate) => ({
+            entity: "product",
+            id: candidate.productId,
+            title: candidate.name,
+            lines: [
+              {
+                text: "Confirm identity before attaching or changing inventory.",
+                tone: "muted",
+              },
+            ],
+            trailing: `${Math.round(candidate.probability * 100)}%`,
+            badges: [{ label: "Unconfirmed", tone: "warning" }],
+          })),
+          empty: "No Product suggestions.",
+        },
+      ]
+    : [
+        {
+          kind: "note",
+          text:
+            identification.identityScope !== "single_identity" &&
+            identification.subject !== "single_object"
+              ? abstentionNotes.not_single_identity
+              : abstentionNotes[identification.outcome],
+          tone: "muted",
+        },
+      ];
+  if (candidates.length) {
+    blocks.push({
+      kind: "note",
+      text: "These suggestions are unconfirmed. Confirm identity before attaching this image or changing inventory.",
+      tone: "warning",
+    });
+  }
+  if (identification.truncated) {
+    blocks.push({
+      kind: "note",
+      text: `Identification search was limited to ${identification.considered} Product candidates; other Products were not considered.`,
+      tone: "warning",
+    });
+  }
+  return blocks;
+};
+
+export const imageAssociationsReport = async (db: Database, code: string) => {
+  const id = await resolveOrThrow(db, "image", code);
+  const [record, identification] = await Promise.all([
+    getImageById(db, id),
+    readImageIdentification(db, id),
+  ]);
+  return [
+    ...records(
+      imageAssociationItems(record.associations),
+      "This image is not attached to a record.",
+      reportSlotActions["image.associations"],
+    ),
+    ...imageIdentificationBlocks(identification?.result ?? null),
+  ];
+};
+
+export const locationAiDescriptionReport = async (
+  db: Database,
+  id: LocationId,
+) => {
+  return records(
+    aiDescriptionItems(await readLocationAiDescription(db, id)),
+    "No photos analyzed yet.",
+    reportSlotActions["location.ai-description"],
+  );
+};
+
+export const recordRunsReport =
+  (kind: "product" | "purchase") =>
+  async (
+    db: Database,
+    entityId: EntityId<"product" | "purchase">,
+    party: NonNullable<Awaited<ReturnType<ReportViewer>>>,
+  ) => {
+    const runs =
+      kind === "product"
+        ? await listProductRuns(
+            db,
+            party.id,
+            parseEntityId("product", entityId),
+          )
+        : await listRuns(db, party.id, parseEntityId("purchase", entityId));
+    const targets = await listRunTargetOutcomes(
+      db,
+      runs.map((item) => item.id),
+      kind === "product"
+        ? { entity: kind, id: parseEntityId("product", entityId) }
+        : { entity: kind, id: parseEntityId("purchase", entityId) },
+    );
+    return records(
+      runHistoryItems(
+        runs.map((run) => ({
+          ...run,
+          purpose: runPurpose.parse(run.purpose),
+          startedAt: run.startedAt.toISOString(),
+          endedAt: run.endedAt?.toISOString() ?? null,
+        })),
+      ).map((row, index) => {
+        const scoped = targets.filter(
+          (target) => target.runId === runs[index]?.id,
+        );
+        const completed = scoped
+          .flatMap((target) => (target.completedAt ? [target.completedAt] : []))
+          .sort()
+          .at(-1);
+        return {
+          ...row,
+          title:
+            runs[index]?.vendorName ??
+            runs[index]?.vendorAccountLabel ??
+            (kind === "product" ? "Product enrichment" : row.title),
+          lines: [
+            ...(kind === "product"
+              ? (row.lines ?? []).slice(0, 1)
+              : (row.lines ?? [])),
+            ...scoped.flatMap((target) =>
+              target.warning
+                ? [{ text: target.warning, tone: "warning" as const }]
+                : [],
+            ),
+          ],
+          at: completed ?? row.at,
+          badges: [
+            ...(row.badges ?? []),
+            ...Array.from(
+              new Set(scoped.map((target) => target.outcome ?? target.state)),
+            ).map((outcome) => ({
+              label: phaseLabel(outcome),
+              tone:
+                outcome === "verified"
+                  ? ("positive" as const)
+                  : [
+                        "partially_verified",
+                        "ambiguous",
+                        "temporarily_blocked",
+                        "researched_with_gaps",
+                      ].includes(outcome)
+                    ? ("warning" as const)
+                    : undefined,
+            })),
+          ],
+        };
+      }),
+      `No research run has been recorded for this ${kind}.`,
+    );
+  };

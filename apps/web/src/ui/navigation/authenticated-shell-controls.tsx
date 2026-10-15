@@ -1,6 +1,6 @@
 import { Row } from "~/ui/layout";
-import { QuickActionsMenu } from "~/ui/navbar/quick-actions-menu";
-import { UserAvatarDropdown } from "~/ui/navbar/user-avatar-dropdown";
+import { QuickActionsMenu } from "~/ui/navigation/quick-actions-menu";
+import { UserAvatarDropdown } from "~/ui/navigation/user-avatar-dropdown";
 
 type AuthenticatedShellControlsProps = {
   includeAccount?: boolean;

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { resolveDevProfile } from "./lib/dev-profile.ts";
 import { spawnToExit } from "./lib/run.ts";
 
-import { tcpReady, waitFor } from "./lib/apple-container.ts";
+import { tcpReady, waitFor } from "./apple/lib/apple-container.ts";
 import {
   devContainerCli as containerCli,
   findDevContainer as findContainer,

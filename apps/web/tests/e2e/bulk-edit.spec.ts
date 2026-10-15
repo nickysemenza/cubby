@@ -1,4 +1,4 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
@@ -9,10 +9,10 @@ import {
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
   seedUnlinkedExpensePrerequisite,
-} from "./fixtures-catalog";
-import { createEntityFixture } from "./fixtures-core";
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
+import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 /**
  * The generic `bulkEdit` action (`bulk-edit-entity-action.tsx`): a list's

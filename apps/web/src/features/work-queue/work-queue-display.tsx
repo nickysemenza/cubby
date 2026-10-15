@@ -8,7 +8,7 @@ import type {
 import { colorizeSelectOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { renderOptionCell } from "~/ui/data-table/column-helpers";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   Popover,

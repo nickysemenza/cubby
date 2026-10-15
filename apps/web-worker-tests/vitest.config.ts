@@ -53,11 +53,11 @@ export default defineConfig({
     // workerd cannot read Vitest 5's transformed modules from the host filesystem.
     fsModuleCache: false,
     include: [
-      "../web/src/server/calendar/**/*.workers.test.ts",
-      "../web/src/server/database-freshness/**/*.workers.test.ts",
-      "../web/src/server/purchase-import/**/*.workers.test.ts",
+      "../web/src/server/domains/calendar/**/*.workers.test.ts",
+      "../web/src/server/db/freshness/**/*.workers.test.ts",
+      "../web/src/server/domains/purchase-import/**/*.workers.test.ts",
       "../web/src/server/ai/**/*.workers.test.ts",
-      "../web/src/server/usda-release/**/*.workers.test.ts",
+      "../web/src/server/domains/usda-release/**/*.workers.test.ts",
     ],
     testTimeout: 30_000,
     hookTimeout: 30_000,

@@ -4,13 +4,13 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
+import { renderCompactFieldValue } from "~/entity/display/entity-display";
 import { entities, entityDetailParams } from "~/entity/entities";
-import { renderCompactFieldValue } from "~/entity/entity-display";
 import { EntityEmptyState } from "~/ui/data-table/entity-empty-states";
 import { ShelfCard, ShelfGrid } from "~/ui/data-table/shelf";
-import type { GroupConfig } from "~/ui/data-table/useGroupedList";
+import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import type { ListGroupState } from "~/ui/hooks/progressive-list";
-import type { InfiniteScrollControls } from "~/ui/hooks/useInfiniteTableList";
+import type { InfiniteScrollControls } from "~/ui/hooks/use-infinite-table-list";
 
 import { DeferredListValue } from "./deferred-list-value";
 

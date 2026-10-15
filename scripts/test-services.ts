@@ -21,7 +21,7 @@ import {
   stopAndRemove,
   tcpReady,
   waitFor,
-} from "./lib/apple-container.ts";
+} from "./apple/lib/apple-container.ts";
 import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
 import { spawnToExit } from "./lib/run.ts";
 

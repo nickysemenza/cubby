@@ -1,14 +1,17 @@
 import { sql } from "drizzle-orm";
 import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
 
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb } from "~/server/db/helpers";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { createEvidenceHarnessContext } from "./fixtures-core";
-import { seedSplitSettlementPrerequisite } from "./fixtures-finance";
-import { gotoAuthenticatedPage, gotoDetailActions } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-import { dispatchesOperation, operationResult } from "./dispatch-wire";
+import { createEvidenceHarnessContext } from "./fixtures/core";
+import { seedSplitSettlementPrerequisite } from "./fixtures/finance";
+import {
+  gotoAuthenticatedPage,
+  gotoDetailActions,
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
 test("finds settlement beyond 200 newer nonmatches and allocates only after review", async ({
   page,

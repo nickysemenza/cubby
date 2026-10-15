@@ -1,6 +1,9 @@
-import { listReadRowSchema, type ListReadRow } from "~/entity/list-read-fields";
+import {
+  listReadRowSchema,
+  type ListReadRow,
+} from "~/entity/model/list-read-fields";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import type { PublicStartOperationError } from "~/server/start-operation.contract";
+import type { PublicStartOperationError } from "~/server/operation-runtime/start-operation.contract";
 
 export type ListReadGroup = "media" | "quality" | "relations" | "derived";
 export interface DeferredListGroup {

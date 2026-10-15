@@ -5,10 +5,10 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { feedback } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { recordFeedback } from "~/server/repo/assessment";
-import { publishEmailLinkDecision } from "~/server/repo/assessment-email-link";
-import { ensureEmailAssessment } from "~/server/repo/assessment-email";
+import { getDb } from "~/server/db/helpers";
+import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
+import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 
 type EmailLinkDecision = Omit<
   Parameters<typeof publishEmailLinkDecision>[1],

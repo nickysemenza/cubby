@@ -7,12 +7,12 @@ import { z } from "zod";
 import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { withErrorReporting } from "~/server/errors/report-error";
 
-import { handleMcpHttpRequest, type McpServe } from "./http-handler";
 import {
   callMcpTool,
   registerTestTool,
   withTestClient,
-} from "./mcp-test-utils";
+} from "../testing/mcp-test-utils";
+import { handleMcpHttpRequest, type McpServe } from "./http-handler";
 
 /**
  * Failures that used to reach the connector proxy as no valid JSON-RPC

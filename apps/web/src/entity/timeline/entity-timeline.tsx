@@ -19,7 +19,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
-import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import {
   type EntityTimelineFiltersByEntity,
@@ -28,11 +27,13 @@ import {
   type EntityTimelineWindowByEntity,
 } from "~/entity/entity-timeline";
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
+import { ChartEmpty } from "~/features/project/charts/chart-empty";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
+import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
-import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -56,7 +57,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { ShortcodeProse } from "~/ui/shortcode-prose";
+import { ShortcodeProse } from "~/ui/text/shortcode-prose";
 
 type EntityTimelineMode = "events" | "lifecycles";
 

@@ -1,5 +1,5 @@
-import { readRetainedMail } from "~/server/repo/retained-mail";
-import { loadRunDetail } from "~/server/purchase-import/run-service";
+import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { loadRunDetail } from "~/server/domains/purchase-import/run-service";
 import { emailImportOut } from "@cubby/schemas/email-actions";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
@@ -11,9 +11,9 @@ import {
   authorizeSyntheticBackfill,
   authorizePurchaseAgent,
   workerdDiagnostic,
-} from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+} from "~/server/domains/purchase-import/purchase-agent-workerd.fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/db/helpers";
 
 import {
   call,
@@ -28,10 +28,10 @@ import {
   createEvidenceHarnessContext,
   fixtureUserId,
   getFixtureDb,
-} from "./fixtures-core";
-import { seedUnimportedOrderMail } from "./fixtures-mail";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./fixtures/core";
+import { seedUnimportedOrderMail } from "./fixtures/mail";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 // Only external model judgment is scripted. Admission, Pi's tools, in-process
 // MCP (imports_read.mail, purchase_import, mail.resolve), the report commands

@@ -17,7 +17,7 @@ import { z } from "zod";
 import {
   PendingImageUpload,
   type PendingImage,
-} from "~/entity/entity-media/PendingImageUpload";
+} from "~/entity/entity-media/pending-image-upload";
 import { readRecordField } from "~/entity/entity-references";
 import {
   fieldSuggestionBasisFromRecord,
@@ -26,7 +26,7 @@ import {
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import type { UnparsedError } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
-import { FormWrapper } from "~/ui/form-utils";
+import { FormWrapper } from "~/ui/forms/form-utils";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { entityEditRegistry } from "./definitions";

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   authServerMetadataHandler,
   preflightHandler,
-} from "~/server/oauth/metadata";
+} from "~/server/http/oauth/metadata";
 
 // RFC 8414 discovery. Clients that treat the origin as the issuer probe this
 // bare path first (Claude Code's documented chain does), so serve the same

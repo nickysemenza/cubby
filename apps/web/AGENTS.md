@@ -5,9 +5,9 @@ reference below before changing the matching surface. Read [DESIGN.md](DESIGN.md
 only when making UI or visual decisions.
 
 - **React hooks, queries, mutations, client/server boundaries, SSR:**
-  [web runtime rules](../../docs/agents/web-runtime.md).
+  [web runtime rules](docs/web-runtime.md).
 - **Colors, images, spacing, layout, tables, entity names, page shell:**
-  [web UI contracts](../../docs/agents/web-ui.md).
+  [web UI contracts](docs/web-ui.md).
 - A hand-written `interface`/`type` for data that crosses a runtime boundary
   (an API response, persisted JSON, a Zod-validated row) is allowed only when
   no `z.object` schema exists for that exact shape — otherwise derive it with

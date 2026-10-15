@@ -1,18 +1,18 @@
-import { entityApi } from "./entity-api";
+import { entityApi } from "./support/entity-api";
 import {
   seedLocationPrerequisite,
   seedProductPrerequisite,
-} from "./fixtures-catalog";
-import { createEntityFixture, seedConcurrently } from "./fixtures-core";
-import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
+} from "./fixtures/catalog";
+import { createEntityFixture, seedConcurrently } from "./fixtures/core";
+import { seedStaplePlanningPrerequisite } from "./fixtures/recipes";
 import {
   chooseOption,
   escapeRegExp,
   gotoAuthenticatedPage,
   selectComboboxItem,
   uniqueName,
-} from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
+} from "./support/e2e-helpers";
+import { expect, test } from "./support/e2e-test";
 
 test("recommendations workbench direct entry shows guidance", async ({
   page,

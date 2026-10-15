@@ -4,18 +4,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
-import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import {
   createProductFixture,
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
-} from "~/server/repo/repo.fixtures";
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool, kernelRequestContext } from "./mcp-test-utils";
+import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 const gap = z.enum(["price", "weight", "nutrients"]);

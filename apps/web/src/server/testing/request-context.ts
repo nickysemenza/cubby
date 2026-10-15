@@ -2,9 +2,9 @@ import { buildActorContext } from "@cubby/schemas/context";
 import type { UserId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
-import { buildCrudServices, currentParty } from "~/server/request-context";
-import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
-import type { RequestOrigin } from "~/server/workload";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/rpc";
+import { buildCrudServices, currentParty } from "~/server/http/request-context";
+import type { RequestOrigin } from "~/server/http/workload";
 
 /** A loaded release holding no foods: every lookup misses, every search is empty. */
 const emptyUsdaRelease: UsdaReleaseRpc = {

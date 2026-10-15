@@ -15,7 +15,7 @@ it("renders native shared constants before generated schemas exist", () => {
       }
       return resolved;
     }});
-    const { renderSwiftSharedConstants } = await import('./scripts/generator/entities/render/swift-shared-constants.ts');
+    const { renderSwiftSharedConstants } = await import('./apps/web/generator/entities/render/swift-shared-constants.ts');
     // Not console.log: Nx sets FORCE_COLOR, which colors an inspected number.
     process.stdout.write(String(renderSwiftSharedConstants().length));
   `;

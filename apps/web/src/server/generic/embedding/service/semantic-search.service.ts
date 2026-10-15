@@ -1,0 +1,100 @@
+import type { RunId } from "@cubby/schemas/identifiers";
+import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { getErrorMessage } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
+
+import type { Database } from "~/server/db";
+import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/semantic/config";
+import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/semantic/constants";
+import {
+  embedQuery,
+  semanticEmbeddingsConfigured,
+} from "~/server/generic/embedding/semantic/embeddings";
+import { productionVectorStore } from "~/server/generic/embedding/semantic/vector-store";
+import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.service";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
+
+const log = createLogger("semantic-search");
+
+export interface SemanticProductCandidate {
+  item: SearchHit & { entityId: string; name: string };
+  similarity: number;
+  reason: string;
+}
+
+async function semanticSearchCandidates(
+  db: Database,
+  query: string,
+  limit: number,
+  entityKinds: SearchableEntity[],
+  runId?: RunId,
+): Promise<SemanticProductCandidate[]> {
+  if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH) return [];
+  if (!semanticEmbeddingsConfigured()) return [];
+
+  const config = getSemanticEmbeddingConfig();
+  const embedding = await withTrace(
+    TraceNames.service("semanticSearch", "embedQuery"),
+    () => embedQuery(query, { db, runId }),
+  );
+  if (!embedding) return [];
+
+  const refs = await withTrace(
+    TraceNames.service("semanticSearch", "vectorLookup"),
+    () =>
+      findSemanticEntityCandidates(productionVectorStore, embedding, {
+        entityKinds,
+        limit,
+      }),
+  );
+  const hits = await hydrateSearchHitRefs(db, refs);
+  const hitByRef = new Map(
+    hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const),
+  );
+  return refs.flatMap((ref) => {
+    const hit = hitByRef.get(`${ref.entityKind}:${ref.entityId}`);
+    return hit
+      ? [
+          {
+            item: { ...hit, name: hit.title },
+            similarity: ref.similarity,
+            reason: `Semantic ${config.provider}/${config.model}`,
+          },
+        ]
+      : [];
+  });
+}
+
+/** Internal semantic fallback for candidate matching; never used by global UX. */
+export async function semanticEntityCandidates(
+  db: Database,
+  query: string,
+  limit: number,
+  entityKind: SearchableEntity,
+  runId?: RunId,
+): Promise<SemanticProductCandidate[]> {
+  try {
+    return await semanticSearchCandidates(
+      db,
+      query,
+      limit,
+      [entityKind],
+      runId,
+    );
+  } catch (error) {
+    log.warn(`${entityKind}-candidates failed`, {
+      query,
+      message: getErrorMessage(error),
+    });
+    return [];
+  }
+}
+
+export const semanticProductCandidates = (
+  db: Database,
+  query: string,
+  limit: number,
+  runId?: RunId,
+): Promise<SemanticProductCandidate[]> =>
+  semanticEntityCandidates(db, query, limit, "product", runId);

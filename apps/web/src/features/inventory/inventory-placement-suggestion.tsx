@@ -5,8 +5,9 @@ import { useNavigate } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { useInventoryInvalidation } from "~/features/inventory/hooks";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
+
+import { useInventoryInvalidation } from "./hooks/use-inventory-mutation";
 
 export function useInventoryPlacementAction({
   inventoryitem,

@@ -432,7 +432,7 @@ export default defineEntity({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/repo/ledger-party.repository",
+        module: "~/server/domains/ledger-party/repo/ledger-party.repository",
         export: "ledgerPartyRepository",
       },
     },

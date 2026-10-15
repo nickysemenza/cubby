@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "~/ui/primitives/dialog";
 
-import { useActionMutation } from "../../ui/hooks/useActionMutation";
+import { useActionMutation } from "../hooks/use-action-mutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
@@ -33,7 +33,7 @@ import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 import { useStagedDialogAction } from "./use-staged-dialog-action";
 
 const SpendingCategoryMergeReview = lazy(() =>
-  import("~/app/finance/spending-classification-review").then((m) => ({
+  import("~/features/finance/spending-classification-review").then((m) => ({
     default: m.SpendingCategoryMergeReview,
   })),
 );

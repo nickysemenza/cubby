@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { IsometricPantry } from "~/app/pantry-view/IsometricPantry";
+import { IsometricPantry } from "~/features/inventory/pantry-view/isometric-pantry";
 import { pageTitle } from "~/lib/page-title";
-import { Page } from "~/ui/page/Page";
+import { Page } from "~/ui/layout/page";
 
 export const Route = createFileRoute("/_authenticated/pantry-view")({
   component: PantryViewPage,
