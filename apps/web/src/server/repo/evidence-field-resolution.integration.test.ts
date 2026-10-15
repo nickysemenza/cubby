@@ -4,7 +4,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { contributionRole } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { unwrapDb } from "./database-helpers";
@@ -466,6 +466,10 @@ it("reports omitted ownership branches and keeps the full stack for each include
     manufacturer: "Synthetic maker",
     name: "Synthetic many-entry product",
   });
+  const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+    name: "Synthetic batched owner",
+    kind: "member",
+  });
   for (let index = 0; index < 51; index++) {
     const location = await insertWithShortcode(ctx.db, "location", {
       type: "room",
@@ -474,17 +478,23 @@ it("reports omitted ownership branches and keeps the full stack for each include
     await insertWithShortcode(ctx.db, "inventory", {
       productId: product.id,
       locationId: location.id,
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: owner.id,
       amountValue: 1,
       amountUnit: "each",
     });
   }
-  const result = await loadFieldResolutionEvidence(
-    ctx.db,
-    "product",
-    product.shortcode,
-    "owners",
-    null,
+  const measured = await countTestDbQueries(() =>
+    loadFieldResolutionEvidence(
+      ctx.db,
+      "product",
+      product.shortcode,
+      "owners",
+      null,
+    ),
   );
+  const result = measured.result;
+  expect(measured.queryCount).toBeLessThan(25);
   expect(result.truncated).toBe(true);
   expect(result.evidence?.branches).toEqual({
     total: 51,

@@ -1536,7 +1536,9 @@ links and current policy settings; they do not invent historical intent. Coverag
 shown and omitted rows, inventory branches, and inputs. Each independent contributor
 contains its own chain, typed decision steps, and coverage; row indexes address that
 contributor chain, including its summary row. Ownership evidence includes at most
-50 inventory contributors, 50 rows per chain, and 50 observations per step. The same generic evidence view
+50 inventory contributors, 50 decision steps per chain plus its contributor summary
+row, and 50 observations per step. Record labels are batch-loaded across the visible
+contributors so query count does not grow with inventory entries. The same generic evidence view
 serves populated and empty fields on list and detail surfaces, with exact inputs available
 under Technical details. Observation `fields` name declared source fields whose own
 explanation and controls are available alongside the record link. Editable stored fields

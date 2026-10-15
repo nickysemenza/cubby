@@ -806,12 +806,7 @@ async function fieldSteps(
       ...(resolution.sourceEntity || resolution.fallbackValue !== null
         ? [
             {
-              title:
-                entity === "recipe" && field === "servings"
-                  ? "Recipe yield"
-                  : entity === "product" && field === "price"
-                    ? "Expense-derived unit price"
-                    : humanize(resolution.source),
+              title: humanize(resolution.source),
               ref: resolution.sourceEntity,
               value: resolution.fallbackValue,
               assigned: resolution.fallbackValue !== null,
@@ -840,8 +835,6 @@ function winnerIndex(steps: Step[], resolution: FieldResolution): number {
       )
     : -1;
   if (byRef >= 0) return byRef;
-  if (resolution.mode === "none" && steps[0]?.self && steps[0].assigned)
-    return 0;
   if (resolution.value === null)
     return steps.findIndex(
       (step) =>
@@ -909,14 +902,7 @@ const collectCodes = (value: Json, into: Set<string>) => {
     for (const item of Object.values(value)) collectCodes(item ?? null, into);
 };
 
-async function chainBlock(
-  db: Database,
-  entity: Entity,
-  field: string,
-  steps: Step[],
-  winner: number,
-  loadedLabels?: Map<string, string>,
-): Promise<Evidence["chain"]> {
+async function labelsForSteps(db: Database, steps: readonly Step[]) {
   const codes = new Set<string>();
   for (const step of steps) {
     collectCodes(step.value, codes);
@@ -925,7 +911,18 @@ async function chainBlock(
       collectCodes(observation.value, codes);
     }
   }
-  const labels = loadedLabels ?? (await shortcodeLabels(db, [...codes]));
+  return shortcodeLabels(db, [...codes]);
+}
+
+async function chainBlock(
+  db: Database,
+  entity: Entity,
+  field: string,
+  steps: Step[],
+  winner: number,
+  loadedLabels?: Map<string, string>,
+): Promise<Evidence["chain"]> {
+  const labels = loadedLabels ?? (await labelsForSteps(db, steps));
   const model = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === field,
   );
@@ -1044,6 +1041,7 @@ async function evidenceBlock(
   allSteps: Step[],
   winner: number,
   fallbackSource: Evidence["fallbackSource"],
+  loadedLabels?: Map<string, string>,
 ): Promise<Evidence> {
   const steps = allSteps.slice(0, MAX_CHAIN_ROWS).map((step) =>
     step.decision
@@ -1056,7 +1054,14 @@ async function evidenceBlock(
         }
       : step,
   );
-  const chain = await chainBlock(db, entity, field, steps, winner);
+  const chain = await chainBlock(
+    db,
+    entity,
+    field,
+    steps,
+    winner,
+    loadedLabels,
+  );
   const omittedObservations = allSteps
     .slice(0, steps.length)
     .reduce(
@@ -1626,12 +1631,34 @@ async function productOwnersEvidence(
     evidence.outcome = ladder.some((step) => step.assigned)
       ? "resolved"
       : "unset";
+    evidence.chain.title = "Acquisition owner context";
+    evidence.chain.footer =
+      "No live inventory entries. This is the owner context a new inheriting entry would use.";
     evidence.branches = coverage(0, 0);
     return { evidence, truncated: isTruncated(evidence) };
   }
 
   const visible = entries.slice(0, 50);
   const traces = await loadInventoryOwnershipTraces(db, visible);
+  const evaluated = new Map(
+    [...traces].map(([id, trace]) => {
+      const resolution = inventoryOwnerResolution(trace.ownership, trace.steps);
+      return [
+        id,
+        {
+          resolution,
+          steps: [
+            ownershipSelfStep(resolution, trace.intent),
+            ...ownershipSteps(trace.steps),
+          ],
+        },
+      ] as const;
+    }),
+  );
+  const labels = await labelsForSteps(
+    db,
+    [...evaluated.values()].flatMap((entry) => entry.steps),
+  );
   const contributors: NonNullable<Evidence["contributors"]> = [];
   const resolvedValues = new Set<string>();
   const unresolvedOwner =
@@ -1655,11 +1682,7 @@ async function productOwnersEvidence(
             : "Household"
           : unresolvedOwner),
     );
-    const resolution = inventoryOwnerResolution(ownership, trace.steps);
-    const steps = [
-      ownershipSelfStep(resolution, trace.intent),
-      ...ownershipSteps(trace.steps),
-    ];
+    const { resolution, steps } = evaluated.get(entry.id)!;
     const branch = {
       entityKind: "inventory" as const,
       entityId: entry.shortcode,
@@ -1671,6 +1694,7 @@ async function productOwnersEvidence(
       steps.map((step) => ({ ...step, branch })),
       winnerIndex(steps, resolution),
       trace.fallbackSource,
+      labels,
     );
     const chain = detail.chain;
     const summary: ReportRecordRow = {

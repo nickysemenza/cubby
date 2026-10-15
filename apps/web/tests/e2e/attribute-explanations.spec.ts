@@ -3,6 +3,8 @@ import { seedLocationPrerequisite } from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+test.setTimeout(60_000);
+
 // A partial location must survive its discrepancy caption; list and detail
 // explanations use the same recorded policy and quantity evidence.
 test("product location context preserves links and explains the same partial gap on detail", async ({

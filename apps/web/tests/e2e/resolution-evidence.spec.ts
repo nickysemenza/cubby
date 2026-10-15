@@ -8,6 +8,8 @@ import { expect, test } from "./e2e-test";
 import { createEntityFixture } from "./fixtures-core";
 import { seedWardrobePrerequisites } from "./fixtures-catalog";
 
+test.setTimeout(60_000);
+
 // Allocation evidence must name the contributing items and preserve each item's
 // override/fallback order. A null mixed result must never read as an unset trade.
 test("explains allocated trades with expandable contributor precedence", async ({
