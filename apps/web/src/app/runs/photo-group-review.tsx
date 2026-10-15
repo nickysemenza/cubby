@@ -558,8 +558,10 @@ function CommitInput({
       if (saved && typeof saved !== "string")
         void saved.then((success) => {
           if (success) {
-            acknowledgedRef.current = next;
-            setAcknowledged(next);
+            flushSync(() => {
+              acknowledgedRef.current = next;
+              setAcknowledged(next);
+            });
           }
         });
     }
@@ -2403,12 +2405,12 @@ export function PhotoGroupReview({
     return pending.then(
       () => {
         pendingSaves.current.delete(pending);
-        setPendingEdits((count) => count - 1);
+        flushSync(() => setPendingEdits((count) => count - 1));
         return true;
       },
       (error) => {
         pendingSaves.current.delete(pending);
-        setPendingEdits((count) => count - 1);
+        flushSync(() => setPendingEdits((count) => count - 1));
         showErrorToast(error);
         return false;
       },
@@ -2420,10 +2422,9 @@ export function PhotoGroupReview({
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
     while (pendingSaves.current.size) await Promise.all(pendingSaves.current);
-    // Blur saves acknowledge local drafts in a promise continuation. Flush that
-    // acknowledgement before inspecting the DOM, including in hidden tabs.
+    // Field acknowledgments run after the save counter settles. Their state
+    // commits synchronously, so the DOM now reflects every completed save.
     await Promise.resolve();
-    flushSync(() => {});
     const unsaved = groupKeys.flatMap((key) => {
       const node = document
         .getElementById(`photo-group-${key}`)
