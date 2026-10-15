@@ -1,0 +1,111 @@
+.claude/workflows/repo-audit.js
+  s_2a22d2c73c07e5::t_426e639347d2c5 51,126-127,137-138,148,159-161,183,195,219
+.worktreeinclude
+  s_2a22d2c73c07e5::t_c7495e7025feb3 11
+apps/apple/AGENTS.md
+  s_2a22d2c73c07e5::t_2d045963d1ae3b 218
+apps/web/AGENTS.md
+  s_2a22d2c73c07e5::t_c699f712a78700 8,10
+apps/web/DESIGN.md
+  s_2a22d2c73c07e5::t_be29ac994b8a9b 62,119
+apps/web/docs/web-runtime.md
+  s_2a22d2c73c07e5::t_108df13f32e641 87,131
+apps/web/docs/web-ui-reference.md
+  s_2a22d2c73c07e5::t_f2bae67aa00779 96,119,169
+apps/web/docs/web-ui.md
+  s_2a22d2c73c07e5::t_8e1727228fe395 55,73
+apps/web/generator/entities/render/kernel-bindings.ts
+  s_2a22d2c73c07e5::t_a4406104bbc51f 27
+apps/web/project.json
+  s_2a22d2c73c07e5::t_71118cec157029 122
+apps/web/src/entity/sortable-fields.ts
+  s_2a22d2c73c07e5::t_13539c0eb18960 13
+apps/web/src/server/db/freshness/rpc.ts
+  s_2a22d2c73c07e5::t_cf202e8248b8c9 4
+apps/web/src/server/domains/calendar/rpc.ts
+  s_2a22d2c73c07e5::t_c3486b1a9d562f 4
+apps/web/src/server/domains/purchase-import/README.md
+  s_2a22d2c73c07e5::t_4f55c00c1878ae 12,89,95,142-152,159
+apps/web/src/server/domains/usda-release/rpc.ts
+  s_2a22d2c73c07e5::t_f38d8e98eb7557 4
+apps/web/src/server/mcp/catalog-schema.unit.test.ts
+  s_2a22d2c73c07e5::t_bde261d0d4b895 660
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_2a22d2c73c07e5::t_6f41e510d69ff8 164
+apps/web/src/server/worker-bindings.ts
+  s_2a22d2c73c07e5::t_1092bffa906cb2 6
+apps/web/tests/e2e/table-column-layout.spec.ts
+  s_2a22d2c73c07e5::t_571e5d6079ce3e 12
+apps/web/tests/e2e/table-density.spec.ts
+  s_2a22d2c73c07e5::t_5a910023c54aff 11
+apps/web/tooling/globals.d.ts
+  s_2a22d2c73c07e5::t_046f6c78a29e30 5
+apps/web/tsconfig.app.json
+  s_2a22d2c73c07e5::t_6edbcb98ced19a 6
+docs/README.md
+  s_ec630365b55263::t_b46e33c58cb9d0 11-12,24-31
+docs/adr/0002-meal-recipe-preparations.md
+  s_2a22d2c73c07e5::t_a85220f67115ce 1
+docs/adr/0003-meal-nutrition-entries.md
+  s_2a22d2c73c07e5::t_7d0ab295f5ade3 1
+docs/adr/0007-generic-entity-links-and-external-ids.md
+  s_2a22d2c73c07e5::t_70abb68b442dcc 61
+docs/adr/0018-current-member-filter-token.md
+  s_2a22d2c73c07e5::t_c89b77dba80d94 1
+docs/adr/README.md
+  s_2a22d2c73c07e5::t_71f87a8c28de54 1-29
+docs/agents/core-journey-e2e.md
+  s_2a22d2c73c07e5::t_3370defb54bf63 20,58
+docs/agents/mcp.md
+  s_2a22d2c73c07e5::t_aed76324fc3a62 60
+docs/agents/validation-tests.md
+  s_2a22d2c73c07e5::t_2704d15db9b1a8 279-280,292-293
+docs/entities.md
+  s_2a22d2c73c07e5::t_a6b736f97ae47a 204,219,237,438,719,733,777,911,964-1018,1024,1040-1042,1060-1128,1155,1352,1359,1425-1511,1550,1566,1579
+docs/guide/product-identity-journey.md
+  s_2a22d2c73c07e5::t_25705dafe3fbe8 32
+docs/guide/terminology.md
+  s_2a22d2c73c07e5::t_afa45c61f9a344 370,394
+docs/infrastructure.md
+  s_2a22d2c73c07e5::t_d30aa4cc8206c2 95,117-118,125,166,391-394,401-405,407-410,413-421,458,472-484,489
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_2a22d2c73c07e5::t_cc280c3c41e4d4 158
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_2a22d2c73c07e5::t_5ff8337ad910e6 57
+apps/web/tooling/checks/worker-type-imports.ts
+  s_84911bbd78073a::t_63b636fa02792e 6-8
+apps/web/tsconfig.json
+  s_84911bbd78073a::t_94ca505a550a7d 8-9,33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "61b718715fb1184ec8c18bd16ee372dfebe8fc3a",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_84911bbd78073a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-affc5e4e475c53cb9",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_ec630365b55263": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "582a1a76-ccf7-4d3d-8447-b409da849e6e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
