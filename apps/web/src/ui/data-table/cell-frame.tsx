@@ -102,9 +102,15 @@ export const CELL_RAIL_BUTTON_CLASS =
  * uses on hover — the reserved-but-invisible pencil is what squeezed narrow
  * money and date columns. Touch has no hover, so coarse pointers keep the
  * pencil in flow and visible.
+ *
+ * A detail facts ledger has width to spare, so there the group hugs its value
+ * and the pencil sits in flow right after it, revealed on row hover. A
+ * full-width group pinned the pencil (and the editor anchored to it) to the
+ * far edge of the value column and pushed the resolution caption onto its
+ * own line.
  */
 export const CELL_EDIT_GROUP_CLASS =
-  "group/cell-edit relative flex w-full min-w-0 items-center";
+  "group/cell-edit relative flex w-full min-w-0 items-center in-data-[slot=basic-info-value]:w-auto in-data-[slot=basic-info-value]:gap-1";
 
 export const CELL_EDIT_PENCIL_CLASS =
-  "absolute inset-y-0 right-0 my-auto size-5 shrink-0 justify-center rounded-sm bg-muted p-0 opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover/cell-edit:opacity-100 focus-visible:opacity-100 pointer-coarse:static pointer-coarse:opacity-100 pointer-coarse:shadow-none";
+  "absolute inset-y-0 right-0 my-auto size-5 shrink-0 justify-center rounded-sm bg-muted p-0 opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover/cell-edit:opacity-100 focus-visible:opacity-100 pointer-coarse:static pointer-coarse:opacity-100 pointer-coarse:shadow-none in-data-[slot=basic-info-value]:static in-data-[slot=basic-info-value]:ms-0 in-data-[slot=basic-info-value]:bg-transparent in-data-[slot=basic-info-value]:shadow-none in-data-[slot=basic-info-value]:hover:bg-muted in-[.ledger-row:hover]:opacity-100";
