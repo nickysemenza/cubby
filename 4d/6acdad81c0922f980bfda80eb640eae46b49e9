@@ -1,0 +1,909 @@
+.oxlintrc.json
+  s_2a22d2c73c07e5::t_b7a07d571f54b7 466
+apps/web/playwright.config.ts
+  s_2a22d2c73c07e5::t_e02047b3ad0782 44,68,71
+apps/web/playwright.dev.config.ts
+  s_2a22d2c73c07e5::t_edfcfd7e4c794e 23
+apps/web/src/entity/actions/bulk-edit-entity-action.tsx
+  s_2a22d2c73c07e5::t_720ef02d096150 41
+apps/web/src/entity/actions/declared-entity-actions.tsx
+  s_2a22d2c73c07e5::t_7a662d0b08b3de 14
+apps/web/src/entity/actions/email-entity-actions.tsx
+  s_2a22d2c73c07e5::t_3bb7e8c72858b7 24
+apps/web/src/entity/actions/merge-entity-actions.tsx
+  s_2a22d2c73c07e5::t_452a72e670278e 28
+apps/web/src/entity/actions/specialist-lifecycle-entity-actions.tsx
+  s_2a22d2c73c07e5::t_6cc7c6d40e05c7 13
+apps/web/src/entity/components/entity-preview-content.tsx
+  s_2a22d2c73c07e5::t_2392c04c3577d2 19,25
+apps/web/src/entity/components/ref-link/inline.tsx
+  s_2a22d2c73c07e5::t_3214ea01c2f2d2 25-26
+apps/web/src/entity/data-quality-views.unit.test.ts
+  s_2a22d2c73c07e5::t_6b60762bfebe99 10-11
+apps/web/src/entity/display/data-quality-value.tsx
+  s_2a22d2c73c07e5::t_d3e4903da4ee62 14
+apps/web/src/entity/display/detail-field-renderers/expense.tsx
+  s_2a22d2c73c07e5::t_51b51806a63b90 7-9
+apps/web/src/entity/display/detail-field-renderers/financial-account.tsx
+  s_2a22d2c73c07e5::t_95ffaf6db6fcf2 2
+apps/web/src/entity/display/detail-field-renderers/financial-transaction.tsx
+  s_2a22d2c73c07e5::t_78b926e64b2331 6
+apps/web/src/entity/display/detail-field-renderers/index.ts
+  s_2a22d2c73c07e5::t_75b9ff11550a71 13
+apps/web/src/entity/display/detail-field-renderers/inventory-expense.tsx
+  s_2a22d2c73c07e5::t_78a3f5d3698dc8 14,18,21-22
+apps/web/src/entity/display/detail-field-renderers/inventory.tsx
+  s_2a22d2c73c07e5::t_a7c5be71aaa8f1 3
+apps/web/src/entity/display/detail-field-renderers/ledger-transfer.tsx
+  s_2a22d2c73c07e5::t_8c2fbdf4988929 1
+apps/web/src/entity/display/detail-field-renderers/spending-category-summary.tsx
+  s_2a22d2c73c07e5::t_3cfb35446a2ef9 7
+apps/web/src/entity/display/detail-field-renderers/wish.tsx
+  s_2a22d2c73c07e5::t_224c6d82396e1b 9
+apps/web/src/entity/display/entity-display.product.unit.test.tsx
+  s_2a22d2c73c07e5::t_ca7261a54d0ad6 13
+apps/web/src/entity/display/entity-display.tsx
+  s_2a22d2c73c07e5::t_cc0721a8b961f4 36-37,75,77-78,83,89,95,97
+apps/web/src/entity/display/entity-display.unit.test.tsx
+  s_2a22d2c73c07e5::t_a2579132b765dd 26
+apps/web/src/entity/display/enum-field-display.tsx
+  s_2a22d2c73c07e5::t_e538404f635aac 19-20
+apps/web/src/entity/display/list-field-renderers.tsx
+  s_2a22d2c73c07e5::t_de1222e9fe4365 37
+apps/web/src/entity/display/list-renderers/recipe.tsx
+  s_2a22d2c73c07e5::t_2b2e681acf49af 13
+apps/web/src/entity/editing/entity-primitive-fields.tsx
+  s_2a22d2c73c07e5::t_ca6c1a1c658d0d 36-37
+apps/web/src/entity/entities.tsx
+  s_2a22d2c73c07e5::t_e5b9229a2e9f74 43-44
+apps/web/src/entity/entity-detail/detail-action-bar.tsx
+  s_2a22d2c73c07e5::t_07a31a9aff649f 61
+apps/web/src/entity/entity-detail/email-review.tsx
+  s_2a22d2c73c07e5::t_447dd2bbb36192 9
+apps/web/src/entity/entity-detail/entity-record-fields.tsx
+  s_2a22d2c73c07e5::t_490fd1bc5a48dd 8,17,20
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_2a22d2c73c07e5::t_dc5b9935ebdaeb 33,60,62
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_2a22d2c73c07e5::t_08992aba0f5ebb 35,40-41
+apps/web/src/entity/entity-detail/record-quality.tsx
+  s_2a22d2c73c07e5::t_b166ee330c8170 14
+apps/web/src/entity/entity-detail/report-commands.tsx
+  s_2a22d2c73c07e5::t_88fd67425003e1 32
+apps/web/src/entity/entity-detail/report-slot.tsx
+  s_2a22d2c73c07e5::t_b5b7fdc67a7c4a 23-24
+apps/web/src/entity/entity-list-href.ts
+  s_2a22d2c73c07e5::t_b633dc6a516524 6
+apps/web/src/entity/entity-list/entity-shelf.tsx
+  s_2a22d2c73c07e5::t_bb9fc563d97923 8
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_2a22d2c73c07e5::t_a0217508bbece1 27,63,69-70,72
+apps/web/src/entity/entity-list/generic-entity-list.unit.test.tsx
+  s_2a22d2c73c07e5::t_580a5386edf8d0 30
+apps/web/src/entity/fields/field-explanation-exception.tsx
+  s_2a22d2c73c07e5::t_f3cc5f7f732cc5 12
+apps/web/src/entity/fields/field-explanation.tsx
+  s_2a22d2c73c07e5::t_062c15b81e3353 24,53
+apps/web/src/entity/fields/field-provenance.tsx
+  s_2a22d2c73c07e5::t_dfc46355794d14 7
+apps/web/src/entity/fields/field-resolution-explanation.tsx
+  s_2a22d2c73c07e5::t_b244cf3ffc5bb5 10
+apps/web/src/entity/fields/field-text.ts
+  s_2a22d2c73c07e5::t_b2ded0d5c5b379 5,7-9
+apps/web/src/entity/hooks/use-client-entity-list.tsx
+  s_2a22d2c73c07e5::t_511c4816aceeec 7-12
+apps/web/src/entity/hooks/use-deferred-filter-options.ts
+  s_2a22d2c73c07e5::t_018c23e62d1b43 8
+apps/web/src/entity/hooks/use-deferred-reference-filter-options.ts
+  s_2a22d2c73c07e5::t_21897bd62260f7 12
+apps/web/src/entity/hooks/use-entity-list-presentation.tsx
+  s_2a22d2c73c07e5::t_ead1d8b7fc5a1e 12-15,20,24-25
+apps/web/src/entity/hooks/use-entity-list.metadata.unit.test.tsx
+  s_2a22d2c73c07e5::t_292f06ff05ff31 14-16,20-21
+apps/web/src/entity/hooks/use-entity-list.tsx
+  s_2a22d2c73c07e5::t_6a2a104f0924b1 21,27-29,33-39,43-45,49-51,64,66,72,243,246
+apps/web/src/entity/hooks/use-entity-list.unit.test.tsx
+  s_2a22d2c73c07e5::t_be9238a0d2b2c1 13-14
+apps/web/src/entity/hooks/use-entity-preview.tsx
+  s_2a22d2c73c07e5::t_aaa48674b9b813 27
+apps/web/src/entity/hooks/use-filter-options.ts
+  s_2a22d2c73c07e5::t_86f374f2c8e303 6
+apps/web/src/entity/hooks/use-list-bulk-actions.tsx
+  s_2a22d2c73c07e5::t_99e60423391044 5,8,12,16,20,24,28
+apps/web/src/entity/hooks/use-list-bulk-actions.unit.test.tsx
+  s_2a22d2c73c07e5::t_635ce39d561f27 11-13
+apps/web/src/entity/hooks/use-optimistic-delete.tsx
+  s_2a22d2c73c07e5::t_ff02ae340f003a 17,24-29
+apps/web/src/entity/hooks/use-optimistic-delete.unit.test.tsx
+  s_2a22d2c73c07e5::t_0df8628c78f870 17
+apps/web/src/entity/hooks/use-related-preview-columns.tsx
+  s_2a22d2c73c07e5::t_7bcdbc5cac4afe 17,21-23
+apps/web/src/entity/hooks/use-related-preview-columns.unit.test.tsx
+  s_2a22d2c73c07e5::t_6c4d0a05686f5b 9
+apps/web/src/entity/hooks/use-server-tree.ts
+  s_2a22d2c73c07e5::t_84595c7c7bbfd7 13-14,18
+apps/web/src/entity/hooks/use-standard-columns.tsx
+  s_2a22d2c73c07e5::t_ca9b699332ee61 13,27-28,34-35
+apps/web/src/entity/list-columns/cookbook.tsx
+  s_2a22d2c73c07e5::t_0afb6dd1203a1f 14
+apps/web/src/entity/list-columns/expense.tsx
+  s_2a22d2c73c07e5::t_23805b2d583d36 16-18
+apps/web/src/entity/list-columns/finance.tsx
+  s_2a22d2c73c07e5::t_dcb1a3b3d6c8d3 19-20
+apps/web/src/entity/list-columns/image.tsx
+  s_2a22d2c73c07e5::t_4bb63bfa7bbff2 4,12-13
+apps/web/src/entity/list-columns/ingredient.tsx
+  s_2a22d2c73c07e5::t_b4e0e03d503dde 15,28
+apps/web/src/entity/list-columns/inventory.tsx
+  s_2a22d2c73c07e5::t_4e6b510c20d6c1 16,45-46,48
+apps/web/src/entity/list-columns/location.tsx
+  s_2a22d2c73c07e5::t_5cff8a1898f239 10-11,23-25
+apps/web/src/entity/list-columns/meal.tsx
+  s_2a22d2c73c07e5::t_a4f429aec6f4ef 6-7
+apps/web/src/entity/list-columns/product.tsx
+  s_2a22d2c73c07e5::t_40bc769cbb2fbf 25-27,34,51,53-54,56
+apps/web/src/entity/list-columns/purchase.tsx
+  s_2a22d2c73c07e5::t_1197db701a332c 4-5
+apps/web/src/entity/list-columns/recipe.tsx
+  s_2a22d2c73c07e5::t_f0018d165a4e23 24,26-27
+apps/web/src/entity/list-columns/task.tsx
+  s_2a22d2c73c07e5::t_a08a0e8c12c6cf 5-6
+apps/web/src/entity/list-columns/types.ts
+  s_2a22d2c73c07e5::t_9819d5a80e7b01 17
+apps/web/src/entity/list-columns/wish.tsx
+  s_2a22d2c73c07e5::t_5102392e4a9e66 13-14,22,31
+apps/web/src/entity/manifest-registries.unit.test.tsx
+  s_2a22d2c73c07e5::t_9d052f42891ad5 16,18
+apps/web/src/entity/model/list-read-schema.ts
+  s_2a22d2c73c07e5::t_d3799e25787b98 4
+apps/web/src/entity/model/list-read-schema.unit.test.ts
+  s_2a22d2c73c07e5::t_e0ded54ee2f89c 4,6
+apps/web/src/entity/model/view-manifest.ts
+  s_2a22d2c73c07e5::t_893bf5d540b688 14
+apps/web/src/entity/model/view-manifest.unit.test.tsx
+  s_2a22d2c73c07e5::t_956297b47c5d5c 7,13,17
+apps/web/src/entity/platform/entity-records-tab.tsx
+  s_2a22d2c73c07e5::t_2ab3368149731e 19
+apps/web/src/entity/platform/entity-reference-graph.tsx
+  s_2a22d2c73c07e5::t_929fc38cc5ad23 21
+apps/web/src/entity/platform/entity-schema-inspector.tsx
+  s_2a22d2c73c07e5::t_90c82adab3cefa 12
+apps/web/src/entity/problems/problem-filter-semantics.ts
+  s_2a22d2c73c07e5::t_44bee91c1e7049 12,18-19
+apps/web/src/entity/problems/problem-registry-validation.ts
+  s_2a22d2c73c07e5::t_eaf686fdc132c3 12
+apps/web/src/entity/problems/problem-registry.ts
+  s_2a22d2c73c07e5::t_43fee95ff9b028 3-6,10-11
+apps/web/src/entity/problems/problem-registry.unit.test.ts
+  s_2a22d2c73c07e5::t_48a1d070252228 9,14-16
+apps/web/src/entity/problems/queries/basic.ts
+  s_2a22d2c73c07e5::t_03a632a572890b 3
+apps/web/src/entity/problems/queries/derived.ts
+  s_2a22d2c73c07e5::t_9f814a67230e24 3
+apps/web/src/entity/problems/queries/product-coverage.ts
+  s_2a22d2c73c07e5::t_ff9f69b669147e 4
+apps/web/src/entity/problems/queries/tracker.ts
+  s_2a22d2c73c07e5::t_2145e484a20d0a 2
+apps/web/src/entity/relationships/entity-relations.tsx
+  s_2a22d2c73c07e5::t_309c7a084dc439 43
+apps/web/src/entity/relationships/relationship-summary-table.tsx
+  s_2a22d2c73c07e5::t_1ca50771668547 21
+apps/web/src/entity/timeline/entity-timeline.tsx
+  s_2a22d2c73c07e5::t_503c2faab2bac8 35-36
+apps/web/src/features/ai/ai-usage-page.tsx
+  s_2a22d2c73c07e5::t_bfbf3c9818aee8 16
+apps/web/src/features/ai/decisions-catalog.tsx
+  s_2a22d2c73c07e5::t_ed8203e267be41 13
+apps/web/src/features/ai/form-field-resolution.tsx
+  s_2a22d2c73c07e5::t_48f09931f22552 17
+apps/web/src/features/ai/record-suggestions.tsx
+  s_2a22d2c73c07e5::t_ed4da5728d5386 50,52
+apps/web/src/features/ai/suggestion-review-list.tsx
+  s_2a22d2c73c07e5::t_26889c82c20af0 19,26
+apps/web/src/features/ai/use-auto-field-suggestion.ts
+  s_2a22d2c73c07e5::t_809a39cbecaa9c 13
+apps/web/src/features/audit-log/audit-log-entry.tsx
+  s_2a22d2c73c07e5::t_d3f1b2b7236009 9-10
+apps/web/src/features/calendar/calendar-connect-dialog.tsx
+  s_2a22d2c73c07e5::t_59b439d43e117f 16
+apps/web/src/features/calendar/calendar-filter-bar.tsx
+  s_2a22d2c73c07e5::t_55991ad9df41dc 2-3
+apps/web/src/features/calendar/calendar-filter-specs.ts
+  s_2a22d2c73c07e5::t_69910f4f2a06cf 9
+apps/web/src/features/calendar/calendar-item-inspector.tsx
+  s_2a22d2c73c07e5::t_9de6caac59424b 6,11,13
+apps/web/src/features/calendar/calendar-item-row.tsx
+  s_2a22d2c73c07e5::t_4c845de5eebc97 6-7
+apps/web/src/features/calendar/calendar-week-summary.tsx
+  s_2a22d2c73c07e5::t_0b104e52f01843 8-9
+apps/web/src/features/calendar/unified-calendar.tsx
+  s_2a22d2c73c07e5::t_3ee9eda8f7d285 31
+apps/web/src/features/collection/collection-assignment-matrix.tsx
+  s_2a22d2c73c07e5::t_4d004bfa0cef47 28-29
+apps/web/src/features/cookbook/cookbook-edit-dialog.tsx
+  s_2a22d2c73c07e5::t_75f0cb8a62232b 7
+apps/web/src/features/cookbook/slots.tsx
+  s_2a22d2c73c07e5::t_4ddf6adb13bee2 17
+apps/web/src/features/developer/mcp-usage-dashboard.tsx
+  s_2a22d2c73c07e5::t_c65c12447e6853 24
+apps/web/src/features/expense/charts/monthly-spend.tsx
+  s_2a22d2c73c07e5::t_e70a12d42a561f 13
+apps/web/src/features/expense/charts/trade-cost-aggregate.tsx
+  s_2a22d2c73c07e5::t_68c92efd0621f3 22-23
+apps/web/src/features/expense/expense-aggregate-explorer.tsx
+  s_2a22d2c73c07e5::t_e3c5de4c144051 21-22
+apps/web/src/features/expense/expense-purchase-section.tsx
+  s_2a22d2c73c07e5::t_c38bec742a7eae 13
+apps/web/src/features/expense/expense-summary-strip.tsx
+  s_2a22d2c73c07e5::t_e24c4ca70be594 1
+apps/web/src/features/expense/receive-expense-dialog.tsx
+  s_2a22d2c73c07e5::t_91f06c3837e00a 43
+apps/web/src/features/expense/split-expense-dialog.tsx
+  s_2a22d2c73c07e5::t_77c79831841d56 32,35,48
+apps/web/src/features/finance/financial-booking-correction-review.tsx
+  s_2a22d2c73c07e5::t_5f1381528e6574 11
+apps/web/src/features/finance/financial-booking-review.tsx
+  s_2a22d2c73c07e5::t_76c598686d5f4c 11
+apps/web/src/features/finance/household-contribution-format.tsx
+  s_2a22d2c73c07e5::t_33327b14d10c4c 8
+apps/web/src/features/finance/household-contribution-ledger.tsx
+  s_2a22d2c73c07e5::t_82a7c3c1ef050b 9,15
+apps/web/src/features/finance/linked-transactions.tsx
+  s_2a22d2c73c07e5::t_276fe3fec1305c 10,12,18,20
+apps/web/src/features/finance/spending-classification-review.tsx
+  s_2a22d2c73c07e5::t_3c96c291385b13 16
+apps/web/src/features/home/entitycount.tsx
+  s_2a22d2c73c07e5::t_a585cfbc3365d9 11
+apps/web/src/features/home/pantry-value-card.tsx
+  s_2a22d2c73c07e5::t_70657089a611bc 7
+apps/web/src/features/home/pinned-views.tsx
+  s_2a22d2c73c07e5::t_61efc4cb18adcf 15
+apps/web/src/features/home/problems-banner.tsx
+  s_2a22d2c73c07e5::t_e33c5bb52b0e6a 5-6
+apps/web/src/features/home/recorded-spend-card.tsx
+  s_2a22d2c73c07e5::t_e1745e5295091b 8
+apps/web/src/features/image/entity-photos-section.tsx
+  s_2a22d2c73c07e5::t_de0b79784df340 19
+apps/web/src/features/image/image-edit-dialog.tsx
+  s_2a22d2c73c07e5::t_4d3feda3294802 7
+apps/web/src/features/image/image-processing-panel.tsx
+  s_2a22d2c73c07e5::t_57d4bdae8006fa 30
+apps/web/src/features/image/upload-image-dialog.tsx
+  s_2a22d2c73c07e5::t_f96ffece74c2a7 12
+apps/web/src/features/ingredient/enrichment-editor.tsx
+  s_2a22d2c73c07e5::t_89d18890f5944a 29
+apps/web/src/features/ingredient/enrichment-workbench.tsx
+  s_2a22d2c73c07e5::t_232ffdb57c84a2 42-44,48
+apps/web/src/features/ingredient/review-queue.tsx
+  s_2a22d2c73c07e5::t_ec43628df8a8fc 14
+apps/web/src/features/inventory/inventory-entries-quick-edit-dialog.tsx
+  s_2a22d2c73c07e5::t_668082a2f960d0 16
+apps/web/src/features/inventory/inventory-placement-suggestion.tsx
+  s_2a22d2c73c07e5::t_82b5713d3b6b76 8
+apps/web/src/features/inventory/location-tree-view.tsx
+  s_2a22d2c73c07e5::t_a11089f07dccf7 16
+apps/web/src/features/inventory/move-inventory-dialog.tsx
+  s_2a22d2c73c07e5::t_eff856a6bf4b85 16
+apps/web/src/features/inventory/pantry-view/isometric-layout.ts
+  s_2a22d2c73c07e5::t_3fb98aca65e884 11
+apps/web/src/features/inventory/quick-inventory-add.tsx
+  s_2a22d2c73c07e5::t_e98b7909a6ff4a 51
+apps/web/src/features/inventory/triage/triage-stop-card.tsx
+  s_2a22d2c73c07e5::t_0d55982dde570d 17,19
+apps/web/src/features/inventory/worklist/use-product-view-snapshot.ts
+  s_2a22d2c73c07e5::t_06e559620052d9 19
+apps/web/src/features/location/ai-description-section.tsx
+  s_2a22d2c73c07e5::t_9bd1c9154e01c1 13
+apps/web/src/features/location/inventory-valuation-summary.tsx
+  s_2a22d2c73c07e5::t_6bd0bd37da6a0b 5
+apps/web/src/features/location/location-breadcrumb.tsx
+  s_2a22d2c73c07e5::t_c4e4e11e707d78 6
+apps/web/src/features/location/location-gallery-card.tsx
+  s_2a22d2c73c07e5::t_f8c12aea1c3c54 8,11-12
+apps/web/src/features/meal/add-to-meal.tsx
+  s_2a22d2c73c07e5::t_2f04ae12707dcf 20
+apps/web/src/features/meal/copy-meals.tsx
+  s_2a22d2c73c07e5::t_802df076ce772f 7
+apps/web/src/features/meal/food-amount-editor.tsx
+  s_2a22d2c73c07e5::t_338b257d3fff67 10
+apps/web/src/features/meal/shopping-list-page.tsx
+  s_2a22d2c73c07e5::t_6b58b461d36939 10-11
+apps/web/src/features/nutrition/nutrient-density-stats.tsx
+  s_2a22d2c73c07e5::t_31dfe150ab6c18 8
+apps/web/src/features/problems/components/awaiting-work-card.tsx
+  s_2a22d2c73c07e5::t_ea13318a3b767a 8
+apps/web/src/features/problems/components/image-processing-maintenance.tsx
+  s_2a22d2c73c07e5::t_745130553c22f2 5
+apps/web/src/features/problems/components/ingredient-cleanup-fixes.tsx
+  s_2a22d2c73c07e5::t_370ecb389df2c5 6
+apps/web/src/features/problems/components/maintenance-card.tsx
+  s_2a22d2c73c07e5::t_3c78f2a1ad9aea 22-23
+apps/web/src/features/problems/components/problem-assembly.tsx
+  s_2a22d2c73c07e5::t_dd4131ead78a7c 12
+apps/web/src/features/problems/components/problem-assembly.unit.test.tsx
+  s_2a22d2c73c07e5::t_3662ea2f885750 4-5
+apps/web/src/features/problems/components/problem-backfill-action.tsx
+  s_2a22d2c73c07e5::t_59d0dd56f6efdb 12
+apps/web/src/features/problems/components/problem-sections.tsx
+  s_2a22d2c73c07e5::t_bc8161132a205c 52-53,61,63
+apps/web/src/features/problems/components/tier2-fixes.tsx
+  s_2a22d2c73c07e5::t_09d1a7f6b61c4e 12,16
+apps/web/src/features/problems/components/unit-coverage-fix.tsx
+  s_2a22d2c73c07e5::t_e2ddc6e8bc3e43 11
+apps/web/src/features/problems/components/vendor-logo-fetch-action.tsx
+  s_2a22d2c73c07e5::t_53d0a885dfb74e 5
+apps/web/src/features/problems/problem-lane-state.ts
+  s_2a22d2c73c07e5::t_10a1f3e85e5ead 3-4
+apps/web/src/features/problems/problem-lane-state.unit.test.ts
+  s_2a22d2c73c07e5::t_ce14e021b057d3 3
+apps/web/src/features/problems/use-problems-data.ts
+  s_2a22d2c73c07e5::t_247b926524f899 9
+apps/web/src/features/product-category/use-category-hierarchy.ts
+  s_2a22d2c73c07e5::t_050ee5e48467ee 7
+apps/web/src/features/product/product-bulk-add-to-inventory-dialog.tsx
+  s_2a22d2c73c07e5::t_7bb596f36a6a23 54
+apps/web/src/features/product/product-discard-dialog.tsx
+  s_2a22d2c73c07e5::t_29e93859b1c1aa 36
+apps/web/src/features/product/product-food-summaries.tsx
+  s_2a22d2c73c07e5::t_5aba6e0b6cf194 5
+apps/web/src/features/product/product-image-summaries.tsx
+  s_2a22d2c73c07e5::t_f679cd901c73fb 5
+apps/web/src/features/project/attention-presentation.ts
+  s_2a22d2c73c07e5::t_425a3d6a71bcb2 6
+apps/web/src/features/project/charts/cost-vs-estimate.tsx
+  s_2a22d2c73c07e5::t_fcfce2d44fae28 10
+apps/web/src/features/project/charts/planned-actual-bar.tsx
+  s_2a22d2c73c07e5::t_6f0aefa3ab70dd 1
+apps/web/src/features/project/charts/trade-activity.tsx
+  s_2a22d2c73c07e5::t_84121191ebdf45 8
+apps/web/src/features/project/needs-attention.tsx
+  s_2a22d2c73c07e5::t_90429eb4703c81 16
+apps/web/src/features/project/projects-dashboard.tsx
+  s_2a22d2c73c07e5::t_41a05c00a55fd2 36-37,43
+apps/web/src/features/project/tool-matrix-page.tsx
+  s_2a22d2c73c07e5::t_cb0f8edc214699 55-56
+apps/web/src/features/project/trade-badge.tsx
+  s_2a22d2c73c07e5::t_c9472b6c3ce2a1 4
+apps/web/src/features/purchase/agent-context-breakdown.tsx
+  s_2a22d2c73c07e5::t_40a7d4ff578839 7-8
+apps/web/src/features/purchase/financial-settlement.tsx
+  s_2a22d2c73c07e5::t_3ea1bdcfc89798 15-17
+apps/web/src/features/purchase/link-expenses-dialog.tsx
+  s_2a22d2c73c07e5::t_63250e1336c144 40
+apps/web/src/features/purchase/link-products-dialog.tsx
+  s_2a22d2c73c07e5::t_a460dae6a4c6ff 36
+apps/web/src/features/purchase/match-statement.tsx
+  s_2a22d2c73c07e5::t_2b947fc2921ae2 24-25
+apps/web/src/features/purchase/purchase-reconciliation.tsx
+  s_2a22d2c73c07e5::t_c15aa49d4693a4 8-9
+apps/web/src/features/purchase/run-finding-actions.tsx
+  s_2a22d2c73c07e5::t_6b787262b75be0 3-4
+apps/web/src/features/purchase/settlement-candidate-list.tsx
+  s_2a22d2c73c07e5::t_a9359600822e2d 7
+apps/web/src/features/recipe/compare/recipe-compare-grid.tsx
+  s_2a22d2c73c07e5::t_6c92f5796cd5fa 19
+apps/web/src/features/recipe/cookbook-import/estimate-panel.tsx
+  s_2a22d2c73c07e5::t_7e1d8ffc516924 4
+apps/web/src/features/recipe/cookbook-import/extract-status.tsx
+  s_2a22d2c73c07e5::t_cd67a87aaef4b6 7
+apps/web/src/features/recipe/cookbook-import/extraction-result.ts
+  s_2a22d2c73c07e5::t_47371f87a0b0be 7
+apps/web/src/features/recipe/cookbook-import/index.tsx
+  s_2a22d2c73c07e5::t_df89d01230d849 44
+apps/web/src/features/recipe/notion-import/index.tsx
+  s_2a22d2c73c07e5::t_e0036b07a246a7 21
+apps/web/src/features/recipe/recipe-detail.tsx
+  s_2a22d2c73c07e5::t_06c92cd07e783e 37
+apps/web/src/features/recipe/recipe-magazine-view.tsx
+  s_2a22d2c73c07e5::t_56f28c947d2845 22-23
+apps/web/src/features/recipe/recipe-prep-sheet-view.tsx
+  s_2a22d2c73c07e5::t_71152ef7d2d52a 10
+apps/web/src/features/recipe/recipe-scale-control.tsx
+  s_2a22d2c73c07e5::t_e633423b92420a 8
+apps/web/src/features/recipe/use-duplicate-recipe.ts
+  s_2a22d2c73c07e5::t_702b91f4a04205 6
+apps/web/src/features/recipe/use-reparse-usage.ts
+  s_2a22d2c73c07e5::t_c96223fcd59b93 4
+apps/web/src/features/recommendation/product-match-queue.tsx
+  s_2a22d2c73c07e5::t_98201064755d8a 28
+apps/web/src/features/run/photo-group-review.tsx
+  s_2a22d2c73c07e5::t_50df50c74b4669 51-52
+apps/web/src/features/run/photo-run-detail.tsx
+  s_2a22d2c73c07e5::t_62d6e33ec6af3f 14
+apps/web/src/features/search/product-family.tsx
+  s_2a22d2c73c07e5::t_78e85e8630bbc9 12
+apps/web/src/features/search/search-page.tsx
+  s_2a22d2c73c07e5::t_6cc625b9c52854 35
+apps/web/src/features/statement-import/statement-row-list.tsx
+  s_2a22d2c73c07e5::t_72541883fc5587 19
+apps/web/src/features/task/board/task-card.tsx
+  s_2a22d2c73c07e5::t_a5ba05d41bbd85 12
+apps/web/src/features/task/create-project-from-tasks-dialog.tsx
+  s_2a22d2c73c07e5::t_ed3cd745feb03f 10,21
+apps/web/src/features/task/next-tasks.tsx
+  s_2a22d2c73c07e5::t_4c5d3602e2cbdd 17
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_2a22d2c73c07e5::t_84ba8aaa56d06a 27-28,41
+apps/web/src/features/units/serving-alias-field.tsx
+  s_2a22d2c73c07e5::t_5d690522a25eea 25
+apps/web/src/features/usda-food/usdafoodlist.tsx
+  s_2a22d2c73c07e5::t_69ac903be43fd3 29
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_2a22d2c73c07e5::t_da88356e3ea615 35,51,89-90
+apps/web/src/integrations/tanstack-query/browser-operation-transport.ts
+  s_2a22d2c73c07e5::t_60af58989e4527 8
+apps/web/src/integrations/tanstack-query/operation-catalog.ts
+  s_2a22d2c73c07e5::t_5f85996b142a0a 24
+apps/web/src/integrations/tanstack-query/request-batcher.ts
+  s_2a22d2c73c07e5::t_cad73ffd9cacff 3-4
+apps/web/src/lib/utils.unit.test.ts
+  s_2a22d2c73c07e5::t_a5dad4160fb52d 3
+apps/web/src/routes/_authenticated/account.connected-apps.tsx
+  s_2a22d2c73c07e5::t_2126b80cadfab5 10
+apps/web/src/routes/_authenticated/entities.tsx
+  s_2a22d2c73c07e5::t_6eaa11afe26416 19-22
+apps/web/src/routes/_authenticated/entities_.schema.$entity.tsx
+  s_2a22d2c73c07e5::t_892529b8d3a023 4
+apps/web/src/routes/_authenticated/recipes.$shortcode_.export.tsx
+  s_2a22d2c73c07e5::t_db21871b7ac4af 39
+apps/web/src/routes/_authenticated/recipes.compare.tsx
+  s_2a22d2c73c07e5::t_0a06bf9ad6cb97 27
+apps/web/src/routes/_authenticated/settings.tsx
+  s_2a22d2c73c07e5::t_f63be2f0cfd48b 42
+apps/web/src/routes/_authenticated/statement-rows.import.tsx
+  s_2a22d2c73c07e5::t_1a5f8e047c3538 18
+apps/web/src/server/ai/settlement-candidate-rank.ts
+  s_2a22d2c73c07e5::t_a70bd01eb01beb 16
+apps/web/src/server/db/db-pg-tracing.ts
+  s_2a22d2c73c07e5::t_b3e8971a287c41 4
+apps/web/src/server/db/freshness/state.ts
+  s_2a22d2c73c07e5::t_a88f2d2543417c 1
+apps/web/src/server/db/helpers/transform.ts
+  s_2a22d2c73c07e5::t_88c9c0afd4c630 13
+apps/web/src/server/domains/calendar/repo/calendar-plantings.ts
+  s_2a22d2c73c07e5::t_79f32109caf270 14
+apps/web/src/server/domains/calendar/repo/calendar.ts
+  s_2a22d2c73c07e5::t_560feb78980cab 48
+apps/web/src/server/domains/dashboard/repo/dashboard.ts
+  s_2a22d2c73c07e5::t_f321678b586389 24
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_2a22d2c73c07e5::t_2c6df2e6823476 20
+apps/web/src/server/domains/financial-transaction/repo/finance-list-projection.integration.test.ts
+  s_2a22d2c73c07e5::t_04169bc2840769 4
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_2a22d2c73c07e5::t_1729f6b4acfb51 28
+apps/web/src/server/domains/garden/repo/garden.integration.test.ts
+  s_2a22d2c73c07e5::t_7074e1715632e3 20
+apps/web/src/server/domains/garden/repo/list-read.integration.test.ts
+  s_2a22d2c73c07e5::t_5fc2ed62d29ab2 11
+apps/web/src/server/domains/garden/repo/repository.ts
+  s_2a22d2c73c07e5::t_94fac51d613b69 35
+apps/web/src/server/domains/garden/repo/timeline.integration.test.ts
+  s_2a22d2c73c07e5::t_9d453ae7198b40 13
+apps/web/src/server/domains/household-contribution/repo/reports.ts
+  s_2a22d2c73c07e5::t_aeaab9f2dd2efa 14
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_2a22d2c73c07e5::t_33845b175fc2eb 32-33
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_2a22d2c73c07e5::t_7675a000dc2013 30
+apps/web/src/server/domains/location/repo/crud.ts
+  s_2a22d2c73c07e5::t_9e04afee169529 37
+apps/web/src/server/domains/location/repo/location.integration.test.ts
+  s_2a22d2c73c07e5::t_6bcc0242b7644c 22
+apps/web/src/server/domains/product/repo/crud.ts
+  s_2a22d2c73c07e5::t_0deb50b94ffd84 63-64
+apps/web/src/server/domains/product/repo/equivalences.ts
+  s_2a22d2c73c07e5::t_a3ff85d1b2df1a 4
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_2a22d2c73c07e5::t_3639f168f74cf5 27-28
+apps/web/src/server/domains/product/repo/merge.integration.test.ts
+  s_2a22d2c73c07e5::t_fcca0898b477bb 21
+apps/web/src/server/domains/product/repo/movement-timeline.ts
+  s_2a22d2c73c07e5::t_84834fa2171f6d 41-42
+apps/web/src/server/domains/product/repo/ownership.ts
+  s_2a22d2c73c07e5::t_68477da63d738e 25
+apps/web/src/server/domains/product/repo/quantity-ledger.ts
+  s_2a22d2c73c07e5::t_7acc47e2d061fb 15
+apps/web/src/server/domains/product/repo/stock-context.ts
+  s_2a22d2c73c07e5::t_39f8908810217f 7
+apps/web/src/server/domains/product/service/product-orchestration.service.ts
+  s_2a22d2c73c07e5::t_e288d9a0838fd9 37
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_2a22d2c73c07e5::t_a9ccd557927067 18
+apps/web/src/server/domains/purchase/repo/purchase-link-draft.ts
+  s_2a22d2c73c07e5::t_8dbcf918de744b 20
+apps/web/src/server/domains/purchase/repo/purchase-products.ts
+  s_2a22d2c73c07e5::t_9fb09aafd64b6c 23
+apps/web/src/server/domains/purchase/repo/purchase-settlement-allocation.ts
+  s_2a22d2c73c07e5::t_06a4187a656601 8
+apps/web/src/server/domains/purchase/repo/purchase-split-draft.ts
+  s_2a22d2c73c07e5::t_1f93a793773d6d 21
+apps/web/src/server/domains/recipe/operations/recipe.server.ts
+  s_2a22d2c73c07e5::t_56ded78ac5426f 26
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_2a22d2c73c07e5::t_31dde9e3cf4bbd 24
+apps/web/src/server/entity-kernel/adapter.ts
+  s_2a22d2c73c07e5::t_17964be6414556 7
+apps/web/src/server/entity-kernel/list-read.ts
+  s_2a22d2c73c07e5::t_b3d4ac84650b1a 9-10
+apps/web/src/server/entity-kernel/repo/entity-display-image.integration.test.ts
+  s_2a22d2c73c07e5::t_1774d3e81c7bbf 19
+apps/web/src/server/generic/data-quality/repo/finance-checks.integration.test.ts
+  s_2a22d2c73c07e5::t_2e795c198d38f9 11
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_2a22d2c73c07e5::t_e3040c6dfed26c 84
+apps/web/src/server/generic/entity-graph/repo/entity-graph.integration.test.ts
+  s_2a22d2c73c07e5::t_a1368dd8031d46 22
+apps/web/src/server/generic/entity-graph/repo/entity-graph.ts
+  s_2a22d2c73c07e5::t_edf898b1b25595 315
+apps/web/src/server/generic/entity-links/repo/connected-records.integration.test.ts
+  s_2a22d2c73c07e5::t_7dc94a4c36d2d0 18
+apps/web/src/server/generic/entity-report/repo/expense-settlement.ts
+  s_2a22d2c73c07e5::t_931326f817595e 10
+apps/web/src/server/generic/entity-report/repo/finance-section.ts
+  s_2a22d2c73c07e5::t_8076b15eb879a6 5
+apps/web/src/server/generic/entity-report/repo/location.ts
+  s_2a22d2c73c07e5::t_a698f963dc090f 8
+apps/web/src/server/generic/entity-report/repo/project.ts
+  s_2a22d2c73c07e5::t_02dbaae7a03603 15-16
+apps/web/src/server/generic/entity-report/repo/purchase-financial-settlement.ts
+  s_2a22d2c73c07e5::t_f88e1fb70438ff 4
+apps/web/src/server/generic/entity-report/repo/purchase-project-allocation.ts
+  s_2a22d2c73c07e5::t_edcf159052a678 4
+apps/web/src/server/generic/field-explanation/operations/field-explanation-interpretation.ts
+  s_2a22d2c73c07e5::t_02aa6d7f69b8d9 11
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_2a22d2c73c07e5::t_b759f57b31f7f6 11
+apps/web/src/server/generic/problems/operations/problems.server.ts
+  s_2a22d2c73c07e5::t_70d98f66e960a8 87
+apps/web/src/server/generic/problems/operations/problems.workflow.unit.test.ts
+  s_2a22d2c73c07e5::t_809ef3230d67bf 4
+apps/web/src/server/generic/problems/repo/detectors-ingredient.ts
+  s_2a22d2c73c07e5::t_d9094d9d36db78 14
+apps/web/src/server/generic/problems/repo/detectors-product.ts
+  s_2a22d2c73c07e5::t_e0160caf30847a 36
+apps/web/src/server/generic/problems/service/problem-diagnostics.service.ts
+  s_2a22d2c73c07e5::t_c63990f8b60967 15-16,18
+apps/web/src/server/generic/problems/service/problem-views.service.ts
+  s_2a22d2c73c07e5::t_23e86206804ef0 24,31,35-36,40
+apps/web/src/server/generic/problems/service/problems.service.ts
+  s_2a22d2c73c07e5::t_d0391e7e6189f9 53,60
+apps/web/src/server/generic/work-queue/repo/work-queue-problems.ts
+  s_2a22d2c73c07e5::t_a8613a914a86f6 30,34-35
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_2a22d2c73c07e5::t_b27ba37c909081 45-46
+apps/web/src/server/lib/harvest-equivalences.unit.test.ts
+  s_2a22d2c73c07e5::t_dd1beb50cf7a82 9
+apps/web/src/server/observability/worker-sentry.ts
+  s_2a22d2c73c07e5::t_0eba3dabbb39f8 19
+apps/web/src/ui/charts/kit.tsx
+  s_2a22d2c73c07e5::t_33256cbdb46dc5 15
+apps/web/src/ui/combobox/combobox-builders.tsx
+  s_2a22d2c73c07e5::t_8963fe4367cafb 29,34
+apps/web/src/ui/combobox/with-usda-food-search.tsx
+  s_2a22d2c73c07e5::t_863af78fd25662 14
+apps/web/src/ui/data-table/column-helpers.tsx
+  s_2a22d2c73c07e5::t_8bc4da1dff2b77 35
+apps/web/src/ui/data-table/column-helpers.unit.test.tsx
+  s_2a22d2c73c07e5::t_f0b72d2a224830 16
+apps/web/src/ui/data-table/data-table-pagination.tsx
+  s_2a22d2c73c07e5::t_ee566f0797073d 8
+apps/web/src/ui/data-table/data-table-toolbar.tsx
+  s_2a22d2c73c07e5::t_0c5e2f4d5754cf 10
+apps/web/src/ui/data-table/data-table-views.tsx
+  s_2a22d2c73c07e5::t_c29b5043b15476 14
+apps/web/src/ui/data-table/desktop-data-row.tsx
+  s_2a22d2c73c07e5::t_06d52168383e3c 14-15,22
+apps/web/src/ui/data-table/enum-pill-presentations.unit.test.tsx
+  s_2a22d2c73c07e5::t_ad9572f3c9ee52 6
+apps/web/src/ui/data-table/indexed-sections.tsx
+  s_2a22d2c73c07e5::t_4249f1fcdaf3d6 16-17
+apps/web/src/ui/data-table/problem-worklist.tsx
+  s_2a22d2c73c07e5::t_07e5091627bf84 6
+apps/web/src/ui/data-table/problem-worklist.unit.test.ts
+  s_2a22d2c73c07e5::t_a53c7851fbc816 3
+apps/web/src/ui/data-table/relation-field-workbench.tsx
+  s_2a22d2c73c07e5::t_3a25205bbafba9 17
+apps/web/src/ui/data-table/table-header-layout.tsx
+  s_2a22d2c73c07e5::t_1d7df1887602fa 20
+apps/web/src/ui/data-table/use-mobile-list-model.tsx
+  s_2a22d2c73c07e5::t_eb92f1f0f17067 10,14,18-19
+apps/web/src/ui/file-upload/file-drop-field.tsx
+  s_2a22d2c73c07e5::t_1063c121339990 6-7
+apps/web/src/ui/hooks/progressive-list.ts
+  s_2a22d2c73c07e5::t_2489f788fa1c79 1
+apps/web/src/ui/layout/page-hero.tsx
+  s_2a22d2c73c07e5::t_07e342bcb20920 17-18
+apps/web/src/ui/layout/workbench-band.tsx
+  s_2a22d2c73c07e5::t_3b55dbe3a34fb5 3
+apps/web/src/ui/navigation/navigation-count-badge.tsx
+  s_2a22d2c73c07e5::t_b2c207132002b3 9
+apps/web/src/ui/text/markdown.tsx
+  s_2a22d2c73c07e5::t_09b5e6be540aa8 6
+apps/web/src/ui/visualizations/recipe-cost-treemap.tsx
+  s_2a22d2c73c07e5::t_6c9791dfe10b8f 6
+apps/web/tests/e2e/activity.spec.ts
+  s_2a22d2c73c07e5::t_7d98e289230eb3 7,12-13
+apps/web/tests/e2e/ai-review.spec.ts
+  s_2a22d2c73c07e5::t_94be57aea70eb5 19-21,25
+apps/web/tests/e2e/ai-usage.spec.ts
+  s_2a22d2c73c07e5::t_8c7ec32b492dbf 11,16-18
+apps/web/tests/e2e/assignment-picker-dialog.spec.ts
+  s_2a22d2c73c07e5::t_6b4a026fb87caf 1-2,10-12
+apps/web/tests/e2e/attribute-explanations.spec.ts
+  s_2a22d2c73c07e5::t_e4be367f675c8b 1-4
+apps/web/tests/e2e/browser-operation-dispatch.spec.ts
+  s_2a22d2c73c07e5::t_f484db8acb0660 1,7
+apps/web/tests/e2e/browser-workflows.spec.ts
+  s_2a22d2c73c07e5::t_a57d4d27af2e6f 1,5-7,14-15
+apps/web/tests/e2e/bulk-edit.spec.ts
+  s_2a22d2c73c07e5::t_a037a82af08918 1,12-15
+apps/web/tests/e2e/calendar.spec.ts
+  s_2a22d2c73c07e5::t_fdce8d98f831d9 1-4
+apps/web/tests/e2e/chatgpt-settings.spec.ts
+  s_2a22d2c73c07e5::t_8d40848e844bf0 1-2
+apps/web/tests/e2e/companion-analysis.spec.ts
+  s_2a22d2c73c07e5::t_3efdc9412a2fdf 28-29
+apps/web/tests/e2e/companion-socket.spec.ts
+  s_2a22d2c73c07e5::t_ba0aab10de4b1e 17-18
+apps/web/tests/e2e/connected-records.spec.ts
+  s_2a22d2c73c07e5::t_3232c68efe7ee2 1-2
+apps/web/tests/e2e/console-ledger-overhaul.spec.ts
+  s_2a22d2c73c07e5::t_9b62f06c9b6053 1-2
+apps/web/tests/e2e/continuous-detail.spec.ts
+  s_2a22d2c73c07e5::t_58d50155304b5f 4-5,9-11
+apps/web/tests/e2e/cookbook-bundle.spec.ts
+  s_2a22d2c73c07e5::t_aa7d6badbcde08 3-5
+apps/web/tests/e2e/cookbook-edit.spec.ts
+  s_2a22d2c73c07e5::t_3b13298e380d39 4,10-11
+apps/web/tests/e2e/cookbook-photos.spec.ts
+  s_2a22d2c73c07e5::t_419db64f5f969b 2-3
+apps/web/tests/e2e/create-recipe-full-flow.spec.ts
+  s_2a22d2c73c07e5::t_96013ea8fce5c7 1,8-9
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_2a22d2c73c07e5::t_4520a38533fe4c 1-2,10-11,15-18
+apps/web/tests/e2e/design-showcase.spec.ts
+  s_2a22d2c73c07e5::t_2f89aa685d6a81 1
+apps/web/tests/e2e/dev-preview.hmr.ts
+  s_2a22d2c73c07e5::t_797693d2feb97b 3
+apps/web/tests/e2e/dev-runtime.hmr.ts
+  s_2a22d2c73c07e5::t_a2d508f3853ded 12
+apps/web/tests/e2e/dnd-interactions.spec.ts
+  s_2a22d2c73c07e5::t_f16d5bc7112ade 2-5
+apps/web/tests/e2e/enrichment-workflow.spec.ts
+  s_2a22d2c73c07e5::t_215529ccf0ab81 8-9
+apps/web/tests/e2e/entity-card-layout.spec.ts
+  s_2a22d2c73c07e5::t_fcca69bab35356 1,6-10
+apps/web/tests/e2e/entity-dependency-graph.spec.ts
+  s_2a22d2c73c07e5::t_893466b07b0981 4-5,10-12
+apps/web/tests/e2e/entity-editor-lifecycle.spec.ts
+  s_2a22d2c73c07e5::t_d81d8756184c3d 1-3
+apps/web/tests/e2e/entity-sources.spec.ts
+  s_2a22d2c73c07e5::t_213726d783d0f4 6-9
+apps/web/tests/e2e/enum-colors-and-counts.spec.ts
+  s_2a22d2c73c07e5::t_ab7ff73fe2291c 2-4
+apps/web/tests/e2e/expense-role.spec.ts
+  s_2a22d2c73c07e5::t_274b33feb9a44b 5,12-13
+apps/web/tests/e2e/field-guide-mobile.spec.ts
+  s_2a22d2c73c07e5::t_9fd2e8cf1097cc 1-3
+apps/web/tests/e2e/finance-category-display.spec.ts
+  s_2a22d2c73c07e5::t_b3566fddf0aba6 1,5-8
+apps/web/tests/e2e/finance-evidence-journey.spec.ts
+  s_2a22d2c73c07e5::t_2e4a6de526376c 1,3
+apps/web/tests/e2e/finance-itemization.spec.ts
+  s_2a22d2c73c07e5::t_ac4c183de304dd 1,5
+apps/web/tests/e2e/finance-section-actions.spec.ts
+  s_2a22d2c73c07e5::t_13dde518b501d0 7-9
+apps/web/tests/e2e/financial-booking-review.spec.ts
+  s_2a22d2c73c07e5::t_2d335c9c701bdf 1,15-17
+apps/web/tests/e2e/fixtures/catalog.ts
+  s_2a22d2c73c07e5::t_cf18004b3b5ac1 1-2,13
+apps/web/tests/e2e/fixtures/core.ts
+  s_2a22d2c73c07e5::t_1d3247d6e7f1fc 1-2,16-17,21,24
+apps/web/tests/e2e/fixtures/finance.ts
+  s_2a22d2c73c07e5::t_c2a3ee2b0c7620 11,16
+apps/web/tests/e2e/fixtures/household.ts
+  s_2a22d2c73c07e5::t_1ea374717853e5 3-5
+apps/web/tests/e2e/fixtures/inventory-flow.ts
+  s_2a22d2c73c07e5::t_682cecba449430 3-4
+apps/web/tests/e2e/fixtures/label-nutrition.ts
+  s_2a22d2c73c07e5::t_4623d721ed6147 16
+apps/web/tests/e2e/fixtures/mail.ts
+  s_2a22d2c73c07e5::t_12f46ee7c030e1 6
+apps/web/tests/e2e/fixtures/photos.ts
+  s_2a22d2c73c07e5::t_cdcb1627235dfb 29,34,92
+apps/web/tests/e2e/fixtures/recipes.ts
+  s_2a22d2c73c07e5::t_77281428b140f4 20
+apps/web/tests/e2e/garden.spec.ts
+  s_2a22d2c73c07e5::t_d0a6819aa96cf0 1,8-9,14-15
+apps/web/tests/e2e/gmail.input-first-import.spec.ts
+  s_2a22d2c73c07e5::t_5e9091c651db03 1-2,24,30-32
+apps/web/tests/e2e/gmail.input-first-settlement.spec.ts
+  s_2a22d2c73c07e5::t_cd264977996233 1,18,24-26
+apps/web/tests/e2e/household-exploration.spec.ts
+  s_2a22d2c73c07e5::t_0c363d2fa96089 4-7
+apps/web/tests/e2e/http-api.spec.ts
+  s_2a22d2c73c07e5::t_c65b5380a90e41 2-3,10,14-15
+apps/web/tests/e2e/http-entity-kernel-api.spec.ts
+  s_2a22d2c73c07e5::t_9515dca64402b0 5-7,11,13
+apps/web/tests/e2e/image-understanding.spec.ts
+  s_2a22d2c73c07e5::t_b9b557faa552c5 24-28
+apps/web/tests/e2e/import-order-convergence.spec.ts
+  s_2a22d2c73c07e5::t_d7476d36d60769 4,8,10-11
+apps/web/tests/e2e/inheritance.spec.ts
+  s_2a22d2c73c07e5::t_456664d1798c9a 1
+apps/web/tests/e2e/inspect-contract.spec.ts
+  s_2a22d2c73c07e5::t_730641b3cda7fa 1-3
+apps/web/tests/e2e/label-nutrition-review.spec.ts
+  s_2a22d2c73c07e5::t_15a895b8b4a9ff 8,12-13
+apps/web/tests/e2e/list-delete.spec.ts
+  s_2a22d2c73c07e5::t_962a6f8e49a244 1,6-9
+apps/web/tests/e2e/list-nesting.spec.ts
+  s_2a22d2c73c07e5::t_e476fa8e5a26da 5-9
+apps/web/tests/e2e/mcp-worklist.spec.ts
+  s_2a22d2c73c07e5::t_6059a86be17799 1-2
+apps/web/tests/e2e/meal-copy.spec.ts
+  s_2a22d2c73c07e5::t_089279d1b08431 1-3
+apps/web/tests/e2e/meal-nutrition.spec.ts
+  s_2a22d2c73c07e5::t_123a3ff8c35433 4,9-10
+apps/web/tests/e2e/native-fieldwork-api.spec.ts
+  s_2a22d2c73c07e5::t_922c75505d3ec8 1,16-19
+apps/web/tests/e2e/native-workspace.spec.ts
+  s_2a22d2c73c07e5::t_7857af3264bc5e 1,8-10
+apps/web/tests/e2e/nutrition.spec.ts
+  s_2a22d2c73c07e5::t_2763ba0df55e1e 4,9-10
+apps/web/tests/e2e/pantry-staples.spec.ts
+  s_2a22d2c73c07e5::t_2b348d86137eb3 3-5
+apps/web/tests/e2e/performance.spec.ts
+  s_2a22d2c73c07e5::t_c4f9a72c792c67 1-2
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_2a22d2c73c07e5::t_feaf3e5ef28a14 1,6,21,26-28
+apps/web/tests/e2e/product-bulk-workflow.spec.ts
+  s_2a22d2c73c07e5::t_72712a0179490b 6
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_2a22d2c73c07e5::t_238560d5282a64 11,17,23-24
+apps/web/tests/e2e/product-photo-first.spec.ts
+  s_2a22d2c73c07e5::t_2c21e3317da5d6 9-10
+apps/web/tests/e2e/product-ssr.spec.ts
+  s_2a22d2c73c07e5::t_17bd512ab51991 1-3
+apps/web/tests/e2e/project-contribution.spec.ts
+  s_2a22d2c73c07e5::t_52a3c1628c3a0b 1-3
+apps/web/tests/e2e/project-tracker.spec.ts
+  s_2a22d2c73c07e5::t_51569da8965c94 1,6-7
+apps/web/tests/e2e/purchase-emails.spec.ts
+  s_2a22d2c73c07e5::t_b4fdf53720e723 7-9
+apps/web/tests/e2e/purchase-import-run.spec.ts
+  s_2a22d2c73c07e5::t_7bfd52637e876e 31-34
+apps/web/tests/e2e/purchase-split-settlement.spec.ts
+  s_2a22d2c73c07e5::t_b6b3a40a5d189c 7-11
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_2a22d2c73c07e5::t_d8d966a597e0a0 1,13,19-21,26,639
+apps/web/tests/e2e/receive-after-photo-inventory.spec.ts
+  s_2a22d2c73c07e5::t_c17c0e6b7b29df 13-14,18,22
+apps/web/tests/e2e/recipe-flow.spec.ts
+  s_2a22d2c73c07e5::t_a11f19686e1dc5 4,6-8
+apps/web/tests/e2e/record-emoji-categories.spec.ts
+  s_2a22d2c73c07e5::t_b22d5485c00e99 3,8-10,14
+apps/web/tests/e2e/relationship-discovery.spec.ts
+  s_2a22d2c73c07e5::t_62e83802cf05d3 1,7,13-14,19-20
+apps/web/tests/e2e/resolution-evidence.spec.ts
+  s_2a22d2c73c07e5::t_0a9a0055457ef9 1,6-9
+apps/web/tests/e2e/retired-fieldwork.spec.ts
+  s_2a22d2c73c07e5::t_289c58ab6386e9 1-2
+apps/web/tests/e2e/route-status.spec.ts
+  s_2a22d2c73c07e5::t_53f2eebee66859 1
+apps/web/tests/e2e/run-presentation.spec.ts
+  s_2a22d2c73c07e5::t_b3db8d1569f723 6-9
+apps/web/tests/e2e/search-product-family.spec.ts
+  s_2a22d2c73c07e5::t_e7c31bb6ac0a6d 12-14
+apps/web/tests/e2e/shelf-triage.spec.ts
+  s_2a22d2c73c07e5::t_4bcbfbb7454170 4-5,11-12
+apps/web/tests/e2e/shortcode-routes.spec.ts
+  s_2a22d2c73c07e5::t_87bb6a698c848f 1-2
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_2a22d2c73c07e5::t_9eb06994dc56cb 1,9-11
+apps/web/tests/e2e/start-entity-transport.spec.ts
+  s_2a22d2c73c07e5::t_a11f90962f9858 1,19-22
+apps/web/tests/e2e/statement-import.spec.ts
+  s_2a22d2c73c07e5::t_255d26260e983b 1,3-5
+apps/web/tests/e2e/structured-field-editors.spec.ts
+  s_2a22d2c73c07e5::t_245d8d466778fb 1-3
+apps/web/tests/e2e/support/connected-records-contract.ts
+  s_2a22d2c73c07e5::t_26720d15d127e8 10
+apps/web/tests/e2e/support/e2e-database.ts
+  s_2a22d2c73c07e5::t_ec3901a24dd23a 1-2,6
+apps/web/tests/e2e/support/e2e-global-setup.ts
+  s_2a22d2c73c07e5::t_f4f7972649c9cc 7-9,28
+apps/web/tests/e2e/support/e2e-harness-reporter.ts
+  s_2a22d2c73c07e5::t_600c14c0ae9e21 16-17,21,25,64,108-109
+apps/web/tests/e2e/support/e2e-helpers.ts
+  s_2a22d2c73c07e5::t_9b067a439f34f0 20
+apps/web/tests/e2e/support/e2e-test.ts
+  s_2a22d2c73c07e5::t_bb2c416b3eb059 3,7-8
+apps/web/tests/e2e/support/e2e-worker-runtime.ts
+  s_2a22d2c73c07e5::t_f4f11b58c53bad 7-9,13
+apps/web/tests/e2e/support/hmr-session.ts
+  s_2a22d2c73c07e5::t_b97b9733f6a89d 5-6,8
+apps/web/tests/e2e/support/hmr-test.ts
+  s_2a22d2c73c07e5::t_a53e986491604b 7-8,74-75
+apps/web/tests/e2e/support/import-order-convergence.helpers.ts
+  s_2a22d2c73c07e5::t_228abf99cd3615 38,53
+apps/web/tests/e2e/support/inheritance-contract.ts
+  s_2a22d2c73c07e5::t_d642c4d78890a2 3
+apps/web/tests/e2e/support/prepare-retailer-source.ts
+  s_2a22d2c73c07e5::t_8cbd4ec40e3aa7 11
+apps/web/tests/e2e/support/relationship-discovery-contract.ts
+  s_2a22d2c73c07e5::t_63544539f32734 3
+apps/web/tests/e2e/support/start-operation.ts
+  s_2a22d2c73c07e5::t_e2bbfb377ad068 5-6
+apps/web/tests/e2e/table-column-layout.spec.ts
+  s_2a22d2c73c07e5::t_0633577b5a1a3e 6-10
+apps/web/tests/e2e/table-density.spec.ts
+  s_2a22d2c73c07e5::t_9c9bbe04a0272b 3-4,8-9
+apps/web/tests/e2e/table-row-height.spec.ts
+  s_2a22d2c73c07e5::t_2b1cc4b0988d01 1,7-8
+apps/web/tests/e2e/tools-flow.spec.ts
+  s_2a22d2c73c07e5::t_c619bff0931085 1,6-7
+apps/web/tests/e2e/unauth.pages.spec.ts
+  s_2a22d2c73c07e5::t_6fa235363774cf 1
+apps/web/tests/e2e/unknown-expense-dates.spec.ts
+  s_2a22d2c73c07e5::t_10e1e570a95abf 1-3
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_2a22d2c73c07e5::t_464cb1a5b9a280 1-3
+apps/web/tests/e2e/wardrobe-preparation.spec.ts
+  s_2a22d2c73c07e5::t_390ec6f98dd9b9 1,5,11-12
+apps/web/tests/e2e/work-queue.spec.ts
+  s_2a22d2c73c07e5::t_d866a0ecb78420 18-20,25-27
+apps/web/tooling/database-socket-lifecycle.integration.test.ts
+  s_2a22d2c73c07e5::t_cfcf417bb4c262 11
+apps/web/tooling/dev/fixtures.ts
+  s_2a22d2c73c07e5::t_5b5624daa17cee 19
+apps/web/tooling/dev/preview/fixtures.ts
+  s_2a22d2c73c07e5::t_c5d635d90daa4b 12
+apps/web/tooling/scenarios/context.ts
+  s_2a22d2c73c07e5::t_d7edfa0452cdbf 19
+apps/web/tooling/sim-e2e.ts
+  s_2a22d2c73c07e5::t_ded2d02d61220b 45
+apps/web/tooling/test-database-lease.integration.test.ts
+  s_2a22d2c73c07e5::t_74a903d8e8997f 5
+apps/web/tooling/test-database-lease.ts
+  s_2a22d2c73c07e5::t_f07511544a755f 21
+apps/web/tooling/tester-army/web.ts
+  s_2a22d2c73c07e5::t_c09cde08b6801c 164,247
+apps/web/tooling/workerd-runtime.integration.test.ts
+  s_2a22d2c73c07e5::t_5ca2bd5d1eb714 10-11
+apps/web/wrangler.jsonc
+  s_2a22d2c73c07e5::t_1d72868d569c68 174
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_96d6f1102c1c87 22-23
+docs/agents/web-ui.md
+  s_2a22d2c73c07e5::t_f636479395873f 38
+docs/development.md
+  s_2a22d2c73c07e5::t_0a3d7a645db749 204,249
+docs/plans/household-finance-synthesis.md
+  s_2a22d2c73c07e5::t_44b8e4bf4b3402 236
+packages/schemas/src/context-breakdown.ts
+  s_2a22d2c73c07e5::t_c4df6ce2a69aa4 7
+packages/schemas/src/cookbook.ts
+  s_2a22d2c73c07e5::t_2814b68af17f26 9
+scripts/generator/entities/render/index.ts
+  s_2a22d2c73c07e5::t_cdad7e88649a5a 1407
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_2a22d2c73c07e5::t_67f5f1d1ff8124 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4d6acdad81c0922f980bfda80eb640eae46b49e9",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
