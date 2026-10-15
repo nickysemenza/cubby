@@ -470,6 +470,9 @@ text budget; larger sets split without dropping candidates. Waiting on another
 request's cache lease does not hold up owned misses. Each upstream batch records
 usage once and still passes through the gateway egress admission limits. Dependent
 decision phases wait for their required answers before starting another batch.
+Product identity grounding batches source-literal questions before eligible
+relation questions; usage is attributed to the literal or relation phase, while
+individual dimension prompts, source literals, and fingerprints stay in receipts.
 Application feature tiers are declared in
 `apps/web/src/server/ai/features.ts`; retier only with live-eval evidence or an
 explicit member choice. Small ceiling-scoring evals cannot establish parity.
