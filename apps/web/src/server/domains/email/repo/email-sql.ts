@@ -13,6 +13,8 @@ import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { sql, type SQL } from "drizzle-orm";
 
+import { uuidArrayParam } from "~/server/db/helpers/query";
+
 // Leaf module: data-quality bindings import these predicates, and the Email
 // repository imports the list scaffold that imports those bindings.
 
@@ -189,22 +191,36 @@ export const emailReviewConflictSql = () => sql<boolean>`
 export const emailLinkedSql = () =>
   sql<boolean>`EXISTS (${emailPurchaseAssociationsSql()})`;
 
-/**
- * An uncorrelated source set can be hashed once even inside scalar checks or
- * OR filters. A correlated JSON containment lookup scanned every member Run
- * again for each Email. Preserve containment's explicit JSON-null match while
- * excluding absent keys and malformed source arrays.
- */
-export const emailHasCompletedImportSql = () => sql<boolean>`(
-  "Email"."ledgerPartyId", coalesce(to_jsonb("Email"."orderMailId"::text), 'null'::jsonb)
-) IN (
-  SELECT import."ledgerPartyId", source.value->'orderMailId'
-  FROM "Run" import
-  CROSS JOIN LATERAL jsonb_array_elements(CASE
-    WHEN jsonb_typeof(import.input->'sources') = 'array' THEN import.input->'sources'
-    ELSE '[]'::jsonb END) source(value)
+/** One row per Email: ordinary joins can spill instead of degrading a hashed
+ * SubPlan into a source-list scan for every Email. Deduplication prevents
+ * repeated imports or duplicate sources from multiplying Email rows. */
+export const emailCompletedImportReadSql = (ids?: SQL) => sql`
+  SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport"
+  FROM "Email" candidate
+  LEFT JOIN (
+    SELECT DISTINCT import."ledgerPartyId", source->'orderMailId' AS "original"
+    FROM "Run" import
+    CROSS JOIN LATERAL jsonb_array_elements(CASE
+      WHEN jsonb_typeof(import.input->'sources') = 'array' THEN import.input->'sources'
+      ELSE '[]'::jsonb END) source
+    WHERE import.purpose = ${runPurpose.enum.mail_import}
+      AND import.status = ${runStatus.enum.completed}
+      AND import."deletedAt" IS NULL
+      AND import."ledgerPartyId" IS NOT NULL
+      AND source->'orderMailId' IS NOT NULL
+  ) membership ON membership."ledgerPartyId" = candidate."ledgerPartyId"
+    AND membership.original = COALESCE(to_jsonb(candidate."orderMailId"::text), 'null'::jsonb)
+  ${ids ? sql`WHERE candidate.id = ANY(${uuidArrayParam(ids)})` : sql``}
+`;
+
+/** Bounded single-record checks retain the historical containment contract. */
+export const emailHasCompletedImportSql = () => sql<boolean>`EXISTS (
+  SELECT 1 FROM "Run" import
   WHERE import.purpose = ${runPurpose.enum.mail_import}
     AND import.status = ${runStatus.enum.completed}
-    AND import."deletedAt" IS NULL AND import."ledgerPartyId" IS NOT NULL
-    AND source.value->'orderMailId' IS NOT NULL
+    AND import."deletedAt" IS NULL
+    AND import."ledgerPartyId" = "Email"."ledgerPartyId"
+    AND import.input @> jsonb_build_object('sources', jsonb_build_array(
+      jsonb_build_object('orderMailId', "Email"."orderMailId"::text)
+    ))
 )`;

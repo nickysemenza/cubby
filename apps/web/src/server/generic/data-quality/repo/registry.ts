@@ -41,6 +41,8 @@ export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
   table: T;
   /** One row per entityId; all checks share it for the selected ID batch. */
   derivedRead?(ids: SQL): SQL;
+  /** One row per entityId for bulk filters and score sorting, before paging. */
+  filterRead?(): SQL;
   /** Exhaustive against the generated per-entity check union. */
   checks: { readonly [C in DataCheckOf<E>]: CheckBinding<T> };
   /**

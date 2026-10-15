@@ -61,6 +61,9 @@ import {
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   dataQualityFilterPredicates,
+  qualityFilterContext,
+  qualityFilterSource,
+  qualityFilterJoin,
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
@@ -419,7 +422,11 @@ export function listScaffold<
   // sort are declared by the manifest block, so they bind here for every
   // list at once rather than beside each repo's own conditions.
   const scored = isScoredEntity(entity) ? entity : null;
-  const scoreSort = scored ? dataQualitySortResolver(scored, table) : null;
+  const qualityContext = scored ? qualityFilterContext(scored) : undefined;
+  const source = scored ? qualityFilterSource(scored, table) : sql`${table}`;
+  const scoreSort = scored
+    ? dataQualitySortResolver(scored, table, qualityContext)
+    : null;
   /** The self-reference a declared `list.tree` nests under. */
   const treeParent = (): AnyColumn => {
     const tree = Object.entries(entitySummary).find(
@@ -474,7 +481,7 @@ export function listScaffold<
         code: sql<string>`(SELECT p.${shortcode} FROM ${name} p WHERE p.${id} = ${parentOf})`,
         count: sql<number>`count(*)::int`,
       })
-      .from(table as PgTable)
+      .from(source)
       .where(
         and(
           filtered,
@@ -500,7 +507,12 @@ export function listScaffold<
         [
           ...declaredFilterPredicates(entity, table, filters),
           ...(scored
-            ? dataQualityFilterPredicates(scored, table, filters)
+            ? dataQualityFilterPredicates(
+                scored,
+                table,
+                filters,
+                qualityContext,
+              )
             : []),
           ...auditDateWhereConditions(table, filters),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,
@@ -598,7 +610,7 @@ export function listScaffold<
             // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
             const ids = await unwrapDb(db)
               .select({ id: sql<string>`${table.id}` })
-              .from(table as PgTable)
+              .from(source)
               .where(clauses.where)
               .orderBy(...clauses.orderBy)
               .limit(clauses.limit)
@@ -618,22 +630,34 @@ export function listScaffold<
             });
           }
         : (spec.select ??
-          (async (clauses: ListPage) =>
-            // SAFETY: `SELECT *` over `table` returns exactly its inferred row.
-            (await unwrapDb(db)
-              .select()
-              .from(table as PgTable)
+          (async (clauses: ListPage) => {
+            // Keep Drizzle's root table and column decoders when a derived
+            // relation joins the list; SELECT * would also return its fields.
+            // SAFETY: T extends PgTable; erase only the generic FROM constraint.
+            const root: PgTable = table;
+            const query = unwrapDb(db)
+              .select(getTableColumns(root))
+              .from(root)
+              .$dynamic();
+            const join = scored ? qualityFilterJoin(scored, table) : undefined;
+            const selected = join
+              ? query.leftJoin(join.relation, join.on)
+              : query;
+            // SAFETY: selecting only the root table's columns preserves Row,
+            // including its Drizzle decoders; derived fields are not returned.
+            return (await selected
               .where(clauses.where)
               .orderBy(...clauses.orderBy)
               .limit(clauses.limit)
-              .offset(clauses.offset)) as Row[]));
+              .offset(clauses.offset)) as Row[];
+          }));
       return withListReadTracing(
         { entity, projection: projection.kind },
         async () => {
           const { data, count } = await executeListQueryWithCount({
             kind: request.readIntent ?? "page",
             rows: () => selectRows(page, projection),
-            count: spec.count ?? (() => countWhere(db, table, where)),
+            count: spec.count ?? (() => countWhere(db, table, where, source)),
           });
           if (request.readIntent === "count" || data.length === 0)
             return { data: [], count };

@@ -1205,12 +1205,15 @@ and emit no migration.
 ## Data quality
 
 An Email's completed-import check matches a live, completed Mail import Run
-owned by the same member with the original in its source list. The SQL builds
-that source membership set once, including inside scalar checks and OR filters;
-it does not rescan a member's unrelated Runs per Email. Historical source JSON
-keeps containment semantics: extra fields are allowed, missing keys and malformed
-source arrays do not match, and an explicit JSON null remains distinct from an
-absent key.
+owned by the same member with the original in its source list. Bulk filtering,
+score sorting, and bounded hydration join a deduplicated source-membership
+relation before evaluating the check, so ordinary join planning can spill rather
+than rescanning a source set per Email when a hashed SubPlan exceeds memory.
+The data-quality registry owns both the relation and the predicate context;
+list reads and Work queue counts use the same binding. Single-record predicates
+retain JSON containment. Historical source JSON allows extra fields, excludes
+missing keys and malformed source arrays, and distinguishes an explicit JSON
+null from an absent key.
 
 Every Purchase expects a Vendor Account; a missing account is an identity gap
 on the Purchase and appears in its Research queue until assigned. Missing

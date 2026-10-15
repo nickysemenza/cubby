@@ -15,7 +15,7 @@ import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadDataQualities } from "./hydrate";
-import { gapCondition } from "./sql";
+import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
 
 // Email pipeline gaps are Relevance-conditional, and their correlated SQL must
 // stay bound to the scored Email: another Email's attachment or completed
@@ -24,14 +24,28 @@ import { gapCondition } from "./sql";
 describe("Email data quality", () => {
   const ctx = withTestDb();
 
-  // A scalar check (including inside OR filters) must build completed-import
-  // membership once, rather than scanning unrelated Runs for every Email.
+  // Scalar checks must stay bounded with both unrelated history and enough
+  // completed imports to exceed a hashed SubPlan's default memory estimate.
   it("bounds completed-import membership work independently of Email volume", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic membership member",
       kind: "member",
     });
-    for (let index = 0; index < 400; index++)
+    const originals = await getDb(ctx.db)
+      .insert(orderMail)
+      .values(
+        Array.from({ length: 80 }, () => ({
+          ledgerPartyId: party.id,
+          rawChecksum: "c".repeat(64),
+        })),
+      )
+      .returning();
+    const originalAt = (index: number) => {
+      const original = originals[index];
+      if (!original) throw new Error("Synthetic original was not created");
+      return original.id;
+    };
+    for (let index = 0; index < 2900; index++)
       await insertWithShortcode(ctx.db, "run", {
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
@@ -40,25 +54,35 @@ describe("Email data quality", () => {
         actorLedgerPartyShortcode: party.shortcode,
         actorLedgerPartyName: party.name,
         actorLedgerPartyKind: party.kind,
-        purpose: "ai_suggest",
+        purpose: index < 400 ? "ai_suggest" : "mail_import",
         trigger: "manual",
         status: "completed",
+        input: {
+          kind: "mail_research",
+          sources: [
+            { orderMailId: originalAt(index % 40), checksum: "c".repeat(64) },
+          ],
+        },
       });
     for (let index = 0; index < 120; index++)
       await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-membership-mailbox",
         messageId: `synthetic-membership-${index}`,
+        orderMailId:
+          index % 3 === 0
+            ? null
+            : originalAt(Math.floor(index / 3) + (index % 3 === 1 ? 40 : 0)),
         checksum: "c".repeat(64),
         classification: "related",
         status: "pending",
       });
     await getDb(ctx.db).execute(sql`ANALYZE "Email", "Run"`);
-    const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported")} AS gap FROM "Email"`;
+    const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")}`;
     const rows = await getDb(ctx.db).execute(statement);
-    expect(
-      z.array(z.object({ gap: z.literal(true) })).parse(rows.rows),
-    ).toHaveLength(120);
+    const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
+    expect(gaps).toHaveLength(120);
+    expect(gaps.filter((row) => row.gap)).toHaveLength(80);
     const result = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
     );
@@ -68,24 +92,46 @@ describe("Email data quality", () => {
       )
       .parse(result.rows);
     const planNode = z.object({
+      "Node Type": z.string(),
       "Relation Name": z.string().optional(),
       "Actual Rows": z.number().default(0),
       "Actual Loops": z.number().default(0),
       "Rows Removed by Filter": z.number().default(0),
       Plans: z.array(z.unknown()).optional(),
     });
-    let runRowsVisited = 0;
+    let membershipRowsVisited = 0;
     const visit = (value: unknown) => {
       const node = planNode.parse(value);
-      if (node["Relation Name"] === "Run")
-        runRowsVisited +=
+      if (
+        node["Relation Name"] === "Run" ||
+        node["Node Type"] === "Materialize" ||
+        node["Node Type"] === "Function Scan"
+      )
+        membershipRowsVisited +=
           (node["Actual Rows"] + node["Rows Removed by Filter"]) *
           node["Actual Loops"];
       node.Plans?.forEach(visit);
     };
     for (const row of planRows)
       row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
-    expect(runRowsVisited).toBeLessThan(2000);
+    // Allow one complete history/source scan, reject a scan per Email.
+    expect(membershipRowsVisited).toBeLessThan(10000);
+  });
+
+  it("rejects completed Mail import Runs without an owner", async () => {
+    await expect(
+      insertWithShortcode(ctx.db, "run", {
+        ledgerPartyId: null,
+        actorUserId: ctx.actor.userId,
+        actorName: "Synthetic member",
+        actorEmail: "member@example.test",
+        purpose: "mail_import",
+        trigger: "manual",
+        status: "completed",
+      }),
+    ).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "Run_import_party_check" },
+    });
   });
 
   // The historical JSON containment contract includes explicit JSON null,
@@ -164,6 +210,10 @@ describe("Email data quality", () => {
       const result = await getDb(ctx.db).execute(
         sql`SELECT ${gapCondition("email", "email_not_imported")} AS gap FROM "Email" WHERE id = ${message.id}`,
       );
+      const bulk = await getDb(ctx.db).execute(
+        sql`SELECT ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")} WHERE "Email".id = ${message.id}`,
+      );
+      expect(bulk.rows).toEqual(result.rows);
       const expected = !["exact", "extra-fields", "explicit-null"].includes(
         scenario,
       );

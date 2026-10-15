@@ -235,11 +235,12 @@ export const countWhere = (
   db: Database | DrizzleTransaction,
   table: PgTable,
   where?: SQL,
+  source: PgTable | SQL = table,
 ): Promise<number> =>
   traceListCount(async () => {
     const [row] = await unwrapDb(db)
       .select({ count: sql<number>`count(*)::int` })
-      .from(table)
+      .from(source)
       .where(where);
     return row?.count ?? 0;
   }, getTableName(table));

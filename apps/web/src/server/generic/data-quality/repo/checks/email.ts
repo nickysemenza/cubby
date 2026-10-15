@@ -5,6 +5,7 @@ import { email } from "~/server/db/schema";
 import {
   automatedStagesSql,
   emailLinkedSql,
+  emailCompletedImportReadSql,
   emailHasCompletedImportSql,
   emailMemberClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
@@ -41,6 +42,8 @@ const retainedContent = sql`(
 export const emailChecks = defineEntityChecks({
   entity: "email",
   table: email,
+  derivedRead: emailCompletedImportReadSql,
+  filterRead: emailCompletedImportReadSql,
   checks: {
     email_relevance_undecided: {
       missing: (t: Email) => sql`${t.classification} = ${uncertain}`,
@@ -66,8 +69,12 @@ export const emailChecks = defineEntityChecks({
     },
     email_not_imported: {
       expected: (t: Email) => sql`${t.classification} = ${related}`,
-      missing: () =>
-        sql`NOT ${emailLinkedSql()} AND NOT ${emailHasCompletedImportSql()}`,
+      missing: (_t: Email, context) =>
+        sql`NOT ${emailLinkedSql()} AND NOT ${
+          context
+            ? sql`${sql.identifier(context.derivedAlias)}."completedImport"`
+            : emailHasCompletedImportSql()
+        }`,
     },
   },
 });

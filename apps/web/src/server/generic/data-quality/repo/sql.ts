@@ -42,6 +42,30 @@ export const entryFor = (
   entity: ScoredEntity,
 ): EntityChecks<ScoredEntity, ScoredTable> => entries[entity];
 
+/** Bulk predicates and their FROM must use the same declared derived relation. */
+export const qualityFilterContext = (
+  entity: ScoredEntity,
+): QualityReadContext | undefined =>
+  entryFor(entity).filterRead ? { derivedAlias: "dq_filter" } : undefined;
+
+export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
+  const derived = entryFor(entity).filterRead?.();
+  return derived
+    ? {
+        relation: sql`(${derived}) dq_filter`,
+        on: sql`dq_filter."entityId" = ${t.id}`,
+      }
+    : undefined;
+};
+
+export const qualityFilterSource = (
+  entity: ScoredEntity,
+  t: ScoredTable = entryFor(entity).table,
+): SQL => {
+  const join = qualityFilterJoin(entity, t);
+  return join ? sql`${t} LEFT JOIN ${join.relation} ON ${join.on}` : sql`${t}`;
+};
+
 const bindingFor = (
   entity: ScoredEntity,
   check: DataCheck,
@@ -125,9 +149,10 @@ const rawGapCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
+  context?: QualityReadContext,
 ): SQL =>
   group(
-    sql`${expectedCondition(entity, check, t)} AND ${checkMissingCondition(entity, check, t)}`,
+    sql`${expectedCondition(entity, check, t)} AND ${checkMissingCondition(entity, check, t, context)}`,
   );
 
 /** A live gap: expected, missing, and not covered by an active exception. */
@@ -135,9 +160,10 @@ export const gapCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
+  context?: QualityReadContext,
 ): SQL => {
   const active = activeExceptionSql(entity, check, t);
-  const raw = rawGapCondition(entity, check, t);
+  const raw = rawGapCondition(entity, check, t, context);
   return active === null ? raw : group(sql`${raw} AND NOT ${active}`);
 };
 
@@ -224,6 +250,7 @@ const fromCheckStates = (
   entity: ScoredEntity,
   t: ScoredTable,
   select: (terms: readonly StateTerm[]) => SQL,
+  context?: QualityReadContext,
 ): SQL => {
   const checks = checksOf(entity);
   const inputs = sql.join(
@@ -231,7 +258,7 @@ const fromCheckStates = (
       const active = activeExceptionSql(entity, check, t);
       return sql`CASE
     WHEN ${expectedCondition(entity, check, t)} IS NOT TRUE THEN ${code("not_applicable")}
-    WHEN ${checkMissingCondition(entity, check, t)} IS NOT TRUE THEN ${code("satisfied")}
+    WHEN ${checkMissingCondition(entity, check, t, context)} IS NOT TRUE THEN ${code("satisfied")}
     ${active === null ? sql`` : sql`WHEN ${active} THEN ${code("excepted")}`}
     ELSE ${code("gap")} END AS ${sql.identifier(`s${index}`)}`;
     }),
@@ -255,20 +282,23 @@ const fromCheckStates = (
 export const scoreSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-): SQL => fromCheckStates(entity, t, scoreFromStates);
+  context?: QualityReadContext,
+): SQL => fromCheckStates(entity, t, scoreFromStates, context);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
 export const statusSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-): SQL => fromCheckStates(entity, t, statusFromStates);
+  context?: QualityReadContext,
+): SQL => fromCheckStates(entity, t, statusFromStates, context);
 
 /** The `dataStatus` filter: the same status expression the row displays. */
 export const statusCondition = (
   entity: ScoredEntity,
   status: DataQualityStatus,
   t: ScoredTable = entryFor(entity).table,
-): SQL => group(sql`${statusSql(entity, t)} = ${status}`);
+  context?: QualityReadContext,
+): SQL => group(sql`${statusSql(entity, t, context)} = ${status}`);
 
 /** The alias a related row is evaluated under inside a roll-up subquery. */
 const RELATED_ALIAS = "dq_r";
@@ -332,12 +362,13 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   entity: ScoredEntity,
   t: ScoredTable,
   filters: Filters,
+  context?: QualityReadContext,
 ): SQL[] => {
   const values = dataQualityFilterValues.parse(filters);
   const predicates: SQL[] = [];
   const [status] = values.dataStatus;
   if (status !== undefined) {
-    predicates.push(statusCondition(entity, status, t));
+    predicates.push(statusCondition(entity, status, t, context));
   }
   const own = dataChecksByEntity[entity];
   const related = relatedDataQualityEntities[entity].map(
@@ -345,7 +376,8 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   );
   const conditions = values.dataGap.flatMap((value) => {
     const ownCheck = own.safeParse(value);
-    if (ownCheck.success) return [gapCondition(entity, ownCheck.data, t)];
+    if (ownCheck.success)
+      return [gapCondition(entity, ownCheck.data, t, context)];
     const relatedCheck = related
       .map((schema) => schema.safeParse(value))
       .find((parsed) => parsed.success);
@@ -361,11 +393,11 @@ const DATA_QUALITY_SORT = "dataQuality";
 
 /** `resolve` for `buildOrderBy`: the score, asc = weakest row first. */
 export const dataQualitySortResolver =
-  (entity: ScoredEntity, t: ScoredTable) =>
+  (entity: ScoredEntity, t: ScoredTable, context?: QualityReadContext) =>
   (sort: { orderBy: string; direction: string }): SQL[] | null =>
     sort.orderBy === DATA_QUALITY_SORT
       ? [
           // A not-assessed (null) score sorts after every scored row either way.
-          sql`${scoreSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
+          sql`${scoreSql(entity, t, context)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
         ]
       : null;
