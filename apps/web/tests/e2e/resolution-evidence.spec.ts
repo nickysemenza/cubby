@@ -71,8 +71,10 @@ test("explains allocated trades with expandable contributor precedence", async (
         .filter({ hasText: "Synthetic evidence cable" }),
     })
     .first();
-  await contributor.locator("summary").click();
-  await expect(contributor.getByText("Overridden above").first()).toBeVisible();
+  await contributor.locator(":scope > summary").click();
+  await expect(
+    contributor.getByText("Evaluated · overridden").first(),
+  ).toBeVisible();
   await expect(
     contributor.getByText("Electrical & Lighting", { exact: true }).first(),
   ).toBeVisible();
@@ -160,7 +162,7 @@ test("shows owner rollup evidence once without nested wire fields", async ({
         .filter({ hasText: "Synthetic owner evidence drawer" }),
     })
     .first();
-  await ownerDetails.locator("summary").click();
+  await ownerDetails.locator(":scope > summary").click();
   await expect(
     ownerDetails.locator('[data-record-list="timeline"]').first(),
   ).toBeVisible();

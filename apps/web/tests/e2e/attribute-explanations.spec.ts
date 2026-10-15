@@ -31,7 +31,7 @@ test("product location context preserves links and explains the same partial gap
   await gotoAuthenticatedPage(page, `/products?q=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toContainText("1 expected item unlocated");
-  await expect(row).toContainText("Owner unknown");
+  await expect(row.getByText("Unknown", { exact: true })).toBeVisible();
   await expect(
     row.locator(`a[href="/locations/${location.id}"]`).first(),
   ).toBeVisible();
