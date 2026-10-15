@@ -56,6 +56,8 @@ test("resolves identity, validates counts, and applies selected fields without r
   page,
   e2eRuntime,
 }) => {
+  // Includes upload seeding, lazy hydration, and several persisted edits.
+  test.setTimeout(Math.max(test.info().timeout, 60_000));
   const name = `Synthetic review ${Date.now()}`;
   const existing = await createEntityFixture(page, "product", {
     name: `${name} shirt`,
@@ -296,6 +298,8 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   page,
   e2eRuntime,
 }) => {
+  // Includes upload seeding, lazy hydration, and several persisted edits.
+  test.setTimeout(Math.max(test.info().timeout, 60_000));
   const name = `Photo run ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
     page,
