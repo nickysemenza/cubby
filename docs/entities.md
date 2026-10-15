@@ -208,7 +208,10 @@ statement; distinct date scopes remain separate. Ledger selection, search,
 related views, contributions and project rollups use the same owner rather
 than correlated allocation calculations per output row. Selection limits the
 purchases to resolve, while every live principal sibling supplies the
-denominator. Scope filters apply to rounded shares, unknown costs stay null,
+denominator. Prepared ledger selections remain SQL relations through batching;
+wrapping their IDs in `ARRAY(SELECT ...)` hides broad cardinality and causes
+repeated allocation scans. Literal ID batches and legacy correlated SQL arrays
+retain their indexed array-membership path. Scope filters apply to rounded shares, unknown costs stay null,
 and unscoped totals sum original Expense costs. Quality hydration declares a
 bounded derived relation for its selected ID batch, sharing category gaps and
 exception evidence; single-record search refreshes restrict that relation too.
