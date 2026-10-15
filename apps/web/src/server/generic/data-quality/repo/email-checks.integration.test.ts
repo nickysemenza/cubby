@@ -1,14 +1,21 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { orderMail, orderMailAttachment } from "~/server/db/schema";
+import {
+  orderMail,
+  orderMailAttachment,
+  run as runTable,
+} from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/mail-tool";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadDataQualities } from "./hydrate";
+import { gapCondition } from "./sql";
 
 // Email pipeline gaps are Relevance-conditional, and their correlated SQL must
 // stay bound to the scored Email: another Email's attachment or completed
@@ -16,6 +23,155 @@ import { loadDataQualities } from "./hydrate";
 // A reviewed link to an existing Purchase must not demand another extraction.
 describe("Email data quality", () => {
   const ctx = withTestDb();
+
+  // A scalar check (including inside OR filters) must build completed-import
+  // membership once, rather than scanning unrelated Runs for every Email.
+  it("bounds completed-import membership work independently of Email volume", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic membership member",
+      kind: "member",
+    });
+    for (let index = 0; index < 400; index++)
+      await insertWithShortcode(ctx.db, "run", {
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: "Synthetic member",
+        actorEmail: "member@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: party.kind,
+        purpose: "ai_suggest",
+        trigger: "manual",
+        status: "completed",
+      });
+    for (let index = 0; index < 120; index++)
+      await insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-membership-mailbox",
+        messageId: `synthetic-membership-${index}`,
+        checksum: "c".repeat(64),
+        classification: "related",
+        status: "pending",
+      });
+    await getDb(ctx.db).execute(sql`ANALYZE "Email", "Run"`);
+    const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported")} AS gap FROM "Email"`;
+    const rows = await getDb(ctx.db).execute(statement);
+    expect(
+      z.array(z.object({ gap: z.literal(true) })).parse(rows.rows),
+    ).toHaveLength(120);
+    const result = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const planRows = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
+      )
+      .parse(result.rows);
+    const planNode = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Rows": z.number().default(0),
+      "Actual Loops": z.number().default(0),
+      "Rows Removed by Filter": z.number().default(0),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    let runRowsVisited = 0;
+    const visit = (value: unknown) => {
+      const node = planNode.parse(value);
+      if (node["Relation Name"] === "Run")
+        runRowsVisited +=
+          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
+          node["Actual Loops"];
+      node.Plans?.forEach(visit);
+    };
+    for (const row of planRows)
+      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+    expect(runRowsVisited).toBeLessThan(2000);
+  });
+
+  // The historical JSON containment contract includes explicit JSON null,
+  // ignores missing keys/scalars, and fences by live completed Run ownership.
+  it("preserves source containment and completed-import fences", async () => {
+    for (const scenario of [
+      "exact",
+      "extra-fields",
+      "other-member",
+      "failed",
+      "deleted",
+      "other-purpose",
+      "scalar-sources",
+      "missing-key",
+      "explicit-null",
+    ] as const) {
+      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: `Synthetic ${scenario} member`,
+        kind: "member",
+      });
+      const [original] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({ ledgerPartyId: party.id, rawChecksum: "c".repeat(64) })
+        .returning();
+      if (!original) throw new Error("Synthetic original was not created");
+      const message = await insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-containment-mailbox",
+        messageId: scenario,
+        checksum: "c".repeat(64),
+        classification: "related",
+        status: "pending",
+        orderMailId:
+          scenario === "explicit-null" || scenario === "missing-key"
+            ? null
+            : original.id,
+      });
+      const importParty =
+        scenario === "other-member"
+          ? await insertWithShortcode(ctx.db, "ledgerParty", {
+              name: "Synthetic other importer",
+              kind: "member",
+            })
+          : party;
+      const run = await insertWithShortcode(ctx.db, "run", {
+        ledgerPartyId: importParty.id,
+        actorUserId: ctx.actor.userId,
+        actorName: "Synthetic member",
+        actorEmail: "member@example.test",
+        actorLedgerPartyShortcode: importParty.shortcode,
+        actorLedgerPartyName: importParty.name,
+        actorLedgerPartyKind: importParty.kind,
+        purpose: scenario === "other-purpose" ? "ai_suggest" : "mail_import",
+        trigger: "manual",
+        status: scenario === "failed" ? "failed" : "completed",
+        deletedAt: scenario === "deleted" ? new Date() : null,
+      });
+      const source =
+        scenario === "explicit-null"
+          ? { orderMailId: null }
+          : scenario === "missing-key"
+            ? {}
+            : {
+                orderMailId: original.id,
+                ...(scenario === "extra-fields"
+                  ? { checksum: "synthetic-checksum" }
+                  : {}),
+              };
+      // Malformed historical inputs bypass the current write schema on purpose.
+      const input = {
+        sources: scenario === "scalar-sources" ? source : [source],
+      };
+      await getDb(ctx.db).execute(
+        sql`UPDATE ${runTable} SET input = ${JSON.stringify(input)}::jsonb WHERE id = ${run.id}`,
+      );
+      const result = await getDb(ctx.db).execute(
+        sql`SELECT ${gapCondition("email", "email_not_imported")} AS gap FROM "Email" WHERE id = ${message.id}`,
+      );
+      const expected = !["exact", "extra-fields", "explicit-null"].includes(
+        scenario,
+      );
+      expect(
+        z.array(z.object({ gap: z.boolean() })).parse(result.rows),
+      ).toEqual([{ gap: expected }]);
+    }
+  });
 
   it("settles automated negatives and keeps related checks bound to their own original and import", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

@@ -1204,6 +1204,14 @@ and emit no migration.
 
 ## Data quality
 
+An Email's completed-import check matches a live, completed Mail import Run
+owned by the same member with the original in its source list. The SQL builds
+that source membership set once, including inside scalar checks and OR filters;
+it does not rescan a member's unrelated Runs per Email. Historical source JSON
+keeps containment semantics: extra fields are allowed, missing keys and malformed
+source arrays do not match, and an explicit JSON null remains distinct from an
+absent key.
+
 Every Purchase expects a Vendor Account; a missing account is an identity gap
 on the Purchase and appears in its Research queue until assigned. Missing
 attribution stays nullable so incomplete records can be captured without

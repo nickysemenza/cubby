@@ -10,6 +10,7 @@ import {
   type MailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { sql, type SQL } from "drizzle-orm";
 
 // Leaf module: data-quality bindings import these predicates, and the Email
@@ -187,3 +188,23 @@ export const emailReviewConflictSql = () => sql<boolean>`
 /** The same SQL owns filter/count membership and the hydrated linked value. */
 export const emailLinkedSql = () =>
   sql<boolean>`EXISTS (${emailPurchaseAssociationsSql()})`;
+
+/**
+ * An uncorrelated source set can be hashed once even inside scalar checks or
+ * OR filters. A correlated JSON containment lookup scanned every member Run
+ * again for each Email. Preserve containment's explicit JSON-null match while
+ * excluding absent keys and malformed source arrays.
+ */
+export const emailHasCompletedImportSql = () => sql<boolean>`(
+  "Email"."ledgerPartyId", coalesce(to_jsonb("Email"."orderMailId"::text), 'null'::jsonb)
+) IN (
+  SELECT import."ledgerPartyId", source.value->'orderMailId'
+  FROM "Run" import
+  CROSS JOIN LATERAL jsonb_array_elements(CASE
+    WHEN jsonb_typeof(import.input->'sources') = 'array' THEN import.input->'sources'
+    ELSE '[]'::jsonb END) source(value)
+  WHERE import.purpose = ${runPurpose.enum.mail_import}
+    AND import.status = ${runStatus.enum.completed}
+    AND import."deletedAt" IS NULL AND import."ledgerPartyId" IS NOT NULL
+    AND source.value->'orderMailId' IS NOT NULL
+)`;
