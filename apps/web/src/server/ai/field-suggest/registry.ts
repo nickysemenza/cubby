@@ -97,9 +97,7 @@ export interface ReferenceSuggestSpec<C> {
   detailOf?(c: C): string | null;
   renderLine(c: C): string;
   subject(basis: ResolvedBasis): string;
-  /** A tree roster's parent link. When set, a pick below the high-confidence
-   * floor rolls up to the deepest ancestor whose subtree clears it
-   * (`placeByBranch`). */
+  /** A tree roster's parent link, used to suppress ancestor corrections. */
   parentIdOf?(c: C): string | null;
 }
 

@@ -43,8 +43,13 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    acceptance has no trustworthy automatic/member attribution. Keep generating
    provenance, supersession and acceptance receipts with the sampled outcome.
 2. Replay: for each sampled record, call `entity_read.suggest_fields` with
-   `entityId`, `targets: [field]`, `basisMode: "suggested"` and
+   `entityId`, `targets: [field]`, `basisMode: "provided"`, captured declared
+   basis fields (excluding the target value for set suggestions, preserving
+   captured target entries for prune suggestions because they are the candidates), and
    `decisionModel` `typesafe/jev`, then `@cf/cloudflare/clef`.
+   `suggested` skips already-resolved fields; an empty basis gives `no_signal`.
+   Report allocated/ineligible targets separately rather than treating a skip
+   as a model abstention.
 3. Score per field × model: accuracy against independent grades and member
    labels separately, repeat misses (same
    wrong value as the stored rejection), mean confidence when right vs wrong,

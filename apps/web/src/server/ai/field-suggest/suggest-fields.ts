@@ -1,7 +1,6 @@
 import {
   decisionConfidence,
   financeCategoryReviewSchema,
-  HIGH_CONFIDENCE_PROBABILITY,
 } from "@cubby/schemas/ai";
 import type {
   FieldSuggestion,
@@ -44,7 +43,6 @@ import {
   type DecisionPort,
 } from "~/server/ai/decision-model";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
-import { placeByBranch } from "~/server/ai/field-suggest/branch-confidence";
 import {
   fieldSuggestSpecFor,
   type FieldSuggestSpec,
@@ -457,43 +455,19 @@ async function resolveReferenceTarget(
       ),
     });
   }
-  const placement =
-    spec.parentIdOf && outcome.probability !== null
-      ? placeByBranch({
-          distribution: outcome.distribution,
-          selected: outcome.selected,
-          selectedProbability: outcome.probability,
-          threshold: HIGH_CONFIDENCE_PROBABILITY,
-          idOf: spec.idOf,
-          parentIdOf: spec.parentIdOf,
-        })
-      : null;
-  const selected = placement?.node ?? outcome.selected;
-  const probability = placement?.probability ?? outcome.probability;
-  const confidence = placement
-    ? decisionConfidence(placement.probability)
-    : outcome.confidence;
+  const selected = outcome.selected;
+  const probability = outcome.probability;
+  const confidence = outcome.confidence;
   const ancestorIds =
     spec.parentIdOf && currentValue !== null
       ? currentAncestorIds(candidates, currentValue, spec.idOf, spec.parentIdOf)
       : new Set<string>();
   const suppressed = ancestorIds.has(spec.idOf(selected));
-  // A rolled-up pick keeps the decision model's more specific guess as the first runner-up,
-  // so the picker still offers it. Ancestors of the current value are not
-  // useful offers, whether selected directly, rolled up to, or ranked as an
-  // alternative.
+  // Ancestors of the current value are not useful correction offers.
   const alternatives = mapAlternatives(
-    placement
-      ? outcome.distribution
-          .filter(
-            (entry) =>
-              entry.candidate !== selected &&
-              !ancestorIds.has(spec.idOf(entry.candidate)),
-          )
-          .slice(0, 3)
-      : outcome.alternatives.filter(
-          (entry) => !ancestorIds.has(spec.idOf(entry.candidate)),
-        ),
+    outcome.alternatives.filter(
+      (entry) => !ancestorIds.has(spec.idOf(entry.candidate)),
+    ),
     spec.idOf,
     spec.labelOf,
     spec.detailOf,
@@ -502,9 +476,6 @@ async function resolveReferenceTarget(
     // The policy declined the pick; its probability cannot describe a decline.
     return declined({ confidence: "low", probability: null, alternatives });
   }
-  const reasoning = placement
-    ? `Most specific pick was ${spec.labelOf(outcome.selected)} (${Math.round((outcome.probability ?? 0) * 100)}%); the ${spec.labelOf(selected)} branch as a whole is ${Math.round(placement.probability * 100)}%.`
-    : outcome.reasoning;
   const value = spec.idOf(selected);
   return {
     suggestion: {
@@ -513,7 +484,7 @@ async function resolveReferenceTarget(
       detail: spec.detailOf?.(selected) ?? null,
       confidence,
       probability,
-      reasoning,
+      reasoning: outcome.reasoning,
       alternatives,
       operation: "set",
       removals: [],
