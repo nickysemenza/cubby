@@ -66,4 +66,24 @@ test("product location context preserves links and explains the same partial gap
   await expect(
     page.getByRole("heading", { name: "Stocked at", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "How owner is determined", exact: true })
+    .first()
+    .click();
+  await page.getByText("Inputs and source settings", { exact: true }).click();
+  const beneficiaries = page.getByRole("button", {
+    name: "How beneficiaries is determined",
+    exact: true,
+  });
+  await expect(beneficiaries).toBeVisible();
+  await beneficiaries.click();
+  const sourceExplanation = page.locator(
+    '[data-slot="popover-content"]:visible',
+  );
+  await expect(sourceExplanation).toContainText(
+    "How beneficiaries is determined",
+  );
+  await expect(
+    sourceExplanation.getByRole("button", { name: "Retry explanation" }),
+  ).toHaveCount(0);
 });
