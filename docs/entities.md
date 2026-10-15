@@ -1211,10 +1211,16 @@ relation before evaluating the check, so ordinary join planning can spill rather
 than rescanning a source set per Email when a hashed SubPlan exceeds memory.
 The data-quality registry owns both the relation and the predicate context;
 list reads and Work queue counts use the same binding. Plain lists and counts
-join no quality relation unless quality filtering or score sorting needs it. Single-record predicates
-retain JSON containment. Historical source JSON allows extra fields, excludes
-missing keys and malformed source arrays, and distinguishes an explicit JSON
-null from an absent key.
+join no quality relation unless quality filtering or score sorting needs it.
+Single-record predicates retain JSON containment. Historical source JSON allows
+extra fields, excludes missing keys and malformed source arrays, and distinguishes
+an explicit JSON null from an absent key.
+
+Bulk Email review checks resolve each member Feedback's Assessment lineage
+before joining current-checksum predictions to their owner. Only valid member
+labels count; the latest valid label wins, and a correct verdict without a
+correction uses the Assessment judgment. Review metadata never supplies a second
+observation identity.
 
 Every Purchase expects a Vendor Account; a missing account is an identity gap
 on the Purchase and appears in its Research queue until assigned. Missing
