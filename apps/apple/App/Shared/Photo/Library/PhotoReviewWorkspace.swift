@@ -15,7 +15,7 @@ final class PhotoReviewWorkspace {
     var selectedGroupKey: String?
     private(set) var approvalKeys: [String] = []
     private(set) var autoStartAttempted = false
-    private var approvalReview: RunReviewDocument?
+    private(set) var approvalReview: RunReviewDocument?
 
     func proposed(_ session: RunReviewSession) -> [PhotoGroupProposal] {
         session.review?.review.proposals.filter { $0.state == .proposed } ?? []
