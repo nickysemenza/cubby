@@ -8,9 +8,10 @@ read each Expense's `purchaseId`, then read the Purchase. List Email with
 pass those handles to `imports_read.mail` for the original. Purchase notes or
 existing Sources may already supply the Gmail message handle. An empty
 Purchase-scoped Email list is not proof that the original is missing:
-`imports_read.mail` can read a known message directly within the connected
-member's authorized mailbox. Respect explicitly selected source tools rather
-than silently switching connectors.
+`imports_read.mail` can read a message Cubby already holds as an Email, at any
+Relevance, within the connected member's authorized mailbox. A known message
+handle alone cannot read mail Cubby has never recorded. Respect explicitly
+selected source tools rather than silently switching connectors.
 
 If no usable handle remains, search owned mail by the exact order reference
 before generic product searches. `mail.search` retains new matches as uncertain

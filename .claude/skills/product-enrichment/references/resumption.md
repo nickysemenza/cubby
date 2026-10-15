@@ -13,7 +13,10 @@ still need metadata or useful images. Read their current full records; activity
 is history, not current state. Retain source attempts and outcomes so unchanged,
 exhausted evidence is not researched again. New evidence can reopen a candidate.
 
-Keep private checkpoints outside the repository and `/tmp`. Save each candidate
+Keep private checkpoints outside the repository and `/tmp`, for example under
+`~/.local/state/cubby-product-research/<session>/`: household evidence must stay
+out of repository content, and resumable work must survive temporary-file cleanup
+and reboot. Save each candidate
 incrementally with its requested code, resolved canonical code, evidence tried,
 proposal, uncertainty and outcome. Redirected aliases can resolve to one Product;
 deduplicate by canonical identity before assigning disjoint lanes. Preserve both

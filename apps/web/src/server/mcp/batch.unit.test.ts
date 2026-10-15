@@ -1,4 +1,5 @@
 import { entityRecordSourceInputs } from "@cubby/schemas/entity-source";
+import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
+import { createMcpServer } from "./server";
 
 const itemInputSchema = z.object({
   id: z.string(),
@@ -62,6 +64,44 @@ function createBatchServer(): McpServer {
 }
 
 describe("MCP batch actions", () => {
+  it("emits command entity attribution when a Source has a parsed date", async () => {
+    const emit = vi.fn(async (_event: McpToolCallTelemetry) => undefined);
+    // Attribution precedes context resolution; no database is supplied, so
+    // this checks the production telemetry boundary without executing a write.
+    await callMcpTool(
+      createMcpServer(),
+      "entity",
+      {
+        action: "commands",
+        commands: [
+          {
+            action: "update",
+            entity: "product",
+            id: "PRD-4K7M",
+            data: { manufacturer: "Example Maker" },
+            sources: [
+              { quote: "Exact item", observedAt: "2026-07-20T12:00:00.000Z" },
+            ],
+          },
+        ],
+      },
+      {},
+      {
+        telemetry: {
+          identity: {
+            userId: "user_1",
+            clientId: "test",
+            surface: "external_mcp",
+          },
+          emit,
+        },
+      },
+    );
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: "entity", entity: "product" }),
+    );
+  });
+
   it("attributes a batch with parsed Source dates before invoking its members", async () => {
     const server = new McpServer({ name: "batch-test", version: "1.0.0" });
     const input = z.object({
