@@ -86,9 +86,9 @@ test("product location context preserves links and explains the same partial gap
   });
   await expect(beneficiaries).toBeVisible();
   await beneficiaries.click();
-  const sourceExplanation = page.locator(
-    '[data-slot="popover-content"]:visible',
-  );
+  const sourceExplanation = page
+    .locator('[data-slot="popover-content"]:visible')
+    .last();
   await expect(sourceExplanation).toContainText(
     "How beneficiaries is determined",
   );
