@@ -1,0 +1,23 @@
+apps/web/src/server/domains/photo-import/operations/photo-import.server.ts
+  s_2a22d2c73c07e5::t_ab55ae8e28dc0d 47,90-99,271
+apps/web/src/server/domains/photo-import/repo/photo-product-candidates.integration.test.ts
+  s_2a22d2c73c07e5::t_29f2e631243322 27,54-62
+apps/web/src/server/domains/photo-import/repo/photo-product-candidates.ts
+  s_2a22d2c73c07e5::t_08d0a0ddbe7eb3 299-309,316,348,364,483
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9ed3770e0b08a74de2e185b51f2e9370c215c3d8",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
