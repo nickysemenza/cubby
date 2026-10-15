@@ -26,16 +26,24 @@ export const emailFeedbackObservationIdSql = (label: SQL) => sql<
  SELECT a.subject->>'observationId' FROM "Assessment" a
  WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
 )`;
+/** A supplied Assessment alias must already join this Feedback by id and
+ * restrict its family to email_relevance. */
 export const emailFeedbackClassificationSql = (
   label: SQL,
+  assessment?: SQL,
 ) => sql<MailboxClassification | null>`
  CASE WHEN ${label}.correction @> ${JSON.stringify({ present: true })}::jsonb THEN ${label}.correction->>'value'
- WHEN ${label}.verdict = ${feedbackVerdict.enum.correct} THEN (
-   SELECT a.judgment->>'classification' FROM "Assessment" a
-   WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
- ) END`;
-export const emailFeedbackHasClassificationSql = (label: SQL) => sql`
- (${emailFeedbackClassificationSql(label)}) IN (${mailboxClassification.enum.related},${mailboxClassification.enum.unrelated},${mailboxClassification.enum.uncertain})`;
+ WHEN ${label}.verdict = ${feedbackVerdict.enum.correct} THEN ${
+   assessment
+     ? sql`${assessment}.judgment->>'classification'`
+     : sql`(SELECT a.judgment->>'classification' FROM "Assessment" a
+     WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance})`
+ } END`;
+export const emailFeedbackHasClassificationSql = (
+  label: SQL,
+  assessment?: SQL,
+) => sql`
+ (${emailFeedbackClassificationSql(label, assessment)}) IN (${mailboxClassification.enum.related},${mailboxClassification.enum.unrelated},${mailboxClassification.enum.uncertain})`;
 /** The stages a member's review can disagree with. */
 export const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
@@ -154,9 +162,17 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
  * The member's own Relevance for the current original: a resolution, else the
  * owner's latest independent review label on a prediction of this checksum.
  */
-export const emailMemberClassificationSql =
-  () => sql<MailboxClassification | null>`
-  CASE WHEN "Email"."classificationStage" = ${resolution} THEN "Email"."classification" ELSE (
+const memberClassificationWithResolutionSql = (email: SQL, reviewed: SQL) =>
+  sql<MailboxClassification | null>`CASE
+    WHEN ${email}."classificationStage" = ${resolution} THEN ${email}.classification
+    ELSE ${reviewed} END`;
+
+// Keep ownership/checksum/latest-valid policy aligned with emailMemberReviewReadSql;
+// email-review-quality.integration.test.ts compares their returned values.
+export const emailMemberClassificationSql = () =>
+  memberClassificationWithResolutionSql(
+    sql`"Email"`,
+    sql`(
     SELECT ${emailFeedbackClassificationSql(sql`label`)}
     FROM "Feedback" label
     INNER JOIN "EmailClassificationObservation" prediction ON prediction."id"::text = ${emailFeedbackObservationIdSql(sql`label`)}
@@ -167,8 +183,8 @@ export const emailMemberClassificationSql =
       AND ${emailFeedbackHasClassificationSql(sql`label`)}
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
-  ) END
-`;
+  )`,
+  );
 /** The latest rule, decision-model or relevance-model result for the current original. */
 const emailAutomatedClassificationSql = () => sql`
   COALESCE(
@@ -191,12 +207,43 @@ export const emailReviewConflictSql = () => sql<boolean>`
 export const emailLinkedSql = () =>
   sql<boolean>`EXISTS (${emailPurchaseAssociationsSql()})`;
 
+/** Resolve immutable Feedback lineage once before the mailbox join. Without
+ * this boundary, join reordering can repeat the Assessment lookup for every
+ * Email × Feedback pair, even though each review names one Assessment.
+ * Page IDs constrain the prediction join; bounded hydration still resolves
+ * immutable Feedback lineage once, outside that join. Keep policy aligned with
+ * emailMemberClassificationSql; email-review-quality.integration.test.ts pins parity. */
+const emailMemberReviewReadSql = (ids?: SQL) => sql`
+  WITH eligible_feedback AS MATERIALIZED (
+    SELECT label.id, label."createdAt", label."actorUserId",
+      reviewed_assessment.subject->>'observationId' AS "observationId",
+      ${emailFeedbackClassificationSql(sql`label`, sql`reviewed_assessment`)} AS classification
+    FROM "Feedback" label
+    JOIN "Assessment" reviewed_assessment
+      ON reviewed_assessment.id = label."assessmentId"
+      AND reviewed_assessment.family = ${assessmentFamily.enum.email_relevance}
+    WHERE label.authority = ${feedbackAuthority.enum.member}
+      AND ${emailFeedbackHasClassificationSql(sql`label`, sql`reviewed_assessment`)}
+  )
+  SELECT DISTINCT ON (candidate.id) candidate.id AS "entityId", label.classification
+  FROM "Email" candidate
+  JOIN "EmailClassificationObservation" prediction
+    ON prediction."emailId" = candidate.id AND prediction.checksum = candidate.checksum
+  JOIN eligible_feedback label ON label."observationId" = prediction.id::text
+  JOIN "LedgerParty" owner ON owner.id = candidate."ledgerPartyId"
+    AND owner."userId" = label."actorUserId"
+  ${ids ? sql`WHERE candidate.id = ANY(${uuidArrayParam(ids)})` : sql``}
+  ORDER BY candidate.id, label."createdAt" DESC, label.id DESC
+`;
+
 /** One row per Email: ordinary joins can spill instead of degrading a hashed
  * SubPlan into a source-list scan for every Email. Deduplication prevents
  * repeated imports or duplicate sources from multiplying Email rows. */
-export const emailCompletedImportReadSql = (ids?: SQL) => sql`
-  SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport"
+export const emailQualityReadSql = (ids?: SQL) => sql`
+  SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
+    ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification"
   FROM "Email" candidate
+  LEFT JOIN (${emailMemberReviewReadSql(ids)}) member_review ON member_review."entityId" = candidate.id
   LEFT JOIN (
     SELECT DISTINCT import."ledgerPartyId", source->'orderMailId' AS "original"
     FROM "Run" import
