@@ -27,9 +27,11 @@ struct DataExceptionControl: View {
         if let recorded {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 Text(
-                    "\(recorded.isStale ? "Evidence changed since this exception was recorded: " : "Recorded as ")\(label(for: recorded.reason)) — \(recorded.note)"
+                    "\(recorded.isStale ? "Evidence changed since this exception was recorded: " : "Recorded as ")\(label(for: recorded.reason))"
                 )
                 .font(.caption).foregroundStyle(.secondary)
+                Text(.init(recorded.note))
+                    .font(.caption).foregroundStyle(.secondary)
                 Button("Clear exception") { Task { await clear() } }
                     .buttonStyle(.bordered).disabled(working)
                     .accessibilityIdentifier("field.explanation.exception.clear.\(draft.check)")
@@ -42,11 +44,15 @@ struct DataExceptionControl: View {
                             Text(option.label).tag(Optional(option.reason))
                         }
                     }
-                    TextField("Note (optional)", text: $note)
+                    TextField("Note (required)", text: $note)
                         .textFieldStyle(.roundedBorder)
                     HStack {
                         Button("Accept exception") { Task { await accept() } }
-                            .buttonStyle(.borderedProminent).disabled(working || reason == nil)
+                            .buttonStyle(.borderedProminent)
+                            .disabled(
+                                working || reason == nil
+                                    || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            )
                             .accessibilityIdentifier("field.explanation.exception.confirm.\(draft.check)")
                         Button("Cancel") { accepting = false }.buttonStyle(.bordered)
                     }
@@ -67,7 +73,7 @@ struct DataExceptionControl: View {
     }
 
     private func accept() async {
-        guard let reason, let input = draft.setInput(reason: reason, label: label(for: reason), note: note)
+        guard let reason, let input = draft.setInput(reason: reason, note: note)
         else { return }
         await run { _ = try await appModel.client.setDataException(input) }
         accepting = false

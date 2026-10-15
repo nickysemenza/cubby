@@ -12,12 +12,13 @@ public struct DataExceptionDraft: Equatable, Sendable {
     }
 
     /// `nil` when `check` is not one this client knows (a newer server), so the action stays hidden.
-    /// The server requires a note, so a blank one falls back to the reason's own label.
-    public func setInput(reason: DataExceptionReason, label: String, note: String) -> SetDataExceptionInput? {
+    /// A finding requires an explanation of the evidence checked.
+    public func setInput(reason: DataExceptionReason, note: String) -> SetDataExceptionInput? {
         guard let check = DataCheck(rawValue: check) else { return nil }
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
         return .init(
-            entityId: entityID, check: check, reason: reason, note: trimmed.isEmpty ? label : trimmed)
+            entityId: entityID, check: check, reason: reason, note: trimmed)
     }
 
     public func clearInput() -> ClearDataExceptionInput? {

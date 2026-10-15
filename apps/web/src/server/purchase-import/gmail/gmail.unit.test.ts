@@ -27,6 +27,32 @@ describe("Gmail retrieval diagnostics", () => {
   });
 });
 
+// Refuse oversized success bodies before allocating or parsing the JSON envelope.
+it("bounds Gmail JSON retrieval before parsing", async () => {
+  const client = createGmailApiClient({
+    accessToken: "synthetic-token",
+    fetcher: async () =>
+      new Response("Synthetic oversized source", {
+        headers: { "content-length": String(36 * 1024 * 1024 + 1) },
+      }),
+  });
+  await expect(client.getMessage("synthetic-source")).rejects.toThrow(
+    "External response exceeds 37748736 bytes",
+  );
+});
+
+it("preserves original attachment retention beyond the model evidence budget", async () => {
+  const data = Buffer.alloc(5 * 1024 * 1024).toString("base64url");
+  const client = createGmailApiClient({
+    accessToken: "synthetic-token",
+    fetcher: async () => Response.json({ data }),
+  });
+  expect(
+    (await client.getAttachment("synthetic-source", "synthetic-attachment"))
+      .data,
+  ).toBe(data);
+});
+
 const orderMessage = (
   id: string,
   internalDate = "1789819200000",

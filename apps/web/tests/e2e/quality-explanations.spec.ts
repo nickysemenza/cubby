@@ -417,9 +417,19 @@ test("a person accepts a data gap as an exception from the explanation and clear
   }).toPass();
   await check.getByRole("button", { name: "Accept as…" }).click();
   await chooseOption(page, check.getByLabel("Reason"), "Not applicable");
-  await check.getByLabel("Note").fill("Synthetic unbranded product.");
+  await expect(
+    check.getByRole("button", { name: "Accept exception" }),
+  ).toBeDisabled();
+  await check
+    .getByLabel("Note")
+    .fill(
+      "Checked [synthetic catalog](https://example.test/catalog); no manufacturer is listed.",
+    );
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");
+  await expect(
+    check.getByRole("link", { name: "synthetic catalog" }),
+  ).toHaveAttribute("href", "https://example.test/catalog");
   await expect(
     check.getByRole("button", { name: "Clear exception" }),
   ).toBeVisible();
@@ -427,6 +437,9 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await expect(check).toContainText("Missing data");
   await expect(check.getByRole("button", { name: "Accept as…" })).toBeVisible();
   await check.getByRole("button", { name: "Accept as…" }).click();
+  await check
+    .getByLabel("Note")
+    .fill("Synthetic item has no issued manufacturer; checked its packaging.");
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");
   const changed = await entityApi(page.request).update(

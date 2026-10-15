@@ -9,6 +9,17 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+gif = { version = "0.14.2", default-features = false, features = [
+  "std",
+], optional = true }
+jpeg-encoder = { version = "0.7.1", default-features = false, features = [
+  "std",
+], optional = true }
+image = { version = "0.25.9", default-features = false, features = [
+  "jpeg",
+  "png",
+  "gif",
+], optional = true }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 # Generates the boundary .d.ts from the Rust structs below (replacing the old
@@ -57,8 +68,10 @@ cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "7
 # Worker-only capabilities. HTML parsing (`compact_browser_page`,
 # `parse_scraped_recipe`) is ~0.8 MB of the wasm binary; `gateway_call_usage`
 # needs the cookbook model catalog. The browser build passes
-# --no-default-features; native builds (cubby-ffi, tests) keep both.
-default = ["html", "ai-usage"]
+# --no-default-features, as does cubby-ffi. Worker builds and native Rust tests
+# retain the defaults, including the model-image codecs.
+default = ["html", "ai-usage", "model-images"]
+model-images = ["dep:image", "dep:jpeg-encoder", "dep:gif"]
 html = ["dep:scraper", "dep:url"]
 ai-usage = ["dep:cookbook"]
 

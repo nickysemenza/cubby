@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { providerFor } from "@cubby/shared/ai/models";
 import {
@@ -161,6 +163,20 @@ const inputSchema = z
         body: z.string(),
         html: z.string().optional(),
         subject: z.string().optional(),
+        images: z
+          .array(
+            z.object({
+              mimeType: z.enum([
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif",
+              ]),
+              dataBase64: z.string(),
+            }),
+          )
+          .max(6)
+          .optional(),
       })
       .refine(
         (entry) => Boolean(entry.body.trim() || entry.html?.trim()),
@@ -229,6 +245,19 @@ async function evaluateDecisions() {
         const parts = [
           part(entry.body, "text/plain"),
           ...(entry.html ? [part(entry.html, "text/html")] : []),
+          ...("images" in entry && entry.images
+            ? entry.images.map((image, index) => ({
+                partId: `synthetic-image-${index}`,
+                filename: `synthetic-image-${index}`,
+                mimeType: image.mimeType,
+                body: {
+                  data: Buffer.from(image.dataBase64, "base64").toString(
+                    "base64url",
+                  ),
+                  size: Buffer.from(image.dataBase64, "base64").length,
+                },
+              }))
+            : []),
         ];
         const raw = {
           id: "synthetic-evaluation",
@@ -356,6 +385,54 @@ async function evaluateRelevance() {
   const fallbackCases = privateInput
     ? cases
     : [
+        ...["png", "webp", "gif"].map((format) => ({
+          label: "related" as const,
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: `image/${format}`,
+              dataBase64: readFileSync(
+                new URL(
+                  `../purchase-import/gmail/fixtures/synthetic-seller-payout.${format}`,
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        })),
+        {
+          label: "related",
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: "image/png",
+              dataBase64: readFileSync(
+                new URL(
+                  "../purchase-import/gmail/fixtures/synthetic-tall-receipt.png",
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        },
+        {
+          label: "related" as const,
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: "image/jpeg",
+              dataBase64: readFileSync(
+                new URL(
+                  "../purchase-import/gmail/fixtures/synthetic-photographic-receipt.jpg",
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        },
         ...cases.slice(0, 2),
         ...cases.slice(-2),
         {
@@ -381,6 +458,7 @@ async function evaluateRelevance() {
     runId: runEntityId.parse(crypto.randomUUID()),
     operation: "mail-relevance-prompt-eval",
   };
+  const confusion: Record<string, number> = {};
   const counts = {
     cases: fallbackCases.length,
     noInference: 0,
@@ -417,6 +495,19 @@ async function evaluateRelevance() {
         parts: [
           part(entry.body, "text/plain"),
           ...(entry.html ? [part(entry.html, "text/html")] : []),
+          ...("images" in entry && entry.images
+            ? entry.images.map((image, index) => ({
+                partId: `synthetic-image-${index}`,
+                filename: `synthetic-image-${index}`,
+                mimeType: image.mimeType,
+                body: {
+                  data: Buffer.from(image.dataBase64, "base64").toString(
+                    "base64url",
+                  ),
+                  size: Buffer.from(image.dataBase64, "base64").length,
+                },
+              }))
+            : []),
           ...("inlineImage" in entry && entry.inlineImage
             ? [
                 {
@@ -484,6 +575,8 @@ async function evaluateRelevance() {
             classification: guarded.classification,
           }),
         );
+      const cell = `${entry.label}->${guarded.classification}`;
+      confusion[cell] = (confusion[cell] ?? 0) + 1;
       counts.noInference += Number(rawClassification === null);
       counts.rawCorrect += Number(
         rawClassification !== null && rawClassification === entry.label,
@@ -511,6 +604,7 @@ async function evaluateRelevance() {
     JSON.stringify({
       model: MAILBOX_RELEVANCE_FEATURE.model,
       ...counts,
+      confusion,
       usage,
       estimatedUsd: await evalCostUsd(MAILBOX_RELEVANCE_FEATURE.model, usage),
     }),

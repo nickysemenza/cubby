@@ -371,6 +371,9 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
   const inline = await inlineExplanation(page, explanation);
   await inline.getByRole("button", { name: "Accept as…" }).click();
   await chooseOption(page, inline.getByLabel("Reason"), "Not applicable");
+  await inline
+    .getByLabel("Note")
+    .fill("Synthetic item has no manufacturer on its packaging.");
   await inline.getByRole("button", { name: "Accept exception" }).click();
   await expect(strip).not.toContainText("Manufacturer is not recorded.");
   await expect(strip).toContainText(

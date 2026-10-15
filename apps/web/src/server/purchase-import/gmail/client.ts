@@ -1,3 +1,4 @@
+import { readResponseWithLimit } from "@cubby/shared/external-fetch";
 import { retryWithBackoff, sleep as defaultSleep } from "@cubby/shared/retry";
 import { z } from "zod";
 
@@ -11,6 +12,7 @@ import {
   type GmailProvider,
 } from "./types";
 
+const MAX_GMAIL_RESPONSE_BYTES = 36 * 1024 * 1024;
 const DEFAULT_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
 
 export type GmailFetcher = (
@@ -106,9 +108,13 @@ export const createGmailApiClient = ({
       },
     );
     if (response.ok) {
-      // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
-      // normalization validates all fields before they cross into persistence.
-      return (await response.json()) as T;
+      // Model-message admission is separate from retaining original attachments.
+      const bytes = await readResponseWithLimit(
+        response,
+        MAX_GMAIL_RESPONSE_BYTES,
+      );
+      // SAFETY: Each caller supplies the owned Gmail response type; normalization validates persistence fields.
+      return JSON.parse(new TextDecoder().decode(bytes)) as T;
     }
     throw await parseError(response);
   };
