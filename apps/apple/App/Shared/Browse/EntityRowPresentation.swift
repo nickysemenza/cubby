@@ -179,6 +179,8 @@ struct EntityRowPresentation: Sendable, Hashable {
                         Fact(
                             id: key, label: label ?? field.label,
                             segments: items.map { Fact.Segment(text: $0.label, inherited: $0.inherited) }))
+                } else if let emptyLabel = field.emptyLabel {
+                    facts.append(Fact(id: key, label: label ?? field.label, value: emptyLabel))
                 }
                 return
             }

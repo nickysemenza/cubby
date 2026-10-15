@@ -322,6 +322,7 @@ struct FieldsSectionView<Inline: View>: View {
             guard
                 EntityFieldValue.text(in: row.raw, field: field, surface: "detail") != nil
                     || FieldResolutionPresentation(raw: row.raw, field: field) != nil
+                    || field.explanation != nil
             else { return nil }
             return field
         }
@@ -402,6 +403,12 @@ struct FieldsSectionView<Inline: View>: View {
                 FieldExplanationLabel(
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
+            }
+        } else if field.explanation != nil {
+            LabeledContent {
+                Text(field.emptyLabel ?? "Not recorded").foregroundStyle(.secondary)
+            } label: {
+                FieldExplanationLabel(field: field, subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
     }
@@ -660,6 +667,16 @@ struct FieldExplanationLabel: View {
                         if chain.title == nil { explanationSectionLabel("Resolution order") }
                         RecordsBlockView(records: ReportPresentation.records(chain), host: nil)
                             .accessibilityIdentifier("field.explanation.chain")
+                        if let steps = resolved.resolutionEvidence?.steps, !steps.isEmpty {
+                            DisclosureGroup("Inputs and source settings") {
+                                ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                                    ForEach(Array(step.observed.enumerated()), id: \.offset) {
+                                        _, observation in
+                                        explanationSource(observation)
+                                    }
+                                }
+                            }
+                        }
                     }
                     if !resolved.verifications.isEmpty {
                         Divider()
@@ -784,6 +801,15 @@ struct FieldExplanationLabel: View {
                     value?["name"]?.stringValue ?? reference.entityId,
                     value: Route.entityDetail(entity, id: reference.entityId))
             }
+            if let reference = source.entity, let entity = EntityKey(rawValue: reference.entityKind.rawValue)
+            {
+                ForEach(source.fields ?? [], id: \.self) { key in
+                    if let sourceField = EntityCatalog[entity].field(key) {
+                        FieldExplanationLabel(
+                            field: sourceField, subject: EntityRef(entity: entity, id: reference.entityId))
+                    }
+                }
+            }
             if let value {
                 ExplanationEvidenceValue(value: sourceFacts(value, reference: source.entity?.entityId))
             }
@@ -904,6 +930,7 @@ private struct ExplanationEvidenceValue: View {
 /// opens the generic editor prefilled with this record's id.
 struct RelationSectionView: View {
     let model: RelationSectionModel
+    let row: EntityRow
     let onCreate: (() -> Void)?
 
     @Environment(AppModel.self) private var appModel
@@ -925,6 +952,11 @@ struct RelationSectionView: View {
     var body: some View {
         Group {
             Section {
+                if !model.spec.contextFields.isEmpty {
+                    FieldsSectionView(descriptor: model.source, row: row, keys: model.spec.contextFields) {
+                        EmptyView()
+                    }
+                }
                 content
             } header: {
                 HStack {
@@ -1305,6 +1337,9 @@ private struct ResolvedListRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
+            if items.isEmpty, let emptyLabel = field.emptyLabel {
+                Text(emptyLabel).foregroundStyle(.secondary)
+            }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 if let reference = item.reference {
                     NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {

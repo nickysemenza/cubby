@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "../database-helpers";
+import { attachProductComponents } from "../product-components";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -15,8 +16,12 @@ import {
   makeProductInput,
 } from "../repo.fixtures";
 import {
+  loadProductDetailQuantityLedgers,
   loadProductPickerQuantities,
   loadProductQuantityLedgers,
+  loadProductQuantitySummaries,
+  onHandUnitsSql,
+  quantityVarianceSql,
 } from "./quantity-ledger";
 
 /**
@@ -77,6 +82,92 @@ describe("loadProductQuantityLedgers", () => {
       sql`SELECT count(*)::int AS n FROM "InventoryEntry" WHERE "productId" = ${prod.entityId}`,
     );
     expect(inventory.rows[0]).toMatchObject({ n: 0 });
+  });
+
+  it("retains unknown ancestor kit quantities on both batch and detail ledgers", async () => {
+    const kit = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Example fastener kit" }),
+      ctx.actor,
+    );
+    const part = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Example fastener" }),
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: part.entityId, quantity: 4 }],
+      ctx.actor,
+    );
+    await seed({
+      name: "Unquantified kit",
+      cost: 12,
+      productId: kit.id,
+      productQuantity: null,
+    });
+    const batch = await ledgerFor(part.entityId);
+    const detail = (
+      await loadProductDetailQuantityLedgers(ctx.db, [part.entityId])
+    ).get(part.entityId);
+    expect(batch?.unknownAcquisitionLines).toBe(1);
+    expect(detail).toEqual(batch);
+  });
+
+  it("keeps non-count units and incomplete history incomparable in SQL and hydrated summaries", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic quantity comparison" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic quantity shelf" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "Known units",
+      cost: 12,
+      productId: product.id,
+      productQuantity: 3,
+    });
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: product.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2, unit: "kg" },
+      },
+      ctx.actor,
+    );
+    const readSql = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT ${sql.raw(onHandUnitsSql('"Product"'))} AS units, ${sql.raw(quantityVarianceSql('"Product"'))} AS variance FROM "Product" WHERE id=${product.entityId}`,
+        )
+      ).rows[0];
+    expect(await readSql()).toMatchObject({ units: null, variance: null });
+    expect(
+      (await loadProductQuantitySummaries(ctx.db, [product.entityId])).get(
+        product.entityId,
+      ),
+    ).toMatchObject({ onHandUnits: null, quantityVariance: null });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "InventoryEntry" SET "amountUnit"='each' WHERE "productId"=${product.entityId}`,
+    );
+    await seed({
+      name: "Unknown additional units",
+      cost: 4,
+      productId: product.id,
+      productQuantity: null,
+    });
+    expect(await readSql()).toMatchObject({ units: 2, variance: null });
+    expect(
+      (await loadProductQuantitySummaries(ctx.db, [product.entityId])).get(
+        product.entityId,
+      ),
+    ).toMatchObject({ onHandUnits: 2, quantityVariance: null });
   });
 
   it("nets acquisitions against every kind of exit", async () => {

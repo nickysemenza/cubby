@@ -62,7 +62,6 @@
   "apps/web/src/server/repo/entity-graph.ts": 3,
   "apps/web/src/server/repo/expense/analyze.ts": 4,
   "apps/web/src/server/repo/location/ai-description.ts": 1,
-  "apps/web/src/server/repo/product-category-sql.ts": 2,
   "apps/web/src/server/repo/data-quality/checks/product-category.ts": 1,
   "apps/web/src/server/repo/data-quality/checks/planting.ts": 5,
   "apps/web/src/server/repo/data-quality/sql.ts": 5,

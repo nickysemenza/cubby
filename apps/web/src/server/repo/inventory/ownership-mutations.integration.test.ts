@@ -241,7 +241,10 @@ describe("inventory ownership mutations", () => {
       for (const id of productIds) {
         expect(owners.get(id)).toEqual([
           {
-            label: "Unknown attribution owner",
+            label:
+              id === unstocked.entityId
+                ? "Unknown attribution owner · from purchase"
+                : "Unknown attribution owner",
             ref: { entityKind: "ledgerParty", entityId: owner.output.id },
             inherited: true,
           },

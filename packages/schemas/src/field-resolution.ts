@@ -17,6 +17,12 @@ export const fieldResolutionSourceSchema = z.object({
   name: z.string().nullable(),
 });
 
+export const fieldResolutionEvaluationSchema =
+  fieldResolutionSourceSchema.extend({
+    value: z.json(),
+    assigned: z.boolean(),
+  });
+
 /** Assignment intent is independent of the value currently selected by a rule. */
 export const fieldResolutionSchema = z.object({
   mode: z.enum(["inherit", "explicit", "none", "allocated"]),
@@ -25,6 +31,8 @@ export const fieldResolutionSchema = z.object({
   fallbackValue: z.json(),
   source: z.string(),
   sourceEntity: fieldResolutionSourceSchema.nullable(),
+  fallbackSource: fieldResolutionSourceSchema.nullable().optional(),
+  evaluation: z.array(fieldResolutionEvaluationSchema).optional(),
   matchesFallback: z.boolean(),
   canReset: z.boolean(),
 });

@@ -19,7 +19,6 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import { RecordsBlockView } from "~/entity/entity-detail/records-block";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/utils";
@@ -47,6 +46,7 @@ import {
 } from "./field-resolution";
 import {
   ResolutionExplanation,
+  FieldEvaluationEvidence,
   ResolutionHeadline,
   sectionLabelClassName,
 } from "./field-resolution-explanation";
@@ -648,7 +648,9 @@ export function FieldExplanationContents({
             ) : result.data.resolutionEvidence ? (
               // A rollup (a Product's owners) has one chain row per record
               // rather than a single resolution.
-              <RecordsBlockView block={result.data.resolutionEvidence.chain} />
+              <FieldEvaluationEvidence
+                evidence={result.data.resolutionEvidence}
+              />
             ) : !result.data.interpretation &&
               (result.data.value !== null ||
                 !result.data.sources.some(
@@ -830,9 +832,9 @@ function ExplanationTechnicalDetails({
               {caveat}
             </p>
           ))}
-          <RawExplanationEvidence data={data} />
         </>
       ) : null}
+      <RawExplanationEvidence data={data} />
     </details>
   );
 }

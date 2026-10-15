@@ -61,6 +61,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { groupBy, uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/list-read-schema";
+import { deriveProductQuantitySummary } from "~/lib/product-quantity-summary";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -194,7 +195,6 @@ import {
 } from "./list-enrichment";
 import {
   dbProductToAPI,
-  deriveProductQuantitySummary,
   splitProductImages,
   mapProductExternalIds,
   mapProductUnitMappings,
@@ -227,7 +227,9 @@ import {
   onHandUnitsFilterSql,
   onHandUnitsSql,
   quantityVarianceSql,
+  comparableQuantityHistoryFilterSql,
 } from "./quantity-ledger";
+import { productStockContext } from "./stock-context";
 import type { ProductDeepDB, ProductListDB } from "./types";
 import { unitMappingColumns } from "./unit-mappings";
 import {
@@ -995,6 +997,7 @@ export const buildProductWhere = async (
             inArray(product.id, productIdsServingAsLocations),
           ),
           inArray(product.id, productIdsWithExpenses),
+          comparableQuantityHistoryFilterSql(product.id),
           filters.quantityVarianceFilter === "mismatched"
             ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
             : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
@@ -1502,15 +1505,16 @@ export const listProductsRead = async (
           inventory,
           ledgerById.get(row.id)!,
         );
+        const fieldResolutions = productFieldResolutions(
+          {
+            ...row,
+            categoryStockTracking: row.categoryStockTracking ?? null,
+          },
+          pricingById.get(row.id) ?? resolveProductPricing(row.price),
+        );
         Object.assign(patch, {
           pricing: pricingById.get(row.id),
-          fieldResolutions: productFieldResolutions(
-            {
-              ...row,
-              categoryStockTracking: row.categoryStockTracking ?? null,
-            },
-            pricingById.get(row.id) ?? resolveProductPricing(row.price),
-          ),
+          fieldResolutions,
           owners: owners?.get(row.id) ?? [],
           expenseCount: Number(row.expenseCount),
           expenseTotal: Number(row.expenseTotal),
@@ -1524,6 +1528,16 @@ export const listProductsRead = async (
             quantity.quantityVariance,
           ),
         });
+        const tracking = fieldResolutions.stockTracked?.value;
+        Object.assign(
+          patch,
+          productStockContext({
+            quantityLedger: ledgerById.get(row.id)!,
+            inventoryEntry: inventory,
+            stockTracked:
+              tracking === true ? true : tracking === false ? false : null,
+          }),
+        );
       }
       return patch;
     },

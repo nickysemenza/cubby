@@ -40,6 +40,7 @@ import {
   attachCubbyColumnMeta,
   type FilterConfig,
   type MobileColumnMeta,
+  type ColumnExplanation,
 } from "~/ui/data-table/table-meta";
 import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
@@ -302,6 +303,9 @@ export function createInventoryEntriesColumn<
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     provenance?: EntityFieldProvenance;
+    context?: (row: T) => ReactNode;
+    contextReadFields?: readonly string[];
+    explanation?: ColumnExplanation;
     /**
      * When set, rows with entries get a hover-revealed pencil that opens a
      * quick-edit surface (e.g. the per-entry inventory dialog). A pencil
@@ -342,7 +346,8 @@ export function createInventoryEntriesColumn<
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       provenance: options?.provenance,
-      readFields: [String(accessor)],
+      readFields: [String(accessor), ...(options?.contextReadFields ?? [])],
+      explanation: options?.explanation,
       linksTo: entity,
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
@@ -352,7 +357,8 @@ export function createInventoryEntriesColumn<
     }),
     cell: (info) => (
       <InventoryEntriesCell<T, TEntry, TEntity>
-        entries={info.getValue() ?? []}
+        entries={info.row.original[accessor] ?? []}
+        context={options?.context?.(info.row.original)}
         entity={entity}
         getRelatedEntity={getRelatedEntity}
         layout={layout}

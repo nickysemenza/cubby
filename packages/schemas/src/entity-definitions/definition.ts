@@ -427,6 +427,8 @@ const buildMetadataSchemas = () => {
        * rule. The field's own value stays the sort and filter value.
        */
       labelPath: nonEmptyString().nullable().optional().default(null),
+      /** An explained absence may be Unknown rather than an undifferentiated dash. */
+      emptyLabel: nonEmptyString().nullable().optional().default(null),
       /**
        * Where the detail record carries this field's human-readable text, in
        * `readPath`'s grammar: the detail-surface twin of `labelPath` for a
@@ -534,6 +536,7 @@ const buildMetadataSchemas = () => {
         width,
         readPath,
         labelPath,
+        emptyLabel,
         detailLabelPath,
         itemsPath,
         format,
@@ -553,6 +556,7 @@ const buildMetadataSchemas = () => {
         width,
         readPath,
         labelPath,
+        emptyLabel,
         detailLabelPath,
         itemsPath,
         format,
@@ -940,6 +944,8 @@ const buildMetadataSchemas = () => {
       .object({
         kind: z.literal("relation"),
         ...sectionBase,
+        /** Scalar context displayed above this relation table. */
+        contextFields: z.array(fieldKey).optional().default([]),
         relation: nonEmptyString("must name a declared relation"),
         filter: z.object({ descriptor: nonEmptyString() }).strict(),
         columns: z

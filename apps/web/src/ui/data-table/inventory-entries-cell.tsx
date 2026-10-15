@@ -59,6 +59,7 @@ export interface InventoryEntriesCellProps<
   TEntity extends InventoryRelatedEntity["entity"],
 > {
   entries: TEntry[];
+  context?: ReactNode;
   entity: TEntity;
   getRelatedEntity: (
     entry: TEntry,
@@ -95,7 +96,7 @@ const isProductRelatedEntity = (
  * `inlineEdit` is supplied; >1-entry rows and the "stacked" layout are
  * unchanged from the original inline cell body.
  */
-export function InventoryEntriesCell<
+function InventoryEntriesCellBody<
   T,
   TEntry extends InventoryEntryBase,
   TEntity extends InventoryRelatedEntity["entity"],
@@ -107,6 +108,7 @@ export function InventoryEntriesCell<
   row,
   onQuickEdit,
   inlineEdit,
+  context,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
   const displayImages = useEntityDisplayImageMap();
   // A dense cell stacks the amount under the name instead of "1 each @".
@@ -179,11 +181,11 @@ export function InventoryEntriesCell<
           clipboard={entityCellClipboard("location", null, (locationId) =>
             inlineEdit.onCreateEntry(row, locationId),
           )}
-          renderValue={() => <NoneValue />}
+          renderValue={() => context ?? <NoneValue />}
         />
       );
     }
-    return <NoneValue />;
+    return <>{context ?? <NoneValue />}</>;
   }
 
   const quickEditButton = onQuickEdit ? (
@@ -338,5 +340,23 @@ export function InventoryEntriesCell<
       </Stack>
       {relatedList}
     </Stack>
+  );
+}
+
+/** Context supplements the links and never replaces a recorded location. */
+export function InventoryEntriesCell<
+  T,
+  TEntry extends InventoryEntryBase,
+  TEntity extends InventoryRelatedEntity["entity"],
+>(props: InventoryEntriesCellProps<T, TEntry, TEntity>) {
+  return (
+    <div className="min-w-0">
+      <InventoryEntriesCellBody {...props} />
+      {props.entries.length > 0 && props.context ? (
+        <div className="truncate text-xs text-muted-foreground">
+          {props.context}
+        </div>
+      ) : null}
+    </div>
   );
 }

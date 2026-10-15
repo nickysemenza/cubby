@@ -124,6 +124,7 @@ export const manifestWire = {
       format: "string~",
       readPath: "string~",
       labelPath: "string~",
+      emptyLabel: "string~",
       detailLabelPath: "string~",
       itemsPath: "string~",
       listRenderer: "ListRendererID~",
@@ -159,6 +160,7 @@ export const manifestWire = {
   SectionSort: record({ field: "string", direction: "SectionSort.Direction" }),
   "SectionSort.Direction": raw({ asc: "asc", desc: "desc" }),
   RelationSectionSpec: record({
+    contextFields: "[string]",
     relation: "string",
     filterDescriptor: "string",
     prefill: "RelationSectionPrefill~",

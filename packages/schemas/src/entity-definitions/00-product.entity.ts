@@ -40,7 +40,7 @@ import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
 import { productKindSchema } from "../product-fields";
-import { labelField } from "./label-field";
+import { labelField, displayItemsField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
 export default defineEntity({
   key: "product",
@@ -126,6 +126,7 @@ export default defineEntity({
           id: "stocked-at",
           title: "Stocked at",
           relation: "inventory",
+          contextFields: ["stockStatus"],
           filter: { descriptor: "productId" },
           columns: ["amount", "placement", "ownerLedgerPartyId", "verifiedAt"],
         },
@@ -574,6 +575,8 @@ export default defineEntity({
           "expenseTotal",
           "purchaseDate",
           "quantityLedger",
+          "stockStatus",
+          "stockStatusItems",
           "onHandUnits",
           "quantityVariance",
           "ledgerExpectedQuantityLabel",
@@ -1540,6 +1543,7 @@ Rules:
           detail: true,
           width: "md",
           format: "resolvedList",
+          emptyLabel: "Owner unknown",
           mobile: { slot: "meta", priority: 41 },
         },
         provenance: {
@@ -1684,6 +1688,38 @@ Rules:
           ],
         },
       },
+      {
+        key: "stockStatus",
+        kind: "text",
+        labelOverride: "Inventory status",
+        display: { detail: true, list: true, listHidden: true, width: "md" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "inventory", relation: "inventory" }],
+        },
+        explanation: {
+          ruleId: "product.stock-context",
+          description:
+            "Recorded inventory, installed locations, stock-tracking policy and quantity history explain presence and supported gaps. Missing history never establishes disposal or consumption.",
+          resolver: "productQuantity",
+          readPath: "stockStatus",
+          sourceDependencies: [
+            { path: "stockStatusItems", label: "Inventory evaluation" },
+            {
+              path: "fieldResolutions.stockTracked",
+              label: "Tracking policy and source",
+            },
+            { path: "quantityLedger", label: "Acquisitions and exits" },
+            { path: "inventoryEntry", label: "Recorded inventory" },
+            {
+              path: "quantityLedger.locationCount",
+              label: "Installed locations",
+            },
+          ],
+        },
+        validation: { read: z.string().nullish(), create: null, update: null },
+      },
+      displayItemsField("stockStatusItems", "Inventory evaluation"),
       labelField("ledgerExpectedQuantityLabel", "Expense quantity ledger"),
       labelField("quantityVarianceLabel", "Counted inventory and ledger"),
       labelField("unitPriceLabel", "Product price and unit mappings"),

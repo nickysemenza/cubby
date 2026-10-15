@@ -296,12 +296,26 @@ const categoryResolutions = (
     },
     stockTracked: resolveStockTrackingField(
       row.stockTracked,
-      path
-        .slice(0, -1)
-        .reverse()
-        .flatMap(({ id, name, stockTracked }) =>
-          stockTracked === null ? [] : [{ id, name, value: stockTracked }],
-        )[0] ?? null,
+      (() => {
+        const ancestors = path.slice(0, -1).reverse();
+        const nearest = ancestors.find(
+          (ancestor) => ancestor.stockTracked !== null,
+        );
+        return ancestors.length === 0
+          ? null
+          : {
+              id: nearest?.id ?? null,
+              name: nearest?.name ?? null,
+              value: nearest?.stockTracked ?? null,
+              evaluation: ancestors.map((ancestor) => ({
+                entityKind: "productCategory" as const,
+                entityId: ancestor.id,
+                name: ancestor.name,
+                value: ancestor.stockTracked,
+                assigned: ancestor.stockTracked !== null,
+              })),
+            };
+      })(),
       "category decision",
     ),
   };

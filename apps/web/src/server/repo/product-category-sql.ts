@@ -1,3 +1,5 @@
+import { entitySchema } from "@cubby/schemas/entity";
+import { fieldResolutionEvaluationSchema } from "@cubby/schemas/field-resolution";
 import type { ProductCategoryId } from "@cubby/schemas/identifiers";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
@@ -6,6 +8,7 @@ import {
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),
@@ -96,20 +99,21 @@ export const categorySummarySql = (categoryIdExpr: SQL) =>
     )
     SELECT json_build_object(
       'id', (SELECT "shortcode" FROM ancestors ORDER BY depth LIMIT 1),
-      'name', (SELECT "name" FROM ancestors ORDER BY depth LIMIT 1),
-      'path', json_agg(json_build_object('id', "shortcode", 'name', "name") ORDER BY depth DESC),
+      ${"name"}::text, (SELECT "name" FROM ancestors ORDER BY depth LIMIT 1),
+      'path', json_agg(json_build_object('id', "shortcode", ${"name"}::text, "name") ORDER BY depth DESC),
       'feature', (SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1)
     ) FROM ancestors
     HAVING count(*) > 0
   )`;
 
 /** The category that supplies an effective stock-tracking decision. */
-export type CategoryStockTracking = {
-  value: boolean;
-  /** The supplying category's shortcode. */
-  id: string;
-  name: string;
-};
+const categoryStockTrackingSchema = z.object({
+  value: z.boolean().nullable(),
+  id: z.string().nullable(),
+  name: z.string().nullable(),
+  evaluation: z.array(fieldResolutionEvaluationSchema).optional(),
+});
+export type CategoryStockTracking = z.infer<typeof categoryStockTrackingSchema>;
 
 /** Categories whose nearest live decision (their own or an ancestor's within
  * the supported depth) equals `value`. Uncorrelated, so a filter over every
@@ -163,9 +167,10 @@ export const categoryStockTrackingSql = (categoryIdExpr: SQL) =>
       WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
         AND NOT parent."id" = ANY(a.visited)
     )
-    SELECT row_to_json(nearest) FROM (
-      SELECT "stockTracked" AS "value", "shortcode" AS "id", "name"
-      FROM ancestors WHERE "stockTracked" IS NOT NULL
-      ORDER BY depth LIMIT 1
-    ) nearest
+    SELECT jsonb_build_object(
+      'value', (SELECT "stockTracked" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
+      'id', (SELECT "shortcode" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
+      ${"name"}::text, (SELECT "name" FROM ancestors WHERE "stockTracked" IS NOT NULL ORDER BY depth LIMIT 1),
+      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', "shortcode", ${"name"}::text, "name", 'value', "stockTracked", ${"assigned"}::text, "stockTracked" IS NOT NULL) ORDER BY depth) FROM ancestors)
+    ) WHERE EXISTS (SELECT 1 FROM ancestors)
   )`;

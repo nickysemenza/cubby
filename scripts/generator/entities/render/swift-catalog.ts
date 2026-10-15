@@ -303,6 +303,7 @@ const fieldDisplayJSON = (display: Field["display"]) => ({
   format: display.format ?? null,
   readPath: display.readPath ?? null,
   labelPath: display.labelPath ?? null,
+  emptyLabel: display.emptyLabel ?? null,
   detailLabelPath: display.detailLabelPath ?? null,
   itemsPath: display.itemsPath ?? null,
   listRenderer: display.renderer?.list ?? null,
@@ -367,6 +368,7 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
           relation: {
             _0: {
               relation: section.relation,
+              contextFields: [...section.contextFields],
               filterDescriptor: section.filter.descriptor,
               prefill:
                 section.prefill === null

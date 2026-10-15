@@ -38,4 +38,10 @@ describe("field explanation interpretation", () => {
     )!;
     expect(interpretFieldValue(amountField, -159.84).result).toBe("-$159.84");
   });
+  it("uses a declared absence label for an empty resolved rollup", () => {
+    const owners = entityFieldModels.product.fields.find(
+      (item) => item.key === "owners",
+    )!;
+    expect(interpretFieldValue(owners, []).result).toBe("Owner unknown");
+  });
 });

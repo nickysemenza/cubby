@@ -22,9 +22,9 @@ import {
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import { sumBy, uniq } from "es-toolkit";
 import type { z } from "zod";
 
+import { deriveProductQuantitySummary } from "~/lib/product-quantity-summary";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {
   ingredient,
@@ -50,7 +50,7 @@ import {
   resolveProductPricing,
   resolveProductPriceField,
 } from "./pricing";
-import type { QuantityLedger } from "./quantity-ledger";
+import { productStockContext } from "./stock-context";
 import type { ProductDeepDB, ProductListDB } from "./types";
 import { unitMappingSides } from "./unit-mappings";
 
@@ -405,62 +405,6 @@ export const mapProductListInventoryEntries = (
     }),
   );
 
-/**
- * The ledger, live units on the shelf, and the gap between them — the block
- * shared by the list row and the detail response.
- *
- * One function on purpose. The list used to own this and the detail page
- * computed its own on-hand inline, which is exactly how the SQL and the render
- * drifted twice: a filter can decide "mismatched" on a number the cell never
- * shows. Both surfaces now read the same three fields.
- *
- * Computed from the already-loaded `inventoryEntry` relation rather than a
- * correlated subquery — both shapes join those rows anyway.
- *
- * `onHandUnits`/`quantityVariance` go null when the entries carry more than one
- * unit. Summing `each` against `can` produces a number that means nothing, and
- * quietly adding them would manufacture a discrepancy out of a unit mismatch.
- * (In practice this is rare — live inventory is essentially all `each` — which
- * is exactly why an unguarded sum would have looked correct right up until it
- * wasn't.) `quantityLedger` is always present: it is ledger-only, so no unit
- * ambiguity can reach it.
- *
- * On-hand is the UNION of stock and identity: inventory units PLUS
- * `quantityLedger.locationCount`, the Locations that ARE this product. This is
- * the TS half of the rule `onHandUnitsSql` implements in SQL for sorting and
- * filtering — keep the two in step, they are one rule with two call sites.
- */
-type ProductQuantitySummary = Pick<
-  ProductListItem,
-  "quantityLedger" | "onHandUnits" | "quantityVariance"
->;
-
-export const deriveProductQuantitySummary = (
-  entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
-  quantityLedger: QuantityLedger,
-): ProductQuantitySummary => {
-  const empty = {
-    quantityLedger,
-    onHandUnits: null,
-    quantityVariance: null,
-  };
-  const { locationCount } = quantityLedger;
-  if (entries.length === 0 && locationCount === 0) return empty;
-
-  // Locations are one unit apiece, so they never widen the unit set — but a
-  // mixed-unit shelf is still unanswerable regardless of them.
-  const units = uniq(entries.map((entry) => entry.amount.unit));
-  if (units.length > 1) return empty;
-
-  const onHandUnits =
-    sumBy(entries, (entry) => entry.amount.value) + locationCount;
-  return {
-    quantityLedger,
-    onHandUnits,
-    quantityVariance: onHandUnits - quantityLedger.expectedQuantity,
-  };
-};
-
 export const dbProductToListAPI = (
   productData: ProductListDB,
   displayImages: DisplayImageSummary[],
@@ -494,10 +438,25 @@ export const dbProductToListAPI = (
     ...deriveProductQuantitySummary(inventoryEntry, productData.quantityLedger),
   };
 
-  return parseWithContext(productListItemOut, result, {
-    entityKind: "Product",
-    identifier: { id: productData.id, name: productData.name },
-  });
+  return parseWithContext(
+    productListItemOut,
+    {
+      ...result,
+      ...productStockContext({
+        ...result,
+        stockTracked:
+          result.fieldResolutions?.stockTracked?.value === true
+            ? true
+            : result.fieldResolutions?.stockTracked?.value === false
+              ? false
+              : null,
+      }),
+    },
+    {
+      entityKind: "Product",
+      identifier: { id: productData.id, name: productData.name },
+    },
+  );
 };
 
 /**
@@ -635,7 +594,18 @@ export const dbProductToAPI = (
 
   return parseWithContext(
     productWithIngredientAndInventoryAndMappingsOut,
-    result,
+    {
+      ...result,
+      ...productStockContext({
+        ...result,
+        stockTracked:
+          result.fieldResolutions?.stockTracked?.value === true
+            ? true
+            : result.fieldResolutions?.stockTracked?.value === false
+              ? false
+              : null,
+      }),
+    },
     {
       entityKind: "Product",
       identifier: { id: productData.id, name: productData.name },

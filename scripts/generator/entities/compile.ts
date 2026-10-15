@@ -448,6 +448,30 @@ const inferredEnumOptions = (
     : null;
 };
 
+const storedFieldExplanation = (
+  field: EntityFieldModelMetadata["fields"][number],
+  storage: EntityFieldModelMetadata["storage"],
+  entityKey: string,
+  key: string,
+): EntityField["explanation"] => {
+  if (
+    !field.display.detail ||
+    field.validation.read === null ||
+    field.control === null ||
+    !storage.some(
+      (entry) => (typeof entry === "string" ? entry : entry.key) === key,
+    )
+  )
+    return null;
+  return {
+    ruleId: `${entityKey}.${key}`,
+    version: 1,
+    description: "Stored directly on this record.",
+    resolver: "field",
+    readPath: field.readKey ?? key,
+  };
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -535,7 +559,7 @@ const compileFieldModel = (
                 ? { readPath: field.display.readPath }
                 : {}),
             }
-          : null),
+          : storedFieldExplanation(field, model.storage, entityKey, key)),
       resolution: field.resolution,
       control:
         field.control === null
@@ -552,6 +576,7 @@ const compileFieldModel = (
         width: field.display.width ?? null,
         readPath: field.display.readPath ?? null,
         labelPath: field.display.labelPath ?? null,
+        emptyLabel: field.display.emptyLabel ?? null,
         // Left undefined (so not emitted) unless declared: the model ships in the budgeted Worker bundle.
         detailLabelPath: field.display.detailLabelPath ?? undefined,
         itemsPath: field.display.itemsPath ?? undefined,
