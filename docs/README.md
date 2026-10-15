@@ -10,6 +10,7 @@ the repository.
   deployment, and the HTTP API.
 - [Entities](entities.md) and [Application framework](application-framework/README.md)
   describe the compiled entity architecture.
+- [Household taxonomy vocabulary](../GLOSSARY.md) defines classification terms.
 - [Inventory audit](inventory-audit.md), [Garden](garden.md), and [Photos library
   deduplication](photo-library-dedup.md) explain household workflows.
 - [CI](ci.md), [Infrastructure](infrastructure.md), and the operational
