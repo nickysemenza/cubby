@@ -1892,7 +1892,7 @@ consume the declarations.
 
 ## Compatibility removal
 
-[Breaking changes](../AGENTS.md#breaking-changes) is the rule; these are the
+[Breaking changes](agents/domain-rules.md#breaking-changes) is the rule; these are the
 compatibility paths still live. Printed `P-`/`L-` QR labels and stored agent
 transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
 historical records and stay readable. `oauth_client.requirePKCE` and
