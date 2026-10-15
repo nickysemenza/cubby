@@ -9,6 +9,7 @@ import { MemoryStorage } from "@earendil-works/pi-durable/storage/memory";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { PiHarness } from "agents/harness/pi";
+import type { LifecycleServices } from "agents/lifecycle";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 class DurableMemoryStorage extends MemoryStorage {
@@ -30,8 +31,15 @@ class DurableMemoryStorage extends MemoryStorage {
 
 const context = BACKGROUND_CONTEXT;
 
+class TestPiHarness extends PiHarness {
+  // Exercise the real cache while isolating its Cloudflare lifecycle seam.
+  override get lifecycle(): LifecycleServices {
+    return fromPartial({ ready: async () => {}, storage: {} });
+  }
+}
+
 function host(storage: DurableMemoryStorage, opened = (_pi: Harness) => {}) {
-  const harness = new PiHarness({
+  const harness = new TestPiHarness({
     harness: async ({ context }) => {
       const pi = await Harness.open(
         storage,
@@ -42,13 +50,6 @@ function host(storage: DurableMemoryStorage, opened = (_pi: Harness) => {}) {
       return pi;
     },
   });
-  // Exercise the real PiHarness cache while isolating its Cloudflare storage seam.
-  vi.spyOn(harness, "lifecycle", "get").mockReturnValue(
-    fromPartial({
-      ready: async () => {},
-      storage: {},
-    }),
-  );
   vi.spyOn(SqliteStorage, "open").mockResolvedValue(fromPartial(storage));
   return harness;
 }
