@@ -531,6 +531,7 @@ _Avoid_: payer, account owner, beneficiary
 
 **Owner**:
 The member or guest who owns an Inventory entry. An owner set on the entry wins (Set here); Household is the entry set to no individual owner; otherwise the entry inherits one from acquisition evidence (the Expense beneficiary, then the vendor account default, then the payment account default), and Confirm pins that inherited owner as Set here. An entry that inherits nothing reads Unknown. A Product's Owner is a read-only rollup of its live entries' effective owners (people, Household, Unknown); a Product with no entries shows the owner its single purchase would supply, and is otherwise blank.
+Entirely unattributed Expense beneficiaries (no rows or only null-party rows, including allocations preserved by itemization) supply no ownership decision, so account defaults may apply. A named Household Party, split beneficiaries, conflicting beneficiaries, or known attribution on only part of an acquisition blocks weaker defaults. Financial attribution and its totals remain unchanged by ownership inheritance.
 _Avoid_: belongs to, assigned to, buyer
 
 **Inherited**:

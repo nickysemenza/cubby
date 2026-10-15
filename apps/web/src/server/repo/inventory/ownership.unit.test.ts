@@ -43,10 +43,17 @@ describe("inventory ownership evidence", () => {
       ],
     },
     {
-      name: "a beneficiary is shared or household",
+      name: "only part of the acquisition has a known beneficiary",
       rows: [
         { expenseShortcode: "EXP-1", ledgerPartyId: null },
         { expenseShortcode: "EXP-2", ledgerPartyId: "person-a" },
+      ],
+    },
+    {
+      name: "the household is the named beneficiary",
+      rows: [
+        { expenseShortcode: "EXP-1", ledgerPartyId: "household" },
+        { expenseShortcode: "EXP-2", ledgerPartyId: "household" },
       ],
     },
   ])("blocks weaker fallback when $name", ({ rows }) => {

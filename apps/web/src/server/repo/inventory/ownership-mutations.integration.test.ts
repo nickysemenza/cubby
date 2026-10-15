@@ -12,7 +12,13 @@ import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { inventoryEntry } from "~/server/db/schema";
+import {
+  financialAccount,
+  financialTransactionAllocation,
+  inventoryEntry,
+  purchase,
+  vendorAccount,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { amountFromColumns } from "~/server/repo/database-helpers";
 import { createExpense, getExpenseByID } from "~/server/repo/expense/crud";
@@ -24,6 +30,7 @@ import {
 } from "~/server/repo/inventory/crud";
 import {
   loadEffectiveInventoryOwnershipById,
+  loadProductOwners,
   productIdsByOwner,
 } from "~/server/repo/inventory/ownership";
 import {
@@ -91,7 +98,7 @@ describe("inventory ownership mutations", () => {
     links?: ProductId[];
     lines: Array<{
       name: string;
-      ownerId: LedgerPartyShortcode;
+      ownerId: LedgerPartyShortcode | null;
       productId: ProductShortcode | null;
       cost?: number;
       productQuantity?: number | null;
@@ -133,6 +140,132 @@ describe("inventory ownership mutations", () => {
     }
     return { purchase, expenses };
   };
+
+  // Replacement itemization can persist the ledger's implicit unknown shares.
+  // Those rows must not suppress account defaults or change financial history.
+  it.each(["vendor", "payment"] as const)(
+    "inherits %s account ownership through unattributed expenses for stocked and unstocked products",
+    async (source) => {
+      const owner = await createLedgerParty(
+        ctx.db,
+        { name: "Unknown attribution owner", kind: "member", notes: null },
+        TEST_ACTOR,
+      );
+      const subject = await createSubject("Unknown attribution");
+      const unstocked = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Unknown attribution unstocked product" }),
+        TEST_ACTOR,
+      );
+      const acquired = await addPurchase({
+        label: "unknown attribution acquisition",
+        lines: [subject.product, unstocked].map((product) => ({
+          name: "Unattributed acquisition line",
+          ownerId: null,
+          productId: product.id,
+        })),
+      });
+      const dbc = getDb(ctx.db);
+      const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+        vendorId: acquired.purchase.vendorId,
+        ledgerPartyId: owner.entityId,
+        label: "Unknown attribution vendor account",
+        inventoryOwnerDefaultEnabled: false,
+      });
+      await dbc
+        .update(purchase)
+        .set({ vendorAccountId: account.id })
+        .where(eq(purchase.id, acquired.purchase.id));
+      const paymentAccount = await insertWithShortcode(
+        ctx.db,
+        "financialAccount",
+        {
+          name: "Unknown attribution payment account",
+          identity: { kind: "cash" },
+          ledgerPartyId: owner.entityId,
+          inventoryOwnerDefaultEnabled: false,
+        },
+      );
+      const payment = await insertWithShortcode(
+        ctx.db,
+        "financialTransaction",
+        {
+          accountId: paymentAccount.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 200,
+          transactionDate: "2026-09-01",
+          postedDate: "2026-09-01",
+        },
+      );
+      await dbc.insert(financialTransactionAllocation).values({
+        transactionId: payment.id,
+        purchaseId: acquired.purchase.id,
+        amount: 200,
+      });
+      const before = await Promise.all(
+        acquired.expenses.map((row) => getExpenseByID(ctx.db, row.entityId)),
+      );
+      expect(before.map((row) => row.beneficiaries)).toEqual([
+        [{ partyId: null, weight: 1 }],
+        [{ partyId: null, weight: 1 }],
+      ]);
+      expect(
+        (await loadEffectiveInventoryOwnershipById(ctx.db, subject.entryId))
+          ?.effectiveOwner,
+      ).toBeNull();
+
+      if (source === "vendor") {
+        await dbc
+          .update(vendorAccount)
+          .set({ inventoryOwnerDefaultEnabled: true })
+          .where(eq(vendorAccount.id, account.id));
+      } else {
+        await dbc
+          .update(financialAccount)
+          .set({ inventoryOwnerDefaultEnabled: true })
+          .where(eq(financialAccount.id, paymentAccount.id));
+      }
+      const effective = await loadEffectiveInventoryOwnershipById(
+        ctx.db,
+        subject.entryId,
+      );
+      expect(effective?.effectiveOwner?.id).toBe(owner.output.id);
+      expect(effective?.source).toBe(
+        source === "vendor"
+          ? "inherited_vendor_account"
+          : "inherited_payment_account",
+      );
+      const productIds = [subject.product.entityId, unstocked.entityId];
+      const owners = await loadProductOwners(ctx.db, productIds);
+      for (const id of productIds) {
+        expect(owners.get(id)).toEqual([
+          {
+            label: "Unknown attribution owner",
+            ref: { entityKind: "ledgerParty", entityId: owner.output.id },
+            inherited: true,
+          },
+        ]);
+      }
+      expect(await productIdsByOwner(ctx.db, [owner.output.id])).toEqual(
+        expect.arrayContaining(productIds),
+      );
+      const inventory = await inventoryentryList(
+        ctx.db,
+        { ownerLedgerPartyId: [owner.output.id] },
+        [],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(inventory.data.map((row) => row.displayName)).toEqual([
+        expect.stringContaining("Unknown attribution product"),
+      ]);
+      expect(
+        await Promise.all(
+          acquired.expenses.map((row) => getExpenseByID(ctx.db, row.entityId)),
+        ),
+      ).toEqual(before);
+    },
+  );
 
   it("assigns an explicit owner without acquisition evidence, splits quantity, and preserves ownership while moving", async () => {
     const owner = await createLedgerParty(
