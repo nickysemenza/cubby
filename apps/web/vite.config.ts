@@ -445,15 +445,15 @@ export default defineConfig(async ({ command }) => {
       // final client/server output. `autoInstrumentMiddleware` stays off: it
       // would inject `wrapMiddlewaresWithSentry` imports from
       // `@sentry/tanstackstart-react`, which the SSR build resolves to
-      // `cfSentryShim` (no such export). Maps are "hidden" (no
-      // `sourceMappingURL`), uploaded once per Vite environment from that
-      // environment's own output dir, then deleted so none ship as public
-      // assets. Map sources are output-relative (`../../src/x.ts` from
+      // `cfSentryShim` (no such export). Maps are uploaded once per Vite
+      // environment from its own output dir. Delete client maps so none ship
+      // as public assets; retain server maps because Cloudflare output can
+      // reference them and Wrangler validates those paths before deployment. Map sources are output-relative (`../../src/x.ts` from
       // dist/server, `../../../src/x.ts` from dist/client/assets); rewriting
       // them repo-relative (`apps/web/src/x.ts`, `packages/schemas/src/y.ts`)
       // lets one Sentry code mapping (repo root -> repo root on main) resolve
       // browser and Worker frames. Without SENTRY_AUTH_TOKEN (PR/preview CI) the plugin warns,
-      // skips the upload, and still injects debug IDs and deletes the maps.
+      // skips the upload, and still injects debug IDs and deletes client maps.
       ...(command === "build"
         ? [
             sentryTanstackStart({
@@ -490,7 +490,7 @@ export default defineConfig(async ({ command }) => {
                         .split(path.sep)
                         .join("/")
                     : source,
-                filesToDeleteAfterUpload: ["./dist/**/*.map"],
+                filesToDeleteAfterUpload: ["./dist/client/**/*.map"],
               },
             }),
           ]

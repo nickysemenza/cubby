@@ -553,20 +553,21 @@ Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflar
 link opens the dashboard, not an individual trace: the custom-span API does not
 expose the active trace ID. These references also survive native API decoding.
 
-Source maps for `apps/web` are generated ("hidden" — emitted to disk but not
-referenced by a `//# sourceMappingURL` comment) and uploaded at deploy by
+Source maps for `apps/web` are generated and uploaded at deploy by
 `sentryTanstackStart` (`vite.config.ts`), under release `cubby@<short sha>` —
 the same value the browser (`router.tsx`) and Worker (`worker-sentry.ts`) SDKs
 report via `Sentry.init`/`withSentry`. The plugin does not inject the release
 into chunks (`release.inject: false`): stamping the commit into every chunk
 would change every client asset's content on every deploy, so each deploy would
-re-upload them all. Uploaded `.map` files are deleted from
-`dist/` afterward so none are served as Worker static assets. Map sources are
+re-upload them all. Client `.map` files are deleted from
+`dist/client/` afterward so none are served as Worker static assets. Server
+maps remain in `dist/server/`: Cloudflare output can reference them with
+`sourceMappingURL`, and Wrangler requires those files when deploying. Map sources are
 rewritten to repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so
 a single Sentry GitHub code mapping (repo root -> repo root on `main`) resolves
 stack frames from both the client bundle and the Worker bundle. The upload needs a `SENTRY_AUTH_TOKEN`
 secret, present only in the `deploy.yaml` workflow; PR/preview builds have no
-token, so the plugin injects debug IDs and deletes the local maps but skips the
+token, so the plugin injects debug IDs and deletes client maps but skips the
 network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
 lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
 them, so they never consume the free-plan error quota.
