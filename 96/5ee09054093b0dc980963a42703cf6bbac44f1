@@ -1,0 +1,111 @@
+.claude/workflows/repo-audit.js
+  s_2a22d2c73c07e5::t_38bd5649be3da1 51,126-127,137-138,148,159-161,183,195,219
+.worktreeinclude
+  s_2a22d2c73c07e5::t_ef5d90c668a69f 11
+apps/apple/AGENTS.md
+  s_2a22d2c73c07e5::t_5c3b4c7f5a3aca 218
+apps/web/AGENTS.md
+  s_2a22d2c73c07e5::t_b64160a196fca5 8,10
+apps/web/DESIGN.md
+  s_2a22d2c73c07e5::t_e295926c88b99c 119
+apps/web/docs/web-runtime.md
+  s_2a22d2c73c07e5::t_61a3a21e79e65a 87,131
+apps/web/docs/web-ui.md
+  s_2a22d2c73c07e5::t_576ccae9e51f7d 73
+apps/web/generator/entities/render/kernel-bindings.ts
+  s_2a22d2c73c07e5::t_32fb373f96d2fa 27
+apps/web/project.json
+  s_2a22d2c73c07e5::t_3038b70d670526 122
+apps/web/src/entity/display/entity-display.financial-transaction.unit.test.tsx
+  s_2a22d2c73c07e5::t_609bb74dc363bd 15,85
+apps/web/src/entity/display/entity-display.product.unit.test.tsx
+  s_2a22d2c73c07e5::t_f2342c419d1747 17
+apps/web/src/entity/display/entity-display.recipe.unit.test.tsx
+  s_2a22d2c73c07e5::t_4c23f4cf793e99 18
+apps/web/src/entity/display/entity-display.task.unit.test.tsx
+  s_2a22d2c73c07e5::t_192a6bb332a8f5 15
+apps/web/src/entity/display/entity-display.unit.test.tsx
+  s_2a22d2c73c07e5::t_7652f026936666 568
+apps/web/src/entity/sortable-fields.ts
+  s_2a22d2c73c07e5::t_b3191958e41dbb 13
+apps/web/src/server/db/freshness/rpc.ts
+  s_2a22d2c73c07e5::t_b1808e7cde31fe 4
+apps/web/src/server/domains/calendar/rpc.ts
+  s_2a22d2c73c07e5::t_b1a30d56d2979a 4
+apps/web/src/server/domains/purchase-import/README.md
+  s_2a22d2c73c07e5::t_7ddfd9918ce0a4 12
+apps/web/src/server/domains/usda-release/rpc.ts
+  s_2a22d2c73c07e5::t_7293838ad2a0da 4
+apps/web/src/server/mcp/catalog-schema.unit.test.ts
+  s_2a22d2c73c07e5::t_37e0590e897b25 660
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_2a22d2c73c07e5::t_f9065c97764544 164
+apps/web/src/server/worker-bindings.ts
+  s_2a22d2c73c07e5::t_346c72ca36b7df 6
+apps/web/tests/e2e/table-column-layout.spec.ts
+  s_2a22d2c73c07e5::t_5fc22f1f91fe92 12
+apps/web/tests/e2e/table-density.spec.ts
+  s_2a22d2c73c07e5::t_af771d7af128db 11
+apps/web/tooling/checks/worker-type-imports.ts
+  s_2a22d2c73c07e5::t_8dcc1428f5092f 6-8
+apps/web/tooling/generator-bootstrap.unit.test.ts
+  s_2a22d2c73c07e5::t_19adc578929b06 18
+apps/web/tooling/globals.d.ts
+  s_2a22d2c73c07e5::t_11067cac2f9875 5
+apps/web/tooling/web-build-provenance.ts
+  s_2a22d2c73c07e5::t_674d0167d90fc1 107
+apps/web/tooling/web-build-provenance.unit.test.ts
+  s_2a22d2c73c07e5::t_47cab571e0bc50 139
+apps/web/tsconfig.app.json
+  s_2a22d2c73c07e5::t_2ac2d04ee129c7 6
+apps/web/tsconfig.json
+  s_2a22d2c73c07e5::t_0fcbf5da13df46 8-9,33
+docs/README.md
+  s_2a22d2c73c07e5::t_8d4a6d6b0396ac 11-12,24-31
+docs/adr/0002-meal-recipe-preparations.md
+  s_2a22d2c73c07e5::t_13425100ed9fc0 1
+docs/adr/0003-meal-nutrition-entries.md
+  s_2a22d2c73c07e5::t_c1440c4c22cc68 1
+docs/adr/0007-generic-entity-links-and-external-ids.md
+  s_2a22d2c73c07e5::t_f8059629fa509a 61
+docs/adr/0018-current-member-filter-token.md
+  s_2a22d2c73c07e5::t_214a28e4782f39 1
+docs/adr/README.md
+  s_2a22d2c73c07e5::t_4c5cd91d9649d3 1-29
+docs/agents/core-journey-e2e.md
+  s_2a22d2c73c07e5::t_05765a13966914 58
+docs/agents/validation-tests.md
+  s_2a22d2c73c07e5::t_4553c312c78443 279-280,292-293
+docs/entities.md
+  s_2a22d2c73c07e5::t_d063e5d76aee47 438,777,911,964-1018,1024,1040-1042,1060-1128,1352,1359,1425-1511,1550,1566,1579
+docs/guide/product-identity-journey.md
+  s_2a22d2c73c07e5::t_86855d0ceb43f1 32
+docs/guide/terminology.md
+  s_2a22d2c73c07e5::t_8e11d9687dc91c 370,394
+docs/infrastructure.md
+  s_2a22d2c73c07e5::t_d69e1eb6739f86 391-394,401-405,407-410,413-421,472-484
+docs/todos.md
+  s_2a22d2c73c07e5::t_753777fb9235a6 133,1251-1272,1699-1709,1803
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_2a22d2c73c07e5::t_2cb8552fa8da29 158
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_2a22d2c73c07e5::t_179ec9f7c763e8 57
+packages/schemas/src/identifiers.ts
+  s_2a22d2c73c07e5::t_4d03d640845bc9 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "965ee09054093b0dc980963a42703cf6bbac44f1",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
