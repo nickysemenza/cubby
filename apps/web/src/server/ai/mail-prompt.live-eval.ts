@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { providerFor } from "@cubby/shared/ai/models";
 import {
@@ -378,6 +380,38 @@ async function evaluateRelevance() {
   const fallbackCases = privateInput
     ? cases
     : [
+        {
+          label: "related",
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: "image/png",
+              dataBase64: readFileSync(
+                new URL(
+                  "../purchase-import/gmail/fixtures/synthetic-seller-payout.png",
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        },
+        {
+          label: "related",
+          body: "See the supplied image for the message content.",
+          html: "",
+          images: [
+            {
+              mimeType: "image/png",
+              dataBase64: readFileSync(
+                new URL(
+                  "../purchase-import/gmail/fixtures/synthetic-tall-receipt.png",
+                  import.meta.url,
+                ),
+              ).toString("base64"),
+            },
+          ],
+        },
         ...cases.slice(0, 2),
         ...cases.slice(-2),
         {
@@ -403,6 +437,7 @@ async function evaluateRelevance() {
     runId: runEntityId.parse(crypto.randomUUID()),
     operation: "mail-relevance-prompt-eval",
   };
+  const confusion: Record<string, number> = {};
   const counts = {
     cases: fallbackCases.length,
     noInference: 0,
@@ -519,6 +554,8 @@ async function evaluateRelevance() {
             classification: guarded.classification,
           }),
         );
+      const cell = `${entry.label}->${guarded.classification}`;
+      confusion[cell] = (confusion[cell] ?? 0) + 1;
       counts.noInference += Number(rawClassification === null);
       counts.rawCorrect += Number(
         rawClassification !== null && rawClassification === entry.label,
@@ -546,6 +583,7 @@ async function evaluateRelevance() {
     JSON.stringify({
       model: MAILBOX_RELEVANCE_FEATURE.model,
       ...counts,
+      confusion,
       usage,
       estimatedUsd: await evalCostUsd(MAILBOX_RELEVANCE_FEATURE.model, usage),
     }),

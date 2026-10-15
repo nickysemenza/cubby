@@ -133,7 +133,6 @@ const readAttachmentContext = async (
 ): Promise<{
   part: MailContentPart;
   encoded: string;
-  byteLength: number;
   imageBytes: Uint8Array | null;
 } | null> => {
   const mimeType = attachment.mimeType;
@@ -160,7 +159,6 @@ const readAttachmentContext = async (
   return {
     part,
     encoded,
-    byteLength: bytes.byteLength,
     imageBytes: mimeType.startsWith("image/") ? bytes : null,
   };
 };
