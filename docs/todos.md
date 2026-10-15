@@ -1661,13 +1661,17 @@ consume the declarations.
   pool/database teardown lifecycle before changing error handling; preserve
   failures from unexpected disconnections.
 
-- 🤔 🧪 🔵 **Measure post-change routing speed and quality.** The
-  2026-10-08 metadata recheck (UTC 2026-09-08 through 2026-10-07, message
-  snapshots deduplicated per parent session) recorded 44.6% of sessions
-  delegating and 56.2% of tokens in subagents, mostly before the routing rule;
-  the earlier 47% figure is a historical baseline.
-  Repeat after a full post-change window using the same accounting and explicit
-  latency/quality evidence; do not infer improvement from token shares alone.
+- 🤔 🧪 🟡 **Measure agent context, routing, and completed-task cost.** Use existing
+  session usage to compare representative tasks before and after the
+  [routing/context defaults](agents/model-routing.md). Verify effective effort,
+  tool-history limits, and skill discovery in Codex CLI, Claude Code, and T3;
+  distinguish repository settings from host overrides and injected catalogs.
+  Confirm required skills remain discoverable and truncated diagnostics support
+  targeted read-back. Deduplicate message snapshots per parent session and
+  account for child usage separately. Compare uncached/cached input, output and
+  reasoning, elapsed time, retries, and review defects per completed task; a lower
+  subagent token share alone is not improvement. Attribute remaining startup
+  overhead before proposing further repository configuration changes.
 
 - 🤔 🧪 🟡 **Capture exact runtime error shapes before broadening suppression.**
   Client-disconnected cancellation, missing update-result, opaque database
