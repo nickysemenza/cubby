@@ -1,0 +1,23 @@
+apps/web/src/ui/data-table/cell-frame.tsx
+  s_8809f27ccf6f1b::t_c58814238df8da 105-110,113,116
+apps/web/src/ui/data-table/editable-entity-cell.tsx
+  s_8809f27ccf6f1b::t_0ac1d1f0804bde 8,120,225-226
+apps/web/src/ui/data-table/editable-entity-cell.unit.test.tsx
+  s_8809f27ccf6f1b::t_f2f48f0a8b3033 117-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "997096563935057889686d1e13264d8bd8da7587",
+  "prompts": {},
+  "sessions": {
+    "s_8809f27ccf6f1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84164ef2-da09-4f9d-9ee1-34c2727abced",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
