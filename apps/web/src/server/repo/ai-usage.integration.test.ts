@@ -150,11 +150,14 @@ describe("listAiUsageForRun", () => {
     const planRow = z.object({
       "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })),
     });
-    let maxJobLoops = 0;
+    let maxRelationLoops = 0;
     const visit = (value: unknown) => {
       const node = planNode.parse(value);
-      if (node["Relation Name"] === "ImageProcessingJob")
-        maxJobLoops = Math.max(maxJobLoops, node["Actual Loops"] ?? 0);
+      if (node["Relation Name"])
+        maxRelationLoops = Math.max(
+          maxRelationLoops,
+          node["Actual Loops"] ?? 0,
+        );
       node.Plans?.forEach(visit);
     };
     try {
@@ -171,7 +174,7 @@ describe("listAiUsageForRun", () => {
         for (const row of result.rows)
           planRow.parse(row)["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
       }
-      expect(maxJobLoops).toBeLessThan(100);
+      expect(maxRelationLoops).toBeLessThan(100);
     } finally {
       await pool.end();
     }
