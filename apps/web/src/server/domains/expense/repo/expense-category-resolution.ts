@@ -9,9 +9,11 @@ import type {
   SpendingCategoryShortcode,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import type {
-  SpendingCategoryMappingMode,
-  VendorSpendingProfile,
+import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
+import {
+  spendingCategoryMappingMode,
+  type SpendingCategoryMappingMode,
+  type VendorSpendingProfile,
 } from "@cubby/schemas/spending-classification";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { sql, type SQL } from "drizzle-orm";
@@ -129,7 +131,7 @@ function expenseSpendingCategoryChoiceSql(
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
   ignoreOverride = false,
-  ancestorCatalog?: SQL,
+  source?: SQL,
 ): SQL {
   const productId = column(alias, "productId");
   const purchaseId = column(alias, "purchaseId");
@@ -145,18 +147,33 @@ function expenseSpendingCategoryChoiceSql(
   );
   const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
   const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
-  const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
+  const productCategory = projectedValue("g", "categoryId", draft?.products);
+  const food = source
+    ? sql`COALESCE(category_feature.feature = ${sqlEnumConstant(productCategoryFeature, productCategoryFeature.enum.food)}, FALSE)`
+    : sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
   const categoryId = sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`;
   return sql`WITH RECURSIVE ancestors AS (
-      ${
-        ancestorCatalog
-          ? sql`SELECT * FROM ${ancestorCatalog} WHERE "rootId"=${categoryId}`
-          : productCategorySpendingAncestorsSql(categoryId, draft)
-      }
+      ${productCategorySpendingAncestorsSql(
+        source ? undefined : categoryId,
+        draft,
+      )}
     ), mapping AS (
-      SELECT a.* FROM ancestors a WHERE a."spendingCategoryMode"<>'inherit' ORDER BY a.depth LIMIT 1
-    ), facts AS (
-      SELECT override_category.id AS override_id,override_category.shortcode AS override_code,
+      ${
+        source
+          ? sql`SELECT DISTINCT ON (a."rootId") a.* FROM ancestors a WHERE a."spendingCategoryMode"<>${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.inherit)} ORDER BY a."rootId", a.depth`
+          : sql`SELECT a.* FROM ancestors a WHERE a."spendingCategoryMode"<>'inherit' ORDER BY a.depth LIMIT 1`
+      }
+    ), ${
+      source
+        ? sql`category_feature AS (
+      SELECT DISTINCT ON (a."rootId") a."rootId", a.feature FROM ancestors a
+      WHERE a.feature IS NOT NULL ORDER BY a."rootId", a.depth
+    ),`
+        : sql``
+    } facts AS (
+      SELECT ${source ? sql`${column(alias, "id")} AS "expenseId",` : sql``}
+        ${principal} AS principal, ${unclassified} AS unclassified, ${productId} AS product_id,
+        override_category.id AS override_id,override_category.shortcode AS override_code,
         p.id AS purchase_id,p.shortcode AS purchase_code,COALESCE(p."displayLabel",p."orderId") AS purchase_name,
         purchase_category.id AS purchase_category_id,p."spendingCategoryOrigin" AS purchase_category_origin,
         m."spendingCategoryMode" AS mapping_mode,m.shortcode AS mapping_code,m.name AS mapping_name,
@@ -164,27 +181,28 @@ function expenseSpendingCategoryChoiceSql(
         v.id AS vendor_id,v.shortcode AS vendor_code,v.name AS vendor_name,${vendorProfile} AS profile,
         vendor_category.id AS vendor_category_id,
         ${food} AS food
-      FROM (VALUES (1)) seed(n)
+      FROM ${source ? sql`${source} ${sql.identifier(alias)}` : sql`(VALUES (1)) seed(n)`}
       LEFT JOIN "Product" g ON g.id=${productId} AND g."deletedAt" IS NULL
       LEFT JOIN "Purchase" p ON p.id=${purchaseId} AND p."deletedAt" IS NULL
       LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
-      LEFT JOIN mapping m ON TRUE
+      LEFT JOIN mapping m ON ${source ? sql`m."rootId"=${productCategory}` : sql`TRUE`}
+      ${source ? sql`LEFT JOIN category_feature ON category_feature."rootId"=${productCategory}` : sql``}
       LEFT JOIN ${categoryCatalog} override_category ON override_category.id=${storedId} AND override_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} purchase_category ON purchase_category.id=${purchaseTarget} AND p."spendingCategoryOrigin" <> 'source' AND purchase_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND mapped_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND vendor_category."deletedAt" IS NULL
     ), candidates AS (
       SELECT f.*,
-        CASE WHEN ${principal} AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND profile IN ('restaurant','coffee_shop') THEN vendor_category_id END AS context_id,
-        CASE WHEN ${principal} AND mapping_mode='mapped' AND (NOT food OR profile IN ('mixed_retail','food_retail')) THEN mapped_id END AS product_mapping_id,
-        CASE WHEN ${principal} AND COALESCE(mapping_mode<>'blocked',TRUE) AND ${productId} IS NULL AND profile IN ('food_retail','restaurant','coffee_shop') THEN vendor_category_id END AS merchant_id
+        CASE WHEN f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND profile IN ('restaurant','coffee_shop') THEN vendor_category_id END AS context_id,
+        CASE WHEN f.principal AND mapping_mode='mapped' AND (NOT food OR profile IN ('mixed_retail','food_retail')) THEN mapped_id END AS product_mapping_id,
+        CASE WHEN f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND f.product_id IS NULL AND profile IN ('food_retail','restaurant','coffee_shop') THEN vendor_category_id END AS merchant_id
       FROM facts f
     ), chosen AS (
       SELECT f.*,
-        CASE WHEN ${unclassified} THEN NULL::uuid ELSE COALESCE(override_id,context_id,product_mapping_id,
-          CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) END AS category_id,
-        CASE WHEN ${unclassified} THEN NULL::uuid ELSE COALESCE(context_id,product_mapping_id,
-          CASE WHEN ${principal} THEN purchase_category_id END,merchant_id) END AS fallback_id
+        CASE WHEN f.unclassified THEN NULL::uuid ELSE COALESCE(override_id,context_id,product_mapping_id,
+          CASE WHEN f.principal THEN purchase_category_id END,merchant_id) END AS category_id,
+        CASE WHEN f.unclassified THEN NULL::uuid ELSE COALESCE(context_id,product_mapping_id,
+          CASE WHEN f.principal THEN purchase_category_id END,merchant_id) END AS fallback_id
       FROM candidates f
     )`;
 }
@@ -222,9 +240,16 @@ export function expenseSpendingCategoryResolutionSql(
 export const effectiveExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
-  ancestorCatalog?: SQL,
 ): SQL =>
-  sql`(${expenseSpendingCategoryChoiceSql(alias, draft, false, ancestorCatalog)} SELECT category_id FROM chosen)`;
+  sql`(${expenseSpendingCategoryChoiceSql(alias, draft)} SELECT category_id FROM chosen)`;
+
+/** One category per input Expense, using the same choice policy as scalar and
+ * explanation reads. The relation supplies Expense identity and policy inputs. */
+export const effectiveExpenseSpendingCategoriesSql = (
+  source: SQL,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): SQL => sql`${expenseSpendingCategoryChoiceSql("e", draft, false, source)}
+  SELECT "expenseId", category_id AS "spendingCategoryId" FROM chosen`;
 export const fallbackExpenseSpendingCategorySql = (alias: string): SQL =>
   sql`(${expenseSpendingCategoryChoiceSql(alias, undefined, true)} SELECT category_id FROM chosen)`;
 export const parseExpenseCategoryResolution = (

@@ -13,8 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 
 import {
-  effectiveExpenseSpendingCategorySql,
-  productCategorySpendingAncestorsSql,
+  effectiveExpenseSpendingCategoriesSql,
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
@@ -90,41 +89,15 @@ export const expenseJointAllocationSql = (
   { categories = true }: { categories?: boolean } = {},
 ): SQL => sql`
   WITH ${
-    categories
-      ? sql`category_ancestry AS MATERIALIZED (
-    WITH RECURSIVE ancestors AS (${productCategorySpendingAncestorsSql(undefined, draft)})
-    SELECT * FROM ancestors
-  ),`
-      : sql``
-  } ${
     expenseIds
       ? sql`selected_expense AS (
     SELECT target."id", target."purchaseId" FROM "Expense" target
     WHERE target."deletedAt" IS NULL AND ${expenseSelectionConditionSql(sql`target."id"`, expenseIds)}
   ),`
       : sql``
-  } principal_fact AS (
-    SELECT e."id" AS "expenseId", e."purchaseId",
-      ${effectiveExpenseProjectSql("e")} AS "projectId",
-      ${
-        // Share the taxonomy walk across principals. Project-only reads skip
-        // both the catalog and category resolution.
-        categories
-          ? effectiveExpenseSpendingCategorySql(
-              "e",
-              draft,
-              sql`category_ancestry`,
-            )
-          : sql`NULL::uuid`
-      } AS "spendingCategoryId",
-      ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
-      e."costType"::text AS "costType",
-      round(e."cost"::numeric * 100)::bigint AS cost_cents,
-      live_purchase."id" IS NOT NULL AS live_purchase,
-      EXISTS (SELECT 1 FROM "Expense" unknown_role
-        WHERE unknown_role."purchaseId" = e."purchaseId"
-          AND unknown_role."deletedAt" IS NULL
-          AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS has_unclassified
+  } principal_input AS (
+    SELECT e.id, e."purchaseId", e."projectId", e."productId", e."spendingCategoryId",
+      e."lineKind", e.trade, e."costType", e.cost
     FROM ${
       expenseIds
         ? sql`(
@@ -138,9 +111,35 @@ export const expenseJointAllocationSql = (
     )`
         : sql`"Expense"`
     } e
+    WHERE e."deletedAt" IS NULL AND e."lineKind" = 'principal'
+  ), ${
+    categories
+      ? sql`principal_categories AS (
+    ${effectiveExpenseSpendingCategoriesSql(sql`principal_input`, draft)}
+  ),`
+      : sql``
+  } principal_fact AS (
+    SELECT e."id" AS "expenseId", e."purchaseId",
+      ${effectiveExpenseProjectSql("e")} AS "projectId",
+      ${
+        // Resolve policy with set-based joins across the selected principals.
+        // Project-only reads omit category resolution entirely.
+        categories
+          ? sql`principal_categories."spendingCategoryId"`
+          : sql`NULL::uuid`
+      } AS "spendingCategoryId",
+      ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
+      e."costType"::text AS "costType",
+      round(e."cost"::numeric * 100)::bigint AS cost_cents,
+      live_purchase."id" IS NOT NULL AS live_purchase,
+      EXISTS (SELECT 1 FROM "Expense" unknown_role
+        WHERE unknown_role."purchaseId" = e."purchaseId"
+          AND unknown_role."deletedAt" IS NULL
+          AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS has_unclassified
+    FROM principal_input e
+    ${categories ? sql`LEFT JOIN principal_categories ON principal_categories."expenseId"=e.id` : sql``}
     LEFT JOIN "Purchase" live_purchase
       ON live_purchase."id" = e."purchaseId" AND live_purchase."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL AND e."lineKind" = 'principal'
   ), purchase_direction AS (
     SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
       coalesce(bool_or(cost_cents < 0), false) AS has_negative,
