@@ -561,6 +561,11 @@ export function shirtGroup(
 ) {
   return {
     groupKey: "shirt",
+    review: {
+      observedName: names.productName,
+      unresolvedReason: null,
+      stockIntent: "receive" as const,
+    },
     images: images.map((entry, index) => ({
       id: entry.imageId,
       purpose: index ? ("label" as const) : ("item" as const),

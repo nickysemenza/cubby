@@ -53,7 +53,10 @@ import {
   runOperation,
   session,
 } from "~/server/db/schema";
-import { approvePhotoGroupProposals } from "~/server/photo-import-run/proposals";
+import {
+  approvePhotoGroupProposals,
+  updatePhotoGroupProductDraft,
+} from "~/server/photo-import-run/proposals";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
@@ -401,6 +404,21 @@ describe("current purchase-agent system boundaries", () => {
           eq(imageProcessingJob.sourceContentHash, checksum),
         ),
       );
+    const unconfirmed = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.publicId },
+      ctx.actor,
+    );
+    expect(unconfirmed.results[0]).toMatchObject({
+      outcome: "failed",
+      error: expect.stringContaining("Confirm"),
+    });
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    await updatePhotoGroupProductDraft(ctx.db, {
+      runId: run.publicId,
+      groupKey: "synthetic-wardrobe-item",
+      name: productName,
+    });
     const approval = await approvePhotoGroupProposals(
       ctx.db,
       { runId: run.publicId },

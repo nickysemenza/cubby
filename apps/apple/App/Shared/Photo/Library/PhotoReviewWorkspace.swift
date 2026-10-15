@@ -15,7 +15,7 @@ final class PhotoReviewWorkspace {
     var selectedGroupKey: String?
     private(set) var approvalKeys: [String] = []
     private(set) var autoStartAttempted = false
-    private var approvalReview: RunReviewDocument?
+    private(set) var approvalReview: RunReviewDocument?
 
     func proposed(_ session: RunReviewSession) -> [PhotoGroupProposal] {
         session.review?.review.proposals.filter { $0.state == .proposed } ?? []
@@ -131,7 +131,7 @@ private struct PhotoReviewConfirmations: ViewModifier {
         ) {
             switch confirmation {
             case .group:
-                Button("Create or link product") { approve() }
+                Button("Apply reviewed decision") { approve() }
             case .all, .selected:
                 Button("Approve \(workspace.approvalKeys.count) items") { approve() }
             case .discard:
@@ -150,11 +150,15 @@ private struct PhotoReviewConfirmations: ViewModifier {
         } message: {
             switch confirmation {
             case .group:
-                Text("This attaches the photos and commits the proposed product choice.")
+                if let group = workspace.approvalReview?.review?.review.proposals.first(where: {
+                    workspace.approvalKeys.contains($0.groupKey)
+                }) {
+                    Text(PhotoReviewPolicy.effects(group: group))
+                }
             case .selected:
-                Text("Products are created or linked only for the selected, ready items.")
+                Text("Apply the Product and stock decisions shown for these selected items.")
             case .all:
-                Text("Products are created or linked only after this confirmation.")
+                Text("Apply every resolved Product and stock decision shown in this review.")
             case .discard, nil:
                 EmptyView()
             }

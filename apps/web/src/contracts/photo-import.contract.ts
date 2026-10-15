@@ -379,7 +379,7 @@ export const photoImportContract = defineContract("photoImport", {
         .optional(),
     }),
     output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly"],
+    invalidates: ["runOnly", "product", "inventory"],
   }),
   discardGroup: mutation({
     native: "Discard a proposed photo group in Apple apps",
@@ -516,6 +516,6 @@ export const photoImportContract = defineContract("photoImport", {
   commitGroup: mutation({
     input: commitPhotoGroupInput,
     output: commitPhotoGroupOutput,
-    invalidates: ["runOnly"],
+    invalidates: ["runOnly", "product", "inventory"],
   }),
 });

@@ -24,7 +24,11 @@ import {
   reconcileSettledRun,
   stopRunForReview,
 } from "~/server/purchase-import/run-service";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -34,6 +38,7 @@ import { mergeLedgerParties } from "~/server/repo/ledger-party";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
+  createInventoryFixture,
   createLocationFixture,
   createProductFixture,
   makeLocationInput,
@@ -108,6 +113,7 @@ describe("photo group proposals", () => {
     groupKey: string,
     imageCodes: string[],
     name = `Synthetic Item ${groupKey}`,
+    stockIntent: "evidence" | "receive" = "evidence",
   ): PhotoGroupProposalGroup => ({
     groupKey,
     images: imageCodes.map((id, index) => ({
@@ -115,6 +121,7 @@ describe("photo group proposals", () => {
       purpose: index === 0 ? "item" : "label",
     })),
     product: { kind: "create", create: { name } },
+    review: { observedName: name, unresolvedReason: null, stockIntent },
   });
 
   const readRow = async (runId: string, groupKey: string) => {
@@ -129,6 +136,463 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  // Legacy prose-only ambiguity and failed field edits must not commit stock
+  // or attach evidence to a guessed variant. Retrying a reviewed edit is once-only.
+  it("requires explicit identity resolution and atomically applies selected Product changes", async () => {
+    const { run, codes } = await seedRun(1);
+    const original = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic blue shirt" }),
+      ctx.actor,
+    );
+    const draft = {
+      ...createGroup("reviewed-shirt", codes),
+      product: {
+        kind: "existing" as const,
+        existingId: parseShortcodeFor("product", original.id),
+      },
+      review: {
+        observedName: "Blue shirt",
+        unresolvedReason: "Choose the size",
+        stockIntent: "evidence" as const,
+        productChanges: { notes: "Label: medium" },
+      },
+    };
+    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    await expect(
+      commitPhotoGroup(ctx.db, { ...draft, runId: run.shortcode }, ctx.actor),
+    ).rejects.toThrow("Choose the size");
+    const blocked = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(blocked.results).toEqual([
+      expect.objectContaining({
+        outcome: "failed",
+        error: expect.stringContaining("Choose the size"),
+      }),
+    ]);
+    expect((await readRow(run.id, draft.groupKey))?.state).toBe("proposed");
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        { ...draft, review: { ...draft.review, unresolvedReason: null } },
+      ],
+    });
+    const applied = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(applied.results[0]?.outcome).toBe("committed");
+    const [saved] = await getDb(ctx.db)
+      .select({ name: product.name, notes: product.notes })
+      .from(product)
+      .where(eq(product.id, original.entityId));
+    expect(saved).toEqual({
+      name: "Synthetic blue shirt",
+      notes: "Label: medium",
+    });
+    const replay = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: [draft.groupKey] },
+      ctx.actor,
+    );
+    expect(replay.results[0]?.outcome).toBe("replayed");
+  });
+
+  // A failed receive must roll back selected fields and attachments with stock.
+  it("rolls back selected Product changes when receiving Inventory fails", async () => {
+    const { run, codes } = await seedRun(1);
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic review closet",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const original = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic rollback shirt",
+        notes: "Original notes",
+      }),
+      ctx.actor,
+    );
+    const draft: PhotoGroupProposalGroup = {
+      ...createGroup("rollback", codes),
+      product: {
+        kind: "existing",
+        existingId: parseShortcodeFor("product", original.id),
+      },
+      review: {
+        observedName: "Synthetic shirt",
+        unresolvedReason: null,
+        stockIntent: "receive",
+        productChanges: { notes: "Reviewed notes" },
+      },
+      inventory: {
+        locationId: parseShortcodeFor("location", closet.id),
+        ownershipMode: "explicit",
+        quantity: 1,
+      },
+    };
+    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    const failed = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(failed.results[0]).toMatchObject({
+      outcome: "failed",
+      error: expect.stringContaining("ownerPartyId"),
+    });
+    const [unchanged] = await getDb(ctx.db)
+      .select({ notes: product.notes })
+      .from(product)
+      .where(eq(product.id, original.entityId));
+    expect(unchanged?.notes).toBe("Original notes");
+    const [target] = await getDb(ctx.db)
+      .select({
+        state: photoRunImage.state,
+        receipt: photoRunImage.commitReceipt,
+      })
+      .from(photoRunImage)
+      .where(eq(photoRunImage.runId, run.id));
+    expect(target).toMatchObject({ state: "pending", receipt: null });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        { ...draft, inventory: { ...draft.inventory!, ownerPartyId: null } },
+      ],
+    });
+    expect(
+      (
+        await approvePhotoGroupProposals(
+          ctx.db,
+          { runId: run.shortcode },
+          ctx.actor,
+        )
+      ).results[0]?.outcome,
+    ).toBe("committed");
+  });
+
+  it("requires a legacy proposal to be explicitly confirmed through a native edit", async () => {
+    const { run, codes } = await seedRun(1);
+    const draft = createGroup("legacy", codes, "Synthetic legacy shirt");
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [{ ...draft, review: undefined }],
+    });
+    expect(
+      (
+        await approvePhotoGroupProposals(
+          ctx.db,
+          { runId: run.shortcode },
+          ctx.actor,
+        )
+      ).results[0],
+    ).toMatchObject({
+      outcome: "failed",
+      error: expect.stringContaining("Confirm"),
+    });
+    const confirmed = await updatePhotoGroupProductDraft(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "legacy",
+      name: "Synthetic confirmed shirt",
+    });
+    expect(confirmed.proposals[0]?.review).toMatchObject({
+      observedName: "Synthetic legacy shirt",
+      unresolvedReason: null,
+      stockIntent: "evidence",
+    });
+    expect(
+      (
+        await approvePhotoGroupProposals(
+          ctx.db,
+          { runId: run.shortcode },
+          ctx.actor,
+        )
+      ).results[0]?.outcome,
+    ).toBe("committed");
+  });
+
+  // Receipt settlement can fail after the Product, photos and stock commit.
+  it("reconciles a committed receipt before a retry saves the same group", async () => {
+    const { run, codes } = await seedRun(1);
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic settlement closet",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const draft: PhotoGroupProposalGroup = {
+      ...createGroup("settlement", codes),
+      review: {
+        observedName: "Synthetic receipt item",
+        unresolvedReason: null,
+        stockIntent: "receive",
+      },
+      inventory: {
+        locationId: parseShortcodeFor("location", closet.id),
+        quantity: 2,
+      },
+    };
+    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    const database = getDb(ctx.db);
+    await database.execute(
+      sql.raw(`CREATE FUNCTION test_failed_proposal_settlement() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.state = 'committed' AND OLD."lastError" IS NULL THEN
+          RAISE EXCEPTION 'Synthetic settlement failure';
+        END IF;
+        RETURN NEW;
+      END $$ LANGUAGE plpgsql`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER test_failed_proposal_settlement BEFORE UPDATE ON "PhotoGroupProposal"
+      FOR EACH ROW EXECUTE FUNCTION test_failed_proposal_settlement()`),
+    );
+    try {
+      const failed = await approvePhotoGroupProposals(
+        ctx.db,
+        { runId: run.shortcode },
+        ctx.actor,
+      );
+      expect(failed.results[0]).toMatchObject({
+        outcome: "failed",
+        error: expect.stringContaining("committed"),
+      });
+      expect((await readRow(run.id, "settlement"))?.state).toBe("proposed");
+      const saved = await proposePhotoGroups(ctx.db, {
+        runId: run.shortcode,
+        groups: [draft],
+      });
+      expect(saved.frozenGroupKeys).toEqual(["settlement"]);
+      expect(saved.proposals[0]?.state).toBe("committed");
+      expect(
+        (
+          await approvePhotoGroupProposals(
+            ctx.db,
+            { runId: run.shortcode, groupKeys: ["settlement"] },
+            ctx.actor,
+          )
+        ).results[0]?.outcome,
+      ).toBe("replayed");
+      const stock = await database
+        .select({ id: inventoryEntry.id })
+        .from(inventoryEntry)
+        .where(
+          eq(
+            inventoryEntry.productId,
+            (await readRow(run.id, "settlement"))!.productId!,
+          ),
+        );
+      expect(stock).toHaveLength(1);
+    } finally {
+      await database.execute(
+        sql.raw(
+          `DROP TRIGGER test_failed_proposal_settlement ON "PhotoGroupProposal"`,
+        ),
+      );
+      await database.execute(
+        sql.raw(`DROP FUNCTION test_failed_proposal_settlement()`),
+      );
+    }
+  });
+
+  it.each([
+    {
+      review: {
+        observedName: "Synthetic item",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+        productChanges: { notes: "Ignored edit" },
+      },
+      product: {
+        kind: "create" as const,
+        create: { name: "Synthetic incompatible edit" },
+      },
+      error: /existing Product/i,
+    },
+  ])(
+    "refuses inconsistent review intent before proposal or direct commit",
+    async ({ review, product, error }) => {
+      const { run, codes } = await seedRun(1);
+      const group = { ...createGroup("intent", codes), product, review };
+      await expect(
+        proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [group] }),
+      ).rejects.toThrow(error);
+      await expect(
+        commitPhotoGroup(ctx.db, { ...group, runId: run.shortcode }, ctx.actor),
+      ).rejects.toThrow(error);
+    },
+  );
+
+  // Native decodes an empty changes object as a non-nil edit; normalize it
+  // before publication so clearing the last checkbox re-enables all clients.
+  it("omits empty Product changes after the last selected edit is cleared", async () => {
+    const { run, codes } = await seedRun(1);
+    const original = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic unchanged shirt" }),
+      ctx.actor,
+    );
+    const saved = await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("empty-edits", codes),
+          product: {
+            kind: "existing",
+            existingId: parseShortcodeFor("product", original.id),
+          },
+          review: {
+            observedName: "Synthetic observed shirt",
+            unresolvedReason: null,
+            stockIntent: "evidence",
+            productChanges: {},
+          },
+        },
+      ],
+    });
+    expect(saved.proposals[0]?.review?.productChanges).toBeUndefined();
+    expect(
+      (await listPhotoGroupProposals(ctx.db, run.shortcode)).proposals[0]
+        ?.review?.productChanges,
+    ).toBeUndefined();
+  });
+
+  it("saves an incomplete receive draft but refuses to apply it", async () => {
+    const { run, codes } = await seedRun(1);
+    const draft = createGroup(
+      "incomplete",
+      codes,
+      "Synthetic incomplete receive",
+      "receive",
+    );
+    const saved = await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
+    expect(saved.proposals[0]?.review?.stockIntent).toBe("receive");
+    const applied = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(applied.results[0]).toMatchObject({
+      outcome: "failed",
+      error: expect.stringMatching(/receive decision requires Inventory/i),
+    });
+    await expect(
+      commitPhotoGroup(ctx.db, { ...draft, runId: run.shortcode }, ctx.actor),
+    ).rejects.toThrow(/receive decision requires Inventory/i);
+    expect((await readRow(run.id, "incomplete"))?.state).toBe("proposed");
+  });
+
+  it("clears destination-specific field edits and stock selection when choosing a different Product", async () => {
+    const { run, codes } = await seedRun(1);
+    const [first, second] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Synthetic first variant",
+          notes: "First notes",
+        }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Synthetic second variant",
+          notes: "Second notes",
+        }),
+        ctx.actor,
+      ),
+    ]);
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic variant closet",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const stock = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: first.id,
+        locationId: closet.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("variant", codes),
+          product: {
+            kind: "existing",
+            existingId: parseShortcodeFor("product", first.id),
+          },
+          review: {
+            observedName: "Synthetic observed variant",
+            unresolvedReason: null,
+            stockIntent: "receive",
+            productChanges: { notes: "Reviewed first variant" },
+          },
+          inventory: {
+            locationId: parseShortcodeFor("location", closet.id),
+            quantity: 1,
+            mode: "add",
+            existingEntryId: parseShortcodeFor("inventory", stock.id),
+          },
+        },
+      ],
+    });
+    const same = await chooseExistingProductForPhotoGroup(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "variant",
+      productId: first.id,
+    });
+    expect(same.proposals[0]?.review?.productChanges).toEqual({
+      notes: "Reviewed first variant",
+    });
+    expect(same.proposals[0]?.inventory?.existingEntryId).toBe(stock.id);
+    const changed = await chooseExistingProductForPhotoGroup(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "variant",
+      productId: second.id,
+    });
+    expect(changed.proposals[0]?.review).toMatchObject({
+      observedName: "Synthetic observed variant",
+      stockIntent: "receive",
+    });
+    expect(changed.proposals[0]?.review?.productChanges).toBeUndefined();
+    expect(changed.proposals[0]?.inventory?.existingEntryId).toBeUndefined();
+    expect(changed.proposals[0]?.inventory?.mode).toBe("create");
+    expect(
+      (
+        await approvePhotoGroupProposals(
+          ctx.db,
+          { runId: run.shortcode },
+          ctx.actor,
+        )
+      ).results[0]?.outcome,
+    ).toBe("committed");
+    const [unchanged] = await getDb(ctx.db)
+      .select({ notes: product.notes })
+      .from(product)
+      .where(eq(product.id, second.entityId));
+    expect(unchanged?.notes).toBe("Second notes");
+  });
 
   // Regression: `assertPhotoRunReviewer` is every review handler's gate
   // (`photoImportHandlers` in `photo-import.server.ts` calls it before doing
@@ -265,6 +729,11 @@ describe("photo group proposals", () => {
       groups: [
         {
           ...createGroup("shirt", [codes[0]!]),
+          review: {
+            observedName: "Synthetic observed shirt",
+            unresolvedReason: "Choose the exact size",
+            stockIntent: "counted",
+          },
           skip: [
             {
               id: parseShortcodeFor("image", codes[1]!),
@@ -286,6 +755,11 @@ describe("photo group proposals", () => {
     expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
     expect(group?.skip).toEqual([{ id: codes[1], reason: "Duplicate angle" }]);
     expect(group?.evidence).toBe("One shirt with a duplicate photo");
+    expect(group?.review).toMatchObject({
+      observedName: "Synthetic observed shirt",
+      unresolvedReason: null,
+      stockIntent: "counted",
+    });
 
     const approved = await approvePhotoGroupProposals(
       ctx.db,
@@ -471,7 +945,7 @@ describe("photo group proposals", () => {
       runId: run.shortcode,
       groups: [
         {
-          ...createGroup("coat", codes, "Synthetic Rain Coat"),
+          ...createGroup("coat", codes, "Synthetic Rain Coat", "receive"),
           inventory: {
             locationId: parseShortcodeFor("location", closet.id),
             quantity: 1,
@@ -780,7 +1254,7 @@ describe("photo group proposals", () => {
       runId: run.shortcode,
       groups: [
         {
-          ...createGroup("boots", codes, "Synthetic Hiking Boots"),
+          ...createGroup("boots", codes, "Synthetic Hiking Boots", "receive"),
           // Explicit ownership with no owner key is refused by the writer.
           inventory: {
             locationId: parseShortcodeFor("location", closet.id),
@@ -918,7 +1392,7 @@ describe("photo group proposals", () => {
       runId: run.shortcode,
       groups: [
         {
-          ...createGroup("owned", codes),
+          ...createGroup("owned", codes, "Synthetic Owned Lamp", "receive"),
           product: {
             kind: "create",
             create: {
@@ -1054,65 +1528,106 @@ describe("photo group proposals", () => {
     ).toEqual({ kept: "committed", gone: "discarded", rest: "discarded" });
   });
 
-  // Regression: an approval marked the row committed AFTER the writer ran,
-  // so a save landing between its read and its commit froze a roster and
-  // Product choice that were never committed.
-  it("freezes what the approval committed, not a save that landed mid-approval", async () => {
+  // A save can win after the request's revision precheck but before its writer
+  // acquires the Run lock. The stale approval must preserve the newer draft.
+  it("rechecks the proposal revision under the domain write lock and preserves a concurrent edit", async () => {
     const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, {
+    const original = createGroup("hat", [codes[0]!], "Synthetic original hat");
+    const initial = await proposePhotoGroups(ctx.db, {
       runId: run.shortcode,
-      groups: [createGroup("hat", [codes[0]!], "Synthetic Sun Hat")],
+      groups: [original],
     });
-    // A concurrent save, landed inside the writer's transaction: the trigger
-    // rewrites the row the approval already read. The file's database is
-    // reused across tests, so the trigger is dropped in `finally`.
-    const firstId = (await readRow(run.id, "hat"))!.images[0]!.imageId;
-    const [other] = await getDb(ctx.db)
-      .select({ imageId: photoRunImage.imageId })
-      .from(photoRunImage)
-      .where(
-        and(
-          eq(photoRunImage.runId, run.id),
-          sql`${photoRunImage.imageId} <> ${firstId}`,
-        ),
-      );
-    const db = getDb(ctx.db);
-    await db.execute(
-      sql.raw(`CREATE FUNCTION test_mid_approval_save() RETURNS trigger AS $$
-        BEGIN
-          UPDATE "PhotoGroupProposal"
-          SET "productCreate" = '{"name":"Edited Straw Hat"}'::jsonb,
-              images = images || '[{"imageId":"${other!.imageId}","purpose":"label"}]'::jsonb
-          WHERE "runId" = NEW."runId" AND "groupKey" = 'hat' AND state = 'proposed';
-          RETURN NEW;
-        END $$ LANGUAGE plpgsql`),
-    );
-    await db.execute(
-      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "PhotoRunImage"
-        FOR EACH ROW EXECUTE FUNCTION test_mid_approval_save()`),
-    );
-
-    let approved: Awaited<ReturnType<typeof approvePhotoGroupProposals>>;
+    const revision = initial.proposals[0]!.updatedAt;
+    let approval:
+      | Promise<Awaited<ReturnType<typeof approvePhotoGroupProposals>>>
+      | undefined;
+    let approved:
+      | Awaited<ReturnType<typeof approvePhotoGroupProposals>>
+      | undefined;
     try {
-      approved = await approvePhotoGroupProposals(
-        ctx.db,
-        { runId: run.shortcode },
-        ctx.actor,
-      );
+      await withTransactionDatabase(ctx.db, async (holder) => {
+        const connection = await getDb(holder).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        const pid = connection.rows[0]!.pid;
+        await getDb(holder)
+          .select({ id: runTable.id })
+          .from(runTable)
+          .where(eq(runTable.id, run.id))
+          .for("update");
+        approval = approvePhotoGroupProposals(
+          ctx.db,
+          {
+            runId: run.shortcode,
+            groupKeys: ["hat"],
+            expectedRevisions: [{ groupKey: "hat", updatedAt: revision }],
+          },
+          ctx.actor,
+        );
+        // Observe the writer actually waiting for this transaction, so the
+        // edit lands after its initial precheck with no timing assumption.
+        await expect
+          .poll(
+            async () => {
+              const waiting = await getDb(ctx.db).execute<{
+                count: number;
+              }>(sql`
+            SELECT count(*)::int AS count FROM pg_stat_activity
+            WHERE datname = current_database() AND ${pid} = ANY(pg_blocking_pids(pid))`);
+              return waiting.rows[0]!.count;
+            },
+            { timeout: 5_000, interval: 20 },
+          )
+          .toBe(1);
+        await proposePhotoGroups(holder, {
+          runId: run.shortcode,
+          groups: [createGroup("hat", codes, "Synthetic edited hat")],
+        });
+      });
     } finally {
-      await db.execute(
-        sql.raw(`DROP TRIGGER test_mid_approval_save ON "PhotoRunImage"`),
-      );
-      await db.execute(sql.raw(`DROP FUNCTION test_mid_approval_save()`));
+      if (approval) approved = await approval;
     }
-
-    expect(approved.results).toEqual([
-      { groupKey: "hat", outcome: "committed" },
+    expect(approved?.results).toEqual([
+      {
+        groupKey: "hat",
+        outcome: "failed",
+        error: expect.stringContaining("Photo group review changed"),
+      },
     ]);
-    const row = await readRow(run.id, "hat");
-    expect(row?.images).toHaveLength(1);
-    expect(row?.productCreate).toMatchObject({ name: "Synthetic Sun Hat" });
-    expect(approved.unassignedImageIds).toEqual([codes[1]]);
+    const saved = await readRow(run.id, "hat");
+    expect(saved).toMatchObject({
+      state: "proposed",
+      productCreate: { name: "Synthetic edited hat" },
+      lastError: null,
+    });
+    expect(saved?.images).toHaveLength(2);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(ilike(product.name, "Synthetic original hat")),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ state: photoRunImage.state })
+        .from(photoRunImage)
+        .where(eq(photoRunImage.runId, run.id)),
+    ).toEqual([{ state: "pending" }, { state: "pending" }]);
+    const current = (await listPhotoGroupProposals(ctx.db, run.shortcode))
+      .proposals[0]!;
+    const retry = await approvePhotoGroupProposals(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKeys: ["hat"],
+        expectedRevisions: [{ groupKey: "hat", updatedAt: current.updatedAt }],
+      },
+      ctx.actor,
+    );
+    expect(retry.results).toEqual([{ groupKey: "hat", outcome: "committed" }]);
+    expect(retry.proposals[0]?.committedProduct?.name).toBe(
+      "Synthetic edited hat",
+    );
   });
   // Household data must survive 0067: a stored person proposal keeps its owner
   // column, and a stored unassigned one stays household stock.
@@ -1135,11 +1650,21 @@ describe("photo group proposals", () => {
       runId: run.shortcode,
       groups: [
         {
-          ...createGroup("person", [codes[0]!]),
+          ...createGroup(
+            "person",
+            [codes[0]!],
+            "Synthetic person item",
+            "receive",
+          ),
           inventory: inventory(owner.shortcode),
         },
         {
-          ...createGroup("household", [codes[1]!]),
+          ...createGroup(
+            "household",
+            [codes[1]!],
+            "Synthetic household item",
+            "receive",
+          ),
           inventory: inventory(null),
         },
       ],

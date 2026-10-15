@@ -307,9 +307,10 @@ export async function photoProductCandidates(
   actor: ActorContext,
 ): Promise<PhotoProductCandidate[]> {
   const name =
-    proposal.product.kind === "create"
+    proposal.review?.observedName ??
+    (proposal.product.kind === "create"
       ? proposal.product.create.name
-      : (proposal.product.existing?.name ?? proposal.committedProduct?.name);
+      : (proposal.product.existing?.name ?? proposal.committedProduct?.name));
   if (!name) return [];
   const manufacturer =
     proposal.product.kind === "create"

@@ -32,6 +32,25 @@ public enum PhotoGroupingReadiness: Equatable, Sendable {
 }
 
 public enum PhotoReviewPolicy {
+    public static func effects(group: PhotoGroupProposal) -> String {
+        let productEffect: String
+        switch group.product {
+        case .create(let product):
+            productEffect = "Create \(product.create.name) and attach \(group.images.count) photos."
+        case .existing(let product):
+            productEffect =
+                "Attach \(group.images.count) photos to \(product.existing?.name ?? "the selected Product"). Keep Product fields, gallery order and cover."
+        }
+        let stockEffect: String
+        if let inventory = group.inventory {
+            stockEffect =
+                "\(inventory.mode == .add ? "Add" : "Create a count of") \(inventory.quantity) at \(inventory.locationName ?? "the selected location")."
+        } else {
+            stockEffect = "No stock change. Historical photos do not record a sale."
+        }
+        return "\(productEffect) \(stockEffect) \(group.skip.count) photos skipped."
+    }
+
     public static func approvableSelection(
         selected: Set<String>, groups: [PhotoGroupProposal], images: [PhotoRunImage],
         runStatus: RunStatus?
@@ -60,6 +79,16 @@ public enum PhotoReviewPolicy {
     public static func approvalBlocker(
         group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: RunStatus?
     ) -> String? {
+        guard let review = group.review else {
+            return "Confirm identity by choosing a Product or saving the proposed Product draft."
+        }
+        if let reason = review.unresolvedReason { return reason }
+        if review.productChanges != nil {
+            return "Review selected Product field changes on the web before applying this group."
+        }
+        if review.stockIntent == .receive && group.inventory?.locationId == nil {
+            return "Choose a location before receiving stock."
+        }
         if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
         let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
         if (group.images.map(\.id) + group.skip.map(\.id)).contains(where: {

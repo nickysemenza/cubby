@@ -416,7 +416,7 @@ export const financialTransactionEvidenceFingerprintSql = (
   alias: string,
 ): SQL => sql`(
   SELECT jsonb_agg(jsonb_build_object('purchaseId', ep_fingerprint_purchase.id, 'amount', ep_fingerprint_allocation.amount,
-    'evidence', ${purchaseEvidenceFingerprintSql("ep_fingerprint_purchase")}) ORDER BY ep_fingerprint_purchase.id)
+    ${"evidence"}::text, ${purchaseEvidenceFingerprintSql("ep_fingerprint_purchase")}) ORDER BY ep_fingerprint_purchase.id)
   FROM "FinancialTransactionAllocation" ep_fingerprint_allocation
   JOIN "Purchase" ep_fingerprint_purchase ON ep_fingerprint_purchase.id = ep_fingerprint_allocation."purchaseId" AND ep_fingerprint_purchase."deletedAt" IS NULL
   WHERE ep_fingerprint_allocation."transactionId" = ${column(alias, "id")} AND ep_fingerprint_allocation."deletedAt" IS NULL

@@ -1,4 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import * as externalFetch from "@cubby/shared/external-fetch";
 import {
   createModels,
   fauxAssistantMessage,
@@ -10,7 +11,7 @@ import {
   type ModelsApiStreamOptions,
   type UserMessage,
 } from "@earendil-works/pi-ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import type { GatewayCallOptions } from "~/server/ai/gateway";
@@ -261,6 +262,51 @@ it("keeps paid admission refusal as the terminal cause after a recovered subscri
 });
 
 describe("runStructuredFeature", () => {
+  it.each([
+    ["invalid", "application/octet-stream"],
+    ["image/png; charset=utf-8", "image/png"],
+  ])(
+    "normalizes upstream content type %s with a binary MIME fallback",
+    async (contentType, mimeType) => {
+      const fetch = vi
+        .spyOn(externalFetch, "fetchExternalResponse")
+        .mockResolvedValue(
+          new Response("synthetic image bytes", {
+            headers: { "content-type": contentType },
+          }),
+        );
+      try {
+        const { calls, ports } = fakePorts([
+          respondWith(PRODUCT_IDENTIFICATION_FIXTURE),
+        ]);
+        await runStructuredFeature(
+          PRODUCT_IDENTIFICATION_FEATURE,
+          {
+            systemPrompts: ["Read image evidence."],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image",
+                    source: { type: "url", value: "https://example.com/image" },
+                  },
+                ],
+              },
+            ],
+          },
+          { runId, operation: "suggestCategory" },
+          ports,
+        );
+        expect(calls[0]?.context.messages[0]?.content).toEqual([
+          expect.objectContaining({ mimeType }),
+        ]);
+      } finally {
+        fetch.mockRestore();
+      }
+    },
+  );
+
   it("passes transient inline receipt bytes to the provider without fetching a URL", async () => {
     const { calls, ports } = fakePorts([
       respondWith(PRODUCT_IDENTIFICATION_FIXTURE),

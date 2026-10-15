@@ -18,7 +18,7 @@ console_error_panic_hook = "0.1.7"
 # validation, assembly, references) lives upstream in `cookbook::wasm`; this
 # crate only re-exports it. No native features (reqwest, fs) reach the wasm
 # build. Same rev as recipebridge's ingredient-parser crates.
-cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", default-features = false, features = [
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", default-features = false, features = [
   "wasm",
 ] }
 

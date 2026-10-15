@@ -67,7 +67,7 @@ resolve_profile() {
 
   uuid="$(jq -r --arg name "$expected_name" --arg type "$expected_type" \
     '.[] | select(.name == $name and .type == $type) | .udid' <<< "$profiles")"
-  path="$HOME/Library/MobileDevice/Provisioning Profiles/${uuid}.${extension}"
+  path="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/${uuid}.${extension}"
   [[ -f "$path" ]] || {
     echo "error: downloaded profile was not installed at $path" >&2
     exit 1

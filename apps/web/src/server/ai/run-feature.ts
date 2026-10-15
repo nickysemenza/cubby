@@ -46,7 +46,7 @@ import {
   type ToolCall,
   type UserMessage,
 } from "@earendil-works/pi-ai";
-import { parse as parseContentType } from "content-type";
+import { isTokenValid, parse as parseContentType } from "content-type";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
@@ -384,11 +384,14 @@ async function resolveImageContent(
   const mimeType = part.source.mimeType
     ? rawContentType
     : (() => {
-        try {
-          return parseContentType(rawContentType).type;
-        } catch {
-          return "application/octet-stream";
-        }
+        // The parser is lenient; only forward a valid type/subtype to AI providers.
+        const { type } = parseContentType(rawContentType);
+        const separator = type.indexOf("/");
+        return separator > 0 &&
+          isTokenValid(type, 0, separator) &&
+          isTokenValid(type, separator + 1)
+          ? type
+          : "application/octet-stream";
       })();
   const bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
   return {

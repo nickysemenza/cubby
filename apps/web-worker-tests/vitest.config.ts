@@ -3,11 +3,7 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
-/**
- * Cloudflare's test plugin still relies on Vitest 4 internals. Keep this
- * package as the resolver root so `/vitest/worker` cannot resolve the web
- * app's Vitest 5 installation; the suites themselves remain beside the code.
- */
+// Resolve the Worker suites and their Cloudflare plugin from this package.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [
@@ -54,6 +50,8 @@ export default defineConfig({
   },
   test: {
     name: "calendar-worker",
+    // workerd cannot read Vitest 5's transformed modules from the host filesystem.
+    fsModuleCache: false,
     include: [
       "../web/src/server/calendar/**/*.workers.test.ts",
       "../web/src/server/database-freshness/**/*.workers.test.ts",

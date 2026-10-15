@@ -49,6 +49,195 @@ test.afterEach(async ({ e2eRuntime }) => {
   await configureVariantDecisions(e2eRuntime.harness, []);
 });
 
+// Applying historical evidence must neither receive stock nor replace fields
+// the reviewer did not select. An unresolved proposal and a fractional count
+// cannot be applied using an older saved payload.
+test("resolves identity, validates counts, and applies selected fields without receiving historical stock", async ({
+  page,
+  e2eRuntime,
+}) => {
+  // Includes upload seeding, lazy hydration, and several persisted edits.
+  test.setTimeout(Math.max(test.info().timeout, 60_000));
+  const name = `Synthetic review ${Date.now()}`;
+  const existing = await createEntityFixture(page, "product", {
+    name: `${name} shirt`,
+    notes: "Original catalog notes",
+  });
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
+  const incompatibleStock = await createEntityFixture(page, "inventory", {
+    productId: existing.id,
+    locationId: seed.location.id,
+    amount: { value: 2, unit: "kg" },
+  });
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    {
+      runId: seed.runId,
+      groups: [
+        {
+          ...seed.groups[0]!,
+          product: { kind: "existing", existingId: existing.id },
+          review: {
+            observedName: "Blue cotton shirt",
+            unresolvedReason: "Confirm the label size",
+            stockIntent: "receive",
+          },
+        },
+        seed.groups[1]!,
+      ],
+    },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-group-g1`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const other = page.locator("#photo-group-g2");
+  await other.scrollIntoViewIfNeeded();
+  await other.getByRole("combobox", { name: "stock decision" }).click();
+  await page
+    .getByRole("option", { name: "Receive newly counted stock", exact: true })
+    .click();
+  await expect(
+    other.getByText("Choose a location before receiving stock."),
+  ).toBeVisible();
+  await expect(
+    other.getByRole("button", { name: "Create Product", exact: true }),
+  ).toBeDisabled();
+  await other.getByRole("combobox", { name: "stock decision" }).click();
+  await page
+    .getByRole("option", { name: "Catalog evidence only", exact: true })
+    .click();
+  const group = page.locator("#photo-group-g1");
+  await expect(
+    group.getByRole("button", { name: "Attach photos", exact: true }),
+  ).toBeDisabled();
+  await group
+    .getByRole("button", { name: "Confirm identity", exact: true })
+    .click();
+  // A failed existing-entry selection can be replaced with a fresh count.
+  await group.getByRole("combobox", { name: "existing stock entry" }).click();
+  await page
+    .getByRole("option")
+    .filter({ hasText: `${name} shirt` })
+    .first()
+    .click();
+  await expect(
+    group.getByText("Retry the stock-entry selection before applying"),
+  ).toBeVisible();
+  await group
+    .getByRole("button", { name: "Create a fresh count here", exact: true })
+    .click();
+  await expect(
+    group.getByText("Retry the stock-entry selection before applying"),
+  ).toHaveCount(0);
+  const quantity = group.getByRole("spinbutton", { name: "Qty" });
+  await quantity.fill("1.5");
+  await group
+    .getByRole("button", { name: "Attach photos", exact: true })
+    .click();
+  await expect(
+    group.getByText("Enter a whole number greater than 0."),
+  ).toBeVisible();
+  await expect(
+    group.getByRole("button", { name: "Attach photos", exact: true }),
+  ).toBeVisible();
+  await quantity.fill("1");
+  await quantity.blur();
+  await group.getByRole("combobox", { name: "stock decision" }).click();
+  await page
+    .getByRole("option", {
+      name: "Historical or sold · no stock change",
+      exact: true,
+    })
+    .click();
+  await group.getByText(/Optional Product changes/).click();
+  await group
+    .getByRole("checkbox", { name: "Change name", exact: true })
+    .check();
+  const editedName = group.getByRole("textbox", {
+    name: "New name",
+    exact: true,
+  });
+  await editedName.fill("x".repeat(501));
+  await editedName.blur();
+  await expect(page.getByText(/Changes were not saved:/)).toBeVisible();
+  await group
+    .getByRole("checkbox", { name: "Change notes", exact: true })
+    .check();
+  await group
+    .getByRole("textbox", { name: "New notes", exact: true })
+    .fill("Label confirmed: medium");
+  await group.getByRole("textbox", { name: "New notes", exact: true }).blur();
+  await group
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await expect(editedName).toBeFocused();
+  await expect(
+    group.getByRole("button", { name: "Apply changes", exact: true }),
+  ).toBeVisible();
+  // Reverting the failed field to its saved value must unblock this group.
+  await editedName.fill(`${name} shirt`);
+  await group
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await group
+    .getByRole("heading", { name: `Approved · ${name} shirt`, exact: true })
+    .click();
+  await expect(
+    group.getByText("No Inventory write", { exact: true }),
+  ).toBeVisible();
+  const context = await createEvidenceHarnessContext(page);
+  const db = getDb(context.db);
+  const product = await db.query.product.findFirst({
+    where: eq(schema.product.shortcode, existing.id),
+  });
+  expect(product).toMatchObject({
+    name: `${name} shirt`,
+    notes: "Label confirmed: medium",
+  });
+  const stock = await db.query.inventoryEntry.findMany({
+    where: eq(schema.inventoryEntry.productId, product!.id),
+  });
+  expect(stock).toHaveLength(1);
+  expect(stock[0]?.shortcode).toBe(incompatibleStock.id);
+  await expect(
+    page.getByRole("navigation", { name: "Section index" }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Run cost · includes all nested work"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "/tmp/cubby-photo-review-fa0dc45b-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  await page.screenshot({
+    path: "/tmp/cubby-photo-review-fa0dc45b-mobile.png",
+    fullPage: true,
+  });
+  // The optional editor primed this Product's detail cache before applying.
+  // Following its result link must show the committed fields immediately.
+  await group
+    .getByRole("link", { name: `${name} shirt`, exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Label confirmed: medium", { exact: true }),
+  ).toBeVisible();
+});
+
 test("approves two selected photo groups with one reviewed batch action", async ({
   page,
   e2eRuntime,
@@ -79,14 +268,14 @@ test("approves two selected photo groups with one reviewed batch action", async 
     page.getByRole("heading", { name: /Gray crew t-shirt/ }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /solo find/ })).toBeAttached();
-  await page.getByRole("button", { name: "Select all ready items" }).click();
+  await page.getByRole("button", { name: "Select all resolved items" }).click();
   await expect(
     page.getByRole("checkbox", { name: /Select Gray crew t-shirt/ }),
   ).toBeChecked();
   await expect(
     page.getByRole("checkbox", { name: /Select .* solo find/ }),
   ).toBeChecked();
-  await page.getByRole("button", { name: "Approve 2 selected items" }).click();
+  await page.getByRole("button", { name: "Apply 2 selected items" }).click();
 
   await expect(
     page.getByText("0 to review · 2 settled · 0 photos not in a group", {
@@ -95,8 +284,8 @@ test("approves two selected photo groups with one reviewed batch action", async 
   ).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Photo item groups" })
-      .getByText("Approved", { exact: true }),
+      .getByRole("navigation", { name: "Section index" })
+      .getByRole("link", { name: /^Applied ·/ }),
   ).toHaveCount(2);
   await expect(
     page
@@ -109,6 +298,8 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   page,
   e2eRuntime,
 }) => {
+  // Includes upload seeding, lazy hydration, and several persisted edits.
+  test.setTimeout(Math.max(test.info().timeout, 60_000));
   const name = `Photo run ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
     page,
@@ -184,8 +375,8 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   await expect(
     page
-      .getByRole("navigation", { name: "Photo item groups" })
-      .getByRole("button", { name: new RegExp(g2Name) }),
+      .getByRole("navigation", { name: "Section index" })
+      .getByRole("link", { name: new RegExp(g2Name) }),
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
@@ -218,23 +409,32 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await g1Card
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
-  await g1Card.getByRole("button", { name: "Approve item" }).click();
+  await g1Card
+    .getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    })
+    .click();
+  const applied = page.getByRole("heading", {
+    name: `Approved · ${correctedName}`,
+  });
+  await expect(applied).toBeVisible({ timeout: 10_000 });
+  await applied.click();
   await expect(
     page
-      .locator("#photo-batch")
+      .locator("#photo-group-g1")
       .getByRole("link", { name: correctedName, exact: true }),
   ).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Photo item groups" })
-      .getByText("Approved", { exact: true }),
+      .getByRole("navigation", { name: "Section index" })
+      .getByRole("link", { name: /^Applied ·/ }),
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
   // Discard G2: nothing is left pending and the run completes.
   await page
-    .getByRole("navigation", { name: "Photo item groups" })
-    .getByRole("button", { name: new RegExp(g2Name) })
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: new RegExp(g2Name) })
     .click();
   const g2Card = page
     .locator('[data-slot="card"]')
@@ -242,8 +442,8 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await g2Card.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(
     page
-      .getByRole("navigation", { name: "Photo item groups" })
-      .getByText("Discarded", { exact: true }),
+      .getByRole("navigation", { name: "Section index" })
+      .getByRole("link", { name: /^Discarded ·/ }),
   ).toBeVisible();
   await expect(
     page.getByText("Every proposed group has been approved or discarded.", {
@@ -294,6 +494,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     kind: "create",
     create: { name: createdName },
   };
+  seed.groups[0]!.review!.observedName = createdName;
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}#work`,
@@ -319,19 +520,26 @@ test("suggests an existing variant and previews every merge decision for a creat
   const group = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: createdName }),
   });
-  await expect(group.getByText("Product comparison")).toBeVisible();
+  await group.getByText("Compare existing Products", { exact: true }).click();
+  await group
+    .getByRole("button", { name: "Check existing Products", exact: true })
+    .click();
   await expect(
     group.getByRole("link", { name: candidateName, exact: true }),
   ).toBeVisible();
   await expect(
     group
-      .getByRole("region", { name: "Product comparison" })
-      .getByRole("article")
+      .locator("[data-record-list]")
+      .locator(".ledger-row")
       .filter({ has: page.getByRole("link", { name: candidateName }) })
-      .getByText(/Titles agree:/)
+      .getByText(/Titles agree/)
       .first(),
   ).toBeVisible();
-  await group.getByRole("button", { name: "Approve item" }).click();
+  await group
+    .getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    })
+    .click();
   // The run's connections panel links the created Product too.
   await expect(
     page.getByRole("heading", { name: `Approved · ${createdName}` }),
@@ -367,7 +575,16 @@ test("suggests an existing variant and previews every merge decision for a creat
   await page
     .getByRole("heading", { name: `Approved · ${createdName}` })
     .click();
-  await page.getByText("Review possible matches", { exact: true }).click();
+  const appliedGroup = page.locator("#photo-group-g1");
+  await appliedGroup
+    .getByText("Review possible matches", { exact: true })
+    .click();
+  await appliedGroup
+    .getByText("Compare existing Products", { exact: true })
+    .click();
+  await appliedGroup
+    .getByRole("button", { name: "Check existing Products", exact: true })
+    .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
   await expect(page.getByText(candidateName).first()).toBeVisible();
@@ -500,18 +717,36 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
+  await page
+    .locator("#photo-group-g1")
+    .getByText("Compare existing Products", { exact: true })
+    .click();
+  await page
+    .locator("#photo-group-g1")
+    .getByRole("button", { name: "Check existing Products", exact: true })
+    .click();
   const comparison = page
     .locator("#photo-group-g1")
-    .getByRole("region", { name: "Product comparison" });
+    .locator("[data-record-list]");
   await expect(comparison.getByText(existingName).first()).toBeVisible();
-  await expect(comparison.getByText(/Titles agree:/).first()).toBeVisible();
-  await expect(comparison.getByText("Counted now").first()).toBeVisible();
-  await expect(comparison.getByText("Ledger expected").first()).toBeVisible();
+  await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
+  await comparison
+    .getByText("Evidence and history", { exact: true })
+    .first()
+    .click();
   await expect(
-    page.getByRole("button", { name: "Add to existing entry" }),
+    comparison.getByText(/Recorded count:.*Expected:/).first(),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Add to existing entry" }).click();
-  await expect(page.getByText(/Add 1 to 2 already at/)).toBeVisible();
+  const entryPicker = page
+    .locator("#photo-group-g1")
+    .getByRole("combobox", { name: "existing stock entry" });
+  await entryPicker.click();
+  await page
+    .getByRole("option")
+    .filter({ hasText: existingName })
+    .first()
+    .click();
+  await expect(page.getByText(/Add 1 to 2 at/)).toBeVisible();
   for (const width of [402, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
@@ -522,12 +757,14 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   }
   await page
     .locator("#photo-group-g1")
-    .getByRole("button", { name: "Approve item" })
+    .getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    })
     .click();
   await expect(
     page
-      .getByRole("navigation", { name: "Photo item groups" })
-      .getByText("Approved", { exact: true }),
+      .getByRole("navigation", { name: "Section index" })
+      .getByRole("link", { name: /^Applied ·/ }),
   ).toBeVisible();
   const review = await page.request.get(
     `/api/v1/photoImport/review?runId=${seed.runId}`,
@@ -641,9 +878,9 @@ test("distinguishes blocking description failure from optional cutout failure", 
     page.getByText(/Description failed: Synthetic description failure/),
   ).toBeVisible();
   await expect(
-    page
-      .locator("#photo-group-g1")
-      .getByRole("button", { name: "Approve item" }),
+    page.locator("#photo-group-g1").getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    }),
   ).toBeDisabled();
   await expect(
     page
@@ -651,16 +888,16 @@ test("distinguishes blocking description failure from optional cutout failure", 
       .getByRole("link", { name: "Open photo to retry" }),
   ).toHaveAttribute("href", new RegExp(seed.itemImage.shortcode));
   await page
-    .getByRole("navigation", { name: "Photo item groups" })
-    .getByRole("button", { name: new RegExp(`${name} solo find`) })
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: new RegExp(`${name} solo find`) })
     .click();
   await expect(
     page.getByText(/Optional cutout failed: Synthetic cutout failure/),
   ).toBeVisible();
   await expect(
-    page
-      .locator("#photo-group-g2")
-      .getByRole("button", { name: "Approve item" }),
+    page.locator("#photo-group-g2").getByRole("button", {
+      name: /^(Create Product|Attach photos|Apply changes)$/,
+    }),
   ).toBeEnabled();
 });
 
@@ -697,6 +934,11 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     { ...seed.groups[0]!, skip: [] },
     {
       ...seed.groups[1]!,
+      review: {
+        observedName: "ForgeWear work boots tan size 7",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+      },
       images: [
         { id: seed.soloImage.shortcode, purpose: "item" as const },
         { id: seed.labelImage.shortcode, purpose: "label" as const },
@@ -728,32 +970,35 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
   await page
-    .getByRole("navigation", { name: "Photo item groups" })
-    .getByRole("button", { name: /ForgeWear work boots tan size 7/ })
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: /ForgeWear work boots tan size 7/ })
     .click();
   const bootGroup = page.locator("#photo-group-g2");
   await bootGroup
     .getByText("Photo descriptions and label text", { exact: true })
     .click();
   await expect(bootGroup.getByText(/OCR: SKU FW-7744/)).toBeVisible();
-  const comparison = bootGroup.getByRole("region", {
-    name: "Product comparison",
-  });
-  const exactIdentifier = comparison.getByText(
-    "Exact label identifier: FW-7744",
-  );
+  await bootGroup
+    .getByText("Compare existing Products", { exact: true })
+    .click();
+  await bootGroup
+    .getByRole("button", { name: "Check existing Products", exact: true })
+    .click();
+  const comparison = bootGroup.locator("[data-record-list]");
+  const exactIdentifier = comparison.getByText("Exact identifier");
   await exactIdentifier.scrollIntoViewIfNeeded();
   await expect(exactIdentifier).toBeVisible();
   const wrongRow = comparison
-    .getByRole("article")
+    .locator(".ledger-row")
     .filter({ hasText: "ForgeWear work boots tan size 9" });
-  const conflict = wrongRow.getByText(/Titles conflict:/);
+  const conflict = wrongRow.getByText(/Titles conflict/);
   await expect(conflict).toBeVisible();
-  await expect(conflict).toContainText("size 7");
-  await expect(conflict).toContainText("size 9");
+  await wrongRow.getByText("Original comparison text", { exact: true }).click();
+  await expect(wrongRow.getByText(/Photo:.*size 7/)).toBeVisible();
+  await expect(wrongRow.getByText(/Product:.*size 9/)).toBeVisible();
   await expect(conflict).toContainText("check evidence");
   await expect(
-    wrongRow.getByRole("button", { name: "Use product" }),
+    wrongRow.getByRole("button", { name: "Choose Product" }),
   ).toBeVisible();
   expect(wrongSize.id).toBeTruthy();
 });

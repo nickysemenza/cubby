@@ -81,6 +81,15 @@ export type CommitPhotoGroupProductCreate = z.infer<
   typeof commitPhotoGroupProductCreate
 >;
 
+/** Observed identity stays independent of the selected catalog destination. */
+export const photoGroupReview = z.object({
+  observedName: z.string().trim().min(1).max(500),
+  unresolvedReason: z.string().trim().min(1).max(500).nullable(),
+  stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
+  productChanges: commitPhotoGroupProductCreate.partial().optional(),
+});
+export type PhotoGroupReview = z.infer<typeof photoGroupReview>;
+
 export const commitPhotoGroupProduct = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("existing"), existingId: productShortcode }),
   z.object({
@@ -130,6 +139,7 @@ const commitPhotoGroupInputBase = z.object({
   // `skip` together are non-empty.
   images: z.array(commitPhotoGroupImage).max(PROPOSAL_IMAGE_LIMIT).default([]),
   product: commitPhotoGroupProduct,
+  review: photoGroupReview.optional(),
   inventory: commitPhotoGroupInventory.optional(),
   skip: z.array(commitPhotoGroupSkip).max(PROPOSAL_IMAGE_LIMIT).optional(),
 });
@@ -303,6 +313,7 @@ export type PhotoGroupProposalProductSummary = z.infer<
 
 export const photoGroupProposal = z.object({
   groupKey: z.string(),
+  review: photoGroupReview.optional(),
   state: photoGroupProposalState,
   images: z.array(commitPhotoGroupImage),
   skip: z.array(commitPhotoGroupSkip),

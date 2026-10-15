@@ -57,6 +57,26 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🤔 🐛 🟡 **Repair photo candidate lookup recall and diagnostics.** A descriptive
+  brand/item query can return no candidates while retained image identification
+  and a narrower name lookup find live Products. Reproduce with synthetic
+  footwear variants; compare candidate retrieval, brand flags, and ranking before
+  changing match policy. Some requests also return `INVALID_ARGUMENT`; retain
+  the underlying diagnostic instead of treating that result as no match.
+
+- 🤔 🛠️ 🟡 **Make external photo-import image inspection direct.** Provide bounded
+  agent-viewable image bytes or a supported read-only download path, including
+  HEIC conversion and label-resolution images. Update `photo-inventory-import`
+  to name that path and its allowed tools; browser screenshots can be blank or
+  show the previous image before decoding finishes. Keep descriptions and OCR
+  advisory: object type, brand, and country readings can contradict the photo.
+
+- 🤔 🐛 🟡 **Reconcile MCP entity-read action schemas with deployment.** The advertised
+  `productCategory` entity is accepted by `list` but rejected by `search`.
+  Verify supported action shapes and generate truthful tool schemas. The photo
+  skill now uses current explicit/default ownership; refresh stale connector
+  schemas without dropping ownership.
+
 - 🤔 🧪 🟡 **Retest the complete photo-import UX across infrastructure with live Pi.**
   Extend the [coupled import journey](tester-army.md#coupled-import-journeys)
   using synthetic photos, the native upload client, and web review. Run the

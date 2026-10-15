@@ -102,6 +102,39 @@ Approving a group receives Inventory at its Location owned by the Run's owner,
 unless the group names another person. A group approved without inventory adds
 the Product and photos only.
 
+The first choice in each group is its outcome: **Create this Product** or
+**Attach to this Product**. Existing-Product comparisons are secondary and load
+only when requested. Exact identifiers and color/size evidence are shown as
+words, not a percentage: the heuristic rank is not a calibrated probability.
+Observed identity remains separate from the chosen catalog destination.
+Unresolved identity blocks applying the group until explicitly confirmed.
+The low-level direct-commit API still permits legacy callers without a review
+object; agents use proposals and stop for human approval.
+
+**Create Product** saves the displayed draft and attaches its photos.
+**Attach photos** appends photos while preserving Product fields, gallery order,
+and cover. Select **Optional Product changes** to update specific name,
+category, manufacturer, model, notes, or tags in the same transaction; the
+review shows the old and proposed values. Review optional field changes on web;
+the native client blocks applying hidden field edits. Labels stay labels and never become
+covers. **Combine photo groups…** moves photos without changing their purposes;
+the destination group's Product and stock decision survive. Product duplicate
+reconciliation remains a separate reviewed operation in the
+[product identity journey](product-identity-journey.md).
+
+Choose a stock decision: catalog evidence, already counted, and historical or
+sold all attach without changing Inventory. **Receive newly counted stock**
+requires a real location, positive whole-number quantity and owner; create a
+count or explicitly choose a compatible existing entry to add to. Historical
+intent does not record a sale. Applying a group creates no Purchase or Expense.
+**Create a fresh count here** replaces an existing-entry choice, including a
+rejected selection, while keeping the chosen location, quantity and owner.
+
+Select resolved groups to apply a batch. Applying waits for saved edits and
+checks each saved revision. Failed groups remain selected for retry, and applied
+results stay in place. **Next unresolved item** is an explicit navigation action.
+Retries recover committed receipts instead of repeating stock or field changes.
+
 ## 5. Afterwards
 
 - **Link orders.** Import the matching store orders with the purchase import

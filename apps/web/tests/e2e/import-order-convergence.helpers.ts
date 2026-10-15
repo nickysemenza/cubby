@@ -398,7 +398,7 @@ export async function createConvergenceHarness(
       .getByRole("checkbox", { name: new RegExp(`Select ${productName}`) })
       .check();
     await page
-      .getByRole("button", { name: "Approve 1 selected item", exact: true })
+      .getByRole("button", { name: "Apply 1 selected item", exact: true })
       .click();
     await expect(
       page.getByText("0 to review · 1 settled · 0 photos not in a group", {

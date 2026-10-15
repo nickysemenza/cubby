@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { sql } from "drizzle-orm";
@@ -8,7 +10,13 @@ import { MIGRATIONS_FOLDER } from "tooling/db-migrate";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 
-import { aiUsage } from "~/server/db/schema";
+import {
+  aiUsage,
+  imageProcessingJob,
+  imageProcessingAttempt,
+} from "~/server/db/schema";
+import { createImageFixture } from "~/server/repo/repo.fixtures";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
@@ -69,6 +77,27 @@ afterEach(() => {
 describe("listAiUsageForRun", () => {
   const ctx = withTestDb();
 
+  const imageJob = async (runId: Awaited<ReturnType<typeof ensureRun>>) => {
+    const image = await createImageFixture(
+      ctx.db,
+      `synthetic-cost-${crypto.randomUUID()}`,
+    );
+    const [job] = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        shortcode: generateShortcode("imageJob"),
+        imageId: parseEntityId("image", image.id),
+        runId,
+        kind: "describe_image",
+        state: "ready",
+        sourceContentHash: "a".repeat(64),
+        processorRevision: 1,
+      })
+      .returning({ id: imageProcessingJob.id });
+    if (!job) throw new Error("fixture: image job not created");
+    return job;
+  };
+
   // An AI run has no member party; the run detail page must still read its
   // usage (the import-run loader only ever served member-scoped runs).
   it("pages an AI run's calls newest first with a full-run subtotal", async () => {
@@ -106,6 +135,164 @@ describe("listAiUsageForRun", () => {
       1,
     ]);
     expect(second.nextCursor).toBeNull();
+  });
+
+  // Descendant usage must contribute once to the root, including paid failures;
+  // unrelated runs and pagination must not change the total.
+  it("includes descendant calls exactly once in the full Run subtotal", async () => {
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const child = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      parentRunId: root,
+    });
+    const grandchild = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      parentRunId: child,
+    });
+    const unrelated = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(
+        [root, child, grandchild, unrelated].map((runId, index) => ({
+          runId,
+          feature: "synthetic",
+          provider: "test",
+          model: "test-model",
+          operation: "review",
+          chargedCost: index + 1,
+          standardCost: index + 2,
+          status: index === 1 ? ("failed" as const) : ("succeeded" as const),
+          durationMs: 1,
+        })),
+      );
+    const result = await listAiUsageForRun(ctx.db, root, { limit: 1 });
+    expect(result.chargedCost).toBe(6);
+    expect(result.count).toBe(3);
+    expect(result.records).toHaveLength(1);
+    expect((await listAiUsageForRun(ctx.db, child)).chargedCost).toBe(5);
+  });
+
+  // Usage can carry both run attribution and attempt lineage; OR membership
+  // must count that row once, and retain failed attempts alongside their retry.
+  it("deduplicates linked image calls and exposes a retry with missing usage", async () => {
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const child = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      parentRunId: root,
+    });
+    const job = await imageJob(child);
+    const unrelated = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    const attempts = [crypto.randomUUID(), crypto.randomUUID()];
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values(
+        attempts.map((id, index) => ({
+          id,
+          jobId: job.id,
+          number: index + 1,
+          state: index ? "ready" : "failed",
+        })),
+      );
+    const usage = (
+      attempt: number,
+      chargedCost: number,
+      directlyAttributed: boolean,
+    ) => ({
+      runId: directlyAttributed ? child : unrelated,
+      jobKind: "image_processing_attempt",
+      jobId: attempts[attempt - 1]!,
+      attempt,
+      feature: "synthetic-image",
+      provider: "test",
+      model: "test-model",
+      operation: "describe",
+      chargedCost,
+      standardCost: chargedCost * 2,
+      status: attempt === 1 ? ("failed" as const) : ("succeeded" as const),
+      durationMs: 1,
+    });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(usage(1, 0.2, true));
+    expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+      count: 1,
+      chargedCost: 0.2,
+      chargedComplete: false,
+      standardComplete: false,
+    });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(usage(2, 0.3, false));
+    const complete = await listAiUsageForRun(ctx.db, root, { limit: 1 });
+    expect(complete).toMatchObject({
+      count: 2,
+      chargedCost: 0.5,
+      standardCost: 1,
+      chargedComplete: true,
+      standardComplete: true,
+    });
+    expect(complete.records).toHaveLength(1);
+  });
+
+  it.each(["ready", "skipped"])(
+    "records device %s image work as zero charge with an unknown standard comparison",
+    async (state) => {
+      const root = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+      });
+      const job = await imageJob(root);
+      await getDb(ctx.db)
+        .insert(imageProcessingAttempt)
+        .values({
+          id: crypto.randomUUID(),
+          jobId: job.id,
+          number: 1,
+          state,
+          executor: {
+            kind: "device",
+            name: "Synthetic device",
+            deviceId: crypto.randomUUID(),
+            platform: "macos",
+            appVersion: "1",
+            osVersion: "1",
+          },
+        });
+      expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+        count: 0,
+        chargedCost: 0,
+        chargedComplete: true,
+        standardComplete: false,
+      });
+    },
+  );
+
+  it("keeps unexecuted image work and unreported external descendant costs incomplete", async () => {
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await imageJob(root);
+    expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
+      chargedComplete: false,
+      standardComplete: false,
+    });
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic cost reviewer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const external = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      parentRunId: root,
+      input: { kind: "photo_inventory", processor: "external", batches: [] },
+    });
+    expect(await listAiUsageForRun(ctx.db, external)).toMatchObject({
+      chargedCost: 0,
+      chargedComplete: false,
+      standardComplete: false,
+    });
   });
 
   it("retains an application hit as a zero-cost usage event", async () => {

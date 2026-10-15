@@ -35,6 +35,8 @@ const proposal = (
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
+// Regrouping must preserve item/label purpose: a second angle is not a label,
+// and splitting a label must not make it eligible as a Product cover.
 describe("photo review edits", () => {
   const proposals = [
     proposal("a", ["IMG-AAA2", "IMG-AAA3"]),
@@ -46,25 +48,25 @@ describe("photo review edits", () => {
     {
       name: "moving the last photo out removes the emptied group",
       edit: () => moveImage(proposals, img("IMG-BBB2"), "a"),
-      groups: { a: ["IMG-AAA2:item", "IMG-AAA3:label", "IMG-BBB2:label"] },
+      groups: { a: ["IMG-AAA2:item", "IMG-AAA3:label", "IMG-BBB2:item"] },
       removed: ["b"],
     },
     {
       name: "splitting picks a groupKey no proposal uses, skipping committed ones",
       edit: () => moveImage(proposals, img("IMG-AAA3"), null),
-      groups: { a: ["IMG-AAA2:item"], "a-3": ["IMG-AAA3:item"] },
+      groups: { a: ["IMG-AAA2:item"], "a-3": ["IMG-AAA3:label"] },
       removed: [],
     },
     {
       name: "an unassigned photo joins a group without touching others",
       edit: () => moveImage(proposals, img("IMG-NEW2"), "b"),
-      groups: { b: ["IMG-BBB2:item", "IMG-NEW2:label"] },
+      groups: { b: ["IMG-BBB2:item", "IMG-NEW2:item"] },
       removed: [],
     },
     {
-      name: "merging folds photos in as label shots and drops the source",
+      name: "combining preserves item purposes and drops the source",
       edit: () => mergeGroups(proposals, "b", "a"),
-      groups: { a: ["IMG-AAA2:item", "IMG-AAA3:label", "IMG-BBB2:label"] },
+      groups: { a: ["IMG-AAA2:item", "IMG-AAA3:label", "IMG-BBB2:item"] },
       removed: ["b"],
     },
   ])("$name", ({ edit, groups, removed }) => {

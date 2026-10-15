@@ -59,6 +59,7 @@ export function toGroupInput(
     product,
     inventory,
     evidence: proposal.evidence,
+    review: proposal.review,
   };
 }
 
@@ -86,7 +87,7 @@ function freshGroupKey(taken: readonly string[], base: string): string {
 /**
  * Move one image into `toGroupKey` (or a brand-new group when it is null),
  * from whichever proposed group holds it — or from the unassigned pool. The
- * moved photo becomes the target's `item` shot unless it already has one.
+ * classified photo retains its purpose; an unassigned photo starts as an item.
  */
 export function moveImage(
   proposals: readonly PhotoGroupProposal[],
@@ -100,6 +101,8 @@ export function moveImage(
         (image) => image.id === imageId,
       ),
   );
+  const purpose =
+    source?.images.find((entry) => entry.id === imageId)?.purpose ?? "item";
   const groups: PhotoGroupProposalGroup[] = [];
   const removeGroupKeys: string[] = [];
   if (source) {
@@ -116,7 +119,7 @@ export function moveImage(
     const sourceProduct = source ? toGroupInput(source).product : null;
     groups.push({
       groupKey,
-      images: [{ id: imageId, purpose: "item" }],
+      images: [{ id: imageId, purpose }],
       skip: [],
       product:
         sourceProduct?.kind === "create"
@@ -131,13 +134,9 @@ export function moveImage(
   const target = proposals.find((proposal) => proposal.groupKey === toGroupKey);
   if (!target) throw new Error(`Group ${toGroupKey} is not on this page`);
   const targetInput = withoutImage(toGroupInput(target), imageId);
-  const hasItem = targetInput.images.some((image) => image.purpose === "item");
   groups.push({
     ...targetInput,
-    images: [
-      ...targetInput.images,
-      { id: imageId, purpose: hasItem ? "label" : "item" },
-    ],
+    images: [...targetInput.images, { id: imageId, purpose }],
   });
   return { groups, removeGroupKeys };
 }
@@ -152,19 +151,11 @@ export function mergeGroups(
   const into = proposals.find((proposal) => proposal.groupKey === intoGroupKey);
   if (!from || !into) throw new Error("Both groups must be on this page");
   const target = toGroupInput(into);
-  const hasItem = target.images.some((image) => image.purpose === "item");
   return {
     groups: [
       {
         ...target,
-        images: [
-          ...target.images,
-          // The absorbed group's photos are supporting shots of the survivor.
-          ...from.images.map((image) => ({
-            id: image.id,
-            purpose: hasItem ? ("label" as const) : image.purpose,
-          })),
-        ],
+        images: [...target.images, ...from.images],
         skip: [...(target.skip ?? []), ...from.skip],
       },
     ],
