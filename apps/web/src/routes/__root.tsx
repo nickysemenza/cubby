@@ -1,7 +1,3 @@
-// Fontsource variable fonts - loaded via bundler for better performance.
-// Field Guide type system: Inter carries headings and UI prose while
-// JetBrains Mono is reserved for aligned data, measures, dates, and codes.
-import "../fonts.css";
 import tokens from "@cubby/design-tokens/tokens.json";
 import { IconContext } from "@phosphor-icons/react/dist/lib/context";
 import type { QueryClient } from "@tanstack/react-query";

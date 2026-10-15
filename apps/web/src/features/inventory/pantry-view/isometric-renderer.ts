@@ -1,3 +1,4 @@
+import tokens from "@cubby/design-tokens/tokens.json";
 import type { LocationType } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 
@@ -447,7 +448,7 @@ function drawItemsOnLevels(
     const lastLevel = shelfLevels[shelfLevels.length - 1] ?? 0;
     const p = toScreen(gx + w / 2, gy + d + 0.3, gz + lastLevel + 1, cx, cy);
     ctx.fillStyle = "rgba(23, 26, 33, 0.7)";
-    ctx.font = '600 11px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.font = `600 11px ${tokens.values["font-sans"]}`;
     ctx.textAlign = "center";
     ctx.fillText(`+${remaining} more`, p.x, p.y);
   }
@@ -590,7 +591,7 @@ function drawGroupLabels(
     const centerGx = (group.minGx + group.maxGx + group.maxW) / 2;
     const labelPos = toScreen(centerGx, -0.3, ROOM_H + 0.3, cx, cy);
 
-    ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.font = `9px ${tokens.values["font-sans"]}`;
     ctx.fillStyle = "rgba(102, 112, 133, 0.72)";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
@@ -702,12 +703,12 @@ function drawRoomLabels(
   );
   const sx = titleWorld.x * camera.zoom + camera.x;
   const sy = titleWorld.y * camera.zoom + camera.y;
-  ctx.font = '600 13px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `600 13px ${tokens.values["font-sans"]}`;
   ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
   ctx.fillText(room.name, sx, sy);
-  ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `11px ${tokens.values["font-sans"]}`;
   ctx.fillStyle = "rgba(102, 112, 133, 0.82)";
   const itemNoun = room.totalItemCount !== 1 ? "items" : "item";
   ctx.fillText(`${room.totalItemCount} ${itemNoun}`, sx, sy + 14);
@@ -725,12 +726,12 @@ function drawRoomLabels(
     );
     const lx = labelWorld.x * camera.zoom + camera.x;
     const ly = labelWorld.y * camera.zoom + camera.y;
-    ctx.font = '10px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.font = `10px ${tokens.values["font-sans"]}`;
     ctx.fillStyle = zone.labelColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillText(zone.name, lx, ly);
-    ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.font = `9px ${tokens.values["font-sans"]}`;
     ctx.fillStyle = zone.labelColor.replace("0.75", "0.45");
     const zoneItemNoun = zone.totalItemCount !== 1 ? "items" : "item";
     ctx.fillText(`${zone.totalItemCount} ${zoneItemNoun}`, lx, ly + 12);
@@ -772,9 +773,9 @@ export function drawTooltip(
 ) {
   const padding = 10;
   const lineHeight = 18;
-  ctx.font = '600 12px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `600 12px ${tokens.values["font-sans"]}`;
   const labelW = ctx.measureText(target.label).width;
-  ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `11px ${tokens.values["font-sans"]}`;
   const detailW = target.detail ? ctx.measureText(target.detail).width : 0;
   const boxW = Math.max(labelW, detailW) + padding * 2;
   const boxH = (target.detail ? 2 : 1) * lineHeight + padding * 1.5;
@@ -796,14 +797,14 @@ export function drawTooltip(
   ctx.stroke();
 
   ctx.fillStyle = "#171a21";
-  ctx.font = '600 12px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `600 12px ${tokens.values["font-sans"]}`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(target.label, tx + padding, ty + padding);
 
   if (target.detail) {
     ctx.fillStyle = "rgba(102, 112, 133, 0.95)";
-    ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.font = `11px ${tokens.values["font-sans"]}`;
     ctx.fillText(target.detail, tx + padding, ty + padding + lineHeight);
   }
 }
@@ -815,13 +816,13 @@ export function drawTitle(
   totalRooms: number,
 ) {
   ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
-  ctx.font = '600 20px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `600 20px ${tokens.values["font-sans"]}`;
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
   ctx.fillText("Isometric Pantry", canvasW - 24, 20);
 
   ctx.fillStyle = "rgba(102, 112, 133, 0.95)";
-  ctx.font = '12px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.font = `12px ${tokens.values["font-sans"]}`;
   ctx.fillText(
     `${countLabel(totalItems, "item")} in ${countLabel(totalRooms, "room")}`,
     canvasW - 24,

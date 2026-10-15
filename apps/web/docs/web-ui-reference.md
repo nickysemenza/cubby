@@ -98,7 +98,7 @@ const { data, isLoading } = useQueries({
 ## Spacing
 
 - **Spacing scale.** `gap`/`space-x|y`/`p*`/`m*` normally use `{0,1,2,4,6}` plus `{8,12,16,20}` for wide gutters, touch targets, and large clearance. Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`. Treat deviations as a visual-review decision, not a CI regex violation.
-- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3` etc. is the design system's own component padding) and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
+- **Exemptions:** `src/ui/primitives/**` (shared primitives — their `px-3` etc. is the design system's own component padding) and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
 - `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context.
 
 ## Layout primitives

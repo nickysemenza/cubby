@@ -231,8 +231,11 @@ function renderProductCell(columnId: string, row: ProductRow) {
 }
 
 describe("product list display columns", () => {
-  it("renders ledgerExpectedQuantity as the server-composed label", () => {
-    render(<>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>);
+  it("keeps a healthy expected quantity in the primary text tier", () => {
+    const { container } = render(
+      <>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>,
+    );
     expect(screen.getByText("3")).toBeVisible();
+    expect(container.querySelector(".text-muted-foreground")).toBeNull();
   });
 });

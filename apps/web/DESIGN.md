@@ -53,6 +53,44 @@ Web controls, chips and panels use their shared token radii. These web tokens ar
 
 ## Components
 
+### Component sources and boundaries
+
+`components.json` configures the shadcn Base UI/Mira family; local primitives
+are maintained in `src/ui/primitives`. Base UI owns accessible interaction,
+while Cubby owns their styling and composition. The remaining copied ReUI
+surface is the event calendar; its exact source and license live in
+[`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md). Filters and file upload are
+Cubby-owned. Prefer existing shared components before importing registry items.
+
+Different jobs justify different public components, not duplicate engines or
+styling. Share lower-level behavior and tokens where the contracts agree:
+
+- Date and date-range selection use DayPicker; event scheduling uses the ReUI calendar's
+  range geometry, event placement and drag/drop. They are separate workflows.
+- `Picker` owns values; Command and DropdownMenu own navigation/actions.
+  Switch owns a boolean and Tabs own content panels. The
+  [value-control contract](docs/web-ui.md) owns mode selection and binding.
+- Interactive lists, static tables, matrices, record evidence and detail facts
+  retain their distinct structures; [table contracts](docs/web-ui-reference.md#tables)
+  own the choice of shared renderer.
+- Dialog and Sheet share Base UI Dialog; responsive wrappers own placement,
+  scroll regions and form actions. AlertDialog retains confirmation semantics.
+- Chart, relationship-map and specialized layout engines follow the
+  [visualization contracts](#data-visualization); a common frame does not require
+  one renderer.
+- `FormSection` owns labeled form groups and optional local disclosure;
+  `CollapsibleSection` gates dashboard content and its queries until open.
+  Neither promises to preserve a collapsed child's mounted state. Drafts that
+  must survive a disclosure belong in the form's state owner.
+- Badge owns named semantic tones, EnumPill owns declaration-driven category
+  color/description, and Pill owns shared geometry and suggestion treatment.
+- Apple keeps native SwiftUI controls and platform geometry; shared semantic
+  tokens and declarations do not require a shared rendering implementation.
+
+Dashboard frames use `SectionHeading` and an open body directly rather than
+canceling Card's surface styles. Canvas text uses the shared system font token;
+web typography needs no bundled font faces.
+
 ### Custom-built signature components
 
 These are Cubby's own components, designed and built here rather than adopted from a component library; the headless pieces under them (Base UI popups and focus, TanStack Table state) carry no visual design. Each has a live, synthetic showcase on `/design`, which is also the home for any new component demo:
