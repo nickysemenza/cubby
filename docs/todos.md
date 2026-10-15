@@ -1567,17 +1567,20 @@ consume the declarations.
   fees separate. Do not infer savings from missing usage or add a separate
   accounting workbench.
 
-- 🟢 🛠️ 🔵 **Use Claude subscriber API credits through AI Gateway BYOK.** Link an
-  eligible Max or Team plan to a Claude Console organization and claim its
-  [included API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers).
-  Store that organization's Anthropic API key in Cloudflare AI Gateway under
-  the `default` [BYOK alias](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/),
-  which precedes [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
-  when a request supplies no provider key. Use the Console API key, not Claude
-  login credentials. Verify the route and spend limit, record credit-funded
-  usage separately from paid charges, and prevent unintended paid fallback or
-  auto-reload when the expiring monthly credits run out. Reuse shared transport
-  and usage reporting; credits are bounded, not unlimited free API access.
+- 🟢 ✨ 🔵 **Use Claude subscriber API credits as subscription-funded fallback.**
+  Implement [ADR 0017](adr/0017-subscription-funded-model-fallback.md):
+  - Claim the plan's credits into a Cubby-only Console organization with
+    `prod`/`testing` workspace spend limits, and store each key as its
+    gateway's `default` BYOK key with `cf-aig-no-wholesale` on Anthropic routes.
+  - Give features ordered chat-model lists that advance only on subscription
+    exhaustion, never to paid billing.
+  - Add the `subscriber_credit` billing reason and a separate egress admission
+    bucket for stored-key traffic.
+  - Run the routing eval with Sonnet 5 and Opus 5.5 to choose each feature's
+    lead model.
+
+  Update the AI cost accounting, ChatGPT plan, and infrastructure docs with the
+  behavior.
 
 - 🤔 🛠️ 🔵 **One pricing source for the upstream cookbook pipeline.** Cubby usage
   pricing uses `models.dev` through `packages/shared/src/ai/pricing.ts`, but
