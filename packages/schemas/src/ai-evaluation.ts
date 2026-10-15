@@ -1,3 +1,4 @@
+import { assessmentChildHandle } from "./assessment-reference";
 import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 import { executionAuthorizationRef } from "./execution-authorization";
@@ -71,28 +72,28 @@ export const aiEvaluationTarget = z.discriminatedUnion("kind", [
     recordId: z.uuid(),
     otherId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(z.uuid()).max(0),
+    assessmentIds: z.array(assessmentChildHandle).max(0),
   }),
   z.object({
     kind: z.literal("product"),
     entity: z.literal("product"),
     recordId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(z.uuid()).max(0),
+    assessmentIds: z.array(assessmentChildHandle).max(0),
   }),
   z.object({
     kind: z.literal("field"),
     entity: z.string(),
     recordId: z.uuid(),
     field: z.string(),
-    assessmentIds: z.array(z.uuid()),
+    assessmentIds: z.array(assessmentChildHandle),
   }),
   z.object({
     kind: z.literal("email"),
     entity: z.literal("email"),
     recordId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(z.uuid()).max(0),
+    assessmentIds: z.array(assessmentChildHandle).max(0),
   }),
 ]);
 export type AiEvaluationTarget = z.infer<typeof aiEvaluationTarget>;

@@ -1,3 +1,16 @@
+import {
+  assessmentReviewInput,
+  assessmentReviewOut,
+} from "@cubby/schemas/assessment";
+import { productId, userId } from "@cubby/schemas/identifiers";
+import { productMatchQueueOut } from "@cubby/schemas/recommendations";
+import { z } from "zod";
+import { Database } from "~/server/db/database";
+import * as schema from "~/server/db/schema";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { reviewAssessment } from "~/server/repo/assessment-review";
+import { getProductMatchQueue } from "~/server/services/product-match.service";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -7,10 +20,13 @@ import { Client } from "pg";
 import { expect, it } from "vitest";
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
 import { testServiceConfig } from "./test-service-config";
+import { createPostgresPool } from "./postgres-pool";
 
 // Failure modes: expansion mistaken for preservation; intervening old writes
 // lost; ambiguous labels invented; corrected null erased; frozen roster,
 // suppression scope or application receipts changed; retired work refs survive.
+// Migrated ledger handles must survive runtime/public validation and exact review
+// replay without rewriting immutable history or relaxing real entity UUIDs.
 // The latest predecessor's explicit/inherited ownership, Expense role and Image evidence
 // must survive both online expansion and the quiesced copy/trigger cutover.
 it("reconciles every legacy review family after an intervening writer without losing immutable history", async () => {
@@ -27,6 +43,7 @@ it("reconciles every legacy review family after an intervening writer without lo
     url.pathname = `/${name}`;
     const client = new Client({ connectionString: url.href });
     await client.connect();
+    let runtimePool: ReturnType<typeof createPostgresPool> | undefined;
     try {
       const journal = JSON.parse(
         readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
@@ -165,7 +182,7 @@ it("reconciles every legacy review family after an intervening writer without lo
       ).rows[0].id;
       const label = (
         await client.query(
-          `INSERT INTO "EmailClassificationLabel" ("predictionId",classification,reason,"actorUserId") VALUES ($1,'related','Synthetic member review','synthetic-review-member') RETURNING id`,
+          `INSERT INTO "EmailClassificationLabel" (id,"predictionId",classification,reason,"actorUserId") VALUES ('00000000-0000-4000-8000-0000000000ac',$1,'related','Synthetic member review','synthetic-review-member') RETURNING id`,
           [observation],
         )
       ).rows[0].id;
@@ -217,6 +234,15 @@ it("reconciles every legacy review family after an intervening writer without lo
       await client.query(
         `INSERT INTO "ProductMatchCandidate" ("productAId","productBId",source,state,evidence) VALUES ($1,$2,'detector','dismissed','Synthetic evidence')`,
         [[product, other].sort()[0], [product, other].sort()[1]],
+      );
+      const third = (
+        await client.query(
+          `INSERT INTO "Product" (shortcode,name,manufacturer) VALUES ('PRD-4K7P','Synthetic pending lamp alias','Example maker') RETURNING id`,
+        )
+      ).rows[0].id;
+      await client.query(
+        `INSERT INTO "ProductMatchCandidate" (id,"productAId","productBId",source,state,evidence) VALUES ('00000000-0000-4000-8000-0000000000ab',$1,$2,'agent','open','Synthetic retained proposal')`,
+        [[product, third].sort()[0], [product, third].sort()[1]],
       );
       await client.query(
         `INSERT INTO "SuggestionDismissal" ("entityKind","entityId","suggestionKind","candidateKey") VALUES ('product',$1,'product.duplicate','opaque-synthetic-group')`,
@@ -327,7 +353,13 @@ it("reconciles every legacy review family after an intervening writer without lo
             )
           ).rows[0].count,
         ).toBe(
-          ["Suggestion", "OrderMailCandidateDecision"].includes(table) ? 2 : 1,
+          [
+            "Suggestion",
+            "OrderMailCandidateDecision",
+            "ProductMatchCandidate",
+          ].includes(table)
+            ? 2
+            : 1,
         );
       expect(
         (
@@ -508,6 +540,89 @@ it("reconciles every legacy review family after an intervening writer without lo
           )
         ).rows[0].verdict,
       ).toBe("ungraded");
+      runtimePool = createPostgresPool({ connectionString: url.href });
+      const runtime = drizzle({ client: runtimePool, schema });
+      const db = new Database(() => ({
+        client: runtime,
+        withConnection: async (fn) => fn(runtime),
+      }));
+      const context = entityKernelContextSchema.parse(
+        createTestRequestContext(db, {
+          auth: { userId: userId.parse("synthetic-review-member") },
+        }),
+      );
+      // This literal is the actual migration's md5-derived handle for the
+      // retained candidate above, including its non-RFC version and variant.
+      const handle = "ef9aa6e3-79bc-e84e-1031-e97400338d34";
+      expect(z.uuid().safeParse(handle).success).toBe(false);
+      expect(productId.safeParse(handle).success).toBe(false);
+      const historical = (
+        await client.query(`SELECT * FROM "Assessment" WHERE id=$1`, [handle])
+      ).rows;
+      expect(historical).toHaveLength(1);
+      const queue = productMatchQueueOut.parse(
+        await getProductMatchQueue(db, {}),
+      );
+      expect(queue.items.map((item) => item.assessmentId)).toContain(handle);
+      expect(
+        queue.items.find((item) => item.assessmentId === handle)?.review
+          ?.assessmentId,
+      ).toBe(handle);
+      const retainedLabel = (
+        await client.query(
+          `SELECT id,"assessmentId" FROM "Feedback" WHERE metadata->>'table'='EmailClassificationLabel'`,
+        )
+      ).rows[0];
+      expect(retainedLabel.id).toBe("e2401ffa-3eda-6673-6a93-95accfcf1320");
+      expect(
+        assessmentReviewOut.parse({
+          assessmentId: retainedLabel.assessmentId,
+          feedbackId: retainedLabel.id,
+          status: "resolved",
+          applied: false,
+        }).feedbackId,
+      ).toBe(retainedLabel.id);
+      const command = assessmentReviewInput.parse({
+        assessmentId: handle,
+        operationId: "synthetic-migrated-review",
+        verdict: "wrong",
+      });
+      const reviewed = assessmentReviewOut.parse(
+        await reviewAssessment(db, context, command),
+      );
+      expect(reviewed).toMatchObject({
+        assessmentId: handle,
+        status: "rejected",
+        applied: false,
+      });
+      expect(
+        assessmentReviewOut.parse(await reviewAssessment(db, context, command)),
+      ).toEqual(reviewed);
+      await expect(
+        reviewAssessment(db, context, { ...command, verdict: "uncertain" }),
+      ).rejects.toThrow(/Immutable Feedback retry/);
+      expect(
+        assessmentReviewInput.safeParse({
+          ...command,
+          assessmentId: "not-a-guid",
+        }).success,
+      ).toBe(false);
+      expect(
+        assessmentReviewOut.safeParse({ ...reviewed, feedbackId: "not-a-guid" })
+          .success,
+      ).toBe(false);
+      expect(
+        (await client.query(`SELECT * FROM "Assessment" WHERE id=$1`, [handle]))
+          .rows,
+      ).toEqual(historical);
+      expect(
+        (
+          await client.query(
+            `SELECT count(*)::int AS count FROM "Feedback" WHERE "assessmentId"=$1`,
+            [handle],
+          )
+        ).rows[0].count,
+      ).toBe(1);
       await expect(
         client.query(`UPDATE "Assessment" SET judgment='{}' WHERE id=$1`, [
           suggestion,
@@ -529,6 +644,7 @@ it("reconciles every legacy review family after an intervening writer without lo
           ).rows[0].table,
         ).toBeNull();
     } finally {
+      await runtimePool?.end();
       await client.end();
     }
   } finally {

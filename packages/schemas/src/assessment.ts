@@ -1,5 +1,9 @@
-import { assessmentSuppression } from "./assessment-reference";
+import {
+  assessmentChildHandle,
+  assessmentSuppression,
+} from "./assessment-reference";
 export {
+  assessmentChildHandle,
   assessmentSuppression,
   assessmentReviewReference,
 } from "./assessment-reference";
@@ -175,7 +179,7 @@ export const feedbackAuthority = z.enum([
   "unknown",
 ]);
 export const feedbackEvent = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: assessmentChildHandle,
   operationId: z.string().min(1),
   verdict: feedbackVerdict,
   correction: assessmentCorrection.default({ present: false }),
@@ -204,7 +208,7 @@ export const assessmentReviewInput = feedbackEvent
         /^(?!(?:command-application|receipt|application|merge|email-accuracy):)(?!(?:decision|resolution|saved-application|saved-correction)$)/,
         "Operation ID uses a reserved internal receipt namespace",
       ),
-    assessmentId: z.uuid().optional(),
+    assessmentId: assessmentChildHandle.optional(),
     standalone: z
       .object({ kind: z.literal("image_description"), id: imageShortcode })
       .optional(),
@@ -224,8 +228,8 @@ export const assessmentReviewInput = feedbackEvent
       .optional(),
   });
 export const assessmentReviewOut = z.object({
-  assessmentId: z.uuid(),
-  feedbackId: z.uuid(),
+  assessmentId: assessmentChildHandle,
+  feedbackId: assessmentChildHandle,
   status: z.string(),
   applied: z.boolean(),
 });
@@ -236,7 +240,7 @@ export const assessmentReviewBatchOut = z.array(
   z.union([
     assessmentReviewOut.extend({ ok: z.literal(true) }),
     z.object({
-      assessmentId: z.uuid().nullable(),
+      assessmentId: assessmentChildHandle.nullable(),
       ok: z.literal(false),
       error: z.string(),
     }),

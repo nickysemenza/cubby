@@ -1,4 +1,5 @@
 import {
+  assessmentChildHandle,
   assessmentPublication,
   assessmentJudgments,
   assessmentProjectionTargets,
@@ -19,7 +20,7 @@ export function assertApplicationReceipt(
   kind: string,
 ) {
   const metadata = z
-    .object({ kind: z.string(), commandFeedbackId: z.uuid() })
+    .object({ kind: z.string(), commandFeedbackId: assessmentChildHandle })
     .safeParse(receipt.metadata);
   if (
     !metadata.success ||
