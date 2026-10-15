@@ -24,6 +24,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const MB = 1_000_000;
+// Every invocation loads this static entry, including API reads that never
+// render a page. Keep unrelated entity metadata behind its consuming handler.
+const ENTRY_BUDGET = 2 * MB;
 // Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
 // attribute conventions, and channel-instrumentation tables) that Cubby never
@@ -80,15 +83,20 @@ export function measureServerClosure(root: string) {
   ];
 
   // Breadth-first so each chunk keeps its shortest chain from the entry.
-  const parent = new Map<string, string | null>([["index.js", null]]);
-  const queue = ["index.js"];
-  for (let file = queue.shift(); file; file = queue.shift()) {
-    for (const target of requestPathImports(file)) {
-      if (parent.has(target) || !sources.has(target)) continue;
-      parent.set(target, file);
-      queue.push(target);
+  const traceImports = (importsFor: (file: string) => string[]) => {
+    const parent = new Map<string, string | null>([["index.js", null]]);
+    const queue = ["index.js"];
+    for (let file = queue.shift(); file; file = queue.shift()) {
+      for (const target of importsFor(file)) {
+        if (parent.has(target) || !sources.has(target)) continue;
+        parent.set(target, file);
+        queue.push(target);
+      }
     }
-  }
+    return parent;
+  };
+  const entry = traceImports((file) => importsOf(file, STATIC_IMPORT));
+  const parent = traceImports(requestPathImports);
 
   const closure = (files: Iterable<string>): Closure => {
     const list = [...files];
@@ -98,6 +106,7 @@ export function measureServerClosure(root: string) {
     };
   };
   return {
+    entry: closure(entry.keys()),
     firstRequest: closure(parent.keys()),
     total: closure(sources.keys()),
     chainTo(file: string): string[] {
@@ -163,9 +172,11 @@ if (invokedPath === import.meta.url) {
   const report = measureServerClosure(serverRoot);
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
   console.log(
-    `[check-server-closure] first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,
+    `[check-server-closure] entry ${mb(report.entry.bytes)} (${report.entry.files.length} files), first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,
   );
   const over: string[] = [];
+  if (report.entry.bytes > ENTRY_BUDGET)
+    over.push(`entry ${mb(report.entry.bytes)} > ${mb(ENTRY_BUDGET)}`);
   if (report.firstRequest.bytes > FIRST_REQUEST_BUDGET)
     over.push(
       `first request ${mb(report.firstRequest.bytes)} > ${mb(FIRST_REQUEST_BUDGET)}`,

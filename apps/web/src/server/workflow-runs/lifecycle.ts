@@ -11,7 +11,7 @@ import {
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/repo/database-helpers/core";
 import { recordRunProgress as recordProgress } from "~/server/repo/run-progress";
 
 import {

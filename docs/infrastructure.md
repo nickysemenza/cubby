@@ -165,7 +165,11 @@ The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
 `server/purchase-agent/run-agent.ts` on its first event, and the queue handler
 loads the consumer when a `cubby-purchase-agent` batch arrives
-(`apps/web/scripts/check-server-closure.ts` budgets both paths).
+(`apps/web/scripts/check-server-closure.ts` budgets the static entry, combined
+page path, and total output). Startup lifecycle/progress modules import the
+database helpers' `core` and `query` modules directly: the barrel also
+initializes relation loaders and pulls in the generated entity field model,
+which belongs behind its consuming handler.
 
 Run purposes and MCP authority are declared in
 `packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
