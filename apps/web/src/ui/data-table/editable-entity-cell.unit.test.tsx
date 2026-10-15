@@ -114,6 +114,27 @@ describe("EditableEntityCell", () => {
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
+  it("names a camelCase entity by its display label, never its key", () => {
+    render(
+      <EditableEntityCell
+        value={PANTRY}
+        onSave={vi.fn()}
+        SearchProvider={StubSearchProvider}
+        label="ledgerParty"
+        clearable
+        trigger="pencil"
+        renderValue={renderValue}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit ledger party" }));
+    openCombobox();
+    expect(
+      screen.getByRole("button", { name: "Clear ledger party" }),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("ledgerParty");
+  });
+
   it("renders display mode by default and enters edit mode on click without propagating", () => {
     const parentClick = vi.fn();
     render(

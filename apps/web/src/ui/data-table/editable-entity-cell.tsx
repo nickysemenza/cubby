@@ -5,6 +5,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
+import { entityLabel } from "~/entity/entities";
 import type { FieldSuggestionSource } from "~/features/ai/field-suggestion";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
 import { cn } from "~/lib/utils";
@@ -116,7 +117,7 @@ export function EditableEntityCell<TId extends string>({
           onStartEdit={edit.open}
           clipboard={edit.clipboard}
           hidePencilIcon
-          aria-label={`Edit ${label}`}
+          aria-label={`Edit ${entityLabel(label).toLowerCase()}`}
           className={CELL_EDIT_PENCIL_CLASS}
         >
           {/* Idle rows keep the trigger (editor anchor, clipboard) but not its glyph. */}
@@ -221,8 +222,9 @@ function EditableEntityEditor<TId extends string>({
               onOpenChange,
             }) => (
               <Picker
+                // No `label`: the entity key ("ledgerParty") is not prose;
+                // Picker derives its noun from the entity's display label.
                 entity={label}
-                label={label}
                 items={filterItems ? items.filter(filterItems) : items}
                 onSearchChange={onSearchChange}
                 isLoading={isLoading}
