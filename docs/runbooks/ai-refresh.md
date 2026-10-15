@@ -52,7 +52,10 @@ by activation revision, so an old page cannot overwrite a newer reset.
 There is no frequent polling cron. Request nudges stay in Durable Object storage
 when the deployment version is already observed. The nightly cron is the idle
 reconciliation exception. An alarm verifies and retries an interrupted startup handoff; external
-activation does not block interactive Gateway admission. Active
+activation does not block interactive Gateway admission.
+The Workflow's preliminary Run guard selects only its identity under the running
+status and attempt predicate, omitting retained input and progress-history payloads. Callers that
+need the Run data keep the full read under the same status/attempt fence.
 Workflows own inference deadlines and retries. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The singleton uses its own compiled manifest, never a caller-supplied version;

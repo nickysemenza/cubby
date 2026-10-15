@@ -2,7 +2,7 @@ import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, lt, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -179,12 +179,24 @@ export async function launchWorkflowRun(
  * Null once it was cancelled, failed, or superseded by a retry — the step
  * then stops instead of writing over the newer attempt.
  */
+export function claimWorkflowRun(
+  db: Database,
+  params: WorkflowRunParams,
+  projection: "id",
+): Promise<{ id: RunId } | null>;
+export function claimWorkflowRun(
+  db: Database,
+  params: WorkflowRunParams,
+): Promise<typeof runTable.$inferSelect | null>;
 export async function claimWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
+  projection?: "id",
 ) {
   const [row] = await getDb(db)
-    .select()
+    .select(
+      projection === "id" ? { id: runTable.id } : getTableColumns(runTable),
+    )
     .from(runTable)
     .where(
       and(
