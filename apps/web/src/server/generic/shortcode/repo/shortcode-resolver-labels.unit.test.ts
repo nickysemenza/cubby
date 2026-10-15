@@ -9,6 +9,7 @@ import {
   SHORTCODE_TABLE,
   TITLE_FIELD_COLUMN,
 } from "~/server/generated/shortcode-tables.gen";
+
 import {
   LABEL_COLUMN_OVERRIDES,
   resolveTitleFieldColumn,

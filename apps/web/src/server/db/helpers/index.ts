@@ -2,7 +2,7 @@
  * Database helpers module.
  *
  * Re-exports all database helper functions.
- * Worker static-entry modules use core/query directly to avoid loading CRUD,
+ * Worker static-entry modules use core/query directly to avoid loading CRUD
  * and relation metadata before a consuming handler.
  * check-server-closure.ts enforces that entry's size budget.
  */
