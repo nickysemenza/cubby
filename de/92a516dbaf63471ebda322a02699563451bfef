@@ -1,0 +1,21 @@
+.oxlintrc.json
+  s_2a22d2c73c07e5::t_314d5757bb803a 439,470,483
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_2a22d2c73c07e5::t_27a3662fd0aa71 22,159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "de92a516dbaf63471ebda322a02699563451bfef",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
