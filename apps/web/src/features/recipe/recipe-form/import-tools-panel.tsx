@@ -111,7 +111,7 @@ function ScrapeImportPanel({
             className="shrink-0"
           >
             {scrapePending || isResolving ? (
-              <Spinner className="mr-1" />
+              <Spinner className="mr-1" aria-hidden="true" />
             ) : (
               <DownloadSimpleIcon className="mr-1 size-4" />
             )}
@@ -286,7 +286,7 @@ export function ImportToolsPanel({
             }
           >
             {ingredientImport.isImporting ? (
-              <Spinner className="mr-1" />
+              <Spinner className="mr-1" aria-hidden="true" />
             ) : (
               <DownloadSimpleIcon className="mr-1 size-4" />
             )}
@@ -344,7 +344,7 @@ export function ImportToolsPanel({
             className="shrink-0"
           >
             {parseHtmlPending || isResolving ? (
-              <Spinner className="mr-1" />
+              <Spinner className="mr-1" aria-hidden="true" />
             ) : (
               <DownloadSimpleIcon className="mr-1 size-4" />
             )}

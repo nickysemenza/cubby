@@ -116,7 +116,11 @@ export function EntityPhotosSection<E extends GalleryEntity>({
         disabled={isCapturing}
         onClick={() => inputRef.current?.click()}
       >
-        {isCapturing ? <Spinner className="size-4" /> : <CameraPlusIcon />}
+        {isCapturing ? (
+          <Spinner className="size-4" aria-hidden="true" />
+        ) : (
+          <CameraPlusIcon />
+        )}
         Add photos
       </Button>
     </Stack>

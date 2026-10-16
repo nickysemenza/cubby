@@ -110,7 +110,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     >
       {running ? (
         <>
-          <Spinner className="mr-2" />
+          <Spinner className="mr-2" aria-hidden="true" />
           Fixing… ({running.done}/{running.total})
         </>
       ) : (

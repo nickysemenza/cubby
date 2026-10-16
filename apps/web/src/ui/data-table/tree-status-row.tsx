@@ -69,7 +69,7 @@ export function TreeStatusRow({ status }: { status: ServerTreeChildStatus }) {
           status.loadMore();
         }}
       >
-        {status.loading ? <Spinner size="sm" /> : null}
+        {status.loading ? <Spinner size="sm" aria-hidden="true" /> : null}
         Load more
       </Button>
       <span className="text-xs text-muted-foreground">
