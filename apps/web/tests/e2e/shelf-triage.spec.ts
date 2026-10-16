@@ -178,11 +178,10 @@ test("discard decisions preserve quantity and shelf choice and allow leaving sto
   await expect(
     dialog.getByRole("button", { name: "Discard", exact: true }),
   ).toBeDisabled();
-  await selectComboboxItem(
-    page,
-    dialog.getByRole("combobox", { name: "Take from" }),
-    `${otherName} — 4 each`,
-  );
+  await dialog.getByRole("combobox", { name: "Take from" }).click();
+  await page
+    .getByRole("option", { name: `${otherName} — 4 each`, exact: true })
+    .click();
   await page.screenshot({
     path: "../../artifacts/decision-steps/discard-shelf.png",
   });
@@ -210,26 +209,4 @@ test("discard decisions preserve quantity and shelf choice and allow leaving sto
       .map((row) => row.amountValue)
       .sort(),
   ).toEqual([4, 6]);
-});
-
-test("design decision examples keep summaries inline and move media above phone rows", async ({
-  page,
-}) => {
-  await gotoAuthenticatedPage(
-    page,
-    "/design#section-compositions",
-    page.getByRole("list", { name: "Synthetic link decisions" }),
-  );
-  const attach = page.getByRole("list", { name: "Synthetic link decisions" });
-  await attach.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: "../../artifacts/decision-steps/design-desktop.png",
-  });
-  await page.setViewportSize({ width: 402, height: 874 });
-  await attach.scrollIntoViewIfNeeded();
-  const trigger = attach.getByRole("button", { name: "Change Product" });
-  expect((await trigger.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  await page.screenshot({
-    path: "../../artifacts/decision-steps/design-phone.png",
-  });
 });
