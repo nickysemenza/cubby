@@ -133,7 +133,11 @@ signed exits and future Expenses exercise the same pricing, quantity and
 Email-history queries as real records. Values and relationships are entirely
 synthetic and deterministic; providers are never dispatched. It is opt-in and
 does not enlarge the core or required CI fixtures. Seeding time is setup time,
-not request latency. Use a separate instance to keep ordinary development small:
+not request latency. Historical mail outcome receipts use the admitted
+`OrderMail.id` as their work key and its checksum as their fingerprint. Validate
+them through Run detail, including the receipt's completion time: receipt counts
+alone cannot detect a projection falling back to current Email status.
+Use a separate instance to keep ordinary development small:
 
 ```sh
 CUBBY_DEV_INSTANCE=performance pnpm dev

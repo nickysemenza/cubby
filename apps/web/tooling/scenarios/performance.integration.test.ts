@@ -6,10 +6,14 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
+import { run } from "~/server/db/schema";
+import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 
 // Failure modes: scale adds disconnected filler instead of kit/ledger fanout;
 // historical Email work lacks retained evidence or a frozen Run roster; future
 // ledger entries become current acquisitions; fixture writes dispatch providers.
+// Receipt counts alone miss unmatched work keys: the actual Run projection must
+// use the receipt's completion time instead of falling back to Email.updatedAt.
 // A small copy of the same graph verifies semantics without a timing threshold.
 const ctx = withTestDb();
 it("seeds connected performance history readable by the real Work queue", async () => {
@@ -44,6 +48,18 @@ it("seeds connected performance history readable by the real Work queue", async 
     FROM "Run" r JOIN "Email" e ON e."runId" = r.id
     WHERE r.input->'sources' @> jsonb_build_array(jsonb_build_object('orderMailId', e."orderMailId", 'checksum', e.checksum))`);
   expect(roster.rows[0]).toMatchObject({ count: 10 });
+  const [historical] = await getDb(ctx.db)
+    .select({ shortcode: run.shortcode })
+    .from(run)
+    .limit(1);
+  if (!historical) throw new Error("Missing historical fixture Run");
+  expect((await loadRunDetail(ctx.db, historical.shortcode)).targets).toEqual([
+    expect.objectContaining({
+      state: "completed",
+      outcome: "verified",
+      completedAt: "2026-01-15T12:01:00.000Z",
+    }),
+  ]);
   const queue = await readWorkQueue(
     ctx.db,
     null,
