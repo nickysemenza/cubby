@@ -9,9 +9,9 @@ import { AuthenticatedShellAccount } from "~/entity/navigation/authenticated-she
 import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import { domainWayfinding } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
@@ -185,7 +185,8 @@ export function WorkspaceNavigator({
   const searching = query.trim().length > 0;
 
   return (
-    <ResponsiveSheet
+    <Overlay
+      placement="panel"
       open={open}
       onOpenChange={onOpenChange}
       title={view === "household" ? "More" : "Tools & data"}
@@ -308,7 +309,7 @@ export function WorkspaceNavigator({
           </>
         )}
       </Stack>
-    </ResponsiveSheet>
+    </Overlay>
   );
 }
 

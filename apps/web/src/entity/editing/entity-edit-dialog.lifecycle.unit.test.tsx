@@ -50,7 +50,9 @@ function editorPort(beforeWrite: () => Promise<void> = async () => undefined) {
 function Editor({
   mutationPort,
   onSuccess,
+  onSubmitOverride,
 }: {
+  onSubmitOverride?: () => Promise<void>;
   mutationPort: EntityMutationPort;
   onSuccess: () => void;
 }) {
@@ -61,6 +63,7 @@ function Editor({
       onOpenChange={setOpen}
       mutationPort={mutationPort}
       onSuccess={onSuccess}
+      onSubmitOverride={onSubmitOverride}
       request={{
         entity: "vendor",
         operation: "update",
@@ -117,6 +120,37 @@ describe("generic editor save lifecycle", () => {
     );
     expect(transport).toHaveBeenCalledTimes(2);
     expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+  it("blocks dismissal until an override finishes, even without a pending mutation", async () => {
+    let finish: () => void = () => undefined;
+    const override = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { mutationPort, transport } = editorPort();
+    render(
+      <Editor
+        mutationPort={mutationPort}
+        onSuccess={vi.fn()}
+        onSubmitOverride={override}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save changes" }),
+    );
+    await waitFor(() => expect(override).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    finish();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(transport).not.toHaveBeenCalled();
   });
   it("focuses the first field refused asynchronously and keeps the entered value", async () => {
     const { mutationPort } = editorPort(async () => {

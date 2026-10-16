@@ -16,9 +16,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 const PURPOSE_OPTIONS: readonly PickerOption[] = [
   { value: "item", label: "Item photo" },
@@ -70,29 +69,27 @@ export function AttachExistingImageDialog({
   const isProduct = targetId.startsWith("PRD-");
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       title="Attach to record"
       description="Search any live gallery record by name or shortcode. Garden entries use GDE- codes."
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel="Attach"
-          pending={attach.isPending}
-          submitDisabled={!target}
-          error={attach.error ? getErrorMessage(attach.error) : null}
-          onSubmit={() =>
-            void attach.mutateAsync({
-              imageId: image.id,
-              targetId,
-              purpose: isProduct ? purpose : undefined,
-            })
-          }
-        />
-      }
+      onCancel={onClose}
+      error={attach.error ? getErrorMessage(attach.error) : null}
+      primary={{
+        label: "Attach",
+        pending: attach.isPending,
+        disabled: !target,
+        onClick: async () => {
+          await attach.mutateAsync({
+            imageId: image.id,
+            targetId,
+            purpose: isProduct ? purpose : undefined,
+          });
+        },
+      }}
     >
       <div className="space-y-2">
         <Label htmlFor="existing-image-target">Record</Label>
@@ -123,6 +120,6 @@ export function AttachExistingImageDialog({
           </>
         )}
       </div>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

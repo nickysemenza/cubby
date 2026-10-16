@@ -12,12 +12,11 @@ import { Picker } from "~/entity/picker/picker";
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { FoodAmountEditor, formatFoodAmount } from "../food-amount-editor";
 import { MealNutritionEstimates } from "../meal-nutrition";
@@ -198,7 +197,7 @@ export function PortionSheet({
         : [setCommand(row)];
     });
 
-    void onSave({
+    return onSave({
       mealRecipeId: source.mealRecipeId,
       estimatedYieldGrams: expectedYield === "" ? null : expectedNumber,
       actualYieldGrams: actualYield === "" ? null : yieldNumber,
@@ -207,21 +206,19 @@ export function PortionSheet({
   };
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={onOpenChange}
       size="md"
       title={`Portions · ${source.recipe.name}`}
       description={`Prepared ${sourceDate} · ${source.preparedHere ? "cooked here" : "from another meal"}`}
-      footer={
-        <DialogFormActions
-          onCancel={() => onOpenChange(false)}
-          submitLabel="Save portions"
-          pending={isSaving}
-          submitDisabled={!canSave}
-          onSubmit={submit}
-        />
-      }
+      onCancel={() => onOpenChange(false)}
+      primary={{
+        label: "Save portions",
+        pending: isSaving,
+        disabled: !canSave,
+        onClick: submit,
+      }}
     >
       <Stack gap="lg">
         <YieldFields
@@ -250,7 +247,7 @@ export function PortionSheet({
           onUpdate={updateRow}
         />
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }
 

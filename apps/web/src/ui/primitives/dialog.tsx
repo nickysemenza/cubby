@@ -51,10 +51,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeDisabled = false,
   size = "sm",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  closeDisabled?: boolean;
   size?: DialogSize;
 }) {
   return (
@@ -73,6 +75,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
+            disabled={closeDisabled}
             render={
               <Button
                 variant="outline"
@@ -97,33 +100,6 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
       className={cn("flex flex-col gap-1", className)}
       {...props}
     />
-  );
-}
-
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean;
-}) {
-  return (
-    <div
-      data-slot="dialog-footer"
-      className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
-        </DialogPrimitive.Close>
-      )}
-    </div>
   );
 }
 
@@ -161,7 +137,6 @@ export {
 
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
 
 

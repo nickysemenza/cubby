@@ -43,7 +43,7 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   await page.getByRole("button", { name: "Edit Cookbook" }).click();
   await dialog.getByLabel("Title").fill(`${name} other`);
   await dialog.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByText(/already used by/)).toBeVisible();
+  await expect(dialog.getByRole("alert")).toContainText(/already used by/);
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
   // Re-point: pick the other cookbook in the recipe editor; the recipe's

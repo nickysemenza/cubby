@@ -1,7 +1,8 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets";
 import { Command as CommandPrimitive } from "cmdk";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 
 import {
   QualityResult,
@@ -10,8 +11,9 @@ import {
 import { SuggestionReview } from "~/entity/suggestions/suggestion-review";
 import { Demo, DemoGrid } from "~/features/design/components/design-section";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { FormWrapper, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Section, SectionHeading } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   CommandDialog,
@@ -47,7 +49,11 @@ export function ActionWorkflowSection() {
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("Workshop supplies");
+  const workflowFormId = useId();
+  const workflowForm = useForm({
+    defaultValues: { name: "Workshop supplies" },
+  });
+  const name = useWatch({ control: workflowForm.control, name: "name" });
   return (
     <DemoGrid className="xl:grid-cols-2">
       <Demo
@@ -92,10 +98,10 @@ export function ActionWorkflowSection() {
         </CommandDialog>
       </Demo>
       <Demo
-        name="WorkflowDialog · local primary, pending and error"
+        name="Overlay · local primary, pending and error"
         note="The first save fails locally. Retry completes the preview."
       >
-        <WorkflowDialog
+        <Overlay
           trigger={
             <DialogTrigger
               render={<Button variant="outline">Open demo workflow</Button>}
@@ -111,15 +117,25 @@ export function ActionWorkflowSection() {
           description="A synthetic workflow; no record is written."
           summary="1 category"
           error={error}
+          bodyMode="form"
+          pending={pending}
           primary={{
             label: error ? "Retry preview" : "Save preview",
             pendingLabel: "Saving preview…",
-            pending,
+            form: workflowFormId,
             disabled: !name.trim(),
-            onClick: async () => {
-              setPending(true);
-              await new Promise((resolve) => setTimeout(resolve, 600));
-              setPending(false);
+          }}
+        >
+          <FormWrapper
+            form={workflowForm}
+            id={workflowFormId}
+            hideActions
+            footerMode="dialog"
+            isPending={pending}
+            onSubmittingChange={setPending}
+            submitButtonText="Save preview"
+            onSubmit={async ({ name }) => {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
               if (!error)
                 setError(
                   "Synthetic workflow failure: SQLSTATE 23514 · category_check",
@@ -128,21 +144,16 @@ export function ActionWorkflowSection() {
                 setWorkflowOpen(false);
                 setAction(`Preview saved: ${name}`);
               }
-            },
-          }}
-        >
-          <label
-            htmlFor="design-workflow-category"
-            className="flex flex-col gap-1 text-xs"
+            }}
           >
-            Category name
-            <Input
-              id="design-workflow-category"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+            <UnifiedTextField
+              form={workflowForm}
+              name="name"
+              label="Category name"
+              placeholder="Workshop supplies"
             />
-          </label>
-        </WorkflowDialog>
+          </FormWrapper>
+        </Overlay>
       </Demo>
     </DemoGrid>
   );

@@ -10,8 +10,8 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import {
   activeFilterCount,
@@ -58,22 +58,16 @@ export function DashboardFilters(props: DashboardFiltersProps) {
         {count > 0 ? `Filters (${count})` : "Filter"}
       </Button>
 
-      <ResponsiveDialog
+      <Overlay
         open={open}
         onOpenChange={setOpen}
         title="Project filters"
         description="Narrow projects, work, and spend together."
         size="lg"
-        footer={
-          <Row justify="end">
-            <Button type="button" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-          </Row>
-        }
+        cancelLabel="Done"
       >
         <DashboardFilterControls {...props} />
-      </ResponsiveDialog>
+      </Overlay>
     </>
   );
 }

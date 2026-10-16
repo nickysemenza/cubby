@@ -32,9 +32,9 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 
@@ -87,7 +87,7 @@ interface ProductDiscardDialogProps {
    */
   defaultQuantity?: number;
   /** Called once the discard is recorded — not on cancel. */
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
 }
 
 /**
@@ -174,8 +174,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       } catch (error) {
         showErrorToast(error);
       }
+      await onComplete?.();
       close(false);
-      onComplete?.();
     },
   });
 
@@ -217,8 +217,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
     }
   }, [serverDefaultQuantity, quantityDirty, form]);
 
-  const submit = form.handleSubmit((values) => {
-    discard.mutate({
+  const submit = form.handleSubmit(async (values) => {
+    await discard.mutateAsync({
       productId: product.id,
       quantity: values.quantity,
       date: values.date,
@@ -234,7 +234,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   });
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={close}
       title="Discard"
@@ -243,7 +243,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
         label: "Discard",
         pending: discard.isPending,
         disabled: needsEntryChoice,
-        onClick: () => void submit(),
+        onClick: () => submit(),
       }}
     >
       <Stack gap="md">
@@ -316,6 +316,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
           </Stack>
         )}
       </Stack>
-    </WorkflowDialog>
+    </Overlay>
   );
 };

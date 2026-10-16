@@ -35,8 +35,8 @@ import { tradeOptions } from "~/entity/presentation/trade-options";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
@@ -455,7 +455,7 @@ export function SplitExpenseDialog({
   const productLabel = start.data?.productName ?? "the linked product";
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={(next) => {
         if (!next) reset();
@@ -547,6 +547,6 @@ export function SplitExpenseDialog({
       ) : null}
 
       <SplitTotals result={result} originalCost={start.data?.originalCost} />
-    </WorkflowDialog>
+    </Overlay>
   );
 }

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import type { VariantProps } from "class-variance-authority";
 import {
   lazy,
@@ -6,6 +7,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
 } from "react";
 import {
   Controller,
@@ -19,13 +21,11 @@ import { toast } from "sonner";
 
 import { FLAGS } from "~/lib/flags";
 import { cn } from "~/lib/utils";
-import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button, type buttonVariants } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { QuantityInput } from "~/ui/primitives/quantity-input";
-import { useDialogHeaderActionsRegistration } from "~/ui/primitives/responsive-dialog";
 import { Spinner } from "~/ui/primitives/spinner";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -154,59 +154,7 @@ function formFooterClassName(
 }
 
 /**
- * Phone edit-dialog vocabulary (DESIGN.md): a dialog-mode form on phone hands
- * its Cancel/Submit to the enclosing ResponsiveDialog's 52px sheet header
- * instead of rendering its own footer row. `formId` lets the header's submit
- * button target this `<form>` via the native `form` attribute even though it
- * renders outside this subtree. Returns whether the header owns the actions.
- */
-function useDialogHeaderFormActions({
-  formId,
-  submitText,
-  isPending,
-  onCancel,
-}: {
-  formId: string;
-  submitText: string;
-  isPending: boolean;
-  onCancel: (() => void) | undefined;
-}): boolean {
-  const isMobile = useIsMobile();
-  const registerHeaderActions = useDialogHeaderActionsRegistration();
-  const useHeaderActions = isMobile && registerHeaderActions != null;
-
-  // `onCancel` reads through a ref rather than sitting in the effect's
-  // dependency array — callers routinely pass a fresh closure every render
-  // (e.g. `onCancel={close}` where `close` is a plain function literal), and
-  // depending on its identity would re-register — and re-render the
-  // enclosing ResponsiveDialog — every render, an infinite update loop.
-  const onCancelRef = useRef(onCancel);
-  onCancelRef.current = onCancel;
-
-  useEffect(() => {
-    if (!useHeaderActions || !registerHeaderActions) return;
-    registerHeaderActions({
-      cancel: {
-        label: "Cancel",
-        onClick: () => onCancelRef.current?.(),
-        disabled: isPending,
-      },
-      submit: {
-        label: submitText,
-        type: "submit",
-        form: formId,
-        disabled: isPending,
-      },
-    });
-    return () => registerHeaderActions(null);
-  }, [useHeaderActions, registerHeaderActions, isPending, submitText, formId]);
-
-  return useHeaderActions;
-}
-
-/**
- * The sticky bar's live tally (a running total, a count) survives the move to
- * sheet-header actions as a plain line at the end of the form.
+ * The sticky bar's live tally stays in the form when its actions live in an overlay.
  */
 function FormTallyLine({
   stickyFooter,
@@ -222,6 +170,9 @@ function FormTallyLine({
 // Form wrapper component with common layout and buttons
 export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   form,
+  id,
+  hideActions = false,
+  onSubmittingChange,
   onSubmit,
   error,
   isPending,
@@ -236,6 +187,10 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   fieldLayout,
 }: {
   form: UseFormReturn<TFieldValues>;
+  id?: string;
+  hideActions?: boolean;
+  /** Includes resolver validation and all awaited completion work. */
+  onSubmittingChange?: (pending: boolean) => void;
   onSubmit: (values: TFieldValues) => void;
   error?: string | readonly string[];
   isPending: boolean;
@@ -261,22 +216,23 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   // Compile-time opt-in via the `formDevtools` flag. The panel only mounts
   // when the devtools are bundled (dev) AND the flag is on (see flags.ts).
   const formDevtoolsEnabled = FLAGS.formDevtools;
-  useSubmitSuccessToast(isPending, error, successMessage);
 
-  const formId = useId();
+  const localFormId = useId();
+  const formId = id ?? localFormId;
+  const submitting = useRef(false);
+  const [submitError, setSubmitError] = useState<string>();
+  const effectiveError = Array.from(
+    new Set(
+      [
+        ...(typeof error === "string" ? [error] : (error ?? [])),
+        ...(submitError ? [submitError] : []),
+      ].filter(Boolean),
+    ),
+  );
+  useSubmitSuccessToast(isPending, effectiveError, successMessage);
   const submitText = isPending
     ? getPendingButtonText(submitButtonText)
     : submitButtonText;
-  // Any form inside a phone ResponsiveDialog hands its actions to the sheet
-  // header: dialog-mode and sticky-bar forms alike (the product form opens
-  // in a dialog with its sticky bar). The registration context only exists
-  // inside a ResponsiveDialog, so page forms are unaffected.
-  const useHeaderActions = useDialogHeaderFormActions({
-    formId,
-    submitText,
-    isPending,
-    onCancel,
-  });
 
   return (
     <FormProvider {...form}>
@@ -298,14 +254,26 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           // (react-hook-form otherwise no-ops the submit). Custom inputs don't all
           // receive RHF's auto-focus, so scroll the first invalid field into view.
           const formElement = e.currentTarget;
-          form.handleSubmit(onSubmit, () => {
-            toast.error("Some fields need attention before you can save.");
-            requestAnimationFrame(() => {
-              formElement
-                .querySelector('[aria-invalid="true"]')
-                ?.scrollIntoView({ block: "center", behavior: "auto" });
+          if (submitting.current || isPending) return;
+          submitting.current = true;
+          onSubmittingChange?.(true);
+          setSubmitError(undefined);
+          void form
+            .handleSubmit(onSubmit, () => {
+              toast.error("Some fields need attention before you can save.");
+              requestAnimationFrame(() => {
+                formElement
+                  .querySelector('[aria-invalid="true"]')
+                  ?.scrollIntoView({ block: "center", behavior: "auto" });
+              });
+            })(e)
+            .catch((failure: unknown) => {
+              setSubmitError(getErrorMessage(failure));
+            })
+            .finally(() => {
+              submitting.current = false;
+              onSubmittingChange?.(false);
             });
-          })(e);
         }}
       >
         {footerMode === "dialog" ? (
@@ -318,23 +286,16 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             )}
           >
             {children}
-            <FormStatusBanner error={error} />
+            <FormStatusBanner error={effectiveError} />
           </div>
         ) : (
           <>
             {children}
-            <FormStatusBanner error={error} />
+            <FormStatusBanner error={effectiveError} />
           </>
         )}
 
-        {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
-            on mobile, full-width; reverts to submit-left/cancel-right on sm+.
-            Sticky mode floats the actions in a chunky ledger bar that stays in
-            reach on long forms (offset above the mobile bottom nav). On phone,
-            dialog mode hands these buttons to the ResponsiveDialog's sheet
-            header instead (see `useHeaderActions` above) and renders nothing
-            here — the phone edit dialog has no footer. */}
-        {useHeaderActions ? (
+        {hideActions ? (
           <FormTallyLine
             stickyFooter={stickyFooter}
             footerStart={footerStart}

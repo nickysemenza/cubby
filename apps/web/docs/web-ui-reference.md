@@ -167,3 +167,11 @@ An embedded table must also reach **its own** rows' entity, not just their relat
 ## Page shell
 
 - Every list and detail page renders through one shell: `Page` from `~/entity/page/page` (`HydrateClient` + `PageWrapper` + unified `PageHeader` + `Suspense`). Props are a discriminated union — `variant="detail"` requires `entity` at compile time. Lists use a compact contextual heading or workbench; details use an open contextual header with a structural divider, optional 48px identity thumbnail, quiet metadata, and visible Edit/main workflow actions with remaining actions in overflow. Global desktop search and create live in the sidebar. Shared headings and disclosure behavior follow [the Section contract](../DESIGN.md#shared-headings-and-actions). Don't reintroduce `EntityLayout`/`DetailPage` (deleted) or call `PageHero`/`PageWrapper` directly in pages — use `Page`. Detail bodies use `DetailSections` (`~/entity/table/detail-page`) as `Page`'s children.
+
+### Ordinary overlays
+
+Use [`Overlay`](../src/ui/overlays/overlay.tsx) for modal workflows and workspace
+panels. [DESIGN.md](../DESIGN.md) owns its
+presentation and submission-lifetime contract. Pass actions directly from the
+owner; forms use a shared native form id. Specialized command, photo and
+modeless inspector surfaces keep their existing engines.

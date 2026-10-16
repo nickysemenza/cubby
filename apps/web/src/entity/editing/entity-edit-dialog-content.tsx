@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -27,7 +28,7 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import type { UnparsedError } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { FormWrapper } from "~/ui/forms/form-utils";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -341,6 +342,9 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
     null,
   );
+  const formId = useId();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const pending = isSubmitting || session.isPending;
   const [shellError, setShellError] = useState<string | null>(null);
   // Field-scoped issues render beside their control via the session's RHF
   // errors; everything else — the headline plus one line per lifecycle blocker
@@ -363,10 +367,10 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   };
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={(next) => {
-        if (!next && session.isPending) return;
+        if (!next && pending) return;
         if (!next) session.reset();
         onOpenChange(next);
       }}
@@ -379,9 +383,19 @@ export function EntityEditDialogContent<E extends EditableEntity>({
       )}
       size={presentation.size ?? "md"}
       bodyMode="form"
+      pending={pending}
+      primary={{
+        label: presentation.submitLabel ?? "Create",
+        pendingLabel: request.operation === "create" ? "Creating…" : "Saving…",
+        form: formId,
+      }}
+      onCancel={close}
     >
       <FormWrapper
         form={session.form}
+        id={formId}
+        hideActions
+        onSubmittingChange={setIsSubmitting}
         onSubmit={async () => {
           setShellError(null);
           if (onSubmitOverride) {
@@ -396,11 +410,11 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             }
             return;
           }
-          void session
+          await session
             .submit()
             .then(async (result) => {
               if (!result.ok) return;
-              onSubmitted?.();
+              await onSubmitted?.();
               if (!result.changed) {
                 close();
                 return;
@@ -417,17 +431,17 @@ export function EntityEditDialogContent<E extends EditableEntity>({
               // Success before close: a create-from-picker caller resolves its
               // pending selection in `onSuccess`, and closing first rejects
               // that pending selection as a cancel.
-              onSuccess?.(result.result);
+              await onSuccess?.(result.result);
               close();
             })
             .catch((error: UnparsedError) =>
               setShellError(getErrorMessage(error)),
             );
         }}
-        isPending={session.isPending}
+        isPending={pending}
         error={error}
         onCancel={() => {
-          if (!session.isPending) close();
+          if (!pending) close();
         }}
         submitButtonText={presentation.submitLabel ?? "Create"}
         footerMode="dialog"
@@ -478,6 +492,6 @@ export function EntityEditDialogContent<E extends EditableEntity>({
           />
         )}
       </FormWrapper>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

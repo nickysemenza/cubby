@@ -4,6 +4,7 @@ import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
 
 import { useIsMobile } from "~/ui/hooks/use-mobile";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -12,7 +13,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import { isTableLayoutCustomized } from "./column-layout";
 import type {
@@ -81,7 +81,8 @@ export function DataTableViewOptions<TData extends RowData>({
         >
           {triggerContent}
         </Button>
-        <ResponsiveSheet
+        <Overlay
+          placement="panel"
           open={mobileOpen}
           onOpenChange={setMobileOpen}
           title="Columns"
@@ -95,7 +96,7 @@ export function DataTableViewOptions<TData extends RowData>({
             )}
             <TableLayoutCustomizer table={table} />
           </div>
-        </ResponsiveSheet>
+        </Overlay>
       </>
     );
   }

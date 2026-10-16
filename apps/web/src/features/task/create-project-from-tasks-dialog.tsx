@@ -3,7 +3,7 @@ import { plainDate, projectKindSchema } from "@cubby/schemas/project";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -19,7 +19,7 @@ import {
   PlainDateField,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 const quickAddSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -54,6 +54,8 @@ export function CreateProjectFromTasksDialog({
   taskIds,
 }: CreateProjectFromTasksDialogProps) {
   const count = taskIds.length;
+  const formId = useId();
+  const [submitting, setSubmitting] = useState(false);
   const form = useForm<QuickAddValues>({
     resolver: zodResolver(quickAddSchema),
     defaultValues,
@@ -79,17 +81,22 @@ export function CreateProjectFromTasksDialog({
   }, [form, open]);
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={onOpenChange}
       title="New Project From Tasks"
       description={`Create a project and move ${countLabel(count, "selected task")} onto it.`}
       bodyMode="form"
+      pending={submitting || mutation.isPending}
+      primary={{ label: "Create", form: formId }}
     >
       <FormWrapper
         form={form}
+        id={formId}
+        hideActions
+        onSubmittingChange={setSubmitting}
         onSubmit={(values) =>
-          mutation.mutate({
+          mutation.mutateAsync({
             taskIds,
             project: {
               name: values.name,
@@ -141,6 +148,6 @@ export function CreateProjectFromTasksDialog({
         />
         <PlainDateField form={form} name="startDate" label="Start date" />
       </FormWrapper>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

@@ -52,11 +52,10 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
-import { Spinner } from "~/ui/primitives/spinner";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 const formSchema = z.object({
@@ -95,7 +94,7 @@ interface ProductBulkAddToInventoryDialogProps {
   onOpenChange: (open: boolean) => void;
   products: readonly BulkAddProduct[];
   /** Called after a successful add — the caller clears its row selection. */
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
 }
 
 const rowsFor = (products: readonly BulkAddProduct[]) =>
@@ -211,8 +210,8 @@ export const ProductBulkAddToInventoryDialog: FC<
           showErrorToast(error, "Stocked, but suggestion receipt failed");
         }
       }
+      await onComplete?.();
       handleOpenChange(false);
-      onComplete?.();
     },
   });
 
@@ -232,29 +231,21 @@ export const ProductBulkAddToInventoryDialog: FC<
   });
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={handleOpenChange}
       size="lg"
       title="Add to inventory"
       description={`Stock ${countLabel(products.length, "product")} at one location.`}
-      footer={
-        <Button
-          type="button"
-          onClick={onSubmit}
-          disabled={addMutation.isPending || fields.length === 0}
-        >
-          {addMutation.isPending && <Spinner size="sm" />}
-          Add {fields.length} to inventory
-        </Button>
-      }
+      primary={{
+        label: `Add ${fields.length} to inventory`,
+        pendingLabel: `Adding ${fields.length}…`,
+        pending: addMutation.isPending,
+        disabled: fields.length === 0,
+        onClick: onSubmit,
+      }}
     >
-      {/* `min-w-0` here and on every wrapper below is load-bearing, not tidying.
-          DialogContent is a `grid` whose items default to `min-width: auto`, so
-          one long product name sets a min-content width that spills past the
-          dialog's `max-w` — and the popup only scrolls on Y, so the overflow is
-          simply unreachable. Break the chain anywhere and `truncate` stops
-          working. */}
+      {/* Long product names must not push editable amounts past the viewport. */}
       <Stack gap="md" className="min-w-0">
         {overAccounted && (
           <Alert variant="destructive">
@@ -354,6 +345,6 @@ export const ProductBulkAddToInventoryDialog: FC<
           </Stack>
         )}
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 };

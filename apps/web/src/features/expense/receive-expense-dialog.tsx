@@ -39,9 +39,9 @@ import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -102,7 +102,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   });
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={onOpenChange}
       title="Receive into Inventory"
@@ -119,7 +119,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
       ) : (
         <Description>Loading product…</Description>
       )}
-    </WorkflowDialog>
+    </Overlay>
   );
 };
 

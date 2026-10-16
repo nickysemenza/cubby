@@ -27,11 +27,11 @@ import { formatDateSpan } from "~/lib/date-span";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { Row, Stack } from "~/ui/layout";
+import type { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import type { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import {
   EntityIntentFields,
@@ -97,7 +97,7 @@ export interface EntityEditorPresentation<E extends EditableEntity> {
     record?: EntityEditRecord;
   }): string;
   submitLabel?: string;
-  size?: ComponentProps<typeof ResponsiveDialog>["size"];
+  size?: ComponentProps<typeof Overlay>["size"];
   Fields: ComponentType<EntityEditorFieldsProps>;
   /**
    * Per-entity extension of the shell's generic image block, consulted only

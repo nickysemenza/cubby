@@ -22,10 +22,10 @@ import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { NutritionSummary } from "./meal-nutrition-summary";
@@ -138,7 +138,7 @@ function DailyAddFood({
       />
     );
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(open) => {
         if (!open && !create.isPending) onClose();
@@ -222,7 +222,7 @@ function DailyAddFood({
           </>
         )}
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }
 

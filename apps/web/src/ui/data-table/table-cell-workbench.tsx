@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 
 import { useIsMobile } from "~/ui/hooks/use-mobile";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
@@ -11,7 +12,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 
@@ -120,7 +120,8 @@ export function TableCellWorkbench({
               >
                 {iconTriggerGlyph}
               </Button>
-              <ResponsiveSheet
+              <Overlay
+                placement="panel"
                 open={open}
                 onOpenChange={setOpen}
                 title={title}
@@ -128,7 +129,7 @@ export function TableCellWorkbench({
                 className="md:max-w-2xl"
               >
                 {body}
-              </ResponsiveSheet>
+              </Overlay>
             </>
           ) : (
             <Popover open={open} onOpenChange={setOpen}>
@@ -155,7 +156,8 @@ export function TableCellWorkbench({
           summary={summary}
           onClick={() => setOpen(true)}
         />
-        <ResponsiveSheet
+        <Overlay
+          placement="panel"
           open={open}
           onOpenChange={setOpen}
           title={title}
@@ -163,7 +165,7 @@ export function TableCellWorkbench({
           className="md:max-w-2xl"
         >
           {open ? children : null}
-        </ResponsiveSheet>
+        </Overlay>
       </>
     );
   }

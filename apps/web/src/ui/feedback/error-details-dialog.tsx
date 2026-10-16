@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 import { ErrorDetailsBody } from "./error-details";
 import {
@@ -27,7 +27,7 @@ export function ErrorDetailsDialogHost() {
   );
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={(next) => {
         if (!next) closeErrorDetailsDialog();
@@ -37,6 +37,6 @@ export function ErrorDetailsDialogHost() {
       size="md"
     >
       {error != null && <ErrorDetailsBody error={error} />}
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

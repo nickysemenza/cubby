@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 import { useInvalidateMeals } from "../use-meal-mutations";
 import { PortionSheet } from "./portion-sheet";
@@ -95,7 +95,7 @@ export function RecipeFoodDialog({
 
   return (
     <>
-      <ResponsiveDialog
+      <Overlay
         open={recipeId != null && controller.selectedPreparation == null}
         onOpenChange={(open) => {
           if (!open && !addRecipe.isPending) close();
@@ -104,7 +104,7 @@ export function RecipeFoodDialog({
         description="Adding the recipe to this meal before recording who had how much."
       >
         <SimpleLoading text="Preparing portion editor…" />
-      </ResponsiveDialog>
+      </Overlay>
       {controller.selectedPreparation ? (
         <PortionSheet
           source={controller.selectedPreparation}

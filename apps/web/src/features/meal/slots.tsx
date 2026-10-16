@@ -22,11 +22,10 @@ import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { formatCostEstimate } from "./meal-nutrition";
@@ -148,22 +147,20 @@ function MealPreparationOverlays({
 }) {
   return (
     <>
-      <ResponsiveDialog
+      <Overlay
         open={preparation.sourcePickerOpen}
         onOpenChange={preparation.setSourcePickerOpen}
         title="Add leftovers"
         description="Choose a recipe prepared in another recent meal, including another meal from the same day."
-        footer={
-          <DialogFormActions
-            onCancel={() => {
-              preparation.setSourcePickerOpen(false);
-              preparation.setSourceSelectionId(null);
-            }}
-            submitLabel="Continue"
-            submitDisabled={preparation.selectedSourceChoice == null}
-            onSubmit={preparation.chooseSource}
-          />
-        }
+        onCancel={() => {
+          preparation.setSourcePickerOpen(false);
+          preparation.setSourceSelectionId(null);
+        }}
+        primary={{
+          label: "Continue",
+          disabled: preparation.selectedSourceChoice == null,
+          onClick: preparation.chooseSource,
+        }}
       >
         {preparation.isLoadingSourceChoices ? (
           <SimpleLoading text="Loading prepared recipes…" />
@@ -184,7 +181,7 @@ function MealPreparationOverlays({
             No prepared recipes are available from another recent meal.
           </Description>
         )}
-      </ResponsiveDialog>
+      </Overlay>
       {preparation.selectedPreparation ? (
         <PortionSheet
           source={preparation.selectedPreparation}

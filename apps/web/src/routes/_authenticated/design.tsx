@@ -164,11 +164,8 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: SlidersHorizontalIcon,
         description: (
           <ComponentsLine
-            components={["CommandDialog", "WorkflowDialog"]}
-            source={[
-              "ui/primitives/command.tsx",
-              "ui/dialogs/workflow-dialog.tsx",
-            ]}
+            components={["CommandDialog", "Overlay"]}
+            source={["ui/primitives/command.tsx", "ui/overlays/overlay.tsx"]}
           />
         ),
         content: <ActionWorkflowSection />,
@@ -192,7 +189,10 @@ const GROUPS: IndexedSectionGroup[] = [
         description: (
           <ComponentsLine
             components={["SectionHeading", "Section", "SectionActionLink"]}
-            source={["ui/layout/section.tsx"]}
+            source={[
+              "ui/layout/section.tsx",
+              "ui/layout/section-action-link.tsx",
+            ]}
           />
         ),
         content: <SectionCompositionsSection />,
@@ -203,10 +203,15 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: TableIcon,
         description: (
           <ComponentsLine
-            components={["QualityResult", "RankedBarBreakdown"]}
+            components={[
+              "QualityResult",
+              "RankedBarBreakdown",
+              "Visualization",
+            ]}
             source={[
               "entity/entity-detail/record-quality.tsx",
               "ui/charts/kit.tsx",
+              "ui/visualizations/visualization.tsx",
             ]}
           />
         ),
@@ -314,14 +319,8 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: ChatCircleTextIcon,
         description: (
           <ComponentsLine
-            components={[
-              "Alert",
-              "Skeleton",
-              "Empty",
-              "ResponsiveDialog",
-              "Tabs",
-            ]}
-            source={["ui/primitives/"]}
+            components={["Alert", "Skeleton", "Empty", "Overlay", "Tabs"]}
+            source={["ui/primitives/", "ui/overlays/overlay.tsx"]}
           />
         ),
         content: <FeedbackSection />,

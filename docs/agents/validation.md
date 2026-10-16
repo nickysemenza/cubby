@@ -160,7 +160,13 @@ hook. Fix formatting through a normal commit so that hook owns the edits.
 The merge gate below applies to every included PR. Merge the ready group with
 `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
 merge instead of issuing individual-PR merge requests. Stack registration does
-not replace final-head CI or independent review.
+not replace final-head CI or independent review. Before reporting a stack ready,
+fetch the trunk and verify it is an ancestor of the bottom branch, then verify
+each lower head is an ancestor of the layer above it. Rebase the full stack when
+the trunk has advanced and push bottom to top. Register layers before their
+final push so normal PR workflows run in stack context; a successful standalone
+`workflow_dispatch` run alone does not establish the required checks or readiness
+shown on each PR.
 
 ## Commit, push, and merge
 

@@ -13,18 +13,11 @@ import { mergeConfigFor } from "~/entity/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
@@ -72,7 +65,7 @@ export function EntityMergeDialog<T extends MergeRow>({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Fires once, with the chosen keeper and the alias ids being merged into it. */
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   /** Ranked mode: the full set under consideration (>= 2). Ignored in fixed mode. */
   rows?: T[];
@@ -273,7 +266,7 @@ function RankedMergeDialog<T extends MergeRow>({
   rows: T[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   impactPreviewOperations?: ImpactPreviewOperations;
 }) {
@@ -293,95 +286,92 @@ function RankedMergeDialog<T extends MergeRow>({
     );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={productPreviewEnabled ? "sm:max-w-5xl" : undefined}
-      >
-        <DialogHeader>
-          <DialogTitle>{resolveCopyText(config.copy.title, null)}</DialogTitle>
-          {config.copy.description && (
-            <DialogDescription>
-              {resolveCopyText(config.copy.description, null)}
-            </DialogDescription>
-          )}
-        </DialogHeader>
-        <Stack>
-          <div>
-            <div className="mb-1 text-sm font-medium text-muted-foreground">
-              Keep (target):
-            </div>
-            <div className="flex flex-col gap-1">
-              {rows.map((row) => {
-                const selected = row.id === effectiveKeepId;
-                return (
-                  <Button
-                    key={row.id}
-                    type="button"
-                    variant={selected ? "default" : "outline"}
-                    size="sm"
-                    className="h-auto justify-start py-1"
-                    onClick={() => setSelectedKeepId(row.id)}
-                  >
-                    <CheckIcon
-                      className={`size-4 shrink-0 ${selected ? "opacity-100" : "opacity-0"}`}
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-                      <span className="flex items-center gap-1 truncate">
-                        {config.rowLabel(row)}
-                      </span>
-                      {config.rowStat && (
-                        <span
-                          className={`flex flex-wrap gap-x-2 text-xs ${
-                            selected
-                              ? "text-primary-foreground/80"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {config.rowStat(row)}
-                        </span>
-                      )}
-                    </span>
-                  </Button>
-                );
-              })}
-            </div>
+    <Overlay
+      open={open}
+      onOpenChange={onOpenChange}
+      title={resolveCopyText(config.copy.title, null)}
+      description={
+        config.copy.description
+          ? resolveCopyText(config.copy.description, null)
+          : undefined
+      }
+      onCancel={() => onOpenChange(false)}
+      primary={{
+        disabled:
+          !effectiveKeepId ||
+          aliasIds.length === 0 ||
+          (productPreviewEnabled &&
+            (productPreview.isPending ||
+              productPreview.isError ||
+              !!productPreview.data?.blockers.length)),
+        pending: isPending,
+        pendingLabel: "Merging…",
+        label: "Merge",
+        onClick: () => {
+          if (effectiveKeepId) return onConfirm(effectiveKeepId, aliasIds);
+        },
+      }}
+      className={productPreviewEnabled ? "sm:max-w-5xl" : undefined}
+    >
+      <Stack>
+        <div>
+          <div className="mb-1 text-sm font-medium text-muted-foreground">
+            Keep (target):
           </div>
-          {config.copy.caution && (
-            <Description size="xs">{config.copy.caution}</Description>
-          )}
-        </Stack>
-        {productPreviewEnabled && (
-          <ProductMergeDecisions
-            data={productPreview.data}
-            error={productPreview.error}
-            isPending={productPreview.isPending}
-          />
+          <div className="flex flex-col gap-1">
+            {rows.map((row) => {
+              const selected = row.id === effectiveKeepId;
+              return (
+                <Button
+                  key={row.id}
+                  type="button"
+                  variant={selected ? "default" : "outline"}
+                  size="sm"
+                  className="h-auto justify-start py-1"
+                  onClick={() => setSelectedKeepId(row.id)}
+                >
+                  <CheckIcon
+                    className={`size-4 shrink-0 ${selected ? "opacity-100" : "opacity-0"}`}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                    <span className="flex items-center gap-1 truncate">
+                      {config.rowLabel(row)}
+                    </span>
+                    {config.rowStat && (
+                      <span
+                        className={`flex flex-wrap gap-x-2 text-xs ${
+                          selected
+                            ? "text-primary-foreground/80"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {config.rowStat(row)}
+                      </span>
+                    )}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+        {config.copy.caution && (
+          <Description size="xs">{config.copy.caution}</Description>
         )}
-        <MergeImpactPreview
-          losers={rows
-            .filter((row) => aliasIds.includes(row.id))
-            .map((row) => ({ id: row.id, label: config.rowLabel(row) }))}
-          operations={impactPreviewOperations}
+      </Stack>
+      {productPreviewEnabled && (
+        <ProductMergeDecisions
+          data={productPreview.data}
+          error={productPreview.error}
+          isPending={productPreview.isPending}
         />
-        <DialogFormActions
-          submitDisabled={
-            !effectiveKeepId ||
-            aliasIds.length === 0 ||
-            (productPreviewEnabled &&
-              (productPreview.isPending ||
-                productPreview.isError ||
-                !!productPreview.data?.blockers.length))
-          }
-          pending={isPending}
-          pendingLabel="Merging…"
-          submitLabel="Merge"
-          onCancel={() => onOpenChange(false)}
-          onSubmit={() => {
-            if (effectiveKeepId) onConfirm(effectiveKeepId, aliasIds);
-          }}
-        />
-      </DialogContent>
-    </Dialog>
+      )}
+      <MergeImpactPreview
+        losers={rows
+          .filter((row) => aliasIds.includes(row.id))
+          .map((row) => ({ id: row.id, label: config.rowLabel(row) }))}
+        operations={impactPreviewOperations}
+      />
+    </Overlay>
   );
 }
 
@@ -401,7 +391,7 @@ function FixedMergeDialog<T extends MergeRow>({
   initialAliasIds?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   impactPreviewOperations?: ImpactPreviewOperations;
 }) {
@@ -432,79 +422,73 @@ function FixedMergeDialog<T extends MergeRow>({
   const keeperLabel = config.rowLabel(keeper);
 
   return (
-    <Dialog
+    <Overlay
       open={open}
       onOpenChange={(next) => {
         if (!next) setSelected([]);
         onOpenChange(next);
       }}
+      title={resolveCopyText(config.copy.title, keeperLabel)}
+      description={
+        config.copy.description
+          ? resolveCopyText(config.copy.description, keeperLabel)
+          : undefined
+      }
+      onCancel={() => onOpenChange(false)}
+      primary={{
+        label: `Merge ${selected.length || ""}`.trim(),
+        pending: isPending,
+        pendingLabel: "Merging…",
+        disabled: selected.length === 0,
+        onClick: () => onConfirm(keeper.id, selected),
+      }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {resolveCopyText(config.copy.title, keeperLabel)}
-          </DialogTitle>
-          {config.copy.description && (
-            <DialogDescription>
-              {resolveCopyText(config.copy.description, keeperLabel)}
-            </DialogDescription>
-          )}
-        </DialogHeader>
-        {candidates.length === 0 ? (
-          <Empty variant="minimal" className="py-6">
-            <EmptyTitle>
-              {config.copy.emptyTitle ?? "Nothing to merge"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {config.copy.emptyDescription ?? "No other rows are on file."}
-            </EmptyDescription>
-          </Empty>
-        ) : (
-          <Stack gap="xs" className="max-h-64 overflow-y-auto">
-            {candidates.map((candidate) => (
-              <Row
-                key={candidate.id}
-                align="center"
-                gap="sm"
-                className="min-w-0 border border-[var(--border)] px-2 py-1"
-              >
-                <Checkbox
-                  checked={selected.includes(candidate.id)}
-                  onCheckedChange={() => toggle(candidate.id)}
-                />
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {config.rowLabel(candidate)}
+      {candidates.length === 0 ? (
+        <Empty variant="minimal" className="py-6">
+          <EmptyTitle>
+            {config.copy.emptyTitle ?? "Nothing to merge"}
+          </EmptyTitle>
+          <EmptyDescription>
+            {config.copy.emptyDescription ?? "No other rows are on file."}
+          </EmptyDescription>
+        </Empty>
+      ) : (
+        <Stack gap="xs" className="max-h-64 overflow-y-auto">
+          {candidates.map((candidate) => (
+            <Row
+              key={candidate.id}
+              align="center"
+              gap="sm"
+              className="min-w-0 border border-[var(--border)] px-2 py-1"
+            >
+              <Checkbox
+                checked={selected.includes(candidate.id)}
+                onCheckedChange={() => toggle(candidate.id)}
+              />
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {config.rowLabel(candidate)}
+              </span>
+              {config.rowStat && (
+                <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                  {config.rowStat(candidate)}
                 </span>
-                {config.rowStat && (
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                    {config.rowStat(candidate)}
-                  </span>
-                )}
-              </Row>
-            ))}
-          </Stack>
-        )}
-        {config.copy.caution && (
-          <Description size="xs">{config.copy.caution}</Description>
-        )}
-        <MergeImpactPreview
-          losers={candidates
-            .filter((candidate) => selected.includes(candidate.id))
-            .map((candidate) => ({
-              id: candidate.id,
-              label: config.rowLabel(candidate),
-            }))}
-          operations={impactPreviewOperations}
-        />
-        <DialogFormActions
-          submitDisabled={selected.length === 0}
-          pending={isPending}
-          pendingLabel="Merging…"
-          submitLabel={`Merge ${selected.length || ""}`.trim()}
-          onCancel={() => onOpenChange(false)}
-          onSubmit={() => onConfirm(keeper.id, selected)}
-        />
-      </DialogContent>
-    </Dialog>
+              )}
+            </Row>
+          ))}
+        </Stack>
+      )}
+      {config.copy.caution && (
+        <Description size="xs">{config.copy.caution}</Description>
+      )}
+      <MergeImpactPreview
+        losers={candidates
+          .filter((candidate) => selected.includes(candidate.id))
+          .map((candidate) => ({
+            id: candidate.id,
+            label: config.rowLabel(candidate),
+          }))}
+        operations={impactPreviewOperations}
+      />
+    </Overlay>
   );
 }

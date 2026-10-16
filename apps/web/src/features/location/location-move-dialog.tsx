@@ -4,9 +4,8 @@ import { useState } from "react";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 /** A disabled-reason resolver that refuses every location in `sources`. */
 export const refuseSourceLocations =
@@ -84,8 +83,7 @@ export function LocationMoveDialog({
     destinationId: LocationShortcode,
   ) => Promise<string | null> | string | null;
   /** A one-click destination (e.g. Home) rendered above the picker. It lives
-   *  in the body, not the footer: the phone sheet promotes the footer's
-   *  Cancel/Move into its header and hides the footer. */
+   *  in the body; the primary Move action belongs to the shared phone header. */
   shortcut?: { label: string; locationId: LocationShortcode | undefined };
 }) {
   const [destination, setDestination] =
@@ -108,23 +106,23 @@ export function LocationMoveDialog({
   };
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
       title={title}
       description={description}
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel={submitLabel}
-          pending={pending}
-          error={error}
-          submitDisabled={destination === null}
-          onSubmit={() => destination && void submit(destination.id)}
-        />
-      }
+      onCancel={onClose}
+      error={error}
+      primary={{
+        label: submitLabel,
+        pending,
+        disabled: destination === null,
+        onClick: async () => {
+          if (destination) await submit(destination.id);
+        },
+      }}
     >
       <Stack gap="md">
         {shortcut && (
@@ -148,6 +146,6 @@ export function LocationMoveDialog({
           }}
         />
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

@@ -29,13 +29,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatInstant } from "~/lib/date-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
 import { Image } from "~/ui/primitives/image";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -488,51 +483,51 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       >
         Queue Apple description
       </Button>
-      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
-        <DialogContent size="xl">
-          <DialogHeader>
-            <DialogTitle>Original and processed result</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
-            <figure>
-              <figcaption className="mb-2 text-sm font-medium">
-                Original
-              </figcaption>
-              <a href={image.url} target="_blank" rel="noreferrer">
-                <Image
-                  src={image.url}
-                  alt="Original image"
-                  displayWidth={640}
-                  className="max-h-[60vh] w-full object-contain"
-                />
-              </a>
-            </figure>
-            <figure>
-              <figcaption className="mb-2 text-sm font-medium">
-                Transparent result
-              </figcaption>
-              <a
-                href={status.data?.representations.transparent ?? image.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Image
-                  src={status.data?.representations.transparent ?? image.url}
-                  alt="Processed image"
-                  displayWidth={640}
-                  className="max-h-[60vh] w-full object-contain"
-                  style={{
-                    backgroundColor: "var(--color-card)",
-                    backgroundImage:
-                      "conic-gradient(var(--color-muted) 25%, transparent 0 50%, var(--color-muted) 0 75%, transparent 0)",
-                    backgroundSize: "16px 16px",
-                  }}
-                />
-              </a>
-            </figure>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <Overlay
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        size="xl"
+        title="Original and processed result"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <figure>
+            <figcaption className="mb-2 text-sm font-medium">
+              Original
+            </figcaption>
+            <a href={image.url} target="_blank" rel="noreferrer">
+              <Image
+                src={image.url}
+                alt="Original image"
+                displayWidth={640}
+                className="max-h-[60vh] w-full object-contain"
+              />
+            </a>
+          </figure>
+          <figure>
+            <figcaption className="mb-2 text-sm font-medium">
+              Transparent result
+            </figcaption>
+            <a
+              href={status.data?.representations.transparent ?? image.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Image
+                src={status.data?.representations.transparent ?? image.url}
+                alt="Processed image"
+                displayWidth={640}
+                className="max-h-[60vh] w-full object-contain"
+                style={{
+                  backgroundColor: "var(--color-card)",
+                  backgroundImage:
+                    "conic-gradient(var(--color-muted) 25%, transparent 0 50%, var(--color-muted) 0 75%, transparent 0)",
+                  backgroundSize: "16px 16px",
+                }}
+              />
+            </a>
+          </figure>
+        </div>
+      </Overlay>
     </>
   );
 }

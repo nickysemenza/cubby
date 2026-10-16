@@ -32,10 +32,12 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  closeDisabled = false,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
+  closeDisabled?: boolean;
 }) {
   return (
     <SheetPortal>
@@ -55,6 +57,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
+            disabled={closeDisabled}
             render={
               <Button
                 variant="ghost"
@@ -95,24 +98,10 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   );
 }
 
-function SheetDescription({
-  className,
-  ...props
-}: SheetPrimitive.Description.Props) {
-  return (
-    <SheetPrimitive.Description
-      data-slot="sheet-description"
-      className={cn("text-muted-foreground text-xs/relaxed", className)}
-      {...props}
-    />
-  );
-}
-
 export {
   Sheet,
   SheetContent,
   SheetHeader,
 
   SheetTitle,
-  SheetDescription,
 };

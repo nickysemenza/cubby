@@ -23,16 +23,9 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
 
 import {
@@ -139,125 +132,120 @@ export function MatchStatementDialog({
         rowIndex === index ? { ...row, ...patch } : row,
       ),
     );
+  const saveAllocation = async () => {
+    if (!selected) return;
+    // Ask again with exactly what is typed now: the live check may lag a keystroke.
+    const latest = await queryClient.fetchQuery({
+      ...purchaseOperations.checkSettlementAllocation.queryOptions({
+        transactionId: selected.id,
+        allocations: rows.map(bare),
+      }),
+      staleTime: 0,
+    });
+    if (!latest.allocations) {
+      setSaveError(latest.reason ?? REFUSED);
+      return;
+    }
+    setSaveError(null);
+    await update.mutateAsync({
+      id: selected.id,
+      data: { allocations: latest.allocations },
+    });
+    await invalidateOperationTags(
+      queryClient,
+      entityRipple("financialTransaction"),
+    );
+    onOpenChange(false);
+    setSelected(null);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Match statement activity</DialogTitle>
-          <DialogDescription>
-            Review unallocated charges and refunds near this order. Allocate the
-            full statement amount across Purchases before saving.
-          </DialogDescription>
-        </DialogHeader>
-        {candidatesQuery.isPending ? (
-          <Description>Checking statement activity…</Description>
-        ) : null}
-        {candidatesQuery.isError ? (
-          <Description>{String(candidatesQuery.error)}</Description>
-        ) : null}
-        {review?.message ? <Description>{review.message}</Description> : null}
-        {review ? (
-          <SettlementCandidateList
-            candidates={review.candidates}
-            suggestHint={review.suggestHint}
-            selectedId={selected?.id ?? null}
-            suggestion={suggestion}
-            suggesting={suggest.isPending}
-            onSuggest={() => suggest.mutate({ purchaseId })}
-            onSelect={choose}
-          />
-        ) : null}
-        {selected ? (
-          <div className="space-y-2 border-t border-border pt-3">
-            <div className="text-sm font-medium">
-              Allocate {formatCurrency(selected.amount)}
-            </div>
-            {rows.map((row, index) => (
-              <div key={row.key} className="grid grid-cols-[1fr_8rem] gap-2">
-                <label
-                  htmlFor={`purchase-${row.key}`}
-                  className="space-y-1 text-xs text-muted-foreground"
-                >
-                  Purchase code
-                  <Input
-                    id={`purchase-${row.key}`}
-                    aria-label={`Purchase code ${index + 1}`}
-                    value={row.purchaseId}
-                    onChange={(event) =>
-                      edit(index, { purchaseId: event.target.value })
-                    }
-                  />
-                </label>
-                <label
-                  htmlFor={`amount-${row.key}`}
-                  className="space-y-1 text-xs text-muted-foreground"
-                >
-                  Amount
-                  <Input
-                    id={`amount-${row.key}`}
-                    aria-label={`Amount ${index + 1}`}
-                    type="number"
-                    step="0.01"
-                    value={row.amount}
-                    onChange={(event) =>
-                      edit(index, { amount: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
-            ))}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setRows((current) => [
-                  ...current,
-                  ...withKeys([{ purchaseId: "", amount: "" }]),
-                ])
-              }
-            >
-              Add Purchase
-            </Button>
-            {note ? <Description size="xs">{note}</Description> : null}
-          </div>
-        ) : null}
-        <DialogFormActions
-          onCancel={() => onOpenChange(false)}
-          submitLabel="Save allocation"
-          pending={update.isPending}
-          submitDisabled={!selected || !check.data?.allocations}
-          onSubmit={async () => {
-            if (!selected) return;
-            // Ask again with exactly what is typed now: the live check may lag a keystroke.
-            const latest = await queryClient.fetchQuery({
-              ...purchaseOperations.checkSettlementAllocation.queryOptions({
-                transactionId: selected.id,
-                allocations: rows.map(bare),
-              }),
-              staleTime: 0,
-            });
-            if (!latest.allocations) {
-              setSaveError(latest.reason ?? REFUSED);
-              return;
-            }
-            setSaveError(null);
-            await update.mutateAsync({
-              id: selected.id,
-              data: { allocations: latest.allocations },
-            });
-            // The global handler fires this ripple without awaiting it; await
-            // it so the panel is fresh before the dialog closes.
-            await invalidateOperationTags(
-              queryClient,
-              entityRipple("financialTransaction"),
-            );
-            onOpenChange(false);
-            setSelected(null);
-          }}
+    <Overlay
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Match statement activity"
+      description="Review unallocated charges and refunds near this order. Allocate the full statement amount across Purchases before saving."
+      onCancel={() => onOpenChange(false)}
+      error={note}
+      primary={{
+        label: "Save allocation",
+        pending: update.isPending,
+        disabled: !selected || !check.data?.allocations,
+        onClick: saveAllocation,
+      }}
+    >
+      {candidatesQuery.isPending ? (
+        <Description>Checking statement activity…</Description>
+      ) : null}
+      {candidatesQuery.isError ? (
+        <Description>{String(candidatesQuery.error)}</Description>
+      ) : null}
+      {review?.message ? <Description>{review.message}</Description> : null}
+      {review ? (
+        <SettlementCandidateList
+          candidates={review.candidates}
+          suggestHint={review.suggestHint}
+          selectedId={selected?.id ?? null}
+          suggestion={suggestion}
+          suggesting={suggest.isPending}
+          onSuggest={() => suggest.mutate({ purchaseId })}
+          onSelect={choose}
         />
-      </DialogContent>
-    </Dialog>
+      ) : null}
+      {selected ? (
+        <div className="space-y-2 border-t border-border pt-3">
+          <div className="text-sm font-medium">
+            Allocate {formatCurrency(selected.amount)}
+          </div>
+          {rows.map((row, index) => (
+            <div key={row.key} className="grid grid-cols-[1fr_8rem] gap-2">
+              <label
+                htmlFor={`purchase-${row.key}`}
+                className="space-y-1 text-xs text-muted-foreground"
+              >
+                Purchase code
+                <Input
+                  id={`purchase-${row.key}`}
+                  aria-label={`Purchase code ${index + 1}`}
+                  value={row.purchaseId}
+                  onChange={(event) =>
+                    edit(index, { purchaseId: event.target.value })
+                  }
+                />
+              </label>
+              <label
+                htmlFor={`amount-${row.key}`}
+                className="space-y-1 text-xs text-muted-foreground"
+              >
+                Amount
+                <Input
+                  id={`amount-${row.key}`}
+                  aria-label={`Amount ${index + 1}`}
+                  type="number"
+                  step="0.01"
+                  value={row.amount}
+                  onChange={(event) =>
+                    edit(index, { amount: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setRows((current) => [
+                ...current,
+                ...withKeys([{ purchaseId: "", amount: "" }]),
+              ])
+            }
+          >
+            Add Purchase
+          </Button>
+        </div>
+      ) : null}
+    </Overlay>
   );
 }
 

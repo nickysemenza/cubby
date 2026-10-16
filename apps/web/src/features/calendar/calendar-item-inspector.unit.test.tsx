@@ -2,7 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
@@ -78,12 +78,15 @@ function editableDescriptor(item: CalendarItem) {
   return descriptor;
 }
 
-function createCalendarOperations() {
+function createCalendarOperations(
+  beforeWrite: () => Promise<void> = async () => undefined,
+) {
   const requests: EntityBrowserMutationInput[] = [];
   let refusal: Error | undefined;
   const mutation = entityMutation.mutate.withTransport(async ({ input }) => {
     const command = entityBrowserMutationCommandSchema.parse(input);
     requests.push(command);
+    await beforeWrite();
     if (refusal) throw refusal;
     if (command.action === "update" && command.entity === "expense") {
       return {
@@ -236,4 +239,51 @@ describe("EditableCalendarItem", () => {
     ).toHaveAttribute("href", `/expenses/${expense.id}`);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
+});
+
+it("owns mobile calendar form actions and blocks dismissal during its write", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener() {},
+      removeEventListener() {},
+    })),
+  );
+  let finish: () => void = () => undefined;
+  const write = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const operations = createCalendarOperations(async () => {
+    await write;
+  });
+  const close = vi.fn();
+  const saved = vi.fn();
+  try {
+    render(
+      <CalendarInspectorBody
+        item={expense}
+        onCancel={close}
+        onSaved={saved}
+        operations={operations.inspectorOperations}
+        overlay={{ open: true, onOpenChange: close }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "Name" }), {
+      target: { value: "Large freezer tray" },
+    });
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toHaveAttribute("form");
+    expect(document.querySelector('[data-slot="overlay-actions"]')).toBeNull();
+    fireEvent.click(save);
+    await waitFor(() => expect(operations.requests).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(close).not.toHaveBeenCalled();
+    finish();
+    await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

@@ -9,14 +9,8 @@ import { productCreateRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Row } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 
@@ -92,28 +86,26 @@ function LinkFoodToIngredientButton({
         <LinkIcon />
         Link to an ingredient
       </Button>
-      <Dialog open={open && !ingredient} onOpenChange={handleOpenChange}>
-        <DialogContent size="xl">
-          <DialogHeader>
-            <DialogTitle>Link {foodName} to an ingredient</DialogTitle>
-            <DialogDescription>
-              Choose the ingredient this food should back — a new product
-              carrying the USDA link is created for it.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4">
-            <EntityReferencePicker
-              entity="ingredient"
-              creatable
-              label="ingredient"
-              value={ingredient}
-              setValue={setIngredient}
-              openOnMount
-              placeholder="Search ingredients…"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <Overlay
+        open={open && !ingredient}
+        onOpenChange={handleOpenChange}
+        size="xl"
+        title={`Link ${foodName} to an ingredient`}
+        description="Choose the ingredient this food should back — a new product carrying the USDA link is created for it."
+        onCancel={() => handleOpenChange(false)}
+      >
+        <div className="mt-4">
+          <EntityReferencePicker
+            entity="ingredient"
+            creatable
+            label="ingredient"
+            value={ingredient}
+            setValue={setIngredient}
+            openOnMount
+            placeholder="Search ingredients…"
+          />
+        </div>
+      </Overlay>
       {/* Step 2 — the generic create dialog, prefilled from the food and the
           ingredient chosen above (closes the `ingredient → product → fdc_id`
           hop in one save). */}

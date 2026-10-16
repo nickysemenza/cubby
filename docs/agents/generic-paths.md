@@ -167,7 +167,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Web UI
 
-- Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
+- Headings and disclosures: `Section` (`ui/layout/section.tsx`).
+- Chart, graph and tree states: `Visualization` (`ui/visualizations/visualization.tsx`).
+- Dialogs and workspace panels: `Overlay` (`ui/overlays/overlay.tsx`),
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
 - Pickers: `Picker` for every value choice (`search`, `choose`, `segmented`,
   `multiple`), `EntityReferencePicker`, `referenceEntitySearch`; record rows come

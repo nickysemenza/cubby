@@ -33,11 +33,10 @@ import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contrac
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { mealListLabel } from "./meal-format";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -239,23 +238,19 @@ export function AddToMeal({
         <CalendarPlusIcon className="size-4" />
         Add to meal
       </Button>
-      <ResponsiveDialog
+      <Overlay
         open={open}
         onOpenChange={setOpen}
         size="md"
         title="Add to meal"
         description="Choose a day and an existing meal, or create a separate meal for this recipe."
-        footer={
-          <DialogFormActions
-            onCancel={() => setOpen(false)}
-            submitLabel={
-              target === NEW_MEAL ? "Create meal" : "Add to selected meal"
-            }
-            pending={isPending}
-            submitDisabled={existingMeals.isLoading}
-            onSubmit={() => void submit()}
-          />
-        }
+        onCancel={() => setOpen(false)}
+        primary={{
+          label: target === NEW_MEAL ? "Create meal" : "Add to selected meal",
+          pending: isPending,
+          disabled: existingMeals.isLoading,
+          onClick: submit,
+        }}
       >
         <Stack gap="sm">
           <Stack gap="xs">
@@ -376,7 +371,7 @@ export function AddToMeal({
             </Stack>
           )}
         </Stack>
-      </ResponsiveDialog>
+      </Overlay>
     </>
   );
 }
