@@ -87,6 +87,8 @@ const clientCodeSplittingGroups = [
     test: /[\\/]@tanstack[\\/]react-router[\\/]|[\\/]@tanstack[\\/]router-core[\\/]/,
     entriesAware: true,
     entriesAwareMergeThreshold: 65536,
+    // React initialization must stay outside entry-specific router chunks.
+    includeDependenciesRecursively: false,
   },
   {
     name: "tanstack-query",
