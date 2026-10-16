@@ -62,6 +62,7 @@ import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
+import { onHandUnitsReadSql } from "~/server/domains/product/repo/quantity-ledger";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -578,7 +579,15 @@ async function queryWorkQueue(
   if (input.source) candidateConditions.push(sql`source = ${input.source}`);
   if (input.kind) candidateConditions.push(sql`kind = ${input.kind}`);
   let needsPriceEvidence = false;
+  let needsOnHandEvidence = false;
   const productReadContext: QualityReadContext = {
+    derivedValue: record
+      ? undefined
+      : (field, entityId) => {
+          if (field !== "onHandUnits") return undefined;
+          needsOnHandEvidence = true;
+          return sql`((SELECT jsonb_object_agg("productId", "onHandUnits") FROM work_product_on_hand) ->> ${entityId}::text)::double precision`;
+        },
     hasDerivedValue: (field, entityId) => {
       needsPriceEvidence = true;
       return sql`${entityId} IN (
@@ -667,7 +676,8 @@ async function queryWorkQueue(
   // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
-    WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``} members AS (
+    WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
+    ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``} members AS (
       SELECT id, shortcode, name FROM "LedgerParty" WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
     ), candidates AS (${projection}), routed AS MATERIALIZED (
       SELECT candidates.*, CASE
