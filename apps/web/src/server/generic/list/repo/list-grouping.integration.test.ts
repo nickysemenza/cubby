@@ -251,6 +251,18 @@ describe("server list grouping", () => {
       "No category item",
       "Retired item",
     ]);
+    // The section header's No value filter returns the rows it counts.
+    const presence = async (value: "has" | "none") =>
+      (
+        await executeEntity(kernel(), {
+          action: "list",
+          entity: "product",
+          filters: { categoryIdPresenceFilter: value },
+          pagination: { pageIndex: 0, pageSize: 10 },
+        })
+      ).meta.totalCount;
+    expect(await presence("none")).toBe(2);
+    expect(await presence("has")).toBe(0);
   });
 
   it("orders enum sections by declared option order before pagination", async () => {

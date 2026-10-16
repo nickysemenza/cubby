@@ -11,6 +11,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import {
   entityInspectorMetadata,
+  entityManifest,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -263,11 +264,20 @@ const referencePredicate = (
     throw new Error(
       `${entity} id filter over ${column.name} references ${String(reference)}, which has no shortcode table`,
     );
+  // A reference to a soft-deleted record is no value, as the group key and
+  // the related-path filters read it.
+  const live = entityManifest[target].softDelete
+    ? sql`${column} IN ${shortcodeIdsSql(target, () => sql`ref."deletedAt" IS NULL`)}`
+    : sql`${column} IS NOT NULL`;
   return or(
     codes === undefined || codes.length === 0
       ? undefined
       : sql`${column} IN ${requestedIdsSql(target, codes, includeDescendants)}`,
-    presenceCondition(column, presence),
+    presence === undefined
+      ? undefined
+      : presence === "has"
+        ? live
+        : sql`(${column} IS NULL OR NOT ${live})`,
   );
 };
 

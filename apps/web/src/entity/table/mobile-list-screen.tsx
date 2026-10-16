@@ -92,7 +92,7 @@ export function MobileListScreen<TItem extends RowData>({
   return (
     <div
       className={cn(
-        "overflow-x-hidden lg:hidden",
+        "overflow-x-clip lg:hidden",
         // Pre-hydration this renders on EVERY viewport (the desktop path is
         // still the JS default), so the breakpoint — not `useIsMobile` — has to
         // be what hides it from desktop for that one pass.

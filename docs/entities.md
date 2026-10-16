@@ -961,7 +961,9 @@ are a prefix of the sections and clients assign them by position. A list spec
 with a custom `count` must pass `joins`, which the summary reuses. A saved
 view's `groupBy` opens the list grouped; web keeps the choice in `?groupBy=`
 and Apple in the list's view state. Timeline is already arranged by date, so
-both clients disable Group by there. A section header's "Filter to this" sets
+both clients disable Group by there; Apple's search results are ranked by
+match, so it disables Group by with that reason while searching and restores
+the choice afterwards. A section header's "Filter to this" sets
 the section's value (and turns an "Include sub-…" toggle off) as the field's
 include filter, and exists only when the choice declares a filter.
 
@@ -1337,7 +1339,9 @@ flag is a `boolean`), and a single value in a URL, saved view, or MCP call
 reads as a one-element list (`oneOrMany`). A compiled filter over a nullable
 field generates `<columnId>PresenceFilter`; clients offer it as Any value /
 No value options ORed with the picked values, so there is no `all` option or
-separate presence filter. A hand-written value filter declares the same key as
+separate presence filter. Over a reference, a soft-deleted record counts as no
+value, as it does for the group key, so a "No ‹field›" section filters to the
+rows it counts. A hand-written value filter declares the same key as
 `nullable: { field, label }`. A filter over several values per row (a
 `text[]` column or a `via` path through a list) also generates
 `<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
@@ -1387,10 +1391,11 @@ one shape:
   scaffold compiles a filter to `EXISTS` over the path and a sort or group to
   a correlated scalar subquery that starts at the outer row's reference. Only
   a to-one path (every relation `one` and every step outgoing) can sort or
-  group; the compiler rejects any other in `sort.fields`/`groupable` with the
-  reason it derives (`Goes through a list of Purchases. Only paths that lead
-  to a single record can sort.`), and a list request sorting by it (or by a
-  `predicate`) fails with that reason over HTTP and MCP.
+  group. The compiler rejects any other in `sort.fields` with the reason it
+  derives (`Goes through a list of Purchases. Only paths that lead to a
+  single record can sort.`); in `model.grouping` it stays a disabled Group by
+  choice showing its reason. A list request sorting or grouping by it (or by
+  a `predicate`) fails with that reason over HTTP and MCP.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value

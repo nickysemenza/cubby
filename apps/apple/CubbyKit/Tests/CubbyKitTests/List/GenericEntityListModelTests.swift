@@ -168,6 +168,29 @@ struct GenericEntityListModelTests {
         staleGate.open()
     }
 
+    /// Search results are ranked by match, not grouped: while searching, Group by reports why it
+    /// is unavailable instead of staying selected over flat results, and returns afterwards.
+    @Test func searchSuspendsGroupingWithAReason() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let page = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
+        ListStub.handler.withLock { $0 = { _ in (200, page) } }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), groupBy: "categoryId",
+            progressive: false, searchDebounceNanoseconds: 0)
+        await model.loadInitial()
+        #expect(model.groupChoice?.id == "categoryId")
+        #expect(model.groupByUnavailableReason == nil)
+
+        model.setSearchQuery("sample")
+        #expect(model.groupChoice == nil)
+        #expect(model.sections == nil)
+        #expect(model.groupByUnavailableReason == "Search results are ordered by match.")
+
+        model.clearSearch()
+        #expect(model.groupChoice?.id == "categoryId")
+        #expect(model.groupByUnavailableReason == nil)
+    }
+
     @Test func loadsProductsIntoRows() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let payload = try Fixtures.data(named: "products-list.json")

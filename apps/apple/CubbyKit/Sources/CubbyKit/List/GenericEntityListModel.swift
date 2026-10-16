@@ -115,13 +115,21 @@ public final class GenericEntityListModel {
 
     public var views: [ListView] { descriptor.presentation.listViews }
 
-    /// The active Group by choice; Timeline is already arranged by date, so it has none.
+    /// Why the list cannot group right now, shown on every Group by choice: Timeline is already
+    /// arranged by date, and search results are ranked by match. `groupBy` is kept and returns
+    /// when the reason clears.
+    public var groupByUnavailableReason: String? {
+        if view == .timeline { return "Timeline is already arranged by date." }
+        if isSearching { return "Search results are ordered by match." }
+        return nil
+    }
+
+    /// The active Group by choice, nil while `groupByUnavailableReason` applies.
     public var groupChoice: GroupChoice? {
-        view == .timeline ? nil : descriptor.groupChoice(groupBy)
+        groupByUnavailableReason == nil ? descriptor.groupChoice(groupBy) : nil
     }
 
     /// The loaded base rows in the server's sections, or nil when the list is not grouped.
-    /// Search results stay flat.
     public var sections: [EntityListSection]? {
         guard groupChoice != nil, let groups = meta?.groups else { return nil }
         return EntityListSection.sections(

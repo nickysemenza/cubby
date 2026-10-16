@@ -181,16 +181,20 @@ describe("MCP entity kernel boundary", () => {
       code: "BAD_REQUEST",
       reason: "LIST_SORT_FIELD_UNSUPPORTED",
     });
+    // Recipe once accepted `groupBy: "name"`; its declared roster replaced
+    // that, and the refusal names the choices that remain.
     await expect(
       executeEntity(context, {
         action: "list",
-        entity: "product",
+        entity: "recipe",
         filters: {},
         groupBy: "name",
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      message:
+        'Unsupported groupBy field "name" for recipe; expected one of cookbook',
     });
   });
 

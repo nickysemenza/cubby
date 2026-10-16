@@ -956,6 +956,25 @@ describe("typed entity compiler", () => {
           reason: "Filter only: Spans two tables.",
         }),
       ]);
+      // A filter whose column id differs from the field it binds (Recipe's
+      // cookbook filter is `source` over `cookbookId`).
+      expect(
+        compile(
+          { grouping: ["parentId"] },
+          {
+            descriptors: [
+              {
+                columnId: "source",
+                field: "parentId",
+                kind: "idMulti",
+                placeholder: "Parent",
+                brandRef: { entity: "alpha" },
+                nullable: { field: "parentPresenceFilter", label: "parent" },
+              },
+            ],
+          },
+        ).listFields.grouping[0]?.filter,
+      ).toEqual({ columnId: "source", noValue: true });
       expect(() => compile({ grouping: ["name", "name"] })).toThrow(
         "model.grouping repeats a field",
       );
