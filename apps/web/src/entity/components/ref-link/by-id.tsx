@@ -1,5 +1,5 @@
-import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   imageUrlSummary,
@@ -9,25 +9,28 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { z } from "zod";
 
+import { entityLabel, isBrowserRoutedEntity } from "~/entity/entities";
 import {
-  isGeneratedBrowserCrudEntity,
-  type StandardEntity,
-} from "~/entity/entity-contracts";
-import { entityPreviewQueryOptions } from "~/entity/entity-query";
+  entityPreviewQueryOptions,
+  isDetailEntity,
+} from "~/entity/entity-query";
+import type { DetailEntity } from "~/entity/generated/entity-details.gen";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";
 
 const isNamedEntity = (
-  entity: AuditEntityKind,
-): entity is StandardEntity & AuditEntityKind =>
+  entity: Entity,
+): entity is DetailEntity & BrowserRoutedEntity =>
   entity !== "inventory" &&
   entity !== "cookbook" &&
-  isGeneratedBrowserCrudEntity(entity);
+  isBrowserRoutedEntity(entity) &&
+  isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
   displayImages: z.array(imageUrlSummary).optional().catch(undefined),
+  emoji: z.string().nullish(),
 });
 
 // Entity types this link resolves to a name via the detail transport. Inventory &
@@ -40,14 +43,12 @@ const FETCHABLE = [
 ] as const satisfies readonly Entity[];
 type FetchableEntity = (typeof FETCHABLE)[number];
 
-const isFetchableEntity = (
-  entity: AuditEntityKind,
-): entity is FetchableEntity =>
+const isFetchableEntity = (entity: Entity): entity is FetchableEntity =>
   FETCHABLE.some((candidate) => candidate === entity);
 
 export type ByIdRefLinkProps = {
   variant: "byId";
-  entityKind: AuditEntityKind;
+  entityKind: Entity;
   entityId: string;
   name?: string | null;
   /** Compact mode: truncates long names with max-width */
@@ -103,9 +104,25 @@ export function ByIdRefLink({
 
   if (name && isNamedEntity(entityKind)) {
     return (
-      <ChipRefLink entity={entityKind} id={entityId} name={name} wrap={wrap} />
+      <ChipRefLink
+        entity={entityKind}
+        id={entityId}
+        name={name}
+        wrap={wrap}
+        compact={compact}
+      />
     );
   }
+
+  if (isNamedEntity(entityKind) && query.isPending) {
+    return (
+      <output className="inline-flex items-center gap-1 text-muted-foreground">
+        <Spinner aria-hidden className="size-3" /> Loading…
+      </output>
+    );
+  }
+  if (isNamedEntity(entityKind) && query.isError)
+    return <span className="text-destructive">{query.error.message}</span>;
 
   if (!isFetchableEntity(entityKind) && isNamedEntity(entityKind)) {
     // Every other generated entity names itself through its manifest
@@ -116,14 +133,16 @@ export function ByIdRefLink({
         entity={entityKind}
         id={entityId}
         wrap={wrap}
+        compact={compact}
+        emoji={record.success ? record.data.emoji : undefined}
         name={
           record.success
             ? z
                 .string()
                 .catch("")
                 .parse(record.data[entitySummary[entityKind].titleField]) ||
-              null
-            : null
+              `Untitled ${entityLabel(entityKind).toLowerCase()}`
+            : `Missing ${entityLabel(entityKind).toLowerCase()}`
         }
         // Absent stays `undefined` so the chip falls back to the surrounding
         // display-image provider's cover.
@@ -132,10 +151,6 @@ export function ByIdRefLink({
         }
       />
     );
-  }
-
-  if (isFetchableEntity(entityKind) && query.isLoading) {
-    return <Spinner className="text-muted-foreground" />;
   }
 
   if (isFetchableEntity(entityKind) && query.data) {

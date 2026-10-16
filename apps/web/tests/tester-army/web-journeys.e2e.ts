@@ -19,8 +19,30 @@ for (const journey of selectedJourneys(journeys, "web"))
       // buttons stay disabled until their own React boundary hydrates.
       const ready = () =>
         expect(browser.locator("[data-hydrating]")).toHaveCount(0);
+      let pickerCapture = 0;
       await runJourney(journey, "web", {
         agent,
+        expectOptionVisible: async (name) => {
+          const option = screen.getByRole("option", { name, exact: false });
+          await expect(option).toBeVisible();
+          // Mounted options can be outside the scroller's viewport. Verify
+          // the reveal without a tap or scroll that could repair the defect.
+          await expect
+            .poll(async () => {
+              const [row, list] = await Promise.all([
+                option.boundingBox(),
+                screen.getByRole("listbox").boundingBox(),
+              ]);
+              return (
+                !!row &&
+                !!list &&
+                row.y >= list.y - 1 &&
+                row.y + row.height <= list.y + list.height + 1
+              );
+            })
+            .toBe(true);
+          await app.screenshot(`picker-selection-${++pickerCapture}`);
+        },
         tapControl: (control) => runJourneyControl(screen, control),
         expectButtonDisabled: (name) =>
           expect(

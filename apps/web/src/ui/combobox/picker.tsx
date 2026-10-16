@@ -11,6 +11,7 @@ import * as React from "react";
 
 import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 import { Spinner } from "~/ui/primitives/spinner";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 
@@ -28,6 +29,7 @@ export function matchesPickerItem(
     item.name,
     item.shortcode,
     item.secondary,
+    item.presentation?.status?.text,
     item.detail,
     ...(item.presentation?.trailing ?? []).map((chip) => chip.text),
     ...(item.aliases ?? []),
@@ -352,15 +354,31 @@ const fieldFrameClass = (compact: boolean | undefined) =>
   );
 
 /**
- * One width rule: the popup is the field's width; a field narrower than
- * 16rem lets its popup grow to its rows, up to 16rem. Never wider than the
- * viewport allows.
+ * Record menus need space for identity and aligned metadata independently of
+ * a narrow inline editor. Fixed choices keep the field's compact width.
  */
 const popupClass = cn(
   "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),28rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-md border border-[var(--border)] bg-popover text-popover-foreground shadow-[var(--shadow-overlay)] outline-none",
-  "w-max max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)",
-  "transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0",
 );
+
+const popupWidthClass = (records: boolean) =>
+  records
+    ? "w-[max(var(--anchor-width),36rem)] max-w-[min(var(--available-width),calc(100vw-16px))]"
+    : "w-max max-w-[min(max(var(--anchor-width),16rem),var(--available-width),calc(100vw-16px))] min-w-(--anchor-width)";
+
+function pickerRowLayout(items: ComboboxItem[]) {
+  return {
+    secondary: items.some(
+      (item) => item.secondary || item.presentation?.status,
+    ),
+    trailing: Math.max(
+      0,
+      ...items.map((item) => item.presentation?.trailing?.length ?? 0),
+    ),
+  };
+}
+
+type PickerRowLayout = ReturnType<typeof pickerRowLayout>;
 
 const listClass =
   "min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none";
@@ -398,47 +416,62 @@ function PickerChipView({ chip }: { chip: PickerChip }) {
 function PickerRowContent<TId extends string>({
   item,
   renderItem,
+  layout,
 }: {
   item: ComboboxItem<TId>;
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
+  layout: PickerRowLayout;
 }) {
   const presentation = item.presentation;
+  const style: React.CSSProperties & { "--picker-columns": string } = {
+    "--picker-columns": `minmax(0,1fr)${layout.secondary ? " 7.5rem" : ""}${" 7.5rem".repeat(layout.trailing)}`,
+  };
   if (renderItem)
     return <span className="min-w-0 flex-1">{renderItem(item)}</span>;
   return (
-    <>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-baseline gap-1.5">
-          {/* The name keeps a readable floor; secondary text and chips give
-              way first in a narrow popup. */}
-          <span className="min-w-[5rem] shrink truncate">
-            {presentation?.rowLabel ?? item.name}
-          </span>
-          {item.secondary ? (
-            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {item.secondary}
-            </span>
-          ) : null}
+    <span
+      className="grid min-w-0 flex-1 items-center gap-x-2 gap-y-0.5 sm:grid-cols-(--picker-columns)"
+      style={style}
+    >
+      <span className="flex min-w-0 flex-col">
+        <span className="min-w-0 break-words whitespace-normal">
+          {presentation?.rowLabel ?? item.name}
         </span>
         {item.detail ? (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="text-xs break-words whitespace-normal text-muted-foreground">
             {item.detail}
           </span>
         ) : null}
         {presentation?.disabledReason ? (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="text-xs break-words whitespace-normal text-muted-foreground">
             {presentation.disabledReason}
           </span>
         ) : null}
       </span>
-      {presentation?.trailing?.length ? (
-        <span className="flex max-w-[55%] min-w-0 shrink items-center justify-end gap-1 overflow-hidden">
-          {presentation.trailing.map((chip) => (
-            <PickerChipView key={chip.text} chip={chip} />
-          ))}
+      {layout.secondary || layout.trailing > 0 ? (
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:contents">
+          {layout.secondary ? (
+            <span className="min-w-0 text-xs text-muted-foreground">
+              {presentation?.status ? (
+                <EnumPill color={presentation.status.color}>
+                  {presentation.status.text}
+                </EnumPill>
+              ) : (
+                item.secondary
+              )}
+            </span>
+          ) : null}
+          {Array.from({ length: layout.trailing }, (_, index) => {
+            const chip = presentation?.trailing?.[index];
+            return (
+              <span key={index} className="flex min-w-0 sm:justify-end">
+                {chip ? <PickerChipView chip={chip} /> : null}
+              </span>
+            );
+          })}
         </span>
       ) : null}
-    </>
+    </span>
   );
 }
 
@@ -448,6 +481,7 @@ function rowAriaLabel(item: ComboboxItem) {
   return [
     item.name,
     item.secondary,
+    presentation?.status?.text,
     item.detail,
     ...(presentation?.trailing ?? []).map((chip) => chip.text),
     presentation?.disabledReason,
@@ -498,10 +532,7 @@ function CaretGlyph({ open }: { open: boolean }) {
   return (
     <CaretDownIcon
       aria-hidden
-      className={cn(
-        "size-3.5 text-muted-foreground transition-transform duration-150",
-        open && "rotate-180",
-      )}
+      className={cn("size-3.5 text-muted-foreground", open && "rotate-180")}
     />
   );
 }
@@ -549,6 +580,10 @@ type CreatePickerItem<TId extends string> = {
 function SearchPickerPopup<TId extends string>({
   anchorRef,
   orderedItems,
+  records,
+  open,
+  query,
+  selectedId,
   renderItem,
   clearable,
   hasValue,
@@ -566,6 +601,10 @@ function SearchPickerPopup<TId extends string>({
 }: {
   anchorRef: React.RefObject<HTMLDivElement | null>;
   orderedItems: ComboboxItem<TId>[];
+  records: boolean;
+  open: boolean;
+  query: string;
+  selectedId?: TId;
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   clearable?: boolean;
   hasValue: boolean;
@@ -581,6 +620,29 @@ function SearchPickerPopup<TId extends string>({
   create: CreatePickerItem<TId> | null;
   footer?: React.ReactNode;
 }) {
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const revealed = React.useRef(false);
+  const layout = pickerRowLayout(orderedItems);
+  React.useEffect(() => {
+    if (!open) {
+      revealed.current = false;
+      return;
+    }
+    // Wait for the roster and selected-row attributes, then scroll only the
+    // list. Repeated renders must not pull someone away from their browsing.
+    if (query || isLoading || revealed.current || !selectedId) return;
+    const frame = requestAnimationFrame(() => {
+      const list = listRef.current;
+      const selected = list?.querySelector<HTMLElement>("[data-selected]");
+      if (!list || !selected) return;
+      const bounds = list.getBoundingClientRect();
+      const row = selected.getBoundingClientRect();
+      list.scrollTop +=
+        row.top - bounds.top - (list.clientHeight - row.height) / 2;
+      revealed.current = true;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, query, isLoading, selectedId, orderedItems]);
   const [isCreating, setIsCreating] = React.useState(false);
   const handleCreate = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (!create) return;
@@ -620,7 +682,9 @@ function SearchPickerPopup<TId extends string>({
         // z-[200]: paints above CellEditorOverlay (z-100).
         className="isolate z-[200]"
       >
-        <ComboboxPrimitive.Popup className={popupClass}>
+        <ComboboxPrimitive.Popup
+          className={cn(popupClass, popupWidthClass(records))}
+        >
           {clearable && hasValue ? (
             <button
               type="button"
@@ -638,7 +702,7 @@ function SearchPickerPopup<TId extends string>({
               {clearLabel}
             </button>
           ) : null}
-          <ComboboxPrimitive.List className={listClass}>
+          <ComboboxPrimitive.List ref={listRef} className={listClass}>
             {orderedItems.map((item, index) => (
               <React.Fragment key={item.id}>
                 <PickerRowPreamble
@@ -655,11 +719,19 @@ function SearchPickerPopup<TId extends string>({
                   )}
                   style={rowStyle(item)}
                 >
-                  <PickerVisual item={item} size={20} />
-                  <PickerRowContent item={item} renderItem={renderItem} />
-                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
-                    <CheckIcon className="size-3.5" />
-                  </ComboboxPrimitive.ItemIndicator>
+                  <span className="flex w-5 shrink-0 items-center justify-center">
+                    <PickerVisual item={item} size={20} />
+                  </span>
+                  <PickerRowContent
+                    item={item}
+                    renderItem={renderItem}
+                    layout={layout}
+                  />
+                  <span className="flex w-3.5 shrink-0 items-center justify-center">
+                    <ComboboxPrimitive.ItemIndicator>
+                      <CheckIcon className="size-3.5" />
+                    </ComboboxPrimitive.ItemIndicator>
+                  </span>
                 </ComboboxPrimitive.Item>
               </React.Fragment>
             ))}
@@ -934,6 +1006,10 @@ function SearchPicker<TId extends string>({
     <SearchPickerPopup
       anchorRef={anchorRef}
       orderedItems={orderedItems}
+      records={records != null}
+      open={open}
+      query={query}
+      selectedId={values[0]?.id}
       renderItem={renderItem}
       clearable={clearable}
       hasValue={values.length > 0}
@@ -971,7 +1047,7 @@ function SearchPicker<TId extends string>({
     onOpenChange: changeOpen,
     openOnInputClick: true,
     modal: false,
-    autoHighlight: true,
+    autoHighlight: query.trim() !== "",
     disabled: gate.disabled,
   } as const;
 
@@ -1050,6 +1126,7 @@ function ChoosePicker<TId extends string>({
     [items],
   );
   const orderedItems = React.useMemo(() => sortByGroup(items), [items]);
+  const layout = pickerRowLayout(orderedItems);
 
   return (
     <div className={cn("w-full min-w-0", className)}>
@@ -1121,7 +1198,9 @@ function ChoosePicker<TId extends string>({
             data-combobox-popup=""
             className="isolate z-[200]"
           >
-            <SelectPrimitive.Popup className={popupClass}>
+            <SelectPrimitive.Popup
+              className={cn(popupClass, popupWidthClass(records != null))}
+            >
               <SelectPrimitive.List className={listClass}>
                 {orderedItems.map((item, index) => (
                   <React.Fragment key={item.id}>
@@ -1140,11 +1219,19 @@ function ChoosePicker<TId extends string>({
                       )}
                       style={rowStyle(item)}
                     >
-                      <PickerVisual item={item} size={20} />
-                      <PickerRowContent item={item} renderItem={renderItem} />
-                      <SelectPrimitive.ItemIndicator className="shrink-0">
-                        <CheckIcon className="size-3.5" />
-                      </SelectPrimitive.ItemIndicator>
+                      <span className="flex w-5 shrink-0 items-center justify-center">
+                        <PickerVisual item={item} size={20} />
+                      </span>
+                      <PickerRowContent
+                        item={item}
+                        renderItem={renderItem}
+                        layout={layout}
+                      />
+                      <span className="flex w-3.5 shrink-0 items-center justify-center">
+                        <SelectPrimitive.ItemIndicator>
+                          <CheckIcon className="size-3.5" />
+                        </SelectPrimitive.ItemIndicator>
+                      </span>
                     </SelectPrimitive.Item>
                   </React.Fragment>
                 ))}

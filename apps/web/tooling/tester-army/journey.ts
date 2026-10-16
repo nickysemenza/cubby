@@ -71,6 +71,8 @@ export type RunWait = {
 };
 
 export type StepCheck = {
+  /** The open picker must reveal these options without agent scrolling. */
+  visibleOptions?: (ids: JourneyIds) => string[];
   /** Exact text that must be on screen as soon as this step ends. */
   visible?: (ids: JourneyIds) => string[];
   /** Confirms that a refused UI operation cannot be submitted. */

@@ -329,17 +329,24 @@ describe("declared entity displays", () => {
           entity="device"
           fields={["productId", "ledgerPartyId"]}
           cohortLinks={false}
-          record={{ productId: "PRD-TEST", ledgerPartyId: "LPY-TEST" }}
+          record={{
+            productId: "PRD-TEST",
+            productName: "Synthetic drill",
+            ledgerPartyId: "LPY-TEST",
+            ledgerPartyName: "Synthetic member",
+          }}
         />
       </EntityDisplayImagesProvider>,
       { wrapper: harness.wrapper },
     );
 
     expect(
-      screen.getByRole("link", { name: "PRD-TEST" }).querySelector("img"),
+      screen
+        .getByRole("link", { name: "Synthetic drill" })
+        .querySelector("img"),
     ).toHaveAttribute("src", "https://images.example/product.jpg");
     // No cover: the entity icon holds the mark's box instead of an image.
-    const party = screen.getByRole("link", { name: "LPY-TEST" });
+    const party = screen.getByRole("link", { name: "Synthetic member" });
     expect(party.querySelector("img")).toBeNull();
     expect(party.querySelector("[aria-hidden] svg")).not.toBeNull();
     harness.dispose();

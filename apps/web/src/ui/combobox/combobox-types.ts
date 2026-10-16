@@ -23,6 +23,8 @@ export interface PickerChip {
 }
 
 export interface PickerPresentation {
+  /** A declared enum subtitle keeps its semantic color and its own column. */
+  status?: { text: string; color: string };
   /** Optional result section. Providers control its order; rows stay stable inside it. */
   group?: {
     id: string;

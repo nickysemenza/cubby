@@ -67,6 +67,15 @@ export function EntityRefLink(props: EntityRefLinkProps) {
     case "inline":
       return <InlineRefLink {...props} />;
     case "chip":
+      if (!props.name || props.name === props.id)
+        return (
+          <ByIdRefLink
+            entityKind={props.entity}
+            entityId={props.id}
+            compact={props.compact}
+            wrap={props.wrap}
+          />
+        );
       return <ChipRefLink {...props} />;
     case "list":
       return <ListRefLink {...props} />;

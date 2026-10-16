@@ -70,6 +70,9 @@ its own value, empty value, focus, and search contract. A picker never displays
 or announces a shortcode: a stored code resolves to its record through
 `useSelectedPickerItems`, showing a loading state meanwhile. `DropdownMenu`
 and the `cmdk` command menu are for navigation and actions, never a value.
+Reference displays whose projection omits the name use the shared by-id
+resolver instead of rendering the stored identifier. Pending reads show loading;
+missing records and failed reads remain explicit, with raw error diagnostics.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
 
 Search-mode empty results use the mounted Base UI `Combobox.Empty` part,

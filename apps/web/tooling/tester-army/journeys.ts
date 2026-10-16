@@ -259,6 +259,57 @@ const coupledJourneys: Journey[] = [
 ];
 
 export const journeys: Journey[] = [
+  ...["desktop", "phone"].map((size): Journey => ({
+    id: `record-picker-${size}`,
+    title: `resolve and edit relationship pickers on ${size}`,
+    webOnly: true,
+    viewport:
+      size === "phone"
+        ? { width: 390, height: 844 }
+        : { width: 1280, height: 900 },
+    start: "purchase",
+    context:
+      "Use the inline field editors on the purchase detail. Leave other fields unchanged.",
+    steps: [
+      {
+        goal: "Inspect the purchase's Default project in Classification. Leave the field unchanged.",
+        check: { visible: () => [JOURNEY_NAMES.pickerProject] },
+      },
+      {
+        goal: "Open the inline Vendor picker. Do not type or scroll in its dropdown, and leave it open.",
+        check: { visibleOptions: () => [JOURNEY_NAMES.pickerVendor] },
+      },
+      {
+        goal: `Select ${JOURNEY_NAMES.pickerVendor} to keep the current vendor. Open the inline Default project picker. Do not type or scroll in its dropdown, and leave it open.`,
+        check: { visibleOptions: () => [JOURNEY_NAMES.pickerProject] },
+      },
+      {
+        goal: `Search for and select ${JOURNEY_NAMES.pickerReplacement} as the Default project. Finish the inline edit.`,
+        check: { visible: () => [JOURNEY_NAMES.pickerReplacement] },
+      },
+    ],
+    visible: () => [
+      JOURNEY_NAMES.pickerReplacement,
+      JOURNEY_NAMES.pickerVendor,
+    ],
+    absent: (ids) => [
+      ids.get("project"),
+      ids.get("vendor"),
+      ids.get("replacement"),
+    ],
+    db: [
+      {
+        label: "the selected project persists without changing the vendor",
+        sql: `SELECT project.shortcode AS project, vendor.shortcode AS vendor
+            FROM "Purchase" p JOIN "Project" project ON project.id = p."defaultProjectId"
+            JOIN "Vendor" vendor ON vendor.id = p."vendorId" WHERE p.shortcode = $1`,
+        params: only("purchase"),
+        rows: (ids) => [
+          { project: ids.get("replacement"), vendor: ids.get("vendor") },
+        ],
+      },
+    ],
+  })),
   {
     id: "email-navigation",
     title: "browse classified Email metadata without admitting an import",
