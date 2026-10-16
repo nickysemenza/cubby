@@ -35,6 +35,8 @@ import {
 // strip shows another record's work, a field-wide suggestion group, or work a
 // member-only read would fence; future purchases leak through reconciliation
 // or findings, inflate counts, or hide incurred work in a mixed purchase.
+// Overlapping diagnostic reads must retain complete diagnostic rows, source
+// filters and member routing; one failed diagnostic must fail the whole read.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 

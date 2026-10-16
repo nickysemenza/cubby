@@ -64,6 +64,7 @@ import {
   workPurchaseOwners,
   workRunOwners,
 } from "~/server/generic/work-queue/repo/work-queue-routing";
+import { traceAllBounded } from "~/server/observability/tracing";
 
 type WhereBuilder = (
   db: Database,
@@ -271,6 +272,7 @@ export async function additionalWorkProblemSelections(
   scope: WorkQueueScope,
 ): Promise<SQL[]> {
   const selections: SQL[] = [];
+  const diagnostics: Record<string, () => Promise<SQL[]>> = {};
   const includeProblems = includesWorkSource(scope, "problem", "repair");
   // Diagnostics and statement imports name no single record and carry no gaps.
   const includeUnrecorded = scopeAdmitsUnrecorded(scope);
@@ -363,58 +365,69 @@ export async function additionalWorkProblemSelections(
     if (!includeUnrecorded || excludedDiagnostics.has(source.diagnostic))
       continue;
     if (!privateDiagnosticKeys.has(definition.key)) {
-      const result = await runDiagnostic(
-        db,
-        source.diagnostic,
-        source.diagnostic === "project-date-window-drift"
-          ? { attentionItems: await attentionItems() }
-          : {},
-        { kind: "count" },
-      );
-      if (result.count)
-        selections.push(
-          workDiagnosticCandidate(
-            definition.key,
-            `problem:${definition.key}`,
-            definition.title,
-            sql`ARRAY[]::uuid[]`,
-            {
-              ...details,
-              reason: `${result.count} work items. ${definition.description}`,
-            },
-            true,
-          ),
+      diagnostics[definition.key] = async () => {
+        const result = await runDiagnostic(
+          db,
+          source.diagnostic,
+          source.diagnostic === "project-date-window-drift"
+            ? { attentionItems: await attentionItems() }
+            : {},
+          { kind: "count" },
         );
+        return result.count
+          ? [
+              workDiagnosticCandidate(
+                definition.key,
+                `problem:${definition.key}`,
+                definition.title,
+                sql`ARRAY[]::uuid[]`,
+                {
+                  ...details,
+                  reason: `${result.count} work items. ${definition.description}`,
+                },
+                true,
+              ),
+            ]
+          : [];
+      };
       continue;
     }
     // These adapters compute their complete grouped relation once; no sample/count scan is repeated.
-    const result = await runDiagnostic(
-      db,
-      source.diagnostic,
-      {},
-      { kind: "sample", limit: Number.POSITIVE_INFINITY },
-    );
-    for (const item of result.items) {
-      const entry = privateProblemEntry(definition.key, item);
-      const privateOwners = entry.refs.flatMap((ref) => {
-        const relation = privateOwnerRelation(ref);
-        return relation ? [relation] : [];
-      });
-      const owners = privateOwners.length
-        ? sql.join(privateOwners, sql` || `)
-        : sql`ARRAY[]::uuid[]`;
-      selections.push(
-        workDiagnosticCandidate(
-          definition.key,
-          `problem:${definition.key}:${await sha256Hex(entry.fingerprintPayload)}`,
-          `${definition.title} · ${entry.refs.map((ref) => ref.shortcode).join(", ")}`,
-          owners,
-          { ...details, reason: entry.reason },
-          privateOwners.length === 0,
-        ),
+    diagnostics[definition.key] = async () => {
+      const rows: SQL[] = [];
+      const result = await runDiagnostic(
+        db,
+        source.diagnostic,
+        {},
+        { kind: "sample", limit: Number.POSITIVE_INFINITY },
       );
-    }
+      for (const item of result.items) {
+        const entry = privateProblemEntry(definition.key, item);
+        const privateOwners = entry.refs.flatMap((ref) => {
+          const relation = privateOwnerRelation(ref);
+          return relation ? [relation] : [];
+        });
+        const owners = privateOwners.length
+          ? sql.join(privateOwners, sql` || `)
+          : sql`ARRAY[]::uuid[]`;
+        rows.push(
+          workDiagnosticCandidate(
+            definition.key,
+            `problem:${definition.key}:${await sha256Hex(entry.fingerprintPayload)}`,
+            `${definition.title} · ${entry.refs.map((ref) => ref.shortcode).join(", ")}`,
+            owners,
+            { ...details, reason: entry.reason },
+            privateOwners.length === 0,
+          ),
+        );
+      }
+      return rows;
+    };
   }
+  // Match the Problems reader's bounded diagnostic fan-out; share the one
+  // request-local attention promise and retain declaration order in results.
+  const diagnosticRows = await traceAllBounded(diagnostics, 4);
+  selections.push(...Object.values(diagnosticRows).flat());
   for (const incomplete of includeAccounts
     ? await findIncompleteStatementImports(db)
     : []) {
