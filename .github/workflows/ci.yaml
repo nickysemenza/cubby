@@ -540,6 +540,7 @@ jobs:
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-
       - name: Run CubbyKit host tests
+        if: steps.apple.outputs.probe-hit != 'true'
         run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
@@ -572,6 +573,7 @@ jobs:
           ffi-targets: sim
           build-cache: "true"
       - name: Run iOS app checks
+        if: steps.apple.outputs.probe-hit != 'true'
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
