@@ -73,7 +73,10 @@ export const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
  * Accepted Orders on any member of the canonical source family survive cache
  * disposal and historical aliases; active lifecycle decisions remain separate.
  */
-export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
+export const emailAcceptedEvidenceSql = (
+  includeDeleted = false,
+  accountOwnerScope: "respect" | "ignore" = "respect",
+): SQL => sql`
   SELECT accepted."id" AS "sourceOrderId", accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt",
     -- The accepted bytes differ from the current original: the Email's own
     -- checksum for a message source, the attachment's for an attachment.
@@ -100,7 +103,7 @@ export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
   INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND (
       (identity."kind" = ${importSourceKind.enum.mail_message}
         AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId")

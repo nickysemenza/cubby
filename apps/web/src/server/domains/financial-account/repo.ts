@@ -36,7 +36,10 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
+import {
+  resolveMemberAssignee,
+  lockLedgerPartiesForReference,
+} from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import {
   cardNumbersLabel,
   sourceAliasesLabel,
@@ -92,6 +95,11 @@ export const financialAccountTransactionCount = sql<number>`(
 )`;
 
 const columns = {
+  authorizedUsers: financialAccount.authorizedUsers,
+  fundingPeriods: financialAccount.fundingPeriods,
+  primaryCardholderShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."primaryCardholderId")`,
   id: financialAccount.id,
   shortcode: financialAccount.shortcode,
   name: financialAccount.name,
@@ -144,6 +152,9 @@ const toOut = (
   return financialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
+    authorizedUsers: row.authorizedUsers,
+    fundingPeriods: row.fundingPeriods,
+    primaryCardholderId: row.primaryCardholderShortcode,
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases,
@@ -202,6 +213,9 @@ const hydrateAccountsRead = async (
     mapRow: (row) => ({
       ...row,
       id: parseShortcodeFor("financialAccount", row.shortcode),
+      primaryCardholderId: row.primaryCardholderShortcode
+        ? parseShortcodeFor("ledgerParty", row.primaryCardholderShortcode)
+        : null,
       ...listGroupFields(projection, "relations", () => ({
         ledgerPartyId: row.ledgerPartyShortcode
           ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
@@ -318,6 +332,7 @@ const financialAccountCrud = createEntityCrud({
       .select({
         ...columns,
         ledgerPartyId: financialAccount.ledgerPartyId,
+        primaryCardholderId: financialAccount.primaryCardholderId,
         providerVendorId: financialAccount.providerVendorId,
       })
       .from(financialAccount)
@@ -358,6 +373,55 @@ async function assertAliasesAvailable(
       );
     }
   }
+}
+
+async function validateAccountHistory(
+  tx: DrizzleTransaction,
+  data: Pick<
+    FinancialAccountCreateInput,
+    "identity" | "primaryCardholderId" | "authorizedUsers" | "fundingPeriods"
+  >,
+) {
+  if (
+    (data.primaryCardholderId !== null || data.authorizedUsers.length > 0) &&
+    data.identity.kind !== "credit_card"
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Card users require a credit-card account.",
+    );
+  if (data.authorizedUsers.length > 0 && data.primaryCardholderId === null)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Authorized users require a primary cardholder.",
+    );
+  if (
+    data.authorizedUsers.some(
+      (row) => row.ledgerPartyId === data.primaryCardholderId,
+    )
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The primary cardholder cannot also be an authorized user.",
+    );
+  const members = await lockLedgerPartiesForReference(
+    tx,
+    data.authorizedUsers.map((row) => row.ledgerPartyId),
+  );
+  if (members.some((row) => row.kind !== "member"))
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Authorized users must be household members.",
+    );
+  const funders = await lockLedgerPartiesForReference(
+    tx,
+    data.fundingPeriods.map((row) => row.ledgerPartyId),
+  );
+  if (funders.some((row) => row.kind === "guest"))
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Funding periods require members or the household.",
+    );
 }
 
 async function resolveLedgerPartyForAccount(
@@ -420,7 +484,13 @@ export async function createFinancialAccount(
       ),
     );
     await assertAliasesAvailable(tx, data.sourceAliases);
-    const { ledgerPartyId, providerVendorId, ...columns } = data;
+    await validateAccountHistory(tx, data);
+    const { ledgerPartyId, providerVendorId, primaryCardholderId, ...columns } =
+      data;
+    const resolvedCardholderId = await resolveMemberAssignee(
+      tx,
+      primaryCardholderId,
+    );
     const resolvedLedgerPartyId = await resolveLedgerPartyForAccount(
       tx,
       ledgerPartyId,
@@ -450,6 +520,7 @@ export async function createFinancialAccount(
     }
     const created = await insertWithShortcode(tx, "financialAccount", {
       ...columns,
+      primaryCardholderId: resolvedCardholderId,
       ledgerPartyId: resolvedLedgerPartyId,
       providerVendorId: resolvedProviderVendorId,
     });
@@ -484,6 +555,27 @@ export async function updateFinancialAccount(
         "FINANCIAL_ACCOUNT_NOT_FOUND",
         `Financial account not found: ${id}`,
       );
+    const primaryCardholderId = await resolveMemberAssignee(
+      tx,
+      data.primaryCardholderId,
+    );
+    const [currentCardholder] = before.primaryCardholderId
+      ? await tx
+          .select({ shortcode: ledgerParty.shortcode })
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, before.primaryCardholderId))
+      : [];
+    await validateAccountHistory(tx, {
+      identity: financialAccountIdentity.parse(before.identity),
+      primaryCardholderId:
+        data.primaryCardholderId === undefined
+          ? currentCardholder
+            ? parseShortcodeFor("ledgerParty", currentCardholder.shortcode)
+            : null
+          : data.primaryCardholderId,
+      authorizedUsers: data.authorizedUsers ?? before.authorizedUsers,
+      fundingPeriods: data.fundingPeriods ?? before.fundingPeriods,
+    });
     if (data.sourceAliases !== undefined) {
       await lockFinancialEvidenceKeys(
         tx,
@@ -563,11 +655,14 @@ export async function updateFinancialAccount(
     const {
       ledgerPartyId: _ledgerPartyId,
       providerVendorId: _providerVendorId,
+      primaryCardholderId: _primaryCardholderId,
       ...accountData
     } = data;
     const updateData: Partial<typeof financialAccount.$inferInsert> = {
       ...accountData,
     };
+    if (primaryCardholderId !== undefined)
+      updateData.primaryCardholderId = primaryCardholderId;
     if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
     if (providerVendorId !== undefined)
       updateData.providerVendorId = providerVendorId;

@@ -1,3 +1,7 @@
+import {
+  financialAccountAuthorizedUsers,
+  financialAccountFundingPeriods,
+} from "../financial-account-party-fields";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
 import {
@@ -182,6 +186,47 @@ export default defineEntity({
         },
       },
       {
+        key: "primaryCardholderId",
+        kind: "identifier",
+        nullable: true,
+        description:
+          "The member who alone makes purchases outside authorized-user periods. Independent of funding and inventory ownership.",
+        reference: { entity: "ledgerParty" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().default(null),
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "authorizedUsers",
+        kind: "json",
+        description:
+          "Members authorized to use this credit card, with inclusive membership dates.",
+        control: { kind: "specialized", renderer: "structured-field" },
+        display: { detail: true },
+        validation: {
+          read: financialAccountAuthorizedUsers,
+          create: financialAccountAuthorizedUsers.default([]),
+          update: financialAccountAuthorizedUsers.optional(),
+        },
+      },
+      {
+        key: "fundingPeriods",
+        kind: "json",
+        description:
+          "Dated funding parties. Empty uses the account Ledger Party; gaps in a nonempty history are unknown. Does not change inventory ownership.",
+        control: { kind: "specialized", renderer: "structured-field" },
+        display: { detail: true },
+        validation: {
+          read: financialAccountFundingPeriods,
+          create: financialAccountFundingPeriods.default([]),
+          update: financialAccountFundingPeriods.optional(),
+        },
+      },
+      {
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
@@ -323,6 +368,17 @@ export default defineEntity({
       },
       { key: "providerVendorId", reference: "vendor" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
+      { key: "primaryCardholderId", reference: "ledgerParty" },
+      {
+        key: "authorizedUsers",
+        defaultValue: "'[]'::jsonb",
+        specialized: "json:authorizedUsers",
+      },
+      {
+        key: "fundingPeriods",
+        defaultValue: "'[]'::jsonb",
+        specialized: "json:fundingPeriods",
+      },
       {
         key: "inventoryOwnerDefaultEnabled",
         defaultValue: false,
@@ -333,6 +389,9 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "primaryCardholderId",
+      "authorizedUsers",
+      "fundingPeriods",
       "name",
       "identity",
       "provisional",
@@ -344,6 +403,9 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "primaryCardholderId",
+      "authorizedUsers",
+      "fundingPeriods",
       "name",
       "identity",
       "provisional",
@@ -356,6 +418,9 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "primaryCardholderId",
+      "authorizedUsers",
+      "fundingPeriods",
       "name",
       "identity",
       "provisional",
@@ -389,6 +454,9 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "primaryCardholderId",
+          "authorizedUsers",
+          "fundingPeriods",
           "name",
           "identity",
           "cardNumbers",
@@ -404,6 +472,9 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "primaryCardholderId",
+      "authorizedUsers",
+      "fundingPeriods",
       "id",
       "name",
       "identity",

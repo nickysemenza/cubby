@@ -18,6 +18,7 @@ import {
 } from "~/server/db/schema";
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
+import { accountFundingPartySql } from "~/server/domains/financial-account/funding-sql";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -143,7 +144,7 @@ export async function loadExpenseAllocations(
     ), funder_party_gross AS (
       SELECT
         e."expenseId",
-        fa."ledgerPartyId" AS owner_party_id,
+        ${accountFundingPartySql(sql`fa`, sql`ft."transactionDate"`)} AS owner_party_id,
         sum(round(fta.amount::numeric * 100))
           FILTER (WHERE fta.amount > 0)::bigint AS gross_cents
       FROM scoped_expense e
@@ -156,7 +157,7 @@ export async function loadExpenseAllocations(
        AND ft.status <> 'void'
       JOIN ${financialAccount} fa
         ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
-      GROUP BY e."expenseId", fa."ledgerPartyId"
+      GROUP BY e."expenseId", ${accountFundingPartySql(sql`fa`, sql`ft."transactionDate"`)}
 
     /* Weight by GROSS outlay — the sum of positive allocations — not by the net.
        Allocation amounts are signed (purchase +, refund/income -, adjustment

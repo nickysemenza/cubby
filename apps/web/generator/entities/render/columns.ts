@@ -35,6 +35,8 @@ export const identifierTypeNames = {
 const storageJsonTypes = {
   "cookbook.rawJson": "CookbookExtraction",
   "cookbook.report": "CookbookRunReport | null",
+  "financialAccount.authorizedUsers": "FinancialAccountPartyPeriod[]",
+  "financialAccount.fundingPeriods": "FinancialAccountPartyPeriod[]",
   "financialAccount.cardNumbers": "FinancialAccountCardNumber[]",
   "financialAccount.identity": "FinancialAccountIdentity",
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
@@ -219,7 +221,7 @@ export const renderStorageColumn = (
 
 /** The type and value-array imports the column builders above reference. */
 export const storageColumnImports =
-  'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
+  'import type { FinancialAccountPartyPeriod, FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
   `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
   'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
   'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +

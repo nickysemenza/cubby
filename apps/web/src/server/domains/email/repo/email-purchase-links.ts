@@ -49,10 +49,12 @@ const SUGGESTION_WINDOW_DAYS = 45;
  * date alone is not a suggestion: every order from that Vendor that month
  * would match. Deleted Purchases and another member's account never relate.
  */
-const emailPurchaseEvidenceSql = (): SQL => sql`
+export const emailPurchaseEvidenceSql = (
+  accountOwnerScope: "respect" | "ignore" = "respect",
+): SQL => sql`
   SELECT accepted."purchaseId", NULL::uuid AS "eventId", ${KIND.accepted}::text AS "kind",
     accepted."changed", ${PROPOSER.import}::text AS "proposedBy"
-  FROM (${emailAcceptedEvidenceSql()}) accepted
+  FROM (${emailAcceptedEvidenceSql(false, accountOwnerScope)}) accepted
   UNION ALL
   SELECT decision."purchaseId", event."id", decision."decision",
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
@@ -64,7 +66,7 @@ const emailPurchaseEvidenceSql = (): SQL => sql`
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
   UNION ALL
   SELECT p."id", event."id", ${KIND.suggested}::text, false, ${PROPOSER.heuristic}::text
   FROM "OrderMailEvent" event
@@ -77,7 +79,7 @@ const emailPurchaseEvidenceSql = (): SQL => sql`
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND NOT EXISTS (
       SELECT 1 FROM "AssessmentEmailLink" decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id"

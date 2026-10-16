@@ -46,7 +46,10 @@ not apply later transfers: transfers are household-global.
 
 ## Presentation and unknowns
 
-Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Household attribution is intentional. Missing, partial, unavailable, and null-attributed values remain explicit gaps rather than inferred parties or automatic matches.
+Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Recorded Expense attributions win for their role. Without recorded funders,
+reports derive funding from positive payment allocations; without recorded
+beneficiaries, they use the singleton Household party. Missing, partial,
+unavailable, and null-attributed evidence remains an explicit gap.
 
 ## Import boundary
 
@@ -55,3 +58,36 @@ Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local expo
 The [local journey coverage map](agents/core-journey-e2e.md) distinguishes
 the tested Project/Task browser path from the still-missing full contribution
 attribution journey.
+
+## Card access, purchaser, and funding dates
+
+A credit card's `primaryCardholderId` identifies its primary member independently
+of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
+records member memberships with inclusive `validFrom`/`validTo` dates (null is an
+open endpoint). A primary cardholder cannot also be an authorized user. Outside
+those memberships, the household's sole-use rule identifies the primary member
+as purchaser. Multiple paying accounts must all agree on that sole user.
+
+Purchase `purchaserOverrideId` wins. Otherwise, use the sole-use rule at the
+Purchase's receipt/order date, then the unique member identified by its linked
+Vendor Account and accepted or explicitly linked Email evidence. Conflicting
+identities or shared use without identifying evidence stays unknown. Suggestions
+are not accepted evidence. Purchaser evidence includes conflicting mailbox and
+vendor-account identities even where account-scoped Email views hide that mailbox. Missing Purchase dates cannot establish sole use.
+Clearing the override restores inheritance. Purchase merges carry an override
+when the survivor has none and refuse conflicting explicit purchasers. Source identities remain intact;
+purchaser attribution does not change beneficiaries or inventory ownership.
+
+Account `fundingPeriods` independently selects the funding party at each payment's
+transaction date, not its posting date or the Purchase date. Inclusive periods
+must not overlap. An empty history keeps the existing `ledgerPartyId` fallback;
+gaps in a nonempty history and missing transaction dates remain unknown. Expense
+funder rows override that derivation. Existing account inventory defaults keep
+using their existing undated party and are unaffected by funding history.
+
+Both effective purchaser and derived funding are calculated on reads. Correcting
+history takes effect automatically, without a recompute action, preview, or
+confirmation, and never rewrites explicit overrides. Existing stored attributions
+remain explicit. Clear references in live account history before deleting,
+merging, or changing the kind of a referenced party; primary cardholders must
+also be detached before merging. Existing card-number history is unchanged.
