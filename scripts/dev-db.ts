@@ -107,6 +107,9 @@ async function up(): Promise<void> {
         "--env",
         "PGDATA=/cubby-devdata/pgdata",
         postgresImage,
+        "postgres",
+        "-c",
+        "shared_preload_libraries=pg_stat_statements",
       ],
       180_000,
     );
@@ -156,7 +159,7 @@ function runInWebWorkspace(
   );
 }
 
-function psql(sql: string): Promise<string> {
+function psql(sql: string, database = "postgres"): Promise<string> {
   return containerCli([
     "exec",
     DEV_DB_CONTAINER,
@@ -164,7 +167,7 @@ function psql(sql: string): Promise<string> {
     "-U",
     DEV_DB_USER,
     "-d",
-    "postgres",
+    database,
     "-tAc",
     sql,
   ]);
@@ -173,12 +176,30 @@ function psql(sql: string): Promise<string> {
 /** Each checkout's selected database is created on first use. */
 async function ensureDatabase(): Promise<void> {
   await waitFor("PostgreSQL query readiness", () => psql("SELECT 1"));
+  const preloaded = await psql("SHOW shared_preload_libraries");
+  if (
+    !preloaded.split(",").some((name) => name.trim() === "pg_stat_statements")
+  ) {
+    throw new Error(
+      "Local query history requires pg_stat_statements. Run `pnpm db:dev:down`, then `pnpm dev` to recreate the container with its existing volume; database data is preserved.",
+    );
+  }
   const exists = await psql(
     `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
   );
-  if (exists.trim() === "1") return;
-  await psql(`CREATE DATABASE "${devDatabaseName}"`);
-  console.log(`[dev-db] Created ${devDatabaseName}`);
+  if (exists.trim() !== "1") {
+    await psql(`CREATE DATABASE "${devDatabaseName}"`);
+    console.log(`[dev-db] Created ${devDatabaseName}`);
+  }
+  // Neon has no JIT provider, while this image ships LLVM. Complex quality
+  // reads otherwise spend tens of seconds compiling instead of querying.
+  // Apply to existing owned databases too, without resetting their fixtures.
+  await psql(`ALTER DATABASE "${devDatabaseName}" SET jit = off`);
+  await psql(
+    "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
+    devDatabaseName,
+  );
+  await psql("SELECT 1 FROM pg_stat_statements LIMIT 1", devDatabaseName);
 }
 
 async function ready(): Promise<number> {
