@@ -90,7 +90,7 @@
   .decision-steps[data-with-media] {
     grid-template-columns: minmax(0, 1fr);
   }
-  .decision-steps-ledger {
+  .decision-steps-ledger.ledger[data-record-list="timeline"] {
     --record-mark-center: 1.3125rem;
   }
   .decision-steps-media {
@@ -107,5 +107,11 @@
   .decision-step-trigger {
     min-width: 2.75rem;
     min-height: 2.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .decision-step-summary {
+    -webkit-line-clamp: 1;
   }
 }

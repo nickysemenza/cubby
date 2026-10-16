@@ -601,7 +601,7 @@ function CommitInput({
   return (
     <div
       data-photo-field
-      className={`flex min-w-0 flex-col gap-1 text-xs ${className ?? ""}`}
+      className={`min-w-0 gap-1 text-xs ${crossCheck ? "grid grid-cols-1 sm:grid-cols-[6rem_minmax(0,1fr)] sm:gap-2" : "flex flex-col"} ${className ?? ""}`}
     >
       <label htmlFor={inputId} className="text-muted-foreground">
         {label}
@@ -659,7 +659,7 @@ function CommitInput({
               </option>
             ))}
           </datalist>
-          <span id={hintId} className="text-muted-foreground">
+          <span id={hintId} className="text-muted-foreground sm:col-start-2">
             {optionsLoading
               ? "Checking existing manufacturer names…"
               : draft.trim()
@@ -1421,7 +1421,7 @@ function ProductPanel({
                 )}
               </WithProductCategorySearch>
             </label>
-            <Row gap="sm" className="min-w-0">
+            <Stack gap="sm" className="min-w-0">
               <CommitInput
                 label="Manufacturer"
                 crossCheck={checks.find(
@@ -1457,7 +1457,7 @@ function ProductPanel({
                   })
                 }
               />
-            </Row>
+            </Stack>
           </Stack>
           <details className="text-xs">
             <summary className="cursor-pointer">Notes and tags</summary>

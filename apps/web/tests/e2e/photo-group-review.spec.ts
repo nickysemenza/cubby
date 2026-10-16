@@ -1032,7 +1032,9 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     .getByRole("link", { name: /ForgeWear work boots tan size 7/ })
     .click();
   const bootGroup = page.locator("#photo-group-g2");
-  await expect(bootGroup.getByText(/OCR: SKU FW-7744/)).toBeVisible();
+  await expect(
+    bootGroup.locator(".decision-steps-media").getByText(/SKU FW-7744/),
+  ).toBeVisible();
   await bootGroup.getByRole("button", { name: "Compare", exact: true }).click();
   const comparison = bootGroup.locator("[data-record-list]");
   await expect(bootGroup.getByText(/Possible duplicate:/)).toBeVisible();
@@ -1176,8 +1178,21 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     e2eRuntime.objectStorageUrl,
   );
   await attachProductImagePrerequisite(page, cover.id, existing.id, "item");
+  const vendor = await createEntityFixture(page, "vendor", {
+    name: "Example Outfitters",
+    website: "https://example.test",
+  });
+  const purchase = await createEntityFixture(page, "purchase", {
+    vendorId: vendor.id,
+    orderId: "Synthetic jacket order",
+    date: "2026-03-04",
+    trade: "other",
+  });
   await createEntityFixture(page, "expense", {
     name: "Synthetic jacket purchase",
+    purchaseId: purchase.id,
+    trade: "other",
+    costType: "materials",
     cost: 49,
     date: "2026-03-04",
     productId: existing.id,
@@ -1254,6 +1269,30 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
+  // Closed summaries stay on the 28px rail; long answers must not stretch it.
+  expect(
+    await attach
+      .locator(
+        '.decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"]',
+      )
+      .evaluateAll((nodes) =>
+        nodes.every(
+          (node) => Math.abs(node.getBoundingClientRect().height - 28) < 1,
+        ),
+      ),
+  ).toBe(true);
+  await expect
+    .poll(() =>
+      attach
+        .getByRole("img", { name: "In Cubby cover" })
+        .evaluate(
+          (image) =>
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
   await attach.locator('[data-slot="card"]').first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
   });
@@ -1267,6 +1306,22 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  // The phone target grows while the first rail endpoint stays at its mark.
+  const railOffset = await attach
+    .locator(".decision-steps-ledger > .ledger-row")
+    .first()
+    .evaluate((row) => {
+      const mark = row.querySelector("[data-record-mark]");
+      if (!mark) throw new Error("Missing decision mark");
+      const markBounds = mark.getBoundingClientRect();
+      return Math.abs(
+        parseFloat(getComputedStyle(row, "::before").top) -
+          (markBounds.top -
+            row.getBoundingClientRect().top +
+            markBounds.height / 2),
+      );
+    });
+  expect(railOffset).toBeLessThanOrEqual(1);
   await attach.locator('[data-slot="card"]').first().screenshot({
     path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
   });
@@ -1294,7 +1349,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   );
   await expect(create.locator(".decision-step-action")).toHaveCount(0);
   const nameField = create.locator("[data-photo-field]").filter({
-    has: create.getByRole("textbox", {
+    has: page.getByRole("textbox", {
       name: "New product name",
       exact: true,
     }),
