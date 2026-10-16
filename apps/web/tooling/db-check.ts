@@ -12,7 +12,6 @@ import * as schema from "../src/server/db/schema";
 import { diffSchemaCatalogs, readSchemaCatalog } from "./db-catalog";
 import { ensureDbExtensions } from "./db-extensions";
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
-import { derivedDdlHash, readDerivedLock } from "./db-derived-ddl";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { testServiceConfig } from "./test-service-config";
 
@@ -21,9 +20,8 @@ import { testServiceConfig } from "./test-service-config";
  * its schema, so prove they still equal the model.
  *
  * (a) `schema.ts` has no change drizzle-kit would generate a migration for,
- *     the derived DDL matches `drizzle/derived.lock`, and the journal is
- *     strictly ordered (drizzle's migrator skips an entry older than the last
- *     applied one).
+ *     and the journal is strictly ordered (drizzle's migrator skips an entry
+ *     older than the last applied one).
  * (b) A database built by the migrations has the same catalog as one built by
  *     pushing `schema.ts` plus the derived DDL.
  *
@@ -65,10 +63,6 @@ async function checkGeneratedState(): Promise<string[]> {
       `schema.ts has changes with no migration; run \`pnpm db:generate\`:\n${pending.join("\n")}`,
     );
 
-  if (derivedDdlHash() !== readDerivedLock())
-    problems.push(
-      "derived DDL changed without a migration; run `pnpm db:generate`",
-    );
   return problems;
 }
 

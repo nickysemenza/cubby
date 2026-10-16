@@ -4,7 +4,8 @@ import { Client } from "pg";
  * The physical `public` schema as PostgreSQL itself renders it, keyed by
  * object identity so two databases compare regardless of creation order.
  * `db:check` compares a migrations-built database against one built from
- * `schema.ts`; after cutover the same read runs against production.
+ * `schema.ts` plus the desired-state derived DDL, including view bodies;
+ * after cutover the same read runs against production.
  *
  * Extension-owned objects (`pg_trgm` functions, `pg_stat_statements` views)
  * and internal (foreign-key) triggers are excluded: they are not part of the
@@ -28,7 +29,10 @@ const notExtensionMember = (oid: string) =>
 
 const CATALOG_QUERIES: CatalogQueries = {
   relations: `
-    SELECT c.relname AS key, c.relkind::text AS value
+    SELECT c.relname AS key,
+      CASE WHEN c.relkind IN ('v', 'm')
+        THEN c.relkind::text || ' ' || pg_get_viewdef(c.oid)
+        ELSE c.relkind::text END AS value
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
       AND ${notExtensionMember("c.oid")}`,
