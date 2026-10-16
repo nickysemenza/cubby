@@ -13,6 +13,7 @@ import { RecordDetail, RecordDot, RecordRow } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { MutedBox } from "~/ui/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
+import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 
 import { foldedFields } from "./audit-log-fold";
 
@@ -214,11 +215,24 @@ function ChangesList({ changes }: { changes: AuditChanges }) {
   return (
     <Stack gap="xs">
       {Object.entries(changes).map(([field, { from, to }]) => (
-        <Row key={field} align="center" gap="xs" className="text-xs">
+        <Row key={field} align="start" gap="xs" className="min-w-0 text-xs">
           <span className="font-medium text-muted-foreground">{field}:</span>
-          <span className="text-foreground">{formatChangeValue(from)}</span>
-          <span className="text-muted-foreground">&rarr;</span>
-          <span className="text-foreground">{formatChangeValue(to)}</span>
+          {(typeof from === "string" || from == null) &&
+          (typeof to === "string" || to == null) ? (
+            <InlineTextDiff
+              before={from ?? ""}
+              after={to ?? ""}
+              beforeLabel="Previous"
+              afterLabel="Applied"
+              wrap
+            />
+          ) : (
+            <>
+              <span className="text-foreground">{formatChangeValue(from)}</span>
+              <span className="text-muted-foreground">&rarr;</span>
+              <span className="text-foreground">{formatChangeValue(to)}</span>
+            </>
+          )}
         </Row>
       ))}
     </Stack>

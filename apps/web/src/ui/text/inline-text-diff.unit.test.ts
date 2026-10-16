@@ -15,6 +15,20 @@ const reconstruct = (segs: { type: string; text: string }[]) => ({
 });
 
 describe("diffWords", () => {
+  it("keeps long activity notes lossless without a quadratic word comparison", () => {
+    const before = Array.from({ length: 2_000 }, (_, i) => `previous${i}`).join(
+      " ",
+    );
+    const after = Array.from({ length: 2_000 }, (_, i) => `updated${i}`).join(
+      " ",
+    );
+    const segments = diffWords(before, after);
+    expect(reconstruct(segments)).toEqual({ before, after });
+    expect(segments).toEqual([
+      { type: "remove", text: before },
+      { type: "add", text: after },
+    ]);
+  });
   it("marks a pure append as added at the end", () => {
     const segs = diffWords("packed", "packed, fresh");
     expect(segs[0]).toEqual({ type: "common", text: "packed" });
