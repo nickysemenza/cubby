@@ -1446,6 +1446,13 @@ remain independent of the page; the correct filter and stable sort precede
 LIMIT/OFFSET, and only selected rows receive the window position used for JSON
 order. Quality and display-image hydration remain page-scoped.
 
+Run attention candidates join their current member and source account once in
+the candidate relation. They share the same authority expression with scalar
+Run-finding lookups: the live member/login and current source owner must agree.
+A missing or deleted source account remains unresolved; it never falls back to
+the actor or becomes shared work. These unique-key joins preserve one candidate
+per Run, and the candidate predicate still owns Run liveness and attention.
+
 Independent entity-predicate, diagnostic-backed and statement-import account
 branches share the existing bounded Problems scheduler with four concurrent
 tasks. Entity branches precede diagnostics in declaration order, followed by

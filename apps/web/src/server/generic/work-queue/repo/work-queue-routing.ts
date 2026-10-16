@@ -12,19 +12,35 @@ export const workRunOwners = (id: SQL): SQL => sql`ARRAY(
 )`;
 
 /** Retained Run controls require the live member/login and current source account
- * to agree. A live Run has exactly one source owner; compare that scalar here
- * rather than rereading the Run through source-owner arrays for each candidate. */
-export const workRunReviewOwners = (id: SQL): SQL => sql`ARRAY(
-  SELECT CASE WHEN member."userId" = r."actorUserId"
-    AND (CASE WHEN r."vendorAccountId" IS NOT NULL THEN account."ledgerPartyId"
-      ELSE r."ledgerPartyId" END) = r."ledgerPartyId"
-    THEN r."ledgerPartyId" ELSE NULL::uuid END
-  FROM "Run" r
-  LEFT JOIN "LedgerParty" member ON member.id = r."ledgerPartyId"
-    AND member.kind = ${ledgerPartyKind.enum.member} AND member."deletedAt" IS NULL
-  LEFT JOIN "VendorAccount" account ON account.id = r."vendorAccountId" AND account."deletedAt" IS NULL
-  WHERE r.id = ${id} AND r."deletedAt" IS NULL
-)`;
+ * to agree. Both bulk candidates and per-finding lookups use this policy. */
+const runReviewAuthority = (alias: string) => {
+  const source = sql.identifier(alias);
+  return {
+    source,
+    table: sql`"Run" ${source}
+      LEFT JOIN "LedgerParty" work_review_member ON work_review_member.id = ${source}."ledgerPartyId"
+        AND work_review_member.kind = ${ledgerPartyKind.enum.member} AND work_review_member."deletedAt" IS NULL
+      LEFT JOIN "VendorAccount" work_review_account ON work_review_account.id = ${source}."vendorAccountId"
+        AND work_review_account."deletedAt" IS NULL`,
+    owner: sql`CASE WHEN work_review_member."userId" = ${source}."actorUserId"
+      AND (CASE WHEN ${source}."vendorAccountId" IS NOT NULL THEN work_review_account."ledgerPartyId"
+        ELSE ${source}."ledgerPartyId" END) = ${source}."ledgerPartyId"
+      THEN ${source}."ledgerPartyId" ELSE NULL::uuid END`,
+  };
+};
+
+export const workRunReviewOwners = (id: SQL): SQL => {
+  const { source, table, owner } = runReviewAuthority("work_review_run");
+  return sql`ARRAY(SELECT ${owner} FROM ${table}
+    WHERE ${source}.id = ${id} AND ${source}."deletedAt" IS NULL)`;
+};
+
+/** Unique member/account joins preserve one row per Run without a correlated
+ * Run reread. The candidate predicate still owns Run liveness and attention. */
+export const workRunReviewRead = () => {
+  const { table, owner } = runReviewAuthority("Run");
+  return { table, owners: sql`ARRAY[${owner}]` };
+};
 
 /** Original item evidence follows current source accounts; a payment does not establish access. */
 export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
