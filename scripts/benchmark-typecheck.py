@@ -34,7 +34,8 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     config = root / args.project
     buildinfo = config.with_suffix(".tsbuildinfo")
-    expected_path = output / (args.project.replace("/", "-") + ".diagnostics.json")
+    project_slug = args.project.replace("/", "-")
+    expected_path = output / (project_slug + ".diagnostics.json")
     command = [
         "node", str(root / "node_modules/typescript/bin/tsc"),
         "--noEmit", "--checkers", "1", "-p", str(config),
@@ -42,7 +43,7 @@ def main():
     ]
 
     def run(name):
-        log_path = output / f"{args.variant}-{name}.log"
+        log_path = output / f"{args.variant}-{project_slug}-{name}.log"
         start = time.monotonic()
         with log_path.open("w") as log:
             process = subprocess.Popen(command, cwd=root, stdout=log, stderr=subprocess.STDOUT)

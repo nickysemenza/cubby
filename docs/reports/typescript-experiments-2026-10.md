@@ -2,6 +2,12 @@
 
 Base: `60e38eae0cdb10650e63b54d6e43bd36764eb4f6` (current main fetched for this experiment).
 
+At final remote verification, main had advanced to
+`de4df5b2465e46568b4fcfed9edd13505c0188d0`. Both experimental branches retain
+the measured start-of-task baseline. No latest-main compatibility or performance
+claim is made, and no completed measurements were restarted after this change.
+Hosted PR validation may include a newer merge context than the local baseline.
+
 The experimental branches retain the complete `apps/web/tsconfig.json` program:
 application, tests, tooling, generators and imported workspace sources. No new
 `skipLibCheck`, exclusions, casts to `any`, `noCheck`, or missing-dependency stubs.
@@ -16,7 +22,10 @@ Rust/wasm-pack installation, initial WASM compilation and generation. Binaryen's
 optimizer download failed. `wasm-pack build --no-opt --no-pack` produced real
 worker/browser/cookbook declarations with the checked-in Rust sources and feature
 sets; skipping binary optimization does not stub or alter the type boundary.
-The strict `loadEntityDeclarationBundle` probe loaded all 29 entities.
+The strict `loadEntityDeclarationBundle` probe loaded all 29 entities. Generation was
+15.5s during baseline installation; later uncached map and combined generation
+reported 16.0s and 15.2s respectively through Nx (setup wall time, not compiler
+CPU measurements).
 
 Compiler command: `node node_modules/typescript/bin/tsc --noEmit --checkers 1 -p apps/web/tsconfig.json --extendedDiagnostics`.
 No other compiler, build, test suite or benchmark ran concurrently. Wall time uses
@@ -43,16 +52,21 @@ schema contracts and app-only validation are reported separately.
 
 ## Options
 
-- Requested label-path validation: expand only root fields matching the label paths a declaration
-  actually requests, retaining the existing recursive path semantics. The previous conditional type first enumerated every
+- Requested label-path validation: expand only roots matching requested paths,
+  retaining the original recursive path grammar. The previous conditional type first enumerated every
   possible nested path across its readable schemas. Runtime code and inferred
   entity/schema types remain unchanged.
-- Generated field-schema contracts: annotate generated maps with named field
-  keys and exact declaration-owned Zod schema types. Runtime `fieldSchemasOf`
+- Generated field-schema contracts: annotate generated maps with named
+  interfaces, field keys, and exact declaration-tuple Zod schema types. Runtime `fieldSchemasOf`
   continues key-based lookup, so declaration reordering cannot silently bind the
   wrong field. No widening to `ZodType<Output>` loses input types, schema methods,
   transforms or brands. Synthesized data-quality fields retain their existing
-  composition.
+  composition. Separate generated compiler-only roots prove bidirectional
+  assignability of every create/update/read map against `FieldSchemas<typeof
+  definition>`; Knip recognizes those roots. Their producer cost is included in
+  the standalone schema measurements. These are exact schema-class contracts,
+  not plain recursive value interfaces or a declaration/project-reference
+  boundary: implementation imports remain reachable.
 - Combination: both independent changes applied to the identical baseline.
 
 ## Patterns considered
@@ -86,30 +100,71 @@ whole-program emit. It also avoids low Go memory caps and stale buildinfo copyin
 both previously measured as regressions. Root Nx cache output restoration remains
 a distinct opportunity; it cannot be claimed as a cold-compiler improvement.
 
-## Current conclusion
+Independent drafts: [requested label roots, #2482](https://github.com/nickysemenza/cubby/pull/2482) and [exact schema-map contracts, #2487](https://github.com/nickysemenza/cubby/pull/2487). Both target the same main baseline. The combined case applies both patches temporarily; neither PR depends on the other and nothing was merged.
 
-This branch contains only the requested-root label-path experiment. It is not a
-recommended performance change: the complete web graph barely shrinks and no
-repeatable CPU/RSS win appears. Standalone schemas likewise do not show a
-repeatable cold improvement. An initial incremental schema probe showed a larger
-type-count reduction, but it was not cold-to-cold and is excluded from these
-conclusions. No dramatic speedup has been demonstrated.
+## Conclusion and correctness
 
-The expanded label contract checks pass on both baseline and candidate: nullable
-array members, indexed arrays, string brands, transforms to strings, and rejection
-of missing keys and numeric outputs. Full web diagnostics remain exactly the six
-inherited errors listed above. No source coverage or required check was removed.
+Neither independent experiment demonstrates a repeatable full-web speedup.
+The label variant barely reduces full-web compiler work and does not improve
+controlled cold standalone-schema checks. The map variant's two cold runs trade
+lower observed peak RSS for higher CPU; its imported type graph remains almost
+identical. These drafts are evidence, not recommendations to merge for speed.
+The combination also shows no convincing speedup: cold web checks are 101.00–127.52s and 170.25–220.52 CPU seconds, with lower cold peak RSS (6.45–6.46 GiB) but no consistent memory benefit across edits. Full-web instantiations fall only 0.079%.
 
-The comparison harness is [scripts/benchmark-typecheck.py](../../scripts/benchmark-typecheck.py).
-Run it first with `baseline`, then with each variant name, in the same prepared
-checkout. For the separate schema program use `--project packages/schemas/tsconfig.json --cold-only`
-and baseline first for that project. [Raw measurements](typescript-experiments-2026-10.csv)
-retain exit codes and compiler counters. The shell preparation command uses
-`--no-default-features` for the browser WASM build only, matching the repository.
+An early incremental schema probe showed a larger type-count reduction, but was
+not cold-to-cold; it is excluded from conclusions. The 08:06 UTC environment
+disconnect notification coincided with the final map shared-schema run. At 08:07
+the environment was responsive, the run had finished, its source probes were
+restored, and all measurements were intact. That timing is retained and flagged
+as noisy; it was not silently replaced or restarted.
 
-Added contract tests were run separately from the timing matrix so the original
-benchmark workload remained identical across variants. Nothing was deleted other
-than the superseded eager label-path validation type aliases.
+The expanded label contracts pass on baseline and candidate: nullable array
+members, indexed arrays, string brands, transforms to strings, and rejection of
+missing keys and numeric outputs. Map contracts pass bidirectional type checks
+for every generated map. Focused tests retain schema identity, default input vs
+output optionality, string transformations, branded outputs, declared keys,
+object `pick`/`partial`, and enum `exclude`. The existing all-entity omitted-update
+regression also passes (2 test files / 2 runtime cases, 1.98s total Vitest time).
+The final combined schema check also passes with both expanded contract-test
+sets present. Full-web runs retain exactly the six inherited diagnostics listed above; no
+errors are suppressed in production code. No existing source/test coverage or
+required checking command was removed. New contract tests were checked outside
+the timing matrix so the baseline workload was identical across variants.
+The generated compiler proofs are part of the map variant's schema workload.
+
+Both code commits' hosted Validation jobs reported success: #2482 at
+`6ce4a1069` and #2487 at `bbdeb5b26`, including TypeScript and unused-code
+checks (the latter was also confirmed from #2487's job-step metadata). Its detailed log download was denied with HTTP 403, so the command/cache
+path could not be reconciled with local baseline errors. Existing GitHub
+integration access also denied Issue Project metadata. No access scopes or
+credentials were expanded. Binaryen download failure was resolved for this
+compiler experiment by generating genuine WASM declarations with `--no-opt`;
+optimized WASM runtime/build validation is not claimed. Scoped Knip could not
+start: loading its configuration invoked the normal WASM prerequisite, which
+failed downloading Binaryen version 117. Its new compiler-root entry pattern is
+therefore locally unverified; #2487's hosted unused-code step reports success.
+
+These measurements cover the complete web program and the affected schema
+program, not total `pnpm typecheck` orchestration across every workspace package.
+No plain recursive value-contract boundary or genuine project-reference split
+was completed. The exact-schema interface experiment intentionally preserves
+all Zod APIs, but still reaches declaration implementations. A future boundary
+experiment must remove those source edges and measure producer plus consumer
+CPU, not just a smaller consumer. Do not infer a whole-repository speedup from
+these local annotations or repeat the failed whole-web declaration emit.
+
+The reproducible [Linux harness](../../scripts/benchmark-typecheck.py) and
+[raw measurements](typescript-experiments-2026-10.csv) preserve exit codes and
+compiler counters. Run the harness first with `baseline`, then each variant name
+in the same prepared checkout. For standalone schemas, first run `baseline
+--project packages/schemas/tsconfig.json --cold-only`, then each candidate with
+those same flags. Baseline error expectations are recorded separately per
+program. Reports retain all samples; no outliers are removed.
+
+Deleted/replaced: the label variant replaces two eager validation type aliases;
+the map variant replaces inferred generated map declarations with explicit
+contracts. No runtime logic, schema validators, tests or compiler coverage was
+deleted. Generated artifacts and screenshots are not committed.
 
 ## Measurements
 
@@ -131,6 +186,20 @@ Ranges below contain both measured runs; smaller differences than the baseline s
 | baseline-schemas | warm     |     0.52–0.53 |     1.90–1.93 |    0.16–0.16 |
 | labels-schemas   | cold     |     8.02–9.74 |   14.30–17.53 |    0.81–0.82 |
 | labels-schemas   | warm     |     0.53–0.73 |     1.96–2.63 |    0.16–0.17 |
+| maps             | cold     | 109.76–116.72 | 184.57–193.19 |    6.45–6.52 |
+| maps             | warm     |     7.21–7.42 |   25.73–26.81 |    1.58–1.65 |
+| maps             | body     | 102.86–109.34 | 180.53–184.82 |    6.67–6.79 |
+| maps             | export   | 105.80–106.06 | 167.68–178.61 |    6.64–7.15 |
+| maps             | schema   | 100.88–108.86 | 169.80–219.53 |    6.98–7.08 |
+| maps-schemas     | cold     |     7.96–8.22 |   14.06–14.58 |    0.82–0.84 |
+| maps-schemas     | warm     |     0.51–0.53 |     1.84–1.84 |    0.16–0.16 |
+| combined         | cold     | 101.00–127.52 | 170.25–220.52 |    6.45–6.46 |
+| combined         | warm     |    8.16–11.54 |   28.99–40.36 |    1.61–1.64 |
+| combined         | body     |  98.41–137.33 | 167.04–208.74 |    7.08–7.16 |
+| combined         | export   |   90.30–96.77 | 154.61–166.50 |    6.57–7.10 |
+| combined         | schema   |  91.87–103.42 | 155.08–189.51 |    7.11–7.14 |
+| combined-schemas | cold     |     7.83–8.29 |   13.03–14.97 |    0.84–0.86 |
+| combined-schemas | warm     |     0.54–0.58 |     1.92–2.04 |    0.16–0.17 |
 
 Cold compiler work (repeat counts agree unless stated):
 
@@ -140,3 +209,16 @@ Cold compiler work (repeat counts agree unless stated):
 | labels           | 10694 | 3941692 |       23770348 |
 | baseline-schemas |   561 |  448815 |        1493981 |
 | labels-schemas   |   561 |  447370 |        1486058 |
+| maps             | 10694 | 3942898 |       23755068 |
+| maps-schemas     |   590 |  449837 |        1499146 |
+| combined         | 10694 | 3941696 |       23753340 |
+| combined-schemas |   590 |  448392 |        1491223 |
+
+Cold web plus schema CPU (arithmetic sum, excluding setup, orchestration and other packages):
+
+| Variant  | CPU seconds, two runs |
+| -------- | --------------------: |
+| baseline |        167.01, 172.20 |
+| labels   |        170.52, 179.85 |
+| maps     |        207.78, 198.62 |
+| combined |        183.28, 235.50 |
