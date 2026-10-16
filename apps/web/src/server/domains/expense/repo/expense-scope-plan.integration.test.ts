@@ -43,7 +43,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
         cost: lineKind === "tax" ? 0.01 : 1,
         lineKind,
         costType: "materials",
-        trade: "other",
+        trade: lineKind === "tax" ? null : "other",
         future: false,
       });
       if (lineKind === "tax") firstTax ??= line.id;
@@ -91,6 +91,22 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     "0",
     "1",
   ]);
+  // Trade and cost-type projections must retain rounded adjustment shares
+  // and inherited trade when category resolution is not requested.
+  for (const scope of [
+    { trades: ["other"] as const },
+    { costTypes: ["materials"] as const },
+    { trades: ["other"] as const, categoryPresence: "none" as const },
+    { costTypes: ["materials"] as const, projectIds: [project.id] },
+  ]) {
+    const costs = await unwrapDb(ctx.db).execute<{
+      expenseId: string;
+      cost: number;
+    }>(
+      expenseDerivedReadSql("costs", { scope, expenseIds: sparse.expenseIds }),
+    );
+    expect(costs.rows).toMatchObject([{ expenseId: firstTax!, cost: 0.01 }]);
+  }
   const scope = { projectIds: [project.id] };
   const contexts = {
     broad: { ...prepared, scope },

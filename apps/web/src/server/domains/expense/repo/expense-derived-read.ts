@@ -60,15 +60,14 @@ export function expenseDerivedReadSql(
   const categories =
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
-    scope?.categoryPresence !== undefined ||
-    scope?.trades !== undefined ||
-    scope?.costTypes !== undefined;
+    scope?.categoryPresence !== undefined;
+  const trades = categories || scope?.trades !== undefined;
   const condition = scope
     ? expenseAllocationScopeConditionSql("allocation", scope)
     : undefined;
   const source =
     preparedSource ??
-    expenseJointAllocationSql(expenseIds, draft, { categories });
+    expenseJointAllocationSql(expenseIds, draft, { categories, trades });
   const membership = scope?.membershipProjectIds;
   const allocations =
     membership === undefined
