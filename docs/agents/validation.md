@@ -152,7 +152,9 @@ gh stack link --base main <bottom-pr-url> <next-pr-url>
 
 Append later layers with `gh stack link <stack-number> <new-pr-url>`. Verify the
 native stack and its member order on GitHub; chained base branches and T3's
-derived chain do not complete registration. Link every layer to the T3 thread.
+derived chain do not complete registration. Link each member PR to T3 using its
+actual pull-request URL. A native stack number identifies the stack resource;
+member PR numbers identify the pull requests.
 Independent changes stay in separate PRs.
 
 Native stacks apply the trunk's branch protection and Actions branch filters to
