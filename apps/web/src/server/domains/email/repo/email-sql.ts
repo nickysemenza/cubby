@@ -11,7 +11,7 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { sql, type SQL } from "drizzle-orm";
+import { and, sql, type SQL } from "drizzle-orm";
 
 import { uuidArrayParam } from "~/server/db/helpers/query";
 
@@ -268,7 +268,12 @@ const emailMemberReviewReadSql = (ids?: SQL) => sql`
 /** One row per Email: ordinary joins can spill instead of degrading a hashed
  * SubPlan into a source-list scan for every Email. Deduplication prevents
  * repeated imports or duplicate sources from multiplying Email rows. */
-export const emailQualityReadSql = (ids?: SQL) => sql`
+const emailQualityRead = (ids?: SQL, predicate?: SQL) => {
+  const condition = and(
+    ids ? sql`candidate.id = ANY(${uuidArrayParam(ids)})` : undefined,
+    predicate,
+  );
+  return sql`
   SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
     ${emailRetainedContentSql(sql`candidate`, sql`quality_original`)} AS "retainedContent",
     ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification"
@@ -288,8 +293,19 @@ export const emailQualityReadSql = (ids?: SQL) => sql`
       AND source->'orderMailId' IS NOT NULL
   ) membership ON membership."ledgerPartyId" = candidate."ledgerPartyId"
     AND membership.original = COALESCE(to_jsonb(candidate."orderMailId"::text), 'null'::jsonb)
-  ${ids ? sql`WHERE candidate.id = ANY(${uuidArrayParam(ids)})` : sql``}
+  ${condition ? sql`WHERE ${condition}` : sql``}
 `;
+};
+
+export const emailQualityReadSql = (ids?: SQL) => emailQualityRead(ids);
+
+/** No derived-reading check expects unrelated or unclassified Emails. Leave
+ * their evidence outside filter joins; ordinary hydration reads all classes. */
+export const emailQualityFilterReadSql = () =>
+  emailQualityRead(
+    undefined,
+    sql`candidate.classification <> ${mailboxClassification.enum.unrelated}`,
+  );
 
 /** Bounded single-record checks retain the historical containment contract. */
 export const emailHasCompletedImportSql = () => sql<boolean>`EXISTS (

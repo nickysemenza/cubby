@@ -6,6 +6,7 @@ import {
   automatedStagesSql,
   emailLinkedSql,
   emailQualityReadSql,
+  emailQualityFilterReadSql,
   emailHasCompletedImportSql,
   emailMemberClassificationSql,
   emailRetainedContentSql,
@@ -26,7 +27,7 @@ export const emailChecks = defineEntityChecks({
   entity: "email",
   table: email,
   derivedRead: emailQualityReadSql,
-  filterRead: emailQualityReadSql,
+  filterRead: emailQualityFilterReadSql,
   checks: {
     email_relevance_undecided: {
       missing: (t: Email) => sql`${t.classification} = ${uncertain}`,
