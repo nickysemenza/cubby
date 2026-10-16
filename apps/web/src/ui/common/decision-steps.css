@@ -59,7 +59,7 @@
   border-radius: var(--radius);
   background: var(--muted);
 }
-.decision-steps-ledger > .ledger-row {
+.decision-steps-ledger.ledger[data-record-list] > .ledger-row {
   padding-block: 0;
 }
 .decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {

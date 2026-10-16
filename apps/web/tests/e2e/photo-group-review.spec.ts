@@ -1273,7 +1273,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   expect(
     await attach
       .locator(
-        '.decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"]',
+        ".decision-steps-ledger > .ledger-row:has([data-decision-body][hidden])",
       )
       .evaluateAll((nodes) =>
         nodes.every(
