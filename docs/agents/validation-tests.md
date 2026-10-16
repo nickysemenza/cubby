@@ -12,6 +12,8 @@ any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+For conditional expected output, construct expected data and assert once; keep
+`expect` calls and asymmetric matchers outside branches.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
