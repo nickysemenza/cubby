@@ -1,0 +1,19 @@
+apps/web/src/server/domains/purchase-import/repo/run-retirement.integration.test.ts
+  s_b4ccbb972ca93f::t_2c5e8d1e533b3e 27,464-469,472,554,556-563,565,608,612,725,766,862,888
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "743f49fda03d45511d2c542f213c92b2c12445dd",
+  "prompts": {},
+  "sessions": {
+    "s_b4ccbb972ca93f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d9a675e3-1921-4d05-9b8d-cd92599a076e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
