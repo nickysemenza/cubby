@@ -1,0 +1,27 @@
+apps/web/src/server/entity-kernel/current-member-filter.ts
+  s_5285635cb5ec69::t_e26d85cb02f84c 1,71-75
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_5285635cb5ec69::t_385f1616a82e20 35,1163-1165,1171-1175,1204-1207
+docs/adr/0018-current-member-filter-token.md
+  s_5285635cb5ec69::t_7c29829326c3e3 34-37
+packages/schemas/src/pagination.ts
+  s_5285635cb5ec69::t_b80b57f8d5c11a 180-186
+packages/schemas/src/work-queue.ts
+  s_5285635cb5ec69::t_20b093d2149e32 19,183-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "46f816e5e68a7765fffa19f6e9c6f36166dfd7aa",
+  "prompts": {},
+  "sessions": {
+    "s_5285635cb5ec69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36a7f5c0-2a54-429d-8349-ad4f4e7f2675",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
