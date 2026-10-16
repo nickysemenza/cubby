@@ -1321,6 +1321,7 @@ export default defineEntity({
         placeholder: "Filter by purchaser override...",
         kind: "idMulti",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         deriveSchema: true,
         stored: true,
       },

@@ -29,8 +29,9 @@ or this other member".
 - Amended (#2409): a filter opts in with `currentMember: true` on its
   descriptor rather than by being a Ledger Party filter, so the token set a
   filter accepts is declared beside its other tokens (Any value, No value,
-  Match all). The Work queue's `waitingFor` is a member any-of that accepts
-  `@me`, with No value for unresolved items.
+  Match all). The Work queue's `waitingFor` is an any-of that accepts `@me`
+  (work routed to me or Either) beside `either` and member codes, with No
+  value for unresolved items.
 
 ## Consequences
 

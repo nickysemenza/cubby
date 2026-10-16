@@ -1170,11 +1170,18 @@ describe("member actionable Work queue", () => {
           false,
         )
       ).items.map((row) => row.id);
+    // A picked member is only the work routed to them, never shared work.
     const forSecond = await household({ waitingFor: second.shortcode });
-    expect(forSecond).toEqual(
-      expect.arrayContaining([theirs.shortcode, shared.id]),
-    );
+    expect(forSecond).toContain(theirs.shortcode);
+    expect(forSecond).not.toContain(shared.id);
     expect(forSecond).not.toContain(mine.shortcode);
+    const sharedOrSecond = await household({
+      waitingFor: ["either", second.shortcode],
+    });
+    expect(sharedOrSecond).toEqual(
+      expect.arrayContaining([shared.id, theirs.shortcode]),
+    );
+    expect(sharedOrSecond).not.toContain(mine.shortcode);
     expect(forSecond).not.toContain(unknownPurchase.shortcode);
     const mineOrUnresolved = await household({
       waitingFor: ["@me"],

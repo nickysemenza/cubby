@@ -456,10 +456,11 @@ function queueColumns(
           filterConfig: {
             placeholder: "Filter waiting for",
             filterType: "multiselect",
-            // A member pick also matches Either work; No value is Unresolved.
+            // Me also matches Either work; No value is Unresolved.
             options: [
               ...nullableSentinelOptions(),
               { value: CURRENT_MEMBER_FILTER, label: "Me" },
+              { value: "either", label: "Either" },
               ...memberOptions,
             ],
           },

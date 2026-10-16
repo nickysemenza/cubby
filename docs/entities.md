@@ -1536,8 +1536,9 @@ until its inputs change.
 The dedicated `/work-queue` page combines those predicates with interactive
 Problems, Email attention, findings and account work. It derives a filterable
 Waiting for column from current source/account authority, with Either for
-shared research and unresolved for missing private ownership. This is a read
-projection, not a new entity or assignment ledger. MCP `activity.work_queue`
+shared research and unresolved for missing private ownership. Its filter is
+any-of: Me (mine or Either), Either, a member (routed to them only), and No
+value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 

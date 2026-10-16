@@ -555,6 +555,7 @@ export default defineEntity({
         placeholder: "Filter by primary cardholder...",
         kind: "idMulti",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         deriveSchema: true,
         stored: true,
       },

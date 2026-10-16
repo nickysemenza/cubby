@@ -175,8 +175,11 @@ export const workQueuePageInput = z.object({
 
 /** Household UI filters select routing metadata; they confer no source access. */
 export const workQueueHouseholdInput = workQueuePageInput.extend({
-  /** Work any picked member can do: routed to them, or to Either. */
-  waitingFor: partyFilterList(ledgerPartyShortcode).optional(),
+  /**
+   * Any of: `@me` (work routed to me or Either), `either` (shared work), or a
+   * member shortcode (work routed to that member).
+   */
+  waitingFor: partyFilterList(ledgerPartyShortcode, ["either"]).optional(),
   /** `none` is Unresolved routing; `has` is resolved (members or Either). */
   waitingForPresence: presenceFilter.describe(
     "has/none waiting for, ORed with picked members",

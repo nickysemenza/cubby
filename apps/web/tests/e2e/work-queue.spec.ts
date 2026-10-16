@@ -86,19 +86,33 @@ test("Work queue filters routing before paging and opens its source record", asy
   await page
     .getByRole("button", { name: "Clear selection", exact: true })
     .click();
-  const chooseWaitingFor = async (current: string, next: string) => {
+  // Waiting for is any-of: swap the one picked choice, then Apply. A choice
+  // is its option label and its chip summary.
+  type Choice = { option: string; chip: string };
+  const either: Choice = { option: "Either", chip: "Either" };
+  const noValue: Choice = { option: "No value", chip: "no value" };
+  const picked: Choice = { option: member.name, chip: member.name };
+  const chooseWaitingFor = async (from: Choice, to: Choice) => {
     await page
-      .getByRole("button", { name: `Waiting for: ${current}`, exact: true })
+      .getByRole("button", { name: `Waiting for: ${from.chip}`, exact: true })
       .click();
-    await page
-      .getByRole("combobox", { name: "Filter Waiting for", exact: true })
-      .fill(next);
-    await page.getByRole("option", { name: next, exact: true }).click();
-    await page
-      .getByRole("button", { name: `Waiting for: ${next}`, exact: true })
-      .click();
+    const search = page.getByRole("combobox", {
+      name: "Filter Waiting for",
+      exact: true,
+    });
+    for (const { option } of [from, to]) {
+      await search.fill(option);
+      await page.getByRole("option", { name: option, exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(
+      page.getByRole("button", {
+        name: `Waiting for: ${to.chip}`,
+        exact: true,
+      }),
+    ).toBeVisible();
   };
-  await chooseWaitingFor("Either", member.name);
+  await chooseWaitingFor(either, picked);
   await expect(product).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Copy codes", exact: true }),
@@ -114,7 +128,7 @@ test("Work queue filters routing before paging and opens its source record", asy
       exact: true,
     }),
   ).toBeVisible();
-  await chooseWaitingFor(member.name, "Unresolved");
+  await chooseWaitingFor(picked, noValue);
   await expect(
     page.getByRole("link", {
       name: `${prefix} unresolved account`,
@@ -124,7 +138,7 @@ test("Work queue filters routing before paging and opens its source record", asy
   await expect(
     page.getByRole("link", { name: `${prefix} owned mail`, exact: true }),
   ).toHaveCount(0);
-  await chooseWaitingFor("Unresolved", "Either");
+  await chooseWaitingFor(noValue, either);
   await expect(
     page.getByRole("combobox", { name: "Rows per page", exact: true }),
   ).toHaveCount(0);

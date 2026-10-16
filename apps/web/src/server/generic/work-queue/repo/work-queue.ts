@@ -635,18 +635,18 @@ async function queryWorkQueue(
     );
   else {
     const waitingFor = oneOrManyValues(input.waitingFor) ?? [];
-    const codes = waitingFor.filter((value) => value !== CURRENT_MEMBER_FILTER);
-    const memberPicks = [
-      waitingFor.includes(CURRENT_MEMBER_FILTER)
-        ? sql`${currentPartyId}::uuid = ANY(owners)`
-        : undefined,
-      codes.length
-        ? sql`EXISTS (SELECT 1 FROM members member WHERE member.shortcode IN (${textList(codes)}) AND member.id = ANY(owners))`
-        : undefined,
-    ].filter((pick) => pick !== undefined);
+    const codes = waitingFor.filter(
+      (value) => value !== CURRENT_MEMBER_FILTER && value !== either,
+    );
+    // Me is the work I can do (mine or Either); a picked member is only the
+    // work routed to them; Either is shared work.
     const routed = or(
-      memberPicks.length
-        ? sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND (${sql.join(memberPicks, sql` OR `)})))`
+      waitingFor.includes(CURRENT_MEMBER_FILTER)
+        ? sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners)))`
+        : undefined,
+      waitingFor.includes(either) ? sql`waiting_kind = ${either}` : undefined,
+      codes.length
+        ? sql`(waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode IN (${textList(codes)}) AND member.id = ANY(owners)))`
         : undefined,
       input.waitingForPresence === "none"
         ? sql`waiting_kind = ${unresolved}`
