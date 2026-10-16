@@ -1,0 +1,61 @@
+apps/web/src/server/domains/dashboard/repo/dashboard.ts
+  s_a6ab29fb52686e::t_630835e6202861 94
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_a6ab29fb52686e::t_63dcf5dd9fd785 813-817,945
+apps/web/src/server/domains/image-job/repo.ts
+  s_a6ab29fb52686e::t_a90d5974a4ea6e 36-40,45-47
+apps/web/src/server/domains/ledger-transfer/repo.ts
+  s_a6ab29fb52686e::t_fb839b3bbe6963 564-565,578
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_a6ab29fb52686e::t_53c93e45866a95 213,221
+apps/web/src/server/domains/plant/repo/plant.ts
+  s_a6ab29fb52686e::t_e7abd1ca79d943 20,33
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_a6ab29fb52686e::t_4d1a8f1b4487ff 35,415-446,457-459,508-510
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_a6ab29fb52686e::t_fe74c0332a1db5 498-499,505
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_a6ab29fb52686e::t_42eaa0f33b1949 367-371,376-378,380
+docs/entities.md
+  s_a6ab29fb52686e::t_a5ea8e290fe119 1419-1422
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_a6ab29fb52686e::t_3e8cce8dade308 747-752,919,930,941,959-960,965,988
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_a6ab29fb52686e::t_4f208c41909869 512-516,607-608,656
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_a6ab29fb52686e::t_46f582f7c10485 417-418,427-428
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_a6ab29fb52686e::t_be9f57fa67f8be 708-711,810,824,843,869-875,895
+packages/schemas/src/entity-definitions/19-planting.entity.ts
+  s_a6ab29fb52686e::t_43f645dd0f380a 537-539,648-649,656-657,664-665,674-675
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_a6ab29fb52686e::t_65d82b90e8ccef 301-303,406-407
+packages/schemas/src/entity-definitions/26-plant.entity.ts
+  s_a6ab29fb52686e::t_8434931948127d 406-407
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_a6ab29fb52686e::t_944a6b5d93a309 299-305,400
+packages/schemas/src/ledger-transfer.ts
+  s_a6ab29fb52686e::t_39218dd9b4e8b5 3,32
+packages/schemas/src/plant.ts
+  s_a6ab29fb52686e::t_c93a0436be2e0d 4-5,18
+packages/schemas/src/planting.ts
+  s_a6ab29fb52686e::t_e4df16ccaf0416 4
+tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json
+  s_a6ab29fb52686e::t_38bcc795ba97f2 6,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9c182597d3bdecd139021e64b64e8c120e55c727",
+  "prompts": {},
+  "sessions": {
+    "s_a6ab29fb52686e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef14048a-b0ff-4e41-bd5d-af494f347122",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
