@@ -154,9 +154,10 @@ providers. Inventory remains unchanged when meals are logged.
 
 Faker uses a fixed independent seed. Story chronology (projects, purchases,
 expenses, settlement, transfers, sowing work, plantings, journal entries, email,
-and meals) is anchored to the household-local day when the database is seeded; an explicit
-`referenceDate` makes artifact dates reproducible. Reseeding a completed pack is a
-no-op, so reset the ephemeral database to refresh its dates or version.
+and meals) is anchored to the household-local day when the corpus template is seeded; an
+explicit `referenceDate` makes artifact dates reproducible. Reseeding a completed
+pack is a no-op. Reset adopts the current template and retains its chronology;
+a changed template hash or a recycled template seeds a new reference day.
 Optional packs still add small focused graphs to the running session:
 
 ```sh
