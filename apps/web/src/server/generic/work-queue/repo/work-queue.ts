@@ -61,6 +61,8 @@ import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
+import { onHandUnitsReadSql } from "~/server/domains/product/repo/quantity-ledger";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -72,6 +74,7 @@ import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
   qualityFilterSource,
@@ -136,12 +139,14 @@ const gapViewFilters = (
 export type WorkProblemSelections = (
   db: Database,
   scope: WorkQueueScope,
+  readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ) => Promise<SQL[]>;
 
 async function workQueueProjection(
   db: Database,
   scope: WorkQueueScope,
   problemSelections: WorkProblemSelections,
+  readContexts: Partial<Record<Entity, QualityReadContext>>,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   // Skips building a branch the scope would drop anyway.
@@ -166,6 +171,7 @@ async function workQueueProjection(
         where: await buildProductWhere(
           db,
           productFiltersSchema.parse(productGaps),
+          readContexts.product,
         ),
         details: research,
         key: "research:product",
@@ -442,7 +448,7 @@ async function workQueueProjection(
       SELECT 1 FROM unnest(authority.owners) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId"
     ) THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END AS owners,
     false AS shared, NULL::text AS "problemKey",
-    ${workRecordFactColumns(sql`identity.kind`, sql`finding."entityId"`)}
+    ${workRecordFactColumns(sql`identity.kind`, sql`finding."entityId"`, scope.facts)}
     FROM "RunFinding" finding
     JOIN "Entity" identity ON identity.id = finding."entityId" AND identity.kind = finding."entityKind" AND identity."deletedAt" IS NULL
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
@@ -472,7 +478,7 @@ async function workQueueProjection(
       key: "account:run",
     }),
   );
-  selections.push(...(await problemSelections(db, scope)));
+  selections.push(...(await problemSelections(db, scope, readContexts)));
   // A scope that admits no branch still yields a typed, empty relation.
   if (selections.length === 0)
     return sql`SELECT NULL::text AS entity, NULL::text AS id, NULL::text AS name,
@@ -561,6 +567,35 @@ async function queryWorkQueue(
   memberOnly: boolean,
   record?: WorkQueueScope["record"],
 ) {
+  const sorts = workQueueSortSchema.parse(
+    normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
+  );
+  const facts = (["amount", "date", "vendor"] as const).filter(
+    (fact) =>
+      sorts.some((sort) => sort.orderBy === fact) ||
+      (fact === "vendor" && input.vendor !== undefined),
+  );
+  const candidateConditions: SQL[] = [];
+  if (input.source) candidateConditions.push(sql`source = ${input.source}`);
+  if (input.kind) candidateConditions.push(sql`kind = ${input.kind}`);
+  let needsPriceEvidence = false;
+  let needsOnHandEvidence = false;
+  const productReadContext: QualityReadContext = {
+    derivedValue: record
+      ? undefined
+      : (field, entityId) => {
+          if (field !== "onHandUnits") return undefined;
+          needsOnHandEvidence = true;
+          return sql`((SELECT jsonb_object_agg("productId", "onHandUnits") FROM work_product_on_hand) ->> ${entityId}::text)::double precision`;
+        },
+    hasDerivedValue: (field, entityId) => {
+      needsPriceEvidence = true;
+      return sql`${entityId} IN (
+        SELECT "entityId" FROM work_product_price
+        WHERE ${sql.identifier(field)} IS NOT NULL
+      )`;
+    },
+  };
   const projection = await workQueueProjection(
     db,
     {
@@ -568,8 +603,10 @@ async function queryWorkQueue(
       kind: input.kind,
       check: input.check === undefined ? undefined : [input.check].flat(),
       record,
+      facts,
     },
     problemSelections,
+    { product: productReadContext },
   );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
@@ -596,10 +633,8 @@ async function queryWorkQueue(
     conditions.push(
       sql`waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode = ${input.waitingFor} AND member.id = ANY(owners))`,
     );
-  if (input.kind) conditions.push(sql`kind = ${input.kind}`);
-  if (input.source) conditions.push(sql`source = ${input.source}`);
   if (input.vendor)
-    conditions.push(
+    candidateConditions.push(
       sql`vendor_id = (SELECT v.id FROM "Vendor" v WHERE v.shortcode = ${input.vendor})`,
     );
   if (input.query)
@@ -622,9 +657,6 @@ async function queryWorkQueue(
     date: sql`date`,
     vendor: sql`(SELECT v.name FROM "Vendor" v WHERE v.id = eligible.vendor_id AND v."deletedAt" IS NULL)`,
   };
-  const sorts = workQueueSortSchema.parse(
-    normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
-  );
   // Every sort places nulls last in both directions; name and key break ties.
   const orderBy = sql.join(
     [
@@ -637,21 +669,30 @@ async function queryWorkQueue(
     ],
     sql`, `,
   );
+  // Keep routed candidates behind a statement-local boundary before eligibility:
+  // search pushdown can turn bulk quality joins into repeated nested-loop work.
+  // Only sort/filter facts enter that population; page facts share their declaration.
+  // Limit the correctly filtered/sorted population before assigning JSON order,
+  // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
-    WITH members AS (
+    WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``}
+    ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``} members AS (
       SELECT id, shortcode, name FROM "LedgerParty" WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
-    ), candidates AS (${projection}), routed AS (
+    ), candidates AS (${projection}), routed AS MATERIALIZED (
       SELECT candidates.*, CASE
         WHEN shared THEN ${either}
         WHEN cardinality(owners) > 0 AND NOT EXISTS (
           SELECT 1 FROM unnest(owners) owner WHERE owner IS NULL OR NOT EXISTS (SELECT 1 FROM members member WHERE member.id = owner)
         ) THEN ${members} ELSE ${unresolved} END AS waiting_kind
-      FROM candidates
+      FROM candidates ${candidateConditions.length ? sql`WHERE ${sql.join(candidateConditions, sql` AND `)}` : sql``}
     ), eligible AS (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), ordered AS (
-      SELECT *, row_number() OVER (ORDER BY ${orderBy}) AS position FROM eligible
+      SELECT * FROM eligible ORDER BY ${orderBy} LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
     ), page AS (
-      SELECT * FROM ordered ORDER BY position LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
+      SELECT entity, id, name, key, source, kind, reason, "nextAction", owners, shared, "problemKey", waiting_kind,
+        row_number() OVER (ORDER BY ${orderBy}) AS position,
+        ${workRecordFactColumns(sql`eligible.entity`, sql`eligible.id`, undefined, "shortcode")}
+      FROM ordered eligible
     ) SELECT
       (SELECT count(*)::int FROM eligible) AS total,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,

@@ -148,6 +148,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -696,6 +697,7 @@ type ProductListFilters = ProductFilters & { ids?: readonly string[] };
 export const buildProductWhere = async (
   db: Database,
   filters: ProductListFilters,
+  readContext?: QualityReadContext,
 ) => {
   const dbClient = getDb(db);
 
@@ -935,15 +937,15 @@ export const buildProductWhere = async (
   const inventoryConditions = () => [
     filters.kitAccounting === "double_counted"
       ? and(
-          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
           sql`${partsAccountedKitsSql(product.id)} > 0`,
-          sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
         )
       : undefined,
     filters.ownershipReconciliation === "disposed_still_on_hand"
       ? and(
           inArray(product.id, productIdsWithRecordedDisposal),
-          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
           sql`${expectedQuantityFilterSql(product.id)} <= 0`,
           sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
         )
@@ -1006,8 +1008,8 @@ export const buildProductWhere = async (
           inArray(product.id, productIdsWithExpenses),
           comparableQuantityHistoryFilterSql(product.id),
           filters.quantityVarianceFilter === "mismatched"
-            ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
-            : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
+            ? sql`${onHandUnitsFilterSql(product.id, readContext)} <> ${expectedQuantityFilterSql(product.id)}`
+            : sql`${onHandUnitsFilterSql(product.id, readContext)} = ${expectedQuantityFilterSql(product.id)}`,
         )
       : undefined,
   ];
@@ -1112,10 +1114,13 @@ export const buildProductWhere = async (
     filters.pricePresenceFilter === "none"
       ? and(
           isNull(product.price),
-          sql`NOT (${hasDerivedProductPriceSql(product.id)})`,
+          sql`NOT (${hasDerivedProductPriceSql(product.id, readContext)})`,
         )
       : filters.pricePresenceFilter === "has"
-        ? or(isNotNull(product.price), hasDerivedProductPriceSql(product.id))
+        ? or(
+            isNotNull(product.price),
+            hasDerivedProductPriceSql(product.id, readContext),
+          )
         : undefined,
   ];
 
@@ -1123,14 +1128,18 @@ export const buildProductWhere = async (
   // presence), manufacturerExact (multiselect), tags (overlap + presence) and
   // the model/notes presence filters are declared stored filters — applied by
   // `productScaffold.where` before the conditions below.
-  const whereClause = productScaffold.where(filters, [
-    await categoryFilterCondition(db, filters),
-    ...classificationConditions(),
-    ...inventoryConditions(),
-    ...ledgerConditions(),
-    ...associationConditions(),
-    ...qualityConditions(),
-  ]);
+  const whereClause = productScaffold.where(
+    filters,
+    [
+      await categoryFilterCondition(db, filters),
+      ...classificationConditions(),
+      ...inventoryConditions(),
+      ...ledgerConditions(),
+      ...associationConditions(),
+      ...qualityConditions(),
+    ],
+    readContext,
+  );
   return whereClause;
 };
 

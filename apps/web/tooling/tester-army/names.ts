@@ -11,6 +11,9 @@ export const JOURNEY_NAMES = {
   inventoryShelf: "Synthetic Inventory Shelf",
   boardProjectA: "Synthetic Board Project A",
   boardProjectB: "Synthetic Board Project B",
+  pickerProject: "Synthetic Zeta travel planning and reservations",
+  pickerReplacement: "Synthetic Alternate Project",
+  pickerVendor: "Synthetic Zeta Airways",
 } as const;
 
 /**

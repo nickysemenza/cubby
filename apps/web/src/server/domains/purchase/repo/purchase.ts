@@ -939,6 +939,109 @@ export const getPurchaseByID = async (
   );
 };
 
+/** Report-only demand; full detail consumers keep getPurchaseByID. */
+type PurchaseFinanceProjection = {
+  reconciliation: boolean;
+  allocation: boolean;
+  settlement: boolean;
+};
+type PurchaseFinanceRead = {
+  reconciliation?: Pick<
+    PurchaseOut,
+    "statedTotal" | "expenseTotal" | "reconciliation"
+  >;
+  allocation?: Pick<PurchaseOut, "id" | "expenseTotal">;
+  settlement?: Pick<PurchaseOut, "id" | "financialReconciliation">;
+};
+
+/** Select the union of this batch's finance inputs, without detail hydration. */
+export const getPurchaseFinanceByID = async (
+  db: Database,
+  id: PurchaseId,
+  projection: PurchaseFinanceProjection,
+): Promise<PurchaseFinanceRead> => {
+  const { reconciliation, allocation, settlement } = projection;
+  const [[row], financialByPurchase] = await Promise.all([
+    getDb(db)
+      .select({
+        ...(allocation || settlement ? { shortcode: purchase.shortcode } : {}),
+        ...(reconciliation || allocation
+          ? { expenseTotal: purchaseExpenseTotal }
+          : {}),
+        ...(reconciliation
+          ? {
+              statedTotal: purchase.statedTotal,
+              vendorExpenseTotal: purchaseVendorExpenseTotal,
+              vendorExpenseCount: purchaseVendorExpenseCount,
+              vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
+            }
+          : {}),
+        ...(settlement
+          ? {
+              settleableExpenseTotal: purchaseSettleableExpenseTotal,
+              settleableUnpricedExpenseCount:
+                purchaseSettleableUnpricedExpenseCount,
+            }
+          : {}),
+      })
+      .from(purchase)
+      .where(and(eq(purchase.id, id), notDeleted(purchase)))
+      .limit(1),
+    reconciliation || settlement
+      ? loadPurchaseFinancialAggregates(db, [id])
+      : undefined,
+  ]);
+  if (!row)
+    throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
+
+  // Selection and result branches use the same demand flags: requested fields
+  // and financial inputs are present in those branches. Reconciliation needs
+  // posted refunds too; one scan supplies both verdicts.
+  const financial =
+    reconciliation || settlement
+      ? (financialByPurchase?.get(id) ?? emptyPurchaseFinancialAggregate())
+      : undefined;
+  return {
+    ...(reconciliation
+      ? {
+          reconciliation: {
+            statedTotal: row.statedTotal ?? null,
+            expenseTotal: Number(row.expenseTotal),
+            reconciliation: reconcilePurchase({
+              statedTotal: row.statedTotal ?? null,
+              expenseTotal: Number(row.vendorExpenseTotal),
+              expenseCount: Number(row.vendorExpenseCount),
+              unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
+              postedRefundTotal: financial!.postedRefundTotal,
+            }),
+          },
+        }
+      : {}),
+    ...(allocation
+      ? {
+          allocation: {
+            id: parseShortcodeFor("purchase", row.shortcode!),
+            expenseTotal: Number(row.expenseTotal),
+          },
+        }
+      : {}),
+    ...(settlement
+      ? {
+          settlement: {
+            id: parseShortcodeFor("purchase", row.shortcode!),
+            financialReconciliation: calculateFinancialReconciliation({
+              settleableExpenseTotal: Number(row.settleableExpenseTotal),
+              settleableUnpricedExpenseCount: Number(
+                row.settleableUnpricedExpenseCount,
+              ),
+              ...financial!,
+            }),
+          },
+        }
+      : {}),
+  };
+};
+
 export type PurchaseLinkIdentity = Pick<
   PurchaseOut,
   "id" | "orderId" | "displayLabel" | "date" | "vendorId" | "vendorName"

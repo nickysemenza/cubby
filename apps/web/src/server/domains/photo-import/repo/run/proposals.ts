@@ -84,8 +84,7 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
-import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
+import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
@@ -572,11 +571,12 @@ async function toViews(
 async function buildList(
   db: Database,
   run: LoadedRun,
+  processingRead = loadPhotoRunImages(db, run),
 ): Promise<PhotoGroupProposalList> {
   const [images, rows, processing] = await Promise.all([
     loadRunImages(db, run.id),
     loadProposalRows(db, run.id),
-    listPhotoRunImages(db, run.shortcode),
+    processingRead,
   ]);
   const assigned = new Set(
     rows
@@ -603,6 +603,17 @@ export async function listPhotoGroupProposals(
   runShortcode: string,
 ): Promise<PhotoGroupProposalList> {
   return buildList(db, await loadRun(db, runShortcode));
+}
+
+/** Review and lifecycle use the same current image evidence within one read. */
+export async function readPhotoRunReview(db: Database, runShortcode: string) {
+  const run = await loadRun(db, runShortcode);
+  const processing = loadPhotoRunImages(db, run);
+  const [images, review] = await Promise.all([
+    processing,
+    buildList(db, run, processing),
+  ]);
+  return { images, review };
 }
 
 type ResolvedGroup = {
@@ -841,17 +852,6 @@ export async function proposePhotoGroups(
 
     const resolved: ResolvedGroup[] = [];
     for (const group of writable) {
-      const previous = existingByKey.get(group.groupKey)?.review;
-      if (previous && group.review) {
-        group.review = {
-          ...group.review,
-          unresolvedReason:
-            normalizeReview(previous)?.unresolvedReason ??
-            group.review.unresolvedReason,
-          resolvedConcerns: previous.resolvedConcerns,
-          confirmation: null,
-        };
-      }
       const rosterCodes = new Set(
         [...group.images, ...(group.skip ?? [])].map((entry) => entry.id),
       );
@@ -877,17 +877,36 @@ export async function proposePhotoGroups(
           ...liveRoster(row, runImages.byId).skipCodes,
         ]),
       ]);
+      // Concerns and their history follow photos just like rejection scope.
+      // Only resolvePhotoGroupConcern may clear a predecessor's concern.
+      const concerns = [
+        ...new Set([
+          ...predecessors.flatMap(
+            (row) =>
+              normalizeReview(row.review)?.unresolvedReason?.split("\n") ?? [],
+          ),
+          ...(normalizeReview(group.review)?.unresolvedReason?.split("\n") ??
+            []),
+        ]),
+      ];
+      const resolvedConcerns = [
+        ...new Map(
+          predecessors
+            .flatMap((row) => row.review?.resolvedConcerns ?? [])
+            .map((concern) => [JSON.stringify(concern), concern]),
+        ).values(),
+      ];
       group.review = {
         ...(group.review ?? {
           observedName:
             group.product.kind === "create"
               ? group.product.create.name
               : group.groupKey,
-          unresolvedReason: null,
           stockIntent: group.inventory ? "receive" : "evidence",
         }),
+        unresolvedReason: concerns.join("\n") || null,
         candidateScopeImageIds: [...lineage],
-        resolvedConcerns: previous?.resolvedConcerns ?? [],
+        resolvedConcerns,
         confirmation: null,
       };
       resolved.push(await resolveGroup(txDb, run, group, runImages.byCode));
@@ -1573,7 +1592,13 @@ export async function listPhotoRunImages(
   db: Database,
   runShortcode: string,
 ): Promise<PhotoRunImage[]> {
-  const run = await loadRun(db, runShortcode);
+  return loadPhotoRunImages(db, await loadRun(db, runShortcode));
+}
+
+async function loadPhotoRunImages(
+  db: Database,
+  run: LoadedRun,
+): Promise<PhotoRunImage[]> {
   const rows = await getDb(db)
     .select({
       imageId: image.id,
@@ -1595,46 +1620,49 @@ export async function listPhotoRunImages(
     .limit(PHOTO_RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
-  const [representations, summaries, jobs, localAnalyses, descriptionEvidence] =
-    await Promise.all([
-      loadImageRepresentations(db, shortcodes),
-      loadImageAnalysisSummaries(db, shortcodes),
-      getDb(db)
-        .select({
-          id: imageProcessingJob.id,
-          imageId: imageProcessingJob.imageId,
-          kind: imageProcessingJob.kind,
-          processorRevision: imageProcessingJob.processorRevision,
-          state: imageProcessingJob.state,
-          lastError: imageProcessingJob.lastError,
-          dispatchedAt: imageProcessingJob.dispatchedAt,
-          completedAt: imageProcessingJob.completedAt,
-          sourceContentHash: imageProcessingJob.sourceContentHash,
-        })
-        .from(imageProcessingJob)
-        .where(
+  const [
+    representations,
+    { summaries, descriptionEvidence },
+    jobs,
+    localAnalyses,
+  ] = await Promise.all([
+    loadImageRepresentations(db, shortcodes),
+    loadImageAnalysisEvidence(db, shortcodes),
+    getDb(db)
+      .select({
+        id: imageProcessingJob.id,
+        imageId: imageProcessingJob.imageId,
+        kind: imageProcessingJob.kind,
+        processorRevision: imageProcessingJob.processorRevision,
+        state: imageProcessingJob.state,
+        lastError: imageProcessingJob.lastError,
+        dispatchedAt: imageProcessingJob.dispatchedAt,
+        completedAt: imageProcessingJob.completedAt,
+        sourceContentHash: imageProcessingJob.sourceContentHash,
+      })
+      .from(imageProcessingJob)
+      .where(
+        inArray(
+          imageProcessingJob.imageId,
+          rows.map((row) => imageId.parse(row.imageId)),
+        ),
+      )
+      .orderBy(desc(imageProcessingJob.processorRevision)),
+    getDb(db)
+      .select({ imageId: aiAnalysis.entityId })
+      .from(aiAnalysis)
+      .where(
+        and(
+          eq(aiAnalysis.entityKind, "image"),
+          eq(aiAnalysis.feature, "photo-local-analysis"),
           inArray(
-            imageProcessingJob.imageId,
+            aiAnalysis.entityId,
             rows.map((row) => imageId.parse(row.imageId)),
           ),
-        )
-        .orderBy(desc(imageProcessingJob.processorRevision)),
-      getDb(db)
-        .select({ imageId: aiAnalysis.entityId })
-        .from(aiAnalysis)
-        .where(
-          and(
-            eq(aiAnalysis.entityKind, "image"),
-            eq(aiAnalysis.feature, "photo-local-analysis"),
-            inArray(
-              aiAnalysis.entityId,
-              rows.map((row) => imageId.parse(row.imageId)),
-            ),
-            notDeleted(aiAnalysis),
-          ),
+          notDeleted(aiAnalysis),
         ),
-      loadSelectedDescriptionEvidence(db, shortcodes),
-    ]);
+      ),
+  ]);
   const descriptionJobIds = jobs
     .filter(
       (job) =>

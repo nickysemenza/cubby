@@ -3,6 +3,7 @@ import { shortcode } from "@cubby/schemas/identifiers";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -63,6 +64,10 @@ it("shows each field Source with whether it still supports the current value", (
     observedAt: null,
     createdAt: "2026-10-07T16:00:00.000Z",
   });
+  harness.queryClient.setQueryData(
+    entityPreviewQueryOptions("run", "RUN-4K7M").queryKey,
+    { id: "RUN-4K7M", displayName: "Synthetic verification run" },
+  );
   render(
     <FieldVerificationEvidence
       verifications={[
@@ -79,8 +84,7 @@ it("shows each field Source with whether it still supports the current value", (
   expect(
     screen.getByRole("link", { name: "https://maker.example.test/earlier" }),
   ).toHaveAttribute("href", "https://maker.example.test/earlier");
-  expect(screen.getByRole("link", { name: "RUN-4K7M" })).toHaveAttribute(
-    "href",
-    expect.stringContaining("RUN-4K7M"),
-  );
+  expect(
+    screen.getByRole("link", { name: "Synthetic verification run" }),
+  ).toHaveAttribute("href", expect.stringContaining("RUN-4K7M"));
 });

@@ -72,6 +72,7 @@ export type AiWorkPorts = {
 export async function advanceAiWorkRun(
   db: Database,
   params: WorkflowRunParams,
+  ports: Pick<AiWorkPorts, "sweep"> = {},
 ) {
   const owner = await claimWorkflowRun(db, params);
   if (!owner) return null;
@@ -83,7 +84,8 @@ export async function advanceAiWorkRun(
     await (
       await import("./suggestion-sweep")
     ).prepareSuggestionSweep(db, owner.id, {
-      context: {
+      ...ports.sweep,
+      context: ports.sweep?.context ?? {
         ...buildCrudServices(db),
         actorContext: buildActorContext(owner.actorUserId, owner.channel, {
           oauthClientId: owner.oauthClientId,

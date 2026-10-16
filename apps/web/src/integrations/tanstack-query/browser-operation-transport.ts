@@ -194,7 +194,7 @@ function queryBatcherFor(headers: HeadersInit) {
 export async function dispatchBrowserOperation(
   operation: StartOperationId,
   input: UnparsedStartOperationData,
-  transport: { signal?: AbortSignal; headers: HeadersInit },
+  transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
 ): Promise<DispatchResult> {
   if (startOperationDefinitionFor(operation)?.kind === "query") {
     const signal = transport.signal ?? new AbortController().signal;
@@ -204,13 +204,15 @@ export async function dispatchBrowserOperation(
     return retryWithBackoff(
       async () => {
         signal.throwIfAborted();
-        try {
-          return await queryBatcherFor(transport.headers).load(
-            { operation, input },
-            signal,
-          );
-        } catch (error) {
-          if (!(error instanceof BatchFallback)) throw error;
+        if (transport.batch !== false) {
+          try {
+            return await queryBatcherFor(transport.headers).load(
+              { operation, input },
+              signal,
+            );
+          } catch (error) {
+            if (!(error instanceof BatchFallback)) throw error;
+          }
         }
         return queryRequests.run(
           () => postDispatch({ operation, input }, transport.headers, signal),

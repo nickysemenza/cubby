@@ -5,6 +5,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -146,10 +147,10 @@ describe("manifestPreviewCard", () => {
   });
 
   // A reference fact renders the resolved name, not the raw shortcode, and
-  // falls back to the shortcode when the projection carries no name.
+  // resolves through the detail cache when the projection carries no name.
   it.each([
     { locationName: "Raised bed 2", shown: "Raised bed 2" },
-    { locationName: null, shown: "LOC-4K7M" },
+    { locationName: null, shown: "Synthetic resolved bed" },
   ])("renders a reference fact as $shown", ({ locationName, shown }) => {
     const tomato = mock(plantingOut, {
       seed: 8,
@@ -161,6 +162,10 @@ describe("manifestPreviewCard", () => {
       },
     });
 
+    harness.queryClient.setQueryData(
+      entityPreviewQueryOptions("location", "LOC-4K7M").queryKey,
+      { id: "LOC-4K7M", name: "Synthetic resolved bed", displayImages: [] },
+    );
     const card = manifestPreviewCard("planting", withMedia(tomato));
     const stats = card.body?.find((block) => block.kind === "stats");
     if (stats?.kind !== "stats") throw new Error("expected a stats block");

@@ -30,6 +30,7 @@ import {
 } from "~/server/ai/policy/decision-choice";
 import type { AiDecisionFeature } from "~/server/ai/policy/features";
 import {
+  AiResponseCacheBatch,
   type ApplicationCacheStatus,
   withAiResponseCache,
 } from "~/server/ai/response-cache";
@@ -325,15 +326,20 @@ export async function runDecisionChoices(
   args: readonly DecisionChoiceArgs[],
 ): Promise<DecisionChoiceResult[]> {
   const batch = new DecisionRequestBatch(args.length);
+  const cache = new AiResponseCacheBatch(args.length);
   const usages = new Map<AiRunContext, number>();
   return Promise.all(
     args.map((item, index) => {
       if (!usages.has(item.usage)) usages.set(item.usage, usages.size);
       return runDecisionChoiceInternal(item, {
         batch,
+        cache,
         index,
         usageGroup: usages.get(item.usage)!,
-      }).finally(() => batch.ready(index));
+      }).finally(() => {
+        cache.ready(index);
+        batch.ready(index);
+      });
     }),
   );
 }
@@ -362,7 +368,12 @@ type DecisionChoiceArgs = {
 
 async function runDecisionChoiceInternal(
   args: DecisionChoiceArgs,
-  pending?: { batch: DecisionRequestBatch; index: number; usageGroup: number },
+  pending?: {
+    batch: DecisionRequestBatch;
+    cache: AiResponseCacheBatch;
+    index: number;
+    usageGroup: number;
+  },
 ): Promise<DecisionChoiceResult> {
   if (args.choices.length > DECISION_MAX_CANDIDATES) {
     throw new Error(
@@ -431,6 +442,7 @@ async function runDecisionChoiceInternal(
   }
   return withAiResponseCache({
     enabled: feature.cache && !args.port,
+    batch: pending ? { batch: pending.cache, index: pending.index } : undefined,
     force: args.usage.force,
     keyInput: {
       feature: feature.feature,

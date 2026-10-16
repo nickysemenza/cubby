@@ -11,6 +11,7 @@ import {
   productShortcode,
   expenseShortcode,
   purchaseShortcode,
+  vendorShortcode,
 } from "./identifier-fields";
 import { decisionStep } from "./decision-step";
 import { userId } from "./identifiers";
@@ -87,7 +88,8 @@ export type CommitPhotoGroupProductCreate = z.infer<
 /** Observed identity stays independent of the selected catalog destination. */
 export const photoGroupReview = z.object({
   observedName: z.string().trim().min(1).max(500),
-  unresolvedReason: z.string().trim().min(1).max(500).nullable(),
+  /** Regrouping combines predecessor concerns without truncating their evidence. */
+  unresolvedReason: z.string().trim().min(1).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
   productChanges: commitPhotoGroupProductCreate.partial().optional(),
   /** Written by the server only after the Product transaction succeeds. */
@@ -348,6 +350,19 @@ export const photoFieldCrossCheck = z.object({
       mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
     }),
   ),
+  // Normalized values compared for this field (e.g. label "9M" vs product
+  // "Size 9"); null when that side has no evidence.
+  labelValue: z.string().nullable().optional(),
+  productValue: z.string().nullable().optional(),
+  // One deterministic fix for a disagree-or-missing field. Label noise
+  // (provenance, materials, connector words) never produces a suggestion.
+  suggestion: z
+    .object({
+      kind: z.enum(["add_to_name", "set_model", "add_identifier"]),
+      value: z.string().min(1),
+    })
+    .nullable()
+    .optional(),
 });
 export type PhotoFieldCrossCheck = z.infer<typeof photoFieldCrossCheck>;
 
@@ -514,7 +529,7 @@ export const photoRunContextImage = photoRunImage
     targetState: true,
     describe: true,
     description: true,
-    descriptionEvidence: true,
+    // runContext serves bounded prose; rich description evidence is review-only.
     recognizedText: true,
   })
   .extend({
@@ -588,6 +603,7 @@ export const photoProductCandidate = z.object({
         date: z.string().nullable(),
         dateLabel: z.enum(["Ordered", "Paid"]).optional(),
         vendor: z.string().nullable().optional(),
+        vendorId: vendorShortcode.nullable().optional(),
         cost: z.number().nullable(),
         productQuantity: z.number().nullable(),
         movement: z.enum(["acquired", "exited", "adjusted", "unknown"]),

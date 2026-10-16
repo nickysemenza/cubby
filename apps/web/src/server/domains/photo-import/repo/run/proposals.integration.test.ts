@@ -217,6 +217,23 @@ describe("photo group proposals", () => {
         throw new Error("Synthetic inference failure");
       },
     );
+    const subset = await photoRunCandidates(
+      ctx.db,
+      saved,
+      [],
+      ctx.actor,
+      async () => {
+        throw new Error("Synthetic subset failure");
+      },
+      ["independent"],
+    );
+    expect(subset.groups.map((group) => group.groupKey)).toEqual([
+      "independent",
+    ]);
+    expect(subset.groups[0]).toMatchObject({
+      status: "failed",
+      error: "Synthetic subset failure",
+    });
     expect(
       result.groups.find((group) => group.groupKey === "split-a"),
     ).toMatchObject({
@@ -228,6 +245,90 @@ describe("photo group proposals", () => {
       result.groups.find((group) => group.groupKey === "independent"),
     ).toMatchObject({ status: "failed", error: "Synthetic inference failure" });
   });
+
+  // Regrouping is not concern resolution, even when no incoming review is supplied.
+  it.each(["split", "merge", "same-key"] as const)(
+    "preserves blocking concerns and resolution history through %s saves without review",
+    async (operation) => {
+      const { run, codes } = await seedRun(3);
+      const source = createGroup("source", codes.slice(0, 2));
+      source.review!.unresolvedReason = "Check the printed width";
+      await proposePhotoGroups(ctx.db, {
+        runId: run.shortcode,
+        groups: [source],
+      });
+      await resolvePhotoGroupConcern(
+        ctx.db,
+        {
+          runId: run.shortcode,
+          groupKey: "source",
+          reply: "Width checked",
+        },
+        ctx.actor,
+      );
+      source.review!.unresolvedReason =
+        operation === "merge"
+          ? `Check the printed size ${"s".repeat(470)}`
+          : "Check the printed size";
+      const destination = createGroup("destination", [codes[2]!]);
+      destination.review!.unresolvedReason = "Check the manufacturer";
+      await proposePhotoGroups(ctx.db, {
+        runId: run.shortcode,
+        groups: [source, destination],
+      });
+      const drafts =
+        operation === "split"
+          ? [
+              createGroup("split-a", [codes[0]!]),
+              createGroup("split-b", [codes[1]!]),
+            ]
+          : operation === "merge"
+            ? [createGroup("destination", codes)]
+            : [createGroup("source", codes.slice(0, 2))];
+      for (const draft of drafts) delete draft.review;
+      const saved = await proposePhotoGroups(ctx.db, {
+        runId: run.shortcode,
+        groups: drafts,
+        removeGroupKeys: operation === "same-key" ? [] : ["source"],
+      });
+      for (const draft of drafts) {
+        const group = saved.proposals.find(
+          (item) => item.groupKey === draft.groupKey,
+        )!;
+        expect(group.review?.unresolvedReason?.split("\n")).toEqual(
+          expect.arrayContaining([
+            source.review!.unresolvedReason,
+            ...(operation === "merge" ? ["Check the manufacturer"] : []),
+          ]),
+        );
+        expect(group.blockedReason).toContain("Check the printed size");
+        expect(group.review?.resolvedConcerns).toEqual([
+          expect.objectContaining({
+            reason: "Check the printed width",
+            reply: "Width checked",
+            by: ctx.actor.userId,
+          }),
+        ]);
+      }
+      const applied = await approvePhotoGroupProposals(
+        ctx.db,
+        {
+          runId: run.shortcode,
+          groupKeys: drafts.map((draft) => draft.groupKey),
+        },
+        ctx.actor,
+      );
+      expect(applied.results).toEqual(
+        drafts.map((draft) =>
+          expect.objectContaining({
+            groupKey: draft.groupKey,
+            outcome: "failed",
+            error: expect.stringContaining("Check the printed size"),
+          }),
+        ),
+      );
+    },
+  );
 
   // Editing a destination or draft is not an answer to an agent's concern.
   it("preserves concerns across edits and records explicit resolution before atomic confirmation", async () => {

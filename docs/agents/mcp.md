@@ -79,6 +79,21 @@ with `mail.resolve` (`unrelated` disposes of it). Change identifier slots with `
 patches on `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`).
 Record "searched, not available" with `data_exception.set`.
 
+Photo MCP identifiers follow the same entity boundary: `runId`, `productId`
+and photo `id` values are canonical shortcodes. The one
+`photo_run.reject_candidate` `operationId` is a caller-generated retry key, not
+an entity reference. Its owning `rejectCandidate` declaration in
+`apps/web/src/contracts/photo-import.contract.ts` describes that protocol;
+`rejectPhotoProductCandidate` scopes it to each photo's Assessment review.
+Reuse the key only for the identical rejection, not a different decision.
+
+`imports_read.photo_context` serves the bounded per-photo text assembled by
+`photo-import/operations/photo-import.server.ts:runContext`. Its
+`photoRunContextImage` schema must match that summary: it does not expose the
+richer web/native `photoRunImage.descriptionEvidence`. The Image shortcode
+remains the public reference; retained `AiAnalysis` rows are not addressable
+entities or new MCP identifier exceptions.
+
 ## Failures and timeouts
 
 Published input schemas keep an object root and share repeated nested fields

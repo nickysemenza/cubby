@@ -202,7 +202,13 @@ predicate; Swift reads its generated constant. This is presentation, not
 execution authority: agent-coordinated purposes include photo inventory and
 exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
-review and durable transcript rather than purchase report sections.
+review and durable transcript rather than purchase report sections. Its review
+snapshot shares one current image-evidence read between proposal cross-checks,
+the photo list, and lifecycle readiness. Reuse lasts only for that read; the
+next refresh observes newly settled image work and proposal edits. Image analysis
+summaries and rich description provenance share `loadImageAnalysisEvidence`,
+which selects source-fenced descriptions and member corrections once.
+Summary-only consumers project from the same read.
 
 Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.
@@ -211,7 +217,16 @@ statement; distinct date scopes remain separate. Ledger selection, search,
 related views, contributions and project rollups use the same owner rather
 than correlated allocation calculations per output row. Selection limits the
 purchases to resolve, while every live principal sibling supplies the
-denominator. Prepared ledger selections remain SQL relations through batching;
+denominator. Stored Expense list predicates narrow that relational selection
+before allocation membership; quality and caller-supplied derived conditions
+remain outside it. Reads without stored constraints keep the whole-ledger path.
+Trade and cost-type scopes do not request spending-category resolution unless
+the projection or another scope uses categories; trade inheritance remains
+available independently of category resolution.
+Membership projects Expense IDs from matching shares without aggregating costs
+or resolving Project output unless its scope needs Projects. Trade inheritance
+still follows the canonical Project policy even when Project output is omitted.
+Prepared ledger selections remain SQL relations through batching;
 wrapping their IDs in `ARRAY(SELECT ...)` hides broad cardinality and causes
 repeated allocation scans. Analytical callers use `expenseSelectionForWhere`;
 batch contexts accept relational selections or literal IDs, never SQL arrays.
@@ -224,16 +239,28 @@ Unclassified receipt roles keep one unresolved allocation with the original
 signed amount; they never enter adjustment weighting. Role completeness is
 reported separately from amount completeness.
 
+Broad Work queue Product filters explicitly request statement-local on-hand
+stock evidence through the shared read context. One grouped inventory/location
+relation preserves the canonical absent, mixed-unit and installed-stock rules;
+record-scoped queue and ordinary Product reads retain indexed scalar lookups.
+Unsupported evidence fields fall back to their canonical reads, and unused
+relations are omitted.
+
 Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
 Each batch memoizes dependency promises by declaration identity, preserving
 slot order, duplicates, cursors and status. Distinct slots share compatible
-project trees and scopes, record identities, purchase hydration and Run
+project trees and scopes, record identities, Purchase finance inputs and Run
 headers. Member-gated histories resolve viewer membership before record identity,
 preserving the authorization error when both inputs are invalid. Project analytics supplies the budget summary when both are requested;
 budget alone does not load charts. Reuse ends with the batch: there is no
 cross-request cache or encompassing transaction. Cheap identity/status dependencies stay separate from
 reference, quality and content hydration. Slot loaders request the projection
 they render and reuse broader reads only when another requested slot needs them.
+Purchase finance slots select the batch's union of scalar finance inputs, sharing
+signed Expense spend and one canonical financial aggregate scan (including posted
+refund evidence for reconciliation). Allocation alone skips financial aggregates;
+settlement alone skips vendor reconciliation inputs. Images, quality, category
+summaries, references and coverage stay with explicit full-detail readers.
 Run report headers select purpose/status; non-import Runs skip import detail,
 and standalone timelines select public operation metadata without result bodies.
 Full import slots share their detail and its operation evidence within the batch.
@@ -1283,6 +1310,11 @@ types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
 and Drizzle relations. Child storage does not acquire an entity identity,
 shortcode, client manifest, or automatic indexes. SQL constraint expressions
 use `{columnKey}` placeholders validated against that child's columns.
+A column's `generated` SQL uses the same placeholders and emits a stored
+PostgreSQL generated column; it cannot also declare a default or update callback.
+Retained mail stores text presence this way, preserving the nullable and
+space-trimming rules as content changes. Email quality reads this scalar rather
+than decompressing original bodies during list and Work queue filtering.
 
 Mail, statement-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned
@@ -1304,6 +1336,18 @@ numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both
 projections reuse the kit-pricing rules used by scalar prices and list totals;
 zero remains a known price and an absent derived price remains null.
+Composite reads can supply statement-local presence evidence through the same
+quality-filter context used by the list scaffold and Product filters. The Work
+queue registers one materialized price relation when a compiled predicate
+requests it; standalone filters retain their closed predicates. Numeric
+fingerprints keep the canonical scalar or joined value, so sharing presence
+does not change exception identity.
+
+Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
+the total, line count and unpriced count. The reconciliation module owns their
+common live vendor-line scope and numeric sum. Exception fingerprints retain
+the same scalar evidence and rounding, so the optimized verdict does not
+reopen an accepted mismatch.
 
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
@@ -1385,6 +1429,24 @@ shared research and unresolved for missing private ownership. This is a read
 projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
+
+The shared population query materializes routed candidates within each SQL
+statement, after source/kind/vendor narrowing and before eligibility/search. This keeps
+search selectivity from turning bulk quality joins into repeated nested-loop
+work; it is not a cache across requests. Only typed facts required by the
+requested sorts or vendor filter are projected across the population. Other amount/date/vendor facts use
+the same record-fact declarations after page selection. Full eligible counts
+remain independent of the page; the correct filter and stable sort precede
+LIMIT/OFFSET, and only selected rows receive the window position used for JSON
+order. Quality and display-image hydration remain page-scoped.
+
+Independent entity-predicate, diagnostic-backed and statement-import account
+branches share the existing bounded Problems scheduler with four concurrent
+tasks. Entity branches precede diagnostics in declaration order, followed by
+account work; Project attention remains one request-local promise shared by
+entity predicates and diagnostics. A failed branch rejects the read rather
+than returning an incomplete queue.
+
 Every source excludes Purchases dated after the current household day, and
 Purchases with live Expense lines all marked `future`. Purchase has no stored
 `future` flag; Expense does. Deleted lines do not count, mixed planned/incurred
@@ -1701,6 +1763,13 @@ sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
 the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
+
+The orphan finder restricts graph arms to edges touching its checked kinds
+before reading rows. Polymorphic source arms remain eligible because their
+source kind is stored on each identity. Both endpoints must still be live;
+same-kind parent edges connect only their target, so an empty child location
+remains a cleanup candidate. This projection does not change Connections or
+graph-explorer reads.
 
 Two generic tables carry the relationships and identifiers that used to have a
 table each (ADR 0007):

@@ -152,7 +152,9 @@ gh stack link --base main <bottom-pr-url> <next-pr-url>
 
 Append later layers with `gh stack link <stack-number> <new-pr-url>`. Verify the
 native stack and its member order on GitHub; chained base branches and T3's
-derived chain do not complete registration. Link every layer to the T3 thread.
+derived chain do not complete registration. Link each member PR to T3 using its
+actual pull-request URL. A native stack number identifies the stack resource;
+member PR numbers identify the pull requests.
 Independent changes stay in separate PRs.
 
 Native stacks apply the trunk's branch protection and Actions branch filters to
@@ -234,8 +236,13 @@ environment, workload, cache state, and unavailable measurements. The harness
 separates declaration-only requested shape from observed work; unsupported shape
 metadata and unprovided bounded operator context stay null. Never use an input
 fingerprint as anonymization or copy arbitrary input keys into evidence, including
-private samples. A query timing
+private samples. Captured SQL can contain data-dependent dictionaries and resolved ID sets.
+Recompile or resolve those bindings against the comparison database and pass the
+same current bindings to both variants; scalar parameter types do not prove
+that values are dataset-independent. A query timing
 does not establish page latency, and HTTP success does not establish RPC success.
+Attribute repeated plan work by its relation or alias and owning SQL producer;
+a shared CTE name alone does not establish an identical computation.
 
 Review the shared cause before approving a local optimization: read projections,
 dependency reuse, per-row SQL work, polling and concurrency ownership, browser

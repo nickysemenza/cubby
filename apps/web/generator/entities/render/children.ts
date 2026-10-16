@@ -64,6 +64,16 @@ export const renderChildTables = (
               : column.default.kind === "sql"
                 ? `.default(${sqlTemplate(column.default.sql)})`
                 : `.default(${JSON.stringify(column.default.value)})`;
+        if (column.generated) {
+          const expression = column.generated.replace(
+            TABLE_SQL_PLACEHOLDER,
+            (_, key: string) =>
+              JSON.stringify(
+                table.columns.find((field) => field.key === key)!.name ?? key,
+              ),
+          );
+          value += `.generatedAlwaysAs(${sqlTemplate(expression)})`;
+        }
         if (column.onUpdateNow) value += ".$onUpdate(() => new Date())";
         if (column.reference) {
           const policy = actions(column.reference);

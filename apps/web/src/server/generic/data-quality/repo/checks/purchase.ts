@@ -13,6 +13,7 @@ import {
   vendorExpenseTotalSql,
   vendorExpenseCountSql,
   vendorUnpricedExpenseCountSql,
+  vendorExpenseAggregateSql,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   purchaseItemizationExpectationSql,
@@ -86,14 +87,16 @@ const tolerance = sql.raw(String(cents(RECONCILIATION_TOLERANCE)));
  * delta beyond tolerance, and posted refunds not fully explaining it.
  */
 const paperworkMismatch = (t: Purchase) => {
-  const delta = sql`(${expenseCents(t)} - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
-  const fullyPriced = sql`${vendorUnpricedExpenseCount(t)} = 0`;
+  const delta = sql`(floor((dq_paperwork.total * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
+  const fullyPriced = sql`dq_paperwork."unpricedCount" = 0`;
   const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
     AND floor((${sql.raw(postedRefundTotalSql(aliasOf(t)))} * 100)::numeric + 0.5) = ${delta})`;
   return sql`(${t.statedTotal} IS NOT NULL
-    AND ${vendorExpenseCount(t)} > 0
-    AND abs(${delta}) > ${tolerance}
-    AND NOT ${refundAdjusted})`;
+    AND EXISTS (SELECT 1
+      FROM (${sql.raw(vendorExpenseAggregateSql(aliasOf(t)))}) dq_paperwork
+      WHERE dq_paperwork."expenseCount" > 0
+        AND abs(${delta}) > ${tolerance}
+        AND NOT ${refundAdjusted}))`;
 };
 
 export const purchaseChecks = defineEntityChecks({

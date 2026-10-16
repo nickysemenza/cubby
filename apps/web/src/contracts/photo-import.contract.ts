@@ -333,7 +333,11 @@ export const photoImportContract = defineContract("photoImport", {
     },
     native:
       "Check all candidates for every group with independent failure results",
-    input: z.object({ runId: runShortcode }),
+    input: z.object({
+      runId: runShortcode,
+      /** Partition large Runs across Worker invocations; omitted reads every group. */
+      groupKeys: z.array(z.string().min(1).max(200)).max(6).optional(),
+    }),
     output: photoRunCandidatesResponse,
     cache: {
       tags: [
@@ -361,7 +365,13 @@ export const photoImportContract = defineContract("photoImport", {
       runId: runShortcode,
       groupKey: z.string().min(1).max(200),
       productId: productShortcode,
-      operationId: z.string().min(1).max(200),
+      operationId: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe(
+          "Caller-generated retry key for this candidate rejection, not an entity reference. Reuse it only for an identical decision.",
+        ),
     }),
     output: reviewPhotoGroupsOutput,
     invalidates: ["runOnly"],

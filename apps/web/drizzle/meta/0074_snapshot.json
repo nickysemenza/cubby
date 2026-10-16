@@ -1,5 +1,5 @@
 {
-  "id": "399fcf68-984c-44d8-b51f-eb39422f8958",
+  "id": "9563e09d-8bf5-42df-a564-5540ac31180b",
   "prevId": "b9a7fcf5-6702-488a-99b9-93aed7c231d2",
   "version": "7",
   "dialect": "postgresql",
@@ -13360,6 +13360,16 @@
           "notNull": true,
           "default": "'{\"snippet\":null,\"bodyText\":null,\"bodyHtml\":null}'::jsonb"
         },
+        "hasRetainedText": {
+          "name": "hasRetainedText",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "COALESCE(\n          NULLIF(BTRIM(\"content\"->>'snippet'), ''),\n          NULLIF(BTRIM(\"content\"->>'bodyText'), ''),\n          NULLIF(BTRIM(\"content\"->>'bodyHtml'), '')\n        ) IS NOT NULL",
+            "type": "stored"
+          }
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -20048,6 +20058,12 @@
         },
         "shortcode": {
           "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
           "type": "text",
           "primaryKey": false,
           "notNull": true

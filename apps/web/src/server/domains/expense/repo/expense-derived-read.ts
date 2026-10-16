@@ -24,15 +24,16 @@ import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation
 /** Each read declares its allocation dimensions before execution. Scope is
  * applied to rounded output shares, never to the complete sibling denominator. */
 const derivedReads = {
-  shares: { categories: true },
-  projects: { categories: false },
-  categories: { categories: true },
-  costs: { categories: false },
-  names: { categories: false },
-  categoryNames: { categories: true },
-  presence: { categories: false },
-  categoryEvidence: { categories: true },
-} satisfies Record<string, { categories: boolean }>;
+  shares: { categories: true, projects: true },
+  projects: { categories: false, projects: true },
+  categories: { categories: true, projects: true },
+  costs: { categories: false, projects: true },
+  membership: { categories: false, projects: false },
+  names: { categories: false, projects: true },
+  categoryNames: { categories: true, projects: true },
+  presence: { categories: false, projects: true },
+  categoryEvidence: { categories: true, projects: true },
+} satisfies Record<string, { categories: boolean; projects: boolean }>;
 
 type DerivedRead = keyof typeof derivedReads;
 type DerivedReadOptions = {
@@ -60,15 +61,23 @@ export function expenseDerivedReadSql(
   const categories =
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
-    scope?.categoryPresence !== undefined ||
-    scope?.trades !== undefined ||
-    scope?.costTypes !== undefined;
+    scope?.categoryPresence !== undefined;
+  const trades = categories || scope?.trades !== undefined;
+  const projects =
+    derivedReads[read].projects ||
+    scope?.projectIds !== undefined ||
+    scope?.presence !== undefined ||
+    scope?.membershipProjectIds !== undefined;
   const condition = scope
     ? expenseAllocationScopeConditionSql("allocation", scope)
     : undefined;
   const source =
     preparedSource ??
-    expenseJointAllocationSql(expenseIds, draft, { categories });
+    expenseJointAllocationSql(expenseIds, draft, {
+      categories,
+      trades,
+      projects,
+    });
   const membership = scope?.membershipProjectIds;
   const allocations =
     membership === undefined
@@ -80,6 +89,8 @@ export function expenseDerivedReadSql(
         WHERE "projectId" = ANY(${uuidArrayParam(membership)})
       )`;
   switch (read) {
+    case "membership":
+      return sql`SELECT "expenseId" FROM (${allocations}) member_share`;
     case "shares":
       return allocations;
     case "projects":
@@ -119,12 +130,14 @@ export function expenseDerivedReadSql(
   }
 }
 
-/** Plain-root list predicates use uncorrelated set membership. */
+/** Plain-root list predicates need any matching share, including zero cents.
+ * IN handles repeated shares without grouping their costs or multiplying rows. */
 export const expenseDerivedMembershipSql = (
   expenseId: SQL,
   scope: ExpenseAllocationProjectScope,
+  expenseIds?: ExpenseIdSelection,
 ): SQL =>
-  sql`${expenseId} IN (SELECT "expenseId" FROM (${expenseDerivedReadSql("costs", { scope })}) derived_member)`;
+  sql`${expenseId} IN (${expenseDerivedReadSql("membership", { scope, expenseIds })})`;
 
 type DerivedValues = Pick<typeof expense.$inferSelect, "cost"> & {
   projectNames: ExpenseJointAllocationRow["projectName"];

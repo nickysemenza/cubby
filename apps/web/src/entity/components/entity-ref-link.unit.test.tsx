@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
@@ -6,6 +13,7 @@ import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { BasicInfo } from "~/ui/common/basic-info";
 
@@ -171,21 +179,33 @@ describe("EntityRefLink chip variant", () => {
     ).toHaveAttribute("src", "https://images.example/seeded.jpg");
   });
 
-  it("labels an unnamed record by its id", () => {
-    renderLink(
-      <EntityRefLink
-        variant="chip"
-        entity="project"
-        id="PRJ-TEST"
-        name={null}
-      />,
-    );
-
-    expect(screen.getByRole("link", { name: /PRJ-TEST/ })).toHaveAttribute(
-      "href",
-      "/projects/PRJ-TEST",
-    );
-  });
+  // A missing projection name must resolve without losing the record route,
+  // including kinds whose legacy audit references used UUIDs.
+  it.each([
+    ["project", "PRJ-4K7M", "/projects/PRJ-4K7M"],
+    ["inventory", "INV-4K7M", "/inventory/INV-4K7M"],
+    ["cookbook", "CKB-4K7M", "/cookbooks/CKB-4K7M"],
+  ] as const)(
+    "resolves an unnamed %s chip and preserves its destination",
+    async (entity, id, href) => {
+      const queryKey = entityPreviewQueryOptions(entity, id).queryKey;
+      harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
+      renderLink(
+        <EntityRefLink variant="chip" entity={entity} id={id} name={null} />,
+      );
+      expect(screen.getByRole("status")).toHaveTextContent("Loading");
+      expect(screen.queryByRole("link")).toBeNull();
+      await act(async () => {
+        harness.queryClient.setQueryData(queryKey, {
+          id,
+          [entitySummary[entity].titleField]: "Synthetic resolved record",
+        });
+      });
+      expect(
+        await screen.findByRole("link", { name: /Synthetic resolved record/ }),
+      ).toHaveAttribute("href", href);
+    },
+  );
 });
 
 describe("EntityRefLink list variant", () => {
@@ -298,7 +318,7 @@ describe("EntityRefLink by-id variant", () => {
       <EntityRefLink
         variant="byId"
         entityKind="cookbook"
-        entityId="CKB-TEST"
+        entityId="00000000-0000-0000-0000-000000000000"
       />,
     );
 

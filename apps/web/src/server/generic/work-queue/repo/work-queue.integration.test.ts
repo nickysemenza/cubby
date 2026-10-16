@@ -3,6 +3,7 @@ import {
   workQueueHouseholdInput,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -10,7 +11,11 @@ import type { z } from "zod";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { runFinding, assessmentState as suggestion } from "~/server/db/schema";
+import {
+  expense,
+  runFinding,
+  assessmentState as suggestion,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -30,6 +35,12 @@ import {
 // strip shows another record's work, a field-wide suggestion group, or work a
 // member-only read would fence; future purchases leak through reconciliation
 // or findings, inflate counts, or hide incurred work in a mixed purchase.
+// Overlapping diagnostic reads must retain complete diagnostic rows, source
+// filters and member routing; one failed diagnostic must fail the whole read.
+// Shared price evidence must preserve explicit/zero prices, inherited kit
+// prices and exception fingerprints; unrelated check reads must not require it.
+// Entity predicates and diagnostics may overlap, but must preserve scoped
+// results, declaration order and the one shared Project-attention snapshot.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 
@@ -325,6 +336,55 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         date: "2026-09-20",
         vendor: { id: vendor.shortcode, name: vendor.name },
       });
+  });
+
+  // Failure modes: page-first hydration changes full-population totals or
+  // signed/null facts; equal sort values cross page boundaries nondeterministically;
+  // a materialized relation accidentally survives the next request's writes.
+  it("keeps tied page boundaries and live facts fresh across requests", async () => {
+    const prefix = "Synthetic fresh queue pages";
+    const { lines, purchase } = await merchandiseOrder(prefix);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ name: prefix })
+      .where(eq(expense.purchaseId, purchase.id));
+    const filters = {
+      query: prefix,
+      check: "expense_product_resolution" as const,
+      sort: [{ orderBy: "name" as const, direction: "asc" as const }],
+    };
+    const whole = await read(filters);
+    expect(whole.meta.totalCount).toBe(3);
+    expect(whole.items.map((row) => row.key)).toEqual(
+      whole.items.map((row) => row.key).sort(),
+    );
+    const pages = [];
+    for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
+      const page = await read({ ...filters, pageSize: 1, pageIndex });
+      expect(page.meta.totalCount).toBe(3);
+      pages.push(...page.items);
+    }
+    expect(pages).toEqual(whole.items);
+    expect(pages.map((row) => row.amount).sort()).toEqual([-5, 20, null]);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ cost: -12 })
+      .where(eq(expense.id, lines[1]!.id));
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ deletedAt: new Date() })
+      .where(eq(expense.id, lines[2]!.id));
+    const refreshed = await read({
+      ...filters,
+      pageSize: 1,
+      sort: [{ orderBy: "amount", direction: "asc" }],
+    });
+    expect(refreshed.meta.totalCount).toBe(2);
+    expect(refreshed.items).toHaveLength(1);
+    expect(refreshed.items[0]).toMatchObject({
+      id: lines[1]!.shortcode,
+      amount: -12,
+    });
   });
 
   // A Project record read scopes the attention rules to that project rather

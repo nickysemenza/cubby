@@ -524,7 +524,9 @@ for (const statementFirst of [true, false]) {
     const purchaseLink = vendorEmails
       .getByRole("row")
       .filter({ has: page.getByText("Linked", { exact: true }) })
-      .getByRole("link", { name: purchaseCode, exact: true });
+      .getByRole("link", {
+        name: new RegExp(`^${escapeRegExp(names.orderId)}(?:$|\\s)`),
+      });
     await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",

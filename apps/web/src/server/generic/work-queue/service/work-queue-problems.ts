@@ -46,6 +46,7 @@ import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
 import { findIncompleteStatementImports } from "~/server/generic/problems/repo/detectors-financial";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
@@ -64,17 +65,20 @@ import {
   workPurchaseOwners,
   workRunOwners,
 } from "~/server/generic/work-queue/repo/work-queue-routing";
+import { traceAllBounded } from "~/server/observability/tracing";
 
 type WhereBuilder = (
   db: Database,
   filters: FilterAssembly,
   attentionItems?: readonly ProjectAttentionItem[],
+  readContext?: QualityReadContext,
 ) => SQL | undefined | Promise<SQL | undefined>;
 const sharedProblemBuilders = {
-  product: (db, filters) =>
+  product: (db, filters, _attentionItems, readContext) =>
     buildProductWhere(
       db,
       productFiltersSchema.parse(compileProblemFilters("product", filters)),
+      readContext,
     ),
   ingredient: (db, filters) =>
     buildIngredientListWhere(
@@ -269,8 +273,11 @@ const sharedProblemScope = (entity: ShortcodeEntity, id: SQL) =>
 export async function additionalWorkProblemSelections(
   db: Database,
   scope: WorkQueueScope,
+  readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ): Promise<SQL[]> {
   const selections: SQL[] = [];
+  const predicates: Record<string, () => Promise<SQL[]>> = {};
+  const diagnostics: Record<string, () => Promise<SQL[]>> = {};
   const includeProblems = includesWorkSource(scope, "problem", "repair");
   // Diagnostics and statement imports name no single record and carry no gaps.
   const includeUnrecorded = scopeAdmitsUnrecorded(scope);
@@ -341,8 +348,8 @@ export async function additionalWorkProblemSelections(
           ? sql`${table} INNER JOIN "Product" ON "Product".id = "InventoryEntry"."productId" INNER JOIN "Location" ON "Location".id = "InventoryEntry"."locationId"`
           : sql`${table}`;
       const routing = sharedProblemScope(source.entity, sql`${table.id}`);
-      selections.push(
-        ...workQueueCandidate(scope, {
+      predicates[definition.key] = async () =>
+        workQueueCandidate(scope, {
           entity: source.entity,
           table: from,
           id: sql`${table.shortcode}`,
@@ -352,73 +359,81 @@ export async function additionalWorkProblemSelections(
             db,
             source.filters,
             needsProjectAttention(source) ? await attentionItems() : undefined,
+            readContexts?.[source.entity],
           ),
           details,
           key: definition.key,
           shared: routing.shared,
-        }),
-      );
+        });
       continue;
     }
     if (!includeUnrecorded || excludedDiagnostics.has(source.diagnostic))
       continue;
     if (!privateDiagnosticKeys.has(definition.key)) {
-      const result = await runDiagnostic(
-        db,
-        source.diagnostic,
-        source.diagnostic === "project-date-window-drift"
-          ? { attentionItems: await attentionItems() }
-          : {},
-        { kind: "count" },
-      );
-      if (result.count)
-        selections.push(
-          workDiagnosticCandidate(
-            definition.key,
-            `problem:${definition.key}`,
-            definition.title,
-            sql`ARRAY[]::uuid[]`,
-            {
-              ...details,
-              reason: `${result.count} work items. ${definition.description}`,
-            },
-            true,
-          ),
+      diagnostics[definition.key] = async () => {
+        const result = await runDiagnostic(
+          db,
+          source.diagnostic,
+          source.diagnostic === "project-date-window-drift"
+            ? { attentionItems: await attentionItems() }
+            : {},
+          { kind: "count" },
         );
+        return result.count
+          ? [
+              workDiagnosticCandidate(
+                definition.key,
+                `problem:${definition.key}`,
+                definition.title,
+                sql`ARRAY[]::uuid[]`,
+                {
+                  ...details,
+                  reason: `${result.count} work items. ${definition.description}`,
+                },
+                true,
+              ),
+            ]
+          : [];
+      };
       continue;
     }
     // These adapters compute their complete grouped relation once; no sample/count scan is repeated.
-    const result = await runDiagnostic(
-      db,
-      source.diagnostic,
-      {},
-      { kind: "sample", limit: Number.POSITIVE_INFINITY },
-    );
-    for (const item of result.items) {
-      const entry = privateProblemEntry(definition.key, item);
-      const privateOwners = entry.refs.flatMap((ref) => {
-        const relation = privateOwnerRelation(ref);
-        return relation ? [relation] : [];
-      });
-      const owners = privateOwners.length
-        ? sql.join(privateOwners, sql` || `)
-        : sql`ARRAY[]::uuid[]`;
-      selections.push(
-        workDiagnosticCandidate(
-          definition.key,
-          `problem:${definition.key}:${await sha256Hex(entry.fingerprintPayload)}`,
-          `${definition.title} · ${entry.refs.map((ref) => ref.shortcode).join(", ")}`,
-          owners,
-          { ...details, reason: entry.reason },
-          privateOwners.length === 0,
-        ),
+    diagnostics[definition.key] = async () => {
+      const rows: SQL[] = [];
+      const result = await runDiagnostic(
+        db,
+        source.diagnostic,
+        {},
+        { kind: "sample", limit: Number.POSITIVE_INFINITY },
       );
-    }
+      for (const item of result.items) {
+        const entry = privateProblemEntry(definition.key, item);
+        const privateOwners = entry.refs.flatMap((ref) => {
+          const relation = privateOwnerRelation(ref);
+          return relation ? [relation] : [];
+        });
+        const owners = privateOwners.length
+          ? sql.join(privateOwners, sql` || `)
+          : sql`ARRAY[]::uuid[]`;
+        rows.push(
+          workDiagnosticCandidate(
+            definition.key,
+            `problem:${definition.key}:${await sha256Hex(entry.fingerprintPayload)}`,
+            `${definition.title} · ${entry.refs.map((ref) => ref.shortcode).join(", ")}`,
+            owners,
+            { ...details, reason: entry.reason },
+            privateOwners.length === 0,
+          ),
+        );
+      }
+      return rows;
+    };
   }
-  for (const incomplete of includeAccounts
-    ? await findIncompleteStatementImports(db)
-    : []) {
-    const owners = sql`coalesce((
+  if (includeAccounts)
+    diagnostics.incompleteStatementImports = async () => {
+      const rows: SQL[] = [];
+      for (const incomplete of await findIncompleteStatementImports(db)) {
+        const owners = sql`coalesce((
       SELECT array_agg(DISTINCT account."ledgerPartyId")
       FROM "StatementImport" batch
       JOIN ${statementImportMembers} member ON member."importId" = batch.id
@@ -426,21 +441,30 @@ export async function additionalWorkProblemSelections(
       LEFT JOIN "FinancialAccount" account ON account.id = row."accountId" AND account."deletedAt" IS NULL
       WHERE batch.source = ${incomplete.source} AND batch.fingerprint = ${incomplete.fingerprint} AND batch."deletedAt" IS NULL
     ), ARRAY[NULL::uuid])`;
-    selections.push(
-      workDiagnosticCandidate(
-        "incompleteStatementImports",
-        `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
-        incomplete.label,
-        owners,
-        {
-          source: "account",
-          kind: "review",
-          reason: `Statement import retained ${incomplete.rowCountStored} of ${incomplete.rowCountDeclared} declared rows.`,
-          nextAction:
-            "Open Problems to inspect the import and its current account evidence.",
-        },
-      ),
-    );
-  }
+        rows.push(
+          workDiagnosticCandidate(
+            "incompleteStatementImports",
+            `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
+            incomplete.label,
+            owners,
+            {
+              source: "account",
+              kind: "review",
+              reason: `Statement import retained ${incomplete.rowCountStored} of ${incomplete.rowCountDeclared} declared rows.`,
+              nextAction:
+                "Open Problems to inspect the import and its current account evidence.",
+            },
+          ),
+        );
+      }
+      return rows;
+    };
+  // One bound covers all independent branch reads. Keep entity branches
+  // before diagnostics and account work; reuse the shared attention promise.
+  const problemRows = await traceAllBounded(
+    { ...predicates, ...diagnostics },
+    4,
+  );
+  selections.push(...Object.values(problemRows).flat());
   return selections;
 }

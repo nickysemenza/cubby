@@ -27,6 +27,7 @@ import {
   loadProductQuantityLedgers,
   loadProductQuantitySummaries,
   onHandUnitsSql,
+  onHandUnitsReadSql,
   quantityVarianceSql,
 } from "./quantity-ledger";
 
@@ -505,6 +506,29 @@ describe("loadProductPickerQuantities", () => {
       ctx.actor,
     );
 
+    // Batch filters must preserve NULL for absent/mixed stock, count installed
+    // placements, and ignore deleted entries and locations just like detail reads.
+    await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Counted installation",
+        productId: counted.id,
+      }),
+      ctx.actor,
+    );
+    const installed = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Installed brace" }),
+      ctx.actor,
+    );
+    await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Installed location",
+        productId: installed.id,
+      }),
+      ctx.actor,
+    );
     const result = await loadProductPickerQuantities(ctx.db, [
       absent.entityId,
       counted.entityId,
@@ -513,8 +537,38 @@ describe("loadProductPickerQuantities", () => {
     expect(result.get(absent.entityId)?.onHand).toEqual({ state: "none" });
     expect(result.get(counted.entityId)?.onHand).toEqual({
       state: "counted",
-      units: 2,
+      units: 3,
     });
     expect(result.get(mixed.entityId)?.onHand).toEqual({ state: "mixed" });
+    const compare = async () => {
+      const rows = await getDb(ctx.db).execute(sql`
+        WITH stock AS (${onHandUnitsReadSql()})
+        SELECT p.id, ${sql.raw(onHandUnitsSql("p"))} AS scalar,
+          stock."onHandUnits" AS batch
+        FROM "Product" p LEFT JOIN stock ON stock."productId" = p.id
+        WHERE p.id IN (${absent.entityId}, ${counted.entityId}, ${mixed.entityId}, ${installed.entityId})
+        ORDER BY p.id
+      `);
+      for (const row of rows.rows) expect(row.batch).toEqual(row.scalar);
+      return rows.rows;
+    };
+    const initial = await compare();
+    expect(initial).toHaveLength(4);
+    expect(initial.find((row) => row.id === installed.entityId)?.batch).toBe(1);
+    expect(initial.find((row) => row.id === absent.entityId)?.batch).toBeNull();
+    expect(initial.find((row) => row.id === counted.entityId)?.batch).toBe(3);
+    expect(initial.find((row) => row.id === mixed.entityId)?.batch).toBeNull();
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Location" SET "deletedAt" = now() WHERE id = ${secondShelf.entityId}`,
+    );
+    expect(
+      (await compare()).find((row) => row.id === mixed.entityId)?.batch,
+    ).toBe(1);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "InventoryEntry" SET "deletedAt" = now() WHERE "productId" = ${mixed.entityId}`,
+    );
+    expect(
+      (await compare()).find((row) => row.id === mixed.entityId)?.batch,
+    ).toBeNull();
   });
 });

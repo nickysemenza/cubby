@@ -27,7 +27,7 @@ const categoryEvidence = <K extends "missing" | "evidence">(
   t: Expense,
   context?: QualityReadContext,
 ): SQL =>
-  context
+  context?.derivedAlias
     ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(field)}`
     : expenseDerivedValueSql(field, sql`${t.id}`);
 

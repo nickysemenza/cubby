@@ -64,13 +64,22 @@ a handful of view modes or formats. `multiple` keeps several values as chips;
 (`PickerOption`); records pass `items` with an `entity`, built by
 `combobox-builders.tsx` from the manifest — `displayImages[0]` is the picture
 and the phone-row projection (`display.mobile` `subtitle` and `trailing` slots)
-supplies the inline secondary and trailing chips, so declare those slots
+supplies the secondary/status and trailing columns, so declare those slots
 rather than hand-building row content. Each mode and `PickerField` store keeps
 its own value, empty value, focus, and search contract. A picker never displays
 or announces a shortcode: a stored code resolves to its record through
 `useSelectedPickerItems`, showing a loading state meanwhile. `DropdownMenu`
 and the `cmdk` command menu are for navigation and actions, never a value.
+Reference displays whose projection omits the name use the shared by-id
+resolver instead of rendering the stored identifier. Pending reads show loading;
+missing records and failed reads remain explicit, with raw error diagnostics.
+Inventory and cookbook shortcodes retain their individual detail destinations;
+legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
+The picker's frame owns its focus ring. Its nested search input suppresses
+the standalone input shadow and border so focus never stacks two outlines.
+On phones, inline suggestion marks reserve their 44px target in layout.
+Invisible hit-area expansion must not cover adjacent edit or relation controls.
 
 Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
 with conditional children for loading and errors. A plain empty-state element

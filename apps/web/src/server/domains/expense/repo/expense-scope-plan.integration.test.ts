@@ -9,6 +9,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import {
   expenseDerivedReadSql,
+  expenseDerivedMembershipSql,
   prepareExpenseDerivedRead,
   executeExpenseDerivedBatches,
   executeExpenseDerivedBatch,
@@ -18,6 +19,65 @@ import {
 
 const ctx = withTestDb();
 
+// Membership means a matching share exists, even when cent rounding gives
+// that Project zero cents. Amount filters must not replace this contract.
+it("keeps zero-cent Project shares in Expense membership", async () => {
+  const small = await insertWithShortcode(ctx.db, "project", {
+    name: "Synthetic small-share project",
+  });
+  const large = await insertWithShortcode(ctx.db, "project", {
+    name: "Synthetic large-share project",
+  });
+  const vendor = await insertWithShortcode(ctx.db, "vendor", {
+    name: "Synthetic cent-share vendor",
+  });
+  const order = await insertWithShortcode(ctx.db, "purchase", {
+    vendorId: vendor.id,
+    date: "2026-09-20",
+  });
+  for (const [projectId, cost] of [
+    [small.id, 1],
+    [large.id, 2],
+  ] as const) {
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic cent-share principal",
+      purchaseId: order.id,
+      projectId,
+      date: "2026-09-20",
+      cost,
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+    });
+  }
+  const tax = await insertWithShortcode(ctx.db, "expense", {
+    name: "Synthetic cent-share tax",
+    purchaseId: order.id,
+    date: "2026-09-20",
+    cost: 0.01,
+    lineKind: "tax",
+    costType: "services",
+    trade: null,
+    future: false,
+  });
+  const scope = { projectIds: [small.id] };
+  const cents = await unwrapDb(ctx.db).execute<{ cost: number }>(
+    expenseDerivedReadSql("costs", { scope, expenseIds: [tax.id] }),
+  );
+  expect(cents.rows).toMatchObject([{ cost: 0 }]);
+  for (const membershipScope of [scope, { trades: ["other"] as const }]) {
+    expect(
+      await unwrapDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(
+          sql`${expense.id} = ${tax.id} AND ${expenseDerivedMembershipSql(sql`${expense.id}`, membershipScope, [tax.id])}`,
+        ),
+    ).toEqual([{ id: tax.id }]);
+  }
+});
+
 // Broad relational scopes must not turn into poorly estimated opaque arrays.
 it("keeps broad prepared scopes set-based and sparse scopes on full sibling weights", async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
@@ -25,6 +85,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
   });
   const project = await insertWithShortcode(ctx.db, "project", {
     name: "Synthetic scope project",
+    defaultTrade: "other",
   });
   let firstPurchase;
   let firstTax: ExpenseId | undefined;
@@ -43,7 +104,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
         cost: lineKind === "tax" ? 0.01 : 1,
         lineKind,
         costType: "materials",
-        trade: "other",
+        trade: null,
         future: false,
       });
       if (lineKind === "tax") firstTax ??= line.id;
@@ -91,6 +152,42 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     "0",
     "1",
   ]);
+  // Trade and cost-type projections must retain rounded adjustment shares
+  // and Project-inherited trade independently of the projected dimensions.
+  for (const scope of [
+    { trades: ["other"] as const },
+    { costTypes: ["materials"] as const },
+    { trades: ["other"] as const, categoryPresence: "none" as const },
+    { costTypes: ["materials"] as const, projectIds: [project.id] },
+    { trades: ["other"] as const, membershipProjectIds: [project.id] },
+    { presence: "has" as const },
+  ]) {
+    const costs = await unwrapDb(ctx.db).execute<{
+      expenseId: string;
+      cost: number;
+    }>(
+      expenseDerivedReadSql("costs", { scope, expenseIds: sparse.expenseIds }),
+    );
+    expect(costs.rows).toMatchObject([{ expenseId: firstTax!, cost: 0.01 }]);
+    // Membership consumes IDs, but its trade and Project constraints still
+    // follow complete, rounded shares and must return each Expense once.
+    expect(
+      await unwrapDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(
+          sql`${expense.id} = ${firstTax!} AND ${expenseDerivedMembershipSql(sql`${expense.id}`, scope, sparse.expenseIds)}`,
+        ),
+    ).toEqual([{ id: firstTax! }]);
+  }
+  expect(
+    await unwrapDb(ctx.db)
+      .select({ id: expense.id })
+      .from(expense)
+      .where(
+        sql`${expense.id} = ${firstTax!} AND ${expenseDerivedMembershipSql(sql`${expense.id}`, { presence: "none" }, sparse.expenseIds)}`,
+      ),
+  ).toEqual([]);
   const scope = { projectIds: [project.id] };
   const contexts = {
     broad: { ...prepared, scope },

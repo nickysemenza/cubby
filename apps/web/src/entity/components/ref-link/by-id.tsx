@@ -1,6 +1,7 @@
-import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   imageUrlSummary,
   type ImageUrlSummary,
@@ -9,29 +10,29 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { z } from "zod";
 
+import { entityLabel, isBrowserRoutedEntity } from "~/entity/entities";
 import {
-  isGeneratedBrowserCrudEntity,
-  type StandardEntity,
-} from "~/entity/entity-contracts";
-import { entityPreviewQueryOptions } from "~/entity/entity-query";
+  entityPreviewQueryOptions,
+  isDetailEntity,
+} from "~/entity/entity-query";
+import type { DetailEntity } from "~/entity/generated/entity-details.gen";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";
 
 const isNamedEntity = (
-  entity: AuditEntityKind,
-): entity is StandardEntity & AuditEntityKind =>
-  entity !== "inventory" &&
-  entity !== "cookbook" &&
-  isGeneratedBrowserCrudEntity(entity);
+  entity: Entity,
+): entity is DetailEntity & BrowserRoutedEntity =>
+  isBrowserRoutedEntity(entity) && isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
   displayImages: z.array(imageUrlSummary).optional().catch(undefined),
+  emoji: z.string().nullish(),
 });
 
-// Entity types this link resolves to a name via the detail transport. Inventory &
-// cookbook are intentionally excluded — they render as plain links below.
+// These detail records retain their richer inline relationship presentation.
 const FETCHABLE = [
   "product",
   "location",
@@ -40,14 +41,12 @@ const FETCHABLE = [
 ] as const satisfies readonly Entity[];
 type FetchableEntity = (typeof FETCHABLE)[number];
 
-const isFetchableEntity = (
-  entity: AuditEntityKind,
-): entity is FetchableEntity =>
+const isFetchableEntity = (entity: Entity): entity is FetchableEntity =>
   FETCHABLE.some((candidate) => candidate === entity);
 
 export type ByIdRefLinkProps = {
   variant: "byId";
-  entityKind: AuditEntityKind;
+  entityKind: Entity;
   entityId: string;
   name?: string | null;
   /** Compact mode: truncates long names with max-width */
@@ -67,33 +66,30 @@ export function ByIdRefLink({
   compact,
   wrap,
 }: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
-  // Resolve the name via the shared entity-detail mapping for every named
-  // entity; everything else (inventory, cookbook, or an out-of-union runtime
-  // entityKind from a legacy audit row) gets a skipped query so useQuery never
-  // receives a non-object arg — v5 throws "only the Object form is allowed".
+  const hydrated = useHydrated();
+  // Legacy audit references carried UUIDs for these kinds; only public record
+  // shortcodes may enter the detail transport or a record URL.
+  const legacyReference =
+    (entityKind === "inventory" || entityKind === "cookbook") &&
+    !shortcodeSchema(entityKind).safeParse(entityId).success;
+  // Unsupported runtime kinds and legacy UUID references skip the query.
   const queryOptions = useMemo(
     () =>
-      isNamedEntity(entityKind) && !name
+      isNamedEntity(entityKind) && !legacyReference && !name
         ? entityPreviewQueryOptions(entityKind, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityKind, entityId, name],
+    [entityKind, entityId, name, legacyReference],
   );
 
   // SAFETY: the options union is narrowed by the named entity guard, but
   // React Query's generic overload cannot express that correlation.
   const query = useQuery(queryOptions as never);
 
-  // Inventory entries have no getByID that returns product info, so there is
-  // no name to resolve here — and this component is handed a uuid, not the
-  // public shortcode a URL needs. Render unlinked rather than build a uuid URL;
-  // callers that can supply a shortcode should use the inline variant.
-  if (entityKind === "inventory") {
+  if (entityKind === "inventory" && legacyReference) {
     return <span className="text-sm font-medium">Inventory Entry</span>;
   }
 
-  // Cookbooks are browsed by name, not id, and have no getByID — link to the
-  // cookbook index rather than resolving the id to a name here.
-  if (entityKind === "cookbook") {
+  if (entityKind === "cookbook" && legacyReference) {
     return (
       <a href="/cookbooks" className="text-sm font-medium hover:underline">
         Cookbook
@@ -103,9 +99,27 @@ export function ByIdRefLink({
 
   if (name && isNamedEntity(entityKind)) {
     return (
-      <ChipRefLink entity={entityKind} id={entityId} name={name} wrap={wrap} />
+      <ChipRefLink
+        entity={entityKind}
+        id={entityId}
+        name={name}
+        wrap={wrap}
+        compact={compact}
+      />
     );
   }
+
+  // The SSR query stream may settle before hydration. Both initial renders
+  // must retain the loading label rather than disagree on the linked name.
+  if (isNamedEntity(entityKind) && (!hydrated || query.isPending)) {
+    return (
+      <output className="inline-flex items-center gap-1 text-muted-foreground">
+        <Spinner aria-hidden className="size-3" /> Loading…
+      </output>
+    );
+  }
+  if (isNamedEntity(entityKind) && query.isError)
+    return <span className="text-destructive">{query.error.message}</span>;
 
   if (!isFetchableEntity(entityKind) && isNamedEntity(entityKind)) {
     // Every other generated entity names itself through its manifest
@@ -116,14 +130,16 @@ export function ByIdRefLink({
         entity={entityKind}
         id={entityId}
         wrap={wrap}
+        compact={compact}
+        emoji={record.success ? record.data.emoji : undefined}
         name={
           record.success
             ? z
                 .string()
                 .catch("")
                 .parse(record.data[entitySummary[entityKind].titleField]) ||
-              null
-            : null
+              `Untitled ${entityLabel(entityKind).toLowerCase()}`
+            : `Missing ${entityLabel(entityKind).toLowerCase()}`
         }
         // Absent stays `undefined` so the chip falls back to the surrounding
         // display-image provider's cover.
@@ -132,10 +148,6 @@ export function ByIdRefLink({
         }
       />
     );
-  }
-
-  if (isFetchableEntity(entityKind) && query.isLoading) {
-    return <Spinner className="text-muted-foreground" />;
   }
 
   if (isFetchableEntity(entityKind) && query.data) {

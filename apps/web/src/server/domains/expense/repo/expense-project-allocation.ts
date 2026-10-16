@@ -86,7 +86,11 @@ type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
 export const expenseJointAllocationSql = (
   expenseIds?: ExpenseIdSelection,
   draft?: ExpenseSpendingCategoryResolutionDraft,
-  { categories = true }: { categories?: boolean } = {},
+  {
+    categories = true,
+    trades = categories,
+    projects = true,
+  }: { categories?: boolean; trades?: boolean; projects?: boolean } = {},
 ): SQL => sql`
   WITH ${
     expenseIds
@@ -120,15 +124,15 @@ export const expenseJointAllocationSql = (
       : sql``
   } principal_fact AS (
     SELECT e."id" AS "expenseId", e."purchaseId",
-      ${effectiveExpenseProjectSql("e")} AS "projectId",
+      ${projects ? effectiveExpenseProjectSql("e") : sql`NULL::uuid`} AS "projectId",
       ${
         // Resolve policy with set-based joins across the selected principals.
-        // Project-only reads omit category resolution entirely.
+        // Reads without a category projection or scope omit its resolution.
         categories
           ? sql`principal_categories."spendingCategoryId"`
           : sql`NULL::uuid`
       } AS "spendingCategoryId",
-      ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
+      ${trades ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
       e."costType"::text AS "costType",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase,
@@ -161,11 +165,15 @@ export const expenseJointAllocationSql = (
         AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)
   ), fallback_weight AS (
     SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
-      default_project."id" AS "projectId", NULL::uuid AS "spendingCategoryId",
+      ${projects ? sql`default_project."id"` : sql`NULL::uuid`} AS "projectId", NULL::uuid AS "spendingCategoryId",
       NULL::text AS trade, NULL::text AS "costType",
       'default'::text AS basis, 1::bigint AS weight
-    FROM "Purchase" p LEFT JOIN "Project" default_project
-      ON default_project."id" = p."defaultProjectId" AND default_project."deletedAt" IS NULL
+    FROM "Purchase" p ${
+      projects
+        ? sql`LEFT JOIN "Project" default_project
+      ON default_project."id" = p."defaultProjectId" AND default_project."deletedAt" IS NULL`
+        : sql``
+    }
     WHERE p."deletedAt" IS NULL
       ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
       AND NOT EXISTS (SELECT 1 FROM principal_weight w WHERE w."purchaseId" = p."id")
@@ -173,7 +181,7 @@ export const expenseJointAllocationSql = (
     SELECT * FROM principal_weight UNION ALL SELECT * FROM fallback_weight
   ), adjustment_seed AS (
     SELECT e."id" AS "expenseId", e."purchaseId", w."principalExpenseId",
-      CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END AS "projectId",
+      ${projects ? sql`CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END` : sql`NULL::uuid`} AS "projectId",
       CASE
         WHEN e."cost" < 0 AND e."lineKind" <> 'discount' AND coalesce(d.has_positive, false) THEN NULL
         ELSE w."spendingCategoryId"
@@ -194,8 +202,12 @@ export const expenseJointAllocationSql = (
       ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
     LEFT JOIN weights w ON w."purchaseId" = p."id"
     LEFT JOIN purchase_direction d ON d."purchaseId" = p."id"
-    LEFT JOIN "Project" standalone_project
-      ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL
+    ${
+      projects
+        ? sql`LEFT JOIN "Project" standalone_project
+      ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL`
+        : sql``
+    }
     WHERE e."deletedAt" IS NULL AND e."lineKind" NOT IN ('principal', ${expenseLineKindSchema.enum.unclassified})
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
@@ -237,13 +249,13 @@ export const expenseJointAllocationSql = (
     FROM adjustment_ranked r
   )
   SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",
-    p."shortcode" AS "projectShortcode", p."name" AS "projectName",
+    ${projects ? sql`p."shortcode"` : sql`NULL::text`} AS "projectShortcode", ${projects ? sql`p."name"` : sql`NULL::text`} AS "projectName",
     a."spendingCategoryId", c."shortcode" AS "spendingCategoryShortcode", c."name" AS "spendingCategoryName",
     a.source_cents::text AS "sourceCents", a.attributed_cents::text AS "attributedCents",
     a.basis, a.incomplete, a.category_incomplete AS "categoryIncomplete",
     a.trade, a."costType"
   FROM allocated a
-  LEFT JOIN "Project" p ON p."id" = a."projectId" AND p."deletedAt" IS NULL
+  ${projects ? sql`LEFT JOIN "Project" p ON p."id" = a."projectId" AND p."deletedAt" IS NULL` : sql``}
   LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND c."deletedAt" IS NULL
   ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
 `;

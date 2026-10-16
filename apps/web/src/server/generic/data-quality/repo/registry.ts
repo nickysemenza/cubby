@@ -19,10 +19,22 @@ export const liveQualityRow = (t: ScoredTable): SQL =>
  * `"dq_r"` with the same binding the Product list uses. Method signatures
  * (not arrow properties) keep the registry assignable across table types.
  */
-/** The declared derived relation joined by a bounded hydration read. */
-export interface QualityReadContext {
-  readonly derivedAlias: string;
-}
+/** Joined hydration values or statement-local evidence explicitly requested by a caller. */
+export type QualityReadContext =
+  | {
+      readonly derivedAlias: string;
+      readonly hasDerivedValue?: never;
+      readonly derivedValue?: never;
+    }
+  | {
+      readonly derivedAlias?: never;
+      readonly hasDerivedValue?: (field: string, entityId: AnyColumn) => SQL;
+      /** Unsupported fields return undefined to retain their canonical scalar read. */
+      readonly derivedValue?: (
+        field: string,
+        entityId: AnyColumn,
+      ) => SQL | undefined;
+    };
 
 export interface CheckBinding<T extends ScoredTable> {
   /** Whether the check applies to this row at all; omitted = always. */

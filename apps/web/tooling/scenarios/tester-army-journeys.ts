@@ -43,6 +43,49 @@ export async function seedJourneyWorld(
 
   const seed: JourneySeed = {};
 
+  // Picker regressions: a missing joined label must resolve to a name; the
+  // current selection must be revealed below the first screen of candidates.
+  const pickerProject = await createEntity(c, "project", {
+    name: JOURNEY_NAMES.pickerProject,
+    status: "in_progress",
+    costEstimate: 5000,
+  });
+  const pickerReplacement = await createEntity(c, "project", {
+    name: JOURNEY_NAMES.pickerReplacement,
+    status: "done",
+  });
+  const pickerVendor = await createEntity(c, "vendor", {
+    name: JOURNEY_NAMES.pickerVendor,
+  });
+  for (let index = 0; index < 20; index++) {
+    await createEntity(c, "project", {
+      name: `Synthetic Picker Project ${String(index).padStart(2, "0")}`,
+      status: index % 2 === 0 ? "done" : "planning",
+      ...(index % 2 === 0 ? { costEstimate: 20 + index } : {}),
+    });
+    const alternative = await createEntity(c, "vendor", {
+      name: `Synthetic Picker Vendor ${String(index).padStart(2, "0")}`,
+    });
+    for (let order = 0; order < 3; order++)
+      await createEntity(c, "purchase", {
+        vendorId: alternative.id,
+        orderId: `SYN-PICKER-${index}-${order}`,
+      });
+  }
+  for (const id of ["record-picker-desktop", "record-picker-phone"]) {
+    const purchase = await createEntity(c, "purchase", {
+      vendorId: pickerVendor.id,
+      orderId: `SYN-${id}`,
+      defaultProjectId: pickerProject.id,
+    });
+    seed[id] = {
+      purchase: purchase.id,
+      project: pickerProject.id,
+      replacement: pickerReplacement.id,
+      vendor: pickerVendor.id,
+    };
+  }
+
   const [emailOwner] = await db
     .clientForRepository()
     .select({ id: ledgerParty.id })

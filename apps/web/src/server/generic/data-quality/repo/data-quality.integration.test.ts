@@ -109,6 +109,10 @@ describe("data quality: list filters, sort and hydration agree", () => {
   // A kit-priced part remains priced even without its own acquiring Expense.
   it("shares derived price evidence across catalog gaps and bounded hydration", async () => {
     const { weak, middling } = await seedProducts();
+    const queueKeys = async () =>
+      (await readRecordWorkQueue(ctx.db, null, weak.id, false)).items.map(
+        (row) => row.key,
+      );
     for (let index = 0; index < 64; index++)
       await createProductFixture(
         ctx.db,
@@ -134,6 +138,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .from(product)
       .where(whereBefore);
     expect(before.map((row) => row.id)).toContain(weak.entityId);
+    expect(await queueKeys()).toContain(`productsMissingPrice:${weak.id}`);
     const excepted = await setDataException(
       ctx.db,
       {
@@ -152,6 +157,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .from(product)
       .where(whereBefore);
     expect(filteredException.map((row) => row.id)).not.toContain(weak.entityId);
+    expect(await queueKeys()).not.toContain(`productsMissingPrice:${weak.id}`);
     await createExpense(
       ctx.db,
       makeExpenseInput({
@@ -168,6 +174,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .from(product)
       .where(where);
     expect(after.map((row) => row.id)).not.toContain(weak.entityId);
+    expect(await queueKeys()).not.toContain(`productsMissingPrice:${weak.id}`);
     const hydrated = await loadDataQualities(ctx.db, "product", [
       weak.entityId,
       middling.entityId,

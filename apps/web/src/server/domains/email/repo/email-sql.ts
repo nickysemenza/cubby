@@ -20,14 +20,7 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 
-const retainedOriginalContentSql = (original: SQL) => sql`COALESCE(
-  NULLIF(BTRIM(${original}."content"->>'snippet'), ''),
-  NULLIF(BTRIM(${original}."content"->>'bodyText'), ''),
-  NULLIF(BTRIM(${original}."content"->>'bodyHtml'), '')
-) IS NOT NULL`;
-
-/** A bulk quality read supplies its joined original so the planner need not
- * inspect every retained body to build a hashed existence SubPlan. */
+/** Bulk and record checks read database-maintained presence, never retained bodies. */
 export const emailRetainedContentSql = (
   email: SQL = sql`"Email"`,
   original?: SQL,
@@ -35,10 +28,10 @@ export const emailRetainedContentSql = (
   ${email}."orderMailId" IS NOT NULL AND ${email}."contentClearedAt" IS NULL AND (
     ${
       original
-        ? sql`(${original}.id IS NOT NULL AND ${retainedOriginalContentSql(original)})`
+        ? sql`(${original}.id IS NOT NULL AND ${original}."hasRetainedText")`
         : sql`EXISTS (SELECT 1 FROM "OrderMail" original
           WHERE original.id=${email}."orderMailId"
-            AND ${retainedOriginalContentSql(sql`original`)})`
+            AND original."hasRetainedText")`
     }
     OR EXISTS (SELECT 1 FROM "OrderMailAttachment" attachment
       WHERE attachment."orderMailId"=${email}."orderMailId"

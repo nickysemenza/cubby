@@ -3,10 +3,13 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
 
 const log = createLogger("ai-response-cache");
+
+export const AI_RESPONSE_CACHE_BATCH_SIZE = 128;
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60_000;
 const LEASE_MS = 90_000;
@@ -55,6 +58,9 @@ interface CacheStore {
     | { kind: "hit"; value: string }
     | { kind: "busy" }
     | { kind: "claimed"; token: string };
+  readOrClaimMany(
+    requests: readonly { key: string; force: boolean }[],
+  ): Promise<CacheClaim[]> | CacheClaim[];
   renew(key: string, token: string): Promise<boolean> | boolean;
   publish(
     key: string,
@@ -65,6 +71,8 @@ interface CacheStore {
   release(key: string, token: string): Promise<void> | void;
   invalidate(key: string, value: string): Promise<void> | void;
 }
+
+type CacheClaim = Awaited<ReturnType<CacheStore["readOrClaim"]>>;
 
 type LocalRow = {
   value: string | null;
@@ -93,6 +101,14 @@ class LocalCacheStore implements CacheStore {
     while (this.rows.size > MAX_LOCAL_ENTRIES)
       this.rows.delete(this.rows.keys().next().value!);
     return { kind: "claimed" as const, token };
+  }
+
+  readOrClaimMany(requests: readonly { key: string; force: boolean }[]) {
+    if (requests.length > AI_RESPONSE_CACHE_BATCH_SIZE)
+      throw new Error(
+        `AI response cache batch supports at most ${AI_RESPONSE_CACHE_BATCH_SIZE} keys, got ${requests.length}`,
+      );
+    return requests.map(({ key, force }) => this.readOrClaim(key, force));
   }
 
   renew(key: string, token: string) {
@@ -152,15 +168,87 @@ export async function aiResponseCacheKey(
   );
 }
 
+const cacheShard = (key: string) =>
+  `shard-${parseInt(key.slice(0, 2), 16) % 64}`;
+
 function cacheStore(key: string): CacheStore {
   const namespace = getAiResponseCacheNamespace();
-  return namespace
-    ? namespace.getByName(`shard-${parseInt(key.slice(0, 2), 16) % 64}`)
-    : localStore;
+  return namespace ? namespace.getByName(cacheShard(key)) : localStore;
+}
+
+/** Collect the first lookup of each independent decision before reading bounded shard chunks. */
+export class AiResponseCacheBatch {
+  private pending: Set<number>;
+  private requests: {
+    key: string;
+    force: boolean;
+    resolve(value: CacheClaim): void;
+    reject(error: UnparsedError): void;
+  }[] = [];
+
+  constructor(size: number) {
+    this.pending = new Set(Array.from({ length: size }, (_, index) => index));
+  }
+
+  ready(index: number) {
+    this.pending.delete(index);
+    if (!this.pending.size) this.flush();
+  }
+
+  readOrClaim(index: number, key: string, force: boolean): Promise<CacheClaim> {
+    if (!this.pending.has(index))
+      return Promise.resolve(cacheStore(key).readOrClaim(key, force));
+    const result = new Promise<CacheClaim>((resolve, reject) => {
+      this.requests.push({ key, force, resolve, reject });
+    });
+    this.ready(index);
+    return result;
+  }
+
+  private flush() {
+    const groups = new Map<string, typeof this.requests>();
+    for (const request of this.requests) {
+      const shard = getAiResponseCacheNamespace()
+        ? cacheShard(request.key)
+        : "local";
+      const group = groups.get(shard) ?? [];
+      group.push(request);
+      groups.set(shard, group);
+    }
+    this.requests = [];
+    for (const group of groups.values()) {
+      for (
+        let offset = 0;
+        offset < group.length;
+        offset += AI_RESPONSE_CACHE_BATCH_SIZE
+      ) {
+        const chunk = group.slice(
+          offset,
+          offset + AI_RESPONSE_CACHE_BATCH_SIZE,
+        );
+        void Promise.resolve()
+          .then(async () => {
+            const results = await cacheStore(chunk[0]!.key).readOrClaimMany(
+              chunk.map(({ key, force }) => ({ key, force })),
+            );
+            if (results.length !== chunk.length)
+              throw new Error(
+                `AI response cache returned ${results.length} results for ${chunk.length} keys`,
+              );
+            for (const [index, request] of chunk.entries())
+              request.resolve(results[index]!);
+          })
+          .catch((error: unknown) => {
+            for (const request of chunk) request.reject(error);
+          });
+      }
+    }
+  }
 }
 
 export async function withAiResponseCache<T>(args: {
   enabled: boolean;
+  batch?: { batch: AiResponseCacheBatch; index: number };
   keyInput: AiResponseCacheKeyInput;
   force?: boolean;
   validate(value: JsonValue): T;
@@ -169,9 +257,15 @@ export async function withAiResponseCache<T>(args: {
   /** A batch may dispatch its owned misses while another request owns this key. */
   onWait?(): void;
 }): Promise<T> {
-  if (!args.enabled) return args.compute("none");
+  if (!args.enabled) {
+    args.batch?.batch.ready(args.batch.index);
+    return args.compute("none");
+  }
   const key = await aiResponseCacheKey(args.keyInput);
-  if (!key) return args.compute("none");
+  if (!key) {
+    args.batch?.batch.ready(args.batch.index);
+    return args.compute("none");
+  }
   const store = cacheStore(key);
   const start = performance.now();
   const deadline = Date.now() + 5 * 60_000;
@@ -179,7 +273,9 @@ export async function withAiResponseCache<T>(args: {
   while (Date.now() < deadline) {
     let claim: Awaited<ReturnType<CacheStore["readOrClaim"]>>;
     try {
-      claim = await store.readOrClaim(key, force);
+      claim = await (args.batch
+        ? args.batch.batch.readOrClaim(args.batch.index, key, force)
+        : store.readOrClaim(key, force));
     } catch (error) {
       log.error("lookup failed", { error });
       return args.compute("none");

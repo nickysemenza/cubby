@@ -107,9 +107,23 @@ The first choice in each group is its outcome: **Create this Product** or
 only when requested. Exact identifiers and color/size evidence are shown as
 words, not a percentage: the heuristic rank is not a calibrated probability.
 Observed identity remains separate from the chosen catalog destination.
-Unresolved identity blocks applying the group until explicitly confirmed.
-The low-level direct-commit API still permits legacy callers without a review
-object; agents use proposals and stop for human approval.
+An unresolved identity concern blocks approval until the member explicitly
+resolves it; changing a Product draft does not resolve a concern. Resolution
+records the original concern, member, time and optional reply, but writes no
+Product or Inventory. Approval itself supplies confirmation atomically with the
+Product, photo attachments and stock writes: no separate draft edit or prior
+confirmation receipt is required. This also applies to legacy proposals without
+a review object, whose review intent the approval path reconstructs.
+
+The low-level direct-commit API is different: Product/Inventory writes require
+explicit review intent and no unresolved concern; only skip-only groups may omit
+review. Agents propose groups and stop for human approval. These boundaries are
+owned by `assertPhotoGroupReviewIntent` / `commitPhotoGroup` in
+`apps/web/src/server/domains/photo-import/repo/run/writer.ts` and
+`resolvePhotoGroupConcern` / `approveRow` in the adjacent `proposals.ts`;
+`photo-import/operations/photo-import.server.ts` exposes their public operations.
+Replaying a committed approval returns its receipt without creating another
+Product or Inventory entry.
 
 **Create Product** saves the displayed draft and attaches its photos.
 **Attach photos** appends photos while preserving Product fields, gallery order,
