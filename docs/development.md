@@ -138,6 +138,39 @@ set, not a complete breakdown of process RAM. Statistics reset when compute
 restarts; interpret them after representative traffic. See the
 [Neon extension documentation](https://neon.com/docs/extensions/neon).
 
+## Typechecking
+
+Use `pnpm typecheck:web` during app development. It generates compact server
+boundary declarations, then checks the server and client as separate incremental
+programs. Each checker runs in a separate process, sequentially, so their live
+heaps do not overlap. A server implementation edit leaves the client program
+up to date when its public signature is unchanged; shared contract edits check
+both. A cold run may take longer than a single combined program because shared
+types are checked twice. Peak edit memory and parallel worktrees take priority.
+
+The runtime still imports real source through the normal Vite aliases. Only
+`tsconfig.client.json` redirects the explicit HTTP handler, SSR dispatch,
+server-function and middleware boundaries to generated declarations under
+`apps/web/artifacts/server-contracts`. `isolatedDeclarations` requires annotated
+exports; `noResolve` prevents emission from loading implementations. Emission
+uses `noCheck` only for syntax-based declaration production. The strict server
+program checks the actual implementations against those same annotations.
+Do not add implementation-derived `typeof` or `ReturnType` exports that reconnect
+the client graph. Generated declarations retain shared contract imports.
+
+The runner emits to a temporary directory and publishes only successful output,
+preserves unchanged files' timestamps, and removes retired declarations. Both
+incremental caches and declarations belong to their worktree. Global ambient
+modules import isolated contracts rather than runtime implementations; generated
+entity port-export checks are split by client/server ownership.
+
+`pnpm typecheck` also checks the complete web program, including tests, tooling
+and generator sources, and verifies both resolved graphs: client imports may
+reach only the explicitly listed shared server contracts, the server must not
+reach browser routes/components, and every production source must be covered.
+The graph guard also rejects unresolved imports inside emitted declarations.
+This CLI split does not change which project an editor's language server opens.
+
 ## Worktrees and test services
 
 GitHub's Linux database lanes share a digest-pinned PostgreSQL 17/pgvector

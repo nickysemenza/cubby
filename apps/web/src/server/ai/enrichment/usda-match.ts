@@ -1,4 +1,3 @@
-import type { Confidence } from "@cubby/schemas/ai";
 // AI-assisted USDA food matching
 //
 // Cookbook ingredients ("AP flour", "orange juice") rarely match the USDA
@@ -7,7 +6,6 @@ import type { Confidence } from "@cubby/schemas/ai";
 // query variants; this asks the decision tier to pick exactly one candidate
 // in a single call via `runAiSelection` (no agentic search loop).
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
-import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
@@ -31,11 +29,8 @@ export interface UsdaMatchAiPort {
 
 const productionUsdaMatchAiPort: UsdaMatchAiPort = { select: runAiSelection };
 
-export interface UsdaFoodSuggestion {
-  food: UsdaFoodListRow | null;
-  confidence: Confidence;
-  reasoning: string;
-}
+export type { UsdaFoodSuggestion } from "./proposals";
+import type { UsdaFoodSuggestion } from "./proposals";
 
 /**
  * Shortlist USDA foods ourselves ({@link buildUsdaShortlist}), then ask the

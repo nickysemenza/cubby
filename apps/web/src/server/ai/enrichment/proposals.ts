@@ -3,10 +3,27 @@
 // The workflow owns resolution, bounded concurrency, streaming, and failure
 // handling. This module retains the shared output type used by that workflow.
 
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import type { Confidence } from "@cubby/schemas/ai";
+import type {
+  IngredientId,
+  IngredientShortcode,
+} from "@cubby/schemas/identifiers";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 
-import type { IngredientMergeSuggestion } from "./ingredient-merge";
-import type { UsdaFoodSuggestion } from "./usda-match";
+export interface IngredientMergeSuggestion {
+  target: {
+    id: IngredientId;
+    shortcode: IngredientShortcode;
+    name: string;
+  } | null;
+  confidence: Confidence;
+  reasoning: string;
+}
+export interface UsdaFoodSuggestion {
+  food: UsdaFoodListRow | null;
+  confidence: Confidence;
+  reasoning: string;
+}
 
 /** One ingredient's pre-computed proposals, streamed as a `BulkProgressEvent` payload. */
 export interface EnrichmentProposal {

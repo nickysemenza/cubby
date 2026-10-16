@@ -67,6 +67,7 @@
         "src/entity/generated/entity-lists.gen.ts!",
         // Type-only port existence checks; nothing imports them by design.
         "src/entity/generated/entity-port-checks.gen.ts!",
+        "src/server/generated/entity-port-checks.gen.ts!",
         // Read only through `import()` types in the global worker-configuration.d.ts.
         "src/server/worker-bindings.ts!",
         // Opt-in `live-eval` vitest project (billed model evals).

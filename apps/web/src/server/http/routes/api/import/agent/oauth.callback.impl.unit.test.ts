@@ -7,7 +7,7 @@ import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/domains/purchase-import/re
 import {
   type CallbackDependencies,
   handlePurchaseAgentOAuthCallback,
-} from "./oauth.callback";
+} from "./oauth.callback.impl";
 
 const database = new Database(() => {
   throw new Error("OAuth callback unit tests do not query the database");

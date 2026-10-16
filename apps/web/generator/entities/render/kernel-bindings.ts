@@ -118,34 +118,35 @@ export const renderKernelBindingsArtifacts = (
       `${right.module}#${right.export}`,
     ),
   );
-  const portTypeModuleAliases = new Map(
-    [...new Set(portExportChecks.map((ref) => ref.module))]
-      .sort((left, right) => left.localeCompare(right))
-      .map((module, index) => [module, `entityPortModule${index}`]),
-  );
-  const portTypeImports = [...portTypeModuleAliases.entries()]
-    .map(
-      ([module, alias]) =>
-        `import type * as ${alias} from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  return [
-    {
-      relativePath: "apps/web/src/entity/generated/entity-port-checks.gen.ts",
+  // A mixed check file joins both programs even though nothing imports it.
+  // Keep every export check, rooted in the program that owns its module.
+  const portChecks = (server: boolean): EntityArtifacts => {
+    const refs = portExportChecks.filter(
+      (ref) => ref.module.startsWith("~/server/") === server,
+    );
+    const aliases = new Map(
+      [...new Set(refs.map((ref) => ref.module))]
+        .sort()
+        .map((module, index) => [module, `entityPortModule${index}`]),
+    );
+    return {
+      relativePath: `apps/web/src/${server ? "server" : "entity"}/generated/entity-port-checks.gen.ts`,
       source:
         generatedHeader +
-        "// Nothing imports this file; the web typecheck checks it on its own, so the\n" +
-        "// server bindings never type-import the client modules some ports name.\n" +
-        "// Generated port aliases retain deterministic import order.\n" +
-        `${portTypeImports}\n\n` +
-        "/** Each literal module/export source reference is checked without a runtime import. */\n" +
-        `export type EntityPortExportChecks = readonly [${portExportChecks
+        "// Rooted independently in the owning client/server program; nothing imports this file.\n" +
+        [...aliases]
           .map(
-            (ref) =>
-              `typeof ${portTypeModuleAliases.get(ref.module)}[${JSON.stringify(ref.export)}]`,
+            ([module, alias]) =>
+              `import type * as ${alias} from ${JSON.stringify(module)};`,
           )
-          .join(", ")}];\n`,
-    },
+          .join("\n") +
+        "\n\n/** Every declared module/export reference must exist. */\n" +
+        `export type EntityPortExportChecks = readonly [${refs.map((ref) => `typeof ${aliases.get(ref.module)}[${JSON.stringify(ref.export)}]`).join(", ")}];\n`,
+    };
+  };
+  return [
+    portChecks(false),
+    portChecks(true),
     {
       relativePath:
         "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",

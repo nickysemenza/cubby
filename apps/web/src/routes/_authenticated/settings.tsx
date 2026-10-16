@@ -37,7 +37,7 @@ import { pageTitle } from "~/lib/page-title";
 import {
   timingResponseSchema,
   type TimingResponse,
-} from "~/routes/api/debug/timing";
+} from "~/lib/perf/timing.contract";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";

@@ -44,7 +44,6 @@ import { type output as ZodOutput, type ZodSchema, z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { updateLiveAndReturn, withTransactionOn } from "~/server/db/helpers";
 import type {
-  EntityBindingSchemas,
   EntityKernelBulkUpdateResult,
   EntityKernelContext,
   EntityKernelDeleteResult,
@@ -644,7 +643,7 @@ export function defineRepository<
     mergeOperation,
     // Resolved on first use: repository modules are evaluated while the
     // generated schema bindings may still be initializing.
-    get schemas(): SchemasFor<E> & EntityBindingSchemas {
+    get schemas(): SchemasFor<E> {
       return ENTITY_SCHEMA_BINDINGS[entity];
     },
     get sort(): EntitySortContract {

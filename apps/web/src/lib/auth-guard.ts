@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
-import { auth } from "~/lib/auth";
 import { authClient } from "~/lib/auth-client";
+import { readGuardSession } from "~/server/http/guard-session.boundary";
 
 /**
  * Server-side session read for the `_authenticated` route guard.
@@ -24,17 +24,12 @@ import { authClient } from "~/lib/auth-client";
  *
  * The root `beforeLoad` only invokes this on the SERVER (`import.meta.env.SSR`);
  * on client navigations it uses {@link getClientAuthed} instead, so an in-app
- * navigation no longer pays a `/_serverFn/` round-trip. The server fn is the only
- * consumer of `~/lib/auth`, so that (server-only) import is stripped from the
- * client bundle by the server-fn split.
+ * navigation no longer pays a `/_serverFn/` round-trip. The server fn delegates
+ * to the server session reader; that import is stripped from the client bundle
+ * by the server-fn split.
  */
 export const getGuardSession = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const session = await auth.api.getSession({
-      headers: getRequest().headers,
-    });
-    return session?.user ? { userId: session.user.id } : null;
-  },
+  async () => readGuardSession(getRequest().headers),
 );
 
 // Client-only cache of the last *resolved* auth state from better-auth's

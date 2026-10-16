@@ -1,0 +1,17 @@
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
+import {
+  preflightHandler,
+  protectedResourceHandler,
+} from "~/server/http/oauth/metadata";
+
+// RFC 9728, resource-path form. This is the URL /api/mcp names in its 401
+// `WWW-Authenticate: Bearer resource_metadata="..."` header, so it's the entry
+// point for every client that discovers us the spec-compliant way.
+
+export const handlers: HttpRouteHandlers<
+  Record<never, never>,
+  "GET" | "OPTIONS"
+> = {
+  GET: protectedResourceHandler,
+  OPTIONS: preflightHandler,
+};

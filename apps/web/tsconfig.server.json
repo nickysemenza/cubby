@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/server/**/*.ts", "src/**/*.d.ts"],
+  "files": [
+    "src/cf-server.ts",
+    "src/server.ts",
+    "src/start.ts",
+    "src/lib/auth.ts",
+    "src/features/ai/server-functions/ai-smoke.ts",
+    "worker-configuration.d.ts"
+  ],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
+}
