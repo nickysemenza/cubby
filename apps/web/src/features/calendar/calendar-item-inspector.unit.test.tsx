@@ -273,7 +273,7 @@ it("owns mobile calendar form actions and blocks dismissal during its write", as
     fireEvent.change(await screen.findByRole("textbox", { name: "Name" }), {
       target: { value: "Large freezer tray" },
     });
-    const save = screen.getByRole("button", { name: "Save", exact: true });
+    const save = screen.getByRole("button", { name: "Save" });
     expect(save).toHaveAttribute("form");
     expect(document.querySelector('[data-slot="overlay-actions"]')).toBeNull();
     fireEvent.click(save);

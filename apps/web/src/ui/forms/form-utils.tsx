@@ -221,10 +221,14 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   const formId = id ?? localFormId;
   const submitting = useRef(false);
   const [submitError, setSubmitError] = useState<string>();
-  const effectiveError = [
-    ...(typeof error === "string" ? [error] : (error ?? [])),
-    ...(submitError ? [submitError] : []),
-  ];
+  const effectiveError = Array.from(
+    new Set(
+      [
+        ...(typeof error === "string" ? [error] : (error ?? [])),
+        ...(submitError ? [submitError] : []),
+      ].filter(Boolean),
+    ),
+  );
   useSubmitSuccessToast(isPending, effectiveError, successMessage);
   const submitText = isPending
     ? getPendingButtonText(submitButtonText)
