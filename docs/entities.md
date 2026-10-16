@@ -1444,8 +1444,12 @@ Independent entity-predicate, diagnostic-backed and statement-import account
 branches share the existing bounded Problems scheduler with four concurrent
 tasks. Entity branches precede diagnostics in declaration order, followed by
 account work; Project attention remains one request-local promise shared by
-entity predicates and diagnostics. A failed branch rejects the read rather
-than returning an incomplete queue.
+entity predicates and diagnostics. Its complete subtree snapshot also supplies
+Project date windows to tool-ownership diagnostics, avoiding a second tree,
+Expense-allocation and Task-date read. The snapshot promise remains inside the
+request, and attention's independent reads overlap its load. Standalone
+ownership diagnostics retain the date-only loader. A failed branch rejects the
+read rather than returning an incomplete queue.
 
 Every source excludes Purchases dated after the current household day, and
 Purchases with live Expense lines all marked `future`. Purchase has no stored

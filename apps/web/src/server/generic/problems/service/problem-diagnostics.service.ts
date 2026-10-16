@@ -19,6 +19,7 @@ import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
 import { readCachedUpcLookups } from "~/server/domains/product/repo/upc-lookup-cache";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
+import type { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { findOrphanEntities } from "~/server/generic/entity-links/repo/entity-edge-source";
@@ -82,6 +83,10 @@ export type DiagnosticRunOptions = {
   upcLookupClient?: UpcLookupBatchPort;
   /** Reuse the tracker lane's complete attention relation; never a page. */
   attentionItems?: readonly ProjectAttentionItem[];
+  /** Complete request-local tree dates shared with Project attention. */
+  projectDateWindows?:
+    | Awaited<ReturnType<typeof loadProjectDateWindows>>
+    | ReturnType<typeof loadProjectDateWindows>;
 };
 
 type DiagnosticAdapter = {
@@ -257,10 +262,10 @@ export const diagnosticAdapters = {
       healthyCount((await findPartiallyImportedCookbooks(db)).length),
   },
   "tools-used-outside-ownership": {
-    sample: (db, _options, limit) =>
-      healthySample(findToolsUsedOutsideOwnership(db), limit),
-    count: async (db) =>
-      healthyCount((await findToolsUsedOutsideOwnership(db)).length),
+    sample: (db, options, limit) =>
+      healthySample(findToolsUsedOutsideOwnership(db, options), limit),
+    count: async (db, options) =>
+      healthyCount((await findToolsUsedOutsideOwnership(db, options)).length),
   },
   "entities-missing-embeddings": {
     sample: async (db, _options, limit) => {

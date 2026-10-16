@@ -132,7 +132,7 @@ export async function computeAttentionItems(
   db: Database,
   options?: {
     /** A whole-tree load the caller already has. */
-    preloaded?: ProjectSubtreeRollups;
+    preloaded?: ProjectSubtreeRollups | Promise<ProjectSubtreeRollups>;
     /** Matched dashboard projects; omitted means global Problems-page scope. */
     projectIds?: ProjectId[];
   },
