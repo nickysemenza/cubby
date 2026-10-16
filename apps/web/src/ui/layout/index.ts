@@ -4,7 +4,7 @@
  */
 export { Grid } from "./grid";
 export { Row } from "./row";
-export { Section, SectionActionLink, SectionHeading } from "./section";
+export { Section, SectionHeading } from "./section";
 export { Stack } from "./stack";
 
 export { SectionActionLink } from "./section-action-link";
