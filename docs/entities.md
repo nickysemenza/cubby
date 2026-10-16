@@ -1385,7 +1385,7 @@ uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
 The shared population query materializes routed candidates within each SQL
-statement, after source/kind narrowing and before eligibility/search. This keeps
+statement, after source/kind/vendor narrowing and before eligibility/search. This keeps
 search selectivity from turning bulk quality joins into repeated nested-loop
 work; it is not a cache across requests. Only typed facts required by the
 requested sorts or vendor filter are projected across the population. Other amount/date/vendor facts use

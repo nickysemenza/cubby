@@ -609,7 +609,7 @@ async function queryWorkQueue(
       sql`waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode = ${input.waitingFor} AND member.id = ANY(owners))`,
     );
   if (input.vendor)
-    conditions.push(
+    candidateConditions.push(
       sql`vendor_id = (SELECT v.id FROM "Vendor" v WHERE v.shortcode = ${input.vendor})`,
     );
   if (input.query)
