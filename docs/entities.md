@@ -205,7 +205,10 @@ have their own deliberately different scopes. A photo batch keeps its own
 review and durable transcript rather than purchase report sections. Its review
 snapshot shares one current image-evidence read between proposal cross-checks,
 the photo list, and lifecycle readiness. Reuse lasts only for that read; the
-next refresh observes newly settled image work and proposal edits.
+next refresh observes newly settled image work and proposal edits. Image analysis
+summaries and rich description provenance share `loadImageAnalysisEvidence`,
+which selects source-fenced descriptions and member corrections once.
+Summary-only consumers project from the same read.
 
 Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.
