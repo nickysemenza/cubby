@@ -231,7 +231,10 @@ host is constrained.
 
 `pnpm apple check` runs lint, then uses the same cache-only guard as CI to
 probe host tests and simulator compilation before FFI preparation. A miss
-fails before native setup and is never cached. `apple:host-tests` runs
+fails before native setup and is never cached. CI accepts a verified replay as
+that target's result and runs the host/simulator check step only on a miss.
+Setup skips native tools on a hit, so a second lookup must not start an
+unprepared compile if the cache becomes unavailable. `apple:host-tests` runs
 CubbyKit's package tests and the OpenAPI warning gate; `apple:simulator-build`
 compiles `Cubby-iOS` for a generic simulator and caches the built app. Neither
 boots a simulator. The independent `apple:lint` target runs Swift formatting
