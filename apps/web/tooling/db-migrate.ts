@@ -19,6 +19,29 @@ export const MIGRATIONS_FOLDER = fileURLToPath(
   new URL("../drizzle", import.meta.url),
 );
 
+const readMigrationJournal = (migrationsFolder: string) => {
+  const { entries } = z
+    .object({
+      entries: z.array(
+        z.object({
+          idx: z.number().int().nonnegative(),
+          when: z.number().int(),
+          tag: z.string().min(1),
+        }),
+      ),
+    })
+    .parse(
+      JSON.parse(
+        readFileSync(join(migrationsFolder, "meta/_journal.json"), "utf8"),
+      ),
+    );
+  return entries;
+};
+
+/** Ordered committed boundaries for predecessor-schema preservation tests. */
+export const migrationTags = () =>
+  readMigrationJournal(MIGRATIONS_FOLDER).map((entry) => entry.tag);
+
 /**
  * Drizzle's migrator applies every journal entry newer than the LAST
  * bookkeeping row's `created_at` and never compares hashes. A database whose
@@ -74,21 +97,7 @@ export async function migrateDatabase(
 ): Promise<void> {
   const migrationsFolder = options.migrationsFolder ?? MIGRATIONS_FOLDER;
   const journal = readMigrationFiles({ migrationsFolder });
-  const { entries } = z
-    .object({
-      entries: z.array(
-        z.object({
-          idx: z.number().int().nonnegative(),
-          when: z.number().int(),
-          tag: z.string().min(1),
-        }),
-      ),
-    })
-    .parse(
-      JSON.parse(
-        readFileSync(join(migrationsFolder, "meta/_journal.json"), "utf8"),
-      ),
-    );
+  const entries = readMigrationJournal(migrationsFolder);
   const tags = new Set<string>();
   entries.forEach((entry, index) => {
     const previous = entries[index - 1];

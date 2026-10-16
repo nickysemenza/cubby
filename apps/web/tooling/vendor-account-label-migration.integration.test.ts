@@ -1,36 +1,14 @@
-import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { withMigrationDatabase } from "./test-database-lease";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
-import { z } from "zod";
 
-import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
+import { migrationTags, migrateDatabase } from "./db-migrate";
 
 // Dropping the retired label must preserve account identities, scope, status,
 // cursor, ownership defaults, and linked Purchases, Runs and source claims.
 it("retires VendorAccount labels without losing accounts or their references", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_vendor_label_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    await client.connect();
-    const tags = z
-      .object({ entries: z.array(z.object({ tag: z.string() })) })
-      .parse(
-        JSON.parse(
-          readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-        ),
-      )
-      .entries.map((entry) => entry.tag);
+  return withMigrationDatabase(async (client) => {
+    const tags = migrationTags();
     const contract = tags.findIndex((tag) =>
       tag.endsWith("_drop_vendor_account_label"),
     );
@@ -113,9 +91,5 @@ it("retires VendorAccount labels without losing accounts or their references", a
         )
       ).rows[0]?.count,
     ).toBe(0);
-  } finally {
-    await client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 });

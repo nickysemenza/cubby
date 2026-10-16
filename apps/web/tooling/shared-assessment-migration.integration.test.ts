@@ -1,3 +1,4 @@
+import { withMigrationDatabase } from "./test-database-lease";
 import {
   assessmentReviewInput,
   assessmentReviewOut,
@@ -12,14 +13,9 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
-import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
+import { migrationTags, migrateDatabase } from "./db-migrate";
 import { createPostgresPool } from "./postgres-pool";
 
 // Failure modes: expansion mistaken for preservation; intervening old writes
@@ -30,31 +26,17 @@ import { createPostgresPool } from "./postgres-pool";
 // The latest predecessor's explicit/inherited ownership, Expense role and Image evidence
 // must survive both online expansion and the quiesced copy/trigger cutover.
 it("reconciles every legacy review family after an intervening writer without losing immutable history", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_shared_reviews_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  let created = false;
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    created = true;
-    const url = new URL(adminUrl);
-    url.pathname = `/${name}`;
-    const client = new Client({ connectionString: url.href });
-    await client.connect();
+  return withMigrationDatabase(async (client, databaseUrl) => {
     let runtimePool: ReturnType<typeof createPostgresPool> | undefined;
     try {
-      const journal = JSON.parse(
-        readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-      );
-      const index = journal.entries.findIndex((entry: { tag: string }) =>
-        entry.tag.endsWith("_shared_assessment_expansion"),
+      const tags = migrationTags();
+      const index = tags.findIndex((tag) =>
+        tag.endsWith("_shared_assessment_expansion"),
       );
       if (index < 1)
         throw new Error("Shared Assessment expansion has no predecessor");
       await migrateDatabase(drizzle(client), {
-        through: journal.entries[index - 1].tag,
+        through: tags[index - 1]!,
       });
       await client.query(
         `INSERT INTO "user" (id,name,email) VALUES ('synthetic-review-member','Synthetic member','review@example.invalid')`,
@@ -280,11 +262,9 @@ it("reconciles every legacy review family after an intervening writer without lo
           [run, product],
         )
       ).rows[0].id;
-      expect(journal.entries[index].tag).toBe(
-        "0068_shared_assessment_expansion",
-      );
+      expect(tags[index]!).toBe("0068_shared_assessment_expansion");
       await migrateDatabase(drizzle(client), {
-        through: journal.entries[index].tag,
+        through: tags[index]!,
       });
       // Online expansion must leave old field invalidation writing its old ledger.
       await client.query(
@@ -540,7 +520,7 @@ it("reconciles every legacy review family after an intervening writer without lo
           )
         ).rows[0].verdict,
       ).toBe("ungraded");
-      runtimePool = createPostgresPool({ connectionString: url.href });
+      runtimePool = createPostgresPool({ connectionString: databaseUrl });
       const runtime = drizzle({ client: runtimePool, schema });
       const db = new Database(() => ({
         client: runtime,
@@ -645,10 +625,6 @@ it("reconciles every legacy review family after an intervening writer without lo
         ).toBeNull();
     } finally {
       await runtimePool?.end();
-      await client.end();
     }
-  } finally {
-    if (created) await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 });
