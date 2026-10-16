@@ -56,12 +56,35 @@ for (const journey of selectedJourneys(journeys, "web"))
               throw new Error(
                 "Centered setup needs an exactly labelled button",
               );
-            await browser.evaluate((name) => {
+            await browser.evaluate(async (name) => {
               const target = Array.from(
                 document.querySelectorAll("button"),
-              ).find((button) => button.getAttribute("aria-label") === name);
+              ).find((button) => {
+                const rect = button.getBoundingClientRect();
+                return (
+                  button.getAttribute("aria-label") === name &&
+                  rect.width > 0 &&
+                  rect.height > 0 &&
+                  getComputedStyle(button).visibility === "visible" &&
+                  !button.closest('[aria-hidden="true"], [inert]')
+                );
+              });
               if (!target) throw new Error(`No labelled button: ${name}`);
-              target.scrollIntoView({ block: "center", behavior: "instant" });
+              const field =
+                target.closest('[data-slot="basic-info-value"]') ?? target;
+              field.scrollIntoView({ block: "center", behavior: "instant" });
+              await new Promise<void>((resolve) =>
+                requestAnimationFrame(() => resolve()),
+              );
+              const rect = target.getBoundingClientRect();
+              const hit = document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2,
+              );
+              if (!hit || !target.contains(hit))
+                throw new Error(
+                  `Centered ${name} is obstructed at ${Math.round(rect.x)},${Math.round(rect.y)} by ${hit?.tagName}: ${hit?.className}`,
+                );
               return null;
             }, control.name);
           }

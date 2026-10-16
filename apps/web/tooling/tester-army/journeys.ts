@@ -292,7 +292,7 @@ export const journeys: Journey[] = [
       },
       {
         tapControl: {
-          web: { role: "button", name: "Edit default project", center: true },
+          web: { role: "button", name: "Edit project", center: true },
         },
         check: { visibleOptions: () => [JOURNEY_NAMES.pickerProject] },
       },
