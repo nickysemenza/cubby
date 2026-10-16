@@ -82,9 +82,9 @@ test("unknown routing groups fail instead of silently omitting checks", () => {
   );
 });
 
-// Pairing must never drop or duplicate a selected check, including partial
-// routing without browsers; CI still needs every command after an earlier failure.
-test("every routing subset retains each selected command exactly once in at most two jobs", () => {
+// Routing must never drop or duplicate a selected check; CI still needs every
+// command after an earlier failure.
+test("every routing subset retains each selected command exactly once", () => {
   const lanes = ["aux", "build-worker", "postgres", "e2e"];
   const commands = Object.fromEntries(
     lanes.map((lane) => [
@@ -98,7 +98,6 @@ test("every routing subset retains each selected command exactly once in at most
   for (let mask = 0; mask < 1 << lanes.length; mask++) {
     const selected = lanes.filter((_, index) => mask & (1 << index));
     const matrix = laneMatrix(selected);
-    assert.ok(matrix.length <= 2, selected.join(","));
     assert.deepEqual(
       matrix
         .flatMap((entry) => [
@@ -107,7 +106,9 @@ test("every routing subset retains each selected command exactly once in at most
         ])
         .sort(),
       selected
-        .flatMap((lane) => (lane === "e2e" ? [lane, lane] : [lane]))
+        .flatMap((lane) =>
+          lane === "e2e" ? commands[lane]!.map(() => lane) : [lane],
+        )
         .sort(),
       selected.join(","),
     );
@@ -136,19 +137,20 @@ test("every routing subset retains each selected command exactly once in at most
   }
 });
 
-test("combined routing groups keep browser shards and companion checks independently addressable", () => {
+test("browser shards run without companion checks", () => {
   const plan = planLanes({
     event: "pull_request",
     baseline: true,
     changes: ["aux+build-worker.1", "e2e"],
   });
-  assert.equal(plan.matrix.filter((entry) => entry.browser).length, 2);
+  for (const entry of plan.matrix.filter((entry) => entry.browser))
+    assert.equal(entry.checks, undefined);
   assert.ok(
     plan.matrix.some(
       (entry) =>
-        entry.browser === "desktop-1" &&
-        entry.checks?.[0]?.run.includes("run-many -t test") &&
-        entry.checks?.[1]?.run.includes("workerd-tests"),
+        !entry.browser &&
+        entry.run.includes("run-many -t test") &&
+        entry.checks?.[0]?.run.includes("workerd-tests"),
     ),
   );
 });
