@@ -138,9 +138,8 @@ credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
 Engine events: outcome, GET/PUT method, artifact bytes and operation duration.
 No hash, archive, terminal output, request identity or credential is recorded.
 `GET /healthz` checks Worker reachability and authentication without touching
-R2; it does not certify R2 availability. CI falls back to the old authenticated
-`/v1/cache/0` probe only while rolling out to a Worker without `/healthz`.
-That legacy probe is excluded from telemetry too.
+R2; it does not certify R2 availability. CI requires HTTP 204 from this
+endpoint before connecting Nx to the remote cache.
 
 The Analytics SQL binding queries fixed aggregate statements, automatically
 weighting sampled events. The public UI distinguishes no activity from query

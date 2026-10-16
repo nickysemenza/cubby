@@ -177,8 +177,7 @@ export default {
     try {
       if (request.method === "GET") {
         const object = await env.CACHE.get(hash);
-        if (hash !== "0")
-          record(env, "GET", object ? "hit" : "miss", object?.size ?? 0, start);
+        record(env, "GET", object ? "hit" : "miss", object?.size ?? 0, start);
         if (!object) return new Response("not found", { status: 404 });
         return new Response(object.body, {
           headers: {
@@ -208,7 +207,7 @@ export default {
         headers: { allow: "GET, PUT" },
       });
     } catch (error) {
-      if (hash !== "0") record(env, request.method, "error", 0, start);
+      record(env, request.method, "error", 0, start);
       return new Response(String(error), {
         status: 500,
         headers: { "cache-control": "no-store" },
