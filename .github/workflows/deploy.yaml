@@ -4,6 +4,7 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,9 +36,8 @@ jobs:
           wasm: "restore"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          # web's deploy:cf script re-runs build:cf, which would duplicate the
-          # build-command step above, so this deploys the already-built
-          # bundle directly instead of going through deploy:cf.
           deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
+          production-direct-database-url: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}

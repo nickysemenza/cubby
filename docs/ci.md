@@ -579,9 +579,24 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 
 `.github/workflows/deploy.yaml` deploys the web Worker on every `main` push,
 without waiting for post-merge CI. Required PR checks gate merging. It uses
-`.github/actions/deploy-worker` to check current main before building and again
-before deploying, preventing stale web deployments. The build runs once;
-Wrangler deploys `dist/server/wrangler.json` directly.
+`.github/actions/deploy-worker` to build once, apply committed production migrations
+with the existing runner, then deploy `dist/server/wrangler.json` directly. It checks
+current main before building and again after migration, before deployment.
+Keep build, migration and deployment as named steps in the existing action;
+avoid standalone wrappers and multi-operation command inputs.
+Migration failure blocks deployment. The migration and deploy share the existing
+non-cancelling production concurrency group. The required database credential is
+scoped to the migration step; the Cloudflare credential is scoped to deployment.
+
+Retry a failed release by manually dispatching `Deploy` on `main`; the runner
+verifies and skips the already-applied migration prefix. If schema application
+succeeds and deployment fails, the schema stays applied: roll forward with a
+compatible deployment rather than resetting migration bookkeeping. Every push
+must therefore be compatible with the code running before deployment. Staged
+boundaries and breaking cutovers follow the
+[production migration runbook](runbooks/production-migrations.md).
+Migrations expected to exceed the deployment job's install/build/release time
+budget belong on the operator-managed cutover path.
 
 `.github/workflows/deploy-nx-cache.yaml` deploys the Nx cache only when its
 source/configuration, dependency inputs, Node version, setup action, or its own

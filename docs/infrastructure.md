@@ -646,13 +646,15 @@ or this repository.
 ## GitHub and deployment
 
 `main` is deployed by `.github/workflows/deploy.yaml`. The `cloudflare` GitHub
-Environment serializes and scopes production deployment. Required repository
-or environment secrets are:
+Environment scopes production deployment to `main`; deployment jobs own
+serialization. Store `PRODUCTION_DIRECT_DATABASE_URL` only in this environment,
+not as a repository secret. Required repository or environment secrets are:
 
-| Secret                    | Purpose                                             |
-| ------------------------- | --------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`    | Deploy declared Workers and manage their bindings   |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
+| Secret                           | Purpose                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`           | Deploy declared Workers and manage their bindings           |
+| `PRODUCTION_DIRECT_DATABASE_URL` | Apply production migrations before deploying the web Worker |
+| `CLAUDE_CODE_OAUTH_TOKEN`        | Automated Claude workflows, not application runtime         |
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always

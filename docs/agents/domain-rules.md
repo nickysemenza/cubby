@@ -48,12 +48,13 @@ fails until the drop. Either drop the legacy FKs in the expand step or run the
 drop right after the deploy (the ADR 0006 image joins blocked image deletes
 this way).
 
-`deploy.yaml` deploys every `main` push and never applies schema. A PR that adds
-a migration is opened without auto-merge and merges only after that migration
-has run in production and been read back. A contract migration (`DROP COLUMN`,
-or a constraint the deployed code would violate) is the exception: ship the code
-that stops reading or writing the old shape first, then apply the migration
-right after that deploy and read it back.
+`deploy.yaml` applies pending committed migrations before deploying each `main`
+push. Ordinary migration PRs must be compatible with the currently deployed
+code; add a populated-predecessor preservation regression for CI before merge,
+and the owner reads back production after release. A contract migration (`DROP COLUMN`, or a
+constraint the deployed code would violate) requires an explicit staged boundary
+before merge: follow the production migration runbook to deploy matching code
+before applying the contraction. Keep staged cutover PRs off auto-merge.
 
 An explicitly authorized breaking cutover may consolidate expansion and
 contraction before merge; follow its owning runbook. Prefer quiesced writers;

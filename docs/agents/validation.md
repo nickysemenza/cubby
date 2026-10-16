@@ -211,7 +211,8 @@ file belongs in its Nx target's inputs; `pnpm generate` then routes the lane. Ru
 locally before a PR therefore lets CI replay the Apple lanes. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a
-migration follows the [production change rules](domain-rules.md#production-changes).
+migration follows the [production change rules](domain-rules.md#production-changes),
+including compatibility with the code running while the release applies it.
 
 ## Explicit local diagnostics
 
