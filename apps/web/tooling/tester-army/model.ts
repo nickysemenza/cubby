@@ -1,23 +1,35 @@
 import { inspect } from "node:util";
 import {
   CF_ACCOUNT_ID,
-  CUBBY_EVALUATION_GATEWAY_ID,
+  CUBBY_AI_GATEWAY_ID,
   testAiGatewayEnvironment,
 } from "@cubby/shared/ai/gateway-metadata";
-import { DECISION_MODEL, FAST_MODEL } from "@cubby/shared/ai/models";
+import {
+  DECISION_MODEL,
+  AUDIT_RECOVERY_MODEL,
+  QUALITY_MODEL,
+} from "@cubby/shared/ai/models";
 import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
 import { decisionExecutor } from "@e2e-dev/decision";
 import {
   gatewayBaseURL,
+  gatewayProviderUrl,
+  inferenceFundingHeaders,
+  isInferenceFundingRefusal,
+  strippedHeaders,
+  type InferenceFunding,
   workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { localSecret } from "../local-secret";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { chatgpt } from "e2e/oauth/chatgpt";
 import {
   APICallError,
   experimental_decide as decide,
   generateText,
   tool,
+  wrapLanguageModel,
 } from "ai";
 import { z } from "zod";
 
@@ -39,17 +51,20 @@ const configuration = z
   .superRefine((value, context) => {
     if (
       value.TESTER_ARMY_MODEL &&
-      !/^openai\/gpt-[a-z0-9.-]+$/u.test(value.TESTER_ARMY_MODEL)
+      !/^(?:openai\/gpt-[a-z0-9.-]+|anthropic\/claude-[a-z0-9.-]+)$/u.test(
+        value.TESTER_ARMY_MODEL,
+      )
     )
       context.addIssue({
         code: "custom",
         path: ["TESTER_ARMY_MODEL"],
-        message: "Gateway models are OpenAI Responses ids like openai/gpt-…",
+        message: "Text models use openai/gpt-… or anthropic/claude-…",
       });
   })
   .transform((value) => ({
     ...value,
-    TESTER_ARMY_MODEL: value.TESTER_ARMY_MODEL ?? `openai/${FAST_MODEL}`,
+    TESTER_ARMY_MODEL:
+      value.TESTER_ARMY_MODEL ?? `anthropic/${AUDIT_RECOVERY_MODEL}`,
   }));
 
 export function modelConfiguration(
@@ -73,7 +88,7 @@ export function modelConfiguration(
 /** The driver's gateway scoping: Cubby's gateway, never production-labelled. */
 export function testerArmyGatewayHeaders(ci: string | undefined) {
   return {
-    "cf-aig-gateway-id": CUBBY_EVALUATION_GATEWAY_ID,
+    "cf-aig-gateway-id": CUBBY_AI_GATEWAY_ID,
     "cf-aig-skip-cache": "true",
     "cf-aig-metadata": JSON.stringify({
       environment: testAiGatewayEnvironment(ci),
@@ -85,14 +100,17 @@ export function testerArmyGatewayHeaders(ci: string | undefined) {
 
 // The upstream executor allows transport retries; this lane measures one attempt.
 async function assertGatewaySuccess(response: Response, url: string) {
-  if (!response.ok)
+  if (!response.ok) {
+    const body = await response.text();
     throw new APICallError({
-      message: `Tester Army gateway HTTP ${response.status}: ${await response.text()}`,
+      message: `Tester Army gateway HTTP ${response.status}: ${body}`,
       url,
       requestBodyValues: undefined,
       statusCode: response.status,
+      responseBody: body,
       isRetryable: false,
     });
+  }
 }
 
 function failFastGatewayFetch(fetcher: typeof fetch): typeof fetch {
@@ -124,18 +142,120 @@ function failFastGatewayFetch(fetcher: typeof fetch): typeof fetch {
   };
 }
 
+/** Funding switches only on provider refusal, never on arbitrary transport errors. */
+function fundingRefused(error: unknown, funding: InferenceFunding) {
+  if (
+    funding === "subscription" &&
+    z
+      .object({
+        name: z.literal("OAuthError"),
+        code: z.literal("NOT_LOGGED_IN"),
+      })
+      .safeParse(error).success
+  )
+    return true;
+  return (
+    APICallError.isInstance(error) &&
+    isInferenceFundingRefusal(
+      error.statusCode ?? 0,
+      error.responseBody ?? "",
+      funding,
+    )
+  );
+}
+
 export function testerArmyModel(
   config = modelConfiguration(),
   fetcher: typeof fetch = fetch,
+  subscription = chatgpt(QUALITY_MODEL),
 ) {
-  const provider = createOpenAI({
+  const openai = createOpenAI({
     apiKey: config.TESTER_ARMY_CF_API_TOKEN,
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${config.TESTER_ARMY_CF_ACCOUNT_ID}/ai/v1`,
     headers: testerArmyGatewayHeaders(process.env.CI),
     fetch: failFastGatewayFetch(fetcher),
   });
-  // The unified endpoint names models `author/model` (`openai/gpt-…`).
-  return provider.responses(config.TESTER_ARMY_MODEL);
+  const paid = openai.responses(`openai/${QUALITY_MODEL}`);
+  const anthropic = createAnthropic({
+    apiKey: "gateway",
+    baseURL: gatewayBaseURL("anthropic"),
+    fetch: async (input, init) => {
+      const request = new Request(input, init);
+      const headers = strippedHeaders({ headers: request.headers });
+      headers.set(
+        "cf-aig-authorization",
+        `Bearer ${config.TESTER_ARMY_CF_API_TOKEN}`,
+      );
+      for (const [key, value] of Object.entries({
+        ...testerArmyGatewayHeaders(process.env.CI),
+        ...inferenceFundingHeaders("subscriber_credit"),
+      }))
+        headers.set(key, value);
+      return failFastGatewayFetch(fetcher)(
+        gatewayProviderUrl({
+          accountId: config.TESTER_ARMY_CF_ACCOUNT_ID,
+          gatewayId: CUBBY_AI_GATEWAY_ID,
+          provider: "anthropic",
+          endpoint: "v1/messages",
+        }),
+        {
+          method: request.method,
+          headers,
+          body: await request.arrayBuffer(),
+          signal: request.signal,
+        },
+      );
+    },
+  });
+  // An explicit OpenAI override remains a paid, single-model diagnostic lane.
+  if (config.TESTER_ARMY_MODEL.startsWith("openai/"))
+    return openai.responses(config.TESTER_ARMY_MODEL);
+  const preferred = anthropic(
+    config.TESTER_ARMY_MODEL.slice("anthropic/".length),
+  );
+  return wrapLanguageModel({
+    model: preferred,
+    middleware: {
+      wrapGenerate: async ({ doGenerate, params }) => {
+        try {
+          return await doGenerate();
+        } catch (error) {
+          if (!fundingRefused(error, "subscriber_credit")) throw error;
+          console.warn(
+            "[tester-army] Subscriber credit refused; trying ChatGPT",
+            error,
+          );
+        }
+        params.abortSignal?.throwIfAborted();
+        try {
+          return await subscription.doGenerate(params);
+        } catch (error) {
+          if (!fundingRefused(error, "subscription")) {
+            if (APICallError.isInstance(error) && error.isRetryable)
+              throw new APICallError({
+                ...error,
+                message: error.message,
+                isRetryable: false,
+              });
+            throw error;
+          }
+          console.warn(
+            "[tester-army] ChatGPT funding unavailable; trying paid Sol",
+            error,
+          );
+        }
+        params.abortSignal?.throwIfAborted();
+        return paid.doGenerate(params);
+      },
+      // Decision executor and preflight use generateText. Never expose partial
+      // output from one provider then replay it against another funding source.
+      wrapStream: async () => {
+        throw new Error(
+          "Tester Army funding fallback requires non-streaming calls",
+        );
+      },
+    },
+  });
 }
 
 /** Jev's decision SDK uses TypeSafe wire JSON; Cloudflare owns billing/auth. */
@@ -161,7 +281,7 @@ export function testerArmyDecisionModel(
         input: query,
         signal: request.signal,
         gateway: {
-          id: CUBBY_EVALUATION_GATEWAY_ID,
+          id: CUBBY_AI_GATEWAY_ID,
           skipCache: true,
           metadata: {
             environment: testAiGatewayEnvironment(process.env.CI),
@@ -212,6 +332,7 @@ export function testerArmyAgent(config = modelConfiguration()) {
 }
 
 export const testerArmyProviderOptions = {
+  anthropic: { thinking: { type: "adaptive" }, effort: "high" },
   openai: { forceReasoning: true, reasoningEffort: "medium", store: false },
 };
 

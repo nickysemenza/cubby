@@ -18,10 +18,12 @@ const request = {
     ["anthropic-version", "2023-06-01"],
     ["cf-aig-authorization", "Bearer attacker"],
     ["authorization", "Bearer attacker"],
+    ["cf-aig-byok-alias", "spoofed"],
+    ["cf-aig-no-wholesale", "false"],
     [
       "cf-aig-metadata",
       JSON.stringify({
-        cookbook: "Zuni",
+        cookbook: "Synthetic Kitchen",
         model: "claude-haiku-4-5",
         chunk: "k004",
         contract: "cookbook-indexed-v1",
@@ -38,7 +40,10 @@ const request = {
 // so the writer's accounting rules apply and the test reads them back typed.
 function fakePort(
   respond: () => Response,
-  selected: "gateway" | "chatgpt" = "gateway",
+  selected:
+    | "gateway"
+    | "chatgpt"
+    | ((opts: GatewayCallOptions) => "gateway" | "chatgpt") = "gateway",
   promptCache = { read: 0, write: 0 },
 ) {
   const sent: {
@@ -50,7 +55,9 @@ function fakePort(
   const recorded: Parameters<AiUsagePort["emit"]>[1][] = [];
   const port: GatewayForwardPort = {
     transport: (provider, opts) => (input, init) => {
-      opts.onTransport?.(selected);
+      opts.onTransport?.(
+        typeof selected === "function" ? selected(opts) : selected,
+      );
       sent.push({ provider, opts, url: String(input), init: init ?? {} });
       return Promise.resolve(respond());
     },
@@ -84,6 +91,141 @@ const db = {} as Database;
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("forwardGatewayRequest", () => {
+  // Credit refusals must reach the Rust ladder; ordinary errors must never buy a retry.
+  it.each([400, 401, 429, 500])(
+    "returns Anthropic %s unchanged without paid retry",
+    async (status) => {
+      const body =
+        status === 400
+          ? '{"error":{"message":"credit balance is too low"}}'
+          : "synthetic provider diagnostic";
+      const { port, sent, recorded } = fakePort(
+        () => new Response(body, { status }),
+      );
+      const out = await forwardGatewayRequest(
+        request,
+        { db, runId, feature: "cookbook-epub-parsing" },
+        port,
+      );
+      expect(out).toMatchObject({ status, body });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.opts.funding).toBe("subscriber_credit");
+      expect(recorded[0]?.costEvidence?.billingReason).not.toBe(
+        "subscriber_credit",
+      );
+    },
+  );
+
+  // Chunk boundaries may split SSE fields, JSON, and UTF-8 output; only exact
+  // capacity codes may buy a second attempt, which needs its own ledger row.
+  it("folds arbitrarily chunked Responses completion without losing output or usage", async () => {
+    const completed = {
+      model: "gpt-6-luna",
+      output: [{ content: [{ text: "café" }] }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    };
+    const bytes = new TextEncoder().encode(
+      `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: completed })}\n\n`,
+    );
+    const { port, sent, recorded } = fakePort(
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const byte of bytes)
+                controller.enqueue(new Uint8Array([byte]));
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      "chatgpt",
+    );
+    const out = await forwardGatewayRequest(
+      { ...request, path: "/openai/responses" },
+      { db, runId, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(JSON.parse(out.body)).toEqual(completed);
+    expect(out.headers).toContainEqual(["content-type", "application/json"]);
+    expect(sent.map((call) => call.opts.funding)).toEqual(["subscription"]);
+    expect(recorded[0]).toMatchObject({
+      inputTokens: 10,
+      outputTokens: 5,
+      transport: "chatgpt",
+    });
+  });
+
+  it.each([
+    "usage_limit_reached",
+    "subscription_unavailable",
+    "unknown_failure",
+  ])(
+    "handles structured subscription %s without generic paid retries",
+    async (code) => {
+      let attempt = 0;
+      const { port, sent, recorded } = fakePort(
+        () =>
+          ++attempt === 1
+            ? new Response(
+                `data: ${JSON.stringify({ type: "response.failed", response: { error: { code, message: "Synthetic diagnostic" } } })}\n\n`,
+                { headers: { "content-type": "text/event-stream" } },
+              )
+            : Response.json({
+                output: [],
+                usage: { input_tokens: 10, output_tokens: 5 },
+              }),
+        (opts) => (opts.funding === "paid" ? "gateway" : "chatgpt"),
+      );
+      const out = await forwardGatewayRequest(
+        { ...request, path: "/openai/responses" },
+        { db, runId, feature: "cookbook-epub-parsing" },
+        port,
+      );
+      const retry = code !== "unknown_failure";
+      expect(sent.map((call) => call.opts.funding)).toEqual(
+        retry ? ["subscription", "paid"] : ["subscription"],
+      );
+      expect(recorded[0]).toMatchObject({
+        status: "failed",
+        transport: "chatgpt",
+      });
+      expect(recorded).toHaveLength(retry ? 2 : 1);
+      expect(out.status).toBe(retry ? 200 : 502);
+      expect(recorded[1]?.transport).toBe(retry ? "gateway" : undefined);
+      const diagnostic = retry ? null : JSON.parse(out.body);
+      expect(diagnostic).toEqual(
+        retry ? null : { error: { code, message: "Synthetic diagnostic" } },
+      );
+    },
+  );
+
+  it("preserves a top-level SSE error code without buying a generic retry", async () => {
+    const error = {
+      type: "error",
+      code: "invalid_request_error",
+      message: "Synthetic raw diagnostic",
+      param: "input",
+    };
+    const { port, sent, recorded } = fakePort(
+      () =>
+        new Response(`data: ${JSON.stringify(error)}\n\n`, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      "chatgpt",
+    );
+    const out = await forwardGatewayRequest(
+      { ...request, path: "/openai/responses" },
+      { db, runId, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(JSON.parse(out.body)).toEqual({ error });
+    expect(out.status).toBe(502);
+    expect(sent).toHaveLength(1);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.status).toBe("failed");
+  });
+
   it("forwards the built request with the server's token and feature, and leaves pricing to the catalog consumer", async () => {
     const { port, sent, recorded } = fakePort(
       () =>
@@ -107,6 +249,8 @@ describe("forwardGatewayRequest", () => {
     expect(call?.url).toBe("https://ai-gateway.invalid/anthropic/v1/messages");
     // The crate decides its own caching; the forwarder never forces a skip.
     expect(call?.opts.skipCache).toBeUndefined();
+    expect(call?.opts.funding).toBe("subscriber_credit");
+    expect(recorded[0]?.costEvidence?.billingReason).toBe("subscriber_credit");
     // Regression: the crate's cookbook, chunk, contract, and model tags once
     // went to the gateway verbatim (a log filter and spend bucket per chunk);
     // `model` and `purpose` are still read below for the usage row.
@@ -118,6 +262,8 @@ describe("forwardGatewayRequest", () => {
     expect(headers.get("authorization")).toBeNull();
     expect(headers.get("cf-aig-authorization")).toBeNull();
     expect(headers.get("cf-aig-metadata")).toBeNull();
+    expect(headers.get("cf-aig-byok-alias")).toBeNull();
+    expect(headers.get("cf-aig-no-wholesale")).toBeNull();
     expect(headers.get("anthropic-version")).toBe("2023-06-01");
     expect(call?.init.body).toBe(JSON.stringify(request.body));
 
@@ -131,7 +277,7 @@ describe("forwardGatewayRequest", () => {
         outputTokens: 5,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-        chargedCost: null,
+        chargedCost: 0,
         cacheStatus: "none",
         gatewayLogId: "log-1",
         transport: "gateway",
@@ -160,13 +306,13 @@ describe("forwardGatewayRequest", () => {
         cacheReadTokens: 40,
         cacheWriteTokens: 7,
         cacheStatus: "none",
-        chargedCost: null,
+        chargedCost: 0,
       }),
     ]);
   });
 
-  // The crate's OpenAI Responses calls ride the household's ChatGPT plan when
-  // it is connected; that answer is plan usage, not an API-priced call.
+  // Accounting trusts the observed transport, even if a port supplies a
+  // plan answer for a subscription-funded request.
   it("attributes a ChatGPT plan answer to chatgpt at no API cost", async () => {
     const { port, recorded } = fakePort(
       () =>
@@ -207,6 +353,7 @@ describe("forwardGatewayRequest", () => {
       port,
     );
     expect(out.headers).toContainEqual(["cf-aig-cache-status", "HIT"]);
+    expect(recorded[0]?.costEvidence?.billingReason).toBe("cache");
     expect(recorded).toEqual([
       expect.objectContaining({
         inputTokens: 10,

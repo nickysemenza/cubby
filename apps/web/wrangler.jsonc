@@ -307,7 +307,8 @@
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
+  //   AI_GATEWAY_API_KEY (gateway inference token for named BYOK passthrough)
   //   GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
-  // Note: production uses Hyperdrive instead of DATABASE_URL and the AI binding
-  // instead of AI_GATEWAY_API_KEY. The latter stays in local .env for Vite dev.
+  // Production uses Hyperdrive instead of DATABASE_URL. Managed inference uses
+  // the AI binding; named BYOK uses native REST with AI_GATEWAY_API_KEY.
 }

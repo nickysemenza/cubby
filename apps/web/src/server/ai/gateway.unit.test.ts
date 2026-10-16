@@ -219,7 +219,7 @@ describe("gatewayFetch on the dev REST fallback", () => {
 
     const [call] = sent;
     expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby-testing/compat/chat/completions",
+      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/compat/chat/completions",
     );
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBeNull();
@@ -497,7 +497,7 @@ describe("gatewayFetch Workers AI", () => {
         decisionInput,
         {
           gateway: {
-            id: "cubby-testing",
+            id: "cubby",
             metadata: outbound,
             skipCache: undefined,
             cacheTtl: 604_800,
@@ -534,7 +534,7 @@ describe("gatewayFetch Workers AI", () => {
     );
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBe("Bearer dev-token");
-    expect(headers.get("cf-aig-gateway-id")).toBe("cubby-testing");
+    expect(headers.get("cf-aig-gateway-id")).toBe("cubby");
     expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
       outbound,
     );

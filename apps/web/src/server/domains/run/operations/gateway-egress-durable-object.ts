@@ -1,7 +1,8 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
+import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   runUniversalGateway,
+  runNativeGateway,
   workersAiModel,
 } from "@cubby/shared/ai/gateway-request";
 import { DurableObject } from "cloudflare:workers";
@@ -248,8 +249,14 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const input = gatewayEgressInput.parse(await request.json());
-    // Binding calls use managed credentials. BYOK routes can be added with an explicit billing declaration.
-    const admitted = await this.admit("unified");
+    // Stored-key traffic does not consume Unified Billing's capacity window.
+    const credit =
+      input.provider === "anthropic" &&
+      input.headers["cf-aig-byok-alias"] === "subscriber-credit" &&
+      input.headers["cf-aig-no-wholesale"] === "true";
+    const admitted = await this.admit(
+      credit ? "subscriber-credit:anthropic" : "unified",
+    );
     if (admitted.kind === "wait")
       return new Response(
         "AI Gateway admission is waiting for shared capacity",
@@ -299,8 +306,28 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       controller.signal.throwIfAborted();
       const { provider, endpoint, query, controls } = input;
       const gatewayId = aiGatewayId(controls.metadata.environment);
-      const response =
-        provider === "workers-ai"
+      const outbound = {
+        endpoint,
+        input: new URL(`https://gateway.internal/${endpoint}`),
+        init: { method: "POST" },
+        headers: new Headers(input.headers),
+        signal: controller.signal,
+        query: async () => query,
+      };
+      if (credit && !this.env.AI_GATEWAY_API_KEY)
+        throw new Error(
+          "Named subscriber-credit BYOK requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
+        );
+      const response = credit
+        ? await runNativeGateway({
+            accountId: CF_ACCOUNT_ID,
+            gatewayId,
+            provider,
+            token: this.env.AI_GATEWAY_API_KEY,
+            request: outbound,
+            controls,
+          })
+        : provider === "workers-ai"
           ? await this.env.AI.run(workersAiModel(endpoint), query, {
               gateway: { id: gatewayId, ...controls },
               returnRawResponse: true,
@@ -309,14 +336,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
           : await runUniversalGateway(
               this.env.AI.gateway(gatewayId),
               provider,
-              {
-                endpoint,
-                input: new URL(`https://gateway.internal/${endpoint}`),
-                init: { method: "POST" },
-                headers: new Headers(input.headers),
-                signal: controller.signal,
-                query: async () => query,
-              },
+              outbound,
               { id: gatewayId, ...controls },
             );
       if (!(response instanceof Response))

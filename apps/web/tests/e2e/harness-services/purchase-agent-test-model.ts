@@ -1,4 +1,4 @@
-/* eslint-disable anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- This deterministic fake implements and recursively inspects the external OpenAI Responses wire shape. */
+/* eslint-disable anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- This deterministic fake implements and recursively inspects the external OpenAI Responses and Anthropic Messages wire shapes. */
 import type {
   ScriptStep,
   ScriptValue,
@@ -53,20 +53,68 @@ function streamed(item: object, id: string) {
   );
 }
 
-const toolResponse = (call: ResponsesFunctionCall) =>
-  streamed(call, `workerd-${call.id}`);
+type Wire = "responses" | "messages";
 
-const textResponse = (text: string) =>
-  streamed(
-    {
-      type: "message",
-      id: "workerd-text",
-      role: "assistant",
-      status: "completed",
-      content: [{ type: "output_text", text, annotations: [] }],
-    },
-    "workerd-text",
+/** Messages consumers require native event names, block deltas and stop reasons. */
+function anthropicStream(block: object, delta: object, tool: boolean) {
+  const event = (type: string, fields: object) =>
+    `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;
+  return new Response(
+    [
+      event("message_start", {
+        message: {
+          id: "workerd-message",
+          type: "message",
+          role: "assistant",
+          model: "scripted",
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 0 },
+        },
+      }),
+      event("content_block_start", { index: 0, content_block: block }),
+      event("content_block_delta", { index: 0, delta }),
+      event("content_block_stop", { index: 0 }),
+      event("message_delta", {
+        delta: {
+          stop_reason: tool ? "tool_use" : "end_turn",
+          stop_sequence: null,
+        },
+        usage: { output_tokens: 1 },
+      }),
+      event("message_stop", {}),
+    ].join(""),
+    { headers: { "content-type": "text/event-stream" } },
   );
+}
+
+const toolResponse = (call: ResponsesFunctionCall, wire: Wire) =>
+  wire === "messages"
+    ? anthropicStream(
+        { type: "tool_use", id: call.call_id, name: call.name, input: {} },
+        { type: "input_json_delta", partial_json: call.arguments },
+        true,
+      )
+    : streamed(call, `workerd-${call.id}`);
+
+const textResponse = (text: string, wire: Wire) =>
+  wire === "messages"
+    ? anthropicStream(
+        { type: "text", text: "" },
+        { type: "text_delta", text },
+        false,
+      )
+    : streamed(
+        {
+          type: "message",
+          id: "workerd-text",
+          role: "assistant",
+          status: "completed",
+          content: [{ type: "output_text", text, annotations: [] }],
+        },
+        "workerd-text",
+      );
 
 type InputItem = {
   type?: string;
@@ -74,6 +122,38 @@ type InputItem = {
   output?: unknown;
   content?: string | Array<{ text?: string }>;
 };
+
+type AnthropicMessage = {
+  role: string;
+  content:
+    | string
+    | Array<{
+        type: string;
+        text?: string;
+        id?: string;
+        tool_use_id?: string;
+        content?: unknown;
+      }>;
+};
+
+/** Flatten native blocks in transcript order; the script engine stays wire agnostic. */
+function messagesInput(messages: AnthropicMessage[]): InputItem[] {
+  return messages.flatMap((message) => {
+    if (typeof message.content === "string")
+      return [{ content: message.content }];
+    return message.content.map((part): InputItem => {
+      if (part.type === "tool_use")
+        return { type: "function_call", call_id: part.id };
+      if (part.type === "tool_result")
+        return {
+          type: "function_call_output",
+          call_id: part.tool_use_id,
+          output: part.content,
+        };
+      return { content: part.text ?? "" };
+    });
+  });
+}
 
 /** Read only the tagged messages a researcher actually sees in its transcript. */
 function signals(input: InputItem[]) {
@@ -319,13 +399,29 @@ export default {
 
     const body = (await request.json()) as {
       input?: InputItem[];
+      messages?: AnthropicMessage[];
+      output_config?: { effort?: string };
       model?: string;
       reasoning?: { effort?: string };
     };
-    checkInference(body);
-    const input = body.input ?? [];
+    const wire: Wire = url.pathname.endsWith("/messages")
+      ? "messages"
+      : "responses";
+    const input =
+      wire === "messages"
+        ? messagesInput(body.messages ?? [])
+        : (body.input ?? []);
+    const normalized = {
+      ...body,
+      input,
+      reasoning:
+        wire === "messages"
+          ? { effort: body.output_config?.effort }
+          : body.reasoning,
+    };
+    checkInference(normalized);
     const steps = selectedScript(input);
-    const requestBody = JSON.stringify(body);
+    const requestBody = JSON.stringify(normalized);
     const browserCalls = new Set(
       steps.flatMap((step) =>
         "call" in step && step.tool === "issue_browser_command"
@@ -340,15 +436,18 @@ export default {
       if ("call" in step) {
         if (issued(requestBody, step.call)) continue;
         emitted.push(step.call);
-        return toolResponse({
-          type: "function_call",
-          id: step.call,
-          call_id: step.call,
-          name: step.tool,
-          arguments: JSON.stringify(
-            resolveValue(step.args, input, step.call, requestBody),
-          ),
-        });
+        return toolResponse(
+          {
+            type: "function_call",
+            id: step.call,
+            call_id: step.call,
+            name: step.tool,
+            arguments: JSON.stringify(
+              resolveValue(step.args, input, step.call, requestBody),
+            ),
+          },
+          wire,
+        );
       }
       if ("check" in step) {
         const output = JSON.stringify(toolOutput(input, step.check) ?? null);
@@ -369,9 +468,9 @@ export default {
       );
       if (markers.some((marker) => requestBody.includes(marker))) continue;
       record(`await:${markers.join("|")}`);
-      return textResponse(step.text ?? "Waiting for the next run event.");
+      return textResponse(step.text ?? "Waiting for the next run event.", wire);
     }
     record("script-complete");
-    return textResponse("The scripted scenario has no further steps.");
+    return textResponse("The scripted scenario has no further steps.", wire);
   },
 };

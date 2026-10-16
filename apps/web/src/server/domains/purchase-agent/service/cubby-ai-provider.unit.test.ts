@@ -30,6 +30,29 @@ const completedResponse = (headers: Record<string, string> = {}) =>
   );
 
 describe("createCubbyGatewayFetch", () => {
+  it("preserves named credit controls through the live model peer", async () => {
+    let headers = new Headers();
+    const send = createCubbyGatewayFetch("anthropic", {
+      funding: "subscriber_credit",
+      gateway: () =>
+        gateway(async () => {
+          throw new Error("Unexpected production gateway");
+        }),
+      testModel: {
+        fetch: async (request) => {
+          headers = request.headers;
+          return Response.json({});
+        },
+      },
+    });
+    await send("https://ai-gateway.invalid/anthropic/v1/messages", {
+      method: "POST",
+      body: "{}",
+    });
+    expect(headers.get("cf-aig-byok-alias")).toBe("subscriber-credit");
+    expect(headers.get("cf-aig-no-wholesale")).toBe("true");
+    expect(headers.has("x-api-key")).toBe(false);
+  });
   // The agent adapter must forward both opt-in and admission; otherwise a
   // disconnected research Run waits despite its existing paid allowance.
   it("forwards durable admission for budgeted disconnected research", async () => {

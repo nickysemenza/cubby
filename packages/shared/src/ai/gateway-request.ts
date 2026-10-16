@@ -447,6 +447,54 @@ async function observeGatewayResponse(
 /** What carried a model request: the household ChatGPT plan or the gateway. */
 export type GatewayTransport = "gateway" | "chatgpt";
 
+export type InferenceFunding = "subscriber_credit" | "subscription" | "paid";
+
+/** Named BYOK is opt-in; the default key must remain unset for paid fallback. */
+export function inferenceFundingHeaders(
+  funding: InferenceFunding,
+): Record<string, string> {
+  return funding === "subscriber_credit"
+    ? {
+        "cf-aig-byok-alias": "subscriber-credit",
+        "cf-aig-no-wholesale": "true",
+      }
+    : {};
+}
+
+/** Provider capacity refusals only; never hide bad keys, invalid prompts or outages. */
+export function isInferenceFundingRefusal(
+  status: number,
+  body: string,
+  funding: InferenceFunding,
+): boolean {
+  if (funding === "paid" || ![400, 402, 429].includes(status)) return false;
+  if (funding === "subscription")
+    return (
+      [400, 429].includes(status) &&
+      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_unavailable)"/u.test(
+        body,
+      )
+    );
+  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|"type"\s*:\s*"rate_limit_error"/iu.test(
+    body,
+  );
+}
+
+/** Verified pi-ai terminal formats for structured provider SSE quota errors. */
+export function isInferenceStreamFundingRefusal(
+  message: string,
+  funding: InferenceFunding,
+): boolean {
+  if (funding === "subscription")
+    return /^(?:Error Code )?(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded):/u.test(
+      message,
+    );
+  return (
+    funding === "subscriber_credit" &&
+    /credit balance is too low|enforced_spend_limit_reached/iu.test(message)
+  );
+}
+
 const subscriptionQuotaCode = z.object({
   code: z.literal("subscription_sharing_usage_limit_exceeded"),
 });
@@ -825,6 +873,7 @@ export interface GatewayFetchRequest {
 }
 
 export interface GatewayFetchRoutes extends GatewayResponseObservers {
+  funding?: InferenceFunding;
   /** The gateway provider segment the SDK's placeholder base names. */
   provider: string;
   /**
@@ -912,12 +961,14 @@ async function routeSubscriptionResponse(
  */
 export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
   const budgetedFallback =
+    routes.funding === undefined &&
     routes.subscriptionFallback === "budgeted" &&
     routes.beforePaidRequest !== undefined;
-  const requireSubscription =
-    (routes.subscriptionRequired ||
-      routes.subscriptionFallback === "budgeted") &&
-    !budgetedFallback;
+  const requireSubscription = routes.funding
+    ? routes.funding === "subscription"
+    : (routes.subscriptionRequired ||
+        routes.subscriptionFallback === "budgeted") &&
+      !budgetedFallback;
   return async (input, init) => {
     const endpoint = endpointFor(routes.provider, requestUrl(input));
     let decoded: Promise<GatewayQuery> | undefined;
@@ -932,6 +983,11 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
           (query) => routes.rewriteQuery?.(query) ?? query,
         )),
     };
+    if (routes.funding)
+      for (const [name, value] of Object.entries(
+        inferenceFundingHeaders(routes.funding),
+      ))
+        request.headers.set(name, value);
     // Reads the already-decoded query or a string body; never consumes a stream body.
     const streamRequested = async () => {
       let query: unknown = await decoded;
@@ -949,12 +1005,14 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {
-      await routes.beforePaidRequest?.(request);
+      if (routes.funding !== "subscriber_credit")
+        await routes.beforePaidRequest?.(request);
       routes.onTransport?.("gateway");
       return observe(await testPeer(request));
     }
     if (
       routes.chatGpt &&
+      routes.funding !== "paid" &&
       routes.provider === "openai" &&
       endpoint === "responses"
     ) {
@@ -974,12 +1032,28 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         if (result) return result;
       }
     }
+    if (routes.funding === "subscription") {
+      routes.onTransport?.("chatgpt");
+      return observe(
+        Response.json(
+          {
+            error: {
+              code: "subscription_unavailable",
+              message:
+                "ChatGPT subscription is disconnected or unavailable in this runtime",
+            },
+          },
+          { status: 429 },
+        ),
+      );
+    }
     if (requireSubscription)
       throw new Error(
         "Required ChatGPT subscription is unavailable; reconnect before retrying.",
       );
     request.signal?.throwIfAborted();
-    await routes.beforePaidRequest?.(request);
+    if (routes.funding !== "subscriber_credit")
+      await routes.beforePaidRequest?.(request);
     request.signal?.throwIfAborted();
     routes.onTransport?.("gateway");
     return observe(await routes.gateway(request));
@@ -1000,6 +1074,33 @@ export interface UniversalGateway {
       signal?: AbortSignal;
     },
   ): Promise<Response>;
+}
+
+/** Named BYOK aliases are honored only by native provider passthrough. */
+export async function runNativeGateway(args: {
+  accountId: string;
+  gatewayId: string;
+  token: string;
+  provider: string;
+  request: GatewayFetchRequest;
+  controls: GatewayControls;
+  fetcher?: typeof fetch;
+}): Promise<Response> {
+  const headers = new Headers(args.request.headers);
+  headers.set("cf-aig-authorization", `Bearer ${args.token}`);
+  for (const [name, value] of Object.entries(
+    gatewayControlHeaders(args.controls),
+  ))
+    headers.set(name, value);
+  return (args.fetcher ?? fetch)(
+    gatewayProviderUrl({ ...args, endpoint: args.request.endpoint }),
+    {
+      method: args.request.init?.method ?? "POST",
+      headers,
+      body: JSON.stringify(await args.request.query()),
+      signal: args.request.signal,
+    },
+  );
 }
 
 /** A provider request over the binding's Universal endpoint. */

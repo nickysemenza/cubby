@@ -429,6 +429,7 @@ documented cache key does not include the gateway or metadata, so shared-gateway
 traffic can return another environment's cached response
 ([caching](https://developers.cloudflare.com/ai-gateway/features/caching/#how-the-cache-key-works)).
 
+All environments use `cubby`; `environment` metadata separates their logs and spend rules.
 The shared gateway also shares Cloudflare's Unified Billing allowance of
 200 requests per 60 seconds and its gateway-wide rate limit; this is an
 accepted capacity tradeoff. A spend limit can filter by `environment` to budget
@@ -446,6 +447,45 @@ and tooling callers. Provider credentials or unified-billing
 configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
+
+### Claude subscriber credits
+
+Pi coordinators and Tester Army use subscriber credits first, then their existing
+ChatGPT subscription transport, then paid Unified Billing. The implementation
+and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#funding-and-gateway-amendment)
+records why paid fallback is allowed. Fixed-model evaluations do not change model.
+
+1. Link the eligible Claude plan to the intended Anthropic Console organization.
+2. Create a dedicated Cubby workspace with a monthly spend limit no larger than
+   the included allowance, then create an API key in that workspace. Keys draw
+   from the organization's shared credit balance; existing purchased credits and
+   auto-reload can otherwise keep the key usable after promotional exhaustion.
+3. In Cloudflare **AI → AI Gateway → cubby → Provider Keys**, add the Anthropic
+   key with alias **subscriber-credit**. Never put it in repository files, CI,
+   application environment variables or chat. Leave the **default** Anthropic
+   BYOK key unset; unaliased requests must be able to use paid Unified Billing.
+4. Keep Unified Billing enabled and Require provider credentials disabled for
+   the final paid route. Credit requests explicitly send the named alias and
+   `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
+   diagnostics rather than silently spending paid credits.
+
+Named BYOK uses the native Anthropic endpoint: Universal `gateway.run()` does
+not honor the alias in its payload. The Worker authenticates native passthrough
+with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
+Anthropic key). Deployment uploads that secret atomically with the new version
+from the existing Actions `TESTER_ARMY_CF_API_TOKEN` secret. Managed paid calls
+retain the binding. Missing native authentication fails with an explicit diagnostic.
+
+Console spend limits reset on the first of the calendar month, while promotional
+credits refresh on the subscription billing cycle. A workspace cap is therefore
+not an exact promotional-balance detector: an organization with purchased
+credits may spend those before its cap. Console Billing owns the actual balance
+and expiry; do not infer them from Cubby's usage totals. The retired
+`cubby-testing` gateway can be removed after older deployments and local
+processes stop using it; deleting it does not update those callers. Requests
+that omit gateway scoping can recreate Cloudflare's `default` gateway.
+
+### Pricing and transport
 
 AI catalog/pricing implementation is owned by
 `packages/shared/src/ai/pricing.ts`; runtime model defaults by

@@ -2,12 +2,9 @@ import { z } from "zod";
 
 /** Production egress is admitted by the shared gateway Durable Object. */
 export const CUBBY_AI_GATEWAY_ID = "cubby";
-/** Live evaluation has a separate capacity window from production. */
-export const CUBBY_EVALUATION_GATEWAY_ID = "cubby-testing";
-export const aiGatewayId = (environment: AiGatewayEnvironment): string =>
-  environment === "production"
-    ? CUBBY_AI_GATEWAY_ID
-    : CUBBY_EVALUATION_GATEWAY_ID;
+/** One gateway for every environment; metadata retains attribution. */
+export const aiGatewayId = (_environment: AiGatewayEnvironment): string =>
+  CUBBY_AI_GATEWAY_ID;
 
 /** Cubby's Cloudflare account, which owns that gateway and Workers AI. */
 export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";

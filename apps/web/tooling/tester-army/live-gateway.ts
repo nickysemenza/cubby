@@ -1,6 +1,6 @@
 import {
   type AiGatewayEnvironment,
-  CUBBY_EVALUATION_GATEWAY_ID,
+  CUBBY_AI_GATEWAY_ID,
   proxiedAiGatewayMetadata,
 } from "@cubby/shared/ai/gateway-metadata";
 import {
@@ -76,7 +76,7 @@ function forward(
         token: env.GATEWAY_TOKEN,
         model: workersAiModel(url.pathname.slice("/workers-ai/".length)),
         input: JSON.parse(new TextDecoder().decode(body)),
-        gateway: { id: CUBBY_EVALUATION_GATEWAY_ID, metadata, skipCache: true },
+        gateway: { id: CUBBY_AI_GATEWAY_ID, metadata, skipCache: true },
       });
     } catch (error) {
       // The run body carries the input as JSON, so it cannot pass bytes on.
@@ -97,7 +97,7 @@ function forward(
   return fetch(
     gatewayProviderUrl({
       accountId: env.ACCOUNT_ID,
-      gatewayId: CUBBY_EVALUATION_GATEWAY_ID,
+      gatewayId: CUBBY_AI_GATEWAY_ID,
       provider: route,
       endpoint: `${url.pathname.slice(`/${route}/`.length)}${url.search}`,
     }),

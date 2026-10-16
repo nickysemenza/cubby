@@ -189,7 +189,7 @@ function idsWhere<const Criteria extends Partial<AiModelDeclaration>>(
 
 export type AiModelId = keyof Declared;
 
-const supportedChatModelSchema = z.enum(idsWhere({ role: "chat" }));
+export const supportedChatModelSchema = z.enum(idsWhere({ role: "chat" }));
 export type SupportedChatModel = z.infer<typeof supportedChatModelSchema>;
 
 const supportedEmbeddingModelSchema = z.enum(idsWhere({ role: "embedding" }));

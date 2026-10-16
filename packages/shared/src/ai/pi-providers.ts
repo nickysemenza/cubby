@@ -7,6 +7,9 @@ import {
   type ProviderStreams,
   type AssistantMessage,
   type AssistantMessageEventStream,
+  type AssistantMessageEvent,
+  type StreamOptions,
+  type ProviderStreamOptions,
 } from "@earendil-works/pi-ai";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
@@ -16,11 +19,19 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 
 import { z } from "zod";
 
-import { gatewayBaseURL, gatewayResponseInfo } from "./gateway-request";
+import {
+  gatewayBaseURL,
+  gatewayResponseInfo,
+  isInferenceFundingRefusal,
+  isInferenceStreamFundingRefusal,
+  type InferenceFunding,
+} from "./gateway-request";
 import {
   anthropicChatModelSchema,
   type ChatGatewayProvider,
   openAiChatModelSchema,
+  getChatModelConfig,
+  type SupportedChatModel,
 } from "./models";
 
 /**
@@ -35,6 +46,7 @@ export type GatewayFetchFor = (
   provider: ChatGatewayProvider,
   /** Marks the call unbilled: a ChatGPT plan response pi-ai must not price. */
   onUnbilledResponse?: () => void,
+  funding?: InferenceFunding,
 ) => typeof fetch;
 
 /** Providers SDKs refuse to run without some key; the shims strip it. */
@@ -210,6 +222,44 @@ function withPdfInputFiles(fetchFn: typeof fetch): typeof fetch {
   };
 }
 
+const pdfJson = z.json();
+type PdfJson = z.infer<typeof pdfJson>;
+
+/** PDFs occur both in user content and nested MCP tool results. */
+function anthropicDocumentParts(value: PdfJson): PdfJson {
+  if (Array.isArray(value)) return value.map(anthropicDocumentParts);
+  if (value === null || typeof value !== "object") return value;
+  const source = value.source;
+  const pdf =
+    value.type === "image" &&
+    source !== null &&
+    typeof source === "object" &&
+    !Array.isArray(source) &&
+    source.media_type === "application/pdf";
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      key === "type" && pdf ? "document" : anthropicDocumentParts(entry),
+    ]),
+  );
+}
+
+function withAnthropicPdfDocuments(fetchFn: typeof fetch): typeof fetch {
+  return (input, init) => {
+    if (
+      typeof init?.body !== "string" ||
+      !init.body.includes("application/pdf")
+    )
+      return fetchFn(input, init);
+    return fetchFn(input, {
+      ...init,
+      body: JSON.stringify(
+        anthropicDocumentParts(pdfJson.parse(JSON.parse(init.body))),
+      ),
+    });
+  };
+}
+
 function catalogModels<TApi extends Api>(
   provider: Provider<TApi>,
   ids: readonly string[],
@@ -247,10 +297,176 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         gatewayBaseURL("anthropic"),
       ),
       api: throughFetch(anthropicMessagesApi(), (onUnbilledResponse) =>
-        fetchFor("anthropic", onUnbilledResponse),
+        withAnthropicPdfDocuments(fetchFor("anthropic", onUnbilledResponse)),
       ),
     }),
   ];
+}
+
+/**
+ * Funding retries restart one generation from its input transcript. Hold every
+ * event until that attempt settles, so a refused partial tool call never runs.
+ * Completed prior turns and their writes remain in pi's durable transcript.
+ */
+export function fundedCubbyPiProviders(
+  fetchFor: GatewayFetchFor,
+  onRefusedAttempt?: (message: AssistantMessage) => Promise<void>,
+): Provider[] {
+  const base = cubbyPiProviders(fetchFor);
+  return base.map((provider): Provider => {
+    const run = (
+      model: Model<Api>,
+      context: Parameters<Provider["streamSimple"]>[1],
+      options: StreamOptions | undefined,
+      simple: boolean,
+    ) => {
+      const output = createAssistantMessageEventStream();
+      void (async () => {
+        const fast = model.id.includes("haiku") || model.id === "gpt-6-luna";
+        const primary: SupportedChatModel = fast
+          ? "claude-haiku-4-5"
+          : "claude-opus-5-5";
+        const subscription: SupportedChatModel = fast
+          ? "gpt-6-luna"
+          : "gpt-6-sol";
+        const attempts: {
+          model: SupportedChatModel;
+          funding: InferenceFunding;
+        }[] = [
+          { model: primary, funding: "subscriber_credit" },
+          { model: subscription, funding: "subscription" },
+          { model: primary, funding: "paid" },
+        ];
+        for (const attempt of attempts) {
+          let refused = false;
+          const providers = cubbyPiProviders((route, unbilled) => {
+            const fetch = fetchFor(route, unbilled, attempt.funding);
+            return async (input, init) => {
+              const response = await fetch(input, init);
+              if (!response.ok)
+                refused = isInferenceFundingRefusal(
+                  response.status,
+                  await response.clone().text(),
+                  attempt.funding,
+                );
+              if (response.ok && attempt.funding === "subscriber_credit")
+                unbilled?.();
+              return response;
+            };
+          });
+          const route = getChatModelConfig(attempt.model).gatewayProvider;
+          const selected = providers.find(
+            (candidate) => candidate.id === route,
+          );
+          const target = selected
+            ?.getModels()
+            .find((candidate) => candidate.id === attempt.model);
+          if (!selected || !target)
+            throw new Error(`Missing funded model ${attempt.model}`);
+          const stream = simple
+            ? selected.streamSimple(target, context, {
+                ...options,
+                maxRetries: 0,
+              })
+            : selected.stream(target, context, {
+                ...fundingOptions(options, route),
+                maxRetries: 0,
+              });
+          const events: AssistantMessageEvent[] = [];
+          for await (const event of stream) events.push(event);
+          const result = await stream.result();
+          const failed = result.stopReason === "error";
+          // pi exposes a late SSE quota refusal on its terminal error message.
+          const quota =
+            refused ||
+            isInferenceStreamFundingRefusal(
+              result.errorMessage ?? "",
+              attempt.funding,
+            );
+          if (attempt.funding === "subscriber_credit")
+            creditMessages.add(result);
+          if (
+            failed &&
+            quota &&
+            !options?.signal?.aborted &&
+            attempt.funding !== "paid"
+          ) {
+            await onRefusedAttempt?.(result);
+            continue;
+          }
+          for (const event of events) output.push(event);
+          output.end(result);
+          return;
+        }
+      })().catch((error: unknown) => {
+        // Dispatch errors occur before a provider's own terminal event exists.
+        const message: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          timestamp: Date.now(),
+          stopReason: "error",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+        };
+        output.push({ type: "error", reason: "error", error: message });
+        output.end(message);
+      });
+      return output;
+    };
+    return {
+      ...provider,
+      stream: (model, context, options) => run(model, context, options, false),
+      streamSimple: (model, context, options) =>
+        run(model, context, options, true),
+    };
+  });
+}
+
+const creditMessages = new WeakSet<object>();
+
+/** Keep forced tool selection while translating the two provider vocabularies. */
+function fundingOptions(
+  options: StreamOptions | undefined,
+  route: ChatGatewayProvider,
+): ProviderStreamOptions {
+  const parsed = z
+    .looseObject({
+      toolChoice: z
+        .union([z.string(), z.looseObject({ name: z.string() })])
+        .optional(),
+      reasoningEffort: z.string().optional(),
+      effort: z.string().optional(),
+    })
+    .parse(options ?? {});
+  const { toolChoice, reasoningEffort, effort, ...common } = parsed;
+  const name = typeof toolChoice === "object" ? toolChoice.name : undefined;
+  return route === "anthropic"
+    ? {
+        ...common,
+        ...(name ? { toolChoice: { type: "tool", name } } : {}),
+        effort: effort ?? reasoningEffort,
+      }
+    : {
+        ...common,
+        ...(name ? { toolChoice: { type: "function", name } } : {}),
+        reasoningEffort: reasoningEffort ?? effort,
+      };
 }
 
 /** pi initializes zero counters before a provider responds. Preserve an
@@ -282,7 +498,9 @@ export function piTokenUsage(message: {
                 source: "estimate" as const,
                 pricingSource: "pi_sdk" as const,
               }),
-          billingReason: "standard" as const,
+          billingReason: creditMessages.has(message)
+            ? ("subscriber_credit" as const)
+            : ("standard" as const),
         }
       : null,
     standardCost: unknown

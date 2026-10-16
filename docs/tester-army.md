@@ -122,8 +122,38 @@ exercise it.
 The driver always uses Tester Army's decision executor with `typesafe/jev`
 through Cloudflare's gateway-scoped Workers AI `/ai/run` route. There is no
 provider switch or text-model fallback for decisions. Jev chooses semantic UI
-actions; a separate Gateway OpenAI model writes field values and handles
-extraction and judgment (`TESTER_ARMY_MODEL`, default `openai/${FAST_MODEL}`).
+actions; a separate text model writes field values and handles extraction
+and judgment (`TESTER_ARMY_MODEL`, default `anthropic/claude-opus-5-5`).
+Opus uses native Anthropic Messages through `cubby`, with named BYOK
+alias `subscriber-credit` and `cf-aig-no-wholesale: true`. A recognized
+credit, quota or spend-limit refusal advances that call to Sol
+through the existing `e2e/oauth/chatgpt` subscription adapter, then paid Sol
+through Unified Billing when subscription quota is exhausted or no local
+OAuth login is stored. A missing BYOK alias or invalid credential currently
+fails with its raw diagnostic: there is no verified gateway error signature
+that safely distinguishes that setup failure from arbitrary authorization errors.
+Paid Sol carries no BYOK alias. Any paid Anthropic path additionally requires
+the gateway default Anthropic BYOK key to be unset.
+
+The subscription adapter owns its existing token store and refresh flow;
+`e2e login openai` provisions it locally. CI can provision the existing `E2E_OAUTH_CREDENTIALS` store. After a supported
+`e2e login openai`, copy the OAuth credential-store JSON into an Actions secret
+named `E2E_OAUTH_CREDENTIALS`, then bind that secret to the same environment
+variable on Tester Army inference steps. The store lives at
+`$XDG_CONFIG_HOME/e2e/oauth.json` or `~/.config/e2e/oauth.json`; do not print
+it or include it in run artifacts. Tester Army CI jobs forward this secret when configured.
+The environment store cannot persist refreshed tokens, so replace the secret
+with renewed credentials when required. Live subscription fallback in CI is
+not verified by the isolated transport tests. Without a login, the call uses paid Sol.
+The subscription adapter is the existing exception to billed-provider
+gateway routing; no new HTTP endpoint or authentication mechanism is added.
+
+Fallback is per non-streaming text call and discards failed output. Ordinary
+400/401 errors, unknown 429s, network failures and cancellation still fail
+with raw diagnostics. Funding transitions log the original refusal. Streaming
+text calls are rejected before inference because this executor uses
+`generateText`. An explicit `openai/gpt-…` override selects a single paid
+Responses model; `anthropic/claude-…` retains the funding ladder.
 Jev is text-only, so screenshot/coordinate decisions remain disabled.
 
 Set `TESTER_ARMY_CF_API_TOKEN` locally or as an Actions secret. It must authorize
@@ -133,9 +163,10 @@ falling back to the primary checkout's file from a worktree.
 `TESTER_ARMY_ENV_FILE` names a different `.env`. Only the inference token is
 read from that file; application database/storage settings do not enter the
 synthetic harness. `TESTER_ARMY_CF_ACCOUNT_ID` overrides Cubby's default account.
-All traffic uses gateway `cubby`, cache bypass, `feature=tester-army`,
+Billed-provider traffic uses gateway `cubby`, cache bypass, `feature=tester-army`,
 `operation=driver`, and `environment=ci` or `development`. Revisions stay in the
-sanitized run bundle. No TypeSafe API key or ChatGPT OAuth login is needed.
+sanitized run bundle. No TypeSafe API key is needed. ChatGPT OAuth is optional
+and used only for subscription fallback.
 
 Preflight checks a real Jev choice and the text tier's image/function-call
 capability before builds or test services. Missing credentials fail early.

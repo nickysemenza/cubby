@@ -2,6 +2,9 @@
 
 [Terminology](../guide/terminology.md#domain-language) defines AI standard and
 charged costs. These are usage telemetry, not additional Expense ledger rows.
+Subscriber-credit inference records billing reason `subscriber_credit`, zero
+incremental charge and the standard API comparison; its nominal comparison
+tracks credit consumption separately from paid inference.
 Subscription fees remain separate; paid-call reservations remain conservative
 allowance consumption rather than measured spend.
 

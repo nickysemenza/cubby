@@ -2,10 +2,287 @@ import { createModels } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { cubbyPiProviders, piTokenUsage } from "./pi-providers";
+import {
+  cubbyPiProviders,
+  fundedCubbyPiProviders,
+  piTokenUsage,
+} from "./pi-providers";
 
 const responsesBody = z.object({
   input: z.array(z.looseObject({ content: z.unknown().optional() })),
+});
+
+// A rejected generation may contain partial tool calls. Never publish those
+// before choosing a successful funding attempt, or the fallback can repeat writes.
+it("restarts a credit-refused generation on the subscription with its actual model", async () => {
+  const attempts: string[] = [];
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    (route, _unbilled, funding) => async () => {
+      attempts.push(`${route}:${funding}`);
+      if (funding === "subscriber_credit")
+        return Response.json(
+          {
+            error: {
+              type: "invalid_request_error",
+              message:
+                "Your credit balance is too low to access the Anthropic API.",
+            },
+          },
+          { status: 400 },
+        );
+      return new Response(
+        `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-response", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("anthropic", "claude-opus-5-5");
+  if (!model) throw new Error("Missing Opus");
+  const response = await models.completeSimple(
+    model,
+    { messages: [] },
+    { maxTokens: 512 },
+  );
+  expect(response.errorMessage).toBeUndefined();
+  expect(response.model).toBe("gpt-6-sol");
+  expect(attempts).toEqual([
+    "anthropic:subscriber_credit",
+    "openai:subscription",
+  ]);
+});
+
+function anthropicStream(
+  events: ({ type: string } & Record<
+    string,
+    z.infer<ReturnType<typeof z.json>>
+  >)[],
+) {
+  return new Response(
+    events
+      .map(
+        (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+      )
+      .join(""),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+const anthropicStart = {
+  type: "message_start",
+  message: {
+    id: "synthetic-message",
+    type: "message",
+    role: "assistant",
+    content: [],
+    model: "claude-opus-5-5",
+    stop_reason: null,
+    usage: { input_tokens: 100, output_tokens: 0 },
+  },
+};
+const anthropicDone = [
+  anthropicStart,
+  {
+    type: "message_delta",
+    delta: { stop_reason: "end_turn" },
+    usage: { output_tokens: 10 },
+  },
+  { type: "message_stop" },
+];
+
+it("records subscriber-credit cost separately and skips later funding on success", async () => {
+  const attempts: string[] = [];
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    (_route, _unbilled, funding) => async () => {
+      attempts.push(String(funding));
+      return anthropicStream(anthropicDone);
+    },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("anthropic", "claude-opus-5-5");
+  if (!model) throw new Error("Missing Opus");
+  const response = await models.completeSimple(model, { messages: [] });
+  expect(response.errorMessage).toBeUndefined();
+  expect(attempts).toEqual(["subscriber_credit"]);
+  expect(piTokenUsage(response)).toMatchObject({
+    chargedCost: 0,
+    costEvidence: { billingReason: "subscriber_credit" },
+  });
+  expect(piTokenUsage(response).standardCost).toBeGreaterThan(0);
+});
+
+it("discards a partial tool call before falling through both included funding routes", async () => {
+  const attempts: string[] = [];
+  const refused: string[] = [];
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    (_route, _unbilled, funding) => async () => {
+      attempts.push(String(funding));
+      if (funding === "subscriber_credit")
+        return anthropicStream([
+          anthropicStart,
+          {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "synthetic-call",
+              name: "save",
+              input: {},
+            },
+          },
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "input_json_delta",
+              partial_json: '{"value":"partial"}',
+            },
+          },
+          {
+            type: "error",
+            error: {
+              type: "rate_limit_error",
+              message: "enforced_spend_limit_reached",
+            },
+          },
+        ]);
+      if (funding === "subscription")
+        return Response.json(
+          { error: { code: "usage_limit_reached" } },
+          { status: 429 },
+        );
+      return anthropicStream(anthropicDone);
+    },
+    async (message) => {
+      refused.push(message.model);
+    },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("anthropic", "claude-opus-5-5");
+  if (!model) throw new Error("Missing Opus");
+  const stream = models.streamSimple(model, { messages: [] });
+  const emitted: string[] = [];
+  for await (const event of stream) emitted.push(event.type);
+  const result = await stream.result();
+  expect(result.errorMessage).toBeUndefined();
+  expect(attempts).toEqual(["subscriber_credit", "subscription", "paid"]);
+  expect(refused).toEqual(["claude-opus-5-5", "gpt-6-sol"]);
+  expect(emitted).not.toContain("toolcall_start");
+  expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
+});
+
+it.each(["error", "response.failed"])(
+  "restarts on a late subscription %s quota refusal",
+  async (type) => {
+    const attempts: string[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (_route, _unbilled, funding) => async () => {
+        attempts.push(String(funding));
+        if (funding === "subscriber_credit")
+          return Response.json(
+            { error: { message: "Your credit balance is too low" } },
+            { status: 400 },
+          );
+        if (funding === "subscription") {
+          const error = {
+            code: "usage_limit_reached",
+            message: "Synthetic quota",
+          };
+          const event =
+            type === "error"
+              ? { type, ...error }
+              : { type, response: { error } };
+          return new Response(`data: ${JSON.stringify(event)}\n\n`, {
+            headers: { "content-type": "text/event-stream" },
+          });
+        }
+        return anthropicStream(anthropicDone);
+      },
+    ))
+      models.setProvider(provider);
+    const model = models.getModel("anthropic", "claude-opus-5-5");
+    if (!model) throw new Error("Missing Opus");
+    const response = await models.completeSimple(model, { messages: [] });
+    expect(response.errorMessage).toBeUndefined();
+    expect(attempts).toEqual(["subscriber_credit", "subscription", "paid"]);
+  },
+);
+
+it("sends PDF user content and nested tool results as Anthropic documents", async () => {
+  let body = "";
+  const models = createModels();
+  for (const provider of cubbyPiProviders(() => async (_input, init) => {
+    body = String(init?.body);
+    return anthropicStream(anthropicDone);
+  }))
+    models.setProvider(provider);
+  const model = models.getModel("anthropic", "claude-opus-5-5");
+  if (!model) throw new Error("Missing Opus");
+  const pdf = {
+    type: "image",
+    data: "JVBERi0=",
+    mimeType: "application/pdf",
+  } as const;
+  await models.completeSimple(model, {
+    tools: [
+      {
+        name: "attachment",
+        description: "Read a synthetic attachment",
+        parameters: { type: "object", properties: {} },
+      },
+    ],
+    messages: [
+      { role: "user", content: [pdf], timestamp: 1 },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "synthetic-tool",
+            name: "attachment",
+            arguments: {},
+          },
+        ],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        stopReason: "toolUse",
+        timestamp: 2,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      },
+      {
+        role: "toolResult",
+        toolCallId: "synthetic-tool",
+        toolName: "attachment",
+        content: [pdf],
+        isError: false,
+        timestamp: 3,
+      },
+    ],
+  });
+  const sent = JSON.parse(body);
+  expect(sent.messages[0].content[0]).toMatchObject({
+    type: "document",
+    source: { media_type: "application/pdf" },
+  });
+  expect(body).not.toContain('"type":"image"');
+  const result = sent.messages
+    .flatMap((message: { content: { type: string }[] }) => message.content)
+    .find((block: { type: string }) => block.type === "tool_result");
+  expect(result.content).toEqual(
+    expect.arrayContaining([expect.objectContaining({ type: "document" })]),
+  );
 });
 
 describe("cubbyPiProviders OpenAI route", () => {
