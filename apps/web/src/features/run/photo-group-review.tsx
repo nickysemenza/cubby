@@ -649,9 +649,10 @@ function CommitInput({
         />
         {crossCheck ? (
           <p className="text-xs text-muted-foreground">
-            Label:{" "}
-            {crossCheck.tokens.map((token) => token.text).join(" · ") ||
-              "No label evidence"}
+            Token check:{" "}
+            {crossCheck.tokens
+              .map((token) => `${crossCheckMark[token.mark]} ${token.text}`)
+              .join(" · ") || "No label evidence"}
           </p>
         ) : null}
       </div>
@@ -777,7 +778,7 @@ function FieldCrossChecks({
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
       <div className="grid grid-cols-[6rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 font-medium">
         <span>Field</span>
-        <span>Photo label</span>
+        <span>Tokens checked</span>
         <span>Product comparison</span>
       </div>
       {checks.map((check) => (
@@ -787,8 +788,9 @@ function FieldCrossChecks({
         >
           <span>{check.field}</span>
           <span>
-            {check.tokens.map((token) => token.text).join(" · ") ||
-              "No label evidence"}
+            {check.tokens
+              .map((token) => `${crossCheckMark[token.mark]} ${token.text}`)
+              .join(" · ") || "No label evidence"}
           </span>
           <span
             className={
@@ -1116,12 +1118,14 @@ function ProductPanel({
   save,
   busy,
   step,
+  labelText,
 }: {
   runId: string;
   proposal: PhotoGroupProposal;
   save: Save;
   busy: boolean;
   step: string;
+  labelText: string;
 }) {
   const saveGroup: SaveGroup = (build) =>
     save(async () => ({ groups: [await build()], removeGroupKeys: [] }));
@@ -1211,6 +1215,18 @@ function ProductPanel({
   return (
     <Stack gap="sm" className="min-w-0">
       <IdentityDecision runId={runId} proposal={proposal} busy={busy} />
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="font-medium">Photo label</p>
+          <p className="whitespace-pre-wrap text-muted-foreground">
+            {labelText || "No label text recorded"}
+          </p>
+        </div>
+        <div>
+          <p className="font-medium">Product</p>
+          <p>{proposalName(proposal)}</p>
+        </div>
+      </div>
       {product.kind === "create" ? (
         <>
           <Stack gap="sm">
@@ -2079,6 +2095,10 @@ function ProposalCard({
               save={save}
               busy={working}
               step={step.key}
+              labelText={proposal.images
+                .map((entry) => imagesById.get(entry.id)?.recognizedText)
+                .filter(Boolean)
+                .join("\n")}
             />
           )}
         />
@@ -2908,7 +2928,6 @@ export function PhotoGroupReview({
   const selectedBatch = ready.filter((proposal) =>
     batchKeys.has(proposal.groupKey),
   );
-  const blockedBatch = false;
   const groupByImage = new Map<string, string>();
   for (const proposal of review.proposals)
     for (const entry of [...proposal.images, ...proposal.skip]) {
@@ -3064,7 +3083,6 @@ export function PhotoGroupReview({
                 onMouseDown={(event) => event.preventDefault()}
                 disabled={
                   selectedBatch.length === 0 ||
-                  blockedBatch ||
                   (action.isPending && action.variables?.action !== "save") ||
                   batchQueued
                 }

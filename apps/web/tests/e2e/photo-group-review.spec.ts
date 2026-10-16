@@ -1086,6 +1086,13 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     path: "../../artifacts/photo-review/desktop-concern.png",
     fullPage: true,
   });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await group.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "../../artifacts/photo-review/phone-concern.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await name.fill("Synthetic jacket blue XL");
   await name.blur();
   await expect(
@@ -1184,6 +1191,18 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review/desktop-attach-nav.png",
     fullPage: true,
   });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await attach.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "../../artifacts/photo-review/phone-attach-nav.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
   await expect(create.getByText("＋ New", { exact: true })).toBeVisible();
   await expect(
