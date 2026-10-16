@@ -1,26 +1,12 @@
-import { randomBytes } from "node:crypto";
+import { withMigrationDatabase } from "./test-database-lease";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
 
 import { migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
 
 // Widening role constraints must preserve historical money and admit unresolved standalone money.
 it("preserves existing Expenses while admitting an unresolved receipt role", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_semantic_role_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
-  let created = false;
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    created = true;
-    await client.connect();
+  return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), { through: "0063_derived_ddl" });
     await client.query(
       `INSERT INTO "Vendor" (shortcode,name) VALUES ('VEN-4K7M','Synthetic merchant')`,
@@ -76,9 +62,5 @@ it("preserves existing Expenses while admitting an unresolved receipt role", asy
         lineKind: "unclassified",
       },
     ]);
-  } finally {
-    await client.end();
-    if (created) await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 }, 60_000);

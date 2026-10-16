@@ -234,6 +234,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Shared builders: `packages/schemas/src/test-support`; deferreds via
   `Promise.withResolvers()`.
 - Import convergence: `apps/web/tooling/convergence-harness.ts`.
+- Migration rehearsals: [shared lease and journal boundaries](validation-tests.md#migration-rehearsals).
 - Disposable IntegreSQL databases: `apps/web/tooling/test-database-lease.ts`
   (`prepareTemplate`, `leaseDatabase`, one template per namespace). Vitest
   keeps `withTestDb`; browser workers use `createE2EDatabase`.

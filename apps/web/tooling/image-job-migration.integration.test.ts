@@ -1,26 +1,14 @@
-import { randomBytes } from "node:crypto";
+import { withMigrationDatabase } from "./test-database-lease";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
 
 import { migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
 
 // The cutover must keep every job's UUID (queue and lease identity), state,
 // lease, attempts, events and submission memberships, while giving each job a
 // fresh public code with a matching Entity identity.
 it("keeps image job work and leases through the Image job entity cutover", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_image_job_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    await client.connect();
+  return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), {
       through: "0060_photo-import-lifecycle",
     });
@@ -88,9 +76,5 @@ it("keeps image job work and leases through the Image job entity cutover", async
         )
       ).rows,
     ).toEqual([{ kind: "imageJob" }]);
-  } finally {
-    await client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 });

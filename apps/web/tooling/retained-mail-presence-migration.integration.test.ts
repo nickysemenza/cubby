@@ -1,22 +1,12 @@
-import { randomBytes } from "node:crypto";
+import { withMigrationDatabase } from "./test-database-lease";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
 
 import { migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
 
 // Presence must backfill without changing originals, stay exact for nullable,
 // blank and HTML-only content, and follow every write without application flags.
 it("preserves retained originals and derives text presence across migration and writes", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_retained_text_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
   const cases = [
     {
       content: { snippet: null, bodyText: null, bodyHtml: null },
@@ -52,9 +42,7 @@ it("preserves retained originals and derives text presence across migration and 
       present: false,
     },
   ];
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    await client.connect();
+  return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), {
       through: "0073_photo_group_review_authority",
     });
@@ -101,9 +89,5 @@ it("preserves retained originals and derives text presence across migration and 
       [party.rows[0].id],
     );
     expect(inserted.rows[0]).toEqual({ present: true });
-  } finally {
-    await client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 });

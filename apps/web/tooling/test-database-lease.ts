@@ -26,7 +26,7 @@ import { worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
  * process's template initialization cannot invalidate a database the other
  * has checked out.
  */
-type TemplateNamespace = "vitest" | "browser";
+type TemplateNamespace = "vitest" | "browser" | "migration";
 
 export interface DatabaseLease {
   /** The disposable database name (pooled or named native fixture). */
@@ -79,9 +79,9 @@ export async function prepareTemplate(
   const hash = await initializeRecoverableTemplate(
     templateHash(namespace),
     async (config) => {
-      console.log(`[test database] Migrating the ${namespace} template`);
-      await cloneSchemaTemplate(config.database);
-      console.log(`[test database] Migrated the ${namespace} template`);
+      console.log(`[test database] Preparing the ${namespace} template`);
+      if (namespace !== "migration") await cloneSchemaTemplate(config.database);
+      console.log(`[test database] Prepared the ${namespace} template`);
     },
   );
   preparedHashes.set(namespace, hash);
@@ -124,6 +124,34 @@ export async function leaseDatabase<T>(
       );
     }
     throw error;
+  }
+}
+
+/** Migration rehearsals start empty and apply their own committed journal boundary. */
+export async function withMigrationDatabase<T>(
+  run: (client: Client, databaseUrl: string) => Promise<T>,
+): Promise<T> {
+  const { lease, prepared: connection } = await leaseDatabase(
+    "migration",
+    async ({ databaseUrl }) => {
+      const connection = new Client({ connectionString: databaseUrl });
+      try {
+        await connection.connect();
+        return connection;
+      } catch (error) {
+        await connection.end();
+        throw error;
+      }
+    },
+  );
+  try {
+    return await run(connection, lease.databaseUrl);
+  } finally {
+    try {
+      await connection.end();
+    } finally {
+      await lease.close();
+    }
   }
 }
 
