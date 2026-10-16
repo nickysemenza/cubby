@@ -5,6 +5,15 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-19",
   "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "analytics_engine_datasets": [
+    { "binding": "EVENTS", "dataset": "cubby_nx_cache" }
+  ],
+  "analytics": { "binding": "ANALYTICS_SQL" },
   "r2_buckets": [{ "binding": "CACHE", "bucket_name": "cubby-nx-cache" }]
   // Secret: CACHE_TOKEN (`wrangler secret put CACHE_TOKEN`).
 }

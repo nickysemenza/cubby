@@ -132,6 +132,36 @@ entries after 30 days. Rotate `CACHE_TOKEN` in the Worker and update the Actions
 `NX_CACHE_TOKEN` secret together. Treat write credentials as trusted check
 publishers. Browser and native compiler caches are separate from Nx result passes.
 
+The Worker's public root is an aggregate dashboard; `/stats.json` returns its
+fixed last-24-hour snapshot. Cache archive routes still require the bearer
+credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
+Engine events: outcome, GET/PUT method, artifact bytes and operation duration.
+No hash, archive, terminal output, request identity or credential is recorded.
+`GET /healthz` checks Worker reachability and authentication without touching
+R2; it does not certify R2 availability. CI falls back to the old authenticated
+`/v1/cache/0` probe only while rolling out to a Worker without `/healthz`.
+That legacy probe is excluded from telemetry too.
+
+The Analytics SQL binding queries fixed aggregate statements, automatically
+weighting sampled events. The public UI distinguishes no activity from query
+failures, preserves the previous view on refresh failure and retries on demand.
+Successful snapshots are cached per edge for 60 seconds, partial failures for
+10 seconds. Analytics errors never change a cache GET/PUT result.
+Read hit rate excludes errors and probes. Bytes offered sums artifact sizes
+returned to readers, not completed downloads; operation latency ends when the
+R2 binding returns, before the download stream finishes. Upload latency includes
+consuming the request body. Build time saved and transfer speed are not inferred.
+R2 storage uses hourly maxima from `states.r2CombinedStorage`, with the
+observation hour shown; these delayed observations are not an exact live tally.
+
+Wrangler provisions the `EVENTS`, `ANALYTICS_SQL` and static `ASSETS` bindings
+with the existing cache Worker deployment. Analytics SQL requires the account's
+Analytics Engine entitlement; it uses the Worker's account scope without an
+additional API secret. Statistics start at deployment, without backfilling
+historical requests. Local Wrangler serves the page and cache but reports
+`ANALYTICS_SQL needs to be run remotely`; use the package tests for synthetic
+analytics coverage and hosted binding queries for live metrics.
+
 Use the supported Nx CLI and existing Actions. Do not derive hashes or inspect
 archive internals with private Nx APIs. `nx affected` and `pnpm check:plan` select
 candidates; neither proves a cached passing result. The guarded Apple probe
