@@ -594,6 +594,8 @@ compatible deployment rather than resetting migration bookkeeping. Every push
 must therefore be compatible with the code running before deployment. Staged
 boundaries and breaking cutovers follow the
 [production migration runbook](runbooks/production-migrations.md).
+Migrations expected to exceed the deployment job's install/build/release time
+budget belong on the operator-managed cutover path.
 
 `.github/workflows/deploy-nx-cache.yaml` deploys the Nx cache only when its
 source/configuration, dependency inputs, Node version, setup action, or its own

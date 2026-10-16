@@ -50,8 +50,8 @@ this way).
 
 `deploy.yaml` applies pending committed migrations before deploying each `main`
 push. Ordinary migration PRs must be compatible with the currently deployed
-code; CI verifies their preservation behavior before merge, and the owner reads
-back production after release. A contract migration (`DROP COLUMN`, or a
+code; add a populated-predecessor preservation regression for CI before merge,
+and the owner reads back production after release. A contract migration (`DROP COLUMN`, or a
 constraint the deployed code would violate) requires an explicit staged boundary
 before merge: follow the production migration runbook to deploy matching code
 before applying the contraction. Keep staged cutover PRs off auto-merge.
