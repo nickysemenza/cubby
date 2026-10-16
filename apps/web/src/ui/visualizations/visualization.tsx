@@ -32,7 +32,7 @@ export function visualizationState({
     return { status: empty ? "empty" : "ready", refreshError: error, onRetry };
   if (error) return { status: "error", error, onRetry };
   if (isLoading || data === undefined) return { status: "loading" };
-  return { status: empty ? "empty" : "ready" };
+  return empty ? { status: "empty" } : { status: "ready" };
 }
 
 /** Presentation only; query owners supply current-scope state and retry. */
