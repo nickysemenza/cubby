@@ -2720,10 +2720,8 @@ export function PhotoGroupReview({
   }, [candidateRevision, refetchCandidates]);
   const groupSections = useMemo(
     () =>
-      (query.data?.review.proposals ?? []).map((proposal) => ({
-        id: `photo-group-${proposal.groupKey}`,
-        title: proposalName(proposal),
-        icon:
+      (query.data?.review.proposals ?? []).map((proposal) => {
+        const Icon =
           proposal.state !== "proposed"
             ? proposal.product.kind === "create"
               ? AppliedNewPhotoGlyph
@@ -2734,9 +2732,15 @@ export function PhotoGroupReview({
                 : NewReadyGlyph
               : proposal.blockedReason
                 ? AttachNeedsInputGlyph
-                : AttachReadyGlyph,
-        content: null,
-      })),
+                : AttachReadyGlyph;
+        return {
+          id: `photo-group-${proposal.groupKey}`,
+          title: proposalName(proposal),
+          icon: Icon,
+          indexLeading: <Icon />,
+          content: null,
+        };
+      }),
     [query.data?.review.proposals],
   );
   useIndexedSubsections("photo-batch", groupSections);

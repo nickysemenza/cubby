@@ -1213,6 +1213,16 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review/phone-attach-nav.png",
     fullPage: true,
   });
+  await page.getByRole("button", { name: /Jump to:/ }).click();
+  await expect(
+    page
+      .getByRole("menuitem", { name: productName, exact: true })
+      .locator('[aria-label="Ready"]'),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../../artifacts/photo-review/phone-nav.png",
+  });
+  await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
   await expect(create.getByText("＋ New", { exact: true })).toBeVisible();
