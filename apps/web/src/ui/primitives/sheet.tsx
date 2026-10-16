@@ -98,24 +98,10 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   );
 }
 
-function SheetDescription({
-  className,
-  ...props
-}: SheetPrimitive.Description.Props) {
-  return (
-    <SheetPrimitive.Description
-      data-slot="sheet-description"
-      className={cn("text-muted-foreground text-xs/relaxed", className)}
-      {...props}
-    />
-  );
-}
-
 export {
   Sheet,
   SheetContent,
   SheetHeader,
 
   SheetTitle,
-  SheetDescription,
 };
