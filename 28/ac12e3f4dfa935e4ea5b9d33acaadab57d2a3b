@@ -1,0 +1,19 @@
+apps/web/tooling/entity-generator.unit.test.ts
+  s_6a763386176fda::t_4895314243fa72 1408,1472-1476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "28ac12e3f4dfa935e4ea5b9d33acaadab57d2a3b",
+  "prompts": {},
+  "sessions": {
+    "s_6a763386176fda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26421de1-62a2-4d30-bfcd-f2fb60cbfae5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
