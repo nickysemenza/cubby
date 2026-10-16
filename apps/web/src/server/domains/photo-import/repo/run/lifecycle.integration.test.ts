@@ -197,6 +197,48 @@ describe("photo run lifecycle", () => {
     };
   };
 
+  // Sharing photo reads must retain proposal cross-check inputs and see jobs
+  // settled after a previous request; request reuse must never become a cache.
+  it("keeps snapshot proposals and lifecycle fresh across image job updates", async () => {
+    const { run, codes } = await seedRun({
+      processor: "cubby",
+      generation: true,
+    });
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          {
+            groupKey: "shared-read",
+            images: [{ id: codes[0]!, purpose: "item" }],
+            product: {
+              kind: "create",
+              create: { name: "Synthetic Shared Item" },
+            },
+          },
+        ],
+      },
+      "coordinator",
+      run.dispatchEventId!,
+    );
+    const before = await readPhotoRunSnapshot(ctx.db, run.shortcode);
+    expect(before.review).toEqual(
+      await listPhotoGroupProposals(ctx.db, run.shortcode),
+    );
+    expect(before.lifecycle.failedImageIds).toEqual([]);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ state: "failed", lastError: "Synthetic processing failure" })
+      .where(eq(imageProcessingJob.runId, run.id));
+    const after = await readPhotoRunSnapshot(ctx.db, run.shortcode);
+    expect(after.review).toEqual(
+      await listPhotoGroupProposals(ctx.db, run.shortcode),
+    );
+    expect(after.lifecycle.failedImageIds).toEqual(codes);
+    expect(before.lifecycle.failedImageIds).toEqual([]);
+  });
+
   const readRun = async (id: string) => {
     const [row] = await getDb(ctx.db)
       .select()

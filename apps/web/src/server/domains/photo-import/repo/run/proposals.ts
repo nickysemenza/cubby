@@ -572,11 +572,12 @@ async function toViews(
 async function buildList(
   db: Database,
   run: LoadedRun,
+  processingRead = loadPhotoRunImages(db, run),
 ): Promise<PhotoGroupProposalList> {
   const [images, rows, processing] = await Promise.all([
     loadRunImages(db, run.id),
     loadProposalRows(db, run.id),
-    listPhotoRunImages(db, run.shortcode),
+    processingRead,
   ]);
   const assigned = new Set(
     rows
@@ -603,6 +604,17 @@ export async function listPhotoGroupProposals(
   runShortcode: string,
 ): Promise<PhotoGroupProposalList> {
   return buildList(db, await loadRun(db, runShortcode));
+}
+
+/** Review and lifecycle use the same current image evidence within one read. */
+export async function readPhotoRunReview(db: Database, runShortcode: string) {
+  const run = await loadRun(db, runShortcode);
+  const processing = loadPhotoRunImages(db, run);
+  const [images, review] = await Promise.all([
+    processing,
+    buildList(db, run, processing),
+  ]);
+  return { images, review };
 }
 
 type ResolvedGroup = {
@@ -1581,7 +1593,13 @@ export async function listPhotoRunImages(
   db: Database,
   runShortcode: string,
 ): Promise<PhotoRunImage[]> {
-  const run = await loadRun(db, runShortcode);
+  return loadPhotoRunImages(db, await loadRun(db, runShortcode));
+}
+
+async function loadPhotoRunImages(
+  db: Database,
+  run: LoadedRun,
+): Promise<PhotoRunImage[]> {
   const rows = await getDb(db)
     .select({
       imageId: image.id,
