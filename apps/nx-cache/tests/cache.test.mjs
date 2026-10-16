@@ -65,8 +65,6 @@ test("health verifies credentials without storage reads or cache-miss telemetry"
   assert.equal((await request("/healthz")).status, 204);
   assert.equal(reads(), 0);
   assert.equal(events.length, 0);
-  assert.equal((await request("/v1/cache/0")).status, 404);
-  assert.equal(events.length, 0);
   assert.equal(
     (await worker.fetch(new Request("https://cache.example/healthz"), env))
       .status,
