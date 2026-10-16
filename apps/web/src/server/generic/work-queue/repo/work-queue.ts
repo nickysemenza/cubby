@@ -94,6 +94,7 @@ import {
   workPurchaseOwners,
   workPurchaseSourceOwners,
   workRunReviewOwners,
+  workRunReviewRead,
 } from "~/server/generic/work-queue/repo/work-queue-routing";
 
 const either = workWaitingForSchema.options[0].shape.kind.value;
@@ -457,10 +458,9 @@ async function workQueueProjection(
   selections.push(
     ...workQueueCandidate(scope, {
       entity: "run",
-      table: sql`"Run"`,
+      ...workRunReviewRead(),
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
-      owners: workRunReviewOwners(sql`"Run".id`),
       where: sql`"Run"."deletedAt" IS NULL AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND finding.status = ${openFindingStatus} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())))
