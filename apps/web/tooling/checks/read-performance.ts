@@ -4,7 +4,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 
-import { readDatabaseTiming } from "./read-performance-metrics";
+import { percentile, readDatabaseTiming } from "./read-performance-metrics";
+import {
+  measureOperationRead,
+  readOperationInputSchema,
+  summarizeOperationReads,
+} from "./read-performance-operations";
 
 const { values } = parseArgs({
   options: {
@@ -30,7 +35,13 @@ if (
 )
   throw new Error("Remote authentication requires HTTPS");
 const samples = z.coerce.number().int().min(1).max(1000).parse(values.samples);
-const mode = z.enum(["progressive", "complete"]).parse(values.mode);
+const mode = z
+  .enum(["progressive", "complete", "operations"])
+  .parse(values.mode);
+if (mode === "operations" && (values.concurrent || values.caldav))
+  throw new Error(
+    "Operations mode takes its batch from --input; omit --concurrent and --caldav",
+  );
 const auth = process.env.CUBBY_READ_AUTHORIZATION;
 const cookie = process.env.CUBBY_READ_COOKIE;
 const apiKey = process.env.CUBBY_READ_API_KEY;
@@ -49,10 +60,30 @@ const input = values.input
   ? readInputSchema.parse(JSON.parse(await readFile(values.input, "utf8")))
   : { filters: {}, pagination: { pageIndex: 0, pageSize: 25 } };
 const { resources: _resourcePaths, ...readInput } = input;
+const operationInput =
+  mode === "operations" ? readOperationInputSchema.parse(input) : null;
 const fingerprint = createHash("sha256")
-  .update(JSON.stringify(readInput))
+  .update(JSON.stringify(operationInput ?? readInput))
   .digest("hex");
-const entities = values.entities.split(",").filter(Boolean);
+const operationSamples: Awaited<ReturnType<typeof measureOperationRead>>[] = [];
+let operationWarmup: Awaited<ReturnType<typeof measureOperationRead>> | null =
+  null;
+if (operationInput) {
+  if (!values["first-invocation"])
+    operationWarmup = await measureOperationRead(
+      operationInput,
+      origin,
+      authHeaders,
+    );
+  for (let sample = 0; sample < samples; sample++)
+    operationSamples.push(
+      await measureOperationRead(operationInput, origin, authHeaders),
+    );
+}
+const operationReport =
+  mode === "operations" ? summarizeOperationReads(operationSamples) : null;
+const entities =
+  mode === "operations" ? [] : values.entities.split(",").filter(Boolean);
 const rowSchema = z.object({ id: z.string() }).passthrough();
 const baseSchema = z.object({
   data: z.array(rowSchema),
@@ -216,10 +247,9 @@ if (values.caldav)
         requests: [measurement],
       });
     }
-const percentile = (numbers: number[], quantile: number) =>
-  [...numbers].sort((a, b) => a - b)[Math.ceil(numbers.length * quantile) - 1];
-const summary = [...new Set(observations.map((row) => row.entity))].map(
-  (entity) => {
+const summary =
+  operationReport?.summary ??
+  [...new Set(observations.map((row) => row.entity))].map((entity) => {
     const rows = observations.filter((row) => row.entity === entity);
     const measuredRequests = rows.flatMap((row) => row.requests);
     const databaseMetric = (
@@ -285,10 +315,9 @@ const summary = [...new Set(observations.map((row) => row.entity))].map(
         0.5,
       ),
     };
-  },
-);
+  });
 const artifact = {
-  schema: 3,
+  schema: 4,
   recordedAt: new Date().toISOString(),
   authenticationMode: apiKey
     ? "api-key"
@@ -300,7 +329,9 @@ const artifact = {
   invocation: values["first-invocation"]
     ? "operator-isolated-first"
     : "warm-sequence",
-  filterFingerprint: fingerprint,
+  ...(operationReport
+    ? { operationFingerprint: fingerprint }
+    : { filterFingerprint: fingerprint }),
   pagination: z
     .object({
       pageIndex: z.number().int().nonnegative(),
@@ -309,7 +340,7 @@ const artifact = {
     .optional()
     .parse(readInput.pagination),
   filterFields: Object.keys(readInputSchema.parse(readInput.filters ?? {})),
-  versions: [
+  versions: operationReport?.versions ?? [
     ...new Set(
       observations.flatMap((row) =>
         row.requests.flatMap((request) =>
@@ -319,11 +350,19 @@ const artifact = {
     ),
   ],
   summary,
+  ...(operationReport
+    ? {
+        operationRequests: operationReport.requests,
+        warmupSuccess: operationWarmup?.success ?? null,
+      }
+    : {}),
   limits: [
     "SQL count and database active-wall times come from completed non-streaming response Server-Timing headers; absent, malformed or streamed metrics remain null. CPU requires matching trace evidence and is never inferred from wall time.",
-    mode === "complete"
-      ? "Usable and complete time both measure decoded complete resource rows; no early core-row response exists in this mode."
-      : "Usable time measures decoded core rows; browser paint is measured by browser journeys.",
+    mode === "operations"
+      ? "Per-operation settlement time is measured when its decoded result arrives, independently of HTTP body completion. Failures have no successful latency sample. No browser retries or fallback are applied; this is one transport attempt."
+      : mode === "complete"
+        ? "Usable and complete time both measure decoded complete resource rows; no early core-row response exists in this mode."
+        : "Usable time measures decoded core rows; browser paint is measured by browser journeys.",
     "Response-body bytes are decoded fetch-body bytes, excluding headers and transport compression.",
     "Only aggregate measurements are published; request correlation identifiers remain in private measurement output.",
   ],
@@ -334,8 +373,34 @@ await writeFile(values.output, JSON.stringify(artifact, null, 2), {
 if (values["raw-output"])
   await writeFile(
     values["raw-output"],
-    JSON.stringify({ ...artifact, observations }, null, 2),
+    JSON.stringify(
+      {
+        ...artifact,
+        observations: operationReport ? operationSamples : observations,
+        ...(operationReport ? { warmup: operationWarmup } : {}),
+      },
+      null,
+      2,
+    ),
     { mode: 0o600 },
   );
 
-console.log(JSON.stringify(summary, null, 2));
+console.log(
+  JSON.stringify(
+    operationReport
+      ? {
+          summary,
+          requests: operationReport.requests,
+          warmupSuccess: operationWarmup?.success ?? null,
+        }
+      : summary,
+    null,
+    2,
+  ),
+);
+if (
+  operationReport &&
+  (operationReport.requests.successful !== samples ||
+    operationWarmup?.success === false)
+)
+  process.exitCode = 1;
