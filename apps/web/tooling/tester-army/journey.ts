@@ -22,6 +22,8 @@ export type JourneyControl = {
   swipe?: SwipeOptions;
   /** A correction can revisit an input above a form footer. */
   scrollDirection?: "up" | "down";
+  /** Web setup: center an exactly labelled button below sticky chrome. */
+  center?: boolean;
   within?: { role: Role; name: string } | { testId: string };
 };
 

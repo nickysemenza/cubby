@@ -15,6 +15,7 @@ import {
   isDetailEntity,
 } from "~/entity/entity-query";
 import type { DetailEntity } from "~/entity/generated/entity-details.gen";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { InlineRefLink } from "./inline";
@@ -68,6 +69,7 @@ export function ByIdRefLink({
   compact,
   wrap,
 }: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
+  const hydrated = useHydrated();
   // Resolve the name via the shared entity-detail mapping for every named
   // entity; everything else (inventory, cookbook, or an out-of-union runtime
   // entityKind from a legacy audit row) gets a skipped query so useQuery never
@@ -114,7 +116,9 @@ export function ByIdRefLink({
     );
   }
 
-  if (isNamedEntity(entityKind) && query.isPending) {
+  // The SSR query stream may settle before hydration. Both initial renders
+  // must retain the loading label rather than disagree on the linked name.
+  if (isNamedEntity(entityKind) && (!hydrated || query.isPending)) {
     return (
       <output className="inline-flex items-center gap-1 text-muted-foreground">
         <Spinner aria-hidden className="size-3" /> Loading…

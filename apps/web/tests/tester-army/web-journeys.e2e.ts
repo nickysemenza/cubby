@@ -29,21 +29,44 @@ for (const journey of selectedJourneys(journeys, "web"))
           // the reveal without a tap or scroll that could repair the defect.
           await expect
             .poll(async () => {
-              const [row, list] = await Promise.all([
-                option.boundingBox(),
-                screen.getByRole("listbox").boundingBox(),
-              ]);
-              return (
-                !!row &&
-                !!list &&
-                row.y >= list.y - 1 &&
-                row.y + row.height <= list.y + list.height + 1
-              );
+              return browser.evaluate((label) => {
+                const option = Array.from(
+                  document.querySelectorAll('[role="option"]'),
+                ).find((item) =>
+                  item.getAttribute("aria-label")?.includes(label),
+                );
+                const row = option?.getBoundingClientRect();
+                const list = option
+                  ?.closest('[role="listbox"]')
+                  ?.getBoundingClientRect();
+                return (
+                  !!row &&
+                  !!list &&
+                  row.y >= list.y - 1 &&
+                  row.bottom <= list.bottom + 1
+                );
+              }, name);
             })
             .toBe(true);
           await app.screenshot(`picker-selection-${++pickerCapture}`);
         },
-        tapControl: (control) => runJourneyControl(screen, control),
+        tapControl: async (control) => {
+          if (control.center) {
+            if (control.role !== "button" || control.exact === false)
+              throw new Error(
+                "Centered setup needs an exactly labelled button",
+              );
+            await browser.evaluate((name) => {
+              const target = Array.from(
+                document.querySelectorAll("button"),
+              ).find((button) => button.getAttribute("aria-label") === name);
+              if (!target) throw new Error(`No labelled button: ${name}`);
+              target.scrollIntoView({ block: "center", behavior: "instant" });
+              return null;
+            }, control.name);
+          }
+          await runJourneyControl(screen, control);
+        },
         expectButtonDisabled: (name) =>
           expect(
             screen.getByRole("button", { name, exact: true }),

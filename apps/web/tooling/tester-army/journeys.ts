@@ -276,11 +276,24 @@ export const journeys: Journey[] = [
         check: { visible: () => [JOURNEY_NAMES.pickerProject] },
       },
       {
-        goal: "Open the inline Vendor picker. Do not type or scroll in its dropdown, and leave it open.",
+        tapControl: {
+          web: { role: "button", name: "Edit vendor", center: true },
+        },
         check: { visibleOptions: () => [JOURNEY_NAMES.pickerVendor] },
       },
       {
-        goal: `Select ${JOURNEY_NAMES.pickerVendor} to keep the current vendor. Open the inline Default project picker. Do not type or scroll in its dropdown, and leave it open.`,
+        tapControl: {
+          web: {
+            role: "option",
+            name: JOURNEY_NAMES.pickerVendor,
+            exact: false,
+          },
+        },
+      },
+      {
+        tapControl: {
+          web: { role: "button", name: "Edit default project", center: true },
+        },
         check: { visibleOptions: () => [JOURNEY_NAMES.pickerProject] },
       },
       {

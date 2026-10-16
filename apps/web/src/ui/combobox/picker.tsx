@@ -952,7 +952,7 @@ function SearchPicker<TId extends string>({
       className={cn(
         // A floor so a field squeezed into a narrow cell (a recipe
         // ingredient row) keeps its text; the caret and clear give way.
-        "h-full min-w-12 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+        "h-full min-w-12 flex-1 border-0 bg-transparent p-0 shadow-none outline-none placeholder:text-muted-foreground",
         multiple && "min-w-16",
       )}
     />

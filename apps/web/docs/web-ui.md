@@ -74,6 +74,8 @@ Reference displays whose projection omits the name use the shared by-id
 resolver instead of rendering the stored identifier. Pending reads show loading;
 missing records and failed reads remain explicit, with raw error diagnostics.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
+The picker's frame owns its focus ring. Its nested search input suppresses
+the standalone input shadow and border so focus never stacks two outlines.
 
 Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
 with conditional children for loading and errors. A plain empty-state element
