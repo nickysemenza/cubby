@@ -1,3 +1,8 @@
+export const percentile = (numbers: readonly number[], quantile: number) =>
+  [...numbers].sort((a, b) => a - b)[
+    Math.ceil(numbers.length * quantile) - 1
+  ] ?? null;
+
 /** Read only the closed metrics emitted by db-observability's request collector. */
 export function readDatabaseTiming(headers: Headers) {
   const unavailable = {

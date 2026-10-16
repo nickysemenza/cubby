@@ -1181,6 +1181,22 @@ compared separately. No historical SQL-plan baseline exists for regional or
 Hyperdrive placement; placement stays unchanged unless isolated repeated
 comparisons show gains without regressions or recurring cost.
 
+`--mode operations --input <request.json>` measures the browser dispatch wire
+using a plain `{ operation, input }` or `{ batch: [...] }` request. Only
+registered queries are admitted; the harness serializes and decodes the existing
+SuperJSON and operation contracts. Each sample is one transport attempt, without
+browser retries or fallback. The schema-4 artifact separates HTTP, transport,
+protocol and RPC failures, and reports successful per-operation settlement times
+as results arrive, separately from complete-response timing. Both batch
+settlement and the nested operation must succeed. Missing, duplicate,
+out-of-range and unterminated result lines fail the sample. Partial successes
+remain visible alongside the failed request count; failed requests never enter
+successful complete-response latency statistics. The input is fingerprinted,
+not published. Request IDs and operation error codes appear only in private raw
+output; inputs, result bodies and diagnostic text are never written. An observed
+failure, including the optional warm-up, produces an artifact and nonzero exit
+status. This is a read-correctness signal, not a performance threshold gate.
+
 ## Filters and search
 
 Product expected-quantity range filters share a catalog kit walk and grouped
