@@ -1,0 +1,267 @@
+.oxlintrc.json
+  s_5285635cb5ec69::t_2409f4a387874c 81
+apps/apple/App/Shared/Editors/EntityPickerSheet.swift
+  s_5285635cb5ec69::t_14678834f9c12a 250
+apps/apple/App/Shared/Editors/EntityReferenceScope.swift
+  s_5285635cb5ec69::t_99cbd0c7e07582 20,22,31
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_5285635cb5ec69::t_ef6df386269819 1499
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_5285635cb5ec69::t_8de04ee472a120 605
+apps/apple/App/Shared/Entity/List/EntityFilterSheet.swift
+  s_5285635cb5ec69::t_1f6aa2df26a2b5 14-15,18-20,22,31-46,49,51,54-57,60-65,69-70,73-126,145-147,152-160,165,169,181,209-210,237,277,282,293-297,304-305,307-313,321-322,335-477,481
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_5285635cb5ec69::t_09b08e97282f8b 178-180,184,383
+apps/apple/App/Shared/Finance/ReceiveExpenseSheet.swift
+  s_5285635cb5ec69::t_5f179c4bdd69a0 81
+apps/apple/App/Shared/Intents/Intents.swift
+  s_5285635cb5ec69::t_ae14a2559e9703 67
+apps/apple/App/Shared/Photo/Import/PhotoImportManifest.swift
+  s_5285635cb5ec69::t_4893061874c2b6 368
+apps/apple/App/Shared/Photo/Import/PhotoImportRunSheet.swift
+  s_5285635cb5ec69::t_b33067f4a3a50e 219-220
+apps/apple/App/Shared/Photo/Library/LibraryMetadataSync.swift
+  s_5285635cb5ec69::t_27ac2011358ae7 395
+apps/apple/App/Shared/Photo/Review/PhotoEntityChooserModel.swift
+  s_5285635cb5ec69::t_33eefc4382c67f 285-286,289-290
+apps/apple/App/Tests/Entity/List/EntityFilterSheetTests.swift
+  s_5285635cb5ec69::t_4a48f4932fe2bd 2,17-18,21-23,26-27,31,33,39-54,57-112,118-124,126,128,131,136,138,151
+apps/apple/App/Tests/Photo/Review/PhotoEntityChooserModelTests.swift
+  s_5285635cb5ec69::t_88f23691e30ecf 64,132,171,491,494
+apps/apple/App/macOS/RootSplitView.swift
+  s_5285635cb5ec69::t_c65f65da12c3c5 187
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_5285635cb5ec69::t_a97caf15e0936c 65-66,75,84,93,659,680-685,688,691,694,717,723-728,795,861
+apps/apple/CubbyKit/Sources/CubbyKit/Detail/RelationSectionModel.swift
+  s_5285635cb5ec69::t_83223d6ca04ad5 70
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityFilterState.swift
+  s_5285635cb5ec69::t_b066ae7820be50 5-7,9,11-13,24,26-29,47,59,73-88,99-100,102-104,106,135
+apps/apple/CubbyKit/Sources/CubbyKit/List/GenericEntityListModel.swift
+  s_5285635cb5ec69::t_872b4d6f082092 473
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/EntityKernel.swift
+  s_5285635cb5ec69::t_80d34163f305d2 185,207,217
+apps/apple/CubbyKit/Sources/CubbyKit/Participation/DeviceRegistration.swift
+  s_5285635cb5ec69::t_0d9eed00f5e6bf 50
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/EntityFilterTests.swift
+  s_5285635cb5ec69::t_b15601b35ad28e 81,88,91,94,97,100,103,107,109-110,113,117,120,123,148,160,198,202,207
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/NativeListAdaptersTests.swift
+  s_5285635cb5ec69::t_52cca099d4ae40 71-72,77,83,98-101,112
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/EntityFilterStateTests.swift
+  s_5285635cb5ec69::t_f82ac320a82229 1,11-12,16-17,19,23,26,38-83
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/GenericEntityListModelTests.swift
+  s_5285635cb5ec69::t_945868773805de 54,64,119,324,392
+apps/web/generator/entities/compile.ts
+  s_5285635cb5ec69::t_3305660012c428 11,1031,1142,1157,1160-1166,1170,1187,1214-1239,1248-1250,1289-1304,1843,1846-1847,1951-1955,1962,1973,1975-1978,2119-2121,2154-2156
+apps/web/generator/entities/data-quality.ts
+  s_5285635cb5ec69::t_0e20f38dfe3e30 237-239,246
+apps/web/generator/entities/declarations.ts
+  s_5285635cb5ec69::t_0c8ce2c812c777 76,107,109-114
+apps/web/generator/entities/derive.ts
+  s_5285635cb5ec69::t_18c6374f8997d4 384
+apps/web/generator/entities/list-fields.ts
+  s_5285635cb5ec69::t_eeadc9163ad3f1 36-37,50,148,165,168-169,201-203,208-238,298-301,316,329-332,336
+apps/web/generator/entities/presentation.ts
+  s_5285635cb5ec69::t_0402b590c2e873 685,687
+apps/web/generator/entities/render/filters.ts
+  s_5285635cb5ec69::t_bcf578fef8cf99 118-124
+apps/web/generator/entities/render/index.ts
+  s_5285635cb5ec69::t_52b2cef01edd08 6,101,168,224,240-270,272,274-287,289-320,1341,1432
+apps/web/generator/entities/render/search.ts
+  s_5285635cb5ec69::t_c7e0e6554566c3 28-35,39,51,72,166-168,179-180,202-206
+apps/web/generator/entities/render/swift-catalog.ts
+  s_5285635cb5ec69::t_c87faa0889c8bb 5,221-224,442-445,457,481-500,556-560
+apps/web/src/entity/display/entity-display.tsx
+  s_5285635cb5ec69::t_483f1afaf76b60 770
+apps/web/src/entity/entity-list/list-scope-chips.tsx
+  s_5285635cb5ec69::t_49ba3656ab33a3 97
+apps/web/src/entity/filter-manifest.tsx
+  s_5285635cb5ec69::t_efe6556415f88d 21,51-62,71-74,76,88,99-100,112-113,115,122-129
+apps/web/src/entity/filter-manifest.unit.test.tsx
+  s_5285635cb5ec69::t_0cf191eb3e6784 27,30-32,37-38,41,88-89,102,113,120,141-142,158-159,166-173,223,239,273,285,291,299,338-339,518,528
+apps/web/src/entity/filter-search-fields.ts
+  s_5285635cb5ec69::t_619cc8df21287b 67-71,135,146-148,153-154,171-175,188-191,214-215,225
+apps/web/src/entity/filters.ts
+  s_5285635cb5ec69::t_a9d8a1359e91cc 3-8,20-22,79-83,85,88-97,111-114,117-120,128-134,183,202,215,217-227,229,233-234,236-241,264,285-286,288,371-391,423,463-465,471-472,494-497,501-507,674-678,684-697,701-705
+apps/web/src/entity/filters.unit.test.ts
+  s_5285635cb5ec69::t_d1afaf7b6cf6ae 8,10,44-48,51,55-57,79,85,264-319,364-367,514,595-611
+apps/web/src/entity/model/view-manifest.ts
+  s_5285635cb5ec69::t_f268ca86d1891a 389,407,425,449,468,490
+apps/web/src/entity/platform/entity-schema-model.ts
+  s_5285635cb5ec69::t_5af92f2399efce 253
+apps/web/src/entity/problems/queries/product-coverage.ts
+  s_5285635cb5ec69::t_ad6b7586d3edc8 30,53
+apps/web/src/entity/table/use-table-state.unit.test.tsx
+  s_5285635cb5ec69::t_bd3488e291884c 529,547,585
+apps/web/src/features/usda-food/usdafoodlist.tsx
+  s_5285635cb5ec69::t_99160a1f5c56e1 48,76-81,183
+apps/web/src/features/usda-food/usdafoodlist.unit.test.tsx
+  s_5285635cb5ec69::t_8c8d972d421ffc 121-122
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_5285635cb5ec69::t_16275055bf2e77 16,42-46,110-116,131-140,161,167,392,458-459,461-462,489,542
+apps/web/src/routes/_authenticated/work-queue.tsx
+  s_5285635cb5ec69::t_0ccc9665cf5224 11-21
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_5285635cb5ec69::t_e2a2fd890ae330 381-382
+apps/web/src/server/db/helpers/index.ts
+  s_5285635cb5ec69::t_2b8528c4bfd65e 54-55
+apps/web/src/server/db/helpers/query.ts
+  s_5285635cb5ec69::t_6bed303f908cfe 9-13,666-692
+apps/web/src/server/domains/cookbook/repo/cookbook.ts
+  s_5285635cb5ec69::t_0bf4ea99b72d7a 458
+apps/web/src/server/domains/dashboard/repo/dashboard.ts
+  s_5285635cb5ec69::t_d621deb9836b4f 75-76
+apps/web/src/server/domains/email/repo/email.ts
+  s_5285635cb5ec69::t_bf330a79d565c9 20,242-244,250-253,255,257-258,261,263-264,267,269-271,280
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_5285635cb5ec69::t_04e13fb909f2c4 3,25,211-216,252,370-372
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_5285635cb5ec69::t_9d21f8a172eb06 32,38,482-493
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_5285635cb5ec69::t_cb40f577622431 960,963,984,986-990
+apps/web/src/server/domains/ingredient/repo/ingredient-mapping-gap.integration.test.ts
+  s_5285635cb5ec69::t_093ac9d34592bb 79,93-105
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_5285635cb5ec69::t_4911a3c2a90d94 42,577-584
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_5285635cb5ec69::t_16fcd4b913651d 52,54,56,227-231,237,250-253,260-263,267,270-271,412-414,425-427
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_5285635cb5ec69::t_8939ab901d7dea 22,232-234
+apps/web/src/server/domains/product/repo/crud.ts
+  s_5285635cb5ec69::t_01e47eabcc7371 83,95-96,855-860,864-888,890-902,904-906
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_5285635cb5ec69::t_475908260dbd06 7,191-196,198,269-270,278
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_5285635cb5ec69::t_221874efd4378d 59,70,681-683
+apps/web/src/server/domains/run/service/suggestion-review.integration.test.ts
+  s_5285635cb5ec69::t_c5e903320aea52 838-842
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_5285635cb5ec69::t_7fc0fc872665ad 27,257-261,269-271
+apps/web/src/server/domains/usda-food/operations/usda.server.ts
+  s_5285635cb5ec69::t_c6e11e71009af1 4,92-99,102,106
+apps/web/src/server/domains/vendor-account/repo/vendor-account.ts
+  s_5285635cb5ec69::t_3071b1e277e245 30,208,213,221
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_5285635cb5ec69::t_6a5f5169db8b7d 255-259
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_5285635cb5ec69::t_8f318b0b3c1504 366,378-385
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_5285635cb5ec69::t_18b8acf6a6be5b 9,18,21,26,127-245
+apps/web/src/server/generic/list/repo/list.ts
+  s_5285635cb5ec69::t_655f1d7c5f1fd6 24,35,102-112,132,246,255-260,263-279,333,386-422,433,435-438,442-443,465,467-469,471,479-481,491-527,552-559,590-591,594-595,597,610
+apps/web/src/server/generic/work-queue/operations/work-queue.server.ts
+  s_5285635cb5ec69::t_9c667a9767c202 1-2,29
+apps/web/src/server/generic/work-queue/repo/work-queue-projection.ts
+  s_5285635cb5ec69::t_317a3f23e55e9f 24-27
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_5285635cb5ec69::t_3899209bbaca82 21,41-42,562-567,585-590,612-613,636-655,657-660,662
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_5285635cb5ec69::t_468ab62e9cda66 260-261,263-264
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_5285635cb5ec69::t_c45b79d02a982c 8,13,612,657,1136,1162-1195
+apps/web/src/ui/combobox/picker.tsx
+  s_5285635cb5ec69::t_062fb339f7a63d 76-77,602,624,692-696,844,1040,1125,1216-1220
+apps/web/src/ui/data-table/filter-bar-core.ts
+  s_5285635cb5ec69::t_d6c465798bb64a 1-5,24-27,64-66,69-89,92-105,191-192
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_5285635cb5ec69::t_2aab97b1b0d2a4 1-6,29,35,37-38,69-74,80,84-92,98-100,102-106,120,124-152,157,159-160,163
+apps/web/src/ui/data-table/filter-bar.unit.test.tsx
+  s_5285635cb5ec69::t_239c11a56b38fe 5-17,350-415
+apps/web/src/ui/data-table/table-meta.ts
+  s_5285635cb5ec69::t_34eff2582ab4c2 19-22
+apps/web/tooling/entity-generator.unit.test.ts
+  s_5285635cb5ec69::t_f5d96006274709 1229-1237,1417
+docs/adr/0018-current-member-filter-token.md
+  s_5285635cb5ec69::t_8aba0746deb091 1,17,29-33
+docs/adr/README.md
+  s_5285635cb5ec69::t_8762cd25612d50 28
+docs/entities.md
+  s_5285635cb5ec69::t_9c4c2e40cdef18 827,957,1288-1315,1327
+packages/schemas/src/email.ts
+  s_5285635cb5ec69::t_11862756f4511e 23-25
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_5285635cb5ec69::t_b4e11ecd90daf6 2299,2573,2577,2585,2587,2592,2596,2604,2606,2611,2613,2881
+packages/schemas/src/entity-definitions/02-ingredient.entity.ts
+  s_5285635cb5ec69::t_5cb8d84567c674 384,386,453
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_5285635cb5ec69::t_075f3b418cd587 56-58,67,83,99,109-112,123,137-140,501,635,643,700,747,757,759,764
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_5285635cb5ec69::t_3544fab5e413d2 649,651,723
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_5285635cb5ec69::t_7acdac6b7cebc3 415,423
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_5285635cb5ec69::t_5ce8dd7dde1db6 942,1012,1054
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_5285635cb5ec69::t_1d8495bd88bea7 900,979,986,1008
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_5285635cb5ec69::t_f705f938d48c41 1280
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_5285635cb5ec69::t_22714feb6ec83f 492
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_5285635cb5ec69::t_d0c2d711a82cbe 1110,1199
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_5285635cb5ec69::t_a5623053612494 1378,1526,1648,1688,1699,1707
+packages/schemas/src/entity-definitions/17-usda-food.entity.ts
+  s_5285635cb5ec69::t_9cf7ccebd5a8b4 301
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_5285635cb5ec69::t_431c6abc900738 868
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_5285635cb5ec69::t_035c7e70a97f81 408
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_5285635cb5ec69::t_8dc16f8ef1555f 288-290,292,387,406
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_5285635cb5ec69::t_c6b2763d0e4c34 946
+packages/schemas/src/entity-definitions/24-device.entity.ts
+  s_5285635cb5ec69::t_0609af9d6a6aa4 410
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_5285635cb5ec69::t_ac1eafec29e89a 622,652,659,666
+packages/schemas/src/entity-definitions/definition.ts
+  s_5285635cb5ec69::t_2aad61dde5d7e3 858,2173-2177,2183-2187
+packages/schemas/src/filter-sentinel-fields.ts
+  s_5285635cb5ec69::t_577e84164e670a 2-3,7-9,13-15
+packages/schemas/src/financial-transaction.ts
+  s_5285635cb5ec69::t_f6ed00dcc75316 359-360
+packages/schemas/src/garden-entry.ts
+  s_5285635cb5ec69::t_c1904a0462c33b 27
+packages/schemas/src/ingredient.ts
+  s_5285635cb5ec69::t_fe68d6319e8e04 68,71
+packages/schemas/src/inventory.ts
+  s_5285635cb5ec69::t_8f02b16e54c110 68-71,90,93,100,102,115,118,121,123-125,131-133
+packages/schemas/src/manifest-wire.ts
+  s_5285635cb5ec69::t_d37382401ed416 151-154,245
+packages/schemas/src/meal.ts
+  s_5285635cb5ec69::t_c53c1a92048bd1 40,120
+packages/schemas/src/pagination.ts
+  s_5285635cb5ec69::t_d173d43778379b 94-104,140-144,146,148,152-155,161,165-174,178
+packages/schemas/src/product.ts
+  s_5285635cb5ec69::t_41da29fdb51a9b 267,273,289,295,299
+packages/schemas/src/project.ts
+  s_5285635cb5ec69::t_0e89071d779a58 155-156,173,183-185,312-313,482,499,508
+packages/schemas/src/purchase.ts
+  s_5285635cb5ec69::t_917a852ac4a379 278
+packages/schemas/src/usda.ts
+  s_5285635cb5ec69::t_e5e8d7d2b4412c 5-6,17
+packages/schemas/src/work-queue.ts
+  s_5285635cb5ec69::t_62b6e1aadc2e07 18-19,168-169,172,178-183
+tools/oxlint/cubby/index.ts
+  s_5285635cb5ec69::t_596a336efb9949 20,40
+tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json
+  s_5285635cb5ec69::t_c1b08d9c507dda 1-22
+tools/oxlint/cubby/rules/no-hand-written-filter-predicate.ts
+  s_5285635cb5ec69::t_23286a16f230fb 1-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e8a8d7940f91397122d58bb3853d14c68e68393a",
+  "prompts": {},
+  "sessions": {
+    "s_5285635cb5ec69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36a7f5c0-2a54-429d-8349-ad4f4e7f2675",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
