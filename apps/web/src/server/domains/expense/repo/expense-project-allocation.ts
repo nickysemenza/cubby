@@ -11,12 +11,12 @@ import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-
 import {
   effectiveExpenseSpendingCategoriesSql,
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
-} from "./expense-category-resolution";
+} from "~/server/domains/expense/repo/expense-category-resolution";
+
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,

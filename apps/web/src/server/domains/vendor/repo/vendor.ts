@@ -75,11 +75,11 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
   hydrateListRead,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
 import {

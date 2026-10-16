@@ -22,8 +22,7 @@ import {
   purchaseHasPrimaryDocumentSql,
   effectivePurchaseItemizationExpectationSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
 
 type Purchase = typeof purchase;
 

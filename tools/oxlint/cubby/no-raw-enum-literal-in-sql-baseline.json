@@ -1,5 +1,5 @@
 {
-  "apps/web/src/server/db/schema.ts": 16,
+  "apps/web/src/server/db/retained-tables.ts": 16,
   "apps/web/src/server/db/shape-constraints.integration.test.ts": 2,
   "apps/web/src/server/domains/purchase-import/repo/retained-settlement.ts": 2,
   "apps/web/src/server/domains/product-category/repo/category-connections.ts": 11,

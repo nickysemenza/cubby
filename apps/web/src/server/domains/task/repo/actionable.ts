@@ -74,6 +74,7 @@ import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { entityLink, project, task } from "~/server/db/schema";
+import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -83,7 +84,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { taskSubtaskCounts } from "./crud";
-import { dbTaskToAPI } from "./helpers";
 import { taskList } from "./lookup";
 import {
   effectiveTaskProjectSql,

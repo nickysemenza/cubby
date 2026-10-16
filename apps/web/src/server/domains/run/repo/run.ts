@@ -25,10 +25,8 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  hydrateListRead,
-  type ListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
@@ -158,7 +156,10 @@ export const listRunsRead = (
             const hydrated = await hydrateProjection(db, rows);
             return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
           },
-          mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+          mapRow: (row, { loaded }) => ({
+            id: parseShortcodeFor("run", row.shortcode),
+            ...loaded.get(row.id),
+          }),
         }),
     },
   );

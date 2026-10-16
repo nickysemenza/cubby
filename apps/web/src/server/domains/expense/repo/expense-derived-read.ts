@@ -7,8 +7,8 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import type { ExpenseSpendingCategoryResolutionDraft } from "~/server/domains/expense/repo/expense-category-resolution";
 
-import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
 import {
   expenseAllocationScopeConditionSql,
   expenseJointAllocationSql,

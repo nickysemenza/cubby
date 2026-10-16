@@ -20,7 +20,7 @@ import type {
 import { renderFieldExplanationReference } from "./field-explanations-reference.ts";
 import { renderRecord } from "./record.ts";
 import {
-  renderEntityTablesArtifact,
+  renderEntityTableArtifacts,
   renderIdentityStorageTablesArtifact,
 } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
@@ -383,6 +383,7 @@ export const renderEntityArtifacts = (
   entities: readonly CompiledEntity[],
   moduleChildren: readonly ChildTableDeclaration[] = [],
 ): EntityArtifacts[] => {
+  const entityTables = renderEntityTableArtifacts(entities, moduleChildren);
   const projections = entityProjectionMaps(entities);
   const imports = new Map<string, Set<string>>();
   for (const { contract, filterSchema } of entities) {
@@ -1393,7 +1394,12 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     },
     {
       relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
-      source: renderEntityTablesArtifact(entities, moduleChildren),
+      source: entityTables.relations,
+    },
+    {
+      relativePath:
+        "apps/web/src/server/db/generated/entity-table-definitions.gen.ts",
+      source: entityTables.definitions,
     },
     {
       relativePath:

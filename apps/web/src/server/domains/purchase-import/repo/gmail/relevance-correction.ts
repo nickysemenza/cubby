@@ -21,14 +21,19 @@ import {
 } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
+import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import {
+  GmailApiError,
+  type GmailNormalizedMessage,
+  type GmailProvider,
+} from "~/server/domains/purchase-import/repo/gmail/types";
 
 import { deferClassificationRefresh } from "./admitted-source";
 import {
   productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
-import { originalChecksum } from "./checksum";
-import { normalizeMessage } from "./normalize";
 import {
   recordEmailClassificationObservation,
   recordEmailRetrievalFailure,
@@ -42,11 +47,6 @@ import {
 } from "./persistence";
 import { gmailProviderForUser } from "./provider";
 import { boundedAttachment, exactMemberEmail } from "./real-time";
-import {
-  GmailApiError,
-  type GmailNormalizedMessage,
-  type GmailProvider,
-} from "./types";
 
 type OwnedEmail = typeof emailTable.$inferSelect;
 async function correctionOwner(

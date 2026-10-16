@@ -6,8 +6,8 @@ import {
   type MailboxScopedQuery,
 } from "@cubby/schemas/mailbox-research";
 
-import { normalizeHistoryPage } from "./normalize";
-import type { GmailProvider } from "./types";
+import { normalizeHistoryPage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
 
 export const GMAIL_PAGE_SIZE = 25;
 const ELIGIBLE_MAIL_QUERY = "-in:spam -in:trash";

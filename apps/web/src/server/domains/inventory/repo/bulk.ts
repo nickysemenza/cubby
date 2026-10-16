@@ -28,6 +28,12 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
+import {
+  inventorySlotKey,
+  inventorySnapshotToken,
+  type InventoryRawOwnership,
+} from "~/server/domains/inventory/repo/slot";
+import type { InventoryEntryDeepDB } from "~/server/domains/inventory/repo/types";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -45,12 +51,6 @@ import {
   assertIndividualOwner,
   loadInventoryOwnershipTraces,
 } from "./ownership";
-import {
-  inventorySlotKey,
-  inventorySnapshotToken,
-  type InventoryRawOwnership,
-} from "./slot";
-import type { InventoryEntryDeepDB } from "./types";
 import { loadInventoryValuations } from "./valuation";
 
 export type ResolvedBulkMovePayload = {

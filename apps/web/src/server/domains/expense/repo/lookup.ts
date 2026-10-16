@@ -50,10 +50,10 @@ import {
   declaredFilterPredicates,
   listScaffold,
 } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";

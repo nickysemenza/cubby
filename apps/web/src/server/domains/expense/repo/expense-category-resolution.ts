@@ -19,8 +19,9 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { sqlEnumConstant } from "~/server/db/helpers/query";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
 const column = (alias: string, key: string) =>
   sql`${sql.identifier(alias.replace(/^"|"$/gu, ""))}.${sql.identifier(key)}`;

@@ -25,8 +25,13 @@ import {
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries as getDb,
+  repositoryQueries as unwrapDb,
+} from "~/server/db/repository-access.boundary";
 import {
   aiAnalysis,
   entityAttachment,
@@ -35,7 +40,7 @@ import {
   imageProcessingJob,
   product,
   productCategory,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 const fingerprintSchema = z.object({
   sourceContentHash: z.string(),

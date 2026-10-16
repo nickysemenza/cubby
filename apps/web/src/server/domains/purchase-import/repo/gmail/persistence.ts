@@ -54,14 +54,19 @@ import {
   readRetainedMail,
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
-import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
+import type {
+  GmailOrderMail,
+  GmailOrderMailAttachment,
+  GmailOrderMailEvent,
+} from "~/server/domains/purchase-import/repo/gmail/types";
 import {
   assertMailSourceIdentityReady,
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
   mailSourceIdentityBlocked,
-} from "../mail-source-identity";
-import { readImportSourceClaimFamily } from "../source-claim-family";
+} from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { readImportSourceClaimFamily } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
 import { deferClassificationRefresh } from "./admitted-source";
 import {
   orderMailAttachmentKey,
@@ -74,11 +79,6 @@ import type {
   GmailAccountTokenRecord,
   GmailAccountTokenStore,
 } from "./tokens";
-import type {
-  GmailOrderMail,
-  GmailOrderMailAttachment,
-  GmailOrderMailEvent,
-} from "./types";
 
 export const loadGmailCursor = async (
   db: Database,

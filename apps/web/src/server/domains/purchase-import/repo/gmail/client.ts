@@ -10,7 +10,7 @@ import {
   type GmailMessageListPage,
   type GmailProfile,
   type GmailProvider,
-} from "./types";
+} from "~/server/domains/purchase-import/repo/gmail/types";
 
 const MAX_GMAIL_RESPONSE_BYTES = 36 * 1024 * 1024;
 const DEFAULT_BASE_URL = "https://gmail.googleapis.com/gmail/v1";

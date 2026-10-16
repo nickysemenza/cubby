@@ -2,13 +2,14 @@ import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EmailId } from "@cubby/schemas/identifiers";
 import { asc, eq, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   importSourceClaim,
   importSourceOrder,
   purchase,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import {
   emailAcceptedEvidenceSql,
   emailPurchaseAssociationsSql,

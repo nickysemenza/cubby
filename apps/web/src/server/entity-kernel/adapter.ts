@@ -26,7 +26,7 @@ import {
 import type {
   ListProjection,
   ListReadPage,
-} from "~/server/generic/list/repo/list-projection";
+} from "~/server/generic/list/repo/list-contracts";
 export interface EntityKernelContext {
   /**
    * The operation's single database adapter: authoritative for strong

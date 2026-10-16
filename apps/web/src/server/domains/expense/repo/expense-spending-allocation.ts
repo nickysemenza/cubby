@@ -5,8 +5,8 @@ import type { SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import type { ExpenseSpendingCategoryResolutionDraft } from "~/server/domains/expense/repo/expense-category-resolution";
 
-import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
 import { expenseDerivedReadSql } from "./expense-derived-read";
 import type {
   ExpenseIdSelection,

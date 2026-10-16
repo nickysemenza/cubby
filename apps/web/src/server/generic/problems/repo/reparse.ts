@@ -16,19 +16,19 @@ import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db/database";
+import { updateAndReturn } from "~/server/db/helpers/crud";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
-  getDb,
-  notDeleted,
-  updateAndReturn,
-  withTransaction,
-} from "~/server/db/helpers";
+  repositoryQueries as getDb,
+  repositoryTransaction as withTransaction,
+} from "~/server/db/repository-access.boundary";
 import {
   ingredient,
   recipe,
   recipeSection,
   recipeSectionIngredient,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const parsedAmountToStored = (parsed: WAmount): Amount => {

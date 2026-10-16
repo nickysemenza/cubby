@@ -37,7 +37,7 @@ const { runDecisionChoice } = await import("./decision-model");
 const { MAILBOX_TRIAGE_FEATURE, MAILBOX_RELEVANCE_FEATURE } =
   await import("./policy/features");
 const { normalizeMessage } =
-  await import("../domains/purchase-import/repo/gmail/normalize");
+  await import("~/server/domains/purchase-import/repo/gmail/normalize");
 const { routeGmailMessage } =
   await import("../domains/purchase-import/service/gmail/triage");
 const { mailTriagePrompt, mailTriageChoices } =

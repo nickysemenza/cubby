@@ -2,9 +2,12 @@ import { emailReclassifyResult } from "@cubby/schemas/email-actions";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { email, emailClassificationObservation } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  email,
+  emailClassificationObservation,
+} from "~/server/db/retained-tables";
 
 /** Read inside the publication transaction: an observation alone is never a receipt. */
 export async function reclassificationReceipt(

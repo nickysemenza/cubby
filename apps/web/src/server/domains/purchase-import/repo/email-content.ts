@@ -1,7 +1,10 @@
 import { and, eq, isNotNull, or } from "drizzle-orm";
 
-import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { orderMail, orderMailAttachment } from "~/server/db/schema";
+import {
+  type RepositoryQueryClient as DrizzleClient,
+  type RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
+import { orderMail, orderMailAttachment } from "~/server/db/retained-tables";
 
 /** A retained shell is provenance, not usable import evidence. */
 export async function hasRetainedEmailImportContent(

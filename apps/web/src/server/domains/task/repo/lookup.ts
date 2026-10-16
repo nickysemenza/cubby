@@ -37,20 +37,23 @@ import {
 import { product, task } from "~/server/db/schema";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
 import type { ProjectTree } from "~/server/domains/project/repo/subtree";
+import {
+  dbTaskToAPI,
+  effectiveTaskDueDateSql,
+} from "~/server/domains/task/repo/helpers";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
-import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 import {
   effectiveTaskAssigneeSql,
   effectiveTaskProjectSql,

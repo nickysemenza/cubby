@@ -135,6 +135,10 @@ import {
   loadCategorySummaries,
 } from "~/server/domains/product-category/repo/product-category";
 import {
+  currentProductConversionCoverageCondition,
+  markProductConversionCoverageInputStale,
+} from "~/server/domains/product/repo/conversion-coverage";
+import {
   loadPrimaryGtins,
   productHasGtin,
   productMatchesGtinTerm,
@@ -163,6 +167,7 @@ import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   expectedQuantityLabel,
   quantityVarianceLabel,
@@ -171,7 +176,6 @@ import {
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
@@ -184,10 +188,6 @@ import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summ
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
 import { assertProductCategoryChange } from "./classification";
-import {
-  currentProductConversionCoverageCondition,
-  markProductConversionCoverageInputStale,
-} from "./conversion-coverage";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
   isRetainingEdgeKey,

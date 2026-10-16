@@ -38,13 +38,13 @@ import {
   product,
 } from "~/server/db/schema";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import type { LocationWithParentChild } from "~/server/domains/location/repo/internal-types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import { MAX_TREE_DEPTH } from "~/server/domains/location/repo/tree-depth";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
 import { buildLocationWithChildren } from "./helpers";
-import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
-import { MAX_TREE_DEPTH } from "./tree-depth";
 import { computeLocationValuations } from "./valuation";
 
 const locationTreeRowSchema = z.object({

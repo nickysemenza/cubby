@@ -309,7 +309,7 @@ export async function recordEmailCandidateObservation(
     if ((await sha256Hex(content)) !== preview.contentChecksum)
       throw new Error("Email candidate source changed before persistence");
     const { prepareEmailEvidenceCandidates } =
-      await import("./evidence-candidates");
+      await import("~/server/domains/purchase-import/repo/gmail/evidence-candidates");
     const prepared = await prepareEmailEvidenceCandidates({
       sourceKey: preview.sourceKey,
       checksum: preview.checksum,

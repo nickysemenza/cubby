@@ -34,6 +34,7 @@ import type { Database } from "~/server/db";
 import { countWhere, getDb, notDeleted, relations } from "~/server/db/helpers";
 import { expense, project, task } from "~/server/db/schema";
 import { expenseDerivedCostRead } from "~/server/domains/expense/repo/expense-derived-read";
+import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import {
   taskDependencyIds,
   taskSubtaskCounts,
@@ -56,7 +57,6 @@ import {
   buildUndatedProjectWhere,
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
-import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
 import {
   collectDescendantIds,

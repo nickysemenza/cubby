@@ -11,7 +11,8 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationIdentityProductOut } from "@cubby/schemas/location";
 
-import { isNotDeleted, mapImages } from "~/server/db/helpers";
+import { isNotDeleted } from "~/server/db/helpers/query";
+import { mapImages } from "~/server/db/helpers/transform";
 
 import type { LocationIdentityProductRow } from "./internal-types";
 

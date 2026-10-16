@@ -13,9 +13,14 @@ import {
   requestedAiEvaluations,
   PENDING_AI_STATES,
 } from "~/server/ai/repo/ai-evaluation-requests";
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { email, emailClassificationObservation, run } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  email,
+  emailClassificationObservation,
+  run,
+} from "~/server/db/retained-tables";
 
 /** Recovery reads only retained Run evidence and identity columns, never entity quality hydration. */
 export async function loadMailReclassificationRead(

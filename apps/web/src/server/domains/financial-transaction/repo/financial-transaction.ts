@@ -90,11 +90,11 @@ import {
   settlementRefsFor,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {

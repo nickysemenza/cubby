@@ -10,9 +10,9 @@ import {
   type AiDecisionFeature,
 } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
+import { readCandidateOwnerEmail } from "~/server/domains/purchase-import/repo/gmail/candidate-source";
 import { paidResearchPreflight } from "~/server/domains/run/service/execution-transport";
 
-import { readCandidateOwnerEmail } from "../../repo/gmail/candidate-source";
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import type { EmailCandidateChoice } from "./candidate-extraction";
 

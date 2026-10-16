@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { email as emailTable } from "~/server/db/schema";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { email as emailTable } from "~/server/db/retained-tables";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 
 export const HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION =

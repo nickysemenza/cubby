@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { cookbook } from "~/server/db/schema";
+import { cookbook } from "~/server/db/retained-tables";
 import { cookbookSourceRecipeCountSql } from "~/server/domains/cookbook/repo/cookbook-source-count";
 import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
 

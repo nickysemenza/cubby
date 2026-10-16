@@ -12,8 +12,10 @@ import type { Database } from "~/server/db";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { createAppError } from "~/server/errors/app-error";
-
-import { sectionBlocks, sectionOut } from "./finance-section";
+import {
+  sectionBlocks,
+  sectionOut,
+} from "~/server/generic/entity-report/repo/finance-section";
 
 type ChargeContext = Awaited<ReturnType<typeof expenseChargeContextWorkflow>>;
 

@@ -2,6 +2,7 @@ import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
 import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import type { Database } from "~/server/db";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { assertExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import {
   executionRequestForRun,
@@ -21,7 +22,6 @@ import {
   saveReclassificationSnapshot,
   type ReclassificationEvaluation,
 } from "../../repo/gmail/reclassification-work";
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../../repo/mail-source-identity";
 import { ingestGmailMessages } from "./ingest";
 import { mailboxApproval } from "./reclassify";
 

@@ -8,13 +8,13 @@ import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
-import type { MappableImageRecord } from "~/server/db/helpers";
-import type {
-  inventoryEntry,
-  location,
-  product,
-  productUnitMappings,
-} from "~/server/db/schema";
+import { type MappableImageRecord } from "~/server/db/helpers/transform";
+import {
+  type inventoryEntry,
+  type location,
+  type product,
+  type productUnitMappings,
+} from "~/server/db/retained-tables";
 import type { LocationIdentityProductRow } from "~/server/domains/location/repo/internal-types";
 import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 

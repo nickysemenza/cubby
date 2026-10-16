@@ -20,6 +20,8 @@ import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
 import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
+import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
+import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
@@ -40,8 +42,6 @@ import {
   getProductsForFoodLookup,
   updateProduct as updateProductRepo,
 } from "../crud";
-import { foodLookupParamFromProduct } from "../helpers";
-import { buildNutritionDisplay } from "../nutrition-display";
 import { loadProductOwnershipEvidence } from "../ownership-evidence";
 import { getProductUnitMappingsByProductIds } from "../unit-mappings";
 

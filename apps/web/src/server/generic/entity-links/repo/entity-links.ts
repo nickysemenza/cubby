@@ -20,10 +20,10 @@ import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { groupBy, sumBy, uniq } from "es-toolkit";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers/core";
 import { findDirectedDependencyCycles } from "~/server/db/helpers/dependency-graph";
-import { entityLink } from "~/server/db/schema";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
 
 /** `entityLink` or an alias of it. */

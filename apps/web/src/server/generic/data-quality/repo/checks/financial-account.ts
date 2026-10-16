@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { financialAccount } from "~/server/db/schema";
+import { financialAccount } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

@@ -10,13 +10,16 @@ const leaf = pathToFileURL(
   resolve(app, "src/server/db/generated/identity-storage-tables.gen.ts"),
 ).href;
 const schema = pathToFileURL(resolve(app, "src/server/db/schema.ts")).href;
+const generated = pathToFileURL(
+  resolve(app, "src/server/db/generated/entity-tables.gen.ts"),
+).href;
 const identifiers = pathToFileURL(
   resolve(app, "src/server/db/external-identifier-tables.ts"),
 ).href;
 
 describe("canonical storage table initialization", () => {
-  for (const first of [leaf, schema]) {
-    it(`keeps table identity and closed foreign keys when ${first === leaf ? "storage" : "assembly"} loads first`, () => {
+  for (const first of [leaf, generated, schema]) {
+    it(`keeps table identity and closed foreign keys when ${first === leaf ? "storage" : first === generated ? "generated tables" : "assembly"} loads first`, () => {
       const result = execFileSync(
         process.execPath,
         [
@@ -26,12 +29,19 @@ describe("canonical storage table initialization", () => {
           "-e",
           `
         import assert from "node:assert/strict";
-        import { getTableName } from "drizzle-orm";
+          import { getTableName, isTable } from "drizzle-orm";
         import { getTableConfig } from "drizzle-orm/pg-core";
         await import(${JSON.stringify(first)});
         const leaf = await import(${JSON.stringify(leaf)});
         const schema = await import(${JSON.stringify(schema)});
         const identifiers = await import(${JSON.stringify(identifiers)});
+          const generated = await import(${JSON.stringify(generated)});
+          const allNames = new Set(Object.values(schema).filter(isTable).map(getTableName));
+          for (const [key, table] of Object.entries(generated).filter(([, value]) => isTable(value))) {
+            assert.equal(table, schema[key], key);
+            for (const fk of getTableConfig(table).foreignKeys)
+              assert.ok(allNames.has(getTableName(fk.reference().foreignTable)), fk.getName());
+          }
         const allowed = new Set([...Object.values(leaf).map(getTableName), getTableName(schema.entityIdentity)]);
         for (const [key, table] of Object.entries(leaf)) {
           assert.equal(table, schema[key], key);

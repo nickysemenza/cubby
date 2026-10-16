@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { ledgerTransfer } from "~/server/db/schema";
+import { ledgerTransfer } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

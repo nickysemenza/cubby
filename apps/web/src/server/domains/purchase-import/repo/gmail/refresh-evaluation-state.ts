@@ -1,13 +1,13 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   aiEvaluation,
   email,
   emailClassificationObservation,
   run,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 
 /** The rows an uncertain-Email refresh evaluation reads and settles. */

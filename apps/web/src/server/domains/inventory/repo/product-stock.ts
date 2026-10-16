@@ -1,9 +1,10 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { and, asc, eq } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { inventoryEntry, location, product } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { inventoryEntry, location, product } from "~/server/db/retained-tables";
 
 /** Live stock rows of one Product with their shelf, oldest first. */
 export async function listProductStock(db: Database, productId: ProductId) {

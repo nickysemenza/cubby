@@ -2,9 +2,9 @@ import { type ImageId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { assessmentState, feedback } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { assessmentState, feedback } from "~/server/db/retained-tables";
 
 export async function readConfirmedDescription(db: Database, imageId: ImageId) {
   const [row] = await getDb(db)

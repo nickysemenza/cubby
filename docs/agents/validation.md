@@ -49,9 +49,10 @@ Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.
 
-Scripted block edits match a unique, line-anchored block or AST node; assert a
-single match before replacing nested declarations. Inspect the affected diff
-and parse the edited source before reporting it ready.
+Scripted block edits identify the owning function or declaration with bounded,
+unique line-anchored markers or AST nodes and assert a single match inside that region; a first whole-file match
+does not establish scope. Inspect the affected diff and parse the edited source
+before reporting it ready.
 
 For persistent HMR, fixture packs, or runtime discovery, load
 [local development](../local-development.md). Disposable E2E lanes own their

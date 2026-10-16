@@ -5,9 +5,12 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type {
+  ListReadRow,
+  ListEnrichmentGroup,
+} from "~/entity/model/list-read-fields";
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -15,23 +18,8 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { traceListGroup } from "~/server/observability/list-read-tracing";
-
-export type ListReadRow = ReturnType<typeof projectListRows>[number];
-
-export interface ListReadPage<T = ListReadRow> {
-  data: T[];
-  count: number;
-  sums?: Record<string, number>;
-  groups?: ListGroupSummary[];
-}
-
-export type ListEnrichmentGroup = "quality" | "media" | "relations" | "derived";
-
-export interface ListProjection {
-  kind: "full" | "base" | "enrichment";
-  groups?: readonly ListEnrichmentGroup[];
-}
 
 export const wantsListGroup = (
   projection: ListProjection,

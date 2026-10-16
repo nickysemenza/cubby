@@ -10,6 +10,9 @@ import {
   storedNutritionTotals,
 } from "./nutrition";
 
+/** Stored `RecipeSection.instructions` entries; API steps use `instruction`. */
+export type StoredRecipeInstruction = { text: string };
+
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
   "Book",

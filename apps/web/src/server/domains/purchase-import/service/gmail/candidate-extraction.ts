@@ -9,9 +9,8 @@ import {
 } from "@cubby/schemas/email-candidates";
 
 import type { Database } from "~/server/db";
-
-import { loadCandidateSource } from "../../repo/gmail/candidate-source";
-import { prepareEmailEvidenceCandidates } from "../../repo/gmail/evidence-candidates";
+import { loadCandidateSource } from "~/server/domains/purchase-import/repo/gmail/candidate-source";
+import { prepareEmailEvidenceCandidates } from "~/server/domains/purchase-import/repo/gmail/evidence-candidates";
 
 export type EmailCandidateChoice = (prompt: {
   subject: string;

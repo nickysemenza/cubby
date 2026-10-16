@@ -1,5 +1,7 @@
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { parentTransactionDatabase, unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryParentDatabase as parentTransactionDatabase } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
 
 // Only the server's fingerprint-validated transaction can grant this capability.

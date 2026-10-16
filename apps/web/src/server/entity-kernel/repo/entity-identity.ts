@@ -18,9 +18,10 @@ import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
-import { entityIdentity } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { entityIdentity } from "~/server/db/retained-tables";
 
 export type EntityIdentityResolution =
   | { state: "live"; kind: ShortcodeEntity; id: string; shortcode: string }

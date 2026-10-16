@@ -1,7 +1,10 @@
+import { imageWithEntitySchema } from "@cubby/schemas/image";
+
 import {
   defineRepository,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
+import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -12,6 +15,7 @@ import {
   updateImage,
 } from "./image";
 
+const listImages = completeListReader(imageWithEntitySchema, imageListRead);
 const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */
@@ -23,7 +27,7 @@ export const imageRepository = defineRepository("image", {
   // The full list is the progressive read's complete projection, so every
   // client's row carries the same display images (an image displays itself).
   list: (ctx, filters, sorts, pagination) =>
-    imageListRead(ctx.db, filters, sorts, pagination, { kind: "full" }),
+    listImages(ctx.db, filters, sorts, pagination),
   listRead: listReadOn(imageListRead),
   update: async (ctx, shortcode, data) => {
     const entityId = await imageShortcodes.one(ctx.db, shortcode);

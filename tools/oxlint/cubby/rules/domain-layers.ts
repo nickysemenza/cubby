@@ -55,7 +55,7 @@ function roleOf(path: string): { area: string; role: Role } | undefined {
 const isDb = (path: string) =>
   /^apps\/web\/src\/server\/db(?:[./]|$)/u.test(path);
 const isDbInternals = (path: string) =>
-  /^apps\/web\/src\/server\/db\/(?:schema|helpers|generated|database-runtime|repository-access|external-identifier-tables|[^/]*schema[^/]*$)(?:[./]|$)/u.test(
+  /^apps\/web\/src\/server\/db\/(?:schema|helpers|generated|database-runtime|repository-access|[^/]*tables|[^/]*schema[^/]*$)(?:[./]|$)/u.test(
     path,
   );
 const isDbFreshness = (path: string) =>

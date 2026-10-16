@@ -7,11 +7,14 @@ import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
+import {
+  aiExecutionOwner,
+  liveAiRequestRun,
+} from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 
-import { aiExecutionOwner, liveAiRequestRun } from "./ai-evaluation-requests";
 import { readAiRefreshActivation } from "./ai-refresh";
 
 export async function claimAiEvaluation(

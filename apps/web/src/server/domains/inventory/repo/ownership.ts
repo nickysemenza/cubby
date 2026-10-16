@@ -33,12 +33,11 @@ import {
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
-import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-
 import {
   resolveBeneficiaryEvidence,
   resolvePaymentEvidence,
-} from "./ownership-evidence";
+} from "~/server/domains/inventory/repo/ownership-evidence";
+import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 type OwnershipEntry = Pick<
   typeof inventoryEntry.$inferSelect,

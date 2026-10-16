@@ -1,10 +1,11 @@
 import { type ProductId, parseEntityId } from "@cubby/schemas/identifiers";
 import { and, not, type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
 import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { product } from "~/server/db/retained-tables";
 import { productHasAnyGtin } from "~/server/domains/product/repo/gtin";
 
 /** Case, punctuation, and spacing fold, applied identically to both sides. */

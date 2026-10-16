@@ -141,7 +141,7 @@ restarts; interpret them after representative traffic. See the
 ## Typechecking
 
 Use `pnpm typecheck:web` during app development. It emits compact annotated
-server boundary declarations, checks and emits the identifier-storage producer,
+server boundary declarations, checks and emits the repository producer,
 then checks the remaining server and client. Each checker runs sequentially in
 its own process so their live heaps do not overlap. Implementation edits whose
 published signatures stay unchanged skip consumers. Shared contract edits check
@@ -150,18 +150,21 @@ checked more than once; peak edit memory and parallel worktrees take priority.
 
 Runtime Vite imports continue to load real source. Compiler paths alone redirect
 HTTP handlers, SSR dispatch, server functions and middleware to the annotated
-boundary declarations. The identifier-storage producer uses a schema-free native
+boundary declarations. The repository producer uses a schema-free native
 Drizzle method projection behind an annotated repository-access boundary; the
 remaining server checks that resolver's implementation. One source-only nominal
 `Database` identity is shared across all programs. Canonical table definitions
-stay single-owned, with foreign-key-closed storage groups and global relational
-assembly referring to the same table instances.
+stay single-owned: generated parent/child definitions and retained manual tables
+and views are independent of global relational assembly. Both programs refer to
+the same runtime table instances. Query helpers and list contracts remain below
+composition; ordinary SQL repositories use the projected client and transaction
+ports, while relational queries and workflows stay in the remaining server.
 Each group retains its declarations' custom column-type imports, deduplicated
 against the built-in column vocabulary.
 
 The HTTP/reverse-boundary emitter uses `isolatedDeclarations`, `noResolve` and
 `noCheck` for syntax-based production of annotated exports; the strict server
-checks their bodies. Storage instead uses ordinary strict declaration emission,
+checks their bodies. Repositories instead use ordinary strict declaration emission,
 including inferred table types, with `noEmitOnError`. Its persistent private emit
 cache stays paired with incremental build-info; its output inventory records the
 compiler revision so retries repair an interrupted emit. Successful builds publish a
@@ -169,11 +172,11 @@ complete declaration set, retaining unchanged bytes and timestamps; missing
 cached output forces regeneration. The disposable annotated emitter keeps its
 separate staging lifecycle. All caches and declarations belong to the worktree.
 
-`tooling/typecheck-storage.ts` owns the storage source roster and derives producer
+`tooling/typecheck-repositories.ts` owns the repository source roster and derives producer
 roots, consumer exclusions and exact contract mappings from it. Boundary exports
 must remain independent of implementation-derived registry types. The resolved
-graph guard rejects storage source in its consumers, server composition in
-storage, browser routes/components in the server, unresolved generated-contract
+graph guard rejects repository source in its consumers, server composition in
+repositories, browser routes/components in the server, unresolved generated-contract
 imports, mixed nominal-handle copies and production source without a strict owner.
 
 `pnpm typecheck` also retains the complete web check, including tests, tooling

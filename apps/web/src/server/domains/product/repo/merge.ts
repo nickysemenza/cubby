@@ -67,6 +67,7 @@ import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
+import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
 import { repointProductMatchCandidatesTx } from "~/server/domains/product/repo/match/product-match-candidate";
 import { unitMappingSides } from "~/server/domains/product/repo/unit-mappings";
 import {
@@ -98,7 +99,6 @@ import {
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 
-import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {

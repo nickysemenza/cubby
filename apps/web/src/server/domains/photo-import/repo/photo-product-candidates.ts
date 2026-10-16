@@ -30,6 +30,7 @@ import {
   sourceOrderObservation,
   ledgerParty,
 } from "~/server/db/schema";
+import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
 import {
   getProductCoverImageUrlsByProductIds,
   getProductImagesByProductIds,
@@ -43,8 +44,6 @@ import {
   aiCallRunInput,
 } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { photoFieldCrossCheck } from "./photo-correctness";
 
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 20;

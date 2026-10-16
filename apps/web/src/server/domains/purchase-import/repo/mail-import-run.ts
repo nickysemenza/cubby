@@ -33,6 +33,7 @@ import {
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
+import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import {
   actorSnapshot,
   assertRunParent,
@@ -44,7 +45,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
-import { assertMailSourceIdentityReady } from "./mail-source-identity";
 
 type MailImportAdmission = {
   ledgerPartyId: string;

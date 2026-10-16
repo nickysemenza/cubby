@@ -7,9 +7,9 @@ import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { runPurpose, type RunPurpose } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { run as runTable } from "~/server/db/retained-tables";
 
 type Capability =
   | "prepare"

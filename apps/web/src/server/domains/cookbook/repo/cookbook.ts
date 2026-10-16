@@ -87,10 +87,8 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { type ListPage, listScaffold } from "~/server/generic/list/repo/list";
 import { listAll } from "~/server/generic/list/repo/list-all";
-import {
-  hydrateListRead,
-  type ListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

@@ -2,9 +2,10 @@ import type { EmailCandidateSource } from "@cubby/schemas/email-candidates";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { email as emailTable, orderMail } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { email as emailTable, orderMail } from "~/server/db/retained-tables";
 import { retainedMailJoin } from "~/server/domains/mail/repo/retained-mail";
 
 /** Exact member, provider identity and retained bytes own this read-only evidence. */

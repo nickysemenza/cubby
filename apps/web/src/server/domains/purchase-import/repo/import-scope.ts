@@ -14,15 +14,16 @@ import {
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   importPreparedOrder,
   email as emailTable,
   orderMail,
   orderMailAttachment,
   run as runTable,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import {
   retainedMailJoin,
   retainedMailProjection,

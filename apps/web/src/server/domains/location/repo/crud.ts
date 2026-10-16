@@ -78,6 +78,12 @@ import {
   attachInventoryValuations,
   loadLiveInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
+import { getHomeLocation } from "~/server/domains/location/repo/home";
+import type {
+  LocationFilters,
+  LocationWithParentChild,
+} from "~/server/domains/location/repo/internal-types";
+import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
@@ -95,10 +101,10 @@ import {
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
@@ -113,12 +119,6 @@ import {
   dbLocationToAPI,
   dbLocationToListAPI,
 } from "./helpers";
-import { getHomeLocation } from "./home";
-import type {
-  LocationFilters,
-  LocationWithParentChild,
-} from "./internal-types";
-import { rollupLocationValuations } from "./location-valuation-rollup";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import {

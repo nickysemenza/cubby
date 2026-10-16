@@ -6,13 +6,13 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { PresenceFilter } from "@cubby/schemas/pagination";
 
-import type { MappableImageRecord } from "~/server/db/helpers";
-import type {
-  ingredient,
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
-} from "~/server/db/schema";
+import { type MappableImageRecord } from "~/server/db/helpers/transform";
+import {
+  type ingredient,
+  type recipe,
+  type recipeSection,
+  type recipeSectionIngredient,
+} from "~/server/db/retained-tables";
 
 /**
  * An ingredient row joined with its optional backing Recipe (set when the

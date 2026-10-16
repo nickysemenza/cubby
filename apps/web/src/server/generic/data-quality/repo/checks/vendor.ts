@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { vendor } from "~/server/db/schema";
+import { vendor } from "~/server/db/retained-tables";
 import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
 
 import { defineEntityChecks } from "../registry";

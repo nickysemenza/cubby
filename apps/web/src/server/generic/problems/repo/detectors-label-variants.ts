@@ -39,9 +39,9 @@ import { ProblemItem } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { product, purchase, vendor } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { product, purchase, vendor } from "~/server/db/retained-tables";
 import { canonicalLabelKey } from "~/server/generic/list/repo/label-canonical";
 
 type SpellingVariantRow = {

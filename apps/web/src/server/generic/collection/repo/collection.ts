@@ -50,14 +50,13 @@ import {
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import { createAppError } from "~/server/errors/app-error";
-import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
 import {
   deriveCollectionMembership,
   directCollectionMembership,
-} from "./collection-membership";
-import { evaluateSmartCollections } from "./smart-collection-membership";
+} from "~/server/generic/collection/repo/collection-membership";
+import { evaluateSmartCollections } from "~/server/generic/collection/repo/smart-collection-membership";
+import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 interface GraphLocation {
   id: LocationId;

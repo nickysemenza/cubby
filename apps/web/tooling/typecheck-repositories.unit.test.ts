@@ -12,7 +12,7 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
-import { createStoragePrograms } from "./typecheck-storage";
+import { createRepositoryPrograms } from "./typecheck-repositories";
 
 it("publishes a complete checked incremental boundary and recovers lost output", () => {
   const root = mkdtempSync(join(tmpdir(), "cubby-storage-types-"));
@@ -33,7 +33,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
   };
   const source = join(app, "src/server/storage.ts");
   const declaration = "apps/web/src/server/storage.d.ts";
-  const snapshot = (program: ReturnType<typeof createStoragePrograms>) => ({
+  const snapshot = (program: ReturnType<typeof createRepositoryPrograms>) => ({
     content: readFileSync(join(program.output, declaration), "utf8"),
     modified: statSync(join(program.output, declaration), { bigint: true })
       .mtimeNs,
@@ -69,7 +69,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
       join(app, "src/server/consumer.ts"),
       'import { value } from "~/server/storage"; export const result: number = value();\n',
     );
-    let program = createStoragePrograms(app, [
+    let program = createRepositoryPrograms(app, [
       "src/server/storage.ts",
       "src/server/retired.ts",
     ]);
@@ -101,7 +101,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     expect(snapshot(program)).toEqual(original);
 
     write(join(app, "src/server/added.ts"), "export const added = 1;\n");
-    program = createStoragePrograms(app, [
+    program = createRepositoryPrograms(app, [
       "src/server/storage.ts",
       "src/server/retired.ts",
       "src/server/added.ts",
@@ -135,7 +135,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     ).toThrow(/TS2322/u);
 
     write(source, "export function value(): number { return 2; }\n");
-    program = createStoragePrograms(app, ["src/server/storage.ts"]);
+    program = createRepositoryPrograms(app, ["src/server/storage.ts"]);
     program.configure();
     program.build(compiler, compile, []);
     expect(() =>

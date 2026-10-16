@@ -21,16 +21,15 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
-import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
-import { createAppError } from "~/server/errors/app-error";
-import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
 import {
   effectiveExpenseSpendingCategorySql,
   fallbackExpenseSpendingCategorySql,
   expenseSpendingCategoryResolutionSql,
-} from "./expense-category-resolution";
+} from "~/server/domains/expense/repo/expense-category-resolution";
+import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { createAppError } from "~/server/errors/app-error";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
 

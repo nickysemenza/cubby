@@ -17,12 +17,12 @@ import {
   type MappableImageRecord,
   mapImages,
   mapRelation,
-} from "~/server/db/helpers";
-import type {
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
-} from "~/server/db/schema";
+} from "~/server/db/helpers/transform";
+import {
+  type recipe,
+  type recipeSection,
+  type recipeSectionIngredient,
+} from "~/server/db/retained-tables";
 import {
   recipeCompositionLabel,
   recipeTotalsLabel,

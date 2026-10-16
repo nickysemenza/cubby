@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
 /**
  * Serialize source-owned financial identities before checking their JSONB

@@ -23,6 +23,15 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { recordDiscoveryEmailReceipt } from "~/server/domains/email/repo/discovery-email-audit";
+import {
+  listGmailSyncTargets,
+  type GmailSyncTarget,
+} from "~/server/domains/purchase-import/repo/gmail/targets";
+import {
+  GmailApiError,
+  type GmailProvider,
+} from "~/server/domains/purchase-import/repo/gmail/types";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { assertExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import {
@@ -57,14 +66,8 @@ import {
   listGmailPage,
   mergeMailboxQueries,
 } from "../../repo/gmail/sync";
-import {
-  listGmailSyncTargets,
-  type GmailSyncTarget,
-} from "../../repo/gmail/targets";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
-import { GmailApiError, type GmailProvider } from "../../repo/gmail/types";
 import type { startMailImport } from "../../repo/mail-import-run";
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../../repo/mail-source-identity";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import type { MailRelevance } from "../../service/gmail/relevance";
 import type { MailTriage } from "../../service/gmail/triage";

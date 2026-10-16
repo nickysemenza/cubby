@@ -1,9 +1,10 @@
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { ledgerParty, run } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { ledgerParty, run } from "~/server/db/retained-tables";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";

@@ -10,7 +10,7 @@
  */
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 
-import { location } from "~/server/db/schema";
+import { location } from "~/server/db/retained-tables";
 
 /** The analysis feature id `describeLocation` writes under. */
 export const LOCATION_DESCRIPTION_FEATURE_ID = "location-description";

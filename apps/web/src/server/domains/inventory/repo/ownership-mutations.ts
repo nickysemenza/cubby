@@ -15,6 +15,10 @@ import {
 import { expense, inventoryEntry } from "~/server/db/schema";
 import { getExpenseByID } from "~/server/domains/expense/repo/crud";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
+import {
+  assertValidRawInventoryOwnership,
+  type InventoryRawOwnership,
+} from "~/server/domains/inventory/repo/slot";
 import { createAppError } from "~/server/errors/app-error";
 import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
@@ -32,10 +36,6 @@ import {
   assertIndividualOwner,
   loadEffectiveInventoryOwnership,
 } from "./ownership";
-import {
-  assertValidRawInventoryOwnership,
-  type InventoryRawOwnership,
-} from "./slot";
 
 const assertValidIndividualOwner = async (
   tx: DrizzleTransaction,

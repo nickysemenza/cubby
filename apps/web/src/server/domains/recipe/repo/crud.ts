@@ -82,10 +82,10 @@ import {
   liveExternalIds,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { recipeListLabels } from "~/server/generic/list/repo/list-display-labels";
 import {
   hydrateListRead,
-  type ListProjection,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
@@ -146,14 +146,15 @@ import {
   dbRecipeToTopLevel,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
-} from "./helpers";
-import type { RecipeFilters } from "./internal-types";
-import { recipeMetaToColumns } from "./meta";
+} from "~/server/domains/recipe/repo/helpers";
+import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
+import { recipeMetaToColumns } from "~/server/domains/recipe/repo/meta";
 import {
   type RecipeProvenance,
   recipeSourceToColumns,
   webProvenance,
-} from "./source";
+} from "~/server/domains/recipe/repo/source";
+
 import {
   createSectionWithIngredients,
   handleSectionUpdates,

@@ -85,17 +85,17 @@ import {
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
+import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
+import {
+  effectivePhotoGroupConcern,
+  photoGroupSteps,
+} from "~/server/domains/photo-import/repo/run/photo-group-steps";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
-import { photoFieldCrossCheck } from "../photo-correctness";
-import {
-  effectivePhotoGroupConcern,
-  photoGroupSteps,
-} from "./photo-group-steps";
 import { assertPhotoGroupReviewIntent, commitPhotoGroup } from "./writer";
 
 function normalizeReview(review: PhotoGroupReview | null | undefined) {

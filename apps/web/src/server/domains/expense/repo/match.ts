@@ -61,17 +61,16 @@ import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
+import {
+  classifyMatchRatio,
+  countTokenOverlap,
+  tokenizeMatchLabel,
+} from "~/server/domains/expense/repo/match-grading";
 import { calculateFinancialReconciliation } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
 } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
-
-import {
-  classifyMatchRatio,
-  countTokenOverlap,
-  tokenizeMatchLabel,
-} from "./match-grading";
 
 /**
  * Raw shape of one candidate row off the wire.

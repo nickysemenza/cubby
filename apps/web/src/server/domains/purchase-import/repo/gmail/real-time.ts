@@ -16,16 +16,16 @@ import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, email as emailTable, run } from "~/server/db/schema";
-
-import { originalChecksum } from "./checksum";
-import { normalizeMessage } from "./normalize";
-import { recordEmailRetrievalFailure } from "./observations";
-import { gmailProviderForUser } from "./provider";
+import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import {
   GmailApiError,
   type GmailAttachmentPayload,
   type GmailOrderMailAttachment,
-} from "./types";
+} from "~/server/domains/purchase-import/repo/gmail/types";
+
+import { recordEmailRetrievalFailure } from "./observations";
+import { gmailProviderForUser } from "./provider";
 
 export async function exactMemberEmail(
   db: Database,

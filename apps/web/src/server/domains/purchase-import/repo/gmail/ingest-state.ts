@@ -13,8 +13,7 @@ import {
   orderMailAttachment,
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
-
-import { hasRetainedEmailImportContent } from "../email-content";
+import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 
 /** Gmail ingest's own reads and writes on Email and its retained original. */
 

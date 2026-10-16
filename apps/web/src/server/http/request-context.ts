@@ -13,7 +13,6 @@ import type { SpanAttr } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
-import { auth as betterAuth } from "~/lib/auth";
 import type { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
@@ -210,6 +209,8 @@ export const createRequestContext = async (opts: {
     };
   }
 
+  // Background services and pre-authenticated actors do not own auth startup.
+  const { auth: betterAuth } = await import("~/lib/auth");
   const betterSession = await betterAuth.api.getSession({
     headers: opts.headers,
   });

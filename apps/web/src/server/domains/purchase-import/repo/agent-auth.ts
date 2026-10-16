@@ -6,15 +6,18 @@ import { z } from "zod";
 
 import { APP_ORIGIN, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 export type { PurchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
-import type { Database } from "~/server/db";
-import { getDb, withTransaction } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import {
+  repositoryQueries as getDb,
+  repositoryTransaction as withTransaction,
+} from "~/server/db/repository-access.boundary";
 import {
   oauthClient,
   oauthClientResource,
   oauthRefreshToken,
   oauthResource,
   session,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 export const PURCHASE_AGENT_OAUTH_CLIENT_ID = "cubby-purchase-agent";
 const PURCHASE_AGENT_OAUTH_SOFTWARE_ID = "cubby-purchase-agent-v1";

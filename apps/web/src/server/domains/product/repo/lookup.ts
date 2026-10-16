@@ -30,10 +30,10 @@ import {
   loadPrimaryGtins,
   productHasGtin,
 } from "~/server/domains/product/repo/gtin";
+import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { attachDataQuality } from "~/server/generic/data-quality/repo/hydrate";
 
 import { getProductCoverImageUrlsByProductIds } from "./crud";
-import { foodLookupParamFromProduct } from "./helpers";
 import {
   dbProductToTopLevelAPI,
   mapProductListInventoryEntries,

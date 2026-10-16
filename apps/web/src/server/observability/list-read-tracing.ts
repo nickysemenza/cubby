@@ -2,12 +2,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Entity } from "@cubby/schemas/entity";
 
+import type { ListEnrichmentGroup } from "~/entity/model/list-read-fields";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { withTrace } from "~/server/observability/tracing";
-
-import type {
-  ListEnrichmentGroup,
-  ListProjection,
-} from "../generic/list/repo/list-projection";
 
 interface ListReadTraceContext {
   entity?: Entity;

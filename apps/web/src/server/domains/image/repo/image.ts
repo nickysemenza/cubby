@@ -147,10 +147,8 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  hydrateListRead,
-  type ListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import {
   findDirectImageSearchOwnerRefs,
   refreshCapturedImageSearchOwnerRefs,

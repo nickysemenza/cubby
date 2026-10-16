@@ -37,7 +37,7 @@ export const recipeChildren = [
         key: "instructions",
         kind: "jsonb",
         notNull: true,
-        type: "Instruction[]",
+        type: "StoredRecipeInstruction[]",
         default: { sql: "'[]'::jsonb" },
       },
       // Position within the recipe. Nullable: rows saved before this column was
@@ -47,7 +47,10 @@ export const recipeChildren = [
     ],
     types: [
       { module: "@cubby/schemas/identifiers", exports: ["RecipeId"] },
-      { module: "../schema", exports: ["Instruction"] },
+      {
+        module: "@cubby/schemas/recipe-shared",
+        exports: ["StoredRecipeInstruction"],
+      },
     ],
     indexes: [
       { name: "RecipeSection_recipeId_idx", on: ["recipeId"] },

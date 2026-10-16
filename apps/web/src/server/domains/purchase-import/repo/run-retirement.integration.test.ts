@@ -24,7 +24,7 @@ import {
 } from "tooling/e2e-run-bundle";
 import { sanitizeWorkerdLogs } from "tooling/e2e-workerd-logs";
 import { withTestDb } from "tooling/test-setup";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
@@ -461,8 +461,7 @@ type CoordinatorRequest = {
 };
 
 describe("coordinator host retirement", () => {
-  // Each case addresses only its own Run's coordinator, so one Worker serves
-  // them all; the restart case's reload leaves it usable for later cases.
+  // The borrowed database resets between cases; its Worker must drain first.
   let shared: ScenarioHarness | undefined;
   const sharedRuntime = async () =>
     (shared ??= await startScenarioHarness(ctx.databaseUrl, { steps: [] }));
@@ -536,7 +535,6 @@ describe("coordinator host retirement", () => {
     expect(await runtime.emitted()).toEqual([]);
     status = "passed";
   }, 90_000);
-  afterAll(() => shared?.close());
   let started: E2ERunIdentity;
   let status = "failed";
   const scenario = "synthetic-settled-coordinator-disposal";
@@ -552,52 +550,58 @@ describe("coordinator host retirement", () => {
     observations = [];
     shared?.harness.clearLogs();
   });
-  afterEach(() => {
+  afterEach(async () => {
     setCfEnv(undefined);
-    const inventory = sanitizeWorkerdLogs(
-      shared?.harness
-        .getLogs()
-        .filter((entry) => entry.message.includes("storage-inventory")) ?? [],
-    );
-    const outputDir = `/tmp/cubby-run-retirement-host-${Date.now()}`;
-    mkdirSync(outputDir, { recursive: true });
-    const evidence = path.join(outputDir, "boundary-results.json");
-    writeFileSync(
-      evidence,
-      JSON.stringify(
-        {
-          status,
-          boundary:
-            "Settled coordinator disposal acknowledged cold, then execution fenced",
-          source:
-            "Synthetic fixtures only; no model requests or production data",
-          observations,
-          inventory,
-        },
-        null,
-        2,
-      ),
-    );
-    writeE2ERunBundle({
-      repoRoot,
-      outputDir,
-      evidence: [evidence],
-      kind: "browser",
-      status,
-      command: [
-        "pnpm",
-        "--dir",
-        "apps/web",
-        "test:postgres",
-        "src/server/domains/purchase-import/repo/run-retirement.integration.test.ts",
-        "--project",
-        "integration-workerd",
-      ],
-      profile: "purchase-agent",
-      scenario,
-      started,
-      cases: [{ name: scenario, status }],
-    });
+    try {
+      const inventory = sanitizeWorkerdLogs(
+        shared?.harness
+          .getLogs()
+          .filter((entry) => entry.message.includes("storage-inventory")) ?? [],
+      );
+      const outputDir = `/tmp/cubby-run-retirement-host-${Date.now()}`;
+      mkdirSync(outputDir, { recursive: true });
+      const evidence = path.join(outputDir, "boundary-results.json");
+      writeFileSync(
+        evidence,
+        JSON.stringify(
+          {
+            status,
+            boundary:
+              "Settled coordinator disposal acknowledged cold, then execution fenced",
+            source:
+              "Synthetic fixtures only; no model requests or production data",
+            observations,
+            inventory,
+          },
+          null,
+          2,
+        ),
+      );
+      writeE2ERunBundle({
+        repoRoot,
+        outputDir,
+        evidence: [evidence],
+        kind: "browser",
+        status,
+        command: [
+          "pnpm",
+          "--dir",
+          "apps/web",
+          "test:postgres",
+          "src/server/domains/purchase-import/repo/run-retirement.integration.test.ts",
+          "--project",
+          "integration-workerd",
+        ],
+        profile: "purchase-agent",
+        scenario,
+        started,
+        cases: [{ name: scenario, status }],
+      });
+    } finally {
+      const runtime = shared;
+      shared = undefined;
+      await runtime?.close();
+    }
   });
 
   it("stamps retiredAt in one pass only after a cold empty retry, then fences fetch and dispatch", async () => {

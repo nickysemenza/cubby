@@ -1,5 +1,8 @@
 import type { EmailFilters } from "@cubby/schemas/email";
-import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
+import {
+  emailPurchaseLink,
+  emailPurchaseLinkState,
+} from "@cubby/schemas/email-fields";
 import {
   parseShortcodeFor,
   purchaseId,
@@ -72,7 +75,11 @@ describe("Email Purchase links", () => {
         [{ orderBy: "linkState", direction: "asc" }],
         { pageIndex: 0, pageSize: 50 },
       )
-    ).data;
+    ).data.map((row) =>
+      Object.assign({}, row, {
+        purchaseLinks: emailPurchaseLink.array().parse(row.purchaseLinks),
+      }),
+    );
 
   async function emailCode(orderMailId: string) {
     const [row] = await getDb(ctx.db)

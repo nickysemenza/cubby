@@ -16,8 +16,10 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { householdDaySqlText, unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { householdDaySqlText } from "~/server/db/helpers/query";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
 
 /**

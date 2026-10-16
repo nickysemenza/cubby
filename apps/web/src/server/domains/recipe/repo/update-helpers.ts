@@ -33,13 +33,18 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
+import type { ExistingRecipeWithSections } from "~/server/domains/recipe/repo/internal-types";
+import {
+  type RecipeMetaColumns,
+  recipeMetaToColumns,
+} from "~/server/domains/recipe/repo/meta";
+import {
+  recipeSourceToColumns,
+  webProvenance,
+} from "~/server/domains/recipe/repo/source";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import type { ExistingRecipeWithSections } from "./internal-types";
-import { type RecipeMetaColumns, recipeMetaToColumns } from "./meta";
-import { recipeSourceToColumns, webProvenance } from "./source";
 
 /**
  * Process a single ingredient input.

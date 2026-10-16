@@ -1,0 +1,10 @@
+import { exists, sql } from "drizzle-orm";
+import { db } from "~/server/db/db";
+import { task } from "~/server/db/schema";
+
+export function missingGuard() {
+  return db
+    .select()
+    .from(task)
+    .where(exists(db.select().from(task).where(sql`${task.id} = 1`)));
+}

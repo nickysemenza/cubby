@@ -9,9 +9,9 @@ import { chunk } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
 import { isStatementTimeout } from "~/server/errors/db-errors";
+import { searchEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-path-search";
 
 import { readEntityGraph } from "./entity-graph";
-import { searchEntityGraphPaths } from "./entity-graph-path-search";
 
 const uniqueRefs = (refs: readonly EntityRef[]): EntityRef[] => [
   ...new Map(

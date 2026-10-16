@@ -30,7 +30,7 @@ import { hasGenericListOperation } from "../generator/entities/list-capabilities
 import { deriveImageDisplaySources } from "../generator/entities/derive";
 import { renderImagePolicyArtifacts } from "../generator/entities/render/image-policy";
 import {
-  renderEntityTablesArtifact,
+  renderEntityTableArtifacts,
   renderIdentityStorageTablesArtifact,
   tableDependencyClosure,
 } from "../generator/entities/render/tables";
@@ -2246,7 +2246,7 @@ describe("entity table storage", () => {
       ],
     });
     const entities = compileEntityDeclarations([declaration, beta], children);
-    const source = renderEntityTablesArtifact(entities, children);
+    const source = renderEntityTableArtifacts(entities, children).definitions;
     expect(source).toContain(
       ".references((): AnyPgColumn => syntheticContent.id)",
     );
@@ -2256,7 +2256,7 @@ describe("entity table storage", () => {
   });
 
   it("binds declared SQL to table columns and emits identity, indexes, and relations", () => {
-    const source = renderEntityTablesArtifact(
+    const artifacts = renderEntityTableArtifacts(
       compileEntityDeclarations([
         alpha({
           indexes: [
@@ -2271,6 +2271,7 @@ describe("entity table storage", () => {
         beta,
       ]),
     );
+    const source = artifacts.definitions + artifacts.relations;
     expect(source).toContain(
       'index("Alpha_live_idx").on(table.name).where(sql`${table.deletedAt} IS NULL`)',
     );
@@ -2278,6 +2279,8 @@ describe("entity table storage", () => {
     expect(source).toContain(
       "beta: one(beta, { fields: [alpha.betaId], references: [beta.id] })",
     );
-    expect(source).toContain('import { alphaSibling } from "../schema";');
+    expect(source).toContain(
+      'import { alphaSibling } from "~/server/db/retained-tables";',
+    );
   });
 });

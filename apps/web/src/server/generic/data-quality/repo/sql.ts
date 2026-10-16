@@ -18,14 +18,15 @@ import { getTableName, type SQL, sql } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { type DataQualityEntries, dataQualityEntries } from "./entries";
 import {
   liveQualityRow,
   type CheckBinding,
   type QualityReadContext,
   type EntityChecks,
   type ScoredTable,
-} from "./registry";
+} from "~/server/generic/data-quality/repo/registry";
+
+import { type DataQualityEntries, dataQualityEntries } from "./entries";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these

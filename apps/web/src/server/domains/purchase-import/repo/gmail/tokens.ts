@@ -1,7 +1,8 @@
 import { z } from "zod";
 
+import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
+
 import { createGmailApiClient, type GmailFetcher } from "./client";
-import type { GmailProvider } from "./types";
 
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const DEFAULT_REFRESH_SKEW_MS = 60_000;

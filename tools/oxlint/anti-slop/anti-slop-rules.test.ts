@@ -32,10 +32,9 @@ interface OxlintOutput {
 
 function runOxlint(fixturePath: string): OxlintDiagnostic[] {
   const result = spawnSync(
-    "pnpm",
+    process.execPath,
     [
-      "exec",
-      "oxlint",
+      join(repoRoot, "node_modules/oxlint/bin/oxlint"),
       "--config",
       ".oxlintrc.json",
       "--format",
@@ -344,6 +343,14 @@ test("moved table definitions retain soft-delete enforcement through shared fact
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [9],
   );
+});
+
+test("generated Task definitions retain soft-delete enforcement after relation separation", () => {
+  const diagnostics = lintScopedFixture(
+    "require-soft-delete-filter",
+    "require-soft-delete-filter-generated-task.txt",
+  );
+  assert.equal(diagnostics.length, 1);
 });
 
 test("a raw sql EXISTS over a soft-deletable table with no guard is rejected", () => {

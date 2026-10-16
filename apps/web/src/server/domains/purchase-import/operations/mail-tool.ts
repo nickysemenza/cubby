@@ -63,6 +63,11 @@ import {
   retainedMailJoin,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types";
+import {
+  assertMailRunMembership,
+  readMailRunSources,
+} from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -77,12 +82,7 @@ import { clearUnrelatedOriginal } from "../repo/gmail/persistence";
 import { gmailProviderForUser } from "../repo/gmail/provider";
 import { GMAIL_PAGE_SIZE } from "../repo/gmail/sync";
 import { GmailAuthorizationError } from "../repo/gmail/tokens";
-import { GmailApiError } from "../repo/gmail/types";
 import { recordMailFinancialReview } from "../repo/mail-financial-review";
-import {
-  assertMailRunMembership,
-  readMailRunSources,
-} from "../repo/mail-run-membership";
 import { ingestGmailMessages } from "../service/gmail/ingest";
 import {
   attachmentEvidenceFingerprint,

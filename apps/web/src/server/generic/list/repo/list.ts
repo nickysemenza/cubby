@@ -76,6 +76,11 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
+  type HierarchyEntity,
+  hierarchyDescendantsSql,
+} from "~/server/generic/list/repo/hierarchy";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
@@ -96,8 +101,7 @@ import {
   relatedExistsSql,
   shortcodeIdsSql,
 } from "./field-compiler";
-import { type HierarchyEntity, hierarchyDescendantsSql } from "./hierarchy";
-import { type ListProjection, wantsListGroup } from "./list-projection";
+import { wantsListGroup } from "./list-projection";
 
 const suggestionKinds = z
   .union([

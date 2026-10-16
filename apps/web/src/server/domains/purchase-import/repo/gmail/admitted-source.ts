@@ -12,8 +12,7 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 
 /** Refresh does not transfer, repair or readmit an assigned import source. */
 async function classificationRefreshDisposition(
@@ -281,7 +280,7 @@ export async function publishGmailEvidence<T>(
         evaluation.token,
         evaluation.reclassification && input.expected && input.runId
           ? await (
-              await import("./reclassification-receipt")
+              await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt")
             ).reclassificationReceipt(
               txDb,
               input.expected,

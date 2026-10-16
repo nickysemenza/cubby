@@ -28,6 +28,12 @@ import {
 } from "~/server/db/helpers";
 import type { location } from "~/server/db/schema";
 import { requireLoadedProductPricing } from "~/server/domains/inventory/repo/mappers";
+import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
+import type {
+  LocationIdentityProductRow,
+  LocationListDB,
+  LocationWithParentChild,
+} from "~/server/domains/location/repo/internal-types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import {
   mapDbProductToInventoryEmbed,
@@ -35,13 +41,6 @@ import {
 } from "~/server/domains/product/repo/mappers";
 import type { ProductPricing } from "~/server/domains/product/repo/pricing";
 import { valuationLabel } from "~/server/generic/list/repo/list-display-labels";
-
-import { mapLocationIdentityProduct } from "./identity-product";
-import type {
-  LocationIdentityProductRow,
-  LocationListDB,
-  LocationWithParentChild,
-} from "./internal-types";
 
 /**
  * Transform a location DB record to API format.

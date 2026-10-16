@@ -24,11 +24,9 @@ import {
   scaleTotals,
 } from "~/lib/nutrition-estimates";
 import { mapImages, type MappableImageRecord } from "~/server/db/helpers";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { mealCostLabel } from "~/server/generic/list/repo/list-display-labels";
-import {
-  type ListProjection,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 
 const scaledRecipeTotals = (
   totals: StoredRecipeTotals | null,

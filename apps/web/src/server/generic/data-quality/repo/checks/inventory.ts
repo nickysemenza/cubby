@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { inventoryEntry } from "~/server/db/schema";
+import { inventoryEntry } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

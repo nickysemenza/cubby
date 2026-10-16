@@ -14,9 +14,10 @@ import {
   productSourceSchema,
   type UPCLookupResponse,
 } from "~/contracts/upc.schemas";
-import type { Database } from "~/server/db";
-import { getDb, ilikeContains } from "~/server/db/helpers";
-import { upcLookupCache } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { ilikeContains } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { upcLookupCache } from "~/server/db/retained-tables";
 
 /** A multi-UPC provider refresh failed; callers receive no partial result. */
 export class PartialUpcBatchLookupError extends Error {

@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull } from "drizzle-orm";
@@ -489,7 +490,7 @@ async function createConvergenceHarness(
     );
     expect(
       emails.data
-        .flatMap((item) => item.purchaseLinks)
+        .flatMap((item) => emailPurchaseLink.array().parse(item.purchaseLinks))
         .find((row) => row.purchaseId === purchase.shortcode)?.state,
     ).toBe("linked");
     expect(purchase.shortcode).toBe(bookedPurchaseCode);

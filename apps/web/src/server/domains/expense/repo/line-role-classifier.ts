@@ -2,7 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db/database";
 
 export type ExpenseLineRoleEvidence = Pick<
   ExpenseCreateInput,

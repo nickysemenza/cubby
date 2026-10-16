@@ -19,10 +19,12 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { device, entityIdentity, entitySource, run } from "~/server/db/schema";
+import {
+  identityShortcodes,
+  resolveEntityIdentity,
+} from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { identityShortcodes, resolveEntityIdentity } from "./entity-identity";
 
 const cubbyOrigin = new URL(getShortcodeUrl("")).origin;
 
