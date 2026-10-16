@@ -276,6 +276,7 @@ export async function additionalWorkProblemSelections(
   readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ): Promise<SQL[]> {
   const selections: SQL[] = [];
+  const predicates: Record<string, () => Promise<SQL[]>> = {};
   const diagnostics: Record<string, () => Promise<SQL[]>> = {};
   const includeProblems = includesWorkSource(scope, "problem", "repair");
   // Diagnostics and statement imports name no single record and carry no gaps.
@@ -347,8 +348,8 @@ export async function additionalWorkProblemSelections(
           ? sql`${table} INNER JOIN "Product" ON "Product".id = "InventoryEntry"."productId" INNER JOIN "Location" ON "Location".id = "InventoryEntry"."locationId"`
           : sql`${table}`;
       const routing = sharedProblemScope(source.entity, sql`${table.id}`);
-      selections.push(
-        ...workQueueCandidate(scope, {
+      predicates[definition.key] = async () =>
+        workQueueCandidate(scope, {
           entity: source.entity,
           table: from,
           id: sql`${table.shortcode}`,
@@ -363,8 +364,7 @@ export async function additionalWorkProblemSelections(
           details,
           key: definition.key,
           shared: routing.shared,
-        }),
-      );
+        });
       continue;
     }
     if (!includeUnrecorded || excludedDiagnostics.has(source.diagnostic))
@@ -429,14 +429,11 @@ export async function additionalWorkProblemSelections(
       return rows;
     };
   }
-  // Match the Problems reader's bounded diagnostic fan-out; share the one
-  // request-local attention promise and retain declaration order in results.
-  const diagnosticRows = await traceAllBounded(diagnostics, 4);
-  selections.push(...Object.values(diagnosticRows).flat());
-  for (const incomplete of includeAccounts
-    ? await findIncompleteStatementImports(db)
-    : []) {
-    const owners = sql`coalesce((
+  if (includeAccounts)
+    diagnostics.incompleteStatementImports = async () => {
+      const rows: SQL[] = [];
+      for (const incomplete of await findIncompleteStatementImports(db)) {
+        const owners = sql`coalesce((
       SELECT array_agg(DISTINCT account."ledgerPartyId")
       FROM "StatementImport" batch
       JOIN ${statementImportMembers} member ON member."importId" = batch.id
@@ -444,21 +441,30 @@ export async function additionalWorkProblemSelections(
       LEFT JOIN "FinancialAccount" account ON account.id = row."accountId" AND account."deletedAt" IS NULL
       WHERE batch.source = ${incomplete.source} AND batch.fingerprint = ${incomplete.fingerprint} AND batch."deletedAt" IS NULL
     ), ARRAY[NULL::uuid])`;
-    selections.push(
-      workDiagnosticCandidate(
-        "incompleteStatementImports",
-        `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
-        incomplete.label,
-        owners,
-        {
-          source: "account",
-          kind: "review",
-          reason: `Statement import retained ${incomplete.rowCountStored} of ${incomplete.rowCountDeclared} declared rows.`,
-          nextAction:
-            "Open Problems to inspect the import and its current account evidence.",
-        },
-      ),
-    );
-  }
+        rows.push(
+          workDiagnosticCandidate(
+            "incompleteStatementImports",
+            `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
+            incomplete.label,
+            owners,
+            {
+              source: "account",
+              kind: "review",
+              reason: `Statement import retained ${incomplete.rowCountStored} of ${incomplete.rowCountDeclared} declared rows.`,
+              nextAction:
+                "Open Problems to inspect the import and its current account evidence.",
+            },
+          ),
+        );
+      }
+      return rows;
+    };
+  // One bound covers all independent branch reads. Keep entity branches
+  // before diagnostics and account work; reuse the shared attention promise.
+  const problemRows = await traceAllBounded(
+    { ...predicates, ...diagnostics },
+    4,
+  );
+  selections.push(...Object.values(problemRows).flat());
   return selections;
 }

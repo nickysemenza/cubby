@@ -39,6 +39,8 @@ import {
 // filters and member routing; one failed diagnostic must fail the whole read.
 // Shared price evidence must preserve explicit/zero prices, inherited kit
 // prices and exception fingerprints; unrelated check reads must not require it.
+// Entity predicates and diagnostics may overlap, but must preserve scoped
+// results, declaration order and the one shared Project-attention snapshot.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 
