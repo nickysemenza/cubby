@@ -505,6 +505,13 @@
       "when": 1792038157204,
       "tag": "0071_photo_review_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792118311156,
+      "tag": "0072_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

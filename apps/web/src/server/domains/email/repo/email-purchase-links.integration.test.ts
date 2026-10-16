@@ -1,4 +1,5 @@
 import type { EmailFilters } from "@cubby/schemas/email";
+import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   parseShortcodeFor,
   purchaseId,
@@ -366,6 +367,100 @@ describe("Email Purchase links", () => {
       email: await emailCode(source.id),
     };
   }
+
+  // The view exposes UUID event IDs. Its lookup must not scan every active
+  // decision through the separate text-key uniqueness indexes.
+  it("bounds UUID event lookups across reviewed Email links", async () => {
+    const f = await retainedReviewFixture();
+    const prediction = await seedEmailLinkDecision(ctx.db, {
+      eventId: f.event.id,
+      purchaseId: f.purchase.id,
+      decision: "linked",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: ctx.actor.userId,
+    });
+    const [history] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, prediction.id));
+    const [state] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, prediction.id));
+    if (!history || !state) throw new Error("Synthetic link decision missing");
+    const events = await getDb(ctx.db)
+      .insert(orderMailEvent)
+      .values(
+        Array.from({ length: 512 }, (_, i) => ({
+          orderMailId: f.source.id,
+          event: "placed" as const,
+          orderId: `SYNTHETIC-INDEX-${i}`,
+          sourceKey: `synthetic-index-event-${i}`,
+        })),
+      )
+      .returning({ id: orderMailEvent.id });
+    const copies = events.map((event) => ({ event, id: crypto.randomUUID() }));
+    await getDb(ctx.db)
+      .insert(assessment)
+      .values(
+        copies.map(({ event, id }) => ({
+          ...history,
+          id,
+          publicationKey: `synthetic-index-link:${event.id}`,
+          subject: { ...history.subject, eventId: event.id },
+        })),
+      );
+    await getDb(ctx.db)
+      .insert(assessmentState)
+      .values(
+        copies.map(({ event, id }) => ({
+          ...state,
+          id,
+          data: {
+            eventId: event.id,
+            purchaseId: f.purchase.id,
+            decision: "linked",
+            evidenceChecksum: f.checksum,
+            decidedByUserId: ctx.actor.userId,
+            proposedBy: "member",
+          },
+        })),
+      );
+    await getDb(ctx.db).execute(sql`ANALYZE "AssessmentState"`);
+    const statement = sql`SELECT "purchaseId" FROM "AssessmentEmailLink"
+      WHERE "eventId" = ${f.event.id}::uuid AND decision = ${emailPurchaseLinkState.enum.linked}`;
+    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
+      { purchaseId: f.purchase.id },
+    ]);
+    const result = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const nodeSchema = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Rows": z.number().default(0),
+      "Actual Loops": z.number().default(0),
+      "Rows Removed by Filter": z.number().default(0),
+      get Plans() {
+        return z.array(nodeSchema).optional();
+      },
+    });
+    const plans = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: nodeSchema })) }),
+      )
+      .parse(result.rows);
+    let examined = 0;
+    const visit = (node: z.infer<typeof nodeSchema>) => {
+      if (node["Relation Name"] === "AssessmentState")
+        examined +=
+          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
+          node["Actual Loops"];
+      node.Plans?.forEach(visit);
+    };
+    for (const row of plans)
+      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+    expect(examined).toBeLessThan(10);
+  });
 
   // A boolean link check must stop at accepted evidence instead of reading and
   // deduplicating every accepted order before it can return true.
