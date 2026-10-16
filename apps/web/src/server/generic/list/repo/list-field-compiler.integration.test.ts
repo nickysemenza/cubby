@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { vendor as vendorTable } from "~/server/db/schema";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
 import { cookbookList } from "~/server/domains/cookbook/repo/cookbook";
+import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
   inventoryentryList,
   inventoryentryListRead,
