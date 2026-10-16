@@ -575,7 +575,7 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
       key: "identity",
       label: "Right one?",
       status: confirmed ? "done" : "needs_input",
-      summary: confirmed ? "Label checked" : "Label: US 10 · size matches name",
+      summary: confirmed ? "Label checked" : "Label: US 10 · compare with name",
       action: null,
       blockedReason: null,
     },
@@ -583,7 +583,8 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
       key: "ownership",
       label: "Own it now?",
       status: confirmed ? "needs_input" : "blocked",
-      summary: "1 pair · hall cupboard",
+      summary:
+        action === "link" ? "1 pair · hall cupboard" : "Reference photo only",
       action: "change",
       blockedReason: confirmed ? null : "Check the label first",
     },
@@ -636,7 +637,7 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
                   onChange={(event) => setName(event.target.value)}
                 />
                 <p className="text-xs">
-                  Label: US 10 · included in name
+                  Label: US 10 · compare with draft name
                   <br />
                   Closest existing: Synthetic court shoes · different style
                 </p>

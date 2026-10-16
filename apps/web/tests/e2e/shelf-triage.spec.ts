@@ -210,3 +210,35 @@ test("discard decisions preserve quantity and shelf choice and allow leaving sto
       .sort(),
   ).toEqual([4, 6]);
 });
+
+// Failure mode: the routed create showcase presents existing-product evidence
+// or its draft edit never reaches the collapsed product summary.
+test("decision showcase edits the create draft independently of attach evidence", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(
+    page,
+    "/design#section-compositions",
+    page.getByRole("list", { name: "Synthetic create decisions" }),
+  );
+  const create = page.getByRole("list", { name: "Synthetic create decisions" });
+  const draft = create.getByRole("textbox", { name: "Draft product name" });
+  await draft.fill("Synthetic trail shoes · US 11");
+  await create.getByRole("button", { name: "Close Right one?" }).click();
+  await expect(
+    create.getByText("Synthetic trail shoes · US 11", { exact: true }),
+  ).toBeVisible();
+  await create.getByRole("button", { name: "Open Right one?" }).click();
+  await expect(draft).toHaveValue("Synthetic trail shoes · US 11");
+  const attach = page.getByRole("list", { name: "Synthetic link decisions" });
+  await expect(attach.getByText(/Ordered Sep 2, 2026/)).toBeVisible();
+  await attach.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "../../artifacts/decision-steps/design-desktop.png",
+  });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await attach.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "../../artifacts/decision-steps/design-phone.png",
+  });
+});
