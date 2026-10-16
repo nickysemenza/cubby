@@ -1,0 +1,19 @@
+docs/plans/manifest-driven-list-fields.md
+  s_26fedc541d5f08::t_2f14eae157f65c 81-82,95-139,141-152,159-162,303,313-316,360-362
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bd85637ddd3701df5b9c9f100ae258e4fe84298e",
+  "prompts": {},
+  "sessions": {
+    "s_26fedc541d5f08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b565132-4a65-41ae-878e-3fc038b9c4a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
