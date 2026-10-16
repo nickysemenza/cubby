@@ -87,7 +87,7 @@ interface ProductDiscardDialogProps {
    */
   defaultQuantity?: number;
   /** Called once the discard is recorded — not on cancel. */
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
 }
 
 /**
@@ -174,8 +174,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       } catch (error) {
         showErrorToast(error);
       }
+      await onComplete?.();
       close(false);
-      onComplete?.();
     },
   });
 

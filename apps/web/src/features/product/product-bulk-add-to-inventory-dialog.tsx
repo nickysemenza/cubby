@@ -94,7 +94,7 @@ interface ProductBulkAddToInventoryDialogProps {
   onOpenChange: (open: boolean) => void;
   products: readonly BulkAddProduct[];
   /** Called after a successful add — the caller clears its row selection. */
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
 }
 
 const rowsFor = (products: readonly BulkAddProduct[]) =>
@@ -210,8 +210,8 @@ export const ProductBulkAddToInventoryDialog: FC<
           showErrorToast(error, "Stocked, but suggestion receipt failed");
         }
       }
+      await onComplete?.();
       handleOpenChange(false);
-      onComplete?.();
     },
   });
 
