@@ -218,7 +218,7 @@ runs:
         path: ${{ steps.paths.outputs.value }}
         # The host-test phase leaves .build here; it is not an app source input.
         # v6 excludes entries published by interrupted or failed builds.
-        key: xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('scripts/apple/apple-check.sh', 'apps/apple/scripts/prepare-project.sh') }}
+        key: xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('scripts/apple/apple-check.sh', 'scripts/apple/apple.ts', 'apps/apple/scripts/prepare-project.sh') }}
         # Keep incomplete entries from earlier generations out of the restore.
         restore-keys: |
           xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-

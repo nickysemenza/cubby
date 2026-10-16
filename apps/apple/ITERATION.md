@@ -122,7 +122,7 @@ remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
 ## Recommended loop
 
 Focused iOS app tests use the `Cubby-iOS` scheme, a concrete simulator destination,
-and the build flags in `scripts/apple/apple-check.sh`. Swift Testing method selectors
+and the build flags in `scripts/apple/apple.ts` (launched by `apple-check.sh`). Swift Testing method selectors
 include parentheses, for example
 `'-only-testing:Cubby-iOS-Tests/LibraryMetadataSyncTests/bulkPagesAreBoundedAndSerialized()'`.
 Check the executed test count: `TEST SUCCEEDED` with zero tests is not validation.

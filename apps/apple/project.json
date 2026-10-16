@@ -8,7 +8,7 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}",
+      "{workspaceRoot}/scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}",
       { "runtime": "node scripts/ci-environment.ts apple" },
       { "runtime": "node scripts/ci-environment.ts ffi" },
       "{projectRoot}/scripts/{prepare-project.sh,build-rust.sh,check-openapi-warnings.sh}",

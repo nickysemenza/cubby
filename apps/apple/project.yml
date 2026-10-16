@@ -26,8 +26,8 @@ options:
     if [ ! -f "$settings" ]; then
       plutil -create xml1 "$settings"
     fi
-    plutil -replace DerivedDataLocationStyle -string WorkspaceRelativePath "$settings"
-    plutil -replace DerivedDataCustomLocation -string DerivedData "$settings"
+    plutil -replace DerivedDataLocationStyle -string AbsolutePath "$settings"
+    plutil -replace DerivedDataCustomLocation -string "$PWD/DerivedData" "$settings"
     # Without a workspace lockfile, Xcode serializes the app graph (Nuke, Sentry)
     # into the local CubbyKit/Package.resolved and floats unpinned app packages.
     # The tracked apps/apple/Package.resolved owns the app graph; Xcode writes
@@ -49,6 +49,9 @@ settings:
     SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
     COMPILATION_CACHE_ENABLE_CACHING: YES
     COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS: YES
+    # Compiler CAS is concurrent and content-addressed; build databases stay local.
+    COMPILATION_CACHE_CAS_PATH: "$(HOME)/Library/Caches/cubby/xcode"
+    COMPILATION_CACHE_LIMIT_SIZE: 10G
     # The xcframework and generated sources come from outside the Xcode build graph.
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     # build-rust.sh produces Apple-silicon slices only (no x86_64 simulator), so a
