@@ -168,6 +168,9 @@ A PostgreSQL test file that starts workerd belongs in
 `integration-workerd` project; CI runs it in the Worker build job against
 that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
+A runtime borrowing a `withTestDb` database must close in `afterEach` before
+the next reset. Suite-level reuse leaves unowned Worker database sessions and
+causes reset to fail; `afterAll` cleanup is too late.
 
 Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting

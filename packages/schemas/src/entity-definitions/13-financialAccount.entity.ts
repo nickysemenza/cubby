@@ -162,11 +162,32 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "visa", label: "Visa" },
-            { value: "mastercard", label: "Mastercard" },
-            { value: "amex", label: "American Express" },
-            { value: "discover", label: "Discover" },
-            { value: "other", label: "Other" },
+            {
+              value: "visa",
+              label: "Visa",
+              description: "Visa payment network.",
+            },
+            {
+              value: "mastercard",
+              label: "Mastercard",
+              description: "Mastercard payment network.",
+            },
+            {
+              value: "amex",
+              label: "American Express",
+              description: "American Express payment network.",
+            },
+            {
+              value: "discover",
+              label: "Discover",
+              description: "Discover payment network.",
+            },
+            {
+              value: "other",
+              label: "Other",
+              description:
+                "An explicitly identified payment network outside the listed networks; not an unknown network.",
+            },
           ],
           suggest: {
             basis: ["name", "identity", "notes", "sourceAliases"],
