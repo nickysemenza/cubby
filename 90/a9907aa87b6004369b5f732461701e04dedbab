@@ -1,0 +1,51 @@
+apps/apple/AGENTS.md
+  s_b4ccbb972ca93f::t_1ecbf9997fb114 161-163
+apps/apple/App/Shared/DesignSystem/NativePresentationCoverage.swift
+  s_b4ccbb972ca93f::t_f309bd2575cc1f 10-11
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_b4ccbb972ca93f::t_cc10ae0ef90d7b 154-158,165-171,177,179-190
+apps/apple/App/Shared/Entity/Detail/DetailSlots.swift
+  s_b4ccbb972ca93f::t_3b82f0bdfdf6c8 8-10,12-22,25-34,38-109,112,117,120-121,154-155
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_b4ccbb972ca93f::t_7f3e63bdb810ca 372-373
+apps/apple/App/Shared/Entity/List/SpecialistListViews.swift
+  s_b4ccbb972ca93f::t_2fe65a91d057c7 49-50,53-63
+apps/apple/App/Shared/Report/RecordsBlockView.swift
+  s_b4ccbb972ca93f::t_5c0a71fa82e9a2 485
+apps/apple/App/Tests/Entity/NativeCoverageViewPathTests.swift
+  s_b4ccbb972ca93f::t_376213c61c6642 7-9
+apps/web/generator/entities/render/swift-catalog.ts
+  s_b4ccbb972ca93f::t_13bf2b082486af 772-778,802-815,829-835,850-856
+apps/web/src/entity/problems/problem-registry.unit.test.ts
+  s_b4ccbb972ca93f::t_672cae15cc59f7 4
+apps/web/src/server/db/entity-edge-owners.ts
+  s_b4ccbb972ca93f::t_70b9b3cfe0cc75 15-17,20,23,49-61,155
+apps/web/src/server/entity-kernel/bindings.unit.test.ts
+  s_b4ccbb972ca93f::t_a5f4d84acf8a26 93
+apps/web/src/server/generic/integrity/operations/entity-integrity.unit.test.ts
+  s_b4ccbb972ca93f::t_f349259a4ffa50 12
+packages/schemas/src/entity-manifest.unit.test.ts
+  s_b4ccbb972ca93f::t_d70c42d935e790 28
+packages/schemas/src/native-coverage.ts
+  s_b4ccbb972ca93f::t_f5ed3ead2e6237 212-213,302-304,317-318
+apps/web/src/server/db/entity-edge-owners.unit.test.ts
+  s_b4ccbb972ca93f::t_df95459840087e 1
+docs/agents/validation.md
+  s_b4ccbb972ca93f::t_bcbd5ca817b02b 29-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90a9907aa87b6004369b5f732461701e04dedbab",
+  "prompts": {},
+  "sessions": {
+    "s_b4ccbb972ca93f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d9a675e3-1921-4d05-9b8d-cd92599a076e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
