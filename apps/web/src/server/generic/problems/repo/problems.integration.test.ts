@@ -918,6 +918,54 @@ describe("problems — purchase financial settlement mismatches", () => {
 
     expect(await mismatches()).toEqual([]);
   });
+
+  // Existence checks must still prefer projected totals while
+  // outstanding, then exclude void evidence when returning to posted totals.
+  it("keeps pending and void evidence aligned with the settlement worklist", async () => {
+    const line = await seedLine({
+      name: "Synthetic staged settlement",
+      cost: 100,
+      vendor: "Synthetic settlement vendor",
+      orderId: "SYNTHETIC-STAGED",
+    });
+    const account = await seedAccount();
+    const code = parseShortcodeFor("purchase", line.purchaseId);
+    const purchaseId = parseEntityId(
+      "purchase",
+      (await resolveLiveShortcode(ctx.db, code, "purchase"))!,
+    );
+    const posted = await postCharge(account.id, code, 60);
+    const pending = await insertSettlementTransaction(ctx.db, {
+      accountId: account.id,
+      purchaseId,
+      kind: "purchase",
+      status: "pending",
+      amount: 40,
+      transactionDate: "2026-07-01",
+      postedDate: null,
+    });
+    expect(await mismatches()).toEqual([]);
+    await updateFinancialTransaction(
+      ctx.db,
+      parseShortcodeFor("financialTransaction", pending.shortcode),
+      { amount: 45 },
+      ctx.actor,
+    );
+    expect((await mismatches()).map((row) => row.id)).toEqual([code]);
+    await updateFinancialTransaction(
+      ctx.db,
+      parseShortcodeFor("financialTransaction", pending.shortcode),
+      { status: "void" },
+      ctx.actor,
+    );
+    await updateFinancialTransaction(
+      ctx.db,
+      parseShortcodeFor("financialTransaction", posted.shortcode),
+      { amount: 100 },
+      ctx.actor,
+    );
+    expect(await mismatches()).toEqual([]);
+  });
 });
 
 /**

@@ -122,14 +122,14 @@ export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
  * different financial delta.
  */
 export const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
-  `(CASE WHEN (
-    SELECT count(DISTINCT a."transactionId")
+  `(CASE WHEN EXISTS (
+    SELECT 1
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
       AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
       AND ft."status" IN ('expected', 'pending')
-  ) > 0 THEN (
+  ) THEN (
     SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
@@ -151,8 +151,8 @@ export const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
  */
 export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
   ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
-  AND (
-    SELECT count(DISTINCT a."transactionId")
+  AND EXISTS (
+    SELECT 1
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseAlias}."id"
@@ -160,7 +160,7 @@ export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
       AND ft."deletedAt" IS NULL
       AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
       AND ft."status" <> 'void'
-  ) > 0
+  )
   AND floor(${purchaseFinancialComparisonTotalSql(purchaseAlias)} * 100 + 0.5)
     IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
 

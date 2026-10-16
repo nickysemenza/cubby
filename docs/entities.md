@@ -280,6 +280,9 @@ signed Expense spend and one canonical financial aggregate scan (including poste
 refund evidence for reconciliation). Allocation alone skips financial aggregates;
 settlement alone skips vendor reconciliation inputs. Images, quality, category
 summaries, references and coverage stay with explicit full-detail readers.
+Settlement predicates use existence checks when they only need to know whether
+live evidence is present. Exception fingerprints include raw comparison totals;
+equal rounded cents alone do not establish fingerprint compatibility.
 Run report headers select purpose/status; non-import Runs skip import detail,
 and standalone timelines select public operation metadata without result bodies.
 Full import slots share their detail and its operation evidence within the batch.
