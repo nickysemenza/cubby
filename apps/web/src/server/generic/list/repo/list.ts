@@ -121,6 +121,9 @@ interface StoredDescriptorView {
   readonly nullable: Readonly<{ field: string }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
   readonly derived: boolean;
+  readonly wire:
+    | Readonly<{ kind: "param"; name: string }>
+    | Readonly<{ kind: "range"; from: string; to: string }>;
 }
 
 /** A stored column resolved to its table column and declared storage facts. */
@@ -255,18 +258,10 @@ const subtreeToggle = (
     : optionalBoolean.parse(values[toggle]) !== false;
 };
 
-/** A range descriptor's lower and upper bound request keys. */
-const rangeKeys = (descriptor: StoredDescriptorView): [string, string] => {
-  const key = descriptor.field ?? descriptor.columnId;
-  return descriptor.range?.kind === "date"
-    ? [`${key}From`, `${key}To`]
-    : [`${key}Min`, `${key}Max`];
-};
-
-/** The request keys a descriptor's predicate reads: a range reads its bounds. */
+/** The request keys a descriptor's predicate reads: a range its compiled bounds. */
 const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] =>
-  descriptor.kind === "range"
-    ? rangeKeys(descriptor)
+  descriptor.wire.kind === "range"
+    ? [descriptor.wire.from, descriptor.wire.to]
     : [descriptor.field ?? descriptor.columnId];
 
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
@@ -327,12 +322,15 @@ const derivedFilterPredicates = (
         return flag === undefined ? [] : [sql`${expression()} = ${flag}`];
       }
       case "range": {
-        const [lowKey, highKey] = rangeKeys(descriptor);
-        const bound =
-          descriptor.range?.kind === "date" ? optionalDate : optionalNumber;
+        if (descriptor.wire.kind !== "range")
+          throw new Error(
+            `${entity}.${descriptor.columnId} is a range filter without range wire keys`,
+          );
+        const { from, to } = descriptor.wire;
+        const bound = field.type === "date" ? optionalDate : optionalNumber;
         const [low, high] = [
-          bound.parse(values[lowKey]),
-          bound.parse(values[highKey]),
+          bound.parse(values[from]),
+          bound.parse(values[to]),
         ];
         return [
           low === undefined ? undefined : sql`${expression()} >= ${low}`,
