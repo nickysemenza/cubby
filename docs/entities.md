@@ -223,6 +223,9 @@ remain outside it. Reads without stored constraints keep the whole-ledger path.
 Trade and cost-type scopes do not request spending-category resolution unless
 the projection or another scope uses categories; trade inheritance remains
 available independently of category resolution.
+Membership projects Expense IDs from matching shares without aggregating costs
+or resolving Project output unless its scope needs Projects. Trade inheritance
+still follows the canonical Project policy even when Project output is omitted.
 Prepared ledger selections remain SQL relations through batching;
 wrapping their IDs in `ARRAY(SELECT ...)` hides broad cardinality and causes
 repeated allocation scans. Analytical callers use `expenseSelectionForWhere`;
