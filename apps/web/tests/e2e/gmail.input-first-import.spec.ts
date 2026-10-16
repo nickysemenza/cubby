@@ -486,13 +486,22 @@ for (const statementFirst of [true, false]) {
       await expect(approve).toBeEnabled();
       await mergeReviewedProducts();
       await approve.click();
-      if (purchaseCode)
-        await applyReviewedSourceReconciliation(page, {
-          db,
-          baseURL: e2eRuntime.baseURL,
-          purchaseCode,
-          productCode: product.id,
-        });
+      if (purchaseCode) {
+        // Preparation writes a finding outside the open Run's query cache.
+        // A fresh direct link reads it immediately instead of waiting for the
+        // original Run's polling interval after a same-document hash change.
+        const reconciliationPage = await page.context().newPage();
+        try {
+          await applyReviewedSourceReconciliation(reconciliationPage, {
+            db,
+            baseURL: e2eRuntime.baseURL,
+            purchaseCode,
+            productCode: product.id,
+          });
+        } finally {
+          await reconciliationPage.close();
+        }
+      }
       await expect
         .poll(async () => {
           const purchase = await database.query.purchase.findFirst({
