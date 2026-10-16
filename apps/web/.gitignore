@@ -1,5 +1,6 @@
 playwright/.auth
 playwright-report/
+blob-report/
 test-results/
 node_modules
 .DS_Store
