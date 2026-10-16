@@ -149,17 +149,17 @@ pnpm dev seed problems
 ```
 
 For performance investigations, `pnpm dev seed performance` adds a larger
-connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with original-content records,
-5,000 completed mail Runs and their outcome receipts, 1,000 Purchases, and
+connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with
+original-content records, 5,000 completed mail Runs and their outcome receipts, 1,000 Purchases, and
 3,000 kit edges. Nested kits, explicitly priced siblings, unpriced stock,
 signed exits and future Expenses exercise the same pricing, quantity and
 Email-history queries as real records. Values and relationships are entirely
 synthetic and deterministic; providers are never dispatched. Three quarters of
-originals include 32 KiB of deterministic padding in plain text or HTML, with
-short or absent snippets; the rest model cleared text. This exercises retained
-body width and decompression rather than just row counts. The isolated seed
-helper accepts `retainedBodyBytes` (0–262144, default 32768) to vary that width;
-zero keeps the same content cases with short bodies. Fingerprints are derived
+originals include 32 KiB of fixed deterministic padding, mixing raw hash text
+with repeated synthetic prose and HTML, and short or absent snippets. The rest
+model cleared text. This exercises out-of-line TOAST reads with both
+compressible and incompressible originals rather than just row counts.
+Fingerprints are derived
 from the original content and reused by Email, Run rosters and receipts; later
 content clearing preserves those fingerprints and records its clearing time.
 The full pack is opt-in; core development stays small and CI uses only a small

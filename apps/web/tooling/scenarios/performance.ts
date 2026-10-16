@@ -45,7 +45,6 @@ async function batches<T, Result>(
 
 const optionsSchema = z.object({
   bundles: z.number().int().min(1).max(1000).default(1000),
-  retainedBodyBytes: z.number().int().min(0).max(262144).default(32768),
 });
 
 /** Optional local pack: one household's repeated purchase/research history.
@@ -57,18 +56,25 @@ export async function seedPerformanceCorpus(
   userId: UserId,
   options: z.input<typeof optionsSchema> = {},
 ) {
-  const { bundles, retainedBodyBytes } = optionsSchema.parse(options);
-  // Distinct hash blocks resist per-row compression without per-record entropy
-  // generation or provider data. Reusing the padding keeps fixture setup cheap.
-  const contentPadding = Array.from(
-    { length: Math.ceil(retainedBodyBytes / 64) },
+  const { bundles } = optionsSchema.parse(options);
+  const bodyBytes = 32768;
+  // Distinct blocks keep the raw profile out of line. Repeated prose models
+  // compression too; both reuse bounded padding instead of per-record entropy.
+  const hashBlocks = Array.from(
+    { length: Math.ceil(bodyBytes / 64) },
     (_, index) =>
       createHash("sha256")
         .update(`Synthetic content block ${index}`)
         .digest("hex"),
-  )
+  );
+  const rawPadding = hashBlocks.join("").slice(0, bodyBytes);
+  const prosePadding = hashBlocks
+    .map(
+      (hash) =>
+        `Synthetic supplier delivery information. This paragraph is invented for local performance fixtures. Reference ${hash}. Synthetic terms and packaging details follow.\n`,
+    )
     .join("")
-    .slice(0, retainedBodyBytes);
+    .slice(0, bodyBytes);
   const context = buildKernelContext(db, userId);
   const [member] = await getDb(db)
     .select()
@@ -209,12 +215,16 @@ export async function seedPerformanceCorpus(
     }
     for (let message = 0; message < 8; message++) {
       const snippet = `${label} invented receipt ${message + 1}. Order SYNTHETIC-PERF-${bundle + 1}. Total 120 USD.`;
-      const body = `${snippet}\n${contentPadding}`;
+      const body = `${snippet}\n${message % 4 === 0 ? rawPadding : prosePadding}`;
       const original =
         message % 4 === 0
           ? { snippet, bodyText: body, bodyHtml: null }
           : message % 4 === 2
-            ? { snippet: " ", bodyText: null, bodyHtml: `<p>${body}</p>` }
+            ? {
+                snippet: " ",
+                bodyText: null,
+                bodyHtml: `<article><p>${body.replaceAll("\n", "</p><p>")}</p></article>`,
+              }
             : { snippet: null, bodyText: body, bodyHtml: null };
       const checksum = createHash("sha256")
         .update(
