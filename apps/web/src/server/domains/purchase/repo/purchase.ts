@@ -961,31 +961,36 @@ export const getPurchaseFinanceByID = async (
   projection: PurchaseFinanceProjection,
 ): Promise<PurchaseFinanceRead> => {
   const { reconciliation, allocation, settlement } = projection;
-  const [row] = await getDb(db)
-    .select({
-      ...(allocation || settlement ? { shortcode: purchase.shortcode } : {}),
-      ...(reconciliation || allocation
-        ? { expenseTotal: purchaseExpenseTotal }
-        : {}),
-      ...(reconciliation
-        ? {
-            statedTotal: purchase.statedTotal,
-            vendorExpenseTotal: purchaseVendorExpenseTotal,
-            vendorExpenseCount: purchaseVendorExpenseCount,
-            vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
-          }
-        : {}),
-      ...(settlement
-        ? {
-            settleableExpenseTotal: purchaseSettleableExpenseTotal,
-            settleableUnpricedExpenseCount:
-              purchaseSettleableUnpricedExpenseCount,
-          }
-        : {}),
-    })
-    .from(purchase)
-    .where(and(eq(purchase.id, id), notDeleted(purchase)))
-    .limit(1);
+  const [[row], financialByPurchase] = await Promise.all([
+    getDb(db)
+      .select({
+        ...(allocation || settlement ? { shortcode: purchase.shortcode } : {}),
+        ...(reconciliation || allocation
+          ? { expenseTotal: purchaseExpenseTotal }
+          : {}),
+        ...(reconciliation
+          ? {
+              statedTotal: purchase.statedTotal,
+              vendorExpenseTotal: purchaseVendorExpenseTotal,
+              vendorExpenseCount: purchaseVendorExpenseCount,
+              vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
+            }
+          : {}),
+        ...(settlement
+          ? {
+              settleableExpenseTotal: purchaseSettleableExpenseTotal,
+              settleableUnpricedExpenseCount:
+                purchaseSettleableUnpricedExpenseCount,
+            }
+          : {}),
+      })
+      .from(purchase)
+      .where(and(eq(purchase.id, id), notDeleted(purchase)))
+      .limit(1),
+    reconciliation || settlement
+      ? loadPurchaseFinancialAggregates(db, [id])
+      : undefined,
+  ]);
   if (!row)
     throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
 
@@ -994,8 +999,7 @@ export const getPurchaseFinanceByID = async (
   // posted refunds too; one scan supplies both verdicts.
   const financial =
     reconciliation || settlement
-      ? ((await loadPurchaseFinancialAggregates(db, [id])).get(id) ??
-        emptyPurchaseFinancialAggregate())
+      ? (financialByPurchase?.get(id) ?? emptyPurchaseFinancialAggregate())
       : undefined;
   return {
     ...(reconciliation
