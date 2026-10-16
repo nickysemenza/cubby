@@ -1,0 +1,43 @@
+apps/web/docs/web-ui.md
+  s_4c88f16b965485::t_74d01171d3d2bd 107-109
+apps/web/src/ui/common/record-list.tsx
+  s_184ec20065a22e::t_c8950447be34c8 59
+apps/web/src/ui/common/basic-info.preview.test.tsx
+  s_556ebfde9efb43::t_f207562d479563 9,19-57
+docs/entities.md
+  s_556ebfde9efb43::t_0d3bb14552f115 768-771
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_556ebfde9efb43::t_52b3881f277928 145,202,294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7c9bece070ee625bacd7af317ce221453b740374",
+  "prompts": {},
+  "sessions": {
+    "s_184ec20065a22e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a14693-2d43-7f02-a28b-7970ec71368c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_4c88f16b965485": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8280f538-2934-496e-a8ae-6cccceb022bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_556ebfde9efb43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a14693-abc8-7f52-9a8d-1cdafe1c159b",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
