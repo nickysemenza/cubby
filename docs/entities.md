@@ -1342,7 +1342,9 @@ No value options ORed with the picked values, so there is no `all` option or
 separate presence filter. Over a reference, a soft-deleted record counts as no
 value, as it does for the group key, so a "No ‹field›" section filters to the
 rows it counts. A hand-written value filter declares the same key as
-`nullable: { field, label }`. A filter over several values per row (a
+`nullable: { field, label }`. Problem assemblies and UI adapters must agree
+on the nullable presence field; its label is presentation copy, not part of
+the filter's query semantics. A filter over several values per row (a
 `text[]` column or a `via` path through a list) also generates
 `<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
 else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me

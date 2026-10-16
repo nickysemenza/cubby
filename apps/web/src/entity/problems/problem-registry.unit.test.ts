@@ -129,7 +129,7 @@ describe("Problem Query registry", () => {
           field: spec.field,
           kind: spec.kind,
           urlKey: spec.urlKey,
-          nullable: spec.nullable,
+          nullableField: spec.nullable?.field,
         });
         const normalized = semantic(core);
         const ui = uiSpecs.get(core.columnId);
@@ -145,7 +145,7 @@ describe("Problem Query registry", () => {
         );
         expect(ui?.kind).toBe(normalized.kind);
         expect(ui?.urlKey).toBe(normalized.urlKey);
-        expect(ui?.nullable).toEqual(normalized.nullable);
+        expect(ui?.nullable?.field).toBe(normalized.nullableField);
       }
     }
   });

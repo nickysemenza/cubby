@@ -343,7 +343,7 @@ const compileGroupChoice = (
         !candidate.urlOnly &&
         (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
         (keys.includes(candidate.columnId) ||
-          keys.includes(candidate.field) ||
+          (candidate.field !== null && keys.includes(candidate.field)) ||
           (candidate.stored?.columns.length === 1 &&
             keys.includes(candidate.stored.columns[0]!))),
     );
