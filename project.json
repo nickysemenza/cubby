@@ -95,6 +95,7 @@
         "{workspaceRoot}/**/project.json",
         "{workspaceRoot}/**/package.json",
         "{workspaceRoot}/scripts/ci-lanes.ts",
+        "{workspaceRoot}/scripts/ci-policy.ts",
         "{workspaceRoot}/.github/ci-lanes.yml"
       ]
     },

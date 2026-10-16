@@ -15,6 +15,72 @@ import { test } from "node:test";
 import { readJsonFile } from "nx/src/devkit-exports.js";
 import { checkApple } from "./apple-validation.ts";
 
+test("native state-rule failures still report independent formatting diagnostics", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "apple-collect-all-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "bin"), { recursive: true });
+  mkdirSync(join(root, "apps/apple/App"), { recursive: true });
+  mkdirSync(join(root, "apps/apple/CubbyKit/Sources/CubbyKit"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(root, "apps/apple/App/Example.swift"),
+    "State(initialValue: draft)",
+  );
+  const swift = join(root, "bin/swift");
+  writeFileSync(
+    swift,
+    '#!/bin/sh\necho "synthetic formatting diagnostic"\nexit 1\n',
+  );
+  chmodSync(swift, 0o755);
+  const script = join(process.cwd(), "scripts/apple/apple-check.sh");
+  const result = spawnSync("/bin/bash", [script, "lint"], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${join(root, "bin")}:/usr/bin:/bin`,
+      CUBBY_NX_CACHE_PROBE: "",
+    },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /State/);
+  assert.match(result.stdout, /synthetic formatting diagnostic/);
+});
+
+test("host test failures still run the independent OpenAPI warning gate", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "apple-host-diagnostics-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "bin"), { recursive: true });
+  mkdirSync(join(root, "apps/apple/scripts"), { recursive: true });
+  mkdirSync(join(root, "apps/apple/CubbyKit"), { recursive: true });
+  for (const [name, body] of Object.entries({
+    "bin/xcode-select": "exit 0",
+    "bin/xcodebuild": "echo synthetic-host-failure; exit 1",
+    "apps/apple/scripts/prepare-project.sh": "exit 0",
+    "apps/apple/scripts/check-openapi-warnings.sh":
+      "echo synthetic-warning-check; exit 0",
+  })) {
+    writeFileSync(join(root, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(root, name), 0o755);
+  }
+  const result = spawnSync(
+    "/bin/bash",
+    [join(process.cwd(), "scripts/apple/apple-check.sh"), "host"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${join(root, "bin")}:/usr/bin:/bin`,
+        CUBBY_NX_CACHE_PROBE: "",
+      },
+    },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /synthetic-warning-check/);
+});
+
 test("Apple cache misses reach the explicit probe guard on POSIX hosts", () => {
   const project = readJsonFile<{
     targets: Record<string, { command?: string }>;

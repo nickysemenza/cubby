@@ -7,6 +7,7 @@
     "dev": "pnpm --dir apps/web exec tsx tooling/dev/index.ts",
     "build": "node scripts/ensure.ts generate && pnpm --filter @cubby/web build:cf",
     "check": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=generate,design-tokens,types,lint,format,knip",
+    "check:stack": "node scripts/stack-preflight.ts",
     "check:plan": "node scripts/ci-lanes.ts --explain",
     "check:staged": "lint-staged --config .lintstagedrc.json --concurrent false",
     "check:all": "NX_DAEMON=false nx run-many --projects=cubby-checks,@cubby/web --outputStyle=stream --targets=generate,design-tokens,types,lint,format,knip,ci-lanes,bindings,script-tests,workers-tests",

@@ -6,6 +6,7 @@ import { createProjectGraphAsync } from "nx/src/devkit-exports.js";
 import { HashPlanInspector } from "nx/src/hasher/hash-plan-inspector.js";
 
 import { LANES, LANES_FILE, splitTask, type LaneSpec } from "./ci-lanes.ts";
+import { laneMatrix } from "./ci-policy.ts";
 
 process.env.NX_DAEMON = "false";
 
@@ -93,8 +94,11 @@ test("every file Nx hashes for a lane's tasks selects that lane", async () => {
 
 test("changes route to the lanes whose tasks read them", () => {
   const web = ["aux", "build-worker", "e2e", "postgres", "purchase-import"];
-  // Prose reaches only formatting and the link check.
-  assert.deepEqual(lanesFor("docs/ci.md"), ["docs"]);
+  // All bundled documentation changes Worker behavior, including CI docs.
+  assert.deepEqual(
+    lanesFor("docs/ci.md"),
+    [...web, "docs", "validation"].sort(),
+  );
   // The Worker bundles the guide pages.
   assert.deepEqual(
     lanesFor("docs/guide/terminology.md"),
@@ -106,8 +110,11 @@ test("changes route to the lanes whose tasks read them", () => {
     lanesFor("apps/apple/scripts/example.sh", "deleted").includes("docs"),
   );
   assert.deepEqual(lanesFor("apps/apple/README.md"), ["docs"]);
-  // Backlog prose does not participate in generation.
-  assert.deepEqual(lanesFor("docs/agents/issues.md"), ["docs"]);
+  // Bundled prose invalidates runtime passes without forcing native generation.
+  assert.deepEqual(
+    lanesFor("docs/agents/issues.md"),
+    [...web, "docs", "validation"].sort(),
+  );
   // The Worker bundles purchase-import prompts.
   assert.deepEqual(
     lanesFor(".claude/skills/purchase-import/references/vendor.md"),
@@ -119,7 +126,7 @@ test("changes route to the lanes whose tasks read them", () => {
   );
   assert.deepEqual(
     lanesFor("apps/apple/App/Example.swift"),
-    ["apple", "apple-lint", ...web, "validation"].sort(),
+    ["apple", "apple-lint", "aux", "validation"].sort(),
   );
   // Rust tests read the shared golden vectors directly.
   assert.deepEqual(
@@ -193,6 +200,11 @@ test("each lane's ci.yaml commands run only tasks routed to that lane", async ()
   // Run alongside Validation's checks: format is routed to the docs lane.
   const elsewhere = new Set(["cubby-checks:format"]);
   const commands: [string, string][] = [];
+  for (const entry of laneMatrix(Object.keys(LANES))) {
+    const lanes = entry.lane!.split("+");
+    commands.push([lanes[0]!, entry.run]);
+    if (entry.nextRun) commands.push([lanes[1]!, entry.nextRun]);
+  }
   const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
   for (const job of workflow.split(/^ {2}(?=[\w-]+:$)/mu)) {
     for (const entry of job.matchAll(

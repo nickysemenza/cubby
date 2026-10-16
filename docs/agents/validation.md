@@ -160,7 +160,8 @@ hook. Fix formatting through a normal commit so that hook owns the edits.
 The merge gate below applies to every included PR. Merge the ready group with
 `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
 merge instead of issuing individual-PR merge requests. Stack registration does
-not replace final-head CI or independent review. Before reporting a stack ready,
+not replace final-head CI or independent review. Run `pnpm check:stack <stack-number>` for read-only native membership,
+ancestry, current-head normal PR CI and mergeability diagnostics. Before reporting a stack ready,
 fetch the trunk and verify it is an ancestor of the bottom branch, then verify
 each lower head is an ancestor of the layer above it. Rebase the full stack when
 the trunk has advanced and push bottom to top. Register layers before their
@@ -204,11 +205,11 @@ successful push proves correctness.
 only the lanes whose inputs differ from the last green `main` run
 ([ADR 0014](../adr/0014-path-routed-ci-lanes.md)). A passing result in the
 shared Nx remote cache for the same input hash satisfies a started lane's
-check, whether CI or the developer's Mac produced it; CI replays it in seconds
+check only when the execution environment also matches; CI replays it in seconds
 ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
 [CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
-file belongs in its Nx target's inputs; `pnpm generate` then routes the lane. Running `pnpm apple check`
-locally before a PR therefore lets CI replay the Apple lanes. A green earlier
+file belongs in its Nx target's inputs; `pnpm generate` then routes the lane. Local native results can replay only for the same actual toolchain/environment;
+local Mac web tests do not replace Linux validation. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a
 migration follows the [production change rules](domain-rules.md#production-changes),

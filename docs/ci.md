@@ -1,12 +1,12 @@
 # Continuous integration
 
 Every required check is an Nx target. A target's `inputs` decide its cache
-key; a passing result for the same key in the shared Nx remote cache, whether
-CI or the developer's Mac produced it, replays in seconds and satisfies the
+key; a passing result for the same key in the shared Nx remote cache, for the same
+execution environment, replays in seconds and satisfies the
 merge gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 [validation policy](agents/validation.md)). Before any lane starts, the `Plan`
 job compares the tree with the last green `main` run and starts only the lanes
-whose tasks' inputs changed, so a documentation-only PR starts no test runner
+whose tasks' inputs changed; documentation bundled into the Worker is a runtime input
 ([ADR 0014](adr/0014-path-routed-ci-lanes.md)). A `main` push whose tree
 already passed CI, usually a squash merge onto an unmoved `main`, starts no
 lane at all. Merging to `main`
@@ -14,8 +14,8 @@ independently deploys the web Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
 `ci.yaml` holds the required checks, one `optional` matrix job whose
-entries `Plan` builds (the purchase-import browser lane when its lane is
-selected, and the live Email decisions on a full manual dispatch), and the
+entries `Plan` builds (the purchase-import browser after relevant import changes or explicit manual opt-in,
+and live Email decisions only with the separate manual opt-in), and the
 informational [journey jobs](#journeys). Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, routing drift and Worker tests as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
@@ -47,7 +47,7 @@ and model credits only on a head whose CI passed. See
 - **Journey-only** (a `labeled` event for a journey label, or a dispatch with a
   `journey` input): `Plan` selects no lane, `CI passed` is skipped under a
   different job name (a skipped job counts as success, so it must not carry
-  the gate's name), and no `tested-tree-*` artifact is recorded. A labeled
+  the gate's name), and no `ci-green-v2-*` artifact is recorded. A labeled
   run reads the PR's current labels and exits cleanly if the PR is closed,
   comes from a fork, or its head moved past the event's head; that push's
   own run starts the still-labeled journeys. It starts nothing unless the
@@ -81,113 +81,61 @@ carrying `tester-army:ios` or `simulator-e2e`. Only the Tester Army jobs get
 
 ## Cache keys and the remote cache
 
-Cache inputs are declared in `nx.json` and each project's `project.json`.
-Deferred MCP omissions are typed contract metadata; backlog wording is not a
-generation input.
+Ordinary PR, main, nightly and manual runs reuse valid Nx results. A nightly
+selects every lane; it does not disable caches. It detects hosted-environment
+drift without rebuilding unchanged targets merely because a day elapsed.
 
-```mermaid
-flowchart LR
-  Mac["Developer Mac: nx run target"] -->|PUT pass| Cache[("apps/nx-cache Worker + R2")]
-  Job["PR or main CI job: nx run target"] -->|GET input hash| Cache
-  Cache -->|hit| Replay["replay the pass in seconds"]
-  Cache -->|miss| Run["run the lane, PUT the pass"]
-  Nightly["nightly: NX_SKIP_NX_CACHE=true"] --> Full["every lane runs uncached"]
-```
+Result passes certify source inputs **and** execution identity. Web/test gates
+include Node, platform/architecture, hosted image (or local kernel), CI mode,
+locale and timezone. Web targets add ignored env files, generated WASM and the
+selectors in `apps/web/project.json`; shard selection is keyed per target and
+browser worker count is part of the target command. The Worker bundles all
+`docs/**/*.md`, so those bytes participate in runtime keys. Native App source
+is excluded only from web-specific passes; root tooling keeps broad coverage.
+Rust checks include their actual compiler and platform. Portable generation and
+WASM artifacts retain their own narrower, content/toolchain-based inputs.
 
-The required test lanes key on the `gate` named input in `nx.json`: every
-non-documentation file (the lockfile and `.github/` included), the Markdown
-that the Worker bundles (`docs/README.md`, the `docs/guide` pages, and the
-purchase-import, product-enrichment, and
-photo-inventory-import skills). Platform, Node version, locale, and `CI`
-stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
-ignored `.env*` files, the WASM their `dependsOn` builds, the preview-build
-switch, and the variables that select or reorder tests (`webGate` in
-`apps/web/project.json`); the Rust targets add `rustc -V`, because
-`rust-toolchain.toml` names a floating channel. The Apple targets key on what
-each native target actually reads (`appleHost` and `appleApp` in
-`apps/apple/project.json`). Host tests read CubbyKit and its fixtures; app
-compilation also reads app sources, resources and project configuration, but
-not the host test fixtures. Both read the Rust FFI sources, build scripts and
-CI configuration. JavaScript dependency hashes are excluded: generation owns
-those dependencies and its output bytes are the native input. The generator's
-artifact manifest selects the generated files to hash; missing files fail,
-while unrelated ignored editor/build files never enter the key. Toolchain
-versions remain outside the native pass key under ADR 0009's nightly backstop.
-The Apple OpenAPI document includes only selected native operations and their
-reachable components, projected by Redocly; the public HTTP document remains
-complete. Unused HTTP contract changes no longer churn the native schema.
-`pnpm apple check [host|app|lint]` prepares generated sources, probes cached
-native passes, then prepares FFI only for misses. Full local checks run misses
-sequentially. Swift formatting/state rules have their own cheap `apple:lint`
-target and CI job with no FFI, SwiftPM resolution or app compilation; it needs
-only a Swift toolchain, so CI runs it on `ubuntu-latest` with the image's own
-Swift and `swift format`, keeping macOS slots for native builds. Its key omits
-the toolchain, so a Mac pass replays on Linux; the nightly run rechecks it.
-When `Plan` selects the Apple
-lane, the Linux `Apple cache probe` job probes both Apple passes in parallel
-with the other lanes before scheduling macOS. A miss or unavailable probe runs
-the corresponding native job; a skipped native job satisfies `CI passed` only
-with its successful probe. Nightly and manual runs force both native jobs. Workflows that only deploy,
-publish or review (`deploy.yaml`, `deploy-nx-cache.yaml`, `apple-testflight.yaml`,
-`claude.yml`) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
-the whole workflow, so every lane, nested Nx calls included, runs uncached on
-CI's platform, catching a failure that only Linux or CI's
-toolchain shows; `main` pushes reuse the cache like PRs. The key is deliberately
-broad. A false hit skips a check that should have run, so a target that starts
-reading something new must have it in its inputs. A change to ordinary
-documentation, a rebase that leaves the content unchanged, or a re-push of a
-tested tree hits; any code change misses.
+Apple passes key the actual Xcode, Swift, SDK, macOS, architecture and Rust
+compiler, plus normalized FFI flags/profile and the files/generated bytes each
+target reads. A tiny Mac job selects the current Xcode **major** and observes
+its environment without dependency installation or generation. Linux then
+probes native results with that identity and generated inputs. A verified hit
+avoids the expensive Mac build job, but environment discovery itself uses a Mac
+slot. The build executor derives its own environment again: a different runner
+cannot publish or reuse a pass under the discovery machine's identity.
+Native-relevant PRs and cached nightly runs observe drift; unrelated PRs do not
+allocate a Mac just to detect an unrelated toolchain update. Minor/patch updates
+float within the configured major. TestFlight's toolchain policy is independent.
+Swift formatting has its own platform/toolchain-aware result key.
 
-Use the documented Nx CLI and existing Actions for CI changes; do not build
-hashing or cache-archive probes with private Nx APIs. The installed Nx has no
-supported cache-only execution mode: a normal invocation restores a hit and
-executes a miss. `--graph` shows the task graph, not a verified cached pass;
-`--excludeTaskDependencies` skips prerequisites, not target execution.
-[`nx affected`](https://nx.dev/docs/features/ci-features/affected) selects work
-from changed inputs and does not prove a passing cache entry exists, so it
-cannot replace this merge gate. The
-[self-hosted cache API](https://nx.dev/docs/kb/self-hosted-caching) specifies
-archive transport, not a cache-probe CLI; its archive format can change.
-[`Nx Agents`](https://nx.dev/docs/features/ci-features/distribute-task-execution)
-provide managed task distribution through Nx Cloud, requiring a separate
-infrastructure decision. Linux lanes currently perform setup before Nx replay.
-The existing Apple probe uses the normal CLI and a guard in `apple-check.sh`
-that fails before native work on a miss.
+A developer pass satisfies hosted CI only when all execution-sensitive inputs
+match. Local Mac test results no longer substitute for Linux results. Native
+passes can still replay across Macs with the same relevant environment.
 
-Known gaps the nightly run covers rather than the key: the Worker bundles all
-of `docs/**/*.md`, but only the Markdown listed above is in the web keys, so a
-documentation-only change replays the browser and workerd lanes; and the Apple
-key omits the Rust toolchain and FFI build settings, so a changed compiler
-reuses an earlier Apple pass.
+Manual `scope=routed` uses the verified main baseline; `scope=full` selects all
+lanes, still cached. `fresh=true` selects every lane and sets
+`NX_SKIP_REMOTE_CACHE=true`: each runner starts with an empty local cache and
+reuses prerequisites it just built, avoiding repeated WASM compilation. Fresh
+results do not read or write the remote cache. This is separate from
+`purchase-import=true` and `live-email=true`; live evaluations never start merely
+because a run is manual or fresh. Manual aggregation is named `Manual CI
+diagnostics`, not the required PR check, and publishes no passing-tree evidence.
 
-To let CI replay a local pass, run the lane exactly as its CI job does from a
-worktree without ignored `.env*` files, for example
-`CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e` for each of the four
-browser shards, `CUBBY_POSTGRES_SHARD=1/2` and `2/2` for `@cubby/web:postgres`,
-and `pnpm apple check` for the Apple lanes. An unsharded run is a different key.
+The remote cache is `apps/nx-cache`, a Worker backed by R2, using Nx's supported
+HTTP cache client. CI and local setup connect only when both cache credentials
+are present and its health request succeeds. Fork PRs receive no credentials;
+a cache outage falls back to real checks rather than failing on a remote-cache
+transport error. Cache failures never constitute passes. The bucket expires
+entries after 30 days. Rotate `CACHE_TOKEN` in the Worker and update the Actions
+`NX_CACHE_TOKEN` secret together. Treat write credentials as trusted check
+publishers. Browser and native compiler caches are separate from Nx result passes.
 
-Nx's built-in HTTP remote cache (`apps/nx-cache`, a Worker over R2) is the
-shared store. Nx connects when `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` and
-`NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` are set: the developer's Mac sets
-them in its shell, and in CI `setup-node-with-deps` exports them from the
-`NX_CACHE_URL` and `NX_CACHE_TOKEN` repository secrets. A fork PR receives no
-secrets, so both stay unset and its jobs use only the runner's empty local cache:
-every lane runs, and nothing is written to the shared cache. Nx never caches a
-failed task.
-
-Nx fails a task on any remote-cache error other than a 404 miss, so
-`setup-node-with-deps` first requests a missing entry and connects only on a
-404; when the Worker is down or the token is rejected, the job warns and runs
-its lanes uncached. The bucket expires entries after 30 days (an R2 lifecycle
-rule on `cubby-nx-cache`). To rotate the token, run `wrangler secret put
-CACHE_TOKEN` in `apps/nx-cache`, then update the `NX_CACHE_TOKEN` repository
-secret and the Mac's `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN`; jobs started
-in between run uncached.
-
-Project relationships (`implicitDependencies` and `dependsOn`) decide which
-prerequisite targets run and in what order (WASM before its consumers, the MCP
-App bundle before the web fast tests). Nx-inferred affected projects
-(`nx show projects --affected`) remain a local convenience, not CI scoping.
+Use the supported Nx CLI and existing Actions. Do not derive hashes or inspect
+archive internals with private Nx APIs. `nx affected` and `pnpm check:plan` select
+candidates; neither proves a cached passing result. The guarded Apple probe
+uses normal Nx execution: a hit replays; a miss fails before native work. Mac
+build jobs probe again after queueing, so a pass populated meanwhile avoids
+FFI/package/build preparation. Linux test lanes still set up before replay.
 
 ## Deployment reuse
 
@@ -301,16 +249,13 @@ defines a `.requiresVisionHardware` trait that skips Vision-dependent
 contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
-Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
-parallel when the Apple lane is selected and its Linux probe did not verify a
-cached pass. The probe runs each Nx target with `CUBBY_NX_CACHE_PROBE=1`: Nx
-replays a cached pass for the same input hash, and on a miss the script fails
-before building (Nx never caches that failure). Only a miss or failed probe
-pays for a macOS runner, which installs the workspace (generating the Swift
-inputs), the FFI, XcodeGen, and Xcode build caches, and runs the target. The
-nightly run and a full manual dispatch skip the probe and run both uncached on the
-runner's own Xcode; a dispatch on `main` therefore seeds `main`'s native caches
-without waiting for the nightly run.
+Two hosted macOS build jobs, `Apple host tests` and `Apple simulator build`,
+run only when the Linux probe did not verify that target's pass for the observed
+Mac environment. Discovery, host builds and simulator builds each have a
+repository concurrency group with a non-dropping queue; at most one of each is
+active. Native build setup probes again before expensive preparation. A fresh
+run skips discovery/probes and executes against each build runner's actual
+current toolchain, retaining local prerequisite reuse.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
@@ -389,7 +334,7 @@ cache keys include both lockfiles and both specs.
 Compiled Apple caches are published only after successful work, through
 `save-cache-main-only`: any run on `main` saves a new exact key over a partial
 restore, and a PR saves only on a full miss. Main pushes of a tested tree run
-no native job, so the nightly run refreshes `main`'s entries. GitHub cache
+no native build job; a native miss or deliberate compilation publishes `main`'s entries. GitHub cache
 entries are immutable: an interrupted compile saved under the final key makes
 later exact hits repeat unfinished work. Cache-generation names and keys belong
 in the setup actions. Retire obsolete generations and merged PRs' private entries
@@ -411,16 +356,16 @@ one main run active and at most one pending; a newer push replaces the pending
 run. This does not add parallel main runs or jobs. The newest main CI result may
 wait for the active run; deployment remains independent.
 
-`Plan` runs on the `ubuntu-slim` container runner. It rejects live entity
-codes in PR text and records the tree it tests. On a `main` push it first asks
-the artifacts API for a same-repository `tested-tree-<tree>` artifact, which
+`Plan` runs on the `ubuntu-slim` container runner. It records the tree it tests. Outward-text validation runs in the final gate so
+a metadata error cannot suppress otherwise-runnable checks. On a `main` push it first asks
+the artifacts API for a same-repository `ci-green-v2-<tree>` artifact, which
 `CI passed` uploads only after a green run; if one exists, every lane is
 skipped. A PR run tests its merge commit, so a squash merge onto the `main` it
 was tested against pushes exactly that tree; if `main` moved, the trees differ
 and routing proceeds as usual, catching interactions between merged PRs. An
 API failure or missing artifact also falls through to routing. Otherwise it
-finds the commit of the newest successful `main` push run of
-`ci.yaml`, and runs `dorny/paths-filter` with git (`token: ""`) on the
+finds the newest successful `main` push run of
+`ci.yaml` carrying unexpired policy-v2 passing-tree evidence, and runs `dorny/paths-filter` with git (`token: ""`) on the
 two-dot diff from that commit to the tested tree, matching
 `.github/ci-lanes.yml`. `scripts/ci-lanes.ts` generates that file from the Nx
 inputs of the tasks each lane runs (`LANES`), resolving named inputs,
@@ -446,7 +391,7 @@ verified a cached pass. A full manual CI dispatch also runs the informational li
 decision entry of the `optional` job outside `CI passed`, calling Jev and Clef on synthetic cases through
 the real gateway with `AI_GATEWAY_API_KEY` (passed only to that entry's step). Failures do not block the deterministic
 merge gate. Real member inputs are refused in CI. A failed probe is allowed: it only sends both Apple
-lanes to macOS. On success it uploads the `tested-tree-<tree>` artifact
+lanes to macOS. On success it uploads the `ci-green-v2-<tree>` artifact
 (retained 14 days) that lets a `main` push of the same tree skip every lane.
 
 `Validation and docs` runs when either lane is selected; `Plan` allows it to
@@ -486,7 +431,7 @@ worker environment together. `Build Workers and runtime tests` runs the
 both lanes are selected they share one runner as `Auxiliary, Worker, and
 runtime tests`, two steps that each run despite the other's failure; together
 they take about as long as the slowest E2E shard and save a runner slot.
-Desktop Chromium runs as four Playwright shards (two workers each) through the
+Desktop Chromium runs as two Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
@@ -511,8 +456,8 @@ model and gateway, driven through the browser) through the
 it is outside `CI passed` and `continue-on-error`, so its failure leaves the run
 successful. It uses the same `webGate` key as the
 other web lanes and uploads the same Playwright report.
-The `integration` Vitest project runs as two `postgres` target shards
-(`CUBBY_POSTGRES_SHARD`, Vitest `--shard`), each with four fork workers. The
+The `integration` Vitest project runs once through the `postgres` target
+with four fork workers; local explicit partitions remain supported and separately keyed. The
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
 Workers and runtime tests`. A workerd consumer missing from that list runs in
@@ -613,12 +558,26 @@ The `main` ruleset requires only `CI passed`, from GitHub Actions. Keep `strict`
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
-Record ten public PR runs before changing topology: queue time,
-required-check p50/p95, per-lane duration, cache behavior, cancellations, and
-merge-to-deploy duration. The target is a 4–7 minute warm critical path and no
-more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
-already rejects node_modules caching. Track queue and
-cold native builds separately; the target is not a measured runtime guarantee.
+Optimize readiness across four concurrent PRs on the existing hosted plan.
+The Linux matrix admits two entries per PR; validation and short control jobs
+are additional demand, and native/optional work has repository-level limits.
+The normal web matrix has two browser entries, one PostgreSQL entry, and a
+combined auxiliary/Worker entry. This reduces repeated setup and leaves room
+for other PRs, main and release work; it does not reserve account-wide capacity
+or guarantee fairness against unrelated repositories.
+
+Use existing job reports and the `CI capacity` step summary to distinguish
+created-to-start waiting, setup, job duration and Nx cache replay. Compare
+readiness p50/p95 and total job-minutes when a tradeoff is unclear, but do not
+hold a clear improvement for a fixed sample quota. Warm, cold and environment
+changes are different populations. Native historical nightly/dispatch runs are
+valid setup/build evidence; PR samples whose Mac jobs all skipped say nothing
+about cold native queueing. The 4–7 minute warm goal is a target, not a measured
+guarantee. Optional purchase import starts only after required CI succeeds and
+uses one repository background slot. Superseded PR revisions cancel; sibling
+failures do not cancel independent checks. Rust formatting, Clippy and tests
+collect results separately, and Playwright has no failure-count cutoff; setup
+failures and existing timeouts still bound impossible or stuck runs.
 
 ### Retained experiment conclusions
 

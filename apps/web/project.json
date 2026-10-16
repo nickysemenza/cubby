@@ -3,13 +3,13 @@
   "name": "@cubby/web",
   "implicitDependencies": ["recipebridge"],
   "namedInputs": {
-    // The merge-gate key plus what only web lanes read: ignored env files and
-    // the settings that select or reorder tests. CI, locale, time zone, and
-    // worker count stay out so a developer Mac's pass counts as CI's; the
-    // configs' CI branches only add a retry and looser timeouts, and focused
-    // tests fail lint. The nightly CI run reruns the lanes uncached.
+    // Runtime identity comes from gate; web-only settings and artifacts add
+    // the inputs the browser/database/Worker lanes actually consume.
     "webGate": [
       "gate",
+      // Native App implementation is not consumed by web/runtime tests. Root
+      // tooling checks retain their broad gate and still validate native layout.
+      "!{workspaceRoot}/apps/apple/App/**/*",
       {
         "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
       },

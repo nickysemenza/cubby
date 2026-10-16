@@ -17,6 +17,11 @@
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
         "scripts/ci-lanes.ts!",
+        "scripts/ci-policy.ts!",
+        "scripts/ci-environment.ts!",
+        "scripts/ci-summary.ts!",
+        "scripts/check-rust.ts!",
+        "scripts/stack-preflight.ts!",
         "scripts/dev-db.ts!"
       ],
       "project": ["neon.ts!", "scripts/**/*.ts!"],

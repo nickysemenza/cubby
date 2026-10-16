@@ -3,7 +3,7 @@
   "name": "recipebridge",
   "targets": {
     "rust": {
-      "command": "cargo fmt --check && cargo clippy --locked --profile ci --all-targets -- -D warnings && cargo clippy --locked --profile ci --no-default-features -- -D warnings && cargo test --locked --profile ci",
+      "command": "node ../scripts/check-rust.ts --browser",
       "options": {
         "cwd": "{projectRoot}"
       },
