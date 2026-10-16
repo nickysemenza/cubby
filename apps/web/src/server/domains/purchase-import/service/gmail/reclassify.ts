@@ -23,12 +23,12 @@ import { groupBy } from "es-toolkit";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { latestExecutionAuthorization } from "~/server/domains/run/repo/execution-context";
 import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import { publishGmailEvidence } from "../../repo/gmail/admitted-source";
-import { normalizeMessage } from "../../repo/gmail/normalize";
 import { recordEmailCandidateObservation } from "../../repo/gmail/observations";
 import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {

@@ -263,6 +263,7 @@ test("services consume the nominal handle, not storage table or query capabiliti
     "db/generated/identity-storage-tables.gen",
     "db/external-identifier-tables",
     "db/repository-access.boundary",
+    "db/retained-tables",
     "db/database-runtime",
   ])
     assert.equal(violation(service, `${S}/${target}`, true), "serviceDb");

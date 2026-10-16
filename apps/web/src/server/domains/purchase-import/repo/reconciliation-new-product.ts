@@ -17,6 +17,10 @@ import {
   run,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import {
+  importedLineMatchesExpense,
+  sameLineTitle,
+} from "~/server/domains/purchase-import/repo/writer-policy";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -26,7 +30,6 @@ import {
 } from "./reconciliation-observations";
 import type { ReconciliationState } from "./reconciliation-state";
 import { assertNewLineProductIdentity } from "./writer";
-import { importedLineMatchesExpense, sameLineTitle } from "./writer-policy";
 
 type ReviewedLine = SourceOrderReconciliationResolution["lines"][number];
 

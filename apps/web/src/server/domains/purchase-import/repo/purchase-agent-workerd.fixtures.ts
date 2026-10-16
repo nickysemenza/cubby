@@ -21,12 +21,11 @@ import {
   runOperation,
   session,
 } from "~/server/db/schema";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
-
 import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "./agent-auth";
+} from "~/server/domains/purchase-import/repo/agent-auth";
+import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 
 type Db = TestDbContext["db"];
 

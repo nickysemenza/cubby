@@ -1,6 +1,7 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { ListEnrichmentGroup } from "~/entity/model/list-read-fields";
 import { listReadFields } from "~/entity/model/list-read-schema";
 import {
   listFinancialAccounts,
@@ -19,7 +20,6 @@ import {
   vendorListRead,
 } from "~/server/domains/vendor/repo/vendor";
 import { wishList, wishListRead } from "~/server/domains/wish/repo";
-import { type ListEnrichmentGroup } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

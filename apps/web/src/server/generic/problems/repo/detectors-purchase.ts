@@ -25,9 +25,14 @@ import {
 } from "@cubby/schemas/problems";
 import { type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { expense, product, purchase, vendor } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  expense,
+  product,
+  purchase,
+  vendor,
+} from "~/server/db/retained-tables";
 
 type DuplicateSpendRow = {
   id: ExpenseShortcode;

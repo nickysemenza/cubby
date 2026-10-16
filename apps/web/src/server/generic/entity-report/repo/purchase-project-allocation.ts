@@ -4,8 +4,10 @@ import type { RelatedSummaryOutput } from "@cubby/schemas/related-view";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
-
-import { sectionBlocks, sectionOut } from "./finance-section";
+import {
+  sectionBlocks,
+  sectionOut,
+} from "~/server/generic/entity-report/repo/finance-section";
 
 /** Every project group a purchase can spread over fits one read. */
 const MAX_PROJECT_GROUPS = 100;

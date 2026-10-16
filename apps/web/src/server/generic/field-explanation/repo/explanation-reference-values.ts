@@ -2,9 +2,9 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { externalSource } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { externalSource } from "~/server/db/retained-tables";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 
 type Json = z.infer<ReturnType<typeof z.json>>;

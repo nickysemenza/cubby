@@ -31,9 +31,9 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
+import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
-import { exceptionReasonsFor } from "./exception-reasons";
-import { liveQualityRow } from "./registry";
 import {
   checkMissingCondition,
   checksOf,

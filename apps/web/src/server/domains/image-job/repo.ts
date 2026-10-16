@@ -11,6 +11,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/schema";
@@ -20,11 +21,8 @@ import {
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  hydrateListRead,
-  type ListProjection,
-  type ListReadRow,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

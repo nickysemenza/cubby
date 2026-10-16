@@ -30,12 +30,15 @@ import type { categoryMappingSchema } from "@cubby/schemas/spending-classificati
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { product, productCategory } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
+import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
+import { loadCategoryConnections } from "~/server/domains/product-category/repo/category-connections";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { categoryPathLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
@@ -49,11 +52,10 @@ import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   hydrateListRead,
   loadListGroup,
-  type ListProjection,
-  type ListReadRow,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
@@ -62,9 +64,6 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import { categoryMappingSql } from "./category-connections";
-import { loadCategoryConnections } from "./category-connections";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {

@@ -27,6 +27,10 @@ import {
   photoGroupProposal,
   session,
 } from "~/server/db/schema";
+import {
+  ensurePurchaseAgentOAuthClient,
+  PURCHASE_AGENT_OAUTH_CLIENT_ID,
+} from "~/server/domains/purchase-import/repo/agent-auth";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -39,10 +43,6 @@ import {
   agentModelEvalCases,
 } from "../service/agent-model-eval.fixtures";
 import { scoreProposals } from "../service/agent-model-eval.score";
-import {
-  ensurePurchaseAgentOAuthClient,
-  PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "./agent-auth";
 import {
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,

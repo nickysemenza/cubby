@@ -68,7 +68,7 @@ import {
 import type {
   ListProjection,
   ListReadPage,
-} from "~/server/generic/list/repo/list-projection";
+} from "~/server/generic/list/repo/list-contracts";
 import { type RemovableEntity } from "~/server/generic/removal/repo/core";
 import { executeDeleteWithEffects } from "~/server/generic/removal/repo/delete-effects";
 import {

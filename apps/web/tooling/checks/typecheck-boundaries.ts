@@ -108,8 +108,7 @@ export async function checkTypecheckBoundaries(
       "observability/tracing.ts",
     ].map((file) => join(serverRoot, file)),
   );
-  const leak = server.find((file) => owned.has(file));
-  if (leak)
+  for (const leak of server.filter((file) => owned.has(file)))
     failures.push(`Server check reaches storage implementation: ${leak}`);
   const backedge = storage.find(
     (file) =>

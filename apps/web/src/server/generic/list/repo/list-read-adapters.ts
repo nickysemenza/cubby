@@ -5,14 +5,13 @@ import {
 } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import type { ListReadIntent } from "~/server/db/helpers";
-
+import type { ListReadRow } from "~/entity/model/list-read-fields";
+import { type Database } from "~/server/db/database";
+import { type ListReadIntent } from "~/server/db/helpers/query";
 import type {
   ListProjection,
   ListReadPage,
-  ListReadRow,
-} from "./list-projection";
+} from "~/server/generic/list/repo/list-contracts";
 
 const childCountRowSchema = z.object({ childCount: listChildCountSchema });
 /**

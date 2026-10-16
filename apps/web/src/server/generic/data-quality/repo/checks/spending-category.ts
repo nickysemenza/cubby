@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { spendingCategory } from "~/server/db/schema";
+import { spendingCategory } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

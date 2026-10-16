@@ -29,12 +29,12 @@ import {
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
+import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
 export const digestValue = <T extends object>(value: T) =>

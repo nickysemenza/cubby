@@ -38,11 +38,11 @@ import {
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
+import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
-import { readMailRunSources } from "../repo/mail-run-membership";
 import {
   loadRunScope,
   STALE_RUN_MS,

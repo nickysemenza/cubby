@@ -2,15 +2,16 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { VendorAttributionDefaultsOut } from "@cubby/schemas/inventory-ownership";
 import { and, desc, eq, exists } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   expense,
   expenseAttribution,
   ledgerParty,
   purchase,
   vendor,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 /**
  * Expense has no vendor column: the vendor is reached through

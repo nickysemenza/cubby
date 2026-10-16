@@ -1,7 +1,7 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { sql } from "drizzle-orm";
 
-import { image } from "~/server/db/schema";
+import { image } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

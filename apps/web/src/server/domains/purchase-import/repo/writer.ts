@@ -65,6 +65,19 @@ import {
   findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
 import { assertRunCapabilityById } from "~/server/domains/purchase-import/repo/capabilities";
+import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/manufacturer-identity";
+import {
+  lockImportSourceClaimFamily,
+  readImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "~/server/domains/purchase-import/repo/source-claim-family";
+import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
+import {
+  decideLineWrite,
+  importedLineMatchesExpense,
+  sourceFinancialFacts,
+  type ExistingExpenseSnapshot,
+} from "~/server/domains/purchase-import/repo/writer-policy";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
@@ -81,7 +94,6 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
   acceptedSourceExtraction,
   recordSourceOrderObservation,
@@ -98,18 +110,6 @@ import {
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
-import {
-  lockImportSourceClaimFamily,
-  readImportSourceClaimFamily,
-  readSourceFamilyOrder,
-} from "./source-claim-family";
-import { sourceOrderKey } from "./source-order-key";
-import {
-  decideLineWrite,
-  importedLineMatchesExpense,
-  sourceFinancialFacts,
-  type ExistingExpenseSnapshot,
-} from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 

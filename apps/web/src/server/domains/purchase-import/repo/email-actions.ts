@@ -17,8 +17,8 @@ import {
   run,
 } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
+import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 
-import { hasRetainedEmailImportContent } from "./email-content";
 import { startMailImport } from "./mail-import-run";
 
 type ImportPorts = { launch?: typeof startMailImport };

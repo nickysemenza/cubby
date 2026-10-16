@@ -16,8 +16,8 @@ import {
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
   brandJoinShortcode,
-} from "~/server/db/helpers";
-import { task } from "~/server/db/schema";
+} from "~/server/db/helpers/transform";
+import { task } from "~/server/db/retained-tables";
 
 /** SQL counterpart of `effectiveTaskDueDate` for repository predicates. */
 

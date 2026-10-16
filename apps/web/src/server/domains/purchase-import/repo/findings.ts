@@ -43,6 +43,7 @@ import {
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
+import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
@@ -61,7 +62,6 @@ import {
   resolveLineProduct,
   receiptProductQuantity,
 } from "./writer";
-import { decideLineWrite } from "./writer-policy";
 
 /**
  * Refund Expenses of this amount already on the Purchase, and refund mails

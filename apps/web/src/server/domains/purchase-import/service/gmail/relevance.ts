@@ -18,13 +18,13 @@ import {
   ModelImageInputError,
   prepareModelImage,
 } from "~/server/domains/image-processing/service/model-image";
-
 import {
   GmailApiError,
   type GmailNormalizedMessage,
   type GmailProvider,
   type GmailOrderMailAttachment,
-} from "../../repo/gmail/types";
+} from "~/server/domains/purchase-import/repo/gmail/types";
+
 import { unreadableMailImages } from "./triage";
 
 export type MailRelevance = (

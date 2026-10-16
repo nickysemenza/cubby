@@ -4,19 +4,19 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql, isNull } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
-  getDb,
-  withTransactionDatabase,
-  notDeleted,
-} from "~/server/db/helpers";
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase as withTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
 import {
   assessment,
   assessmentState,
   feedback,
   email,
   orderMailEvent,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import {
   publishAssessment,
   recordFeedback,

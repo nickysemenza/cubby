@@ -19,6 +19,7 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -39,11 +40,10 @@ import {
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   hydrateListRead,
   loadListGroup,
-  type ListProjection,
-  type ListReadRow,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";

@@ -2,9 +2,11 @@ import { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import { and, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { productCategory } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { productCategory } from "~/server/db/retained-tables";
 import { productCategorySpendingAncestorsSql } from "~/server/domains/expense/repo/expense-category-resolution";
 
 export function categoryMappingSql(id: SQL): SQL {

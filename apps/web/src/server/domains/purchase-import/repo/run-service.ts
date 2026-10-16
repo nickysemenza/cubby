@@ -131,6 +131,10 @@ import {
   type PhotoImportCommitPorts,
 } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
+import {
+  readMailRunSources,
+  transferMailRunSources,
+} from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
 import {
   DEBUG_EVENT_KIND,
@@ -142,10 +146,6 @@ import {
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import {
-  readMailRunSources,
-  transferMailRunSources,
-} from "./mail-run-membership";
 import { listRunTargetOutcomes } from "./run-target";
 
 /**

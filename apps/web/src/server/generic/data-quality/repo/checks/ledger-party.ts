@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { ledgerParty } from "~/server/db/schema";
+import { ledgerParty } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

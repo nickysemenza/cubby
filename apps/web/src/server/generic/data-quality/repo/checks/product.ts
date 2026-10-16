@@ -10,8 +10,10 @@ import {
   hasDerivedProductPriceSql,
   productPriceEvidenceSql,
 } from "~/server/domains/product/repo/pricing";
-
-import { defineEntityChecks, type QualityReadContext } from "../registry";
+import {
+  defineEntityChecks,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 
 type Product = typeof product;
 

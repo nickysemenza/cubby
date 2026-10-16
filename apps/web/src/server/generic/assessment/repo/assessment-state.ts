@@ -3,9 +3,10 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { assessmentState } from "~/server/db/retained-tables";
 
 /**
  * Versioned positional input deliberately avoids free-form JSON key ordering.

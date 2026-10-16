@@ -9,8 +9,9 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { possibleVendorLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 
 /** Lowercase, trim and collapse whitespace. Punctuation and words stay intact. */

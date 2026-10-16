@@ -17,14 +17,15 @@ import { and, inArray, or, sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
-import type { Database } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   financialAccount,
   financialTransaction,
   statementRow,
   statementImport,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import {
   statementRowExternalId,
   statementRowOccurrenceId,

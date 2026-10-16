@@ -1,10 +1,12 @@
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
-import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db/database";
 import {
   createDatabase,
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
+import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 /** Work that must not happen unless the enclosing transaction commits. */
@@ -109,9 +111,9 @@ export const unwrapDb = (
 };
 
 export const parentTransactionDatabase = (
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
 ): Database | undefined => {
-  return transactionParents.get(unwrapDb(db));
+  return transactionParents.get("rollback" in db ? db : getDb(db));
 };
 
 /**

@@ -10,8 +10,8 @@ import type { TaskTodayBriefingOut } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 
 import { openTaskBlockingCtes } from "./blocking-sql";
 

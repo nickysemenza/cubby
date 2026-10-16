@@ -37,6 +37,10 @@ import {
 } from "~/server/domains/product-category/repo/product-category";
 import { externalIdsContainIsbn } from "~/server/domains/product/repo/update-helpers";
 import {
+  assertReviewedSpendingClassification,
+  withReviewedSpendingClassification,
+} from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import {
   executeEntity,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
@@ -48,10 +52,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { lockLiveSpendingCategories } from "./spending-category";
-import {
-  assertReviewedSpendingClassification,
-  withReviewedSpendingClassification,
-} from "./spending-classification-review-authorization";
 
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);

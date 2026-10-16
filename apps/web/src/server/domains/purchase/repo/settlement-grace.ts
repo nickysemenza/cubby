@@ -5,7 +5,7 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
-import { householdDaySql } from "~/server/db/helpers";
+import { householdDaySql } from "~/server/db/helpers/query";
 
 /** Two complete Monday-Friday days after the evidence date. The second
  * following weekday ends the grace at the next household midnight. Resolve

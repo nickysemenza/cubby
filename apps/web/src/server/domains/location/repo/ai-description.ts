@@ -2,10 +2,10 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
 import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
-import { getDb } from "~/server/db/helpers";
-import { location } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { location } from "~/server/db/retained-tables";
 
 /**
  * The description a location shows right now (null when none was ever analyzed).

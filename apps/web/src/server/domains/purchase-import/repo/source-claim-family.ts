@@ -1,7 +1,13 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
-import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { importSourceClaim, importSourceOrder } from "~/server/db/schema";
+import {
+  type RepositoryQueryClient as DrizzleClient,
+  type RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
+import {
+  importSourceClaim,
+  importSourceOrder,
+} from "~/server/db/retained-tables";
 
 type Reader = Pick<DrizzleClient, "select">;
 type FamilyIdentity = Pick<

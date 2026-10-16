@@ -8,7 +8,7 @@ import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership"
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, isNull } from "drizzle-orm";
 
-import { inventoryEntry } from "~/server/db/schema";
+import { inventoryEntry } from "~/server/db/retained-tables";
 
 export type InventoryRawOwnership = {
   ownershipMode: InventoryOwnershipMode;

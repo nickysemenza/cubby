@@ -21,6 +21,7 @@ import {
   primaryGtinOf,
   productImageShortcodesOf,
 } from "~/server/domains/product/repo/mappers";
+import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import { enrichProductRowsWithPricing } from "~/server/domains/product/repo/pricing";
 import {
   EMPTY_QUANTITY_LEDGER,
@@ -30,7 +31,6 @@ import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-lab
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
-import { buildNutritionDisplay } from "./nutrition-display";
 import { loadProductOwnershipEvidence } from "./ownership-evidence";
 
 interface ProductDetailReadContext {

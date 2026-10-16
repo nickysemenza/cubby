@@ -5,13 +5,13 @@ import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { householdDaySql } from "~/server/db/helpers";
+import { householdDaySql } from "~/server/db/helpers/query";
 import {
   email,
   expense,
   financialTransaction,
   purchase,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 type Candidate = Pick<
   WorkQueueRow,

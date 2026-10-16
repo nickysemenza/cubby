@@ -36,6 +36,10 @@ import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
 } from "~/server/domains/household-contribution/repo/allocation";
+import {
+  matchCompletePaymentSet,
+  sourceFinancialFacts,
+} from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
@@ -58,7 +62,6 @@ import {
   type ReconciliationState,
 } from "./reconciliation-state";
 import { receiptProductQuantity, resolveLineProduct } from "./writer";
-import { matchCompletePaymentSet, sourceFinancialFacts } from "./writer-policy";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**

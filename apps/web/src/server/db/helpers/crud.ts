@@ -22,13 +22,17 @@ import {
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type JSONType, z } from "zod";
 
-import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { entityAttachment, image } from "~/server/db/schema";
+import {
+  repositoryQueries as unwrapDb,
+  repositoryTransactionOn as withTransactionOn,
+  type RepositoryQueryClient,
+  type RepositoryQueryTransaction,
+} from "~/server/db/repository-access.boundary";
+import { entityAttachment, image } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-
-import { unwrapDb, withTransactionOn } from "./core";
 
 /**
  * `findOrCreate` inserted nothing and then couldn't re-find a winner.
@@ -71,7 +75,7 @@ export class FindOrCreateConflictError extends Error {
  * runs on the create path, not when the row already exists.
  */
 export const findOrCreate = async <T extends PgTable>(
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: T,
   opts: {
     /** Predicate to find an existing row (and to re-find the winner on conflict). */
@@ -133,10 +137,10 @@ export const findOrCreate = async <T extends PgTable>(
 /**
  * Insert a single record and return it.
  * Cleaner than manually destructuring the returning() array.
- * Accepts both Database and DrizzleTransaction.
+ * Accepts both Database and RepositoryQueryTransaction.
  */
 export const insertAndReturn = async <T extends PgTable>(
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: T,
   values: InferInsertModel<T>,
 ): Promise<InferSelectModel<T>> => {
@@ -160,10 +164,10 @@ export const insertAndReturn = async <T extends PgTable>(
 /**
  * Update a single record and return it.
  * Cleaner than manually destructuring the returning() array.
- * Accepts both Database and DrizzleTransaction.
+ * Accepts both Database and RepositoryQueryTransaction.
  */
 export const updateAndReturn = async <T extends PgTable>(
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: T,
   values: PgUpdateSetSource<T>,
   where: SQL | undefined,
@@ -208,7 +212,7 @@ export const updateAndReturn = async <T extends PgTable>(
 export const updateLiveAndReturn = async <
   T extends PgTable & { id: AnyColumn; deletedAt: AnyColumn },
 >(
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: T,
   values: PgUpdateSetSource<T>,
   id: string,
@@ -236,7 +240,7 @@ export const touchUpdatedAt = async <
     updatedAt: AnyColumn;
   },
 >(
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: T,
   ids: readonly string[],
   at = new Date(),
@@ -352,7 +356,7 @@ export async function associatePendingImages<
   TTable extends ImageJoinTable,
   TParentColumn extends AnyColumn,
 >(
-  dbOrTx: DrizzleClient | DrizzleTransaction,
+  dbOrTx: RepositoryQueryClient,
   binding: ImageJoinBinding<TTable, TParentColumn>,
   parentId: GetColumnData<TParentColumn>,
   pendingImageIds: ImageId[],
@@ -451,7 +455,7 @@ export async function applyImageOrder<
   TTable extends ImageJoinTable,
   TParentColumn extends AnyColumn,
 >(
-  dbOrTx: DrizzleClient | DrizzleTransaction,
+  dbOrTx: RepositoryQueryClient,
   binding: ImageJoinBinding<TTable, TParentColumn>,
   parentId: GetColumnData<TParentColumn>,
   orderedImageIds: ImageId[],
@@ -478,7 +482,7 @@ export async function nextImageSortOrder<
   TTable extends ImageJoinTable,
   TParentColumn extends AnyColumn,
 >(
-  dbOrTx: DrizzleClient | DrizzleTransaction,
+  dbOrTx: RepositoryQueryClient,
   binding: ImageJoinBinding<TTable, TParentColumn>,
   parentId: GetColumnData<TParentColumn>,
 ): Promise<number> {
@@ -516,7 +520,7 @@ const isJsonContainer = (value: JSONType | undefined): value is JsonContainer =>
   value !== null && typeof value === "object";
 
 export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
-  dbOrTx: DrizzleClient | DrizzleTransaction,
+  dbOrTx: RepositoryQueryClient,
   table: PgTable,
   updates: TUpdate[],
   chunkSize = 250,

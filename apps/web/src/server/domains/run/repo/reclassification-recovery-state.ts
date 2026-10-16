@@ -2,9 +2,15 @@ import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { aiEvaluation, email, run, runOperation } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  aiEvaluation,
+  email,
+  run,
+  runOperation,
+} from "~/server/db/retained-tables";
 
 const RECLASSIFICATION_RECOVERY_OPERATION = "reclassification-recovery-v1";
 

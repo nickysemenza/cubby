@@ -55,11 +55,11 @@ import {
   replaceLinkSet,
 } from "~/server/generic/entity-links/repo/entity-links";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
   hydrateListRead,
   loadListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {

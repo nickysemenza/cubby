@@ -4,10 +4,10 @@ import { env } from "~/env";
 import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
 
 import { createBetterAuthGmailAccountStore } from "./persistence";
 import { createGmailProviderFactory } from "./tokens";
-import type { GmailProvider } from "./types";
 
 /** The local Google provider's Gmail and token endpoints during E2E. */
 const localGmailEndpoints = () => {

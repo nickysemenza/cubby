@@ -1,4 +1,4 @@
-import { gardenEntry } from "~/server/db/schema";
+import { gardenEntry } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 import { sameRecordClassificationChecks } from "./classification-policy";

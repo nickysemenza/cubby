@@ -8,6 +8,8 @@ import type {
 } from "@cubby/schemas/entity-report";
 
 import type { Database } from "~/server/db";
+import { foldRepeatedRows } from "~/server/generic/entity-report/repo/fold-repeats";
+import { purchaseReconciliationReport } from "~/server/generic/entity-report/repo/purchase-reconciliation";
 import type { RequestServices } from "~/server/http/request-services";
 
 import {
@@ -21,7 +23,6 @@ import {
 } from "./dependency";
 import { emailReviewReport } from "./email";
 import { expenseSettlementReport } from "./expense-settlement";
-import { foldRepeatedRows } from "./fold-repeats";
 import { imageJobAttemptsReport } from "./image-job";
 import { locationContentsValuationReport } from "./location";
 import {
@@ -37,7 +38,6 @@ import {
 } from "./project-dependencies";
 import { purchaseFinancialSettlementReport } from "./purchase-financial-settlement";
 import { purchaseProjectAllocationReport } from "./purchase-project-allocation";
-import { purchaseReconciliationReport } from "./purchase-reconciliation";
 import {
   cookbookId,
   productId,

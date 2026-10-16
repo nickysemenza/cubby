@@ -8,6 +8,10 @@ import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-owner
 import type { z } from "zod";
 
 import { mapImages, parseInventoryAmount } from "~/server/db/helpers";
+import type {
+  InventoryEntryDeepDB,
+  InventoryEntryListDB,
+} from "~/server/domains/inventory/repo/types";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import {
@@ -23,7 +27,6 @@ import {
   type InventoryOwnershipStep,
   inventoryOwnerResolution,
 } from "./ownership";
-import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<
   InventoryEntryListDB,

@@ -1,8 +1,8 @@
 import type { ImageId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { photoRunImage } from "~/server/db/schema";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { photoRunImage } from "~/server/db/retained-tables";
 
 type Membership = typeof photoRunImage.$inferSelect;
 const settled = (row: Membership) =>

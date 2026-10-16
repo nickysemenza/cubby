@@ -24,6 +24,10 @@ import { expense, project, task } from "~/server/db/schema";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import {
+  setProjectExternalUrls,
+  withProjectExternalUrls,
+} from "~/server/domains/project/repo/external-links";
+import {
   effectiveTaskProjectSql,
   effectiveProjectAssigneeSql,
   effectiveProjectLocationsSql,
@@ -57,10 +61,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { projectDependencyIds } from "./analytics";
-import {
-  setProjectExternalUrls,
-  withProjectExternalUrls,
-} from "./external-links";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, type ProjectTree } from "./subtree";
 

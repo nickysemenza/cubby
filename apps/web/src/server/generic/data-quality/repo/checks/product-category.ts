@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { productCategory } from "~/server/db/schema";
+import { productCategory } from "~/server/db/retained-tables";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
 
 import { defineEntityChecks } from "../registry";

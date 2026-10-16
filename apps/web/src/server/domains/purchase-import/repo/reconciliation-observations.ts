@@ -24,12 +24,11 @@ import {
   purchase,
   sourceOrderObservation,
 } from "~/server/db/schema";
-import { entityDetailJson } from "~/server/entity-kernel/repo/entity-source";
-
 import {
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
-} from "./source-claim-family";
+} from "~/server/domains/purchase-import/repo/source-claim-family";
+import { entityDetailJson } from "~/server/entity-kernel/repo/entity-source";
 
 /** JSONB changes object-key order; review hashes must describe values, not serialization order. */
 export function reconciliationFingerprint(value: unknown): Promise<string> {

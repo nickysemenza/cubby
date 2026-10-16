@@ -30,6 +30,7 @@ import {
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
+import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import {
   effectiveProjectAssigneeSql,
   effectiveProjectLocationsSql,
@@ -39,10 +40,10 @@ import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-im
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
@@ -56,7 +57,6 @@ import {
   projectAttentionFilterTypes,
 } from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
-import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,

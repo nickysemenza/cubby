@@ -19,6 +19,7 @@ import { and, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { notDeleted, withTransaction } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
+import { setProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { normalizeRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
 import {
@@ -34,7 +35,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getProjectByID } from "./crud";
-import { setProjectExternalUrls } from "./external-links";
 
 export async function createProjectFromTasks(
   db: Database,

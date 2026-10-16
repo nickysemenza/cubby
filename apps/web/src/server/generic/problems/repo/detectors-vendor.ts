@@ -1,8 +1,9 @@
 import { and, count, eq, inArray } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { expense, purchase, vendor } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { expense, purchase, vendor } from "~/server/db/retained-tables";
 
 /**
  * Hydrate card aggregates for an already-selected canonical vendor page.

@@ -70,7 +70,7 @@ type LockedTarget = Pick<
   "id" | "imageId" | "state" | "outcome" | "commitReceipt"
 >;
 
-import { effectivePhotoGroupConcern } from "./photo-group-steps";
+import { effectivePhotoGroupConcern } from "~/server/domains/photo-import/repo/run/photo-group-steps";
 
 type ResolvedAttach = {
   code: ImageShortcode;

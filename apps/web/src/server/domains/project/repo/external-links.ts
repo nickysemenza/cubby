@@ -12,8 +12,9 @@ import { GOOGLE_DRIVE_SOURCE, NOTION_SOURCE } from "@cubby/schemas/external-id";
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { entityExternalId } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { entityExternalId } from "~/server/db/retained-tables";
 import {
   liveExternalIds,
   setSingleExternalId,

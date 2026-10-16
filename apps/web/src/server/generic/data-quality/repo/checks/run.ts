@@ -6,7 +6,7 @@ import {
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 
-import { run } from "~/server/db/schema";
+import { run } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

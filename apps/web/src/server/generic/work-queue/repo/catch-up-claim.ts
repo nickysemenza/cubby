@@ -1,8 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { appSettings } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { appSettings } from "~/server/db/retained-tables";
 
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000072";
 const COOLDOWN_MS = 60 * 60_000;

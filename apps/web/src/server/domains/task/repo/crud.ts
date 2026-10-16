@@ -37,6 +37,7 @@ import {
 import { product, task } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
+import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { bulkPatchEntities } from "~/server/entity-kernel/repo/entity-patch";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
@@ -70,7 +71,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { dbTaskToAPI } from "./helpers";
 import {
   effectiveTaskAssigneeSql,
   effectiveTaskProjectSql,

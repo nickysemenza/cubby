@@ -37,6 +37,7 @@ import {
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import {
   statementRowExternalId,
   statementRowOccurrenceId,
@@ -54,8 +55,6 @@ import {
   settlementRefsFor,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { statementImportMembers } from "./statement-import-membership";
 
 /**
  * Every live settlement reference with its transaction's shortcode — the

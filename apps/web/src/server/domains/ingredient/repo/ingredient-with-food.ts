@@ -18,10 +18,11 @@ import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";
+import { buildIngredientNutritionProduct } from "~/server/domains/ingredient/repo/nutrition-product";
+import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
+import { recipeTreeLeafIngredientIds } from "~/server/domains/recipe/repo/totals";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
-import { foodLookupParamFromProduct } from "../../product/repo/helpers";
-import { recipeTreeLeafIngredientIds } from "../../recipe/repo/totals";
 import {
   batchEnrichNestedItems,
   batchEnrichWithFood,
@@ -29,7 +30,6 @@ import {
 import type { UsdaFoodBatchPort } from "../../usda-food/repo/usda-helpers";
 import { getIngredientByID as getIngredientByIDRepo } from "./crud";
 import { findFuzzyMergeCandidates } from "./merge";
-import { buildIngredientNutritionProduct } from "./nutrition-product";
 import {
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
   getIngredientByName as getIngredientByNameRepo,

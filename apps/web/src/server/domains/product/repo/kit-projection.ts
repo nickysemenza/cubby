@@ -45,7 +45,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { uuidArrayParam } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 
 /**
  * How many kit hops a projection will walk before it stops.

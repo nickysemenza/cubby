@@ -4,10 +4,13 @@ import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import {
+  optionColor,
+  sectionBlocks,
+  sectionOut,
+} from "~/server/generic/entity-report/repo/finance-section";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { settlementLabel } from "~/server/generic/list/repo/list-display-labels";
-
-import { optionColor, sectionBlocks, sectionOut } from "./finance-section";
 
 /**
  * Scoped to one purchase, the slice is the honest figure — the full charge settled several

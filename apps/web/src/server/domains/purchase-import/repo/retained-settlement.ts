@@ -33,11 +33,10 @@ import {
   readAllocations,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
-
 import {
   matchCompletePaymentSet,
   type SettlementCandidate,
-} from "./writer-policy";
+} from "~/server/domains/purchase-import/repo/writer-policy";
 
 const log = createLogger("purchase-import.settlement");
 

@@ -7,9 +7,14 @@
 
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { entityAttachment } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  type RepositoryQueryClient as DrizzleClient,
+  type RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { entityAttachment } from "~/server/db/retained-tables";
 
 export type SingularRole = "cover" | "logo";
 

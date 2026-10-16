@@ -36,16 +36,18 @@ import {
   householdDateTime,
   shiftPlainDate,
 } from "~/lib/household-date";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db/database";
 import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
+import {
+  repositoryQueries as unwrapDb,
+  type RepositoryQueryTransaction,
+} from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
 import {
   traceListPage,
   traceListCount,
 } from "~/server/observability/list-read-tracing";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-
-import { unwrapDb } from "./core";
 
 export function buildSearchConditions(
   table: { deletedAt: AnyColumn },
@@ -219,7 +221,7 @@ export const isNotDeleted = <T extends { deletedAt?: Date | null }>(
 ): boolean => row.deletedAt == null;
 
 export const countWhere = (
-  db: Database | DrizzleTransaction,
+  db: Database | RepositoryQueryTransaction,
   table: PgTable,
   where?: SQL,
   source: PgTable | SQL = table,
@@ -362,7 +364,7 @@ const LOCK_ENTITY_BY_NAME = {
 type LockEntityName = keyof typeof LOCK_ENTITY_BY_NAME;
 
 export async function lockAndValidateForDelete<TId extends string>(
-  tx: DrizzleTransaction,
+  tx: RepositoryQueryTransaction,
   table: PgTable & { id: AnyColumn; deletedAt: AnyColumn },
   ids: TId[],
   entityName: LockEntityName,

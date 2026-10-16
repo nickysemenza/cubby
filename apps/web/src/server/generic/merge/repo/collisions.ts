@@ -28,7 +28,7 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
-import type { DrizzleTransaction } from "~/server/db";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 
 /**
  * The keeper/loser split for one slotted edge.

@@ -28,6 +28,7 @@ import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { loadCategoryConnections } from "~/server/domains/product-category/repo/category-connections";
+import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import {
   createEntityCrud,
   defineRepository,
@@ -41,10 +42,8 @@ import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  hydrateListRead,
-  type ListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
@@ -56,8 +55,6 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
 const scaffold = listScaffold("spendingCategory", spendingCategory);
 export const buildSpendingCategoryWhere = scaffold.where;

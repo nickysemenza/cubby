@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { project } from "~/server/db/schema";
+import { project } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

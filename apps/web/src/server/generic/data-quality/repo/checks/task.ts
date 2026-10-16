@@ -2,8 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { task } from "~/server/db/schema";
 import { effectiveTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
-
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
 
 type Task = typeof task;
 

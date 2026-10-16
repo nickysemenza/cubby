@@ -62,10 +62,8 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  hydrateListRead,
-  type ListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";

@@ -20,6 +20,12 @@ import {
   quoteAiChatRequestUsd,
 } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
+import {
+  assertSelectedMailSources,
+  readLiveRunOwner,
+  readMailImportLineage,
+  type RunExecutionIdentity,
+} from "~/server/domains/run/repo/execution-lineage";
 
 import {
   assertExecutionAuthorization,
@@ -30,12 +36,6 @@ import {
   executionRequestForRun,
   pauseExecutionRun,
 } from "../repo/execution-context";
-import {
-  assertSelectedMailSources,
-  readLiveRunOwner,
-  readMailImportLineage,
-  type RunExecutionIdentity,
-} from "../repo/execution-lineage";
 
 const decisionQuestions = z.object({
   questions: z.record(z.string(), z.unknown()),

@@ -1,7 +1,7 @@
 import { mailboxClassification } from "@cubby/schemas/mailbox-research";
 import { sql } from "drizzle-orm";
 
-import { email } from "~/server/db/schema";
+import { email } from "~/server/db/retained-tables";
 import {
   automatedStagesSql,
   emailLinkedSql,

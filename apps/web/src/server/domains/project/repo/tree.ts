@@ -40,11 +40,11 @@ import { and, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
+import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
 import { projectDependencyIds } from "./analytics";
-import { withProjectExternalUrls } from "./external-links";
 import { hydrateProjectRow } from "./helpers";
 import { buildProjectListQuery, projectListSums } from "./lookup";
 import { collectDescendantIds, loadProjectSubtreeRollups } from "./subtree";

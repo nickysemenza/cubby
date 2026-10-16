@@ -142,6 +142,7 @@ import {
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   expenseCountLabel,
   reconciliationLabel,
@@ -151,7 +152,6 @@ import {
   listGroupFields,
   hydrateListRead,
   loadListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,

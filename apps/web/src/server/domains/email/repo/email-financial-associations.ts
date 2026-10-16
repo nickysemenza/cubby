@@ -4,13 +4,14 @@ import { desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   emailFinancialAssociation,
   financialAccount,
   financialTransaction,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 /** Reviewed evidence survives soft-deleted targets; it is not current settlement. */
 export async function readEmailFinancialAssociations(

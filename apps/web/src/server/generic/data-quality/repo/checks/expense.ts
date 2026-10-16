@@ -7,8 +7,10 @@ import {
   expenseDerivedReadSql,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { expenseProductExpectedSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-
-import { defineEntityChecks, type QualityReadContext } from "../registry";
+import {
+  defineEntityChecks,
+  type QualityReadContext,
+} from "~/server/generic/data-quality/repo/registry";
 
 type Expense = typeof expense;
 

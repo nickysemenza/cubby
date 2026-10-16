@@ -5,14 +5,14 @@ import { z } from "zod";
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-
-import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {
   blockUnpublishedEmailRefresh,
   latestClassificationObservation,
   loadEmailRefreshTarget,
   type EmailRefreshEvaluation,
-} from "../../repo/gmail/refresh-evaluation-state";
+} from "~/server/domains/purchase-import/repo/gmail/refresh-evaluation-state";
+
+import { gmailProviderForUser } from "../../repo/gmail/provider";
 import { ingestGmailMessages } from "./ingest";
 
 export async function refreshEmailEvaluation(

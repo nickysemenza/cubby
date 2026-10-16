@@ -7,8 +7,11 @@ import { and, count, getTableColumns, inArray, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { sum } from "es-toolkit";
 
-import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { notDeleted } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  type RepositoryQueryClient as DrizzleClient,
+  type RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
 
 /**
  * Shared building blocks for operation impact previews.

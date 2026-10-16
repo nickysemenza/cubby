@@ -11,14 +11,19 @@ import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries as unwrapDb,
+  repositoryTransaction as withTransaction,
+} from "~/server/db/repository-access.boundary";
 import {
   ingredient,
   recipe,
   recipeSection,
   recipeSectionIngredient,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("recompute");

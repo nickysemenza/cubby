@@ -1,33 +1,37 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
-import { cookbookChecks } from "./checks/cookbook";
-import { deviceChecks } from "./checks/device";
-import { emailChecks } from "./checks/email";
+import { cookbookChecks } from "~/server/generic/data-quality/repo/checks/cookbook";
+import { deviceChecks } from "~/server/generic/data-quality/repo/checks/device";
+import { emailChecks } from "~/server/generic/data-quality/repo/checks/email";
+import { financialAccountChecks } from "~/server/generic/data-quality/repo/checks/financial-account";
+import { gardenEntryChecks } from "~/server/generic/data-quality/repo/checks/garden-entry";
+import { imageChecks } from "~/server/generic/data-quality/repo/checks/image";
+import { imageJobChecks } from "~/server/generic/data-quality/repo/checks/image-job";
+import { ingredientChecks } from "~/server/generic/data-quality/repo/checks/ingredient";
+import { inventoryChecks } from "~/server/generic/data-quality/repo/checks/inventory";
+import { ledgerPartyChecks } from "~/server/generic/data-quality/repo/checks/ledger-party";
+import { ledgerTransferChecks } from "~/server/generic/data-quality/repo/checks/ledger-transfer";
+import { locationChecks } from "~/server/generic/data-quality/repo/checks/location";
+import { mealChecks } from "~/server/generic/data-quality/repo/checks/meal";
+import { plantChecks } from "~/server/generic/data-quality/repo/checks/plant";
+import { plantingChecks } from "~/server/generic/data-quality/repo/checks/planting";
+import { productCategoryChecks } from "~/server/generic/data-quality/repo/checks/product-category";
+import { projectChecks } from "~/server/generic/data-quality/repo/checks/project";
+import { recipeChecks } from "~/server/generic/data-quality/repo/checks/recipe";
+import { runChecks } from "~/server/generic/data-quality/repo/checks/run";
+import { spendingCategoryChecks } from "~/server/generic/data-quality/repo/checks/spending-category";
+import { vendorChecks } from "~/server/generic/data-quality/repo/checks/vendor";
+import { wishChecks } from "~/server/generic/data-quality/repo/checks/wish";
+import type {
+  EntityChecks,
+  ScoredTable,
+} from "~/server/generic/data-quality/repo/registry";
+
 import { expenseChecks } from "./checks/expense";
-import { financialAccountChecks } from "./checks/financial-account";
 import { financialTransactionChecks } from "./checks/financial-transaction";
-import { gardenEntryChecks } from "./checks/garden-entry";
-import { imageChecks } from "./checks/image";
-import { imageJobChecks } from "./checks/image-job";
-import { ingredientChecks } from "./checks/ingredient";
-import { inventoryChecks } from "./checks/inventory";
-import { ledgerPartyChecks } from "./checks/ledger-party";
-import { ledgerTransferChecks } from "./checks/ledger-transfer";
-import { locationChecks } from "./checks/location";
-import { mealChecks } from "./checks/meal";
-import { plantChecks } from "./checks/plant";
-import { plantingChecks } from "./checks/planting";
 import { productChecks } from "./checks/product";
-import { productCategoryChecks } from "./checks/product-category";
-import { projectChecks } from "./checks/project";
 import { purchaseChecks } from "./checks/purchase";
-import { recipeChecks } from "./checks/recipe";
-import { runChecks } from "./checks/run";
-import { spendingCategoryChecks } from "./checks/spending-category";
 import { taskChecks } from "./checks/task";
-import { vendorChecks } from "./checks/vendor";
-import { wishChecks } from "./checks/wish";
-import type { EntityChecks, ScoredTable } from "./registry";
 
 /** The registry's owner contract: one entry per scored entity. */
 export type DataQualityEntries = {

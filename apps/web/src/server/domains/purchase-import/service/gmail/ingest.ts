@@ -13,6 +13,15 @@ import {
 
 import type { Database } from "~/server/db";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
+import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
+import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import {
+  GmailApiError,
+  type GmailProvider,
+  type GmailMessage,
+  type GmailNormalizedMessage,
+} from "~/server/domains/purchase-import/repo/gmail/types";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { claimRunExecution } from "~/server/domains/run/repo/execution-context";
 
 import {
@@ -23,7 +32,6 @@ import {
   productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "../../repo/gmail/attachment-storage";
-import { originalChecksum } from "../../repo/gmail/checksum";
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import {
   afterPublicationCommit,
@@ -33,7 +41,6 @@ import {
   readMemberClassification,
   restoreOrderMailContent,
 } from "../../repo/gmail/ingest-state";
-import { normalizeMessage } from "../../repo/gmail/normalize";
 import {
   recordEmailClassificationObservation,
   recordEmailCandidateObservation,
@@ -51,13 +58,6 @@ import {
   upsertOrderMail,
 } from "../../repo/gmail/persistence";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
-import {
-  GmailApiError,
-  type GmailProvider,
-  type GmailMessage,
-  type GmailNormalizedMessage,
-} from "../../repo/gmail/types";
-import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../../repo/mail-source-identity";
 import {
   extractEmailCandidatePreview,
   type EmailCandidateChoice,

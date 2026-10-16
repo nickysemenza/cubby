@@ -85,10 +85,10 @@ import {
   listIdsCondition,
   listScaffold,
 } from "~/server/generic/list/repo/list";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
   wantsListGroup,
-  type ListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
@@ -114,6 +114,16 @@ import {
   placementCondition,
   stockOnly,
 } from "~/server/db/computed/inventory-placement";
+import {
+  assertValidRawInventoryOwnership,
+  inventoryOwnershipSlotCondition,
+  type InventoryRawOwnership,
+} from "~/server/domains/inventory/repo/slot";
+import type {
+  CreateInventoryEntryData,
+  InventoryEntryDeepDB,
+  UpdateInventoryEntryData,
+} from "~/server/domains/inventory/repo/types";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";
@@ -124,16 +134,6 @@ import {
   loadInventoryOwnershipTraces,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-import {
-  assertValidRawInventoryOwnership,
-  inventoryOwnershipSlotCondition,
-  type InventoryRawOwnership,
-} from "./slot";
-import type {
-  CreateInventoryEntryData,
-  InventoryEntryDeepDB,
-  UpdateInventoryEntryData,
-} from "./types";
 import {
   type InventoryValuations,
   inventoryValuationSql,

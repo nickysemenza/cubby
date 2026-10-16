@@ -9,8 +9,7 @@ import {
   financialTransactionItemizationExpectationSql,
   financialTransactionRequiresBookingSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
 
 type FinancialTransaction = typeof financialTransaction;
 

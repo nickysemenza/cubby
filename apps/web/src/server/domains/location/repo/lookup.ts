@@ -32,12 +32,12 @@ import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
+import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
-import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
 import { computeLocationValuations } from "./valuation";
 

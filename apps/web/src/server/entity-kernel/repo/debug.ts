@@ -1,8 +1,8 @@
 import { count, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { product } from "~/server/db/retained-tables";
 
 /**
  * Bare `SELECT 1` round-trip — dev-only latency probe, no rows returned.

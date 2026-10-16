@@ -8,9 +8,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { email, emailClassificationObservation, run } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  email,
+  emailClassificationObservation,
+  run,
+} from "~/server/db/retained-tables";
 
 /** A handling receipt shares the durable ledger; a reused verdict does not create a prediction. */
 export async function recordDiscoveryEmailReceipt(

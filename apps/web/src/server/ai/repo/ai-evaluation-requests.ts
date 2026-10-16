@@ -4,9 +4,16 @@ import { runStatus } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase as withTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  run,
+} from "~/server/db/retained-tables";
 
 export const PENDING_AI_STATES: readonly (typeof aiEvaluation.$inferSelect)["state"][] =
   [

@@ -5,8 +5,11 @@ import {
 } from "@cubby/schemas/run-fields";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { email as emailTable, run } from "~/server/db/schema";
+import {
+  type RepositoryQueryClient as DrizzleClient,
+  type RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
+import { email as emailTable, run } from "~/server/db/retained-tables";
 
 /** The admitted source roster is immutable Run input; current Email status only describes its outcome. */
 export async function readMailRunSources(

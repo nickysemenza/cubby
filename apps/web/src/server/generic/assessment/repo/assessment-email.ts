@@ -1,9 +1,12 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { assessment, emailClassificationObservation } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  assessment,
+  emailClassificationObservation,
+} from "~/server/db/retained-tables";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 
 /** Observations retain retrieval/model lineage; Assessments own the review identity. */

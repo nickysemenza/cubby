@@ -1,17 +1,17 @@
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { notDeleted } from "~/server/db/helpers";
-import { getDb } from "~/server/db/helpers/core";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   ledgerParty,
   vendor,
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 
 import { vendorSearchTerms } from "./vendor-identity";
 

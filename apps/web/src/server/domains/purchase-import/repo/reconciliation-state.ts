@@ -27,6 +27,10 @@ import {
   sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
+import {
+  readImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "~/server/domains/purchase-import/repo/source-claim-family";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -35,10 +39,6 @@ import {
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
 import { lockPartySettlement } from "./retained-settlement";
-import {
-  readImportSourceClaimFamily,
-  readSourceFamilyOrder,
-} from "./source-claim-family";
 
 export type ReconciliationFix = Extract<
   ProposedImportFix,

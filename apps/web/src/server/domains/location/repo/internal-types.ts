@@ -6,8 +6,12 @@
 import type { InventoryItemForTree } from "@cubby/schemas/location";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
-import type { MappableImageRecord } from "~/server/db/helpers";
-import type { inventoryEntry, location, product } from "~/server/db/schema";
+import { type MappableImageRecord } from "~/server/db/helpers/transform";
+import {
+  type inventoryEntry,
+  type location,
+  type product,
+} from "~/server/db/retained-tables";
 
 /**
  * `aiDescription` is not a column: the read that loaded the row attaches the

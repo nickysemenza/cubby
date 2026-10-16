@@ -13,9 +13,11 @@
 
 import { asc, type SQLWrapper, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { product } from "~/server/db/retained-tables";
 
 /**
  * Canonical form of a brand label: lowercase, without a leading "The", without

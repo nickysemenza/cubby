@@ -9,9 +9,16 @@ import { and, eq, sql } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import { type Database } from "~/server/db/database";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase as withTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import {
+  assessment,
+  assessmentState,
+  feedback,
+} from "~/server/db/retained-tables";
 
 /** A matching operation ID alone never proves that a domain mutation committed. */
 export function assertApplicationReceipt(

@@ -5,7 +5,11 @@ import {
 } from "../../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { validateChildTables } from "../child-tables.ts";
 import { retainedTableExports } from "../../../../../packages/schemas/src/child-tables/retained.ts";
-import { childTableDependencies, renderChildTables } from "./children.ts";
+import {
+  childTableDependencies,
+  renderChildTables,
+  renderChildRelations,
+} from "./children.ts";
 import type {
   CompiledEntity,
   CompiledEntityTable,
@@ -207,17 +211,11 @@ const renderRelations = (
   return `export const ${table.exportName}Relations = relations(${table.exportName}, ({ ${helpers.join(", ")} }) => ({${entries.join(",")}}));`;
 };
 
-/**
- * Every entity's complete Drizzle table and relational-query relations,
- * from its declaration's `model.storage` + `storage`. `schema.ts` re-exports
- * this module; child tables that entity relations name are imported back
- * from it, a cycle that is safe only because every cross-table reference
- * here (FK thunks, extra-config callbacks, `relations()` callbacks) is lazy.
- */
-export const renderEntityTablesArtifact = (
+/** Canonical definitions and downstream relational assembly share one render context. */
+export const renderEntityTableArtifacts = (
   entities: readonly CompiledEntity[],
   moduleChildren: readonly ChildTableDeclaration[] = [],
-): string => {
+) => {
   validateEntityTables(entities, moduleChildren);
   const tabled = entities.filter(
     (entity): entity is TabledEntity => entity.table !== null,
@@ -292,45 +290,55 @@ export const renderEntityTablesArtifact = (
     tabled.filter((entity) => !identityKeys.has(entity.key)),
     typeImports,
   );
-  const usesUser =
-    childTableDependencies(declaredChildren).includes("user") ||
-    tabled.some(({ table }) =>
-      table.columns.some(({ reference }) => reference === "user"),
-    );
   const ownedDefinitions = tabled
     .filter((entity) => !identityKeys.has(entity.key))
     .map((entity) => renderTable(entity, exportOf))
     .join("\n\n");
   const childDefinitions = renderChildTables(declaredChildren);
-  return (
-    generatedHeader +
-    "// Import through `~/server/db/schema`, never directly: the cycle with\n" +
-    "// schema.ts only resolves when schema.ts is the first module loaded.\n\n" +
-    storageColumnImportsFor(
-      ownedDefinitions + "\n" + childDefinitions,
-      renderTypeImports(typeImports),
-    ) +
-    'import { relations, sql } from "drizzle-orm";\n' +
-    'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n\n' +
-    (usesUser ? 'import { user } from "../auth.schema";\n' : "") +
-    'import { entityIdentity, entityIdentityFk } from "~/server/db/entity-identity-schema";\n' +
-    (childTables.length === 0
-      ? ""
-      : `import { ${childTables.join(", ")} } from "../schema";\n`) +
-    (identityExports.length
-      ? `import { ${identityExports.join(", ")} } from "~/server/db/generated/identity-storage-tables.gen";\nexport { ${identityExports.join(", ")} };\n`
-      : "") +
-    "\n" +
-    ownedDefinitions +
-    "\n\n" +
-    childDefinitions +
-    "\n\n" +
+  const definitionSource = ownedDefinitions + "\n\n" + childDefinitions;
+  const relationSource =
     tabled
       .filter(({ table }) => table.relations.length > 0)
       .map(({ table }) => renderRelations(table, exportOf))
       .join("\n\n") +
-    "\n"
-  );
+    "\n\n" +
+    renderChildRelations(declaredChildren);
+  const retainedImports = childTables.length
+    ? `import { ${childTables.join(", ")} } from "~/server/db/retained-tables";\n`
+    : "";
+  const sharedImports =
+    'import { user } from "~/server/db/auth.schema";\n' +
+    'import { entityIdentity, entityIdentityFk } from "~/server/db/entity-identity-schema";\n';
+  const definitions =
+    generatedHeader +
+    storageColumnImportsFor(definitionSource, renderTypeImports(typeImports)) +
+    referencedImports(
+      'import { sql } from "drizzle-orm";\n' +
+        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n' +
+        sharedImports +
+        retainedImports,
+      definitionSource,
+    ) +
+    (identityExports.length
+      ? `import { ${identityExports.join(", ")} } from "~/server/db/generated/identity-storage-tables.gen";\nexport { ${identityExports.join(", ")} };\n`
+      : "") +
+    "\n" +
+    definitionSource +
+    "\n";
+  const relations =
+    generatedHeader +
+    'export * from "~/server/db/generated/entity-table-definitions.gen";\n' +
+    'import { relations } from "drizzle-orm";\n' +
+    referencedImports(
+      `import { ${[...tableExports].sort().join(", ")} } from "~/server/db/generated/entity-table-definitions.gen";\n` +
+        sharedImports +
+        retainedImports,
+      relationSource,
+    ) +
+    "\n" +
+    relationSource +
+    "\n";
+  return { definitions, relations };
 };
 
 /** Canonical FK-closed definitions; relations remain in the full assembly. */

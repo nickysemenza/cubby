@@ -8,10 +8,6 @@ import { deferClassificationRefresh } from "~/server/domains/purchase-import/rep
 import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { mailboxApproval } from "~/server/domains/purchase-import/service/gmail/reclassify";
-
-import { ensureRun } from "../repo/ensure-run";
-import { assertExecutionAuthorization } from "../repo/execution-authorization";
-import { executionRequestForRun } from "../repo/execution-context";
 import {
   hasLaterReclassifyEvaluation,
   laterLegacyReclassifyRuns,
@@ -21,7 +17,11 @@ import {
   unrecoveredReclassificationRuns,
   type RecoveryCursor,
   type RecoveryEmail,
-} from "../repo/reclassification-recovery-state";
+} from "~/server/domains/run/repo/reclassification-recovery-state";
+
+import { ensureRun } from "../repo/ensure-run";
+import { assertExecutionAuthorization } from "../repo/execution-authorization";
+import { executionRequestForRun } from "../repo/execution-context";
 import { withRunTransaction } from "../repo/run";
 
 const fulfilled = new Set([

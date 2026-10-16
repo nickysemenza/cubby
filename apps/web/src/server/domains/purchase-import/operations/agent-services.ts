@@ -144,7 +144,7 @@ export function runServicesFor(
       withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
         const { findActivePurchaseAgentGrant } =
-          await import("../repo/agent-auth");
+          await import("~/server/domains/purchase-import/repo/agent-auth");
         if (await findActivePurchaseAgentGrant(db, scope.actorUserId)) return;
         await service.pauseRunForAuthorization(db, runId);
         throw new Error("Purchase Agent authorization is required");
@@ -166,7 +166,7 @@ export function runServicesFor(
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
           { handleMcpHttpRequest },
         ] = await Promise.all([
-          import("../repo/agent-auth"),
+          import("~/server/domains/purchase-import/repo/agent-auth"),
           import("~/server/mcp/http-handler"),
         ]);
         const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);

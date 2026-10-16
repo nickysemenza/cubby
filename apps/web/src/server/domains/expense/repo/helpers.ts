@@ -24,9 +24,9 @@ import {
   singularAttachment,
 } from "~/server/db/helpers";
 import type { purchase } from "~/server/db/schema";
+import { parseExpenseCategoryResolution } from "~/server/domains/expense/repo/expense-category-resolution";
 import { createAppError } from "~/server/errors/app-error";
 
-import { parseExpenseCategoryResolution } from "./expense-category-resolution";
 import type { ExpenseProjectAllocationRow } from "./expense-project-allocation";
 import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation";
 

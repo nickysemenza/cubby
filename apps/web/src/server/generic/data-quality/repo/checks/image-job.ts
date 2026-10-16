@@ -1,7 +1,7 @@
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import { sql } from "drizzle-orm";
 
-import { imageProcessingJob } from "~/server/db/schema";
+import { imageProcessingJob } from "~/server/db/retained-tables";
 
 import { defineEntityChecks } from "../registry";
 

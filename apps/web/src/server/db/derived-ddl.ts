@@ -3,13 +3,13 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { getTableColumns, getTableName } from "drizzle-orm";
 
 import { entityIdentityTriggerSql } from "~/server/db/entity-identity-schema";
+import { entityLinkLivenessTriggerSql } from "~/server/db/entity-link-schema";
 
 import { SHORTCODE_TABLE } from "../generated/shortcode-tables.gen";
 import {
   assessmentHistoryDdl,
   productIdentityInvalidationDdl,
 } from "./assessment-ddl";
-import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;

@@ -1,4 +1,5 @@
 import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
+import { findParentRecipeIdsBatch } from "~/server/domains/recipe/repo/totals";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,
@@ -18,7 +19,6 @@ import {
   recipeListRead,
   updateRecipe,
 } from "./crud";
-import { findParentRecipeIdsBatch } from "./totals";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
