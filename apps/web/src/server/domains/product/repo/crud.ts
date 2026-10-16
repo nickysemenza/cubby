@@ -212,7 +212,7 @@ import {
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
-  derivedPriceFilterSql,
+  hasDerivedProductPriceSql,
   effectiveProductPriceSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
@@ -1112,13 +1112,10 @@ export const buildProductWhere = async (
     filters.pricePresenceFilter === "none"
       ? and(
           isNull(product.price),
-          sql`${derivedPriceFilterSql(product.id)} IS NULL`,
+          sql`NOT (${hasDerivedProductPriceSql(product.id)})`,
         )
       : filters.pricePresenceFilter === "has"
-        ? or(
-            isNotNull(product.price),
-            sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
-          )
+        ? or(isNotNull(product.price), hasDerivedProductPriceSql(product.id))
         : undefined,
   ];
 

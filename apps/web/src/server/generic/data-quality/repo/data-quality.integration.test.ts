@@ -16,7 +16,11 @@ import {
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
-import { productList } from "~/server/domains/product/repo/crud";
+import {
+  buildProductWhere,
+  productList,
+} from "~/server/domains/product/repo/crud";
+import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
@@ -100,6 +104,103 @@ describe("data quality: list filters, sort and hydration agree", () => {
     }
     return { weak, middling, catalogOnly };
   };
+
+  // Catalog price gaps must not repeat a kit-pricing walk for every Product.
+  // A kit-priced part remains priced even without its own acquiring Expense.
+  it("shares derived price evidence across catalog gaps and bounded hydration", async () => {
+    const { weak, middling } = await seedProducts();
+    for (let index = 0; index < 64; index++)
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Synthetic price catalog ${index}` }),
+        TEST_ACTOR,
+      );
+    const kit = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic priced kit" }),
+      TEST_ACTOR,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: weak.entityId, quantity: 4 }],
+      TEST_ACTOR,
+    );
+    const whereBefore = await buildProductWhere(ctx.db, {
+      dataGap: "product_price",
+    });
+    const before = await unwrapDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(whereBefore);
+    expect(before.map((row) => row.id)).toContain(weak.entityId);
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: weak.id,
+        check: "product_price",
+        reason: "unavailable",
+        note: "Synthetic historical price is unavailable.",
+      },
+      TEST_ACTOR,
+    );
+    expect(excepted.exceptions).toContainEqual(
+      expect.objectContaining({ check: "product_price", state: "active" }),
+    );
+    const filteredException = await unwrapDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(whereBefore);
+    expect(filteredException.map((row) => row.id)).not.toContain(weak.entityId);
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Synthetic kit acquisition",
+        productId: kit.id,
+        cost: 10,
+        productQuantity: 2,
+      }),
+      TEST_ACTOR,
+    );
+    const where = await buildProductWhere(ctx.db, { dataGap: "product_price" });
+    const after = await unwrapDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(where);
+    expect(after.map((row) => row.id)).not.toContain(weak.entityId);
+    const hydrated = await loadDataQualities(ctx.db, "product", [
+      weak.entityId,
+      middling.entityId,
+    ]);
+    expect(
+      hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check),
+    ).not.toContain("product_price");
+    expect(hydrated.get(weak.entityId)?.exceptions).toContainEqual(
+      expect.objectContaining({ check: "product_price", state: "stale" }),
+    );
+    const planNode = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Loops": z.number().optional(),
+      get Plans() {
+        return z.array(planNode).optional();
+      },
+    });
+    const explained = await unwrapDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT ${product.id} FROM ${product} WHERE ${where}`,
+    );
+    const plan = z
+      .array(z.object({ Plan: planNode }))
+      .parse(explained.rows[0]?.["QUERY PLAN"])[0];
+    if (!plan) throw new Error("Missing query plan");
+    let edgeScans = 0;
+    const visit = (node: z.infer<typeof planNode>) => {
+      if (node["Relation Name"] === "EntityLink")
+        edgeScans += node["Actual Loops"] ?? 0;
+      node.Plans?.forEach(visit);
+    };
+    visit(plan.Plan);
+    expect(edgeScans).toBeLessThanOrEqual(16);
+  });
 
   it("filters by status and gap exactly as the hydrated object reports", async () => {
     const { weak, middling, catalogOnly } = await seedProducts();
