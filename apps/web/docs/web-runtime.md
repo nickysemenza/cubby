@@ -79,7 +79,8 @@ Full record timelines join the continuous detail page. Timeline renderers remain
 Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
 compiler's filter descriptors, port refs, and a duplicate of the summary, and
 one import ships all of it to every list. Read names, titles, resolved
-`primarySearch`, `list.initialFilter`, and `bulkUpdate` from `entitySummary`;
+`primarySearch`, `list.initialFilter`, `bulkUpdate`, `recordEmojiField`, and
+`recordIconEntityField` from `entitySummary`;
 `shortcodePrefix`/`searchable` from `entityManifest`; and filter
 `field`/`columnId`/`kind`/URL key/`referenceEntity` from `getEntityFilters`
 with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
