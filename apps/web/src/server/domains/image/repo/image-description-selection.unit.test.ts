@@ -21,7 +21,7 @@ it("keeps claims with their authority and never lends model claims to member pro
   ).toMatchObject({
     authority: "model",
     claims: analysis.result.claims,
-    analysis: { id: analysis.analysisId },
+    analysis: { model: analysis.model, createdAt: analysis.createdAt },
   });
   expect(
     selectImageDescriptionEvidence(

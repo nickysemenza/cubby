@@ -610,6 +610,8 @@ describe("MCP catalog schemas", () => {
       "entity.operationId",
       "entity.items[].assessmentId",
       "entity.items[].operationId",
+      // photo_run.reject_candidate retries by the same caller-generated key.
+      "photo_run.operationId",
       // suggest_fields' entityId and suggestion_queue's recordIds are
       // shortcodes of the kind `entity` names, so no single prefix pattern
       // fits.

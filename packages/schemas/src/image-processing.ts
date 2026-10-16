@@ -334,7 +334,6 @@ export const selectedImageDescriptionEvidence = z.object({
   authority: z.enum(["model", "member", "missing"]),
   analysis: z
     .object({
-      id: z.uuid(),
       provider: z.string().nullable(),
       model: z.string(),
       createdAt: z.string(),
@@ -393,7 +392,6 @@ export function selectImageDescriptionEvidence(
     description: selected.result.description,
     authority: "model",
     analysis: {
-      id: selected.analysisId,
       provider: selected.provider,
       model: selected.model,
       createdAt: selected.createdAt,
