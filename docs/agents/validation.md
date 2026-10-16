@@ -236,6 +236,8 @@ metadata and unprovided bounded operator context stay null. Never use an input
 fingerprint as anonymization or copy arbitrary input keys into evidence, including
 private samples. A query timing
 does not establish page latency, and HTTP success does not establish RPC success.
+Attribute repeated plan work by its relation or alias and owning SQL producer;
+a shared CTE name alone does not establish an identical computation.
 
 Review the shared cause before approving a local optimization: read projections,
 dependency reuse, per-row SQL work, polling and concurrency ownership, browser

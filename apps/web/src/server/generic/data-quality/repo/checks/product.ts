@@ -89,13 +89,11 @@ const hasIdentifier = (t: Product) =>
   sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
 
 const derivedPrice = (t: Product, context?: QualityReadContext) =>
-  context
+  context?.derivedAlias
     ? sql`${sql.identifier(context.derivedAlias)}."derivedPrice"`
     : derivedPriceFilterSql(t.id);
 const hasDerivedPrice = (t: Product, context?: QualityReadContext) =>
-  context
-    ? sql`${derivedPrice(t, context)} IS NOT NULL`
-    : hasDerivedProductPriceSql(t.id);
+  hasDerivedProductPriceSql(t.id, context);
 
 export const productChecks = defineEntityChecks({
   entity: "product",

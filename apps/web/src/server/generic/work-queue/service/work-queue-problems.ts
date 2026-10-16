@@ -46,6 +46,7 @@ import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
 import { findIncompleteStatementImports } from "~/server/generic/problems/repo/detectors-financial";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
@@ -70,12 +71,14 @@ type WhereBuilder = (
   db: Database,
   filters: FilterAssembly,
   attentionItems?: readonly ProjectAttentionItem[],
+  readContext?: QualityReadContext,
 ) => SQL | undefined | Promise<SQL | undefined>;
 const sharedProblemBuilders = {
-  product: (db, filters) =>
+  product: (db, filters, _attentionItems, readContext) =>
     buildProductWhere(
       db,
       productFiltersSchema.parse(compileProblemFilters("product", filters)),
+      readContext,
     ),
   ingredient: (db, filters) =>
     buildIngredientListWhere(
@@ -270,6 +273,7 @@ const sharedProblemScope = (entity: ShortcodeEntity, id: SQL) =>
 export async function additionalWorkProblemSelections(
   db: Database,
   scope: WorkQueueScope,
+  readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ): Promise<SQL[]> {
   const selections: SQL[] = [];
   const diagnostics: Record<string, () => Promise<SQL[]>> = {};
@@ -354,6 +358,7 @@ export async function additionalWorkProblemSelections(
             db,
             source.filters,
             needsProjectAttention(source) ? await attentionItems() : undefined,
+            readContexts?.[source.entity],
           ),
           details,
           key: definition.key,

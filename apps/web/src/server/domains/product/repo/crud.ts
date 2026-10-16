@@ -148,6 +148,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -696,6 +697,7 @@ type ProductListFilters = ProductFilters & { ids?: readonly string[] };
 export const buildProductWhere = async (
   db: Database,
   filters: ProductListFilters,
+  readContext?: QualityReadContext,
 ) => {
   const dbClient = getDb(db);
 
@@ -1112,10 +1114,13 @@ export const buildProductWhere = async (
     filters.pricePresenceFilter === "none"
       ? and(
           isNull(product.price),
-          sql`NOT (${hasDerivedProductPriceSql(product.id)})`,
+          sql`NOT (${hasDerivedProductPriceSql(product.id, readContext)})`,
         )
       : filters.pricePresenceFilter === "has"
-        ? or(isNotNull(product.price), hasDerivedProductPriceSql(product.id))
+        ? or(
+            isNotNull(product.price),
+            hasDerivedProductPriceSql(product.id, readContext),
+          )
         : undefined,
   ];
 
@@ -1123,14 +1128,18 @@ export const buildProductWhere = async (
   // presence), manufacturerExact (multiselect), tags (overlap + presence) and
   // the model/notes presence filters are declared stored filters — applied by
   // `productScaffold.where` before the conditions below.
-  const whereClause = productScaffold.where(filters, [
-    await categoryFilterCondition(db, filters),
-    ...classificationConditions(),
-    ...inventoryConditions(),
-    ...ledgerConditions(),
-    ...associationConditions(),
-    ...qualityConditions(),
-  ]);
+  const whereClause = productScaffold.where(
+    filters,
+    [
+      await categoryFilterCondition(db, filters),
+      ...classificationConditions(),
+      ...inventoryConditions(),
+      ...ledgerConditions(),
+      ...associationConditions(),
+      ...qualityConditions(),
+    ],
+    readContext,
+  );
   return whereClause;
 };
 

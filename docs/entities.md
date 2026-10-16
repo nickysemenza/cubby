@@ -1314,6 +1314,12 @@ numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both
 projections reuse the kit-pricing rules used by scalar prices and list totals;
 zero remains a known price and an absent derived price remains null.
+Composite reads can supply statement-local presence evidence through the same
+quality-filter context used by the list scaffold and Product filters. The Work
+queue registers one materialized price relation when a compiled predicate
+requests it; standalone filters retain their closed predicates. Numeric
+fingerprints keep the canonical scalar or joined value, so sharing presence
+does not change exception identity.
 
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
