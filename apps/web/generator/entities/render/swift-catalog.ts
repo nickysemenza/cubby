@@ -788,6 +788,13 @@ export const renderSwiftEntityCatalog = (
     collectionActionPlan: nativeCollectionActionPlans,
     collectionActionScope: COLLECTION_ACTION_SCOPES,
   };
+  const idsWithStatus = (
+    coverage: Readonly<Record<string, NativeCoverageEntry>>,
+    status: NativeCoverageEntry["status"],
+  ) =>
+    Object.entries(coverage).flatMap(([id, entry]) =>
+      entry.status === status ? [id] : [],
+    );
   checkCatalogKeys(entities);
 
   const declaredKeys = new Set(entities.map(({ key }) => key));
@@ -811,6 +818,20 @@ export const renderSwiftEntityCatalog = (
       name: "ControlRendererID",
       cases: vocabularyCases(coverageVocabulary.control),
     },
+    {
+      name: "ImplementedControlRendererID",
+      doc: "The control renderers `native-coverage.ts` marks `implemented`; each draws a native control.",
+      cases: vocabularyCases(
+        idsWithStatus(nativeCoverageJSON.control, "implemented"),
+      ),
+    },
+    {
+      name: "GenericControlRendererID",
+      doc: "The control renderers `native-coverage.ts` marks `generic`; each may draw a native control.",
+      cases: vocabularyCases(
+        idsWithStatus(nativeCoverageJSON.control, "generic"),
+      ),
+    },
     { name: "ListRendererID", cases: vocabularyCases(coverageVocabulary.list) },
     {
       name: "DetailRendererID",
@@ -825,6 +846,13 @@ export const renderSwiftEntityCatalog = (
       cases: vocabularyCases(coverageVocabulary.detailSlot),
     },
     {
+      name: "ImplementedDetailSlotID",
+      doc: "The detail slots `native-coverage.ts` marks `implemented`. `DetailSlotRegistry` switches\nover every case, so the compiler holds the registry to the declarations.",
+      cases: vocabularyCases(
+        idsWithStatus(nativeCoverageJSON.detailSlot, "implemented"),
+      ),
+    },
+    {
       name: "CollectionActionID",
       doc: "The verbs a report `records` block offers; each has a plan in `native-coverage.json`'s\n`collectionActionPlan` that `HeroActionRunner` executes.",
       cases: vocabularyCases(COLLECTION_ACTIONS),
@@ -837,6 +865,13 @@ export const renderSwiftEntityCatalog = (
     {
       name: "EntityListSlotID",
       cases: vocabularyCases(coverageVocabulary.listSlot),
+    },
+    {
+      name: "ImplementedListSlotID",
+      doc: "The list slots `native-coverage.ts` marks `implemented`. `ListSlotRegistry` switches over\nevery case, so the compiler holds the registry to the declarations.",
+      cases: vocabularyCases(
+        idsWithStatus(nativeCoverageJSON.listSlot, "implemented"),
+      ),
     },
     {
       name: "WayfindingDomain",

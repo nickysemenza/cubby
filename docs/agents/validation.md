@@ -24,6 +24,14 @@ by the retained flow or an existing compiler/generator guard. Remove tests of
 declarations, constants, source spelling and mocks, repeated cases of the same
 shared primitive, and copy-only assertions. An accessible action name used to
 drive a real interaction still has value; incidental wording is not an outcome.
+Never assert the size, non-emptiness, or exact membership of a growing declared
+set (the entity catalog, manifest, registries, generated output) or count a
+test's own iterations: assert the per-member property instead. Do not compare
+two outputs of the same generator. Hold a hand-written registry to declarations
+with types, not a key-set test: `satisfies Record<GeneratedUnion, …>` in
+TypeScript, an exhaustive `switch` over a generated per-status enum in Swift
+(`native-coverage.ts` emits `Implemented…ID`). Pinning a documented deliberate
+exception stays.
 For every deletion, record either the stronger retained regression or why the
 test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
 

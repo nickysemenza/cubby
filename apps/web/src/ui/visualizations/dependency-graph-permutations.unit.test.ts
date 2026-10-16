@@ -141,7 +141,6 @@ it("renders every work and recipe filter combination with complete, nonoverlappi
       expect(dot).toContain(`"${edge.source}" -> "${edge.target}"`);
     }
   };
-  let count = 0;
   for (const workKind of ["all", "project", "task"] as const)
     for (const grouped of [false, true])
       for (const groupByLocation of [false, true])
@@ -161,7 +160,6 @@ it("renders every work and recipe filter combination with complete, nonoverlappi
                     focus,
                     hideUnconnected: false,
                   });
-                  count++;
                 }
   const recipes: GraphData = {
     nodes: data.nodes.map((node) => ({
@@ -189,7 +187,5 @@ it("renders every work and recipe filter combination with complete, nonoverlappi
               focus,
               hideCompleted: false,
             });
-            count++;
           }
-  expect(count).toBe(1824);
 }, 30000);

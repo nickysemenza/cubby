@@ -87,7 +87,6 @@ struct CollectionActionTests {
 
     @Test func everyDeclaredActionHasAPlanTheRunnerHandles() throws {
         let coverage = NativeCoverageManifest.shared
-        #expect(Set(coverage.collectionActionPlan.keys) == Set(CollectionActionID.allCases.map(\.rawValue)))
         for action in CollectionActionID.allCases {
             let plan = try #require(coverage.collectionActionPlan[action.rawValue], "\(action)")
             let operation = try #require(plan.operation, "\(action) is an operation plan")

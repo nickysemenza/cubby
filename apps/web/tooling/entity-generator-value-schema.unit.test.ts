@@ -219,7 +219,6 @@ describe("valueSchemaOf", () => {
 
 describe("declared structured editors", () => {
   it("every field a structured renderer draws has a describable input schema", async () => {
-    const structured: string[] = [];
     for (const entity of await loadEntityDeclarations()) {
       for (const field of entity.fieldModel.fields) {
         if (!drawsFromValueSchema(entity.key, field)) continue;
@@ -231,28 +230,8 @@ describe("declared structured editors", () => {
             noEntity,
           ),
         ).not.toThrow();
-        structured.push(`${entity.key}.${field.key}`);
       }
     }
-    // Only fields with a read-to-input vector; both clients draw exactly these.
-    expect(structured.sort()).toEqual([
-      "expense.sourceClaims",
-      "financialAccount.authorizedUsers",
-      "financialAccount.cardNumbers",
-      "financialAccount.fundingPeriods",
-      "financialAccount.identity",
-      "financialAccount.sourceAliases",
-      "financialTransaction.sourceRefs",
-      "ledgerTransfer.sourceClaims",
-      "meal.recipes",
-      "product.externalIds",
-      "product.labelNutrition",
-      "product.unitMappings",
-      "recipe.meta",
-      "recipe.sections",
-      "recipe.yield",
-      "vendor.agentHints",
-    ]);
   });
 
   it("every native-edited field has a read-to-input vector the update schema accepts", async () => {

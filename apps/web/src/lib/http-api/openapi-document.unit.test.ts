@@ -295,7 +295,6 @@ describe("generated HTTP OpenAPI document", () => {
   });
 
   it("serves structured queries as POST bodies and everything else as GET", () => {
-    expect(POST_QUERIES.length).toBeGreaterThan(0);
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();

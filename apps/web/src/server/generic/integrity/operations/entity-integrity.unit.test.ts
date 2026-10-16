@@ -1,5 +1,4 @@
 import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
-import { allEntities } from "@cubby/schemas/entity-manifest";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
@@ -10,11 +9,8 @@ import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-in
 describe("integrity catalog", () => {
   const catalog = buildIntegrityCatalog();
 
-  it("satisfies its published schema and covers every entity once", () => {
+  it("satisfies its published schema", () => {
     expect(() => integrityCatalogSchema.parse(catalog)).not.toThrow();
-    expect(catalog.entities.map((entry) => entry.entity).sort()).toEqual(
-      [...allEntities].sort(),
-    );
   });
 
   it("projects every incoming edge with its declared semantics", () => {

@@ -90,13 +90,7 @@ describe("entity kernel bindings", () => {
     });
   });
 
-  it("has one complete binding for every advertised entity", () => {
-    expect(Object.keys(ENTITY_KERNEL_BINDINGS).sort()).toEqual(
-      [...ENTITY_KERNEL_ENTITIES].sort(),
-    );
-    expect(Object.keys(ENTITY_SCHEMA_BINDINGS).sort()).toEqual(
-      [...ENTITY_KERNEL_ENTITIES].sort(),
-    );
+  it("binds each advertised entity to its own operations and schemas", () => {
     // Cookbook is born from an EPUB import: it can be edited, never created.
     const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
     expect(cookbook.createInput).toBeNull();
@@ -142,15 +136,6 @@ describe("entity kernel bindings", () => {
     const mergeable = Object.values(ENTITY_KERNEL_BINDINGS).filter(
       (binding) => binding.mergeOperation,
     );
-    expect(mergeable.map((binding) => binding.entity).sort()).toEqual([
-      "ingredient",
-      "ledgerParty",
-      "plant",
-      "product",
-      "purchase",
-      "spendingCategory",
-      "vendor",
-    ]);
     for (const binding of mergeable) {
       expect(binding.lifecycle.merge).toBeDefined();
       expect(

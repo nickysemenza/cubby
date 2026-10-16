@@ -158,8 +158,9 @@ None is committed; edit the generator or its inputs, never the output. A missing
   that `HeroActionRunner` runs; a collection verb needs a plan in `nativeCollectionActionPlans`.
   A new verb is a plan plus (for a new RPC) a typed case in the runner, never per-entity Swift or
   a slot view. An `implemented` slot or control needs its view path (`DetailSlotRegistry`,
-  `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), checked both ways by
-  `NativeCoverageViewPathTests`.
+  `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), each an exhaustive `switch` over a
+  generated per-status enum (`ImplementedDetailSlotID`, `ImplementedListSlotID`,
+  `ImplementedControlRendererID`/`GenericControlRendererID`), so the compiler checks both ways.
 - **Server-owned reports.** Report slots draw through the one `ReportDetailSlot`; every figure,
   candidate, verb and disabled reason is the server's. Writes go through the same operations web
   calls, behind the server's `disabledReason` and a fresh server check of exactly what is sent.

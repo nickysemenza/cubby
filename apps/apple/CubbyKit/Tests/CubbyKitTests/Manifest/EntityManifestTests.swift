@@ -95,10 +95,4 @@ struct EntityManifestTests {
             ListTotalDescriptor(id: "total", label: "Total", keys: ["cost"], format: .currencyRange),
             #"{"id":"total","label":"Total","keys":["cost"],"format":"currencyRange"}"#)
     }
-
-    @Test func bundledManifestDecodesOneDescriptorPerEntityKey() {
-        let keys = EntityCatalog.all.map(\.key)
-        #expect(keys.count == EntityKey.allCases.count)
-        #expect(Set(keys) == Set(EntityKey.allCases))
-    }
 }

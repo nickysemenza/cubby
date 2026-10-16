@@ -303,12 +303,6 @@ struct RecordsBlockView: View {
     // The answers to the block's choices (a prepared import's per-line decisions).
     @State private var answers = ReportChoiceAnswers()
 
-    /// Exactly the finance verbs `native-coverage.ts` marks `implemented`
-    /// (`NativeCoverageViewPathTests` asserts it); `verbButton` runs each.
-    static let handledVerbs: Set<SectionActionID> = [
-        .matchStatement, .receiveExpense, .splitExpense, .linkExpenses, .linkProducts,
-    ]
-
     /// An update editor a verb opened with a derived value staged for review.
     private struct StagedEdit: Identifiable {
         let id = UUID()
@@ -488,7 +482,7 @@ struct RecordsBlockView: View {
     }
 
     @ViewBuilder private var verbs: some View {
-        ForEach(records.verbs.filter { Self.handledVerbs.contains($0.verb) }) { verb in
+        ForEach(records.verbs.filter { SectionActionRunner.coverage(of: $0.verb) == .implemented }) { verb in
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 verbButton(verb)
                     .buttonStyle(.borderless)

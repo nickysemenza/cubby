@@ -209,8 +209,8 @@ export const nativeCoverage = {
     ...ownedElsewhere(["edit", "bulkEdit"]),
   },
   /**
-   * `implemented` slots are exactly the keys of `DetailSlotRegistry` in
-   * `apps/apple/App/Shared/Entity/Detail/DetailSlots.swift` (asserted by a Swift test).
+   * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`
+   * (`apps/apple/App/Shared/Entity/Detail/DetailSlots.swift`) switches over exhaustively.
    */
   detailSlot: {
     ...implemented([
@@ -299,9 +299,9 @@ export const nativeCoverage = {
     ),
   },
   /**
-   * Finance verbs a report's `records` block offers. `implemented` ones are exactly the cases
-   * `ReportRecordsView` runs (apps/apple `ReportRecordsView.swift`), each through the same
-   * operation web's handler calls; the report says per record whether the verb is available, so
+   * Finance verbs a report's `records` block offers. Native offers the `implemented` ones;
+   * `RecordsBlockView.verbButton` switches over every verb, each through the same operation
+   * web's handler calls; the report says per record whether the verb is available, so
    * native never offers one the server would refuse.
    */
   sectionAction: {
@@ -314,8 +314,8 @@ export const nativeCoverage = {
     ]),
   },
   /**
-   * `implemented` slots are exactly the keys of `ListSlotRegistry` in
-   * `apps/apple/App/Shared/Entity/List/SpecialistListViews.swift`; `ownedElsewhere` ones are
+   * `implemented` slots are the generated `ImplementedListSlotID`, which `ListSlotRegistry`
+   * (`apps/apple/App/Shared/Entity/List/SpecialistListViews.swift`) switches over; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
   /**

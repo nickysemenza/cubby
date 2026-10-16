@@ -151,29 +151,43 @@ struct EntityFieldControl: View {
 
     // MARK: - Specialized
 
-    /// The native control a specialized renderer draws. nil means none: a renderer only web
-    /// draws (the image block's `.imageOrder`, any id a future field declares) draws nothing, and
-    /// `NativePresentationCoverage.control` reports it unsupported. A field with a declared
-    /// `valueSchema` (the structured renderers, `generic` in `native-coverage.ts`) is drawn by
-    /// `StructuredValueControl` whatever its renderer. Every other renderer is exactly the set
-    /// `native-coverage.ts` marks `implemented` or `generic`; `NativeCoverageViewPathTests` fails
-    /// when they differ.
+    /// The native control a specialized renderer draws. Each renderer `native-coverage.ts` marks
+    /// `implemented` draws one and each `generic` one may; any other renderer (one only web draws,
+    /// such as the image block's `.imageOrder`) draws nothing. The generated per-status enums make
+    /// the compiler hold these switches to the declarations. A field with a declared `valueSchema`
+    /// (the structured renderers) is drawn by `StructuredValueControl` whatever its renderer.
     enum Drawing {
         case entityReference, entityMultiReference, amount, tokens, productTags, text, money,
             ledgerAttributions
     }
 
     static func drawing(for renderer: ControlRendererID) -> Drawing? {
+        if let implemented = ImplementedControlRendererID(rawValue: renderer.rawValue) {
+            return drawing(for: implemented)
+        }
+        return GenericControlRendererID(rawValue: renderer.rawValue).flatMap(drawing(for:))
+    }
+
+    private static func drawing(for renderer: ImplementedControlRendererID) -> Drawing {
         switch renderer {
-        case .entitySelect: .entityReference
         case .entityMultiSelect: .entityMultiReference
         case .amount: .amount
         case .tagList: .tokens
         case .productTags: .productTags
-        case .vendorName, .url: .text
-        case .money: .money
+        case .vendorName: .text
         case .ledgerAttributions: .ledgerAttributions
-        default: nil
+        }
+    }
+
+    /// nil: drawn as the primitive of its `controlKind`, or from its `valueSchema`.
+    private static func drawing(for renderer: GenericControlRendererID) -> Drawing? {
+        switch renderer {
+        case .entitySelect: .entityReference
+        case .money: .money
+        case .url: .text
+        case .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .structuredField, .unitMappings,
+            .upcLookup, .usdaFood:
+            nil
         }
     }
 

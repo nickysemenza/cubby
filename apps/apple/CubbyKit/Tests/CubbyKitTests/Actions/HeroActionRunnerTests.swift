@@ -91,12 +91,6 @@ struct HeroActionRunnerTests {
 
     // MARK: - Verb to operation
 
-    @Test func everyImplementedVerbHasAPlanAndNothingElseDoes() {
-        let coverage = NativeCoverageManifest.shared
-        let implemented = Set(coverage.heroAction.filter { $0.value == .implemented }.keys)
-        #expect(Set(coverage.heroActionPlan.keys) == implemented)
-    }
-
     @Test func everyPlanOperationIsAGeneratedRouteTheRunnerHandles() throws {
         for (verb, plan) in NativeCoverageManifest.shared.heroActionPlan {
             guard case .operation(let operation) = plan.kind else { continue }
