@@ -93,7 +93,14 @@ export function PullToRefresh({
   return (
     <div
       ref={containerRef}
-      className={cn("relative overflow-x-hidden overflow-y-auto", className)}
+      className={cn(
+        // Window-scrolled content must not get its own scrollport: one that
+        // never scrolls still captures its descendants' sticky headers.
+        getScrollTop
+          ? "relative overflow-x-clip"
+          : "relative overflow-x-hidden overflow-y-auto",
+        className,
+      )}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

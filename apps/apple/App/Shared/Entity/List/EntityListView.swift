@@ -321,14 +321,15 @@ struct EntityListView: View {
     }
 
     /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
-    /// reason as the subtitle.
+    /// reason as the subtitle. While the list cannot group (Timeline, search), every choice
+    /// shows that reason.
     private func groupByMenu(_ model: GenericEntityListModel) -> some View {
-        let timeline = model.view == .timeline
+        let unavailable = model.groupByUnavailableReason
         return Menu("Group by", systemImage: "rectangle.grid.1x2") {
             Button {
                 Task { await model.apply(groupBy: nil) }
             } label: {
-                if model.groupChoice == nil && !timeline {
+                if model.groupChoice == nil && unavailable == nil {
                     Label("None", systemImage: "checkmark")
                 } else {
                     Text("None")
@@ -336,7 +337,7 @@ struct EntityListView: View {
             }
             .accessibilityIdentifier("browse.\(key.rawValue).group.none")
             ForEach(descriptor.grouping) { choice in
-                let reason = timeline ? "Timeline is already arranged by date." : choice.reason
+                let reason = unavailable ?? choice.reason
                 Button {
                     Task { await model.apply(groupBy: choice.id) }
                 } label: {
@@ -573,7 +574,7 @@ struct EntityListView: View {
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
                     section: .browse,
-                    sections: model.isSearching ? nil : model.sections,
+                    sections: model.sections,
                     sectionFilter: sectionFilter(model))
                 loadMore(model).padding(FieldGuideTokens.Space.md)
             }
@@ -772,7 +773,7 @@ struct EntityListView: View {
     private func tableView(_ model: GenericEntityListModel) -> some View {
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
-        let sections = model.isSearching ? nil : model.sections
+        let sections = model.sections
         let filter = sectionFilter(model)
         #if os(macOS)
             // Native table cells are rehosted when sorting replaces the rows. Capture the
@@ -1007,7 +1008,7 @@ struct EntityListView: View {
         if let meta = visibleMeta {
             listSummary(meta: meta, shown: visibleRows.count)
         }
-        if !model.isSearching, let sections = model.sections {
+        if let sections = model.sections {
             let filter = sectionFilter(model)
             ForEach(sections) { section in
                 Section {

@@ -2,6 +2,12 @@ import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 
 import { cn } from "~/lib/utils";
 
+/**
+ * The header's fixed height in px, border included (`h-8`). The desktop
+ * virtualizer budgets this size without measuring, so the band must not grow.
+ */
+export const SECTION_HEADER_HEIGHT = 32;
+
 interface SectionHeaderProps {
   title: string;
   count: number;
@@ -25,7 +31,7 @@ export function SectionHeader({
     <div
       data-slot="list-section-header"
       className={cn(
-        "group/section flex min-h-8 items-center gap-2 border-b bg-muted px-3 py-1.5",
+        "group/section flex h-8 items-center gap-2 border-b bg-muted px-3",
         className,
       )}
     >

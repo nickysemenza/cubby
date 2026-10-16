@@ -918,7 +918,7 @@ export function MobileCardView<TItem extends RowData>({
 
   return (
     <ul
-      className="block overflow-x-hidden lg:hidden"
+      className="block overflow-x-clip lg:hidden"
       aria-label={resolveListAriaLabel(entity)}
       aria-busy={isTransitioning}
       inert={isTransitioning ? true : undefined}

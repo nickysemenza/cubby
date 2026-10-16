@@ -133,3 +133,46 @@ test("wardrobe cards section by clothing type and a header filters to one type",
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("groupBy")).toBe("category");
 });
+
+test("mobile list section headers stay pinned while their section scrolls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  const name = `Wardrobe pinned ${Date.now()}`;
+  const { owner, location } = await seedWardrobePrerequisites(page, name);
+  const category = await seedProductCategoryPrerequisite(page, {
+    name: `${name} Tops`,
+    parentId: taxonomyShortcode("apparel"),
+  });
+  for (let index = 0; index < 14; index++) {
+    const product = await createEntityFixture(page, "product", {
+      name: `${name} shirt ${index}`,
+      manufacturer: "Fixture",
+      categoryId: category.id,
+    });
+    await createEntityFixture(page, "inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 1, unit: "each" },
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: owner.id,
+    });
+  }
+  const header = page
+    .locator('[data-slot="list-section-header"]')
+    .filter({ hasText: `${name} Tops` });
+  await gotoAuthenticatedPage(
+    page,
+    `/inventory?owner=${owner.id}&categoryFeature=apparel&groupBy=category`,
+    header,
+  );
+  const top = async () => (await header.boundingBox())?.y ?? -1;
+  const before = await top();
+  await page.mouse.wheel(0, 900);
+  // The header pins under the app chrome instead of leaving with the
+  // ancestor's clipping box (an `overflow-x-hidden` ancestor scrolled it away).
+  await expect.poll(top).toBeLessThan(before);
+  await expect.poll(top).toBeGreaterThanOrEqual(0);
+  await page.mouse.wheel(0, 400);
+  await expect(header).toBeInViewport();
+});

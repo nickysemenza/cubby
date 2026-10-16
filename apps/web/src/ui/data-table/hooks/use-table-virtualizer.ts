@@ -13,8 +13,7 @@ import {
   useState,
 } from "react";
 
-// Estimated height for section headers (smaller than data rows).
-const SECTION_HEADER_HEIGHT = 28;
+import { SECTION_HEADER_HEIGHT } from "../section-header";
 
 /**
  * Interleaved header/row item produced by `useDesktopGroupedRows`. Duplicated
