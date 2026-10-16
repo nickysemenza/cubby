@@ -52,6 +52,66 @@ async function serve<T>(
 }
 
 describe("operation performance evidence", () => {
+  it("keeps database medians from successful requests separate from failed attempts", async () => {
+    let request = 0;
+    const samples = await serve(
+      (response) => {
+        const ok = request++ === 0;
+        response.setHeader("content-type", "application/json");
+        response.setHeader(
+          "server-timing",
+          `db-query;dur=10;desc="n=${ok ? 7 : 0} max=10 conc=1"`,
+        );
+        response.end(
+          JSON.stringify(superjson.serialize(ok ? success : failure)),
+        );
+      },
+      async (origin) => [
+        await measureOperationRead(item, origin, new Headers()),
+        await measureOperationRead(item, origin, new Headers()),
+      ],
+    );
+    const report = summarizeOperationReads(samples);
+    expect(report.requests.databasePerSuccessfulRequest.sqlCount).toEqual({
+      observedRequests: 1,
+      totalRequests: 1,
+      median: 7,
+    });
+    expect(report.requests.rpcFailures).toBe(1);
+  });
+
+  it("preserves server batch rejection codes without calling them malformed stream results", async () => {
+    const sample = await serve(
+      (response) => {
+        response.setHeader("content-type", "application/json");
+        response.end(
+          JSON.stringify(
+            superjson.serialize({
+              ...failure,
+              error: {
+                ...failure.error,
+                code: "BAD_REQUEST",
+                requestId: "synthetic-correlation",
+              },
+            }),
+          ),
+        );
+      },
+      (origin) =>
+        measureOperationRead({ batch: [item, item] }, origin, new Headers()),
+    );
+    expect(sample.failure).toBe("dispatch");
+    expect(sample.dispatchErrorCode).toBe("BAD_REQUEST");
+    expect(sample.requestId).toBe("synthetic-correlation");
+    const report = summarizeOperationReads([sample]);
+    expect(report.requests.dispatchFailures).toBe(1);
+    expect(report.summary[0]?.unsettledResults).toBe(2);
+    expect(JSON.stringify(report)).not.toMatch(
+      /BAD_REQUEST|synthetic-correlation/,
+    );
+    expect(JSON.stringify(sample)).not.toContain("synthetic-private");
+  });
+
   it("records an RPC failure inside HTTP success without retaining input, payload or diagnostic text", async () => {
     const sample = await serve(
       (response) => {

@@ -25,7 +25,7 @@ const querySchema = z
   .strict();
 export const readOperationInputSchema = z.union([
   querySchema,
-  z.object({ batch: z.array(querySchema).min(1).max(20) }).strict(),
+  z.object({ batch: z.array(querySchema).min(2).max(20) }).strict(),
 ]);
 const lineSchema = z.object({
   i: z.number().int().nonnegative(),
@@ -64,8 +64,20 @@ export async function measureOperationRead(
   let firstResponseMs: number | null = null;
   let responseBodyBytes: number | null = null;
   let bodyComplete = false;
-  let failure: "transport" | "http" | "protocol" | null = null;
+  let failure: "transport" | "http" | "protocol" | "dispatch" | null = null;
+  let dispatchErrorCode: string | null = null;
+  let dispatchRequestId: string | null = null;
   const seen = new Set<number>();
+
+  const decodeEnvelope = (text: string) => {
+    try {
+      return unparsedStartOperationResultSchema.parse(
+        superjson.deserialize(superJsonResultSchema.parse(JSON.parse(text))),
+      );
+    } catch {
+      throw new InvalidOperationResponse();
+    }
+  };
 
   const record = (
     index: number,
@@ -85,18 +97,12 @@ export async function measureOperationRead(
   };
   const decode = (text: string) => {
     try {
-      const json: unknown = JSON.parse(text);
       if (batch) {
-        const { i, r } = lineSchema.parse(json);
+        const { i, r } = lineSchema.parse(JSON.parse(text));
         const result = settlementSchema.parse(superjson.deserialize(r));
         record(i, result.ok ? result.value : null);
       } else {
-        record(
-          0,
-          unparsedStartOperationResultSchema.parse(
-            superjson.deserialize(superJsonResultSchema.parse(json)),
-          ),
-        );
+        record(0, decodeEnvelope(text));
       }
     } catch {
       throw new InvalidOperationResponse();
@@ -119,12 +125,19 @@ export async function measureOperationRead(
       failure = "http";
       responseBodyBytes = (await response.arrayBuffer()).byteLength;
       bodyComplete = true;
+    } else if (
+      batch &&
+      !response.headers.get("content-type")?.includes("application/x-ndjson")
+    ) {
+      const body = await response.arrayBuffer();
+      responseBodyBytes = body.byteLength;
+      bodyComplete = true;
+      const rejection = decodeEnvelope(new TextDecoder().decode(body));
+      if (rejection.ok) throw new InvalidOperationResponse();
+      failure = "dispatch";
+      dispatchErrorCode = rejection.error.code;
+      dispatchRequestId = rejection.error.requestId ?? null;
     } else {
-      if (
-        batch &&
-        !response.headers.get("content-type")?.includes("application/x-ndjson")
-      )
-        throw new InvalidOperationResponse();
       if (!response.body) throw new InvalidOperationResponse();
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -166,9 +179,10 @@ export async function measureOperationRead(
   return {
     success: failure === null && results.every((result) => result.ok),
     failure,
+    dispatchErrorCode,
     status: response?.status ?? null,
     version: response?.headers.get("x-cubby-worker-version") ?? null,
-    requestId: response?.headers.get("x-request-id") ?? null,
+    requestId: response?.headers.get("x-request-id") ?? dispatchRequestId,
     firstResponseMs,
     completeMs: performance.now() - started,
     responseBodyBytes,
@@ -192,13 +206,13 @@ export function summarizeOperationReads(
       | "queryActiveWallMs"
       | "clientQueueActiveWallMs",
   ) => {
-    const available = samples.flatMap((sample) => {
+    const available = successful.flatMap((sample) => {
       const value = sample[field];
       return value === null ? [] : [value];
     });
     return {
       observedRequests: available.length,
-      totalRequests: samples.length,
+      totalRequests: successful.length,
       median: percentile(available, 0.5),
     };
   };
@@ -211,6 +225,9 @@ export function summarizeOperationReads(
     requests: {
       attempted: samples.length,
       successful: successful.length,
+      dispatchFailures: samples.filter(
+        (sample) => sample.failure === "dispatch",
+      ).length,
       httpFailures: samples.filter((sample) => sample.failure === "http")
         .length,
       transportFailures: samples.filter(
@@ -232,7 +249,7 @@ export function summarizeOperationReads(
         ),
         0.5,
       ),
-      databasePerRequest: {
+      databasePerSuccessfulRequest: {
         sqlCount: metric("sqlCount"),
         acquisitionMs: metric("acquisitionMs"),
         queryActiveWallMs: metric("queryActiveWallMs"),
@@ -259,7 +276,7 @@ export function summarizeOperationReads(
           batchFailures: results.filter(
             (result) => result.errorKind === "batch",
           ).length,
-          missingResults: results.filter(
+          unsettledResults: results.filter(
             (result) => result.errorKind === "missing",
           ).length,
           successfulSettledMedianMs: percentile(times, 0.5),
