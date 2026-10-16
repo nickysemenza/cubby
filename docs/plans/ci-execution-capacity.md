@@ -155,6 +155,32 @@ rather than retrying indefinitely. User cancellation and superseded PR runs
 clean up without starting fallback work. Test failures and test timeouts are
 not infrastructure fallback triggers.
 
+## Pilot controls
+
+Dispatch `boat-ci-pilot.yaml` with `executor=boat` or `executor=github`.
+`BOAT_CI_ENABLED=false` forces GitHub without contacting Boat. Setup requires
+CI-scoped secret `BOAT_API_KEY` and variable `BOAT_CI_SNAPSHOT`. The workflow
+uses Boat's documented CLI download, without a separate version-pin process.
+
+`.github/boat/prepare.sh` prepares a credential-free snapshot with Node/pnpm,
+Rust/WASM, persisted Chromium and the images in `.github/boat/images.json`.
+Save the named snapshot and delete its preparation machine. Runtime AI
+credentials stay outside the snapshot and artifacts. Keep trial billing;
+the pilot uses two default machines and leaves ordinary required CI unchanged.
+
+Each machine runs its assigned tasks sequentially in separate worktrees.
+Task-result caching is disabled and diagnostics are cleared for fresh evidence.
+Source fetch has a 150-second budget, setup commands 180 seconds, and tasks
+retain lane deadlines. The coordinator validates transferred reports and
+preserves streamed failures independently of transfer success. Cancellation
+cleans up without fallback. GitHub fallback runs the same tasks sequentially.
+
+Artifacts retain source records, browser HTML/blobs/traces, PostgreSQL JSON,
+and optional `ai-smoke=true` product-rename evidence and usage. AI remains
+informational. Missing diagnostics cannot establish a pass. Provider-seam
+regressions cover failure, missing/stale reports, capacity, off and cancellation.
+Keep pilot-specific operating detail here; `docs/ci.md` links to this document.
+
 ## Evidence before changing defaults
 
 Compare the same source and coverage on GitHub and Boat. Distinguish valid

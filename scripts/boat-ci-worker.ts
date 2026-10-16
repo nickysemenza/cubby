@@ -14,12 +14,12 @@ import path from "node:path";
 import { z } from "zod";
 
 import {
+  pilotEvidenceStatus,
   pilotCredentialSchema,
   pilotJobs,
   pilotManifestSchema,
 } from "./boat-ci.ts";
 import { spawnToExit } from "./lib/run.ts";
-import { pilotEvidenceStatus } from "./boat-ci-evidence.ts";
 
 const base = path.resolve(import.meta.dirname, "..");
 const local = process.argv[2] === "--local";
