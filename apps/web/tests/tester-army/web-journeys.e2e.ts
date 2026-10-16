@@ -22,6 +22,8 @@ for (const journey of selectedJourneys(journeys, "web"))
       let pickerCapture = 0;
       await runJourney(journey, "web", {
         agent,
+        expectLinkAbsent: (name) =>
+          expect(screen.getByRole("link", { name, exact: true })).toBeHidden(),
         expectOptionVisible: async (name) => {
           const option = screen.getByRole("option", { name, exact: false });
           await expect(option).toBeVisible();

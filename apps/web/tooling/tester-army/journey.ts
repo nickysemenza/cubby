@@ -139,6 +139,8 @@ export type Journey = {
   visible: (ids: JourneyIds) => string[];
   /** Exact on-screen text that must be absent (for example a rejected edit). */
   absent?: (ids: JourneyIds) => string[];
+  /** Linked record identity must not fall back to these code-only labels. */
+  absentLinks?: (ids: JourneyIds) => string[];
   db: DbCheck[];
 };
 

@@ -315,7 +315,7 @@ export const journeys: Journey[] = [
       JOURNEY_NAMES.pickerReplacement,
       JOURNEY_NAMES.pickerVendor,
     ],
-    absent: (ids) => [
+    absentLinks: (ids) => [
       ids.get("project"),
       ids.get("vendor"),
       ids.get("replacement"),

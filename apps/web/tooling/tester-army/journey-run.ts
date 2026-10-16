@@ -62,6 +62,7 @@ type Fixtures = {
   tapControl?: (control: JourneyControl) => Promise<void>;
   expectButtonDisabled?: (name: string) => Promise<void>;
   expectOptionVisible?: (name: string) => Promise<void>;
+  expectLinkAbsent?: (name: string) => Promise<void>;
   /** Exact-text assertions supplied by the engine's own `expect`/`screen`. */
   expectText: (text: string, visible: boolean) => Promise<void>;
 };
@@ -152,6 +153,11 @@ async function runJourneyBody(
   }
   await expectTexts(fixtures, journey.visible(ids), true);
   await expectTexts(fixtures, journey.absent?.(ids) ?? [], false);
+  for (const name of journey.absentLinks?.(ids) ?? []) {
+    if (!fixtures.expectLinkAbsent)
+      throw new Error("Engine does not support absent link assertions");
+    await fixtures.expectLinkAbsent(name);
+  }
   await assertDatabase(journey, journey.db, ids, wrong);
 }
 
