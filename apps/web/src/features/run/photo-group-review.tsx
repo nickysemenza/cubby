@@ -7,6 +7,7 @@ import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
   PhotoGroupProposal,
+  PhotoFieldCrossCheck,
   PhotoGroupProposalGroup,
   PhotoRunImage,
   ReviewPhotoGroupsAction,
@@ -56,6 +57,7 @@ import {
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
+import { DecisionSteps } from "~/ui/common/decision-steps";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -471,45 +473,78 @@ function GroupPhotos({
           </div>
         );
       })}
-      <details className="border-t border-border pt-2">
-        <summary className="cursor-pointer text-xs font-medium">
-          Photo descriptions and label text
-        </summary>
-        <div className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-2">
-          {[...entries].map(([id, role]) => {
-            const photo = imagesById.get(id);
-            if (!photo) return null;
-            return (
-              <div
-                key={id}
-                className="min-w-0 border-t border-border pt-2 text-xs"
-              >
-                <p className="font-medium">
-                  {role.purpose === "label"
-                    ? "Label photo"
-                    : role.purpose === "item"
-                      ? "Item photo"
-                      : "Skipped photo"}{" "}
-                  · original upload
-                </p>
-                {photo.description && (
-                  <p className="mt-1 text-muted-foreground">
-                    <span className="text-foreground">Description:</span>{" "}
-                    {photo.description}
-                  </p>
-                )}
-                {photo.recognizedText && (
-                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                    <span className="text-foreground">OCR:</span>{" "}
-                    {photo.recognizedText}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </details>
+      {proposal.images
+        .filter((entry) => entry.purpose === "label")
+        .map((entry) => (
+          <p key={entry.id} className="text-xs whitespace-pre-wrap">
+            {imagesById.get(entry.id)?.recognizedText}
+          </p>
+        ))}
     </div>
+  );
+}
+
+function GroupEvidence({
+  proposal,
+  imagesById,
+}: {
+  proposal: PhotoGroupProposal;
+  imagesById: ImagesById;
+}) {
+  return (
+    <section className="border-t border-border pt-2">
+      <h4 className="text-xs font-medium">Photo descriptions and label text</h4>
+      <div className="mt-2 grid gap-2">
+        {[
+          ...proposal.images,
+          ...proposal.skip.map((entry) => ({ ...entry, purpose: null })),
+        ].map((role) => {
+          const id = role.id;
+          const photo = imagesById.get(id);
+          if (!photo) return null;
+          return (
+            <div
+              key={id}
+              className="min-w-0 border-t border-border pt-2 text-xs"
+            >
+              <p className="font-medium">
+                {role.purpose === "label"
+                  ? "Label photo"
+                  : role.purpose === "item"
+                    ? "Item photo"
+                    : "Skipped photo"}{" "}
+                · original upload
+              </p>
+              {(photo.descriptionEvidence?.description ??
+                photo.description) && (
+                <p className="mt-1 text-muted-foreground">
+                  <span className="text-foreground">
+                    {photo.descriptionEvidence?.authority === "member"
+                      ? "Your description:"
+                      : "Description:"}
+                  </span>{" "}
+                  {photo.descriptionEvidence?.description ?? photo.description}
+                </p>
+              )}
+              {photo.descriptionEvidence?.claims.map((claim) => (
+                <p key={`${claim.evidenceKind}-${claim.text}`}>
+                  {claim.evidenceKind}: {claim.text}
+                </p>
+              ))}
+              {photo.descriptionEvidence?.missingReason ? (
+                <p>{photo.descriptionEvidence.missingReason}</p>
+              ) : null}
+              {photo.recognizedText && (
+                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  <span className="text-foreground">OCR:</span>{" "}
+                  {photo.recognizedText}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -523,6 +558,7 @@ function CommitInput({
   className,
   options,
   optionsLoading,
+  crossCheck,
 }: {
   label: string;
   value: string;
@@ -532,6 +568,7 @@ function CommitInput({
   className?: string;
   options?: readonly { value: string; count: number }[];
   optionsLoading?: boolean;
+  crossCheck?: PhotoFieldCrossCheck;
 }) {
   const optionsId = useId();
   const inputId = useId();
@@ -570,29 +607,54 @@ function CommitInput({
   return (
     <div className={`flex min-w-0 flex-col gap-1 text-xs ${className ?? ""}`}>
       <label htmlFor={inputId} className="text-muted-foreground">
+        {crossCheck ? (
+          <span
+            aria-hidden="true"
+            className={
+              crossCheck.mark === "disagree-or-missing"
+                ? "text-warning"
+                : "text-muted-foreground"
+            }
+          >
+            {crossCheckMark[crossCheck.mark]}{" "}
+          </span>
+        ) : null}
         {label}
       </label>
-      <Input
-        id={inputId}
-        data-photo-unsaved={draft.trim() !== acknowledged.trim() || undefined}
-        aria-describedby={options ? hintId : undefined}
-        list={options ? optionsId : undefined}
-        type={type}
-        min={type === "number" ? 1 : undefined}
-        step={type === "number" ? 1 : undefined}
-        aria-invalid={
-          (type === "number" && !/^[1-9]\d*$/.test(draft)) ||
-          ((label === "New product name" || label === "New name") &&
-            !draft.trim())
+      <div
+        className={
+          crossCheck ? "grid grid-cols-2 items-start gap-2" : undefined
         }
-        value={draft}
-        disabled={disabled}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-        }}
-      />
+      >
+        <Input
+          id={inputId}
+          data-photo-unsaved={draft.trim() !== acknowledged.trim() || undefined}
+          aria-describedby={options ? hintId : undefined}
+          list={options ? optionsId : undefined}
+          type={type}
+          min={type === "number" ? 1 : undefined}
+          step={type === "number" ? 1 : undefined}
+          aria-invalid={
+            (type === "number" && !/^[1-9]\d*$/.test(draft)) ||
+            ((label === "New product name" || label === "New name") &&
+              !draft.trim())
+          }
+          value={draft}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+        {crossCheck ? (
+          <p className="text-xs text-muted-foreground">
+            Label:{" "}
+            {crossCheck.tokens.map((token) => token.text).join(" · ") ||
+              "No label evidence"}
+          </p>
+        ) : null}
+      </div>
       {type === "number" && !/^[1-9]\d*$/.test(draft) && (
         <StatusText tone="destructive">
           Enter a whole number greater than 0.
@@ -633,64 +695,181 @@ function reviewDecision(proposal: PhotoGroupProposal): PhotoGroupDecision {
   return (
     proposal.review ?? {
       observedName: proposalName(proposal),
-      unresolvedReason:
-        "Confirm the observed identity before applying this group",
+      unresolvedReason: null,
       stockIntent: proposal.inventory ? "receive" : "evidence",
     }
   );
 }
 
 function IdentityDecision({
+  runId,
   proposal,
-  save,
   busy,
 }: {
+  runId: string;
   proposal: PhotoGroupProposal;
-  save: SaveGroup;
   busy: boolean;
 }) {
-  const review = reviewDecision(proposal);
+  const queryClient = useQueryClient();
+  const [reply, setReply] = useState("");
+  const replyId = useId();
+  const resolve = useMutation({
+    mutationFn: (
+      input: Parameters<typeof photoImport.resolveConcern.call>[0],
+    ) => photoImport.resolveConcern.call(input),
+    onSuccess: async () => {
+      setReply("");
+      await invalidateOperationTags(queryClient, ripple.runOnly);
+    },
+    onError: showErrorToast,
+  });
+  const concern = proposal.review?.unresolvedReason;
+  if (
+    !concern ||
+    concern === "Confirm the observed identity before applying this group"
+  )
+    return null;
   return (
     <Stack gap="xs">
-      <p className="text-xs text-muted-foreground">
-        Observed: {review.observedName}
-      </p>
-      {review.unresolvedReason ? (
-        <StatusText tone="warning">{review.unresolvedReason}</StatusText>
-      ) : null}
-      <Row gap="xs" wrap>
-        {review.unresolvedReason ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              save(() => ({
-                ...toGroupInput(proposal),
-                review: { ...review, unresolvedReason: null },
-              }))
+      <p className="text-xs">Agent's concern: {concern}</p>
+      <label htmlFor={replyId} className="flex flex-col gap-1 text-xs">
+        Reply (optional)
+        <Input
+          id={replyId}
+          maxLength={500}
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+          disabled={busy || resolve.isPending}
+        />
+      </label>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || resolve.isPending}
+        onClick={() =>
+          resolve.mutate({
+            runId,
+            groupKey: proposal.groupKey,
+            reply: reply.trim() || undefined,
+            expectedRevision: proposal.updatedAt,
+          })
+        }
+      >
+        Resolved
+      </Button>
+    </Stack>
+  );
+}
+
+const crossCheckMark = {
+  agree: "✓",
+  "disagree-or-missing": "!",
+  unknown: "?",
+} as const;
+function FieldCrossChecks({
+  checks,
+  name,
+}: {
+  checks: readonly PhotoFieldCrossCheck[];
+  name?: string;
+}) {
+  return (
+    <div className="space-y-1 text-xs" aria-label="Field cross-checks">
+      <div className="grid grid-cols-[6rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 font-medium">
+        <span>Field</span>
+        <span>Photo label</span>
+        <span>Product comparison</span>
+      </div>
+      {checks.map((check) => (
+        <div
+          key={check.field}
+          className="grid grid-cols-[6rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 border-t border-border py-1"
+        >
+          <span>{check.field}</span>
+          <span>
+            {check.tokens.map((token) => token.text).join(" · ") ||
+              "No label evidence"}
+          </span>
+          <span
+            className={
+              check.mark === "disagree-or-missing"
+                ? "text-warning"
+                : "text-muted-foreground"
             }
           >
-            Confirm identity
-          </Button>
-        ) : (
-          <Badge variant="positive">Identity resolved</Badge>
-        )}
-        <details className="text-xs">
-          <summary className="cursor-pointer">Identity needs work</summary>
-          <CommitInput
-            label="Reason this item cannot be applied yet"
-            value={review.unresolvedReason ?? ""}
-            disabled={busy}
-            onCommit={(reason) =>
-              reason &&
-              save(() => ({
-                ...toGroupInput(proposal),
-                review: { ...review, unresolvedReason: reason },
-              }))
-            }
-          />
-        </details>
+            {crossCheckMark[check.mark]}{" "}
+            {check.field === "name" && name ? `${name} · ` : ""}
+            {check.mark === "agree"
+              ? "Matches"
+              : check.mark === "unknown"
+                ? "Unknown"
+                : "Different or missing"}
+            {check.source === "model" ? " · model" : ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SelectedProductEvidence({
+  runId,
+  productId,
+}: {
+  runId: string;
+  productId: ProductShortcode;
+}) {
+  const evidence = useQuery(
+    photoImport.productEvidence.queryOptions({ runId, productId }),
+  );
+  if (evidence.isError)
+    return <StatusText tone="destructive">{evidence.error.message}</StatusText>;
+  if (!evidence.data)
+    return (
+      <p className="text-xs text-muted-foreground">Loading Product evidence…</p>
+    );
+  const product = evidence.data;
+  return (
+    <Stack gap="xs" className="text-xs">
+      <p>
+        {product.name} · {product.manufacturer || "Manufacturer unknown"} ·{" "}
+        {product.model || "Model unknown"}
+      </p>
+      {product.purchaseLines?.map((line) => (
+        <p key={line.expenseId}>
+          {line.dateLabel ?? "Paid"}{" "}
+          {line.date ? <DateDisplay start={line.date} /> : "date unknown"} ·{" "}
+          {line.vendor ?? "Vendor unknown"} ·{" "}
+          {line.cost == null ? "Price unknown" : formatCurrency(line.cost)} · +
+          {line.productQuantity ?? "?"}
+        </p>
+      ))}
+      {(product.purchaseLineCount ?? 0) > 3 ? (
+        <p>+{(product.purchaseLineCount ?? 0) - 3} more purchase lines</p>
+      ) : null}
+      <p>On hand: {product.quantity?.onHandUnits ?? "Not counted"}</p>
+      {product.inventoryEntries?.map((entry) => (
+        <p key={entry.id}>{entry.location?.name ?? "Location unknown"}</p>
+      ))}
+      <Row gap="sm" wrap>
+        {product.ownPhotos?.map((photo) => (
+          <div key={photo.id}>
+            <Image
+              src={photo.url}
+              alt="Own Product photo"
+              displayWidth={56}
+              className="size-14 object-contain"
+            />
+            <p>
+              Taken{" "}
+              {photo.capturedAt ? (
+                <DateDisplay start={photo.capturedAt} />
+              ) : (
+                "date unknown"
+              )}
+            </p>
+          </div>
+        ))}
       </Row>
     </Stack>
   );
@@ -894,319 +1073,358 @@ function ExistingProductChanges({
   );
 }
 
+function selectPhotoProduct(
+  proposal: PhotoGroupProposal,
+  next: PhotoGroupProposalGroup["product"],
+): PhotoGroupProposalGroup {
+  const product = proposal.product;
+  const input = toGroupInput(proposal, { product: next });
+  if (
+    input.inventory?.existingEntryId &&
+    (next.kind !== "existing" ||
+      product.kind !== "existing" ||
+      next.existingId !== product.existing?.id)
+  )
+    input.inventory = {
+      ...input.inventory,
+      mode: "create",
+      existingEntryId: undefined,
+    };
+  const review = reviewDecision(proposal);
+  return {
+    ...input,
+    review: {
+      ...review,
+      observedName:
+        next.kind === "create" ? next.create.name : review.observedName,
+      productChanges:
+        next.kind === "existing" &&
+        product.kind === "existing" &&
+        next.existingId === product.existing?.id
+          ? review.productChanges
+          : undefined,
+    },
+  };
+}
+
 function ProductPanel({
   runId,
   proposal,
   save,
   busy,
+  step,
 }: {
   runId: string;
   proposal: PhotoGroupProposal;
   save: Save;
   busy: boolean;
+  step: string;
 }) {
   const saveGroup: SaveGroup = (build) =>
     save(async () => ({ groups: [await build()], removeGroupKeys: [] }));
-  const draftRef = useRef(
-    proposal.product.kind === "create" ? proposal.product.create : undefined,
-  );
-  const saveProduct = (next: PhotoGroupProposalGroup["product"]) => {
-    if (proposal.product.kind === "create")
-      draftRef.current = proposal.product.create;
-    const review = reviewDecision(proposal);
-    const input = toGroupInput(proposal, { product: next });
-    if (
-      input.inventory?.existingEntryId &&
-      (next.kind !== "existing" ||
-        proposal.product.kind !== "existing" ||
-        next.existingId !== proposal.product.existing?.id)
-    )
-      input.inventory = {
-        ...input.inventory,
-        mode: "create",
-        existingEntryId: undefined,
-      };
-    return saveGroup(() => ({
-      ...input,
-      review: {
-        observedName:
-          next.kind === "create" ? next.create.name : review.observedName,
-        unresolvedReason:
-          next.kind === "existing" ? null : review.unresolvedReason,
-        stockIntent: review.stockIntent,
-        productChanges:
-          next.kind === "existing" &&
-          proposal.product.kind === "existing" &&
-          next.existingId === proposal.product.existing?.id
-            ? review.productChanges
-            : undefined,
-      },
-    }));
-  };
-  const attachExisting = (existingId: ProductShortcode) =>
-    saveProduct({ kind: "existing", existingId });
   const product = proposal.product;
   const manufacturers = useQuery({
     ...productOperations.manufacturerOptions.queryOptions(),
     enabled: product.kind === "create",
   });
-  return (
-    <Stack gap="sm" className="min-w-0">
-      <h4 className="text-sm font-semibold">
-        {product.kind === "create"
-          ? "Create this Product"
-          : "Attach to this Product"}
-      </h4>
-      <IdentityDecision proposal={proposal} save={saveGroup} busy={busy} />
-      {manufacturers.isError ? (
-        <StatusText tone="destructive">
-          {manufacturers.error.message}
-        </StatusText>
-      ) : null}
-      {product.kind === "existing" ? (
-        product.existing ? (
-          <Row gap="sm" align="center" className="min-w-0">
-            <Image
-              src={product.existing.coverUrl ?? undefined}
-              alt={product.existing.name}
-              displayWidth={64}
-              className="size-16 shrink-0 rounded-md border border-border object-cover"
-            />
-            <Stack gap="tight" className="min-w-0">
-              <span className="text-2xs text-muted-foreground">
-                Attach to existing product
-              </span>
-              <EntityRefLink
-                entity="product"
-                data={{ id: product.existing.id, name: product.existing.name }}
-                displayImage={null}
-                truncate
-                className="min-w-0 text-sm font-medium"
-              />
-            </Stack>
-          </Row>
-        ) : (
-          <StatusText tone="warning">
-            The chosen product was deleted. Pick another or create one.
-          </StatusText>
-        )
-      ) : (
-        <Stack gap="sm">
-          <CommitInput
-            label="New product name"
-            value={product.create.name}
-            disabled={busy}
-            onCommit={(name) =>
-              name &&
-              saveProduct({
+  const batch = useQuery({
+    ...photoImport.candidatesBatch.queryOptions({ runId }),
+    enabled: false,
+  });
+  const candidates = batch.data?.groups.find(
+    (group) => group.groupKey === proposal.groupKey,
+  );
+  const checks =
+    candidates?.selectedComparison?.crossCheck ?? proposal.crossCheck ?? [];
+  const [showCandidates, setShowCandidates] = useState(false);
+  const [identityAccepted, setIdentityAccepted] = useState(false);
+  const queryClient = useQueryClient();
+  const saveProduct = (next: PhotoGroupProposalGroup["product"]) => {
+    return saveGroup(() => selectPhotoProduct(proposal, next));
+  };
+  const attachExisting = (existingId: ProductShortcode) =>
+    saveProduct({ kind: "existing", existingId });
+  const reject = useMutation({
+    mutationFn: (
+      input: Parameters<typeof photoImport.rejectCandidate.call>[0],
+    ) => photoImport.rejectCandidate.call(input),
+    onSuccess: async () => {
+      setShowCandidates(true);
+      await saveProduct({
+        kind: "create",
+        create: {
+          name: proposal.review?.observedName ?? proposalName(proposal),
+        },
+      });
+      await invalidateOperationTags(queryClient, ripple.runOnly);
+    },
+    onError: showErrorToast,
+  });
+  if (step === "product")
+    return (
+      <Stack gap="sm">
+        <Picker
+          mode="segmented"
+          label="Product choice"
+          value={product.kind}
+          disabled={busy}
+          options={[
+            { value: "existing", label: "Existing" },
+            { value: "create", label: "New" },
+          ]}
+          onValueChange={(kind) => {
+            if (kind === "create" && product.kind !== "create")
+              void saveProduct({
                 kind: "create",
-                create: { ...product.create, name },
-              })
-            }
-          />
-          <label className="flex min-w-0 flex-col gap-1 text-xs">
-            <span className="text-muted-foreground">Category</span>
-            <WithProductCategorySearch>
-              {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                <Picker
-                  entity="productCategory"
-                  label="category"
-                  items={items}
-                  value={
-                    items.find(
-                      (item) => item.id === product.create.categoryId,
-                    ) ?? null
-                  }
-                  setValue={(item) =>
-                    saveProduct({
-                      kind: "create",
-                      create: {
-                        ...product.create,
-                        categoryId: item
-                          ? productCategoryShortcode.parse(item.id)
-                          : null,
-                      },
-                    })
-                  }
-                  onSearchChange={onSearchChange}
-                  onOpenChange={onOpenChange}
-                  isLoading={isLoading}
-                  disabled={busy}
-                  placeholder="Choose a category"
-                  clearable
-                />
-              )}
-            </WithProductCategorySearch>
-          </label>
-          <Row gap="sm" className="min-w-0">
-            <CommitInput
-              label="Manufacturer"
-              options={
-                manufacturers.data?.map((entry) => ({
-                  value: entry.manufacturer,
-                  count: entry.count,
-                })) ?? []
-              }
-              optionsLoading={manufacturers.isPending}
-              className="flex-1"
-              value={product.create.manufacturer ?? ""}
-              disabled={busy}
-              onCommit={(manufacturer) =>
-                saveProduct({
-                  kind: "create",
-                  create: { ...product.create, manufacturer },
-                })
-              }
-            />
-            <CommitInput
-              label="Model"
-              className="flex-1"
-              value={product.create.model ?? ""}
-              disabled={busy}
-              onCommit={(model) =>
-                saveProduct({
-                  kind: "create",
-                  create: { ...product.create, model: model || null },
-                })
-              }
-            />
-          </Row>
-        </Stack>
-      )}
-
-      <Row gap="sm" align="end" wrap className="min-w-0">
-        <div className="min-w-0 flex-1">
-          <EntityReferencePicker
-            entity="product"
-            label="existing product"
-            value={null}
-            setValue={(item) => {
-              if (item) attachExisting(item.id);
-            }}
-            disabled={busy}
-            placeholder={
-              product.kind === "existing"
-                ? "Choose a different product"
-                : "Search existing products before creating another"
-            }
-          />
-        </div>
-        {product.kind === "existing" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() =>
-              saveProduct({
-                kind: "create",
-                create: draftRef.current ?? {
+                create: {
                   name:
                     proposal.review?.observedName ??
                     product.existing?.name ??
-                    proposal.groupKey,
+                    "New product",
                 },
-              })
-            }
-          >
-            Create new instead
-          </Button>
-        ) : null}
-      </Row>
-      <PhotoProductSuggestions
-        runId={runId}
-        proposal={proposal}
-        onPick={attachExisting}
-        busy={busy}
-      />
-      {proposal.conflict?.length ? (
-        <Stack
-          gap="xs"
-          className="rounded-md border border-warning/30 bg-warning/10 p-2"
-        >
-          <StatusText tone="warning" className="text-xs font-medium">
-            This name already belongs to a product. Attach to it, or rename.
-          </StatusText>
-          {proposal.conflict.map((match) => (
-            <Row key={match.id} gap="sm" align="center" className="min-w-0">
-              <Image
-                src={match.coverUrl ?? undefined}
-                alt={match.name}
-                displayWidth={40}
-                className="size-10 shrink-0 rounded-sm border border-border object-cover"
-              />
-              <EntityRefLink
-                entity="product"
-                data={{ id: match.id, name: match.name }}
-                displayImage={null}
-                truncate
-                className="min-w-0 flex-1 text-xs"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => attachExisting(match.id)}
-              >
-                Use this product
-              </Button>
-            </Row>
-          ))}
-        </Stack>
-      ) : null}
-
-      {product.kind === "create" ? (
-        <details className="text-xs">
-          <summary className="cursor-pointer">Notes and tags</summary>
-          <Stack gap="sm" className="mt-2">
-            <CommitInput
-              label="Product notes"
-              value={product.create.notes ?? ""}
-              disabled={busy}
-              onCommit={(notes) =>
-                saveProduct({
-                  kind: "create",
-                  create: { ...product.create, notes: notes || null },
-                })
-              }
-            />
-            <CommitInput
-              label="Tags (comma separated)"
-              value={(product.create.tags ?? []).join(", ")}
-              disabled={busy}
-              onCommit={(tags) =>
-                saveProduct({
-                  kind: "create",
-                  create: {
-                    ...product.create,
-                    tags: tags
-                      .split(",")
-                      .map((tag) => tag.trim())
-                      .filter(Boolean),
-                  },
-                })
-              }
-            />
-          </Stack>
-        </details>
-      ) : (
-        <ExistingProductChanges
-          proposal={proposal}
-          save={saveGroup}
-          busy={busy}
+              });
+            setShowCandidates(kind === "existing");
+          }}
         />
+        <EntityReferencePicker
+          entity="product"
+          label="existing product"
+          value={null}
+          setValue={(item) => {
+            if (item) void attachExisting(item.id);
+          }}
+          disabled={busy}
+          placeholder="Choose an existing product"
+        />
+      </Stack>
+    );
+  if (step === "ownership")
+    return <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />;
+  return (
+    <Stack gap="sm" className="min-w-0">
+      <IdentityDecision runId={runId} proposal={proposal} busy={busy} />
+      {product.kind === "create" ? (
+        <>
+          <Stack gap="sm">
+            <CommitInput
+              label="New product name"
+              crossCheck={checks.find((check) => check.field === "name")}
+              value={product.create.name}
+              disabled={busy}
+              onCommit={(name) =>
+                name &&
+                saveProduct({
+                  kind: "create",
+                  create: { ...product.create, name },
+                })
+              }
+            />
+            <label className="flex min-w-0 flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Category</span>
+              <WithProductCategorySearch>
+                {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                  <Picker
+                    entity="productCategory"
+                    label="category"
+                    items={items}
+                    value={
+                      items.find(
+                        (item) => item.id === product.create.categoryId,
+                      ) ?? null
+                    }
+                    setValue={(item) =>
+                      saveProduct({
+                        kind: "create",
+                        create: {
+                          ...product.create,
+                          categoryId: item
+                            ? productCategoryShortcode.parse(item.id)
+                            : null,
+                        },
+                      })
+                    }
+                    onSearchChange={onSearchChange}
+                    onOpenChange={onOpenChange}
+                    isLoading={isLoading}
+                    disabled={busy}
+                    placeholder="Choose a category"
+                    clearable
+                  />
+                )}
+              </WithProductCategorySearch>
+            </label>
+            <Row gap="sm" className="min-w-0">
+              <CommitInput
+                label="Manufacturer"
+                crossCheck={checks.find(
+                  (check) => check.field === "manufacturer",
+                )}
+                options={
+                  manufacturers.data?.map((entry) => ({
+                    value: entry.manufacturer,
+                    count: entry.count,
+                  })) ?? []
+                }
+                optionsLoading={manufacturers.isPending}
+                className="flex-1"
+                value={product.create.manufacturer ?? ""}
+                disabled={busy}
+                onCommit={(manufacturer) =>
+                  saveProduct({
+                    kind: "create",
+                    create: { ...product.create, manufacturer },
+                  })
+                }
+              />
+              <CommitInput
+                label="Model"
+                crossCheck={checks.find((check) => check.field === "model")}
+                className="flex-1"
+                value={product.create.model ?? ""}
+                disabled={busy}
+                onCommit={(model) =>
+                  saveProduct({
+                    kind: "create",
+                    create: { ...product.create, model: model || null },
+                  })
+                }
+              />
+            </Row>
+          </Stack>
+          <details className="text-xs">
+            <summary className="cursor-pointer">Notes and tags</summary>
+            <Stack gap="xs">
+              <CommitInput
+                label="Product notes"
+                value={product.create.notes ?? ""}
+                disabled={busy}
+                onCommit={(notes) =>
+                  saveProduct({
+                    kind: "create",
+                    create: { ...product.create, notes: notes || null },
+                  })
+                }
+              />
+              <CommitInput
+                label="Tags (comma separated)"
+                value={(product.create.tags ?? []).join(", ")}
+                disabled={busy}
+                onCommit={(tags) =>
+                  saveProduct({
+                    kind: "create",
+                    create: {
+                      ...product.create,
+                      tags: tags
+                        .split(",")
+                        .map((tag) => tag.trim())
+                        .filter(Boolean),
+                    },
+                  })
+                }
+              />
+            </Stack>
+          </details>
+        </>
+      ) : (
+        <>
+          {checks.some((check) => check.mark === "disagree-or-missing") ? (
+            <StatusText tone="warning" className="text-xs">
+              Name says {proposalName(proposal)} · label comparison has
+              different or missing details.
+            </StatusText>
+          ) : null}
+          <FieldCrossChecks checks={checks} name={proposalName(proposal)} />
+          {product.existing ? (
+            <SelectedProductEvidence
+              runId={runId}
+              productId={product.existing.id}
+            />
+          ) : (
+            <StatusText tone="warning">Choose a live Product.</StatusText>
+          )}
+          <Row gap="sm" wrap>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || identityAccepted}
+              onClick={() => setIdentityAccepted(true)}
+            >
+              {identityAccepted
+                ? "Selected Product accepted"
+                : "Yes, this is it"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || reject.isPending}
+              onClick={() => {
+                if (product.kind === "existing" && product.existing)
+                  reject.mutate({
+                    runId,
+                    groupKey: proposal.groupKey,
+                    productId: product.existing.id,
+                    operationId: crypto.randomUUID(),
+                  });
+              }}
+            >
+              Not this one…
+            </Button>
+          </Row>
+          <ExistingProductChanges
+            proposal={proposal}
+            save={saveGroup}
+            busy={busy}
+          />
+        </>
       )}
-
-      <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />
-
+      {product.kind === "create" ? (
+        <>
+          <FieldCrossChecks checks={checks} name={proposalName(proposal)} />
+          {checks
+            .filter((check) => ["name", "size", "color"].includes(check.field))
+            .flatMap((check) => check.tokens)
+            .filter(
+              (token) =>
+                token.mark === "disagree-or-missing" &&
+                !product.create.name
+                  .toLocaleLowerCase()
+                  .includes(token.text.toLocaleLowerCase()),
+            )
+            .map((token) => (
+              <Button
+                key={token.text}
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() =>
+                  saveProduct({
+                    kind: "create",
+                    create: {
+                      ...product.create,
+                      name: `${product.create.name} ${token.text}`,
+                    },
+                  })
+                }
+              >
+                Add ‘{token.text}’ to name
+              </Button>
+            ))}
+        </>
+      ) : null}
+      {showCandidates ? (
+        <PhotoProductSuggestions
+          runId={runId}
+          proposal={proposal}
+          onPick={attachExisting}
+          busy={busy}
+          expanded
+        />
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        ✓ deterministic match · ! different or missing · ? unknown
+      </p>
       {proposal.evidence ? (
-        <details className="border-t border-border pt-2 text-xs text-muted-foreground">
-          <summary className="cursor-pointer font-medium text-foreground">
-            Why this item was proposed
-          </summary>
-          <p className="mt-2 leading-relaxed whitespace-pre-wrap">
-            {proposal.evidence}
-          </p>
-        </details>
+        <p className="text-xs text-muted-foreground">{proposal.evidence}</p>
       ) : null}
     </Stack>
   );
@@ -1218,161 +1436,166 @@ function PhotoProductSuggestions({
   onPick,
   busy,
   settled = false,
+  expanded = false,
 }: {
   runId: string;
   proposal: PhotoGroupProposal;
   onPick?: (id: ProductShortcode) => void;
   busy?: boolean;
   settled?: boolean;
+  expanded?: boolean;
 }) {
   const suggestions = useQuery({
-    ...photoImport.candidates.queryOptions({
-      runId,
-      groupKey: proposal.groupKey,
-    }),
+    ...photoImport.candidatesBatch.queryOptions({ runId }),
     enabled: false,
   });
-  return (
-    <details className="border-t border-border pt-2 text-xs">
-      <summary className="cursor-pointer font-medium">
-        Compare existing Products
-      </summary>
-      <Stack gap="sm" className="mt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || suggestions.isFetching}
-          onClick={() => void suggestions.refetch()}
-        >
-          {suggestions.isFetching
-            ? "Checking existing Products…"
-            : "Check existing Products"}
-        </Button>
-        {suggestions.isError && (
-          <StatusText tone="destructive">
-            {suggestions.error.message}
-          </StatusText>
-        )}
-        {suggestions.data && (
-          <RecordList empty="No matching Products found. Search the catalog if identity is still unclear.">
-            {suggestions.data.candidates.map((candidate) => (
-              <RecordRow
-                key={candidate.id}
-                leading={
-                  <Image
-                    src={candidate.coverUrl ?? undefined}
-                    alt={candidate.name}
-                    displayWidth={40}
-                    className="size-10 rounded-sm object-contain"
-                  />
-                }
-                primary={
-                  <EntityRefLink
-                    entity="product"
-                    data={{ id: candidate.id, name: candidate.name }}
-                    displayImage={null}
-                  />
-                }
-                secondary={
-                  <ProductVariantEvidence
-                    comparison={candidate.match.variant}
-                    firstLabel="Photo"
-                    secondLabel="Product"
-                  />
-                }
-                trailing={
-                  candidate.match.matchedIdentifiers?.length ? (
-                    <Badge variant="positive">Exact identifier</Badge>
-                  ) : null
-                }
-                actions={
-                  settled && proposal.committedProduct ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      render={
-                        <Link
-                          to="/recommendations/workbench"
-                          search={{
-                            kind: "product-match",
-                            source: proposal.committedProduct.id,
-                            candidate: candidate.id,
-                          }}
-                        />
-                      }
-                    >
-                      Review duplicate
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => onPick?.(candidate.id)}
-                    >
-                      {proposal.product.kind === "existing" &&
-                      proposal.product.existing?.id === candidate.id
-                        ? "Selected"
-                        : "Choose Product"}
-                    </Button>
-                  )
-                }
-                detail={
-                  <details className="py-1 text-xs">
-                    <summary className="cursor-pointer text-muted-foreground">
-                      Evidence and history
-                    </summary>
-                    <Stack gap="xs" className="py-2">
-                      <p>
-                        Heuristic rank {candidate.match.score ?? "—"} · not a
-                        probability
-                      </p>
-                      <p>
-                        {candidate.match.factors
-                          ?.map((factor) => `${factor.label}: ${factor.points}`)
-                          .join(" · ")}
-                      </p>
-                      <p>
-                        Recorded count:{" "}
-                        {candidate.quantity?.onHandUnits ?? "Not counted"} ·
-                        Expected:{" "}
-                        {candidate.quantity?.quantityLedger.expectedQuantity ??
-                          "Unknown"}
-                      </p>
-                      {candidate.variantEvidence?.map((fact) => (
-                        <p key={`${fact.source}-${fact.text}`}>
-                          <strong>{fact.source.replaceAll("_", " ")}</strong>:{" "}
-                          {fact.text}
-                        </p>
-                      ))}
-                      {candidate.purchaseLines?.map((line) => (
-                        <p key={line.expenseId}>
-                          <EntityRefLink
-                            entity="expense"
-                            data={{ id: line.expenseId, name: line.name }}
-                            displayImage={null}
-                          />{" "}
-                          ·{" "}
-                          {line.date ? (
-                            <DateDisplay start={line.date} />
-                          ) : (
-                            "Undated"
-                          )}{" "}
-                          ·{" "}
-                          {line.cost == null
-                            ? "Cost unknown"
-                            : formatCurrency(line.cost)}
-                        </p>
-                      ))}
-                    </Stack>
-                  </details>
-                }
-              />
-            ))}
-          </RecordList>
-        )}
+  const group = suggestions.data?.groups.find(
+    (item) => item.groupKey === proposal.groupKey,
+  );
+  const closest = group?.candidates[0];
+  const [open, setOpen] = useState(expanded);
+  useEffect(() => {
+    if (expanded) setOpen(true);
+  }, [expanded]);
+  if (suggestions.isError || group?.status === "failed")
+    return (
+      <Stack gap="xs">
+        <Row gap="xs">
+          <span className="text-xs">Couldn't check ·</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={suggestions.isFetching}
+            onClick={() => void suggestions.refetch()}
+          >
+            Retry
+          </Button>
+        </Row>
+        <StatusText tone="destructive">
+          {group?.error ?? suggestions.error?.message}
+        </StatusText>
       </Stack>
-    </details>
+    );
+  return (
+    <Stack gap="xs">
+      {!group ? (
+        <p className="text-xs text-muted-foreground">
+          Checking existing Products…
+        </p>
+      ) : closest ? (
+        <div
+          className={
+            closest.duplicateStrength === "strong"
+              ? "bg-warning/10 p-2 text-xs text-warning"
+              : "text-xs text-muted-foreground"
+          }
+        >
+          {closest.duplicateStrength === "strong"
+            ? "Possible duplicate"
+            : "Closest existing"}
+          : {closest.name} ·{" "}
+          <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
+            Compare
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No matching existing Products.
+        </p>
+      )}
+      {open ? (
+        <RecordList>
+          {group?.candidates.map((candidate) => (
+            <RecordRow
+              key={candidate.id}
+              primary={
+                <EntityRefLink
+                  entity="product"
+                  data={{ id: candidate.id, name: candidate.name }}
+                  displayImage={null}
+                />
+              }
+              secondary={
+                <ProductVariantEvidence
+                  comparison={candidate.match.variant}
+                  firstLabel="Photo"
+                  secondLabel="Product"
+                />
+              }
+              trailing={
+                candidate.match.matchedIdentifiers?.length ? (
+                  <Badge variant="positive">Exact identifier</Badge>
+                ) : null
+              }
+              actions={
+                settled && proposal.committedProduct ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={
+                      <Link
+                        to="/recommendations/workbench"
+                        search={{
+                          kind: "product-match",
+                          source: proposal.committedProduct.id,
+                          candidate: candidate.id,
+                        }}
+                      />
+                    }
+                  >
+                    Review duplicate
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => onPick?.(candidate.id)}
+                  >
+                    {proposal.product.kind === "existing" &&
+                    proposal.product.existing?.id === candidate.id
+                      ? "Selected"
+                      : "Choose Product"}
+                  </Button>
+                )
+              }
+              detail={
+                <Stack gap="xs">
+                  <FieldCrossChecks checks={candidate.crossCheck ?? []} />
+                  <p className="text-xs">
+                    Recorded count:{" "}
+                    {candidate.quantity?.onHandUnits ?? "Not counted"} ·
+                    Expected:{" "}
+                    {candidate.quantity?.quantityLedger.expectedQuantity ??
+                      "Unknown"}
+                  </p>
+                  {candidate.purchaseLines?.map((line) => (
+                    <p key={line.expenseId} className="text-xs">
+                      {line.dateLabel ?? "Paid"}{" "}
+                      {line.date ? (
+                        <DateDisplay start={line.date} />
+                      ) : (
+                        "date unknown"
+                      )}{" "}
+                      · {line.vendor ?? "Vendor unknown"} ·{" "}
+                      {line.cost == null
+                        ? "Price unknown"
+                        : formatCurrency(line.cost)}{" "}
+                      · +{line.productQuantity ?? "?"}
+                    </p>
+                  ))}
+                </Stack>
+              }
+            />
+          ))}
+        </RecordList>
+      ) : null}
+      {group?.rejectedCandidates.map((candidate) => (
+        <p key={candidate.id} className="text-xs text-muted-foreground">
+          {candidate.name} · Rejected
+        </p>
+      ))}
+    </Stack>
   );
 }
 
@@ -1420,22 +1643,22 @@ function InventoryFields({
       : null;
   return (
     <div className="border-t border-border pt-3">
-      <h4 className="mb-2 text-sm font-semibold">Stock decision</h4>
+      <h4 className="mb-2 text-sm font-semibold">Own it now?</h4>
       <div className="mb-2 flex flex-col gap-1 text-xs">
-        What do these photos establish?
+        Own it now?
         <Picker
           mode="choose"
           label="stock decision"
           value={review.stockIntent}
           disabled={busy}
           options={[
-            { value: "evidence", label: "Catalog evidence only" },
+            { value: "evidence", label: "Just a reference photo" },
             { value: "counted", label: "Already counted · no stock change" },
             {
               value: "historical",
               label: "Historical or sold · no stock change",
             },
-            { value: "receive", label: "Receive newly counted stock" },
+            { value: "receive", label: "Yes, add to inventory" },
           ]}
           onValueChange={(intent) => {
             if (
@@ -1706,7 +1929,25 @@ function ProposalCard({
   const stale = isStaleGroup(proposal, imagesById, runStatus);
   const descriptionsPending = awaitingDescriptions(proposal, imagesById);
   return (
-    <Card className="rounded-none border-x-0 border-b-0 shadow-none">
+    <Card
+      className="rounded-none border-x-0 border-b-0 shadow-none"
+      onKeyDown={(event) => {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key === "Enter" &&
+          !working &&
+          !approvalQueued &&
+          !proposal.blockedReason &&
+          !stale
+        ) {
+          event.preventDefault();
+          setApprovalQueued(true);
+          void approve(proposal.groupKey).finally(() =>
+            setApprovalQueued(false),
+          );
+        }
+      }}
+    >
       <CardHeader>
         <Row align="center" justify="between" wrap gap="sm">
           <Row align="center" gap="sm" className="min-w-0">
@@ -1714,13 +1955,14 @@ function ProposalCard({
               {proposalName(proposal)}
             </CardTitle>
             <Badge
-              variant={
-                proposal.product.kind === "create" ? "default" : "secondary"
+              variant="secondary"
+              className={
+                proposal.product.kind === "create"
+                  ? "bg-action-create-surface text-action-create"
+                  : "bg-action-link-surface text-action-link"
               }
             >
-              {proposal.product.kind === "create"
-                ? "New product"
-                : "Existing product"}
+              {proposal.product.kind === "create" ? "＋ New" : "↪ Attach"}
             </Badge>
           </Row>
           <Row align="center" gap="xs" wrap className="w-full sm:w-auto">
@@ -1796,8 +2038,23 @@ function ProposalCard({
         </Row>
       </CardHeader>
       <CardContent className="@container/photo-editor">
-        <div className="grid min-w-0 items-start gap-4 @2xl/photo-editor:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-          <div className="min-w-0">
+        <PhotoProductSuggestions
+          runId={runId}
+          proposal={proposal}
+          busy={working}
+          onPick={(existingId) => {
+            void save(() => ({
+              groups: [
+                selectPhotoProduct(proposal, { kind: "existing", existingId }),
+              ],
+              removeGroupKeys: [],
+            }));
+          }}
+        />
+        <DecisionSteps
+          aria-label="Photo group decisions"
+          steps={proposal.steps}
+          media={
             <GroupPhotos
               proposal={proposal}
               proposals={proposals}
@@ -1806,14 +2063,18 @@ function ProposalCard({
               editable
               busy={working}
             />
-          </div>
-          <ProductPanel
-            runId={runId}
-            proposal={proposal}
-            save={save}
-            busy={working}
-          />
-        </div>
+          }
+          renderBody={(step) => (
+            <ProductPanel
+              runId={runId}
+              proposal={proposal}
+              save={save}
+              busy={working}
+              step={step.key}
+            />
+          )}
+        />
+        <GroupEvidence proposal={proposal} imagesById={imagesById} />
         {proposal.missingImageCount ? (
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
             {proposal.missingImageCount === 1
@@ -1852,23 +2113,21 @@ function ProposalCard({
             Last approval failed: {proposal.lastError}
           </StatusText>
         ) : null}
+        {proposal.blockedReason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {proposal.blockedReason}
+          </p>
+        ) : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <p className="max-w-2xl text-xs text-muted-foreground">
-            Apply {countLabel(proposal.images.length, "photo")} (
-            {proposal.images.map((image) => image.purpose).join(", ")}) for{" "}
-            <strong className="text-foreground">
-              {proposalName(proposal)}
-            </strong>
-            .{" "}
-            {proposal.product.kind === "existing"
-              ? `Append photos; preserve cover and gallery order. ${Object.keys(proposal.review?.productChanges ?? {}).length ? `Update selected fields: ${Object.keys(proposal.review?.productChanges ?? {}).join(", ")}.` : "Keep Product fields unchanged."}`
-              : "Create the draft shown above."}{" "}
-            {proposal.skip.length
-              ? `${proposal.skip.length} photos skipped. `
-              : ""}
+            {proposal.product.kind === "create" ? "Create" : "Attach"}{" "}
+            {countLabel(proposal.images.length, "photo")}{" "}
+            {proposal.product.kind === "create" ? "as" : "to"}{" "}
+            {proposalName(proposal)}
             {proposal.inventory?.locationId
-              ? `${proposal.inventory.mode === "add" ? "Add" : "Receive"} ${proposal.inventory.quantity} at ${proposal.inventory.locationName}.`
-              : "No Inventory entry or possession claim."}
+              ? ` and add ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
+              : " as reference photos"}
+            .
           </p>
           <Button
             onMouseDown={(event) => event.preventDefault()}
@@ -1877,12 +2136,7 @@ function ProposalCard({
               (action.isPending && action.variables?.action !== "save") ||
               stale ||
               descriptionsPending.length > 0 ||
-              !proposal.review ||
-              Boolean(proposal.review.unresolvedReason) ||
-              (proposal.review.stockIntent === "receive" &&
-                !proposal.inventory?.locationId) ||
-              (proposal.product.kind === "existing" &&
-                !proposal.product.existing)
+              Boolean(proposal.blockedReason)
             }
             onClick={() => {
               setApprovalQueued(true);
@@ -1893,11 +2147,11 @@ function ProposalCard({
           >
             <CheckIcon />
             {proposal.product.kind === "create"
-              ? "Create Product"
-              : proposal.review?.productChanges &&
-                  Object.keys(proposal.review.productChanges).length
-                ? "Apply changes"
-                : "Attach photos"}
+              ? "Create product"
+              : `Attach ${countLabel(proposal.images.length, "photo")}`}
+            <kbd aria-hidden="true" className="text-xs opacity-70">
+              ⌘↵
+            </kbd>
           </Button>
         </div>
       </CardContent>
@@ -2363,6 +2617,50 @@ function DeferredPhotoGroup({
   );
 }
 
+function PhotoNavGlyph({
+  mode,
+  state,
+}: {
+  mode: "create" | "existing";
+  state: "needs" | "ready" | "applied";
+}) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1"
+      aria-label={
+        state === "needs"
+          ? "Needs you"
+          : state === "ready"
+            ? "Ready"
+            : "Applied"
+      }
+    >
+      <span
+        className={`size-1.5 rounded-full ${state === "needs" ? "bg-signal" : state === "ready" ? "bg-positive" : "bg-muted-foreground"}`}
+      />
+      <span
+        className={
+          mode === "create" ? "text-action-create" : "text-muted-foreground"
+        }
+      >
+        {mode === "create" ? "＋" : "↪"}
+      </span>
+    </span>
+  );
+}
+const NewNeedsInputGlyph = () => <PhotoNavGlyph mode="create" state="needs" />;
+const NewReadyGlyph = () => <PhotoNavGlyph mode="create" state="ready" />;
+const AttachNeedsInputGlyph = () => (
+  <PhotoNavGlyph mode="existing" state="needs" />
+);
+const AttachReadyGlyph = () => <PhotoNavGlyph mode="existing" state="ready" />;
+const AppliedNewPhotoGlyph = () => (
+  <PhotoNavGlyph mode="create" state="applied" />
+);
+const AppliedPhotoGlyph = () => (
+  <PhotoNavGlyph mode="existing" state="applied" />
+);
+
 export function PhotoGroupReview({
   runId,
   runStatus,
@@ -2377,12 +2675,38 @@ export function PhotoGroupReview({
   const [pendingEdits, setPendingEdits] = useState(0);
   const queryClient = useQueryClient();
   const query = usePhotoRunReview(runId, runStatus, hasAgent);
+  const { refetch: refetchCandidates } = useQuery({
+    ...photoImport.candidatesBatch.queryOptions({ runId }),
+    enabled: Boolean(query.data?.review.proposals.length),
+    staleTime: Infinity,
+  });
+  const candidateRevision = (query.data?.review.proposals ?? [])
+    .map((proposal) => proposal.updatedAt)
+    .join("|");
+  const previousCandidateRevision = useRef(candidateRevision);
+  useEffect(() => {
+    if (previousCandidateRevision.current === candidateRevision) return;
+    const previous = previousCandidateRevision.current;
+    previousCandidateRevision.current = candidateRevision;
+    if (previous) void refetchCandidates();
+  }, [candidateRevision, refetchCandidates]);
   const groupSections = useMemo(
     () =>
       (query.data?.review.proposals ?? []).map((proposal) => ({
         id: `photo-group-${proposal.groupKey}`,
-        title: `${proposal.state === "proposed" ? (proposal.product.kind === "create" ? "Create" : "Attach") : proposal.state === "committed" ? "Applied" : "Discarded"} · ${proposalName(proposal)}`,
-        icon: CheckCircleIcon,
+        title: proposalName(proposal),
+        icon:
+          proposal.state !== "proposed"
+            ? proposal.product.kind === "create"
+              ? AppliedNewPhotoGlyph
+              : AppliedPhotoGlyph
+            : proposal.product.kind === "create"
+              ? proposal.blockedReason
+                ? NewNeedsInputGlyph
+                : NewReadyGlyph
+              : proposal.blockedReason
+                ? AttachNeedsInputGlyph
+                : AttachReadyGlyph,
         content: null,
       })),
     [query.data?.review.proposals],
@@ -2452,11 +2776,28 @@ export function PhotoGroupReview({
       );
       if (!group)
         throw new Error("The group changed; refresh before applying it");
-      await action.mutateAsync({
+      const result = await action.mutateAsync({
         action: "approve",
         groupKeys: [groupKey],
         expectedRevisions: [{ groupKey, updatedAt: group.updatedAt }],
       });
+      if (
+        result.results.some(
+          (item) =>
+            item.groupKey === groupKey &&
+            (item.outcome === "committed" || item.outcome === "replayed"),
+        )
+      ) {
+        const next = result.proposals.find(
+          (item) => item.state === "proposed" && item.groupKey !== groupKey,
+        );
+        if (next)
+          requestAnimationFrame(() =>
+            document
+              .getElementById(`photo-group-${next.groupKey}`)
+              ?.scrollIntoView({ block: "start" }),
+          );
+      }
     } catch (error) {
       showErrorToast(error);
     }
@@ -2465,13 +2806,16 @@ export function PhotoGroupReview({
     if (batchQueued) return;
     setBatchQueued(true);
     try {
-      const groupKeys = [...batchKeys];
+      const groupKeys = selectedBatch.map((proposal) => proposal.groupKey);
       await flushEdits(groupKeys);
       const latest = queryClient.getQueryData<
         Awaited<ReturnType<typeof photoImport.review.call>>
       >(photoImport.review.queryKey({ runId }));
       const expectedRevisions = (latest?.review.proposals ?? [])
-        .filter((proposal) => batchKeys.has(proposal.groupKey))
+        .filter(
+          (proposal) =>
+            groupKeys.includes(proposal.groupKey) && !proposal.blockedReason,
+        )
         .map((proposal) => ({
           groupKey: proposal.groupKey,
           updatedAt: proposal.updatedAt,
@@ -2552,31 +2896,11 @@ export function PhotoGroupReview({
       productsById.set(proposal.committedProduct.id, proposal);
   }
   const resultProducts = [...productsById.values()];
-  const ready = proposed.filter(
-    (proposal) =>
-      !isStaleGroup(proposal, imagesById, review.runStatus) &&
-      awaitingDescriptions(proposal, imagesById).length === 0 &&
-      !(proposal.product.kind === "existing" && !proposal.product.existing) &&
-      !proposal.conflict?.length &&
-      Boolean(proposal.review) &&
-      !proposal.review?.unresolvedReason &&
-      (proposal.review?.stockIntent !== "receive" ||
-        Boolean(proposal.inventory?.locationId)),
-  );
-  const selectedBatch = proposed.filter((proposal) =>
+  const ready = proposed.filter((proposal) => !proposal.blockedReason);
+  const selectedBatch = ready.filter((proposal) =>
     batchKeys.has(proposal.groupKey),
   );
-  const blockedBatch = selectedBatch.some(
-    (proposal) =>
-      isStaleGroup(proposal, imagesById, review.runStatus) ||
-      awaitingDescriptions(proposal, imagesById).length > 0 ||
-      (proposal.product.kind === "existing" && !proposal.product.existing) ||
-      Boolean(proposal.conflict?.length) ||
-      !proposal.review ||
-      Boolean(proposal.review.unresolvedReason) ||
-      (proposal.review.stockIntent === "receive" &&
-        !proposal.inventory?.locationId),
-  );
+  const blockedBatch = false;
   const groupByImage = new Map<string, string>();
   for (const proposal of review.proposals)
     for (const entry of [...proposal.images, ...proposal.skip]) {
@@ -2782,7 +3106,10 @@ export function PhotoGroupReview({
                       type="checkbox"
                       aria-label={`Select ${proposalName(selected)} for batch approval`}
                       checked={batchKeys.has(selected.groupKey)}
-                      disabled={busy || batchQueued}
+                      disabled={
+                        busy || batchQueued || Boolean(selected.blockedReason)
+                      }
+                      title={selected.blockedReason ?? undefined}
                       onChange={(event) =>
                         setBatchKeys((current) => {
                           const next = new Set(current);
@@ -2792,7 +3119,7 @@ export function PhotoGroupReview({
                         })
                       }
                     />
-                    Select for batch
+                    {selected.blockedReason ?? "Select for batch"}
                   </label>
                 ) : null}
                 {selected.state === "proposed" ? (

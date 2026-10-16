@@ -19,6 +19,11 @@ describe("server photo group steps", () => {
       descriptionBlocked: false,
     };
     expect(photoGroupSteps(base).blockedReason).toBeNull();
+    expect(photoGroupSteps(base).steps.map((step) => step.key)).toEqual([
+      "product",
+      "identity",
+      "ownership",
+    ]);
     expect(photoGroupSteps(base).steps[1]?.status).toBe("needs_input");
     expect(
       photoGroupSteps({ ...base, concern: "Read the label" }).steps[1],

@@ -5,6 +5,7 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 /**
  * ProductDiscardDialog — record that units were thrown away or written off.
  *
@@ -21,7 +22,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
  * the point — otherwise expected and actual diverge in the gap between two
  * writes, which is precisely the drift the Variance column exists to catch.
  */
-import { tradeSchema } from "@cubby/schemas/task-fields";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -260,7 +261,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
                 status: quantity > 0 && trade ? "done" : "needs_input",
                 summary:
                   quantity > 0
-                    ? `${quantity} units${trade ? ` · ${trade}` : ""}`
+                    ? `${countLabel(quantity, "unit")}${trade ? ` · ${trade}` : ""}`
                     : null,
                 action: "remove",
                 blockedReason: null,

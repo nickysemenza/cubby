@@ -76,14 +76,6 @@ export function photoGroupSteps(input: {
       action: input.stockIntent === "receive" ? "create" : null,
       blockedReason: productBlock ?? identityBlock,
     },
-    {
-      key: "apply",
-      label: "Apply",
-      status: blockedReason ? "blocked" : "needs_input",
-      summary: input.kind === "create" ? "Create product" : "Attach photos",
-      action,
-      blockedReason,
-    },
   ];
   if (settled)
     for (const step of steps) {
