@@ -482,7 +482,7 @@ virtualStoreType: global
 optimisticRepeatInstall: false
 
 configDependencies:
-  "@pnpm/plugin-types-fixer": 0.1.0
+  "@pnpm/plugin-types-fixer": 0.1.0+sha512-bLww63gRHi7siYTqFJb5qNdcXadU0jv20Et6z5AryMZ7FlLolbEJOrXLpg8+amQZNHHNW1dfFUBGVw/9ezQbFg==
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
   agent-device@0.21.27: patches/agent-device@0.21.27.patch
