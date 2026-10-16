@@ -1406,11 +1406,12 @@ remain independent of the page; the correct filter and stable sort precede
 LIMIT/OFFSET, and only selected rows receive the window position used for JSON
 order. Quality and display-image hydration remain page-scoped.
 
-Independent diagnostic-backed branches use the existing bounded Problems
-scheduler with four concurrent tasks. Their results retain declaration order,
-and Project attention remains one request-local promise shared with entity
-predicates. Diagnostic failure rejects the read rather than returning an
-incomplete queue.
+Independent entity-predicate, diagnostic-backed and statement-import account
+branches share the existing bounded Problems scheduler with four concurrent
+tasks. Entity branches precede diagnostics in declaration order, followed by
+account work; Project attention remains one request-local promise shared by
+entity predicates and diagnostics. A failed branch rejects the read rather
+than returning an incomplete queue.
 
 Every source excludes Purchases dated after the current household day, and
 Purchases with live Expense lines all marked `future`. Purchase has no stored
