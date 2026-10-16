@@ -170,9 +170,7 @@ describe("ordinary overlay actions", () => {
       </Overlay>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Attach" }));
-    expect(
-      screen.getByRole("button", { name: "Attaching…", exact: true }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attaching…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(change).not.toHaveBeenCalled();
