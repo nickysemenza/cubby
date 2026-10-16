@@ -212,7 +212,7 @@ const hydrate = async (
 // `lastRunAt` and `displayName` are computed, not columns.
 const scaffold = listScaffold("vendorAccount", vendorAccount, {
   derived: {
-    displayName: vendorAccountLabelSql,
+    displayName: { sql: vendorAccountLabelSql, nulls: "high" },
     lastRunAt: sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id})`,
   },
 });

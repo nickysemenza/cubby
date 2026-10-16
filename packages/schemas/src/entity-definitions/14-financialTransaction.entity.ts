@@ -952,6 +952,7 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
+    derived: { merchant: { type: "text" } },
     sort: {
       fields: [
         "transactionDate",

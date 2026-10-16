@@ -68,6 +68,33 @@ describe("list field compiler", () => {
     expect(renderWhereSql(clause)).not.toContain('"InventoryEntry" lf0');
   });
 
+  it("keeps a part's declared NULL placement and fixed direction", () => {
+    const scaffold = listScaffold("purchase", purchase, {
+      derived: {
+        reconciliationGap: [
+          { sql: sql`gap`, nulls: "high" },
+          { sql: sql`received`, direction: "desc" },
+        ],
+        vendorId: sql`0`,
+        expenseCount: sql`0`,
+        expenseTotal: sql`0`,
+        documentCount: sql`0`,
+      },
+    });
+    const render = (direction: "asc" | "desc") =>
+      scaffold
+        .derivedSort({ orderBy: "reconciliationGap", direction })
+        ?.map((clause) => renderWhereSql(clause));
+    expect(render("desc")).toEqual([
+      "gap desc nulls first",
+      "received desc nulls last",
+    ]);
+    expect(render("asc")).toEqual([
+      "gap asc nulls last",
+      "received desc nulls last",
+    ]);
+  });
+
   it("orders a compound derived value part by part", () => {
     const valuations = listPrepare(async () => new Map<string, number>());
     const scaffold = listScaffold("inventory", inventoryEntry, {
@@ -88,6 +115,7 @@ describe("list field compiler", () => {
     const scaffold = listScaffold("purchase", purchase, {
       derived: {
         reconciliationGap: sql`declared_gap`,
+        vendorId: sql`0`,
         expenseCount: sql`0`,
         expenseTotal: sql`0`,
         documentCount: sql`0`,

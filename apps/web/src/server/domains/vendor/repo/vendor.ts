@@ -494,7 +494,8 @@ const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
     spend: vendorSpend,
     purchaseCount: vendorPurchaseCount,
-    latestPurchaseDate: vendorLatestPurchaseDate,
+    // A vendor with no purchases leads a newest-first list.
+    latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
   },
 });
 

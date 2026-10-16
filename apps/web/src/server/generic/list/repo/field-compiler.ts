@@ -45,11 +45,26 @@ interface PredicateValues {
 }
 
 /**
- * A derived value's SQL: one expression, or a compound key whose parts order
- * in turn (inventory `amount` is a unit, then a size). A compound value sorts
+ * One ordered part of a derived value. A part orders NULLS LAST in the
+ * requested direction unless it declares otherwise: `nulls: "high"` orders
+ * NULL above every value (first when descending, as Postgres does by
+ * default), and `direction` fixes the part's direction whatever the request
+ * (an Email link state reads newest first within each state).
+ */
+type DerivedPart =
+  | SQL
+  | {
+      readonly sql: SQL;
+      readonly nulls?: "high";
+      readonly direction?: "asc" | "desc";
+    };
+
+/**
+ * A derived value's SQL: one part, or a compound key whose parts order in
+ * turn (inventory `amount` is a unit, then a size). A compound value sorts
  * and groups but cannot filter.
  */
-type DerivedValue = SQL | readonly [SQL, ...SQL[]];
+type DerivedValue = DerivedPart | readonly [DerivedPart, ...DerivedPart[]];
 
 /**
  * Request data a derived field's SQL reads (inventory valuations run WASM
@@ -177,7 +192,7 @@ const derivedValueParts = (
   derived: AnyDerivedSql,
   key: string,
   context: ListContext,
-): readonly SQL[] => {
+): readonly DerivedPart[] => {
   const entry = derived[key];
   if (entry === undefined || typeof entry === "function")
     throw missingSql(entity, key);
@@ -186,8 +201,13 @@ const derivedValueParts = (
   const value = isPrepared(entry)
     ? (entry as PreparedValue).render(context)
     : (entry as DerivedValue);
-  return value instanceof SQL ? [value] : value;
+  return isCompound(value) ? value : [value];
 };
+
+// `Array.isArray` does not narrow a readonly tuple out of a union.
+const isCompound = (
+  value: DerivedValue,
+): value is readonly [DerivedPart, ...DerivedPart[]] => Array.isArray(value);
 
 /** A derived value field's single SQL expression in `context`. */
 export const derivedValueSql = (
@@ -201,7 +221,7 @@ export const derivedValueSql = (
     throw new Error(
       `${entity}.model.derived.${key} is a compound sort key and cannot filter`,
     );
-  return value;
+  return value instanceof SQL ? value : value.sql;
 };
 
 /** A declared predicate's condition for a parsed filter value. */
@@ -305,8 +325,9 @@ export const shortcodeIdsSql = (
  * The ORDER BY of a declared derived field or a `related:<view>` roster
  * column, or null for a field this compiler does not own. A rejected field (a
  * to-many path, a filter-only predicate) fails with the reason the
- * declaration derives. Every part orders NULLS LAST in both directions, the
- * convention `buildOrderBy` applies to stored columns.
+ * declaration derives. A part orders NULLS LAST in both directions, the
+ * convention `buildOrderBy` applies to stored columns, unless it declares
+ * its own placement or direction (`DerivedPart`).
  */
 export const derivedOrderBy = (
   entity: Entity,
@@ -315,9 +336,17 @@ export const derivedOrderBy = (
   table: PgTable,
   context: ListContext,
 ): SQL[] | null => {
-  const direction = sql.raw(sort.direction === "asc" ? "asc" : "desc");
-  const order = (parts: readonly SQL[]) =>
-    parts.map((part) => sql`${part} ${direction} nulls last`);
+  const order = (parts: readonly DerivedPart[]) =>
+    parts.map((part) => {
+      const {
+        sql: value,
+        nulls,
+        direction = sort.direction,
+      } = part instanceof SQL ? { sql: part } : part;
+      const placement =
+        nulls === "high" && direction === "desc" ? "first" : "last";
+      return sql`${value} ${sql.raw(direction === "asc" ? "asc" : "desc")} nulls ${sql.raw(placement)}`;
+    });
   if (sort.orderBy.startsWith("related:"))
     return order([
       relatedSortExpression(

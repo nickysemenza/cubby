@@ -228,9 +228,10 @@ const emailScopeFilters = emailFilters.pick({
 
 const scaffold = listScaffold("email", emailTable, {
   derived: {
+    // Ties read newest first in either direction.
     linkState: emailScope.value((scope) => [
       emailLinkRankSql(scope),
-      sql`${emailTable.receivedAt}`,
+      { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
     ]),
   },
 });

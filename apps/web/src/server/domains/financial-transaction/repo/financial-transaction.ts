@@ -436,6 +436,12 @@ async function toIds(
 const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
+  {
+    derived: {
+      // An unnamed merchant leads a descending list.
+      merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },
+    },
+  },
 );
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */

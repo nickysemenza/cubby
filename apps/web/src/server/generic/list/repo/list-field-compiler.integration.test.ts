@@ -1,15 +1,21 @@
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { vendor as vendorTable } from "~/server/db/schema";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
   inventoryentryList,
   inventoryentryListRead,
 } from "~/server/domains/inventory/repo/crud";
+import { locationList } from "~/server/domains/location/repo/crud";
 import { productList } from "~/server/domains/product/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
+import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { taskList } from "~/server/domains/task/repo/lookup";
+import { vendorList } from "~/server/domains/vendor/repo/vendor";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -27,7 +33,8 @@ const page = { pageIndex: 0, pageSize: 50 };
  * projects or tasks stops at direct children; a sort that moved from a
  * per-entity resolver into `model.derived` (a GTIN, a `related:` view, an
  * effective reference, a multi-hop path) orders differently or surfaces
- * empties first.
+ * empties first; a field that kept its resolver's NULL placement (empties
+ * first under desc) flips to last; a count read rejects a sort it never runs.
  */
 describe("compiled list fields", () => {
   const ctx = withTestDb();
@@ -269,5 +276,64 @@ describe("compiled list fields", () => {
       child.id,
       parent.id,
     ]);
+  });
+  it("keeps a declared field's empties first when descending", async () => {
+    const vendor = (name: string) =>
+      createRepoEntity(ctx, "vendor", { name }).then(({ output }) => output);
+    const bought = await vendor("Compiler bought vendor");
+    const idle = await vendor("Compiler idle vendor");
+    const named = (
+      await createRepoEntity(ctx, "purchase", {
+        date: "2026-03-02",
+        vendorId: bought.id,
+      })
+    ).output;
+    // A Purchase reads its live Vendor's name; a retired Vendor reads none.
+    const retired = await vendor("Compiler retired vendor");
+    const vendorless = (
+      await createRepoEntity(ctx, "purchase", {
+        date: "2026-03-03",
+        vendorId: retired.id,
+      })
+    ).output;
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendorTable.name, retired.name));
+    const vendors = async (direction: "asc" | "desc") =>
+      (
+        await vendorList(
+          ctx.db,
+          {},
+          [{ orderBy: "latestPurchaseDate", direction }],
+          page,
+        )
+      ).data.map((row) => row.id);
+    expect(await vendors("desc")).toEqual([idle.id, bought.id]);
+    expect(await vendors("asc")).toEqual([bought.id, idle.id]);
+    const purchases = async (direction: "asc" | "desc") =>
+      (
+        await purchaseList(
+          ctx.db,
+          {},
+          [{ orderBy: "vendorId", direction }],
+          page,
+        )
+      ).data.map((row) => row.id);
+    expect(await purchases("desc")).toEqual([vendorless.id, named.id]);
+    expect(await purchases("asc")).toEqual([named.id, vendorless.id]);
+  });
+
+  it("counts locations under a valuation sort", async () => {
+    await createLocationFixture(ctx.db, makeLocationInput(), ctx.actor);
+    const counted = await locationList(
+      ctx.db,
+      {},
+      [{ orderBy: "valuation", direction: "desc" }],
+      page,
+      undefined,
+      "count",
+    );
+    expect(counted.count).toBeGreaterThan(0);
   });
 });

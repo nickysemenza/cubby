@@ -872,12 +872,18 @@ export const locationListRead = async (
       ? await loadLiveInventoryValuations(db)
       : undefined);
 
-  const orderByClause = locationScaffold.orderBy(
-    sorts,
-    { groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy },
-    filters,
-    context,
-  );
+  // A count never orders, and skipped the prepare a valuation sort reads.
+  const orderByClause: SQL[] =
+    readIntent === "count"
+      ? []
+      : locationScaffold.orderBy(
+          sorts,
+          {
+            groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy,
+          },
+          filters,
+          context,
+        );
 
   const groupDirection =
     sorts.find((sort) => sort.orderBy === LOCATION_GROUPING.field)?.direction ??

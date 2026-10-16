@@ -367,6 +367,41 @@ describe("Email Purchase links", () => {
     };
   }
 
+  // A link-state tie reads newest first in either direction.
+  it("orders Emails within one link state newest first", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic link-state member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const mail = (messageId: string, receivedAt: string, hex: string) =>
+      syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-link-state-mailbox",
+        messageId,
+        sender: null,
+        subject: messageId,
+        receivedAt: new Date(receivedAt),
+        vendorId: null,
+        rawChecksum: hex.repeat(64),
+        content: { snippet: null, bodyText: null, bodyHtml: null },
+      });
+    await mail("synthetic-older", "2026-10-01T12:00:00Z", "a");
+    await mail("synthetic-newer", "2026-10-02T12:00:00Z", "b");
+    for (const direction of ["asc", "desc"] as const) {
+      const { data } = await listEmailsRead(
+        ctx.db,
+        {},
+        [{ orderBy: "linkState", direction }],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(data.map((row) => row.subject)).toEqual([
+        "synthetic-newer",
+        "synthetic-older",
+      ]);
+    }
+  });
+
   // The view exposes UUID event IDs. Its lookup must not scan every active
   // decision through the separate text-key uniqueness indexes.
   it("bounds UUID event lookups across reviewed Email links", async () => {

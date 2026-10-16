@@ -628,6 +628,8 @@ const documentPresenceCondition = (
 const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
+    // A purchase with no live vendor leads a descending list.
+    vendorId: { sql: purchaseVendorName, nulls: "high" },
     expenseCount: purchaseExpenseCount,
     expenseTotal: purchaseExpenseTotal,
     documentCount: purchaseDocumentCount,

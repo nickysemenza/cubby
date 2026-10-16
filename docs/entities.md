@@ -1329,7 +1329,10 @@ one shape:
   `valuationStatus` statuses overlap).
 
 Every compiled sort part orders NULLS LAST in both directions, as stored
-columns do. A `related:<view>` roster entry orders by the view's first chip
+columns do, unless the part declares `{ sql, nulls: "high" }` (empties first
+when descending: a vendor's latest purchase, a purchase's vendor name) or a
+fixed `direction` (an Email's received time stays newest first within one
+link state). A `related:<view>` roster entry orders by the view's first chip
 (`relatedSortExpression`) for any entity. USDA food lists read the external
 release rather than a table, a declared exception whose service orders by its
 declared values.

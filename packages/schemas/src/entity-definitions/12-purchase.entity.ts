@@ -1132,7 +1132,8 @@ export default defineEntity({
     ],
     derived: {
       reconciliationGap: { type: "number" },
-      vendorId: { via: "vendor" },
+      // The live vendor's name.
+      vendorId: { type: "text" },
       expenseCount: { type: "number" },
       expenseTotal: { type: "number" },
       documentCount: { type: "number" },
