@@ -1,0 +1,23 @@
+apps/web/src/server/domains/inventory/repo/inventory-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_3c066a58ac2a69 1-175
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_f04406e5b5f6fa 1-193
+apps/web/src/server/domains/project/repo/project-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_7a77ae62fdd273 1-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b0f05f2b609a23323b81ff8c812c2c503a6ffb97",
+  "prompts": {},
+  "sessions": {
+    "s_f9d414ac9cc014": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd04ade3-971f-4681-b1f2-fa2d03203a89",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
