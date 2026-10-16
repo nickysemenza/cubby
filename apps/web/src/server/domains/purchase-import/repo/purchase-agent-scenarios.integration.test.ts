@@ -406,16 +406,8 @@ describe("current purchase-agent system boundaries", () => {
           eq(imageProcessingJob.sourceContentHash, checksum),
         ),
       );
-    const unconfirmed = await approvePhotoGroupProposals(
-      ctx.db,
-      { runId: run.publicId },
-      ctx.actor,
-    );
-    expect(unconfirmed.results[0]).toMatchObject({
-      outcome: "failed",
-      error: expect.stringContaining("Confirm"),
-    });
-    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    // Approval itself records member confirmation (#2422); there is no
+    // separate confirm gate to fail first.
     await updatePhotoGroupProductDraft(ctx.db, {
       runId: run.publicId,
       groupKey: "synthetic-wardrobe-item",

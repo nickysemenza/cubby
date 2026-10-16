@@ -124,6 +124,7 @@ export const photoImportHandlers = implementOperationDomain(
           runId: await resolveOrThrow(context.db, "run", input.runId),
         },
         decideProductVariantComparisons,
+        input.groupKeys,
       );
     },
     productEvidence: async (context, input) => {

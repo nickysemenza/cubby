@@ -89,6 +89,8 @@ async function observedStartCall<T>(options: {
 }
 
 export type StartCallOptions = {
+  /** Keep this read in its own Worker invocation while retaining shared admission/retry. */
+  batch?: boolean;
   signal?: AbortSignal;
   speculative?: boolean;
 };
@@ -96,21 +98,21 @@ export type StartCallOptions = {
 /** Explicit adapter shape used by focused tests and in-process callers. */
 type StartTransportInvocation<Input> = (
   input: Input,
-  transport: { signal?: AbortSignal; headers: HeadersInit },
+  transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
 ) => Promise<StartOperationResult<unknown>>;
 
 export interface StartTransportRuntime {
   dispatch(
     operation: StartOperationId,
     input: UnparsedStartOperationData,
-    transport: { signal?: AbortSignal; headers: HeadersInit },
+    transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
   ): Promise<StartOperationResult<UnparsedStartOperationData>>;
 }
 
 async function dispatchServerOperation<Input>(
   operation: StartOperationId,
   input: Input,
-  transport: { signal?: AbortSignal; headers: HeadersInit },
+  transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
 ): Promise<StartOperationResult<UnparsedStartOperationData>> {
   const [
     { getRequest },
@@ -236,6 +238,7 @@ export function startOperation<Input, Output>(
                   )(input, {
                     signal: options?.signal,
                     headers,
+                    ...(options?.batch === false ? { batch: false } : {}),
                   }),
                 ),
                 config.createError,

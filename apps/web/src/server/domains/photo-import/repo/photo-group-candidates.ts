@@ -134,20 +134,26 @@ export async function loadRejectedPhotoProductCandidates(
   return [...rejected.values()];
 }
 
-/** All groups start together; model pairs are independently cached and run concurrently. */
+/** Requested groups start together; callers partition invocations without limiting total decisions. */
 export async function photoRunCandidates(
   db: Database,
   review: PhotoGroupProposalList,
   images: Parameters<typeof photoProductCandidates>[2],
   actor: ActorContext,
   compareVariants: ProductVariantComparator,
+  groupKeys?: readonly string[],
 ): Promise<z.infer<typeof photoRunCandidatesResponse>> {
+  const proposals = groupKeys
+    ? review.proposals.filter((proposal) =>
+        groupKeys.includes(proposal.groupKey),
+      )
+    : review.proposals;
   let rejections: Awaited<ReturnType<typeof loadRunRejections>>;
   try {
     rejections = await loadRunRejections(db, review.runId);
   } catch (error) {
     return {
-      groups: review.proposals.map((proposal) => ({
+      groups: proposals.map((proposal) => ({
         groupKey: proposal.groupKey,
         status: "failed",
         error: scrubErrorMessage(getErrorMessage(error)),
@@ -158,7 +164,7 @@ export async function photoRunCandidates(
     };
   }
   const groups = await Promise.all(
-    review.proposals.map(async (proposal) => {
+    proposals.map(async (proposal) => {
       let rejectedCandidates: Awaited<
         ReturnType<typeof loadRejectedPhotoProductCandidates>
       > = [];

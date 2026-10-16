@@ -588,7 +588,10 @@ test("suggests an existing variant and previews every merge decision for a creat
   const group = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: createdName }),
   });
-  await group.getByRole("button", { name: "Compare", exact: true }).click();
+  // Weak neighbours offer the list without naming one; strong ones say "Compare".
+  await group
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
+    .click();
   await expect(
     group.getByRole("link", { name: candidateName, exact: true }),
   ).toBeVisible();
@@ -645,7 +648,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     .getByText("Review possible matches", { exact: true })
     .click();
   await appliedGroup
-    .getByRole("button", { name: "Compare", exact: true })
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
@@ -779,12 +782,14 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
+  // Selected Products show inline evidence; the create group owns alternative comparisons.
+  await page.locator("#photo-group-g2").scrollIntoViewIfNeeded();
   await page
-    .locator("#photo-group-g1")
-    .getByRole("button", { name: "Compare", exact: true })
+    .locator("#photo-group-g2")
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   const comparison = page
-    .locator("#photo-group-g1")
+    .locator("#photo-group-g2")
     .locator("[data-record-list]");
   await expect(comparison.getByText(existingName).first()).toBeVisible();
   await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
@@ -1164,9 +1169,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     manufacturer: "Synthetic Outfitters",
     model: "SJ-104",
   });
+  const runName = `Synthetic evidence ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
     page,
-    `Synthetic evidence ${Date.now()}`,
+    runName,
     e2eRuntime.objectStorageUrl,
   );
   await seedPhotoReviewLabelText(
@@ -1216,6 +1222,12 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     },
     {
       ...seed.groups[1]!,
+      inventory: undefined,
+      review: {
+        observedName: "Synthetic shell jacket",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+      },
       product: {
         kind: "create" as const,
         create: {
@@ -1242,7 +1254,13 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       .locator('[data-slot="card-header"]')
       .getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
-  await expect(attach.getByText(/On hand:/)).toBeVisible();
+  await expect(attach.getByText("On hand", { exact: true })).toBeVisible();
+  await expect(
+    attach.getByRole("link", { name: `${runName} location` }),
+  ).toBeVisible();
+  await expect(attach.getByText("Not counted", { exact: false })).toHaveCount(
+    0,
+  );
   await expect(
     attach.getByText("Closest existing:", { exact: false }),
   ).toHaveCount(0);
@@ -1337,9 +1355,14 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
+  await expect(
+    create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(create.getByText("＋ New", { exact: true })).toBeVisible();
   await expect(
-    create.getByRole("button", { name: "Add ‘xl’ to name", exact: true }),
+    create.getByRole("button", { name: /^Add ‘xl’ to name$/i }),
   ).toBeVisible();
   await expect(create.locator('[aria-label="Field cross-checks"]')).toHaveCount(
     0,
@@ -1355,9 +1378,9 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     }),
   });
   await expect(
-    nameField.getByRole("button", { name: "Add ‘blue’ to name", exact: true }),
+    nameField.getByRole("button", { name: /^Add ‘blue’ to name$/i }),
   ).toBeVisible();
-  await expect(nameField.getByText(/label adds/)).toBeVisible();
+  await expect(nameField.getByText(/Label:|Label differs/)).toBeVisible();
   await create.locator('[data-slot="card"]').first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
   });
@@ -1366,12 +1389,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review-polish/phone-create-mark.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await create
-    .getByRole("button", { name: "Add ‘xl’ to name", exact: true })
-    .click();
+  await create.getByRole("button", { name: /^Add ‘xl’ to name$/i }).click();
   await expect(
     create.getByRole("textbox", { name: "New product name", exact: true }),
-  ).toHaveValue("Synthetic shell jacket xl");
+  ).toHaveValue(/^Synthetic shell jacket xl$/i);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await create.scrollIntoViewIfNeeded();
@@ -1390,17 +1411,17 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.locator('[aria-label="Field cross-checks"]'),
   ).toBeVisible();
+  const attachChecks = attach.locator('[aria-label="Field cross-checks"]');
   await expect(
-    attach.getByRole("columnheader", { name: "Photo label", exact: true }),
+    attachChecks.getByText("Photo label", { exact: true }),
+  ).toBeVisible();
+  // Manufacturer and model are printed on the label; both agree.
+  await expect(
+    attachChecks.getByText("SJ-104", { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    attach.getByText("No label evidence for identifiers, colour, size", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    attach.locator('[aria-label="Field cross-checks"] tbody tr'),
-  ).toHaveCount(3);
+    attachChecks.getByText("Matches the label").first(),
+  ).toBeAttached();
   await attach.locator('[data-slot="card"]').first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
   });
@@ -1409,6 +1430,31 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review-polish/phone-attach-label.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  // An inferred comparison of saved catalog fields cannot bless a pending model edit.
+  const changed = await startOperation(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: [
+      {
+        ...groups[0]!,
+        review: { ...groups[0]!.review, productChanges: { model: "SJ-999" } },
+      },
+    ],
+  });
+  expect(changed.ok(), await changed.text()).toBeTruthy();
+  const inferred = page.waitForResponse(
+    (response) =>
+      response.request().postData()?.includes("photoImport.candidatesBatch") ===
+      true,
+  );
+  await page.reload();
+  await (await inferred).finished();
+  await expect(
+    attach.getByText("Checking existing Products…", { exact: true }),
+  ).toHaveCount(0);
+  const modelRow = attach.locator('[data-cross-check="model"]');
+  await expect(modelRow).toContainText("Label differs or adds a term");
+  await expect(modelRow).toContainText("SJ-999");
+
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })
     .click();
@@ -1553,11 +1599,108 @@ test("keeps a weak closest match quiet", async ({ page, e2eRuntime }) => {
     page.getByRole("heading", { name: "Photo review" }),
   );
   const group = page.locator("#photo-group-g1");
+  // A weak lexical neighbour is not named; the list stays one click away.
   await expect(
-    group.getByText(/Closest existing: Synthetic studio stool oak/),
+    group.getByRole("button", { name: "Compare existing Products" }),
   ).toBeVisible();
+  await expect(group.getByText(/Synthetic studio stool oak/)).toHaveCount(0);
   await expect(group.getByText(/Possible duplicate:/)).toHaveCount(0);
   await expect(
     group.getByRole("button", { name: "Create product", exact: true }),
   ).toBeEnabled();
+});
+
+// Real care labels are noisy: repeated lines, provenance, materials and a style
+// code. Only size, colour and identifiers may raise a mark; noise never becomes
+// an "Add to name" suggestion, and the agent's working note stays collapsed.
+test("keeps a noisy care label to meaningful checks and linked purchase evidence", async ({
+  page,
+  e2eRuntime,
+}) => {
+  test.setTimeout(90_000);
+  const productName = "Acme Harbor Penny Loafer, Black, Size 9";
+  const existing = await createEntityFixture(page, "product", {
+    name: productName,
+    manufacturer: "Acme",
+  });
+  const runName = `Synthetic care label ${Date.now()}`;
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    runName,
+    e2eRuntime.objectStorageUrl,
+  );
+  await seedPhotoReviewLabelText(
+    seed.itemImage.shortcode,
+    "MEN'S\n9M\nC33223\nMADE IN VIETNAM\nBather and Manmade\nMEN'S",
+  );
+  const vendor = await createEntityFixture(page, "vendor", {
+    name: "Example Marketplace",
+    website: "https://example.test",
+  });
+  const purchase = await createEntityFixture(page, "purchase", {
+    vendorId: vendor.id,
+    orderId: "Synthetic loafer order",
+    date: "2023-09-16",
+    defaultTrade: "other",
+  });
+  await createEntityFixture(page, "expense", {
+    name: "Synthetic loafer purchase",
+    purchaseId: purchase.id,
+    trade: "other",
+    costType: "materials",
+    cost: 106.04,
+    date: "2023-09-16",
+    productId: existing.id,
+    productQuantity: 1,
+  });
+  const agentNote =
+    "Synthetic agent note: label OCR reads a style code. INVENTORY DRAFT HELD for a synthetic reason that should stay out of the way.";
+  const saved = await startOperation(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: [
+      {
+        ...seed.groups[0]!,
+        product: { kind: "existing" as const, existingId: existing.id },
+        evidence: agentNote,
+        review: {
+          observedName: productName,
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
+        inventory: undefined,
+      },
+    ],
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-group-g1`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const card = page.locator("#photo-group-g1");
+  const label = card.locator(".decision-steps-media").getByLabel("Label text");
+  await expect(label).toContainText("C33223");
+  await expect(label).toHaveText(
+    /^MEN'S · 9M · C33223 · MADE IN VIETNAM · Bather and Manmade$/,
+  );
+
+  const checks = card.locator('[aria-label="Field cross-checks"]');
+  await expect(checks.getByText("9M", { exact: true })).toBeVisible();
+  await expect(checks.getByText("Matches the label").first()).toBeAttached();
+  await expect(checks.getByText(/C33223/).first()).toBeVisible();
+  await expect(
+    card.getByText(/Add ‘(?:made|in|vietnam|bather|and|manmade|men's)’/i),
+  ).toHaveCount(0);
+  await expect(card.getByText(/label adds/)).toHaveCount(0);
+
+  await expect(
+    card.getByRole("link", { name: "Example Marketplace" }),
+  ).toBeVisible();
+  await expect(card.getByRole("link", { name: "$106.04" })).toBeVisible();
+
+  await expect(card.getByText("Why the agent proposed this")).toBeVisible();
+  await expect(card.getByText(agentNote)).toBeHidden();
+  await card.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-real-data/desktop-care-label.png",
+  });
 });

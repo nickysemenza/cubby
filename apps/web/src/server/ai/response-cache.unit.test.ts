@@ -1,7 +1,14 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { aiResponseCacheKey, withAiResponseCache } from "./response-cache";
+import * as cfEnv from "~/server/cf-env";
+
+import {
+  AiResponseCacheBatch,
+  aiResponseCacheKey,
+  withAiResponseCache,
+} from "./response-cache";
 
 const input = (name: string) => ({
   feature: "test",
@@ -21,6 +28,81 @@ const input = (name: string) => ({
 const validate = z.object({ choice: z.string() }).parse;
 
 describe("AI response cache", () => {
+  // A full group's pair reads must be bounded by shards/chunks, not candidate count.
+  it("batches 240 cache lookups and reuses hits while handling misses", async () => {
+    const { getAiResponseCacheNamespace } = await import("~/server/cf-env");
+    const namespace = getAiResponseCacheNamespace();
+    expect(namespace).toBeUndefined();
+    const inputs = Array.from({ length: 240 }, (_, index) =>
+      input(`batch-${crypto.randomUUID()}-${index}`),
+    );
+    const compute = vi.fn(async () => ({ choice: "one" }));
+    const run = () => {
+      const batch = new AiResponseCacheBatch(inputs.length);
+      return Promise.all(
+        inputs.map((keyInput, index) =>
+          withAiResponseCache({
+            enabled: true,
+            keyInput,
+            validate,
+            compute,
+            batch: { batch, index },
+          }),
+        ),
+      );
+    };
+    expect(await run()).toEqual(
+      Array.from({ length: 240 }, () => ({ choice: "one" })),
+    );
+    expect(compute).toHaveBeenCalledTimes(240);
+    await run();
+    expect(compute).toHaveBeenCalledTimes(240);
+  });
+
+  it("uses at most 64 shard reads for a 240-pair group", async () => {
+    const read = vi.fn(
+      async (requests: readonly { key: string; force: boolean }[]) => {
+        expect(requests.length).toBeLessThanOrEqual(128);
+        return requests.map(() => ({
+          kind: "hit" as const,
+          value: JSON.stringify({ choice: "one" }),
+        }));
+      },
+    );
+    const single = vi.fn();
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({ readOrClaimMany: read, readOrClaim: single }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    try {
+      const batch = new AiResponseCacheBatch(240);
+      const compute = vi.fn();
+      const results = await Promise.all(
+        Array.from({ length: 240 }, (_, index) =>
+          withAiResponseCache({
+            enabled: true,
+            keyInput: input(`bounded-${index}`),
+            validate,
+            compute,
+            batch: { batch, index },
+          }),
+        ),
+      );
+      expect(results).toHaveLength(240);
+      expect(read.mock.calls.length).toBeGreaterThan(0);
+      expect(read.mock.calls.length).toBeLessThanOrEqual(64);
+      expect(single).not.toHaveBeenCalled();
+      expect(compute).not.toHaveBeenCalled();
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
   it("keys the effective input while preserving choice order", async () => {
     const a = await aiResponseCacheKey(input("alpha"));
     const b = await aiResponseCacheKey({

@@ -841,17 +841,6 @@ export async function proposePhotoGroups(
 
     const resolved: ResolvedGroup[] = [];
     for (const group of writable) {
-      const previous = existingByKey.get(group.groupKey)?.review;
-      if (previous && group.review) {
-        group.review = {
-          ...group.review,
-          unresolvedReason:
-            normalizeReview(previous)?.unresolvedReason ??
-            group.review.unresolvedReason,
-          resolvedConcerns: previous.resolvedConcerns,
-          confirmation: null,
-        };
-      }
       const rosterCodes = new Set(
         [...group.images, ...(group.skip ?? [])].map((entry) => entry.id),
       );
@@ -877,17 +866,36 @@ export async function proposePhotoGroups(
           ...liveRoster(row, runImages.byId).skipCodes,
         ]),
       ]);
+      // Concerns and their history follow photos just like rejection scope.
+      // Only resolvePhotoGroupConcern may clear a predecessor's concern.
+      const concerns = [
+        ...new Set([
+          ...predecessors.flatMap(
+            (row) =>
+              normalizeReview(row.review)?.unresolvedReason?.split("\n") ?? [],
+          ),
+          ...(normalizeReview(group.review)?.unresolvedReason?.split("\n") ??
+            []),
+        ]),
+      ];
+      const resolvedConcerns = [
+        ...new Map(
+          predecessors
+            .flatMap((row) => row.review?.resolvedConcerns ?? [])
+            .map((concern) => [JSON.stringify(concern), concern]),
+        ).values(),
+      ];
       group.review = {
         ...(group.review ?? {
           observedName:
             group.product.kind === "create"
               ? group.product.create.name
               : group.groupKey,
-          unresolvedReason: null,
           stockIntent: group.inventory ? "receive" : "evidence",
         }),
+        unresolvedReason: concerns.join("\n") || null,
         candidateScopeImageIds: [...lineage],
-        resolvedConcerns: previous?.resolvedConcerns ?? [],
+        resolvedConcerns,
         confirmation: null,
       };
       resolved.push(await resolveGroup(txDb, run, group, runImages.byCode));

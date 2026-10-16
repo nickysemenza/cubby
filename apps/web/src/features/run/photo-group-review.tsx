@@ -108,6 +108,7 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
+import { loadPhotoRunCandidateChunks } from "./photo-run-candidates";
 
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")
@@ -115,6 +116,28 @@ function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "approve")
     return photoImport.approveGroups.call({ ...action, runId });
   return photoImport.discardGroup.call({ ...action, runId });
+}
+
+function usePhotoRunCandidates(runId: string, enabled = false) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    ...photoImport.candidatesBatch.queryOptions({ runId }),
+    queryFn: async ({ signal }) => {
+      const review = await queryClient.ensureQueryData(
+        photoImport.review.queryOptions({ runId }),
+      );
+      return loadPhotoRunCandidateChunks(
+        review.review.proposals.map((proposal) => proposal.groupKey),
+        (groupKeys) =>
+          photoImport.candidatesBatch.call(
+            { runId, groupKeys },
+            { signal, batch: false },
+          ),
+      );
+    },
+    enabled,
+    staleTime: Infinity,
+  });
 }
 
 /**
@@ -476,6 +499,68 @@ function GroupPhotos({
   );
 }
 
+// Style/model codes: letters and digits mixed, at least five characters.
+const LABEL_IDENTIFIER = /^(?=.*\p{L})(?=.*\p{N})[\p{L}\p{N}-]{5,}$/u;
+
+function labelLines(text: string) {
+  const seen = new Set<string>();
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      const key = line.toLocaleLowerCase();
+      if (!line || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function LabelText({ text }: { text: string }) {
+  const lines = labelLines(text);
+  if (!lines.length) return null;
+  return (
+    <p
+      className="rounded bg-muted px-1.5 py-1 font-mono text-2xs leading-relaxed break-words"
+      aria-label="Label text"
+    >
+      {lines.map((line, index) => (
+        <span key={line}>
+          {index ? <span className="text-muted-foreground"> · </span> : null}
+          {line.split(/(\s+)/).map((part) =>
+            LABEL_IDENTIFIER.test(part) ? (
+              <strong key={part} className="font-semibold">
+                {part}
+              </strong>
+            ) : (
+              part
+            ),
+          )}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function ClampedText({ children }: { children: string }) {
+  const [open, setOpen] = useState(false);
+  const long = children.length > 140;
+  return (
+    <div>
+      <p className={open || !long ? undefined : "line-clamp-3"}>{children}</p>
+      {long ? (
+        <button
+          type="button"
+          className="text-muted-foreground underline"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Less" : "More"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function GroupEvidence({
   proposal,
   imagesById,
@@ -487,45 +572,42 @@ function GroupEvidence({
     const photo = imagesById.get(entry.id);
     return photo ? [photo] : [];
   });
-  const missing = photos.some(
-    (photo) => photo.descriptionEvidence?.missingReason,
-  );
+  const missing = photos.filter(
+    (photo) =>
+      photo.descriptionEvidence?.missingReason && !photo.recognizedText?.trim(),
+  ).length;
   return (
     <section aria-label="Photo evidence" className="space-y-2 text-xs">
       {photos.map((photo) => {
         const description =
           photo.descriptionEvidence?.description ?? photo.description;
         const claims = photo.descriptionEvidence?.claims ?? [];
-        if (!description && !claims.length && !photo.recognizedText)
-          return null;
+        if (!description && !photo.recognizedText?.trim()) return null;
         return (
           <div key={photo.id} className="space-y-1">
             {photo.recognizedText ? (
-              <p
-                className="rounded bg-muted p-1 break-words whitespace-pre-wrap"
-                aria-label="Label text"
-              >
-                {photo.recognizedText}
-              </p>
+              <LabelText text={photo.recognizedText} />
             ) : null}
             {description ? (
-              <p>
-                {photo.descriptionEvidence?.authority === "member"
-                  ? "Your description: "
-                  : ""}
-                {description}
-              </p>
+              <div className="text-muted-foreground">
+                {photo.descriptionEvidence?.authority === "member" ? (
+                  <span className="font-medium text-foreground">Yours · </span>
+                ) : null}
+                <ClampedText>{description}</ClampedText>
+              </div>
             ) : null}
             {claims.length ? (
-              <details>
+              <details className="text-muted-foreground">
                 <summary className="cursor-pointer">
                   {countLabel(claims.length, "claim")}
                 </summary>
-                {claims.map((claim) => (
-                  <p key={`${claim.evidenceKind}-${claim.text}`}>
-                    {claim.evidenceKind}: {claim.text}
-                  </p>
-                ))}
+                <ul className="mt-1 space-y-0.5">
+                  {claims.map((claim) => (
+                    <li key={`${claim.evidenceKind}-${claim.text}`}>
+                      {claim.text}
+                    </li>
+                  ))}
+                </ul>
               </details>
             ) : null}
           </div>
@@ -533,7 +615,9 @@ function GroupEvidence({
       })}
       {missing ? (
         <p className="text-muted-foreground">
-          No description analysis retained.
+          {missing === photos.length
+            ? "No description analysis retained."
+            : `${countLabel(missing, "photo")} without description analysis.`}
         </p>
       ) : null}
     </section>
@@ -636,7 +720,16 @@ function CommitInput({
         />
         {crossCheck ? (
           <div className="min-w-0 space-y-1">
-            <FieldMark check={crossCheck} value={value} />
+            <p className="text-muted-foreground">
+              <FieldMark check={crossCheck} />{" "}
+              {crossCheck.mark === "agree"
+                ? "Matches label"
+                : crossCheck.labelValue
+                  ? `Label: ${crossCheck.labelValue}`
+                  : crossCheck.mark === "unknown"
+                    ? "Label is silent"
+                    : "Label differs"}
+            </p>
             {actions ? (
               <Row gap="xs" wrap>
                 {actions}
@@ -756,146 +849,226 @@ const crossCheckMark = {
   "disagree-or-missing": "!",
   unknown: "?",
 } as const;
-function FieldMark({
-  check,
-  value,
-}: {
-  check: PhotoFieldCrossCheck;
-  value?: string | null;
-}) {
-  const additions = check.tokens.filter(
-    (token) =>
-      token.mark === "disagree-or-missing" &&
-      value &&
-      !value.toLocaleLowerCase().includes(token.text.toLocaleLowerCase()),
-  );
-  const detail =
-    check.mark === "agree"
-      ? "Matches label"
-      : check.mark === "unknown"
-        ? "No label evidence"
-        : additions.length
-          ? `label adds ${additions.map((token) => `‘${token.text}’`).join(", ")} — not in ${check.field}`
-          : "Label differs or is incomplete";
+const crossCheckMeaning = {
+  agree: "Matches the label",
+  "disagree-or-missing": "Label differs or adds a term",
+  unknown: "Label doesn't confirm this",
+} as const;
+
+function suggestionText(
+  suggestion: NonNullable<PhotoFieldCrossCheck["suggestion"]>,
+) {
+  return suggestion.kind === "add_to_name"
+    ? `Add ‘${suggestion.value}’ to name`
+    : suggestion.kind === "set_model"
+      ? `Set model to ${suggestion.value}`
+      : `Add identifier ${suggestion.value}`;
+}
+
+function FieldMark({ check }: { check: PhotoFieldCrossCheck }) {
   return (
     <span
       className={
-        check.mark === "disagree-or-missing"
-          ? "text-warning"
-          : "text-muted-foreground"
+        check.mark === "agree"
+          ? "text-positive"
+          : check.mark === "disagree-or-missing"
+            ? "text-warning"
+            : "text-muted-foreground"
       }
-      title={check.tokens
-        .map((token) => `${crossCheckMark[token.mark]} ${token.text}`)
-        .join(" · ")}
+      title={`${crossCheckMeaning[check.mark]}${check.source === "model" ? " (model judgment)" : ""}`}
     >
-      {crossCheckMark[check.mark]} {detail}
-      {check.source === "model" ? " · model" : ""}
+      <span aria-hidden>{crossCheckMark[check.mark]}</span>
+      <span className="sr-only">{crossCheckMeaning[check.mark]}</span>
     </span>
   );
 }
 
+const fieldLabel = (field: PhotoFieldCrossCheck["field"]) =>
+  field === "color" ? "colour" : field;
+
 function FieldCrossChecks({
   checks,
   name,
-  labelText = "",
   product,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
   name?: string;
-  labelText?: string;
   product?: Pick<
     PhotoProductEvidence,
     "manufacturer" | "model" | "identifiers"
   >;
 }) {
-  const observed = new Set(
-    labelText
-      .toLocaleLowerCase()
-      .match(/[\p{L}\p{N}]+(?:[./-][\p{L}\p{N}]+)*/gu) ?? [],
+  // Rows need label evidence; a field the label is silent about folds into one line.
+  const evidenced = checks.filter(
+    (check) =>
+      Boolean(check.labelValue) || check.mark === "disagree-or-missing",
   );
-  const hasEvidence = (check: PhotoFieldCrossCheck) =>
-    check.tokens.some(
-      (token) =>
-        token.mark === "agree" || observed.has(token.text.toLocaleLowerCase()),
-    ) ||
-    (check.source === "model" && check.mark === "disagree-or-missing");
-  const evidenced = checks.filter(hasEvidence);
-  const absent = checks.filter((check) => !hasEvidence(check));
-  const fieldLabel = (field: PhotoFieldCrossCheck["field"]) =>
-    field === "color" ? "colour" : field;
-  if (!labelText.trim()) return null;
+  const absent = checks.filter((check) => !evidenced.includes(check));
+  if (!evidenced.length) return null;
+  const stored = (check: PhotoFieldCrossCheck) =>
+    check.productValue ??
+    (check.field === "identifiers"
+      ? product?.identifiers?.join(" · ")
+      : check.field === "manufacturer" || check.field === "model"
+        ? product?.[check.field]
+        : check.field === "name"
+          ? name
+          : null);
   return (
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
-      {evidenced.length ? (
-        <Table className="w-full table-fixed text-left">
-          <TableHeader>
-            <TableRow className="border-0 text-muted-foreground">
-              <TableHead className="h-7 px-0 font-medium">
-                Photo label
-              </TableHead>
-              <TableHead className="h-7 px-0 font-medium">In Cubby</TableHead>
-              <TableHead className="h-7 w-6 px-0">
-                <span className="sr-only">Agreement</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {evidenced.map((check) => {
-              const value =
-                check.field === "name"
-                  ? name
-                  : check.field === "identifiers"
-                    ? product?.identifiers?.join(" · ")
-                    : check.field === "manufacturer" || check.field === "model"
-                      ? product?.[check.field]
-                      : name;
-              const printed = check.tokens
-                .filter(
-                  (token) =>
-                    observed.has(token.text.toLocaleLowerCase()) ||
-                    token.mark === "agree",
-                )
-                .map((token) => token.text)
-                .join(" ");
-              return (
-                <TableRow key={check.field} className="border-0 align-top">
-                  <TableCell className="px-0 py-1 pr-2 break-words whitespace-normal">
-                    <span className="text-muted-foreground">
-                      {fieldLabel(check.field)} ·{" "}
-                    </span>
-                    {printed || "Label differs"}
-                  </TableCell>
-                  <TableCell className="px-0 py-1 pr-2 break-words whitespace-normal">
-                    {value || "Not recorded"}
-                    {check.mark === "disagree-or-missing" ? (
-                      <p>
-                        <FieldMark check={check} value={value} />
-                      </p>
-                    ) : null}
-                  </TableCell>
-                  <TableCell
-                    className={`px-0 py-1 text-right ${check.mark === "agree" ? "text-positive" : check.mark === "disagree-or-missing" ? "text-warning" : "text-muted-foreground"}`}
-                    title={
-                      check.source === "model"
-                        ? "Model comparison"
-                        : "Literal label comparison"
-                    }
-                  >
-                    {crossCheckMark[check.mark]}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      ) : null}
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1fr)_1rem] gap-x-3 gap-y-1">
+        <span />
+        <span className="text-muted-foreground">Photo label</span>
+        <span className="text-muted-foreground">In Cubby</span>
+        <span />
+        {evidenced.map((check) => (
+          <div
+            key={check.field}
+            className="contents"
+            data-cross-check={check.field}
+          >
+            <span className="text-muted-foreground">
+              {fieldLabel(check.field)}
+            </span>
+            <span className="break-words">{check.labelValue ?? "—"}</span>
+            <span className="break-words">
+              {stored(check) || (
+                <span className="text-muted-foreground">Not recorded</span>
+              )}
+              {check.mark === "disagree-or-missing" && check.suggestion ? (
+                <span className="block text-warning">
+                  {suggestionText(check.suggestion)}
+                </span>
+              ) : null}
+            </span>
+            <FieldMark check={check} />
+          </div>
+        ))}
+      </div>
       {absent.length ? (
         <p className="text-muted-foreground">
-          No label evidence for{" "}
+          Label is silent on{" "}
           {absent.map((check) => fieldLabel(check.field)).join(", ")}
         </p>
       ) : null}
     </div>
+  );
+}
+
+type PurchaseLine = NonNullable<PhotoProductEvidence["purchaseLines"]>[number];
+
+function PurchaseLineRow({ line }: { line: PurchaseLine }) {
+  return (
+    <Row gap="xs" wrap align="center" className="min-w-0">
+      <span className="text-muted-foreground">{line.dateLabel ?? "Paid"}</span>
+      {line.date ? <DateDisplay start={line.date} /> : <span>Undated</span>}
+      <span className="text-muted-foreground">·</span>
+      {line.purchaseId ? (
+        <EntityRefLink
+          variant="chip"
+          entity="purchase"
+          id={line.purchaseId}
+          name={
+            line.purchaseLabel && line.purchaseLabel !== line.vendor
+              ? line.purchaseLabel
+              : "Order"
+          }
+          displayImage={null}
+        />
+      ) : null}
+      {line.vendorId && line.vendor ? (
+        <EntityRefLink
+          variant="chip"
+          entity="vendor"
+          id={line.vendorId}
+          name={line.vendor}
+          displayImage={null}
+        />
+      ) : line.vendor && !line.purchaseId ? (
+        <span>{line.vendor}</span>
+      ) : null}
+      <span className="text-muted-foreground">·</span>
+      <EntityRefLink
+        entity="expense"
+        data={{
+          id: line.expenseId,
+          name: line.cost == null ? "Price unknown" : formatCurrency(line.cost),
+        }}
+        displayImage={null}
+      />
+      {line.productQuantity != null && line.productQuantity !== 1 ? (
+        <span className="text-muted-foreground">× {line.productQuantity}</span>
+      ) : null}
+    </Row>
+  );
+}
+
+function PurchaseLines({
+  lines,
+  total,
+  productId,
+}: {
+  lines: readonly PurchaseLine[];
+  total: number;
+  productId: ProductShortcode;
+}) {
+  const [latest, ...rest] = lines;
+  if (!latest)
+    return <p className="text-muted-foreground">No purchases recorded</p>;
+  const hidden = total - lines.length;
+  return (
+    <div className="space-y-1">
+      <PurchaseLineRow line={latest} />
+      {rest.length || hidden > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground">
+            {countLabel(total - 1, "more purchase")}
+          </summary>
+          <div className="mt-1 space-y-1">
+            {rest.map((line) => (
+              <PurchaseLineRow key={line.expenseId} line={line} />
+            ))}
+            {hidden > 0 ? (
+              <Link
+                to="/products/$shortcode"
+                params={{ shortcode: productId }}
+                className="text-muted-foreground underline"
+              >
+                All {total} on the Product
+              </Link>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function OnHand({ product }: { product: PhotoProductEvidence }) {
+  const entries = product.inventoryEntries ?? [];
+  if (entries.length)
+    return (
+      <Row gap="xs" wrap align="center">
+        <span className="text-muted-foreground">On hand</span>
+        {entries.map((entry) => (
+          <Row key={entry.id} gap="xs" align="center">
+            <span>
+              {entry.amount.value} {entry.amount.unit}
+            </span>
+            <EntityRefLink
+              entity="location"
+              data={{ id: entry.location.id, name: entry.location.name }}
+              displayImage={null}
+            />
+          </Row>
+        ))}
+      </Row>
+    );
+  const units = product.quantity?.onHandUnits;
+  return units == null ? null : (
+    <p>
+      <span className="text-muted-foreground">On hand</span> {units}
+    </p>
   );
 }
 
@@ -936,31 +1109,23 @@ function SelectedProductEvidence({
           )}
           <div className="min-w-0">
             <p className="text-muted-foreground">In Cubby</p>
-            <p className="font-medium">{product.name}</p>
+            <EntityRefLink
+              entity="product"
+              data={{ id: product.id, name: product.name }}
+              displayImage={null}
+              className="font-medium"
+            />
             {product.manufacturer ? <p>{product.manufacturer}</p> : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
         </Row>
       ) : null}
-      {product.purchaseLines?.map((line) => (
-        <p key={line.expenseId}>
-          {line.dateLabel ?? "Paid"}{" "}
-          {line.date ? <DateDisplay start={line.date} /> : "date unknown"} ·{" "}
-          {line.vendor ?? "Vendor unknown"} ·{" "}
-          {line.cost == null ? "Price unknown" : formatCurrency(line.cost)} · +
-          {line.productQuantity ?? "?"}
-        </p>
-      ))}
-      {(product.purchaseLineCount ?? 0) > 3 ? (
-        <p>+{(product.purchaseLineCount ?? 0) - 3} more purchase lines</p>
-      ) : null}
-      <p>On hand: {product.quantity?.onHandUnits ?? "Not counted"}</p>
-      {product.inventoryEntries?.map((entry) => (
-        <p key={entry.id}>
-          {entry.amount.value} {entry.amount.unit} ·{" "}
-          {entry.location?.name ?? "Location unknown"}
-        </p>
-      ))}
+      <PurchaseLines
+        lines={product.purchaseLines ?? []}
+        total={product.purchaseLineCount ?? product.purchaseLines?.length ?? 0}
+        productId={product.id}
+      />
+      <OnHand product={product} />
       {product.ownPhotos?.length ? (
         <Row gap="sm" wrap>
           <span className="text-muted-foreground">Your photos</span>
@@ -1242,20 +1407,24 @@ function ProductPanel({
     ...productOperations.manufacturerOptions.queryOptions(),
     enabled: product.kind === "create",
   });
-  const batch = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: false,
-  });
+  const batch = usePhotoRunCandidates(runId);
   const candidates = batch.data?.groups.find(
     (group) => group.groupKey === proposal.groupKey,
   );
-  const checks =
+  const inferred =
     product.kind === "existing" &&
     candidates?.selectedComparison?.id === product.existing?.id
-      ? (candidates?.selectedComparison?.crossCheck ??
-        proposal.crossCheck ??
-        [])
-      : (proposal.crossCheck ?? []);
+      ? (candidates?.selectedComparison?.crossCheck ?? [])
+      : [];
+  const checks = (proposal.crossCheck ?? []).map((check) =>
+    check.source === "model" &&
+    (check.field === "color" || check.field === "size")
+      ? (inferred.find(
+          (candidate) =>
+            candidate.source === "model" && candidate.field === check.field,
+        ) ?? check)
+      : check,
+  );
   const selectedEvidence = useQuery({
     ...photoImport.productEvidence.queryOptions({
       runId,
@@ -1344,19 +1513,15 @@ function ProductPanel({
               crossCheck={checks.find((check) => check.field === "name")}
               actions={[
                 ...new Set(
-                  checks
-                    .filter((check) =>
-                      ["name", "size", "color"].includes(check.field),
-                    )
-                    .flatMap((check) => check.tokens)
-                    .filter(
-                      (token) =>
-                        token.mark === "disagree-or-missing" &&
-                        !product.create.name
-                          .toLocaleLowerCase()
-                          .includes(token.text.toLocaleLowerCase()),
-                    )
-                    .map((token) => token.text),
+                  checks.flatMap((check) =>
+                    check.mark === "disagree-or-missing" &&
+                    check.suggestion?.kind === "add_to_name" &&
+                    !product.create.name
+                      .toLocaleLowerCase()
+                      .includes(check.suggestion.value.toLocaleLowerCase())
+                      ? [check.suggestion.value]
+                      : [],
+                  ),
                 ),
               ].map((text) => (
                 <Button
@@ -1447,6 +1612,32 @@ function ProductPanel({
               <CommitInput
                 label="Model"
                 crossCheck={checks.find((check) => check.field === "model")}
+                actions={checks.flatMap((check) =>
+                  check.mark === "disagree-or-missing" &&
+                  (check.suggestion?.kind === "set_model" ||
+                    check.suggestion?.kind === "add_identifier") &&
+                  check.suggestion.value !== product.create.model
+                    ? [
+                        <Button
+                          key={check.suggestion.value}
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            saveProduct({
+                              kind: "create",
+                              create: {
+                                ...product.create,
+                                model: check.suggestion?.value ?? null,
+                              },
+                            })
+                          }
+                        >
+                          Use {check.suggestion.value} as model
+                        </Button>,
+                      ]
+                    : [],
+                )}
                 className="flex-1"
                 value={product.create.model ?? ""}
                 disabled={busy}
@@ -1497,9 +1688,17 @@ function ProductPanel({
         <>
           <FieldCrossChecks
             checks={checks}
-            name={proposalName(proposal)}
-            labelText={labelText}
-            product={selectedEvidence.data}
+            name={
+              proposal.review?.productChanges?.name ?? proposalName(proposal)
+            }
+            product={
+              selectedEvidence.data
+                ? {
+                    ...selectedEvidence.data,
+                    ...proposal.review?.productChanges,
+                  }
+                : undefined
+            }
           />
           {product.existing ? (
             <SelectedProductEvidence
@@ -1554,11 +1753,15 @@ function ProductPanel({
           expanded
         />
       ) : null}
-      <p className="text-xs text-muted-foreground">
-        ✓ deterministic match · ! different or missing · ? unknown
-      </p>
       {proposal.evidence ? (
-        <p className="text-xs text-muted-foreground">{proposal.evidence}</p>
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            Why the agent proposed this
+          </summary>
+          <p className="mt-1 leading-relaxed whitespace-pre-wrap">
+            {proposal.evidence}
+          </p>
+        </details>
       ) : null}
     </Stack>
   );
@@ -1579,10 +1782,7 @@ function PhotoProductSuggestions({
   settled?: boolean;
   expanded?: boolean;
 }) {
-  const suggestions = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: false,
-  });
+  const suggestions = usePhotoRunCandidates(runId);
   const group = suggestions.data?.groups.find(
     (item) => item.groupKey === proposal.groupKey,
   );
@@ -1623,20 +1823,33 @@ function PhotoProductSuggestions({
         <p className="text-xs text-muted-foreground">
           Checking existing Products…
         </p>
-      ) : closest ? (
-        <div
-          className={
-            strongDuplicate
-              ? "bg-warning/10 p-2 text-xs text-warning"
-              : "text-xs text-muted-foreground"
-          }
+      ) : closest && strongDuplicate ? (
+        <Row
+          gap="xs"
+          align="center"
+          wrap
+          className="rounded bg-warning/10 px-2 py-1 text-xs text-warning"
         >
-          {strongDuplicate ? "Possible duplicate" : "Closest existing"}:{" "}
-          {closest.name} ·{" "}
+          Possible duplicate:
+          <EntityRefLink
+            entity="product"
+            data={{ id: closest.id, name: closest.name }}
+            displayImage={null}
+          />
           <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
-            Compare
+            {open ? "Hide" : "Compare"}
           </Button>
-        </div>
+        </Row>
+      ) : closest ? (
+        // Weak lexical neighbours are not evidence; offer the list without naming one.
+        <Button
+          size="sm"
+          variant="ghost"
+          className="self-start text-xs text-muted-foreground"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Hide existing Products" : "Compare existing Products"}
+        </Button>
       ) : (
         <p className="text-xs text-muted-foreground">
           No matching existing Products.
@@ -2275,13 +2488,12 @@ function ProposalCard({
         ) : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <p className="max-w-2xl text-xs text-muted-foreground">
-            {proposal.product.kind === "create" ? "Create" : "Attach"}{" "}
-            {countLabel(proposal.images.length, "photo")}{" "}
-            {proposal.product.kind === "create" ? "as" : "to"}{" "}
-            {proposalName(proposal)}
+            {proposal.product.kind === "create"
+              ? `Creates ${proposalName(proposal)} and attaches ${countLabel(proposal.images.length, "photo")}`
+              : `Attaches ${countLabel(proposal.images.length, "photo")} to ${proposalName(proposal)}`}
             {proposal.inventory?.locationId
-              ? ` and add ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
-              : " as reference photos"}
+              ? ` and adds ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
+              : ""}
             .
           </p>
           <Button
@@ -2842,11 +3054,10 @@ export function PhotoGroupReview({
   const [pendingEdits, setPendingEdits] = useState(0);
   const queryClient = useQueryClient();
   const query = usePhotoRunReview(runId, runStatus, hasAgent);
-  const { refetch: refetchCandidates } = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: Boolean(query.data?.review.proposals.length),
-    staleTime: Infinity,
-  });
+  const { refetch: refetchCandidates } = usePhotoRunCandidates(
+    runId,
+    Boolean(query.data?.review.proposals.length),
+  );
   const candidateRevision = (query.data?.review.proposals ?? [])
     .map((proposal) => proposal.updatedAt)
     .join("|");
