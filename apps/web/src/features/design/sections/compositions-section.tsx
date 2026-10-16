@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type { DecisionStep } from "@cubby/schemas/decision-step";
 import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets";
 import { Command as CommandPrimitive } from "cmdk";
 import { useId, useState } from "react";
@@ -11,8 +12,9 @@ import {
 import { SuggestionReview } from "~/entity/suggestions/suggestion-review";
 import { Demo, DemoGrid } from "~/features/design/components/design-section";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
+import { DecisionSteps } from "~/ui/common/decision-steps";
 import { FormWrapper, UnifiedTextField } from "~/ui/forms/form-utils";
-import { Section, SectionHeading } from "~/ui/layout";
+import { Section, SectionHeading, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -300,6 +302,18 @@ export function SectionCompositionsSection() {
   const [count, setCount] = useState(2);
   return (
     <DemoGrid className="xl:grid-cols-2">
+      <Demo
+        name="DecisionSteps · attach"
+        note="Synthetic photo evidence · neutral attachment, citron attention."
+      >
+        <DecisionStepsDemo action="link" />
+      </Demo>
+      <Demo
+        name="DecisionSteps · create"
+        note="Synthetic product draft · blue marks the pending creation."
+      >
+        <DecisionStepsDemo action="create" />
+      </Demo>
       <Demo name="Section · headings, actions and deferred context">
         <SectionHeading
           as="h3"
@@ -542,5 +556,103 @@ export function QualityChartsSection() {
         </Demo>
       </DemoGrid>
     </Section>
+  );
+}
+
+function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [name, setName] = useState("Synthetic trail shoes · US 10");
+  const steps: DecisionStep[] = [
+    {
+      key: "product",
+      label: "Product",
+      status: "done",
+      summary: name,
+      action,
+      blockedReason: null,
+    },
+    {
+      key: "identity",
+      label: "Right one?",
+      status: confirmed ? "done" : "needs_input",
+      summary: confirmed ? "Label checked" : "Label: US 10 · size matches name",
+      action: null,
+      blockedReason: null,
+    },
+    {
+      key: "ownership",
+      label: "Own it now?",
+      status: confirmed ? "needs_input" : "blocked",
+      summary: "1 pair · hall cupboard",
+      action: "change",
+      blockedReason: confirmed ? null : "Check the label first",
+    },
+    {
+      key: "apply",
+      label: "Apply",
+      status: confirmed ? "needs_input" : "blocked",
+      summary: null,
+      action,
+      blockedReason: confirmed ? null : "Answer the steps above",
+    },
+  ];
+  return (
+    <DecisionSteps
+      steps={steps}
+      aria-label={`Synthetic ${action} decisions`}
+      media={
+        <figure>
+          <svg viewBox="0 0 112 112" aria-label="Synthetic shoe illustration">
+            <rect width="112" height="112" rx="4" fill="var(--muted)" />
+            <path
+              d="M18 75L27 39 48 44 55 62 92 77 94 88 18 88Z"
+              fill="var(--muted-foreground)"
+            />
+            <path
+              d="M18 83H94M36 51L50 54M33 59L53 63"
+              stroke="var(--card)"
+              strokeWidth="3"
+            />
+          </svg>
+          <figcaption>
+            Synthetic photo
+            <br />
+            Label: US 10
+          </figcaption>
+        </figure>
+      }
+      renderBody={(step) =>
+        step.key === "product" ? (
+          <Input
+            aria-label="Synthetic product name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        ) : step.key === "identity" ? (
+          <Stack gap="sm">
+            <p className="text-xs">
+              Ordered Sep 2, 2026 · Example outfitter · $48
+              <br />
+              On hand: 1 pair · hall cupboard
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmed(!confirmed)}
+            >
+              {confirmed ? "Review label again" : "This is the one"}
+            </Button>
+          </Stack>
+        ) : step.key === "ownership" ? (
+          <p className="text-xs">
+            Keep the existing count. Attaching evidence never adds units.
+          </p>
+        ) : (
+          <Button size="sm" onClick={() => setConfirmed(false)}>
+            {action === "link" ? "Attach 1 photo" : "Create product"}
+          </Button>
+        )
+      }
+    />
   );
 }

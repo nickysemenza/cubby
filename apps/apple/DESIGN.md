@@ -10,6 +10,8 @@ Use San Francisco through the standard system font design for record identity an
 
 Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus, and split views. The neutral canvas belongs to content; system bars and Liquid Glass retain native presentation. Resting panels use tonal separation and a hairline; overlays may use native elevation. Controls keep native hit behavior, and phone targets stay at least 44 points. Structured amounts use separate native Form rows for Amount, Upper amount and Unit, with distinct labels and native bordered field targets; do not compress multiple editable inputs and Remove into one row. Task-board Move actions name their task for accessibility.
 
+Action color is the third channel: it marks the outcome of a pending decision, separate from domain ("where am I?") and condition ("what state?"). Adaptive ActionCreate/ActionCreateSurface are blue, link/attach reuses Slate/Inset, ActionChange/ActionChangeSurface are muted ochre, and remove reuses Destructive. Primary controls stay ink; action color belongs on chips, glyphs and step marks.
+
 ## Navigation and generic records
 
 Mac has one main window with Settings in its sidebar. The sidebar is a native `List(.sidebar)` at small sidebar row size in a narrow column (170–260 points, ideal 200). Each domain section is collapsible, and the collapsed set persists across launches and windows. Catalog and Search use a grouped sidebar, selectable record list, adjacent complete detail, and an optional inspector. The inspector summarizes the already loaded row; the complete record and its actions remain in detail. Other workspaces use the main column. Keep menus, keyboard access, window restoration, selection, and related-record history.

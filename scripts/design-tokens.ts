@@ -7,6 +7,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetRoles = {
   AccentColor: "interaction",
   Signal: "signal",
+  ActionCreate: "action-create",
+  ActionCreateSurface: "action-create-surface",
+  ActionChange: "action-change",
+  ActionChangeSurface: "action-change-surface",
   Canvas: "canvas",
   Surface: "surface",
   Inset: "inset",
@@ -125,10 +129,13 @@ export function renderMetricsSwift(values: Record<string, string>) {
     "",
     "    static func optionColor(_ token: String?) -> Color? {",
     "        switch token {",
-    ...Object.entries(assetRoles).map(
-      ([asset, role]) =>
-        `        case "var(--${role})", "var(--brand-${role})": Color("${asset}")`,
-    ),
+    // Option colors describe domain/condition; pending actions use their assets directly.
+    ...Object.entries(assetRoles)
+      .filter(([, role]) => !role.startsWith("action-"))
+      .map(
+        ([asset, role]) =>
+          `        case "var(--${role})", "var(--brand-${role})": Color("${asset}")`,
+      ),
     "        default: nil",
     "        }",
     "    }",

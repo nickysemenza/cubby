@@ -112,6 +112,9 @@ test("receiving after a photo import writes nothing until additional units are c
   await dialog
     .getByRole("button", { name: "Additional units arrived" })
     .click();
+  await expect(
+    dialog.getByRole("button", { name: "Close Where and how many?" }),
+  ).toHaveAttribute("aria-expanded", "true");
   await selectComboboxItem(
     page,
     dialog.getByRole("combobox", { name: "Location" }),
@@ -123,6 +126,14 @@ test("receiving after a photo import writes nothing until additional units are c
   await dialog.getByRole("button", { name: "Add to inventory" }).click();
   expect(await boughtRows()).toEqual([]);
   await dialog.getByLabel("Amount Value").fill("2");
+  await dialog
+    .getByRole("button", { name: "Close Where and how many?" })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Open Where and how many?" })
+    .click();
+  await expect(dialog.getByLabel("Amount Value")).toHaveValue("2");
+  await page.screenshot({ path: "../../artifacts/decision-steps/receive.png" });
   await dialog.getByRole("button", { name: "Add to inventory" }).click();
   await expect(dialog).toHaveCount(0);
   const stocked = await boughtRows();

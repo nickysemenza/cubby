@@ -1,3 +1,11 @@
+import { eq } from "drizzle-orm";
+import { inventoryEntry } from "~/server/db/schema";
+import { getDb } from "~/server/db/helpers";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  createEntityFixture,
+  createEvidenceHarnessContext,
+} from "./fixtures/core";
 import {
   seedLocationPrerequisite,
   seedProductCategoryPrerequisite,
@@ -6,6 +14,7 @@ import { seedLedgerProduct } from "./fixtures/inventory-flow";
 import {
   escapeRegExp,
   gotoAuthenticatedPage,
+  gotoDetailActions,
   selectComboboxItem,
   uniqueName,
 } from "./support/e2e-helpers";
@@ -59,11 +68,18 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   const discard = page.getByRole("dialog");
   await expect(discard.getByLabel("Units discarded")).toHaveValue("2");
+  // Failure mode: step disclosure remounts fields and loses a dirty quantity.
+  await discard.getByLabel("Units discarded").fill("1");
   await selectComboboxItem(
     page,
     discard.getByRole("combobox", { name: "Trade" }),
     "Other",
   );
+  await discard.getByRole("button", { name: "Change What left?" }).click();
+  await discard.getByRole("button", { name: "Change What left?" }).click();
+  await expect(discard.getByLabel("Units discarded")).toHaveValue("1");
+  await discard.getByLabel("Units discarded").fill("2");
+  await page.screenshot({ path: "../../artifacts/decision-steps/discard.png" });
   await discard.getByRole("button", { name: "Discard", exact: true }).click();
   // Settling the last outstanding product ends the pass on its summary; with a
   // stranger's rows still queued, this one shows as done instead.
@@ -124,4 +140,96 @@ test("the not-on-a-shelf view offers a triage of its rows", async ({
   await page.getByRole("menuitem", { name: /Saved views/ }).click();
   await page.getByRole("menuitem", { name: /Triage these/ }).click();
   await expect(page).toHaveURL(/\/inventory\/triage$/);
+});
+
+// Failure modes: changing steps resets a dirty quantity or selected shelf;
+// declining the inventory adjustment still decrements stock on submission.
+test("discard decisions preserve quantity and shelf choice and allow leaving stock unchanged", async ({
+  page,
+}, testInfo) => {
+  const { db } = await createEvidenceHarnessContext(page);
+  const firstShelf = await seedLocationPrerequisite(
+    page,
+    uniqueName(testInfo, "Synthetic first shelf"),
+  );
+  const otherName = uniqueName(testInfo, "Synthetic other shelf");
+  const otherShelf = await seedLocationPrerequisite(page, otherName);
+  const product = await seedLedgerProduct(page, {
+    name: uniqueName(testInfo, "Synthetic discard supplies"),
+    bought: 10,
+    stocked: { locationId: firstShelf.id, quantity: 6 },
+  });
+  await createEntityFixture(page, "inventory", {
+    productId: product.id,
+    locationId: otherShelf.id,
+    amount: { value: 4, unit: "each" },
+  });
+  const trigger = page.getByRole("button", { name: "Discard...", exact: true });
+  await gotoDetailActions(page, `/products/${product.id}`, trigger);
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Discard", exact: true });
+  await dialog.getByLabel("Units discarded").fill("2");
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: "Trade" }),
+    "Other",
+  );
+  await dialog.getByRole("button", { name: "Open Adjust the shelf?" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "Discard", exact: true }),
+  ).toBeDisabled();
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: "Take from" }),
+    `${otherName} — 4 each`,
+  );
+  await page.screenshot({
+    path: "../../artifacts/decision-steps/discard-shelf.png",
+  });
+  await dialog.getByRole("button", { name: "Change What left?" }).click();
+  await expect(dialog.getByLabel("Units discarded")).toHaveValue("2");
+  await dialog
+    .getByRole("button", { name: "Change Adjust the shelf?" })
+    .click();
+  await expect(
+    dialog.getByRole("combobox", { name: "Take from" }),
+  ).toContainText(otherName);
+  await dialog
+    .getByRole("checkbox", { name: "Also take these units off the shelf" })
+    .uncheck();
+  await dialog.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const productId = await resolveOrThrow(db, "product", product.id);
+  const rows = await getDb(db)
+    .select()
+    .from(inventoryEntry)
+    .where(eq(inventoryEntry.productId, productId));
+  expect(
+    rows
+      .filter((row) => row.deletedAt === null)
+      .map((row) => row.amountValue)
+      .sort(),
+  ).toEqual([4, 6]);
+});
+
+test("design decision examples keep summaries inline and move media above phone rows", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(
+    page,
+    "/design#section-compositions",
+    page.getByRole("list", { name: "Synthetic link decisions" }),
+  );
+  const attach = page.getByRole("list", { name: "Synthetic link decisions" });
+  await attach.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "../../artifacts/decision-steps/design-desktop.png",
+  });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await attach.scrollIntoViewIfNeeded();
+  const trigger = attach.getByRole("button", { name: "Change Product" });
+  expect((await trigger.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await page.screenshot({
+    path: "../../artifacts/decision-steps/design-phone.png",
+  });
 });

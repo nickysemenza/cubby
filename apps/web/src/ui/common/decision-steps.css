@@ -1,0 +1,92 @@
+.decision-steps {
+  min-width: 0;
+}
+.decision-steps[data-with-media] {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: var(--brand-space-5);
+}
+.decision-steps-media {
+  width: 7rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.decision-steps-media img,
+.decision-steps-media svg {
+  width: 100%;
+  height: auto;
+}
+.decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {
+  column-gap: var(--brand-space-2);
+}
+.decision-step-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.decision-steps-ledger
+  > .ledger-row
+  > [data-ledger-slot="primary"]
+  > .font-medium {
+  flex-shrink: 0;
+}
+.decision-steps-ledger > .ledger-row > [data-ledger-slot="actions"] {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  grid-column: 3 / -1;
+  grid-row: 1;
+}
+.decision-steps-ledger > .ledger-row:has([data-decision-body][hidden]) {
+  row-gap: 0;
+}
+.decision-steps-ledger
+  > .ledger-row
+  > [data-ledger-slot="detail"]:has(> [hidden]) {
+  display: none;
+}
+[data-decision-body]:not([hidden]) {
+  padding-block: var(--brand-space-3);
+}
+.decision-step-trigger {
+  min-height: 1.75rem;
+  padding-inline: var(--brand-space-1);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.decision-step-trigger:disabled {
+  text-decoration: none;
+}
+.decision-step-trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.decision-step-action {
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  color: var(--action-link);
+}
+.decision-step-action[data-action="create"] {
+  color: var(--action-create);
+  background: var(--action-create-surface);
+}
+.decision-step-action[data-action="change"] {
+  color: var(--action-change);
+  background: var(--action-change-surface);
+}
+.decision-step-action[data-action="remove"] {
+  color: var(--action-remove);
+}
+@media (max-width: 767px) {
+  .decision-steps[data-with-media] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .decision-step-trigger {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
