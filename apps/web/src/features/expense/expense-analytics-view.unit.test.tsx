@@ -1,4 +1,7 @@
-import type { ExpenseAnalyticsOut } from "@cubby/schemas/project";
+import type {
+  ExpenseAnalyticsOut,
+  ExpenseAnalyzeReadyOut,
+} from "@cubby/schemas/project";
 import {
   act,
   fireEvent,
@@ -41,10 +44,39 @@ const data: ExpenseAnalyticsOut = {
   byVendor: [],
 };
 
+const emptyPair = {
+  current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+  previous: null,
+};
+const analyze: ExpenseAnalyzeReadyOut = {
+  status: "ready",
+  rowDimension: "trade",
+  columnDimension: "costType",
+  comparison: { mode: "none", previousRange: null },
+  rows: [],
+  columns: [],
+  cells: [],
+  totals: { scope: emptyPair, grid: emptyPair },
+  reconciliation: {
+    tail: emptyPair,
+    causes: {
+      unallocated: emptyPair,
+      unattributedProject: emptyPair,
+      unattributedVendor: emptyPair,
+    },
+  },
+};
+
 describe("expense analytics query lifecycle", () => {
   it("retries an initial failure and retains loaded analytics on refresh failure", async () => {
     let fail = true;
-    const restore = overrideStartDispatch(async () => {
+    const operations: string[] = [];
+    const restore = overrideStartDispatch(async (operation) => {
+      operations.push(operation);
+      if (operation === "expense.analyze") return { ok: true, data: analyze };
+      if (operation !== "expense.analytics") {
+        throw new Error(`Unexpected operation: ${operation}`);
+      }
       if (fail) throw new Error("SQLSTATE 08006 synthetic expense analytics");
       return { ok: true, data };
     });
@@ -58,6 +90,10 @@ describe("expense analytics query lifecycle", () => {
       fail = false;
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
       const content = await screen.findByText("Monthly Spend");
+      await waitFor(() => expect(operations).toContain("expense.analyze"), {
+        timeout: 10_000,
+      });
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
       fail = true;
       await act(async () => {
         await harness.queryClient.refetchQueries();
