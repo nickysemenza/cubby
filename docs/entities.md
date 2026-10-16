@@ -208,7 +208,12 @@ the photo list, and lifecycle readiness. Reuse lasts only for that read; the
 next refresh observes newly settled image work and proposal edits. Image analysis
 summaries and rich description provenance share `loadImageAnalysisEvidence`,
 which selects source-fenced descriptions and member corrections once.
-Summary-only consumers project from the same read.
+Summary-only consumers project from the same read. Local-analysis summaries
+select the newest live row per requested Image in SQL, using descending IDs
+for equal timestamps, and transfer only classifications and recognized text.
+Missing keys keep their defaults; explicit null or malformed newest evidence
+contributes no local summary rather than reviving an older row. Full payloads
+and historical rows remain in retained storage.
 
 Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.
