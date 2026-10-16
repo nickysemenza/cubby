@@ -349,6 +349,19 @@ export const photoFieldCrossCheck = z.object({
       mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
     }),
   ),
+  // Normalized values compared for this field (e.g. label "9M" vs product
+  // "Size 9"); null when that side has no evidence.
+  labelValue: z.string().nullable().optional(),
+  productValue: z.string().nullable().optional(),
+  // One deterministic fix for a disagree-or-missing field. Label noise
+  // (provenance, materials, connector words) never produces a suggestion.
+  suggestion: z
+    .object({
+      kind: z.enum(["add_to_name", "set_model", "add_identifier"]),
+      value: z.string().min(1),
+    })
+    .nullable()
+    .optional(),
 });
 export type PhotoFieldCrossCheck = z.infer<typeof photoFieldCrossCheck>;
 
