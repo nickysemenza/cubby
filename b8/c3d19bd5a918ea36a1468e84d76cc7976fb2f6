@@ -1,0 +1,117 @@
+apps/web/generator/entities/compile.ts
+  s_55a6b281e9ae6b::t_d07df751685abb 358-363,372,374,839
+apps/web/src/server/db/helpers/query.ts
+  s_55a6b281e9ae6b::t_6a5d6b8191b7f1 255-259
+apps/web/src/server/domains/cookbook/repo/cookbook.ts
+  s_55a6b281e9ae6b::t_72c720b585ba5f 45,403-405
+apps/web/src/server/domains/email/repo/email.ts
+  s_55a6b281e9ae6b::t_faa47284920cfa 3,63,218-236,501-511
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_55a6b281e9ae6b::t_ce476921acf127 258-270
+apps/web/src/server/domains/financial-account/repo.ts
+  s_55a6b281e9ae6b::t_9c5f51896caff5 21,233
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_55a6b281e9ae6b::t_d65615556b16ee 25
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_55a6b281e9ae6b::t_56b1d731a37816 272-276
+apps/web/src/server/domains/location/repo/crud.ts
+  s_55a6b281e9ae6b::t_a12e47157648ab 96,121,124-129,660-669,672-676,859-867,869-873,877,879,901,947-954
+apps/web/src/server/domains/location/repo/valuation.ts
+  s_55a6b281e9ae6b::t_2fb32949e32dd7 88-90,95-102
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_55a6b281e9ae6b::t_b8f64cbcf0a3f9 203-214
+apps/web/src/server/domains/product/repo/crud.ts
+  s_55a6b281e9ae6b::t_5f3ed73137a5f7 262-277
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_55a6b281e9ae6b::t_65c517afcd2773 70-95,329
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_55a6b281e9ae6b::t_268543cf4c02e3 631-633
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_55a6b281e9ae6b::t_8f24aaa2cd0df2 412-427,539,541
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_55a6b281e9ae6b::t_bd7ebe64159d38 149-156
+apps/web/src/server/domains/vendor-account/repo/vendor-account.ts
+  s_55a6b281e9ae6b::t_9aed73208add75 212-218
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_55a6b281e9ae6b::t_273ac1471fd981 493-499
+apps/web/src/server/domains/wish/repo.ts
+  s_55a6b281e9ae6b::t_cffc5041756da2 268-272
+apps/web/src/server/entity-kernel/list-input.ts
+  s_55a6b281e9ae6b::t_28e5610bfcd10d 1,39-40,42-52
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_55a6b281e9ae6b::t_bc3eb0c36d1119 261-263
+apps/web/src/server/generic/entity-links/repo/related-view.ts
+  s_55a6b281e9ae6b::t_12e8f2668ff27b 17,31,497-500,510-512,515-516,519-528,532
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_55a6b281e9ae6b::t_4206592162e298 18-20,24-32,47-53,56-58,60-64,66-67,75,83,120,174-175,180,184-186,188-204,240-244,248,252-258,268-271,305-309,315,318-328,331-338
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_55a6b281e9ae6b::t_dc0929adb5aa69 28,57,63-64,66,68-84,89-94,116-119,134
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_55a6b281e9ae6b::t_9a5a8a51655b7c 5,10,27-30,156-272
+apps/web/src/server/generic/list/repo/list.integration.test.ts
+  s_55a6b281e9ae6b::t_f5a8d9690b7e4d 16-18,93-95
+apps/web/src/server/generic/list/repo/list.ts
+  s_55a6b281e9ae6b::t_d1eb83700c07a8 90-91,251,282,461,578-586,815,846,913,918,937,992
+apps/web/src/server/generic/list/repo/list.unit.test.ts
+  s_55a6b281e9ae6b::t_9f390078c3897c 1,10-12
+apps/web/src/server/generic/relatedness/repo/traversal.ts
+  s_55a6b281e9ae6b::t_c1e3318b7edbe0 147-148,150,152,310
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_55a6b281e9ae6b::t_b44944b764be67 194-221
+apps/web/tooling/entity-generator.unit.test.ts
+  s_55a6b281e9ae6b::t_b8e52ae654c705 905-918
+docs/entities.md
+  s_55a6b281e9ae6b::t_21cdb5a2df8cc4 907-910,1305-1307,1309-1311,1316-1321,1324-1326,1331-1336,1338-1339
+docs/plans/manifest-driven-list-fields.md
+  s_55a6b281e9ae6b::t_569034db621912 120-123
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_55a6b281e9ae6b::t_c318a6a6ee567c 1988-1998
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_55a6b281e9ae6b::t_4eab2ef292c85d 738-747
+packages/schemas/src/entity-definitions/03-cookbook.entity.ts
+  s_55a6b281e9ae6b::t_81bfb1ea020410 273
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_55a6b281e9ae6b::t_6fad7dbed10d8a 595-596
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_55a6b281e9ae6b::t_abcc2e7097b52a 485-486
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_55a6b281e9ae6b::t_efe00739cc5aa7 8,511-512
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_55a6b281e9ae6b::t_dd0d9498970fef 808-814
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_55a6b281e9ae6b::t_94fd196e1a18d1 779-784
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_55a6b281e9ae6b::t_4017cd8c48ee38 704-708
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_55a6b281e9ae6b::t_48f59b5011fc97 1133-1139
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_55a6b281e9ae6b::t_958b008141f343 369
+packages/schemas/src/entity-definitions/15-wish.entity.ts
+  s_55a6b281e9ae6b::t_3e193baad7c495 277-278
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_55a6b281e9ae6b::t_c8e9a98d6d3c76 1137-1145
+packages/schemas/src/entity-definitions/17-usda-food.entity.ts
+  s_55a6b281e9ae6b::t_c34163314f2d96 256-260,264
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_55a6b281e9ae6b::t_3737bf77746940 288-291
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_55a6b281e9ae6b::t_0c70a1d4ca7f91 463-466
+packages/schemas/src/entity-definitions/definition.ts
+  s_55a6b281e9ae6b::t_9dd2840f378378 844-848
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b8c3d19bd5a918ea36a1468e84d76cc7976fb2f6",
+  "prompts": {},
+  "sessions": {
+    "s_55a6b281e9ae6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cac79df8-e165-41b1-9a13-54712c8bfb22",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
