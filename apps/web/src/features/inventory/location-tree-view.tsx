@@ -14,12 +14,17 @@ import { useId, useMemo, useState } from "react";
 import { EntityIcon } from "~/entity/entities";
 import { useLocationTree } from "~/entity/hooks/use-location-tree";
 import { cn } from "~/lib/utils";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
 import { LocationVisual } from "../location/location-visual";
 
@@ -446,11 +451,25 @@ function InventoryRow({ item }: { item: InventoryItemForTree }) {
 }
 
 const LocationTreeView = () => {
+  const hydrated = useHydrated();
   const locations = useLocationTree();
+  const state = visualizationState({
+    data: locations.data,
+    isLoading: locations.isLoading,
+    error: hydrated ? locations.error : null,
+    empty: locations.data?.length === 0,
+    onRetry: () => void locations.refetch(),
+  });
 
-  if (!locations.data) return null;
-
-  return <LocationTree data={locations.data} />;
+  return (
+    <Visualization
+      state={state}
+      title="Tree View"
+      message="No locations to display."
+    >
+      {locations.data && <LocationTree data={locations.data} />}
+    </Visualization>
+  );
 };
 
 export default LocationTreeView;

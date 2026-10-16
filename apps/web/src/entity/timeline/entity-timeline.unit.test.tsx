@@ -1,5 +1,12 @@
 import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -286,5 +293,54 @@ describe("EntityTimeline", () => {
         screen.queryByRole("toolbar", { name: "Timeline controls" }),
       ).toBeNull();
     });
+  });
+});
+
+describe("timeline query lifecycle", () => {
+  it("retains loaded history through refresh failure and retry", async () => {
+    let fail = false;
+    const operations = {
+      timeline: entityTimeline.timeline.withTransport(async () => {
+        if (fail) throw new Error("SQLSTATE 08006 synthetic timeline refresh");
+        return events;
+      }),
+    };
+    render(<EntityTimeline entity="product" operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
+    const content = await screen.findByText("Bench vise");
+    fail = true;
+    await act(async () => {
+      await harness.queryClient.refetchQueries();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "SQLSTATE 08006 synthetic timeline refresh",
+    );
+    expect(screen.getByText("Bench vise")).toBe(content);
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.getByText("Bench vise")).toBe(content);
+  });
+  it("removes loaded history immediately when the date scope changes", async () => {
+    const operations = {
+      timeline: entityTimeline.timeline.withTransport(async ({ input }) => {
+        if (input.window?.from) return new Promise<EntityTimelineOut>(() => {});
+        return events;
+      }),
+    };
+    const { rerender } = render(
+      <EntityTimeline entity="product" operations={operations} />,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByText("Bench vise");
+    rerender(
+      <EntityTimeline
+        entity="product"
+        from="2026-02-01"
+        operations={operations}
+      />,
+    );
+    expect(screen.queryByText("Bench vise")).toBeNull();
   });
 });

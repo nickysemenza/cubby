@@ -8,8 +8,8 @@ import {
   useRecordEmojiById,
 } from "~/entity/components/record-mark";
 import { formatCurrency } from "~/lib/number-format";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { HorizontalBarChart } from "./horizontal-bar-chart";
@@ -87,7 +87,13 @@ export function CostVsEstimate({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CurrencyDollarIcon} title="No cost data." />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={CurrencyDollarIcon}
+        message="No cost data."
+      />
+    );
   }
 
   return (

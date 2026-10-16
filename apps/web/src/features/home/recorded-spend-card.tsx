@@ -8,8 +8,10 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { Row } from "~/ui/layout";
 import { Section, SectionActionLink } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
 
@@ -72,30 +74,16 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
       description="Last six calendar months · actual expenses only"
       actions={<SectionActionLink to="/expenses">Ledger</SectionActionLink>}
     >
-      {query.isLoading ? (
-        <>
-          <Skeleton className="h-7 w-24" />
-          <Skeleton className="mt-4 h-40 w-full" />
-        </>
-      ) : query.isError ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Spend is unavailable right now.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 sm:h-7"
-            onClick={() => query.refetch()}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : query.data?.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No recorded expenses in this period.
-        </p>
-      ) : (
+      <Visualization
+        state={visualizationState({
+          data: query.data,
+          isLoading: query.isLoading,
+          error: query.error,
+          empty: query.data?.length === 0,
+          onRetry: () => void query.refetch(),
+        })}
+        message="No recorded expenses in this period."
+      >
         <>
           <Row align="baseline" gap="xs">
             <span className="font-mono text-xl font-semibold tabular-nums">
@@ -109,7 +97,7 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
           </p>
           <RecordedSpendBars monthly={monthly} />
         </>
-      )}
+      </Visualization>
     </Section>
   );
 }

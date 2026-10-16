@@ -9,8 +9,7 @@ import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { StatTile } from "~/ui/primitives/stat-tile";
-
-import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 const SEGMENT_COLORS = [
   "var(--chart-1)",
@@ -137,7 +136,8 @@ export default function NutritionBars({
 
   if (nutrition == null) {
     return (
-      <VisualizationPlaceholder
+      <Visualization
+        state={{ status: "empty" }}
         message="Nutrition totals are not available"
         subMessage="Calculate recipe totals to see the breakdown"
         height={300}

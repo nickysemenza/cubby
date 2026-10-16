@@ -19,7 +19,6 @@ import {
 import { formatCurrency } from "~/lib/number-format";
 import { getCostTypeColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";
@@ -30,6 +29,7 @@ import {
   emptyCell,
   totalCell,
 } from "~/ui/matrix/matrix-chrome";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 import { pivotTradeCostContributions } from "./trade-cost-pivot";
 
@@ -89,7 +89,13 @@ export function TradeBarsAggregate({
   }, [tradeCostMatrix]);
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={ShoppingBagIcon}
+        message="No expense data."
+      />
+    );
   }
 
   const tradeLabel = (value: string) => {
@@ -179,7 +185,13 @@ export function TradeCostMatrixAggregate({
     activeCell?.trade === trade && activeCell.costType === costType;
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={ShoppingBagIcon}
+        message="No expense data."
+      />
+    );
   }
 
   const interactiveCell =

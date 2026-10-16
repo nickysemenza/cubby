@@ -22,6 +22,10 @@ import {
 } from "~/ui/primitives/command";
 import { DialogTrigger } from "~/ui/primitives/dialog";
 import { Input } from "~/ui/primitives/input";
+import {
+  Visualization,
+  type VisualizationState,
+} from "~/ui/visualizations/visualization";
 
 const PROPOSAL: FieldSuggestion = {
   value: "Workshop supplies",
@@ -348,9 +352,90 @@ const SIGNED_VALUES = [
   { label: "Parts", amount: 30 },
 ];
 
+function VisualizationDemo() {
+  const [state, setState] = useState<VisualizationState>({ status: "ready" });
+  const retry = () => setState({ status: "ready" });
+  const failure = new Error(
+    "Synthetic visualization read: SQLSTATE 08006 · SELECT amount FROM demo_expense",
+  );
+  return (
+    <Demo
+      name="Visualization · query lifecycle"
+      note="Select a bar, then fail refresh: selection stays mounted. Initial load and new scope discard the renderer. Retry recovers locally."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          onClick={() => setState({ status: "loading" })}
+        >
+          First load / new scope
+        </Button>
+        <Button variant="outline" onClick={() => setState({ status: "empty" })}>
+          Empty
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            setState({ status: "error", error: failure, onRetry: retry })
+          }
+        >
+          Initial error
+        </Button>
+        <Button variant="outline" onClick={retry}>
+          Ready
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            setState({ status: "ready", refreshError: failure, onRetry: retry })
+          }
+        >
+          Fail refresh
+        </Button>
+      </div>
+      <Visualization
+        title="Synthetic spend"
+        state={state}
+        message="No demo expenses."
+        height={100}
+      >
+        <SelectableDemoBars />
+      </Visualization>
+    </Demo>
+  );
+}
+
+function SelectableDemoBars() {
+  const [selected, setSelected] = useState<string | null>(null);
+  return (
+    <div className="space-y-2">
+      <RankedBarBreakdown
+        data={[
+          { key: "supplies", label: "Supplies", value: 42 },
+          { key: "credit", label: "Credit", value: -12 },
+        ]}
+        valueKey="value"
+        labelKey="label"
+        idKey="key"
+        onClick={(row) => setSelected(row.label)}
+        formatValue={(value) => `$${value}`}
+        emptyTitle="No demo expenses."
+      />
+      <Button
+        variant="outline"
+        aria-pressed={selected !== null}
+        onClick={() => setSelected(selected ? null : "Supplies")}
+      >
+        {selected ? `Clear ${selected} selection` : "Select Supplies"}
+      </Button>
+    </div>
+  );
+}
+
 export function QualityChartsSection() {
   return (
     <Section>
+      <VisualizationDemo />
       <Demo name="QualityResult · record check states">
         <div className="grid gap-2 sm:grid-cols-2">
           {QUALITY_CHECKS.map((check) => (

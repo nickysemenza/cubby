@@ -2,7 +2,7 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
-import { ChartEmpty } from "~/ui/charts/chart-empty";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 import { monthLabel } from "../project-formatting";
 import {
@@ -29,7 +29,13 @@ export function PlannedVsActualByMonth({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarCheckIcon} title="No expense data." />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={CalendarCheckIcon}
+        message="No expense data."
+      />
+    );
   }
 
   return <PlannedActualBar data={data} />;

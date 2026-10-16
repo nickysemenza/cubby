@@ -9,9 +9,9 @@ import {
   nivoCurrencyAxis,
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 type MonthDatum = {
   month: string;
@@ -52,7 +52,11 @@ export function MonthlySpend({
 
   if (data.length === 0) {
     return (
-      <ChartEmpty icon={CalendarDotsIcon} title="No dated expense data." />
+      <Visualization
+        state={{ status: "empty" }}
+        icon={CalendarDotsIcon}
+        message="No dated expense data."
+      />
     );
   }
 

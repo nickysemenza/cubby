@@ -4,12 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getAppErrorDetails } from "~/lib/error-utils";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { StaticTable } from "~/ui/primitives/static-table";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
-import { VisualizationPlaceholder } from "../../ui/visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
 
 /**
@@ -32,38 +34,31 @@ export function IngredientUsagePanel({
     recipe.getIngredientUsage.queryOptions({ cookbookId }),
   );
 
-  if (isLoading) {
-    return (
-      <VisualizationPlaceholder
-        message="Loading ingredient usage…"
-        height={400}
-      />
-    );
-  }
+  return (
+    <Visualization
+      state={visualizationState({
+        data,
+        isLoading,
+        error: isError ? error : null,
+        empty: !data?.rows.length,
+        onRetry: () => void refetch(),
+      })}
+      message="No ingredient usage to show"
+      subMessage="Add recipes with ingredients to see usage counts"
+      height={400}
+    >
+      {data && <UsageContent rows={data.rows} limit={limit} />}
+    </Visualization>
+  );
+}
 
-  if (isError) {
-    return (
-      <VisualizationPlaceholder
-        message="Ingredient usage is unavailable"
-        subMessage={getAppErrorDetails(error).message}
-        height={400}
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (!data || data.rows.length === 0) {
-    return (
-      <VisualizationPlaceholder
-        message="No ingredient usage to show"
-        subMessage="Add recipes with ingredients to see usage counts"
-        height={400}
-      />
-    );
-  }
-
-  const { rows } = data;
-
+function UsageContent({
+  rows,
+  limit,
+}: {
+  rows: IngredientUsageRow[];
+  limit?: number;
+}) {
   if (limit != null) {
     const topIngredients = [...rows]
       .sort((a, b) => b.recipeCount - a.recipeCount)
