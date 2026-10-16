@@ -1,6 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { fieldResolutionEvaluationSchema } from "@cubby/schemas/field-resolution";
-import type { ProductCategoryId } from "@cubby/schemas/identifiers";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
   type ProductCategoryFeature,
@@ -58,28 +57,6 @@ export const categoryFeatureSql = (
   categoryIdExpr: SQL,
   feature: ProductCategoryFeature,
 ) => categoryFeatureInSql(categoryIdExpr, [feature]);
-
-/** Parenthesized id subquery containing the selected categories and descendants. */
-export const categoryDescendantsSql = (
-  selectedIds: readonly ProductCategoryId[],
-) =>
-  selectedIds.length === 0
-    ? sql<ProductCategoryId>`(SELECT NULL::uuid WHERE false)`
-    : sql<ProductCategoryId>`(
-      WITH RECURSIVE descendants AS (
-        SELECT c."id", ARRAY[c."id"] AS visited
-        FROM "ProductCategory" c
-        WHERE c."id" IN (${sql.join(
-          selectedIds.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )}) AND c."deletedAt" IS NULL
-        UNION ALL
-        SELECT child."id", d.visited || child."id"
-        FROM descendants d JOIN "ProductCategory" child ON child."parentId" = d."id"
-        WHERE child."deletedAt" IS NULL AND array_length(d.visited, 1) < ${PRODUCT_CATEGORY_MAX_DEPTH}
-          AND NOT child."id" = ANY(d.visited)
-      ) SELECT "id" FROM descendants
-    )`;
 
 /** A nullable JSON summary expression for product and relation projections. */
 export const categorySummarySql = (categoryIdExpr: SQL) =>

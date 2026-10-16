@@ -17,7 +17,10 @@ import {
   projectDateWindow,
   projectRollup,
 } from "@cubby/schemas/project-output-fields";
-import { projectStatusValues } from "../project-fields.js";
+import {
+  MAX_PROJECT_TREE_DEPTH,
+  projectStatusValues,
+} from "../project-fields.js";
 import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
@@ -182,6 +185,10 @@ export default defineEntity({
     },
   },
   model: {
+    hierarchy: {
+      parentField: "parentProjectId",
+      maxDepth: MAX_PROJECT_TREE_DEPTH,
+    },
     fields: [
       {
         ...recordEmojiField,
@@ -809,7 +816,6 @@ Rules:
         "createdAt",
         "updatedAt",
       ],
-      computed: ["assigneeId"],
     },
     intents: {
       fields: {

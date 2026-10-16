@@ -272,7 +272,6 @@ export default defineEntity({
     audit: ["name", "author", "subjects"],
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
-      computed: ["recipeCount"],
     },
     output: [
       "id",

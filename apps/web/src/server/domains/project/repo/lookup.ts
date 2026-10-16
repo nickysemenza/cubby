@@ -37,6 +37,7 @@ import {
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   loadListGroup,
@@ -59,7 +60,6 @@ import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,
-  collectDescendantIds,
   loadProjectDateWindows,
   loadProjectSubtreeRollups,
   loadProjectTree,
@@ -138,8 +138,8 @@ export const buildProjectListQuery = async (
   preparedTree?: ProjectTree,
 ) => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
-  // comment. Loaded LAZILY and memoized: only two filters need it for the WHERE
-  // clause (`includeSubProjects` below, and `completionYear`'s date windows),
+  // comment. Loaded LAZILY and memoized: only `completionYear`'s date windows
+  // need it for the WHERE clause,
   // and `getEntityCounts` calls this with `{}` inside a function whose entire
   // design is one round trip. Eagerly loading here made that a second query
   // before a single filter had been inspected.
@@ -219,8 +219,8 @@ export const buildProjectListQuery = async (
       : [];
   });
 
-  // When scoped to a parent's subtree, resolve every live descendant id and
-  // match on that set (excluding the parent itself — same shape as the plain
+  // When scoped to a parent's subtree, match rows whose parent is in that
+  // subtree (every live descendant, excluding the parent itself — the plain
   // `parentProjectId` filter, just recursive); otherwise a direct-children match.
   let parentValues =
     parentCodes.length === 0
@@ -228,15 +228,8 @@ export const buildProjectListQuery = async (
       : parentProjectUuids.length === 0
         ? sql`false`
         : inArray(project.parentProjectId, parentProjectUuids);
-  if (parentProjectUuids.length > 0 && filters.includeSubProjects) {
-    const { childrenByParent } = await getTree();
-    parentValues = inArray(
-      project.id,
-      parentProjectUuids.flatMap((id) =>
-        collectDescendantIds(childrenByParent, id),
-      ),
-    );
-  }
+  if (parentProjectUuids.length > 0 && filters.includeSubProjects)
+    parentValues = sql`${project.parentProjectId} IN ${hierarchyDescendantsSql("project", parentProjectUuids)}`;
   const parentCondition = or(
     parentValues,
     presenceCondition(

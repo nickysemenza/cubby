@@ -476,6 +476,18 @@ export default defineEntity({
       "ownershipMode",
       "ownerLedgerPartyId",
     ],
+    derived: {
+      name: { via: "product" },
+      product: { via: "product" },
+      location: { via: "location" },
+      category: { via: "product.category" },
+      valuation: { type: "number" },
+      valuationStatus: {
+        predicate: "select",
+        reason:
+          "Missing includes priceable entries, so the statuses overlap and are not one row value",
+      },
+    },
     sort: {
       fields: [
         "createdAt",
@@ -488,7 +500,6 @@ export default defineEntity({
         "verifiedAt",
         "category",
       ],
-      computed: ["name", "product", "location", "valuation", "category"],
     },
     intents: {
       fields: {
@@ -649,6 +660,7 @@ export default defineEntity({
         columnId: "category",
         field: "categoryFilter",
         kind: "idMulti",
+        derived: true,
         placeholder: "Filter classification...",
         brandRef: { entity: "productCategory" },
         optionsKey: "productCategories",
@@ -744,6 +756,7 @@ export default defineEntity({
             label: "Missing despite product price",
           },
         ],
+        derived: true,
       },
       {
         columnId: "related:inventory.ingredient",

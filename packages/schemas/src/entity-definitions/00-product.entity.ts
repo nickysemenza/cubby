@@ -1981,6 +1981,11 @@ Rules:
       "price",
       "labelNutrition",
     ],
+    derived: {
+      // The first live stock location by name, across all inventory.
+      location: { type: "text" },
+      ingredient: { via: "ingredient" },
+    },
     sort: {
       fields: [
         "createdAt",
@@ -1998,18 +2003,6 @@ Rules:
         "expenseTotal",
         "expenseCount",
         "ledgerExpectedQuantity",
-        "quantityVariance",
-        "purchaseDate",
-        "related:product.projects",
-        "related:product.vendors",
-        "related:product.purchases",
-      ],
-      computed: [
-        "categoryId",
-        "location",
-        "ingredient",
-        "expenseTotal",
-        "expenseCount",
         "quantityVariance",
         "purchaseDate",
         "related:product.projects",

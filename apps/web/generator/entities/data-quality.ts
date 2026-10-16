@@ -229,6 +229,7 @@ export const compileDataQuality = (
     expandRef: null,
     schemaRef: null,
     stored: null,
+    derived: false,
     range: null,
     urlOnly: false,
     nullable: null,
@@ -261,9 +262,6 @@ export const compileDataQuality = (
     wire: { kind: "param", name: "dataGap" },
   };
   const sort = fieldModel.sort;
-  // `dataQuality` is a declared (synthesized) field, so it need not be in
-  // `computed`; it is listed there anyway because no stored column backs it
-  // and `buildOrderBy` must never fall through to a column lookup.
   return {
     dataQuality: {
       checks: checks.map((check) => ({ ...check })),
@@ -277,7 +275,6 @@ export const compileDataQuality = (
       sort: {
         ...sort,
         fields: [sort.fields[0], ...sort.fields.slice(1), DATA_QUALITY_SORT],
-        computed: [...sort.computed, DATA_QUALITY_SORT],
         // An empty `groupable` means "every sortable field groups"; a json
         // score column cannot group, so pin the declared roster instead.
         groupable:

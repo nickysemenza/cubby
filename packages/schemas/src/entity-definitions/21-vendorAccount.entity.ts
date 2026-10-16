@@ -287,7 +287,6 @@ export default defineEntity({
     ],
     sort: {
       fields: ["displayName", "status", "lastRunAt", "updatedAt"],
-      computed: ["displayName"],
     },
     intents: {
       fields: {

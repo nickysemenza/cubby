@@ -28,6 +28,7 @@ import {
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
 import { compileEntityTable, validateEntityTables } from "./table-storage.ts";
+import { compileListFields } from "./list-fields.ts";
 import { validateClassificationPolicies } from "./classification-policies.ts";
 import {
   deriveImageDisplaySources,
@@ -354,33 +355,91 @@ const compileFieldProvenance = (
 };
 
 /**
+ * `model.derived`: a key names a list field that is not a table column, so it
+ * may share a key only with a model field that has no storage (a read-only
+ * projection such as inventory `valuation`). Enum values declare options; a
+ * filter-only predicate always declares its reason.
+ */
+const compileDerived = (
+  derived: EntityFieldModelMetadata["derived"],
+  fields: readonly EntityField[],
+  storageKeys: readonly string[],
+  context: string,
+): EntityFieldModel["derived"] => {
+  for (const [key, entry] of Object.entries(derived)) {
+    const derivedContext = `${context}.derived.${key}`;
+    if (storageKeys.includes(key))
+      throw new EntityDeclarationError(
+        `${derivedContext} names a stored column; declare its list behavior on the field.`,
+      );
+    if (
+      "type" in entry &&
+      (entry.type === "enum") !== (entry.options !== undefined)
+    )
+      throw new EntityDeclarationError(
+        `${derivedContext} declares options exactly when its type is enum.`,
+      );
+    if (
+      "via" in entry &&
+      fields.some((field) => field.key === key && field.reference !== null)
+    )
+      throw new EntityDeclarationError(
+        `${derivedContext} shadows reference field ${key}.`,
+      );
+  }
+  return derived;
+};
+
+/** `model.hierarchy`: a single, non-multiple self-reference. */
+const compileHierarchy = (
+  hierarchy: EntityFieldModelMetadata["hierarchy"],
+  fields: readonly EntityField[],
+  entityKey: string,
+  context: string,
+): EntityFieldModel["hierarchy"] => {
+  if (hierarchy === undefined) return null;
+  const parent = fields.find((field) => field.key === hierarchy.parentField);
+  if (parent?.reference?.entity !== entityKey || parent.reference.multiple)
+    throw new EntityDeclarationError(
+      `${context}.hierarchy.parentField ${hierarchy.parentField} must be a single reference to ${entityKey}.`,
+    );
+  return hierarchy;
+};
+
+/**
  * Compiles a declared `model.sort` roster: every `fields`/`default`/
- * `groupable`/`computed` cross-reference, plus the one opt-in
- * `grouping` contract a list's web/native detail renders group by
- * (`field` must itself be `groupable` — the compiler-enforced half of
- * the list-grouping contract; see `entity-definitions/definition.ts`
- * and `docs/entities.md`).
+ * `groupable` cross-reference, plus the one opt-in `grouping` contract a
+ * list's web/native detail renders group by (`field` must itself be
+ * `groupable` — the compiler-enforced half of the list-grouping contract;
+ * see `entity-definitions/definition.ts` and `docs/entities.md`). A roster
+ * entry is a model field, a `model.derived` key, or a `related:<view>`
+ * related-view column; cardinality and filter-only rejections need the
+ * other entities and run in `compileListFields`.
  */
 const compileSort = (
   sortValue: EntityFieldModelMetadata["sort"],
   fieldKeys: readonly string[],
+  derived: EntityFieldModel["derived"],
   fields: EntityField[],
   context: string,
 ): EntityFieldModel["sort"] => {
   if (sortValue === undefined) return null;
   const sortContext = `${context}.sort`;
-  const computed = sortValue.computed ?? [];
   const groupable = sortValue.groupable ?? [];
   const [first, ...rest] = sortValue.fields;
   if (first === undefined)
     throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
   const defaultField = sortValue.default ?? first;
   for (const key of sortValue.fields) {
-    if (computed.includes(key)) continue;
-    if (!fieldKeys.includes(key))
-      throw new EntityDeclarationError(
-        `${sortContext}.fields references undeclared field ${key}.`,
-      );
+    if (
+      fieldKeys.includes(key) ||
+      Object.hasOwn(derived, key) ||
+      /^related:[a-z][A-Za-z]*\.[a-z][A-Za-z-]*$/.test(key)
+    )
+      continue;
+    throw new EntityDeclarationError(
+      `${sortContext}.fields references undeclared field ${key}.`,
+    );
   }
   if (!sortValue.fields.includes(defaultField))
     throw new EntityDeclarationError(
@@ -392,12 +451,6 @@ const compileSort = (
         `${sortContext}.groupable ${key} must be one of sort.fields.`,
       );
   }
-  for (const key of computed) {
-    if (!sortValue.fields.includes(key))
-      throw new EntityDeclarationError(
-        `${sortContext}.computed ${key} must be one of sort.fields.`,
-      );
-  }
   const grouping = sortValue.grouping ?? null;
   if (grouping !== null && !groupable.includes(grouping.field))
     throw new EntityDeclarationError(
@@ -406,7 +459,6 @@ const compileSort = (
   return {
     fields: [first, ...rest] as const,
     default: defaultField,
-    computed,
     groupable,
     grouping:
       grouping === null
@@ -490,6 +542,8 @@ const compileFieldModel = (
       audit: [],
       output: [],
       sort: null,
+      derived: {},
+      hierarchy: null,
       intents: null,
     };
   }
@@ -788,7 +842,14 @@ const compileFieldModel = (
     }
     return values;
   };
-  const sort = compileSort(model.sort, fieldKeys, fields, context);
+  const derived = compileDerived(model.derived, fields, storageKeys, context);
+  const hierarchy = compileHierarchy(
+    model.hierarchy,
+    fields,
+    entityKey,
+    context,
+  );
+  const sort = compileSort(model.sort, fieldKeys, derived, fields, context);
   const compiled = {
     fields,
     storage,
@@ -798,6 +859,8 @@ const compileFieldModel = (
     audit: policy("audit"),
     output: policy("output"),
     sort,
+    derived,
+    hierarchy,
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
     research: model.research,
   };
@@ -1170,6 +1233,10 @@ const filterDescriptor = (
   validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);
+  if (stored !== null && value.derived === true)
+    throw new EntityDeclarationError(
+      `${context} is either stored or derived, not both.`,
+    );
   const range = resolveFilterRange(value, parsedKind, modelField, context);
   return {
     columnId: value.columnId,
@@ -1188,6 +1255,7 @@ const filterDescriptor = (
     expandRef: value.expandRef ?? null,
     schemaRef: value.schemaRef ?? null,
     stored,
+    derived: value.derived === true,
     range,
     urlOnly: value.urlOnly ?? false,
     nullable: value.nullable ?? null,
@@ -1773,7 +1841,6 @@ const compiledInspector = (
       capabilities: declaration.capabilities,
       ports,
       hasUpdate: declaration.fields?.update != null,
-      entityKey: declaration.key,
     },
     `${context}.presentation`,
   ),
@@ -1857,6 +1924,7 @@ const suggestionFilterDescriptors = (
       expandRef: null,
       schemaRef: null,
       stored: null,
+      derived: false,
       range: null,
       urlOnly: false,
       nullable: null,
@@ -1993,6 +2061,7 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
+          derived: false,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",
@@ -2024,6 +2093,7 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
+          derived: false,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",
@@ -2151,6 +2221,8 @@ export const compileEntity = (
     filterSchema,
     filterAudit,
     filterDescriptors: filterDescriptorsWithAudit,
+    // Resolved across entities by `compileListFields`.
+    listFields: { derived: {}, hierarchy: null, subtree: {}, fieldGroup: {} },
     bulkUpdateFields,
     ports,
     imagePolicy: declaration.capabilities.images,
@@ -2783,15 +2855,17 @@ export const compileEntityDeclarations = (
 ): CompiledEntity[] => {
   if (declarations.length === 0)
     throw new EntityDeclarationError("Entity declarations must not be empty.");
-  const entities = deriveRelationSections(
-    validateDataQualityDeclarations(
-      deriveInverseRelations(
-        deriveImageDisplaySources(
-          declarations.map((value, index) =>
-            objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
+  const entities = compileListFields(
+    deriveRelationSections(
+      validateDataQualityDeclarations(
+        deriveInverseRelations(
+          deriveImageDisplaySources(
+            declarations.map((value, index) =>
+              objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
+            ),
           ),
-        ),
-      ).map(compileEntity),
+        ).map(compileEntity),
+      ),
     ),
   );
   validateEntityIdentities(entities);

@@ -83,3 +83,18 @@ export const projectKindValues = [
 ] as const;
 export const projectKindSchema = z.enum(projectKindValues);
 export type ProjectKind = z.infer<typeof projectKindSchema>;
+
+/**
+ * Depth cap for every project-tree walk — children-map traversals, ancestor
+ * walks, and the browser-side WBS/Gantt builders alike. A defensive backstop
+ * against a corrupt/cyclic tree, never a real limit: `parentProjectId` is
+ * documented as arbitrary-depth below, and the create/update cycle guard
+ * (repo/project/crud.ts) means a well-formed tree never gets remotely close.
+ *
+ * It lives here, in the dependency-light schema package, because the same
+ * number has to hold on both sides of the wire — server folds
+ * (repo/project/subtree.ts) and the client walks over the rows they produce
+ * (features/project/project-forest.ts) — and three copies of a magic 100 is how
+ * they drift.
+ */
+export const MAX_PROJECT_TREE_DEPTH = 100;

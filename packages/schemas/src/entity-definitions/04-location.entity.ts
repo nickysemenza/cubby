@@ -176,6 +176,7 @@ export default defineEntity({
     },
   },
   model: {
+    hierarchy: { parentField: "parentId", maxDepth: 10 },
     fields: [
       {
         key: "name",
@@ -588,6 +589,10 @@ Rules:
     ],
     bulk: ["parentId"],
     audit: ["name", "aliases", "tags", "type", "parentId"],
+    derived: {
+      parent: { via: "parent" },
+      inventoryEntries: { type: "number" },
+    },
     sort: {
       fields: [
         "createdAt",
@@ -599,7 +604,6 @@ Rules:
         "valuation",
         "inventoryEntries",
       ],
-      computed: ["parent", "inventoryEntries"],
       groupable: ["type"],
       // The web list groups locations by their own `type` value, so no
       // `labelField` is needed — the field's own value is the label.

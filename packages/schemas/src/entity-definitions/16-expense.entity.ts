@@ -1151,7 +1151,6 @@ Rules:
         "createdAt",
         "updatedAt",
       ],
-      computed: ["spendingCategoryId", "projectId", "productId"],
       groupable: ["costType"],
     },
     intents: {

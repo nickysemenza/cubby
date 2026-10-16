@@ -32,7 +32,7 @@
  * For each seeded entity, every id-shaped filter is re-run with a
  * well-formed shortcode that names no row, and must return nothing.
  */
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
@@ -281,8 +281,10 @@ describe("entity list smoke — shared selection/count FROM context", () => {
     // The kernel's `filters.ids` scan and per-entity `list()` both go through
     // the relational builder, but ingredient's `readIntent: "ids"` bulk-scan
     // path is a repo-level entry point the kernel never calls — reach it
-    // directly for its two computed (correlated-subquery) sort keys.
-    for (const orderBy of generatedEntitySort.ingredient.computed) {
+    // directly for its two derived (correlated-subquery) sort keys.
+    for (const orderBy of Object.keys(
+      generatedEntityListFields.ingredient.derived,
+    )) {
       caseCount += 1;
       try {
         const result = await ingredientList(

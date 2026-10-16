@@ -260,6 +260,10 @@ export default defineEntity({
     // declared field — is an array with no orderable scalar projection
     // (usda.service.ts sorts it by a correlated count). All three are
     // `computed`, same as a product's `expenseTotal`/`quantityVariance`.
+    derived: {
+      data_type: { type: "text" },
+      relevance: { type: "number" },
+    },
     sort: {
       fields: [
         "fdc_id",
@@ -268,7 +272,6 @@ export default defineEntity({
         "relevance",
         "linkedProducts",
       ],
-      computed: ["data_type", "relevance", "linkedProducts"],
     },
     output: [
       "fdc_id",

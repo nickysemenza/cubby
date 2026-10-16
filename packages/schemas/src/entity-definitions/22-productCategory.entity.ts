@@ -6,7 +6,10 @@ import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import { spendingCategoryMappingMode } from "../spending-classification.js";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryShortcode } from "../identifier-fields.js";
-import { productCategoryFeature } from "../product-category-fields.js";
+import {
+  PRODUCT_CATEGORY_MAX_DEPTH,
+  productCategoryFeature,
+} from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
 
@@ -68,10 +71,15 @@ export default defineEntity({
         dependencies: { derived: ["relations"] },
       },
       views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
-      tree: { parentField: "parentId" },
+      tree: {},
     },
   },
   model: {
+    hierarchy: {
+      parentField: "parentId",
+      // A three-level tree: at most two levels below any category.
+      maxDepth: PRODUCT_CATEGORY_MAX_DEPTH - 1,
+    },
     fields: [
       {
         key: "spendingCategoryMapping",

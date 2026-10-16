@@ -650,7 +650,19 @@ export const deleteLocations = (
     overrides: { "Location.parentId": promoteSurvivingChildren },
   });
 
-const locationScaffold = listScaffold("location", location);
+const locationScaffold = listScaffold("location", location, {
+  derived: {
+    // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
+    // stockOnly() filter — otherwise sort and filter disagree on whether an
+    // installed fixture counts.
+    inventoryEntries: sql.raw(
+      `(SELECT count(*) FROM "InventoryEntry" ie ` +
+        `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
+        `WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL ` +
+        `AND ie."placement" = 'stock')`,
+    ),
+  },
+});
 
 /**
  * "Which SKU is this location an instance of", plus the has/none presence
@@ -842,33 +854,11 @@ export const locationListRead = async (
       // `valuation` is computed on read, not a stored column; sort by direct
       // value because that is what the list cell renders in compact mode.
       resolve: (s) => {
-        const dirSql =
-          s.direction === "asc" ? "asc nulls last" : "desc nulls last";
         if (s.orderBy === "valuation" && directValuation)
           return [
             s.direction === "asc"
               ? sql`${directValuation} asc nulls last`
               : sql`${directValuation} desc nulls last`,
-          ];
-        if (s.orderBy === "inventoryEntries")
-          return [
-            // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
-            // stockOnly() filter — otherwise sort and filter disagree on
-            // whether an installed fixture counts.
-            sql.raw(
-              `(SELECT count(*) FROM "InventoryEntry" ie ` +
-                `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-                `WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL ` +
-                `AND ie."placement" = 'stock') ${dirSql}`,
-            ),
-          ];
-        // Parent names exclude deleted locations, like the read path.
-        if (s.orderBy === "parent")
-          return [
-            sql.raw(
-              `(SELECT l."name" FROM "Location" l ` +
-                `WHERE l."id" = "Location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
-            ),
           ];
         return null;
       },

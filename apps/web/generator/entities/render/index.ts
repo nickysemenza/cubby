@@ -934,7 +934,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
   );
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
-      const { sort: _sort, intents: _intents, ...rest } = fieldModel;
+      // `derived`/`hierarchy` are emitted compiled, in entity-list-fields.gen.ts.
+      const {
+        sort: _sort,
+        intents: _intents,
+        derived: _derived,
+        hierarchy: _hierarchy,
+        ...rest
+      } = fieldModel;
       return [
         key,
         {
@@ -969,7 +976,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             {
               fields: fieldModel.sort.fields,
               default: fieldModel.sort.default,
-              computed: fieldModel.sort.computed,
               groupable: fieldModel.sort.groupable,
               grouping: fieldModel.sort.grouping,
               direction: fieldModel.sort.direction,
@@ -1296,6 +1302,42 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "} as const;\n",
     },
     {
+      relativePath: "packages/schemas/src/generated/entity-list-fields.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n' +
+        'import type { RelationshipPathStep } from "../entity-integrity";\n\n' +
+        "/**\n" +
+        " * The compiled list fields of every entity, from `model.derived` and\n" +
+        " * `model.hierarchy`: each derived field's shape (a related `via` path, a\n" +
+        " * repository `value`, or a filter-only `predicate`) with the reason sort\n" +
+        " * or group is rejected (null when supported); the hierarchy's parent\n" +
+        " * column and depth cap; `subtree` maps a filter key to its generated\n" +
+        ' * "Include sub-…" toggle; `fieldGroup` holds group rejections for\n' +
+        " * multi-valued model fields.\n" +
+        " */\n" +
+        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "select" | "multiselect" | "boolean"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
+        renderRecord({
+          name: "generatedEntityListFields",
+          entries: Object.fromEntries(
+            entities.map(({ key, listFields }) => [key, listFields]),
+          ),
+          satisfies:
+            "Record<Entity, { derived: Record<string, GeneratedListField>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; fieldGroup: Record<string, string> }>",
+          comment: "// Generated list fields stay one entity per line.",
+        }) +
+        "\n" +
+        'type DerivedOf<E extends Entity> = (typeof generatedEntityListFields)[E]["derived"];\n' +
+        "/** Derived keys whose SQL value the repository passes to `listScaffold`. */\n" +
+        "export type GeneratedDerivedValueKey<E extends Entity> = {\n" +
+        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
+        "}[keyof DerivedOf<E>] & string;\n" +
+        "/** Derived keys whose filter predicate the repository passes to `listScaffold`. */\n" +
+        "export type GeneratedDerivedPredicateKey<E extends Entity> = {\n" +
+        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "predicate" } ? K : never;\n' +
+        "}[keyof DerivedOf<E>] & string;\n",
+    },
+    {
       relativePath: "packages/schemas/src/generated/entity-sort.gen.ts",
       source:
         generatedHeader +
@@ -1303,8 +1345,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "/**\n" +
         " * The declared list-sort roster for entities that expose one, keyed from\n" +
         " * `model.sort` in `packages/schemas/src/entity-definitions/*.entity.ts`.\n" +
-        " * `computed` names roster entries with no `model.fields` read projection\n" +
-        " * (correlated subqueries and rollups); `groupable` is the `groupBy` allowlist,\n" +
+        " * Entries name model fields, `model.derived` keys (`entity-list-fields.gen.ts`)\n" +
+        " * or `related:<view>` columns; `groupable` is the `groupBy` allowlist,\n" +
         " * defaulting to every sortable field when empty. `direction` is the list's\n" +
         ' * opening sort direction, defaulting to "desc". `grouping` is the entity\'s\n' +
         " * single opt-in list-grouping contract (null when the list has no grouped\n" +
@@ -1317,7 +1359,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           name: "generatedEntitySort",
           entries: entitySort,
           satisfies:
-            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[]; grouping: { field: string; nullGroupKey: string; labelField: string | null } | null; direction: "asc" | "desc" }>>',
+            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; groupable: readonly string[]; grouping: { field: string; nullGroupKey: string; labelField: string | null } | null; direction: "asc" | "desc" }>>',
           comment: "// Generated sort rosters stay one entity per line.",
         }) +
         "\n" +
@@ -1364,7 +1406,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +

@@ -31,7 +31,6 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
@@ -48,6 +47,7 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   hydrateListRead,
@@ -189,7 +189,7 @@ const pathsFor = async (
 /**
  * Live products in each category's subtree. One recursive walk seeded by
  * every requested id, with the same depth bound and visited-array guard as
- * `categoryDescendantsSql`, so a stored cycle cannot make a read loop.
+ * `hierarchyDescendantsSql`, so a stored cycle cannot make a read loop.
  */
 const productCountsFor = async (
   db: Database | DrizzleTransaction,
@@ -530,7 +530,7 @@ const assertAffectedProductsRemainAdmissible = async (
     .where(
       and(
         notDeleted(product),
-        sql`${product.categoryId} IN ${categoryDescendantsSql([categoryId])}`,
+        sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", [categoryId])}`,
       ),
     );
   const { assertProductCategoryChange } =
@@ -630,7 +630,7 @@ export async function updateProductCategory(
     ) {
       const affected = await unwrapDb(db)
         .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
-        WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${categoryDescendantsSql([id])} LIMIT 1`);
+        WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`);
       if (affected.rows.length) assertReviewedSpendingClassification(db);
     }
   }

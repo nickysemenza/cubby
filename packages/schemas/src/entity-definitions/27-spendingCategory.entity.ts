@@ -32,10 +32,11 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      tree: { parentField: "parentId" },
+      tree: {},
     },
   },
   model: {
+    hierarchy: { parentField: "parentId", maxDepth: 10 },
     fields: [
       {
         key: "productCategories",
