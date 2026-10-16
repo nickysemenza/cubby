@@ -11,6 +11,7 @@
         "scripts/apple/apple-release.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure.ts!",
+        "scripts/install-git-hooks.ts!",
         "scripts/design-tokens.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
@@ -29,6 +30,8 @@
       // spawned by the simulator runner in apps/web/tooling/sim-e2e.ts.
       // neon-env is installed for interactive branch environment commands.
       "ignoreDependencies": [
+        // Invoked directly by .husky/pre-commit, without a package-manager process.
+        "lint-staged",
         "vitest",
         "vite",
         "concurrently",

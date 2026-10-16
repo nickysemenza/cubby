@@ -192,9 +192,17 @@ When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only `pnpm check:staged`: Oxlint checks staged files and Oxfmt
-formats them in place, with the existing rules and ignore patterns. Partial
-staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
+Commits run only staged-file Oxlint/Oxfmt and the commit-message check below.
+The pre-commit entrypoint invokes installed lint-staged directly; `pnpm
+check:staged` runs the same entrypoint. Partial staging is preserved. Target
+1–2 seconds for ordinary commits; large staged changes can take longer. Hooks
+run no package managers, dependency installation, generation, WASM, builds,
+typechecks, tests, or network work. Never run Oxfmt by hand; commit and let the
+hook format.
+`pnpm agent:setup` installs shared dispatchers under Git's common metadata
+directory. Linked worktrees inherit them; each runs `.husky/` from its own
+checkout. A missing lint-staged installation fails immediately with the local
+install command. Exported source archives without `.git` skip hook setup.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 

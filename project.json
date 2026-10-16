@@ -121,7 +121,7 @@
       "dependsOn": ["wasm", "generate"]
     },
     "wasm": {
-      "command": "pnpm run wasm",
+      "command": "node scripts/ensure.ts wasm --build",
       "cache": true,
       "inputs": [
         "{workspaceRoot}/recipebridge/**/*",
@@ -132,7 +132,6 @@
         "{workspaceRoot}/scripts/ensure.ts",
         "{workspaceRoot}/scripts/rust-fingerprint.ts",
         "{workspaceRoot}/scripts/lib/tree-digest.ts",
-        "{workspaceRoot}/package.json",
         {
           "externalDependencies": []
         },
