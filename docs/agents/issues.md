@@ -39,8 +39,8 @@ deliverable steps and native dependencies for actual prerequisites. Read the
 parent issue when working a subissue. Preserve explicit sequencing and triggers;
 do not infer a dependency just because two issues mention the same domain.
 Use native Relates to for associated work whose containment, dependency, or
-common cause is unproven. Related Sentry symptoms alone do not establish a
-duplicate or blocker.
+common cause is unproven. Similar symptoms alone do not establish a duplicate
+or blocker.
 
 ## Project views and automation
 
@@ -142,17 +142,7 @@ does not establish that its open subissues are complete. Git history and closed
 issues preserve completed work; remove completed plans/reports after moving
 durable facts into their owning documentation.
 
-## Sentry and public content
-
-Preserve every related Sentry issue identifier as a clickable Sentry URL. Related
-symptoms can share an issue without asserting a common root cause or merging
-their Sentry histories. GitHub closure on merge does not prove deployment and
-does not resolve Sentry: resolve a Sentry issue only when an identifiable deployed
-fix addresses its failure. No recent events is not evidence of a fix.
-
-Sentry Developer does not provide the paid native tracker linking/status sync.
-Agents can read Sentry through the existing integration and update GitHub through
-`gh`; links are the connection, and no custom synchronizer is required.
+## Public content
 
 Cubby's repository issues are public even when the Project is private. Use
 synthetic engineering examples and keep raw household evidence, live entity
