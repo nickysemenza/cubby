@@ -64,7 +64,9 @@ export interface WorkerdRuntime {
  *
  * Resources are acquired in that order and `close()` releases them newest
  * first, running every release even when one fails; it is idempotent and
- * never closes a borrowed database. `prepare` runs against the listening
+ * never closes a borrowed database. Callers must await `close()` before
+ * resetting that database, including between tests using `withTestDb`.
+ * `prepare` runs against the listening
  * runtime before it is returned (signing in, loading a scenario). If any
  * acquisition or `prepare` throws, everything acquired so far is released
  * before the error propagates, so a failed start leaks no workerd, lease, or

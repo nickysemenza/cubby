@@ -83,6 +83,7 @@ import type {
   LocationFilters,
   LocationWithParentChild,
 } from "~/server/domains/location/repo/internal-types";
+import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
@@ -118,7 +119,6 @@ import {
   dbLocationToAPI,
   dbLocationToListAPI,
 } from "./helpers";
-import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import {
