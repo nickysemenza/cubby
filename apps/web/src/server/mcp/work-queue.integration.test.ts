@@ -93,7 +93,6 @@ describe("member actionable Work queue", () => {
     const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: member.id,
-      label: "Synthetic settlement source",
     });
     const order = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -189,7 +188,6 @@ describe("member actionable Work queue", () => {
     const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: member.id,
-      label: "Synthetic undated source",
     });
     const account = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Synthetic undated tender",
@@ -271,7 +269,6 @@ describe("member actionable Work queue", () => {
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: member.id,
-      label: "Synthetic source",
     });
     const recent = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -347,7 +344,6 @@ describe("member actionable Work queue", () => {
     const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: sourceOwner.id,
-      label: "Synthetic original source account",
     });
     const tenderAccount = await insertWithShortcode(
       ctx.db,
@@ -497,7 +493,6 @@ describe("member actionable Work queue", () => {
       {
         vendorId: vendor.id,
         ledgerPartyId: payer.id,
-        label: "Synthetic other original source account",
       },
     );
     const otherSourcePurchase = await insertWithShortcode(ctx.db, "purchase", {
@@ -1010,7 +1005,6 @@ describe("member actionable Work queue", () => {
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: second.id,
-      label: "Synthetic second member source account",
     });
     const ownedPurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,

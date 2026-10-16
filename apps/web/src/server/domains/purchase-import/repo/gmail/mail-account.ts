@@ -2,8 +2,8 @@ import type { LedgerPartyId, VendorId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { vendor, vendorAccount } from "~/server/db/schema";
+import { notDeleted } from "~/server/db/helpers";
+import { vendorAccount } from "~/server/db/schema";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
@@ -21,22 +21,11 @@ export async function ensureMailVendorAccount(
       eq(vendorAccount.ledgerPartyId, input.ledgerPartyId),
       notDeleted(vendorAccount),
     ),
-    values: async () => ({
-      label: `${await vendorName(db, input.vendorId)} mail`,
+    values: () => ({
       vendorId: input.vendorId,
       ledgerPartyId: input.ledgerPartyId,
-      status: "disabled",
+      status: "disabled" as const,
     }),
   });
   return row;
-}
-
-async function vendorName(db: Database | DrizzleTransaction, id: VendorId) {
-  const [row] = await unwrapDb(db)
-    .select({ name: vendor.name })
-    .from(vendor)
-    .where(eq(vendor.id, id))
-    .limit(1);
-  if (!row) throw new Error("Vendor for this order mail no longer exists");
-  return row.name;
 }

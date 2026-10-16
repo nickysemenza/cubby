@@ -526,6 +526,13 @@
       "when": 1792153196406,
       "tag": "0074_retained_mail_text_presence",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792155390777,
+      "tag": "0075_drop_vendor_account_label",
+      "breakpoints": true
     }
   ]
 }

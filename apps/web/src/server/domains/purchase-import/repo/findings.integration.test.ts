@@ -562,7 +562,6 @@ describe("create_refund findings", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "ForgeWear refunds account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

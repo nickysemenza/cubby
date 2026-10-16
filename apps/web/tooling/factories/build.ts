@@ -82,7 +82,7 @@ const ENTITY_DEFAULTS = {
   }),
   planting: () => ({}),
   gardenEntry: () => ({ observedOn: SOME_DAY }),
-  vendorAccount: (f) => ({ label: f.name("Account") }),
+  vendorAccount: () => ({}),
   productCategory: (f) => ({ name: f.name("Category") }),
   device: (f) => ({ name: f.name("Device"), platform: "ios" }),
   plant: (f) => ({ name: f.name("Plant") }),

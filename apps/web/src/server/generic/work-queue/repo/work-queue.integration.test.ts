@@ -505,7 +505,6 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: second.id,
-      label: "Synthetic strip second member account",
     });
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: `${prefix} private merchandise`,

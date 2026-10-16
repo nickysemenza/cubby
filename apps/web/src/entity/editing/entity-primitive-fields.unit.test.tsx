@@ -568,7 +568,6 @@ function ExpenseCaptureFields({
 function VendorAccountCaptureFields() {
   const form = useForm({
     defaultValues: {
-      label: "",
       vendorId: "",
       ledgerPartyId: "",
     },
@@ -810,10 +809,11 @@ describe("EntityIntentFields", () => {
     );
   });
 
-  it("renders every required vendor-account ownership field", () => {
+  // The account title is derived from Vendor and member, never typed.
+  it("renders every required vendor-account ownership field and no label", () => {
     render(<VendorAccountCaptureFields />, { wrapper: harness.wrapper });
 
-    expect(screen.getByLabelText("Label")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Label")).toBeNull();
     expect(screen.getByLabelText("Vendor")).toBeInTheDocument();
     expect(screen.getByLabelText("Ledger party")).toBeInTheDocument();
   });

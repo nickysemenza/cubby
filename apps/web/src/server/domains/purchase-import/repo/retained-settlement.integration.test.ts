@@ -45,7 +45,6 @@ describe("settlement from retained order evidence", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Settlement vendor account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

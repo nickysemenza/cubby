@@ -353,14 +353,12 @@ async function seedConnectedHousehold(
     vendors.push(vendor);
     vendorAccounts.push(
       await create("vendorAccount", {
-        label: `${name} household account`,
         vendorId: vendor.id,
         ledgerPartyId: memberCode,
       }),
     );
   }
   await create("vendorAccount", {
-    label: "Cedar Market retired account",
     vendorId: vendors[0]!.id,
     ledgerPartyId: otherMemberCode,
     status: "disabled",

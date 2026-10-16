@@ -87,7 +87,6 @@ describe("vendor identity and purchase account coverage", () => {
       userId: ctx.actor.userId,
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic in-store relationship",
       vendorId: vendor.id,
       ledgerPartyId: member.id,
     });
@@ -141,12 +140,10 @@ describe("vendor identity and purchase account coverage", () => {
       kind: "member",
     });
     const first = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic relationship A",
       vendorId: vendor.id,
       ledgerPartyId: firstMember.id,
     });
     const second = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic relationship B",
       vendorId: vendor.id,
       ledgerPartyId: secondMember.id,
     });

@@ -37,7 +37,6 @@ describe("purchase import run target resolution", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Import target account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -70,7 +69,6 @@ describe("purchase import run target resolution", () => {
       ctx.db,
       "vendorAccount",
       {
-        label: "Untouched target account",
         vendorId: untouchedVendor.id,
         ledgerPartyId: party.id,
       },

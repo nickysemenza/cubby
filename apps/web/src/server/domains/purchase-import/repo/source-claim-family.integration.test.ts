@@ -48,7 +48,6 @@ describe("canonical source claim families", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Example family account",
       ledgerPartyId: party.id,
       vendorId: vendor.id,
     });

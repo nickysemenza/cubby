@@ -19,12 +19,13 @@ import {
   parseShortcodeFor,
   type ShortcodeFor,
 } from "@cubby/shared";
-import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import { type SQL, and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   financialTransaction,
@@ -334,13 +335,18 @@ export const LABEL_COLUMN_OVERRIDES = {
     reason:
       "titleField (fromPartyName) is a read-only value joined from LedgerParty, not a physical LedgerTransfer column",
   },
+  vendorAccount: {
+    column: vendorAccountLabelSql,
+    reason:
+      "titleField (displayName) is the current '<vendor> · <member>' pair, a relational SQL expression rather than a stored column",
+  },
   run: {
     column: runTable.purpose,
     reason:
       'titleField (displayName) is computed as `${vendorName ?? "Purchase agent"} · ${purpose label}` with no single storage column; purpose is the always-present best-effort audit-label fallback',
   },
 } satisfies Partial<
-  Record<ShortcodeEntity, { column: PgColumn | null; reason: string }>
+  Record<ShortcodeEntity, { column: PgColumn | SQL | null; reason: string }>
 >;
 
 /**
@@ -365,6 +371,7 @@ export const resolveTitleFieldColumn = (
 
 /**
  * `null` means the label is relational or the entity has no display column.
+ * An SQL expression is a relational label over the unaliased table.
  *
  * Not a third copy of the entity *type* label (`ENTITY_LABEL` above,
  * `entityLabel()` in `apps/web/src/entity/entities.tsx`): those map an
@@ -379,7 +386,7 @@ export const resolveTitleFieldColumn = (
  * no physical storage column is a bug — declare it as an override instead of
  * letting the map silently go null.
  */
-type DisplayNameColumns = Record<ShortcodeEntity, PgColumn | null>;
+type DisplayNameColumns = Record<ShortcodeEntity, PgColumn | SQL | null>;
 
 export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
   (columns, entity) => {
@@ -431,7 +438,7 @@ export async function lookupEntityLabels(
         }
         return;
       }
-      const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
+      const nameColumn: PgColumn | SQL | null = DISPLAY_NAME_COLUMN[entity];
       if (!nameColumn) return;
       const table: ShortcodeTable = SHORTCODE_TABLE[entity];
       // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
@@ -479,7 +486,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
   >();
   if (wanted.length === 0) return result;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
+  const nameColumn: PgColumn | SQL | null = DISPLAY_NAME_COLUMN[entity];
   const rows = await unwrapDb(db)
     .select({
       id: table.id,

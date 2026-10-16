@@ -116,6 +116,25 @@ revision while retaining their observed values and notes. Verify Product notes,
 Image and EntityAttachment rows, EntitySource evidence, and InventoryEntry amounts
 are preserved, then confirm the retired column and exception records are gone.
 
+## VendorAccount label retirement
+
+The member chose to discard stored Vendor Account labels and use the current
+Vendor and member names for display. Use one column-drop migration in the
+owner-confirmed idle cutover; a nullable expansion adds no value when no
+label-free writes occur between migrations. Keep the app unused until the
+matching code and schema are in place, following the breaking-cutover procedure
+above. Deployed old code still reads `label`, so the drop and matching deploy
+must complete before use resumes.
+
+Apply through `0074_drop_vendor_account_label` and deploy the matching code in
+that idle window. Compare VendorAccount rows excluding `label` (UUID, shortcode,
+vendor, member, status, cursor, owner default, timestamps) and the Purchase, Run
+and ImportSourceClaim rows that reference them. Only the old label values may
+be discarded. Confirm the column is gone before ending the idle window. The
+populated-predecessor regression
+`vendor-account-label-migration.integration.test.ts` verifies preservation with
+synthetic data.
+
 ## Durable member AI work
 
 Provision `cubby-image-cloud` using the one-time commands in

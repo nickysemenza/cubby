@@ -108,7 +108,6 @@ describe("purchase audit restart recovery", () => {
         website: null,
       });
       const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-        label: "Other audit account",
         ledgerPartyId: f.party.id,
         vendorId: foreignVendor.id,
       });

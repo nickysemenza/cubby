@@ -1546,7 +1546,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Shared import fixture account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -1740,7 +1739,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Barcode import fixture account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -1835,7 +1833,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Adjustment lines account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -1963,7 +1960,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Failed commit account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -2072,7 +2068,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Manual-then-import account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -2570,7 +2565,6 @@ describe("shared purchase-import prepare and commit", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Manual conflict account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

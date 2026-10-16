@@ -172,7 +172,6 @@ describe("inventory ownership mutations", () => {
       const account = await insertWithShortcode(ctx.db, "vendorAccount", {
         vendorId: acquired.purchase.vendorId,
         ledgerPartyId: owner.entityId,
-        label: "Unknown attribution vendor account",
         inventoryOwnerDefaultEnabled: false,
       });
       await dbc

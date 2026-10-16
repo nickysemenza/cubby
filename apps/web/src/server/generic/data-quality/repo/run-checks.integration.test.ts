@@ -164,7 +164,6 @@ describe("Run data quality", () => {
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
-      label: "Fixture store login",
     });
     const run = await makeRun("completed");
     await writeOutcomeReceipts(ctx.db, [
@@ -182,7 +181,7 @@ describe("Run data quality", () => {
     expect(
       (await loadRunDetail(ctx.db, run.shortcode)).targets[0]
         ?.vendorAccountLabel,
-    ).toBe(account.label);
+    ).toBe("Fixture vendor · Fixture owner");
   });
   it("delivers quality through the progressive enrichment projection", async () => {
     const run = await makeRun("running", null);

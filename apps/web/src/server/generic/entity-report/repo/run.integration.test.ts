@@ -51,7 +51,6 @@ describe("Run detail reports", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Report account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
