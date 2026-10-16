@@ -340,6 +340,8 @@ export type ProjectTree = {
  */
 export type ProjectSubtreeRollups = ProjectTree & {
   ownRollups: Map<ProjectId, ProjectOwnRollup>;
+  /** Own live task/expense dates, before descendant folds or manual overrides. */
+  ownContentDates: Map<ProjectId, ProjectContentDates>;
   subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
   dateWindows: Map<ProjectId, ProjectDateWindow>;
 };
@@ -429,6 +431,7 @@ export async function loadProjectSubtreeRollups(
   return {
     ...loaded,
     ownRollups,
+    ownContentDates: contentDates,
     subtreeRollups: aggregateSubtreeRollups(loaded.allRows, ownRollups),
     dateWindows: aggregateSubtreeDates(loaded.allRows, contentDates),
   };
