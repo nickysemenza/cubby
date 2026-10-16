@@ -176,9 +176,14 @@ async function ensureDatabase(): Promise<void> {
   const exists = await psql(
     `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
   );
-  if (exists.trim() === "1") return;
-  await psql(`CREATE DATABASE "${devDatabaseName}"`);
-  console.log(`[dev-db] Created ${devDatabaseName}`);
+  if (exists.trim() !== "1") {
+    await psql(`CREATE DATABASE "${devDatabaseName}"`);
+    console.log(`[dev-db] Created ${devDatabaseName}`);
+  }
+  // Neon has no JIT provider, while this image ships LLVM. Complex quality
+  // reads otherwise spend tens of seconds compiling instead of querying.
+  // Apply to existing owned databases too, without resetting their fixtures.
+  await psql(`ALTER DATABASE "${devDatabaseName}" SET jit = off`);
 }
 
 async function ready(): Promise<number> {

@@ -50,7 +50,12 @@ and rejects redirects; it is absent from release app builds.
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with
 that id. PostgreSQL's container is shared; databases, D1/R2/DO/queue state, and
-session files belong to each checkout. Runtime settings are meant for people:
+session files belong to each checkout. Database preparation disables JIT for
+that checkout's database, including existing databases without resetting data.
+Neon's PostgreSQL has no JIT provider; the local image's LLVM compiler otherwise
+adds substantial compilation time to complex quality queries. Restart a running
+dev session after applying this setting so its existing connections pick it up.
+Runtime settings are meant for people:
 `PORT` (default 3000), `CUBBY_DEV_PROFILE` (`offline`, or `integrations` with
 `CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
 (another isolated instance within the same checkout), and `CUBBY_DEV_DB_NAME`
