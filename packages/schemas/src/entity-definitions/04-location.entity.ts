@@ -592,6 +592,8 @@ Rules:
     derived: {
       parent: { via: "parent" },
       inventoryEntries: { type: "number" },
+      // The direct stock value the compact list cell renders.
+      valuation: { type: "number" },
     },
     sort: {
       fields: [

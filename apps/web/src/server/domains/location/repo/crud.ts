@@ -93,6 +93,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   loadListGroup,
@@ -117,9 +118,15 @@ import type {
   LocationFilters,
   LocationWithParentChild,
 } from "./internal-types";
+import { rollupLocationValuations } from "./location-valuation-rollup";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
-import { computeLocationValuations, loadDirectValuationSql } from "./valuation";
+import {
+  computeLocationValuations,
+  directValuationSql,
+  loadDirectValuationSql,
+  loadLocationValuationInputs,
+} from "./valuation";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
   "InventoryEntry.locationId": {
@@ -650,8 +657,23 @@ export const deleteLocations = (
     overrides: { "Location.parentId": promoteSurvivingChildren },
   });
 
+// One computed valuation per inventory entry serves the list's valuation
+// sort, its rows' entry valuations, and the whole-tree rollup.
+const locationValuations = listPrepare(async (db) => {
+  const entryValuations = await loadLiveInventoryValuations(db);
+  return {
+    entryValuations,
+    inputs: await loadLocationValuationInputs(db, entryValuations),
+  };
+});
+
 const locationScaffold = listScaffold("location", location, {
   derived: {
+    // Direct value, because that is what the list cell renders in compact
+    // mode.
+    valuation: locationValuations.value(({ inputs }) =>
+      directValuationSql(inputs.entries),
+    ),
     // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
     // stockOnly() filter — otherwise sort and filter disagree on whether an
     // installed fixture counts.
@@ -834,37 +856,34 @@ export const locationListRead = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const whereClause = await buildLocationWhere(db, filters);
-  // One computed valuation per inventory entry serves the list's valuation
-  // sort, its rows' entry valuations, and the whole-tree rollup.
-  const entryValuations =
-    readIntent === "count" ||
-    (!wantsListGroup(projection, "relations") &&
-      !wantsListGroup(projection, "derived") &&
-      !sorts.some((sort) => sort.orderBy === "valuation"))
-      ? undefined
-      : await loadLiveInventoryValuations(db);
-  const directValuation = sorts.some((sort) => sort.orderBy === "valuation")
-    ? await loadDirectValuationSql(db, entryValuations)
-    : undefined;
-
-  const orderByClause = locationScaffold.orderBy(
-    sorts,
-    {
-      groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy,
-      // `valuation` is computed on read, not a stored column; sort by direct
-      // value because that is what the list cell renders in compact mode.
-      resolve: (s) => {
-        if (s.orderBy === "valuation" && directValuation)
-          return [
-            s.direction === "asc"
-              ? sql`${directValuation} asc nulls last`
-              : sql`${directValuation} desc nulls last`,
-          ];
-        return null;
-      },
-    },
+  const context = await locationScaffold.context(db, {
     filters,
-  );
+    sorts,
+    groupBy,
+    readIntent,
+    projection,
+  });
+  const prepared = context.has(locationValuations)
+    ? context.get(locationValuations)
+    : undefined;
+  const entryValuations =
+    prepared?.entryValuations ??
+    (readIntent !== "count" && wantsListGroup(projection, "relations")
+      ? await loadLiveInventoryValuations(db)
+      : undefined);
+
+  // A count never orders, and skipped the prepare a valuation sort reads.
+  const orderByClause: SQL[] =
+    readIntent === "count"
+      ? []
+      : locationScaffold.orderBy(
+          sorts,
+          {
+            groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy,
+          },
+          filters,
+          context,
+        );
 
   const groupDirection =
     sorts.find((sort) => sort.orderBy === LOCATION_GROUPING.field)?.direction ??
@@ -885,6 +904,7 @@ export const locationListRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
+      context,
       where: whereClause,
       orderBy: orderByClause,
       load: (where) =>
@@ -930,7 +950,14 @@ export const locationListRead = async (
               loadProductPricing(db, pageProducts),
             ),
             loadListGroup(projection, "derived", () =>
-              computeLocationValuations(db, entryValuations),
+              prepared
+                ? Promise.resolve(
+                    rollupLocationValuations(
+                      prepared.inputs.entries,
+                      prepared.inputs.locations,
+                    ),
+                  )
+                : computeLocationValuations(db, entryValuations),
             ),
             loadListGroup(projection, "quality", () =>
               loadDataQualities(

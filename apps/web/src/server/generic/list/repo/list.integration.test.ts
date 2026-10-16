@@ -13,7 +13,9 @@ import { listScaffold } from "./list";
  * loses page order, deleted rows leak, or count/empty reads load graphs. */
 describe("list selection and relation loading", () => {
   const ctx = withTestDb();
-  const scaffold = listScaffold("task", task);
+  const scaffold = listScaffold("task", task, {
+    derived: { assigneeId: sql`NULL` },
+  });
 
   it("uses one FROM context and preserves the selected order across graph loading", async () => {
     const parent = await insertWithShortcode(ctx.db, "task", {
@@ -88,7 +90,9 @@ describe("list selection and relation loading", () => {
   it("counts an aliased table through its real FROM relation", async () => {
     await insertWithShortcode(ctx.db, "task", { name: "Test Aliased Task" });
     const table = alias(task, "listed_task");
-    const page = await listScaffold("task", table).list(
+    const page = await listScaffold("task", table, {
+      derived: { assigneeId: sql`NULL` },
+    }).list(
       ctx.db,
       { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },
       { where: notDeleted(table), hydrate: (rows) => rows },

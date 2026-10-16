@@ -22,7 +22,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { cents } from "@cubby/shared";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
@@ -436,6 +436,12 @@ async function toIds(
 const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
+  {
+    derived: {
+      // An unnamed merchant leads a descending list.
+      merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },
+    },
+  },
 );
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
@@ -502,14 +508,6 @@ export const listFinancialTransactionsRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildFinancialTransactionWhere(db, filters),
-      resolveSort: (sort) =>
-        sort.orderBy === "merchant"
-          ? [
-              (sort.direction === "asc" ? asc : desc)(
-                financialTransaction.merchant,
-              ),
-            ]
-          : null,
       select: (page) =>
         selectTransactionsRead(db, projection)
           .where(page.where)

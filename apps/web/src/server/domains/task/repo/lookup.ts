@@ -146,38 +146,14 @@ async function resolveTaskFilterReferences(
   };
 }
 
-/**
- * The joined project name isn't a column on `task` — a correlated subquery
- * keeps `taskList` a relational `findMany`. Soft-delete guarded and NULLS LAST
- * in both directions, matching `buildOrderBy`'s convention.
- */
-const joinedNameSort = (
-  sort: SortParams,
-  tableName: string,
-  foreignKey: SQL,
-) => {
-  const dirSql =
-    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
-  return [
-    sql`(SELECT j."name" FROM ${sql.raw(`"${tableName}"`)} j
-        WHERE j."id" = ${foreignKey} AND j."deletedAt" IS NULL)
-      ${sql.raw(dirSql)}`,
-  ];
-};
-
-const resolveTaskSort = (sort: SortParams) => {
-  if (sort.orderBy === "assigneeId")
-    return joinedNameSort(sort, "LedgerParty", effectiveTaskAssigneeSql());
-  if (sort.orderBy === "projectId") {
-    return joinedNameSort(sort, "Project", effectiveTaskProjectSql());
-  }
-  if (sort.orderBy === "subjectProductId") {
-    return joinedNameSort(sort, "Product", effectiveTaskSubjectProductSql());
-  }
-  return null;
-};
-
-const taskScaffold = listScaffold("task", task);
+// The effective project and subject product compile from their declared
+// `via` paths; the effective assignee is inherited, so it orders by name here.
+const taskScaffold = listScaffold("task", task, {
+  derived: {
+    assigneeId: sql`(SELECT j."name" FROM "LedgerParty" j
+        WHERE j."id" = ${effectiveTaskAssigneeSql()} AND j."deletedAt" IS NULL)`,
+  },
+});
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildTaskWhere = async (
@@ -346,7 +322,6 @@ export const taskListRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
-      resolveSort: resolveTaskSort,
       load: (where) => {
         const declared = relations.task.withProject.with;
         const references =

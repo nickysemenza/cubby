@@ -200,7 +200,18 @@ export const getUpcomingMealSummary = async (
   }));
 };
 
-const mealScaffold = listScaffold("meal", meal);
+// `mealType` must sort by slot, not by slug: a plain text ordering puts
+// dessert before dinner, which reads as a broken table. `mealTypeValues`
+// declaration order IS clock order (the calendar sorts a day by it), so
+// `array_position` over that tuple is the same ranking `mealTypeRank`
+// applies client-side. Unslotted meals sort last in both directions.
+const mealScaffold = listScaffold("meal", meal, {
+  derived: {
+    mealType: sql`array_position(${sql.raw(
+      `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
+    )}, ${meal.mealType})`,
+  },
+});
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildMealWhere = (
@@ -231,28 +242,11 @@ export const mealListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  // `mealType` must sort by slot, not by slug: a plain text ordering puts
-  // dessert before dinner, which reads as a broken table. `mealTypeValues`
-  // declaration order IS clock order (the calendar sorts a day by it), so
-  // `array_position` over that tuple is the same ranking `mealTypeRank`
-  // applies client-side. Unslotted meals sort last in both directions.
-  const resolveMealSort = (s: SortParams): SQL[] | null => {
-    if (s.orderBy !== "mealType") return null;
-    const rank = sql`array_position(${sql.raw(
-      `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
-    )}, ${meal.mealType})`;
-    return [
-      s.direction === "asc"
-        ? sql`${rank} asc nulls last`
-        : sql`${rank} desc nulls last`,
-    ];
-  };
   return mealScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
       where: buildMealWhere(db, filters),
-      resolveSort: resolveMealSort,
       // An unnamed meal displays as its date, so a name sort would otherwise
       // dump every one of them into an arbitrarily-ordered NULL block. This
       // orders that block the way its visible label reads.

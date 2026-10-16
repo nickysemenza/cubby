@@ -776,6 +776,12 @@ export default defineEntity({
       "dueEndDate",
       "trade",
     ],
+    derived: {
+      // Effective references, inherited from a parent task, by name.
+      projectId: { via: "project" },
+      subjectProductId: { via: "subject" },
+      assigneeId: { type: "text" },
+    },
     sort: {
       fields: [
         "name",

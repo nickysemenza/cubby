@@ -117,6 +117,10 @@ derived: {
 - **`predicate`** is filter-only and must declare a `reason`. It is the
   declared-exception form from [Generic by default](../entities.md#generic-by-default),
   so predicates are countable and should shrink.
+- A `type` or `via` entry may also name a stored field, declaring the value
+  that field orders and groups by when its column is not that value (product
+  `categoryId` by category path, task `projectId` by its effective project).
+  Its filters stay on the column (#2412).
 
 The domain repo supplies SQL once, when it builds the scaffold, as an
 argument rather than a registry ([ADR 0019](../adr/0019-domain-first-server-layout.md)):

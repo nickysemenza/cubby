@@ -42,7 +42,7 @@ import type {
   CookbookSummary,
   CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -399,15 +399,10 @@ const hydrateCookbookSummaries = async (
   }));
 };
 
-const cookbookScaffold = listScaffold("cookbook", cookbook);
-
 // `recipeCount` is the grouped count, not a column.
-const resolveCookbookSort = (sort: SortParams) =>
-  sort.orderBy === "recipeCount"
-    ? sort.direction === "asc"
-      ? [asc(recipeCountSql)]
-      : [desc(recipeCountSql)]
-    : null;
+const cookbookScaffold = listScaffold("cookbook", cookbook, {
+  derived: { recipeCount: recipeCountSql },
+});
 
 /** The kernel list: declared filters, the generated sort roster, paging. */
 export const cookbookList = (
@@ -422,7 +417,6 @@ export const cookbookList = (
     {
       select: (page) => selectCookbookSummaryRows(db, page),
       hydrate: (rows) => hydrateCookbookSummaries(db, rows),
-      resolveSort: resolveCookbookSort,
     },
   );
 
@@ -454,7 +448,6 @@ export const cookbookListRead = (
               : loadCookbookProductCovers(db, rows),
           mapRow: (row, { loaded }) => cookbookCore(row, loaded),
         }),
-      resolveSort: resolveCookbookSort,
     },
   );
 

@@ -41,7 +41,6 @@ import { parseShortcode, cents } from "@cubby/shared";
 import {
   and,
   asc,
-  desc,
   eq,
   inArray,
   isNull,
@@ -629,6 +628,11 @@ const documentPresenceCondition = (
 const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
+    // A purchase with no live vendor leads a descending list.
+    vendorId: { sql: purchaseVendorName, nulls: "high" },
+    expenseCount: purchaseExpenseCount,
+    expenseTotal: purchaseExpenseTotal,
+    documentCount: purchaseDocumentCount,
   },
 });
 
@@ -686,15 +690,6 @@ export const buildPurchaseWhereClause = async (
   ]);
 };
 
-const resolvePurchaseSort = (sort: SortParams) => {
-  const dir = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "vendorId") return [dir(purchaseVendorName)];
-  if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
-  if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
-  if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
-  return null;
-};
-
 export const purchaseListRead = async (
   db: Database,
   filters: PurchaseFilters,
@@ -728,7 +723,6 @@ export const purchaseListRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildPurchaseWhereClause(db, filters),
-      resolveSort: resolvePurchaseSort,
       select: (page) =>
         getDb(db)
           .select({

@@ -701,6 +701,11 @@ export default defineEntity({
       "returnWindowDays",
       "notes",
     ],
+    derived: {
+      spend: { type: "number" },
+      purchaseCount: { type: "number" },
+      latestPurchaseDate: { type: "date" },
+    },
     sort: {
       fields: [
         "spend",

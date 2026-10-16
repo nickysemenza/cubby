@@ -355,22 +355,23 @@ const compileFieldProvenance = (
 };
 
 /**
- * `model.derived`: a key names a list field that is not a table column, so it
- * may share a key only with a model field that has no storage (a read-only
- * projection such as inventory `valuation`). Enum values declare options; a
- * filter-only predicate always declares its reason.
+ * `model.derived`: a key names a list field that is not a table column, or the
+ * value a stored field lists by when its column is not that value (a
+ * reference ordered by its effective record's name, `tags` by its first tag).
+ * A stored field's filters stay on its column, so only a `type` or `via`
+ * entry may name one. Enum values declare options; a filter-only predicate
+ * always declares its reason.
  */
 const compileDerived = (
   derived: EntityFieldModelMetadata["derived"],
-  fields: readonly EntityField[],
   storageKeys: readonly string[],
   context: string,
 ): EntityFieldModel["derived"] => {
   for (const [key, entry] of Object.entries(derived)) {
     const derivedContext = `${context}.derived.${key}`;
-    if (storageKeys.includes(key))
+    if ("predicate" in entry && storageKeys.includes(key))
       throw new EntityDeclarationError(
-        `${derivedContext} names a stored column; declare its list behavior on the field.`,
+        `${derivedContext} names a stored column; a filter-only predicate needs its own key.`,
       );
     if (
       "type" in entry &&
@@ -378,13 +379,6 @@ const compileDerived = (
     )
       throw new EntityDeclarationError(
         `${derivedContext} declares options exactly when its type is enum.`,
-      );
-    if (
-      "via" in entry &&
-      fields.some((field) => field.key === key && field.reference !== null)
-    )
-      throw new EntityDeclarationError(
-        `${derivedContext} shadows reference field ${key}.`,
       );
   }
   return derived;
@@ -842,7 +836,7 @@ const compileFieldModel = (
     }
     return values;
   };
-  const derived = compileDerived(model.derived, fields, storageKeys, context);
+  const derived = compileDerived(model.derived, storageKeys, context);
   const hierarchy = compileHierarchy(
     model.hierarchy,
     fields,

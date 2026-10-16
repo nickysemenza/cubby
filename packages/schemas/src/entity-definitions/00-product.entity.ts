@@ -1985,6 +1985,17 @@ Rules:
       // The first live stock location by name, across all inventory.
       location: { type: "text" },
       ingredient: { via: "ingredient" },
+      // Orders by the category's full path, as its section headers read.
+      categoryId: { type: "text" },
+      // The effective price: the stored price, else the derived one.
+      price: { type: "number" },
+      // The primary live GTIN, else the oldest.
+      primaryGtin: { type: "text" },
+      expenseTotal: { type: "number" },
+      expenseCount: { type: "number" },
+      ledgerExpectedQuantity: { type: "number" },
+      quantityVariance: { type: "number" },
+      purchaseDate: { type: "date" },
     },
     sort: {
       fields: [

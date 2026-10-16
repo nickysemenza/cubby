@@ -258,7 +258,9 @@ describe("Email data quality", () => {
     expect(membershipRowsVisited).toBeLessThan(50000);
     // Plain count reads need no completed-import membership or hydration.
     const plain = await countTestDbQueries(() =>
-      listScaffold("email", email).list(
+      listScaffold("email", email, {
+        derived: { linkState: sql`0` },
+      }).list(
         ctx.db,
         {
           filters: {},

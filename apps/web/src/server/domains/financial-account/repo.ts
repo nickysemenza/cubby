@@ -18,7 +18,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, eq, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -230,6 +230,7 @@ const aliasCondition = (
 const financialAccountScaffold = listScaffold(
   "financialAccount",
   financialAccount,
+  { derived: { transactionCount: financialAccountTransactionCount } },
 );
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
@@ -281,14 +282,6 @@ export const listFinancialAccountsRead = (
     { filters, sorts, pagination, projection },
     {
       where: buildFinancialAccountWhere(filters),
-      resolveSort: (sort) =>
-        sort.orderBy === "transactionCount"
-          ? [
-              (sort.direction === "asc" ? asc : desc)(
-                financialAccountTransactionCount,
-              ),
-            ]
-          : null,
       select: (page) =>
         selectAccountsRead(db, projection)
           .where(page.where)
