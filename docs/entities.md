@@ -227,13 +227,18 @@ reported separately from amount completeness.
 Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
 Each batch memoizes dependency promises by declaration identity, preserving
 slot order, duplicates, cursors and status. Distinct slots share compatible
-project trees and scopes, record identities, purchase hydration and Run
+project trees and scopes, record identities, Purchase finance inputs and Run
 headers. Member-gated histories resolve viewer membership before record identity,
 preserving the authorization error when both inputs are invalid. Project analytics supplies the budget summary when both are requested;
 budget alone does not load charts. Reuse ends with the batch: there is no
 cross-request cache or encompassing transaction. Cheap identity/status dependencies stay separate from
 reference, quality and content hydration. Slot loaders request the projection
 they render and reuse broader reads only when another requested slot needs them.
+Purchase finance slots select the batch's union of scalar finance inputs, sharing
+signed Expense spend and one canonical financial aggregate scan (including posted
+refund evidence for reconciliation). Allocation alone skips financial aggregates;
+settlement alone skips vendor reconciliation inputs. Images, quality, category
+summaries, references and coverage stay with explicit full-detail readers.
 Run report headers select purpose/status; non-import Runs skip import detail,
 and standalone timelines select public operation metadata without result bodies.
 Full import slots share their detail and its operation evidence within the batch.

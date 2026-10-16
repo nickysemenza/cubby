@@ -63,7 +63,7 @@ const composeProjectAllocationSection = (
 
 export const purchaseProjectAllocationReport = async (
   db: Database,
-  purchase: PurchaseOut,
+  purchase: Pick<PurchaseOut, "id" | "expenseTotal">,
 ) => {
   const purchaseId = purchase.id;
   return sectionBlocks(

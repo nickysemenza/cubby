@@ -1,6 +1,6 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { getPurchaseFinanceByID } from "~/server/domains/purchase/repo/purchase";
 import {
   resolveOrThrow,
   resolveLiveShortcode,
@@ -30,6 +30,12 @@ export const recipeId = recordIdentity("recipe");
 export const locationId = recordIdentity("location");
 export const cookbookId = recordIdentity("cookbook");
 
-export const purchaseRecord = reportDependency(async (execution) =>
-  getPurchaseByID(execution.request.db, await execution.read(purchaseId)),
-);
+// Compute demand from the whole request, not whichever slot runs first.
+export const purchaseFinance = reportDependency(async (execution) => {
+  const { slots, db } = execution.request;
+  return getPurchaseFinanceByID(db, await execution.read(purchaseId), {
+    reconciliation: slots.includes("purchase.reconciliation"),
+    allocation: slots.includes("purchase.project-allocation"),
+    settlement: slots.includes("purchase.financial-settlement"),
+  });
+});

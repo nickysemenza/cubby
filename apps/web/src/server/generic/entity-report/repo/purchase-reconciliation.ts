@@ -71,5 +71,9 @@ export const composeReconciliationSection = (
     ],
   });
 
-export const purchaseReconciliationReport = (purchase: PurchaseOut) =>
-  sectionBlocks(composeReconciliationSection(purchase));
+export const purchaseReconciliationReport = (
+  purchase: Pick<
+    PurchaseOut,
+    "statedTotal" | "expenseTotal" | "reconciliation"
+  >,
+) => sectionBlocks(composeReconciliationSection(purchase));
