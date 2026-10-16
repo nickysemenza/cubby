@@ -841,7 +841,8 @@ function FieldCrossChecks({
       (token) =>
         token.mark === "agree" || observed.has(token.text.toLocaleLowerCase()),
     ) ||
-    (check.source === "model" && check.mark === "disagree-or-missing");
+    // A pending value missing from a literal label is a disagreement, not absent evidence.
+    check.mark === "disagree-or-missing";
   const evidenced = checks.filter(hasEvidence);
   const absent = checks.filter((check) => !hasEvidence(check));
   const fieldLabel = (field: PhotoFieldCrossCheck["field"]) =>

@@ -1451,7 +1451,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toHaveCount(0);
   const modelRow = attach
     .locator('[aria-label="Field cross-checks"] tbody tr')
-    .filter({ hasText: "Model" });
+    .filter({ hasText: "model ·" });
   await expect(modelRow.getByRole("cell").last()).toHaveText("!");
   await expect(modelRow).toContainText("SJ-999");
 
