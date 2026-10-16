@@ -1,0 +1,101 @@
+apps/web/generator/entities/compile.ts
+  s_a97c767a553ada::t_d120358be0454a 31,357-408,411-417,422,434-442,545-546,845-852,862-863,1236-1239,1258,1927,2064,2096,2224-2225,2858-2865,2867-2868
+apps/web/generator/entities/data-quality.ts
+  s_a97c767a553ada::t_166a6f7427a184 232
+apps/web/generator/entities/declarations.ts
+  s_a97c767a553ada::t_5837e17c4cf37b 1-4,105-106,311-315,421-422,518-519
+apps/web/generator/entities/list-fields.ts
+  s_a97c767a553ada::t_3394feec90596b 1-315
+apps/web/generator/entities/presentation.ts
+  s_a97c767a553ada::t_e02d272319a7e6 229,246,248-253,565,622-625
+apps/web/generator/entities/render/index.ts
+  s_a97c767a553ada::t_33d27005b3d59c 937-944,1304-1339,1348-1349,1362,1409
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_a97c767a553ada::t_a86420c9296123 441-453,603
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_a97c767a553ada::t_732fc28cf6403d 27-38,43,80-84,227-230,262-278,280-303,309,326-328,349-351,353-354,359,383-386,394,436-443,459-488,612-618
+apps/web/src/server/domains/location/repo/crud.ts
+  s_a97c767a553ada::t_1fb3704839dc99 653-665
+apps/web/src/server/domains/location/repo/tree-depth.ts
+  s_a97c767a553ada::t_ab6b2107a713c0 1-2,4-5
+apps/web/src/server/domains/product-category/repo/product-category.integration.test.ts
+  s_a97c767a553ada::t_648f78d18fbe5e 15,499
+apps/web/src/server/domains/product-category/repo/product-category.ts
+  s_a97c767a553ada::t_99812a75db5032 50,192,533,633
+apps/web/src/server/domains/product/repo/crud.ts
+  s_a97c767a553ada::t_7044378a705651 159,336-344,666,768,1132,1769
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_a97c767a553ada::t_e255c6860373ef 40,141-142,222-223,231-232
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_a97c767a553ada::t_ad3b86e43f17cc 629-633
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_a97c767a553ada::t_6d604b7aaff782 38,41,64-65,78,92-94,141,220
+apps/web/src/server/entity-kernel/list-smoke.integration.test.ts
+  s_a97c767a553ada::t_d9d1de91b347ac 35,284-287
+apps/web/src/server/generic/embedding/repo/entity-embedding-cleanup.ts
+  s_a97c767a553ada::t_cd8a520bf31fa7 56,170
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_a97c767a553ada::t_cd8ded410026c5 1-279
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_a97c767a553ada::t_0e50d347741364 1-147
+apps/web/src/server/generic/list/repo/hierarchy.ts
+  s_a97c767a553ada::t_5441bca68bdeca 1-8,10-26,29-33,35-52,54-56,59-61,64
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_a97c767a553ada::t_6e2d0e0591efda 1-136
+apps/web/src/server/generic/list/repo/list.ts
+  s_a97c767a553ada::t_1ac8e6a607fffa 11-15,82-96,99,123,194-219,222-223,231,234-237,241-421,448,450,474-484,522-527,587-595,597-607,670-681,683-685,696-712,791-836,843-846,852,876-897,902,918-921,952,954-956,975,1044
+apps/web/tooling/entity-generator.unit.test.ts
+  s_a97c767a553ada::t_75345ecc40519c 775,781,783,790,798-931
+docs/agents/generic-paths.md
+  s_a97c767a553ada::t_c3dca7bb8a3013 66-68
+docs/entities.md
+  s_a97c767a553ada::t_d01ecaad05f002 758-763,903,906-909,914-915,935-938,1290,1304-1342
+packages/schemas/package.json
+  s_a97c767a553ada::t_937dcfeb972adc 44
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_a97c767a553ada::t_5c0153593486a0 1984-1988
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_a97c767a553ada::t_26269fd182e150 738
+packages/schemas/src/entity-definitions/02-ingredient.entity.ts
+  s_a97c767a553ada::t_6593f92eb41488 275-279
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_a97c767a553ada::t_1fd05a65cdad9e 179,592-595
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_a97c767a553ada::t_33dfefeede051a 479-490,663,759
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_a97c767a553ada::t_3c45b4da5f209f 20-23,188-191
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_a97c767a553ada::t_945824b4dd37d1 2,175-178
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_a97c767a553ada::t_fbe27df967eae1 1133
+packages/schemas/src/entity-definitions/17-usda-food.entity.ts
+  s_a97c767a553ada::t_e2e42176874faa 263-266
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_a97c767a553ada::t_d655e6d590235c 9-12,74,78-82
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_a97c767a553ada::t_fc218b20d2d85f 173,235
+packages/schemas/src/entity-definitions/27-spendingCategory.entity.ts
+  s_a97c767a553ada::t_0dfd2314c1920b 35,39
+packages/schemas/src/entity-definitions/definition.ts
+  s_a97c767a553ada::t_f83699ad34a6db 136-139,141-146,794-797,839-878,894-898,1419-1420,2153-2157
+packages/schemas/src/project-fields.ts
+  s_a97c767a553ada::t_51d39f0b4e991c 86-100
+packages/schemas/src/project.ts
+  s_a97c767a553ada::t_475236ac805e1c 145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "13a5d246f04fb2bbf8ab237f3c4aaecfceded8b8",
+  "prompts": {},
+  "sessions": {
+    "s_a97c767a553ada": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f7c1ce8-2935-4968-857e-0c2859a2bb21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
