@@ -1,0 +1,41 @@
+apps/web/src/entity/filter-search-fields.ts
+  s_f9d414ac9cc014::t_32c52ba2727afe 19,49,140
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_f9d414ac9cc014::t_e18419c274475a 222,227,372
+apps/web/src/server/domains/product/repo/crud.ts
+  s_f9d414ac9cc014::t_2bdb64a893cf11 29-33,46-50,64,66,80,170-173,263-359,383-544,870-873,875-878
+apps/web/src/server/domains/product/repo/ownership.ts
+  s_f9d414ac9cc014::t_e4960dd6d43297 20,41-45,67,71
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_b5cdbf83cd7fb5 1,69,144,149-154,157,179-204
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_f9d414ac9cc014::t_424604000fb797 15,19,82-91,96-98,103-107
+apps/web/src/server/domains/project/repo/project-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_4517e4b64a9a63 57,59,61-63
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_f9d414ac9cc014::t_12be1a60cdced6 20-25,35,65,112,172,174
+apps/web/src/server/generic/problems/repo/detectors-product.ts
+  s_f9d414ac9cc014::t_30af988339b8d0 150
+docs/entities.md
+  s_f9d414ac9cc014::t_7e49b6f652d998 1333-1334,1344-1348,1374-1379,1390-1400,1405-1406,1418-1422
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_f9d414ac9cc014::t_e6559f68ccf3ed 1999-2063,2316,2348,2361,2379,2384,2389-2390,2400-2403,2412,2423-2424,2433-2434,2442,2465,2498,2539,2578,2587-2593,2639-2679,2682,2693,2704,2717,2725,2738,2746,2754,2765,2797,2846,2855,2946
+packages/schemas/src/product.ts
+  s_f9d414ac9cc014::t_a9e8808b7d86e6 303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6d974a97805960ce17eb371e7bee7bd241a398a1",
+  "prompts": {},
+  "sessions": {
+    "s_f9d414ac9cc014": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd04ade3-971f-4681-b1f2-fa2d03203a89",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

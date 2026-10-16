@@ -1,0 +1,23 @@
+apps/web/src/server/domains/product/repo/crud.ts
+  s_f9d414ac9cc014::t_3eba3eef48e9e0 344-376,385-392,396,561-564,566-570,892-893,897-901,903-913,969,1013,1046-1047,1058,1175,1178
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_822c1dfba47408 131-137,185-188
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_f9d414ac9cc014::t_bb63b9e3d45ee9 279,333-334,353
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "62d266f5efdd7134813ea9dda878d980f081d9a4",
+  "prompts": {},
+  "sessions": {
+    "s_f9d414ac9cc014": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd04ade3-971f-4681-b1f2-fa2d03203a89",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

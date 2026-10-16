@@ -1,0 +1,25 @@
+apps/web/src/server/generic/data-quality/repo/checks/inventory.ts
+  s_f9d414ac9cc014::t_f4c4e8172552dc 1,24
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_f9d414ac9cc014::t_8ad3d70818b007 1-4,33-34,39
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_f9d414ac9cc014::t_27417395826b01 44,53
+apps/web/src/server/generic/list/repo/list.ts
+  s_f9d414ac9cc014::t_7568cc1928c1ec 859
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4353623f1814bc3db9baffb1d98759d7a2523dd4",
+  "prompts": {},
+  "sessions": {
+    "s_f9d414ac9cc014": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd04ade3-971f-4681-b1f2-fa2d03203a89",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
