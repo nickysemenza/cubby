@@ -1,8 +1,9 @@
 import { retireTemplateMarkers } from "./lib/template-markers.ts";
 import type { ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
+  renameSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -23,7 +24,8 @@ import {
   findDevContainer as findContainer,
   stopDevContainer as stopAndRemove,
 } from "./lib/dev-container.ts";
-import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
+import { holdLock, worktreeRoot } from "./lib/harness-lock.ts";
+import { processStatus } from "./lib/process-identity.ts";
 import { spawnToExit } from "./lib/run.ts";
 import {
   SHARED_POSTGRES,
@@ -92,9 +94,9 @@ const STATE_LOCK = { path: STATE, label: "test services", staleMs: 30_000 };
 const RECYCLE_DATABASE_COUNT = 100;
 
 const runRecord = z.object({
-  pid: z.number(),
+  pid: z.number().int().positive(),
   // The command's detached process group; it can outlive a SIGKILLed wrapper.
-  group: z.number().optional(),
+  group: z.number().int().positive().optional(),
   configuration: z.string(),
   root: z.string(),
 });
@@ -123,34 +125,49 @@ function groupIsAlive(group: number): boolean {
     process.kill(-group, 0);
     return true;
   } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
+    return !(
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ESRCH"
+    );
   }
 }
 
-/**
- * Live run records; a dead or unreadable record is deleted. A run stays live
- * while its wrapper or its command's process group runs.
- */
-function liveRuns(): RunRecord[] {
-  mkdirSync(RUNS, { recursive: true });
-  return readdirSync(RUNS).flatMap((file) => {
-    let record: ReturnType<typeof runRecord.safeParse> | undefined;
-    try {
-      record = runRecord.safeParse(
-        JSON.parse(readFileSync(path.join(RUNS, file), "utf8")),
-      );
-    } catch {
-      // Unreadable: removed below.
-    }
-    if (
-      record?.success &&
-      (ownerIsAlive(record.data.pid) ||
-        (record.data.group !== undefined && groupIsAlive(record.data.group)))
-    )
-      return [record.data];
-    rmSync(path.join(RUNS, file), { force: true });
-    return [];
-  });
+/** Publish adoption without exposing a truncated record to concurrent readers. */
+export function writeRunRecord(file: string, record: RunRecord): void {
+  const pending = `${file}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(pending, JSON.stringify(record));
+    renameSync(pending, file);
+  } finally {
+    rmSync(pending, { force: true });
+  }
+}
+
+/** Unknown records block lifecycle work; only proven-dead owners are pruned. */
+export function liveRuns(directory = RUNS): RunRecord[] {
+  mkdirSync(directory, { recursive: true });
+  return readdirSync(directory)
+    .filter((file) => !file.endsWith(".tmp"))
+    .flatMap((file) => {
+      const recordFile = path.join(directory, file);
+      let record: RunRecord;
+      try {
+        record = runRecord.parse(JSON.parse(readFileSync(recordFile, "utf8")));
+      } catch (cause) {
+        throw new Error(
+          `Test service run ${recordFile}: ownership unknown; preserve this record and stop its clients, then repair or remove it manually only after verifying its owners are gone`,
+          { cause },
+        );
+      }
+      if (
+        processStatus(record.pid, undefined) !== "dead" ||
+        (record.group !== undefined && groupIsAlive(record.group))
+      )
+        return [record];
+      rmSync(recordFile, { force: true });
+      return [];
+    });
 }
 
 const serviceModeSchema = z.enum(["managed", "external"]);
@@ -275,15 +292,12 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
   const record = path.join(RUNS, `${process.pid}.json`);
   const leave = () => rmSync(record, { force: true });
   const write = (group?: number) =>
-    writeFileSync(
-      record,
-      JSON.stringify({
-        pid: process.pid,
-        group,
-        configuration,
-        root: worktreeRoot,
-      } satisfies RunRecord),
-    );
+    writeRunRecord(record, {
+      pid: process.pid,
+      group,
+      configuration,
+      root: worktreeRoot,
+    });
   try {
     const others = liveRuns();
     write();

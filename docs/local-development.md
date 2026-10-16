@@ -49,8 +49,11 @@ means equal verified birth identities; `dead` means an absent PID or a verified
 different birth in the same identity format; everything unreadable or in another
 format is `unknown`. Unknown ownership never authorizes termination, replacement,
 reset, or template discard. Unprefixed legacy identities are unknown because their
-original timezone/locale was not recorded. The diagnostic names the PID: stop that
-process with `kill <pid>`, then run `pnpm dev down` before retrying. Session and
+original timezone/locale was not recorded. For local birth uncertainty, the
+diagnostic names the PID: stop that local process with `kill <pid>`, then run
+`pnpm dev down` before retrying. Foreign-host or missing-service-incarnation
+uncertainty requires shared-service recovery instead; see
+[template recovery](development.md#worktrees-and-test-services). Session and
 persistent data stay intact until ownership is resolved.
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.

@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { resolveDevProfile } from "./lib/dev-profile.ts";
 
 // Mixed revisions must not mark a live legacy supervisor/runtime stopped:
 // start and reset rely on the same stop boundary before replacing state/data.
+// Invoke Node directly: package-manager dependency repair can prune modules
+// underneath concurrently running script tests.
 test("down preserves live legacy sessions and reports how to resolve ownership", () => {
   const root = resolve(import.meta.dirname, "..");
   const instance = `synthetic_identity_${process.pid}`;
@@ -42,20 +46,20 @@ test("down preserves live legacy sessions and reports how to resolve ownership",
       });
       writeFileSync(file, session);
       const result = spawnSync(
-        "pnpm",
+        process.execPath,
         [
-          "--dir",
-          profile.webRoot,
-          "exec",
-          "tsx",
+          "--import",
+          pathToFileURL(
+            createRequire(join(profile.webRoot, "package.json")).resolve("tsx"),
+          ).href,
           "tooling/dev/index.ts",
           "down",
         ],
         {
-          cwd: root,
+          cwd: profile.webRoot,
           encoding: "utf8",
           timeout: 15_000,
-          env: { PATH: process.env.PATH, CUBBY_DEV_INSTANCE: instance },
+          env: { ...process.env, CUBBY_DEV_INSTANCE: instance },
         },
       );
       assert.notEqual(result.status, 0);

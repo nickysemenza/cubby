@@ -96,7 +96,7 @@ export async function holdLock(
   };
 }
 
-export function ownerIsAlive(pid: number): boolean {
+function ownerIsAlive(pid: number): boolean {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);

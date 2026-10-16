@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -22,12 +24,20 @@ it("recovers an interrupted template and preserves live initialization", async (
     script,
     `import { initializeRecoverableTemplate } from ${JSON.stringify(new URL("./template-recovery.ts", import.meta.url).pathname)}; await initializeRecoverableTemplate('${hash}', async () => { console.log('SYNTHETIC_INITIALIZING'); setInterval(() => {}, 1000); await new Promise(() => {}); });`,
   );
-  const child = spawn("pnpm", ["exec", "tsx", script], {
-    cwd: process.cwd(),
-    env: { ...process.env, TZ: "UTC", LC_ALL: "C" },
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: true,
-  });
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href,
+      script,
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, TZ: "UTC", LC_ALL: "C" },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    },
+  );
   const output: string[] = [];
   child.stderr.on("data", (data) => output.push(String(data)));
   const previousTimezone = process.env.TZ;
@@ -194,7 +204,11 @@ it("fails closed for unverifiable identities and marker namespaces", async () =>
           },
           { timeoutMs: 100 },
         ),
-      ).rejects.toThrow(new RegExp(`PID ${process.pid}.*unknown.*stop`, "u"));
+      ).rejects.toThrow(
+        scope === "birth"
+          ? new RegExp(`PID ${process.pid}.*unknown.*stop`, "u")
+          : /ownership unknown.*pnpm test:services:down/u,
+      );
       rmSync(file);
     }
   } finally {

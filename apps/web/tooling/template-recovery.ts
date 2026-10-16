@@ -75,12 +75,10 @@ export async function initializeRecoverableTemplate(
     if (owner) {
       // Separate hosts/temp namespaces cannot prove ownership; external callers
       // without an incarnation must fail rather than discard a pending owner.
-      const unknownOwner = () =>
-        new Error(
-          `Template ${hash}: PID ${owner.pid} ownership unknown (host ${owner.host}, service ${process.env.CUBBY_TEMPLATE_SERVICE_ID ?? "unverified"}); stop that process (kill ${owner.pid}) or run pnpm dev down, then retry`,
-        );
       if (!process.env.CUBBY_TEMPLATE_SERVICE_ID || owner.host !== hostname())
-        throw unknownOwner();
+        throw new Error(
+          `Template ${hash}: ownership unknown (host ${owner.host}, service ${process.env.CUBBY_TEMPLATE_SERVICE_ID ?? "unverified"}); stop all clients of this shared service, then run pnpm test:services:down and restart through the managed runner; for external services, have the service owner recycle it and supply a fresh CUBBY_TEMPLATE_SERVICE_ID shared by all clients`,
+        );
       if (owner.redirect) {
         if (visited.has(hash))
           throw new Error(`Cyclic template redirect at ${hash}`);
@@ -89,7 +87,10 @@ export async function initializeRecoverableTemplate(
         continue;
       }
       const ownerStatus = processStatus(owner.pid, owner.start);
-      if (ownerStatus === "unknown") throw unknownOwner();
+      if (ownerStatus === "unknown")
+        throw new Error(
+          `Template ${hash}: local PID ${owner.pid} birth ownership unknown; stop that local process (kill ${owner.pid}), then run pnpm dev down and retry`,
+        );
       if (ownerStatus === "alive") {
         await delay(50);
         continue;

@@ -188,8 +188,15 @@ native PostgreSQL installation remain owned by their existing runners.
   versioned process birth identity read with `TZ=UTC LC_ALL=C`. A live or
   unverifiable owner is never discarded. Recovery uses the shared
   [tri-state process-liveness contract](local-development.md#checkout-runtime);
-  unknown ownership reports the PID and resolution command, while live owners
-  wait at most two minutes.
+  local birth uncertainty reports the local PID to stop before retrying, while
+  live owners wait at most two minutes. Foreign-host markers and missing service
+  IDs reject before PID inspection: never kill a local PID based on a foreign
+  marker. Stop all shared-service clients, run `pnpm test:services:down`, then
+  restart via the managed runner. External service owners must recycle the
+  service and supply a fresh `CUBBY_TEMPLATE_SERVICE_ID` shared by all clients.
+  If legacy/unverified markers still block recovery, the service owner must
+  remove only that retired service's marker scope after confirming all its
+  initializers have stopped; managed cleanup deliberately preserves those scopes.
   A proven-dead owner redirects to a deterministic successor hash. Only newly
   created redirects consume the eight-interruption budget; established redirects
   may be traversed across any number of past interruptions within the deadline.
@@ -216,7 +223,12 @@ native PostgreSQL installation remain owned by their existing runners.
   until socket closure; other database errors remain failures. Workers, peers and Playwright
   listen on OS-assigned ports, so worktrees never collide. Startup runs under
   the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
-  itself in `/tmp/cubby-test-services/runs`: IntegreSQL a live run uses is never
+  itself in `/tmp/cubby-test-services/runs`. Record creation and command-group
+  adoption use atomic rename; temporary files are not published records.
+  Unreadable or invalid records remain intact and block startup/teardown before
+  any service changes. Stop the record's clients and verify its owners are gone
+  before manually repairing/removing it; automatic pruning requires a proven
+  absent wrapper and command group. IntegreSQL a live run uses is never
   removed, an idle one of a superseded configuration (or an earlier revision's
   `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
   than 100 databases is recreated with its `integresql_*` databases dropped.
