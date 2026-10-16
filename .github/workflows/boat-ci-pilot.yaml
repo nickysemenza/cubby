@@ -1,0 +1,117 @@
+name: Boat CI pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      executor:
+        description: Executor to measure (GitHub also verifies the off path)
+        type: choice
+        options: [github, boat]
+        default: github
+      browser-shards:
+        description: Browser shard count (trial starts with two)
+        type: choice
+        options: ["2", "4", "6", "10"]
+        default: "2"
+      postgres-shards:
+        description: PostgreSQL shard count
+        type: choice
+        options: ["1", "2", "3", "4"]
+        default: "1"
+      ai-smoke:
+        description: Include the live product-rename AI journey (informational)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boat-pilot-${{ github.ref }}
+  cancel-in-progress: true
+
+# Informational and explicitly dispatched: this pilot cannot satisfy CI passed.
+# One hosted job owns every remote shard and the ordinary GitHub fallback.
+jobs:
+  pilot:
+    name: Linux execution pilot (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BOAT_EXECUTOR: ${{ inputs.executor }}
+      BOAT_CI_ENABLED: ${{ vars.BOAT_CI_ENABLED }}
+      BOAT_CI_SNAPSHOT: ${{ vars.BOAT_CI_SNAPSHOT }}
+      BOAT_MACHINE_TYPE: default
+      BOAT_MACHINES: "2"
+      BOAT_E2E_SHARDS: ${{ inputs.browser-shards }}
+      BOAT_POSTGRES_SHARDS: ${{ inputs.postgres-shards }}
+      BOAT_AI_SMOKE: ${{ inputs.ai-smoke }}
+      CARGO_BUILD_WARNINGS: deny
+      NX_SKIP_REMOTE_CACHE: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+      - name: Install verified Boat CLI
+        id: cli
+        if: inputs.executor == 'boat' && vars.BOAT_CI_ENABLED != 'false'
+        continue-on-error: true
+        run: bash .github/boat/install-cli.sh
+      - name: Authenticate Boat
+        id: auth
+        if: steps.cli.outcome == 'success'
+        continue-on-error: true
+        env:
+          BOAT_API_KEY: ${{ secrets.BOAT_API_KEY }}
+        run: |
+          test -n "$BOAT_API_KEY"
+          printf '%s' "$BOAT_API_KEY" | boat login --key-stdin --no-update --json > /dev/null
+      - name: Execute Boat pilot
+        id: boat
+        env:
+          BOAT_API_KEY: ${{ steps.auth.outcome == 'success' && secrets.BOAT_API_KEY || '' }}
+          TESTER_ARMY_CF_API_TOKEN: ${{ inputs.ai-smoke && secrets.TESTER_ARMY_CF_API_TOKEN || '' }}
+          TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+        run: node scripts/boat-ci.ts
+      - name: Prepare GitHub fallback toolchain
+        if: ${{ !cancelled() && steps.boat.outputs.outcome == 'fallback' }}
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: wasm-pack
+      - name: Ordinary GitHub execution or infrastructure fallback
+        if: ${{ !cancelled() && steps.boat.outputs.outcome == 'fallback' }}
+        env:
+          CUBBY_CI_EXECUTOR: github
+          TESTER_ARMY_CF_API_TOKEN: ${{ inputs.ai-smoke && secrets.TESTER_ARMY_CF_API_TOKEN || '' }}
+          TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+        run: |
+          pnpm exec nx run cubby-checks:wasm --outputStyle=stream
+          pnpm --dir apps/web exec playwright install --with-deps chromium
+          node scripts/boat-ci-worker.ts --local
+      - name: Merge browser reports
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOME: ${{ steps.boat.outputs.outcome }}
+        run: |
+          mkdir -p artifacts/boat-ci/blobs
+          if [[ "$OUTCOME" == fallback ]]; then
+            sources=(artifacts/boat-ci/github)
+          else
+            sources=(artifacts/boat-ci/machine-*)
+          fi
+          for source in "${sources[@]}"; do
+            if [[ -d "$source" ]]; then
+              find "$source" -path '*/blob-report/*.zip' -exec cp '{}' artifacts/boat-ci/blobs/ \;
+            fi
+          done
+          if find artifacts/boat-ci/blobs -name '*.zip' -print -quit | grep -q .; then
+            pnpm --dir apps/web exec playwright merge-reports --reporter html ../../artifacts/boat-ci/blobs
+          fi
+      - name: Preserve synthetic reports and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: boat-pilot-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            artifacts/boat-ci/**
+            apps/web/playwright-report/**
+          retention-days: 7

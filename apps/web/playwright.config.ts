@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import type { ReporterDescription } from "@playwright/test";
 
 import type { WorkerdProfile } from "./tooling/workerd-harness";
 
@@ -30,6 +31,8 @@ for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
  * See https://playwright.dev/docs/test-configuration.
  */
 const isCI = !!process.env.CI;
+const pilotReporters: ReporterDescription[] =
+  process.env.CUBBY_BOAT_PILOT === "1" ? [["blob"]] : [];
 
 export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   testDir: "./tests/e2e",
@@ -63,7 +66,12 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
-    ? [["github"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]]
+    ? [
+        ["github"],
+        ["html"],
+        ...pilotReporters,
+        ["./tests/e2e/support/e2e-harness-reporter.ts"],
+      ]
     : // `line` so a failing pre-push or verify run says which test failed in the
       // terminal; the HTML report alone leaves the hook's output blank.
       [["line"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]],

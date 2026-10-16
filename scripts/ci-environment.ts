@@ -4,7 +4,13 @@ import { release } from "node:os";
 import { fileURLToPath } from "node:url";
 
 export function webEnvironment(
-  overrides: { platform?: string; node?: string; ci?: string } = {},
+  overrides: {
+    platform?: string;
+    node?: string;
+    ci?: string;
+    executor?: string;
+    snapshot?: string;
+  } = {},
 ) {
   return JSON.stringify({
     platform: overrides.platform ?? process.platform,
@@ -12,6 +18,11 @@ export function webEnvironment(
     image: process.env.ImageVersion || release(),
     node: overrides.node ?? process.version,
     ci: overrides.ci ?? process.env.CI ?? "",
+    executor:
+      overrides.executor ??
+      process.env.CUBBY_CI_EXECUTOR ??
+      (process.env.GITHUB_ACTIONS === "true" ? "github" : "local"),
+    snapshot: overrides.snapshot ?? process.env.CUBBY_CI_SNAPSHOT ?? "",
     locale: Intl.DateTimeFormat().resolvedOptions().locale,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });

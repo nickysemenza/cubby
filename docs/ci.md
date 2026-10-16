@@ -24,6 +24,64 @@ work. The web matrix likewise keeps `fail-fast: false`. Formatting and the
 link check run in the same job when the docs lane is selected. This collects distinct failures without paying a fresh install
 for every static check. One status context, `CI passed`, owns the merge gate.
 
+## Boat execution pilot
+
+`boat-ci-pilot.yaml` is an explicitly dispatched, informational workflow; it
+does not replace or satisfy `CI passed`. It compares the same Linux browser,
+PostgreSQL, auxiliary and Worker/runtime commands from `scripts/ci-policy.ts`.
+One GitHub-hosted coordinator owns all remote machines and collects their
+evidence, reducing hosted-slot demand without a hosted waiting job per shard.
+The ordinary required workflow and native checks retain their existing path.
+
+Choose `executor=boat` to try Boat, or `executor=github` to run the same pilot
+tasks on GitHub. Set repository variable `BOAT_CI_ENABLED=false` to force GitHub
+execution without contacting Boat. Missing credentials or snapshot configuration,
+unavailable capacity, exhausted balance and provider failures also fall back.
+Application failures and test timeouts remain failures. Cancellation cleans up
+without starting fallback, and missing task evidence cannot establish a pass.
+Fallback runs sequentially on its one GitHub host and can be slower than normal CI.
+
+Setup uses the CI-scoped `BOAT_API_KEY` secret (rotate at its expiry) and the
+`BOAT_CI_SNAPSHOT` repository variable. `.github/boat/install-cli.sh` verifies
+the Linux CLI checksum; an upstream binary change requires a deliberate pin
+update, otherwise the pilot falls back. `.github/boat/prepare.sh` prepares a
+credential-free disposable machine using the checkout's Node/pnpm versions,
+Rust/WASM tools, a persisted Chromium installation and the database images in
+`.github/boat/images.json`. Save a new named snapshot version after changing
+the prepared environment; do not overwrite an existing version. Delete the
+preparation machine after saving it. Runtime inference credentials are supplied
+only to a machine selected for AI smoke, outside the snapshot and artifact tree.
+
+The trial configuration uses two default-size machines, with grouped tasks
+running sequentially inside each. Each remote task has a separate worktree
+because browser runs hold a checkout-wide lock and write shared report paths.
+The worker verifies clean HEAD/tree against the requested source before running;
+the snapshot's source or its generated files cannot establish revision identity.
+The pilot disables task-result caching and clears report directories before each
+task, so collected diagnostics come from the requested execution. Tool and build
+preparation can still reuse the snapshot.
+Web gate identity distinguishes executor and snapshot, and browser blob-report
+selection is a target input. PostgreSQL JSON and browser blob outputs are cached
+with their tasks for ordinary CI. The pilot independently checks transferred
+browser manifests/blobs, PostgreSQL JSON and AI summaries before accepting a pass.
+Each task retains a bounded lane deadline; database services must respond before
+tasks begin. Streamed application failures stay failures if artifact transfer fails.
+
+The artifact contains per-task records, original browser reports and traces,
+PostgreSQL JSON diagnostics, and the merged Playwright HTML report. Optional
+`ai-smoke=true` runs the existing live product-rename journey; its sanitized
+reports, screenshots, traces, video and usage summary are retained. It is
+informational, and broader AI exploration remains opt-in. Missing or failed
+remote evidence is visible alongside any GitHub fallback evidence.
+
+Keep the trial until paid capacity is intentionally activated. The five-PR,
+8-core and higher-parallelism benchmarks are not established by a two-machine
+trial run. Review matched-coverage timings, reporting, cancellation and fallback
+before changing ordinary CI's executor or requiring any AI journey. Disabling
+execution does not cancel Boat subscription renewal. Leave auto-refill disabled;
+Boat's zero-balance grace period means the subscription alone is not an exact
+dollar cap ([billing](https://docs.boat.dev/billing)).
+
 ## Journeys
 
 Tester Army and simulator journeys are `ci.yaml` jobs that `Plan` selects

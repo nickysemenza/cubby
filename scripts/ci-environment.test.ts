@@ -50,6 +50,17 @@ test("a web pass distinguishes platform, runtime and test environment", () => {
   );
 });
 
+test("Boat and GitHub passes cannot substitute for each other's execution evidence", () => {
+  assert.notEqual(
+    webEnvironment({ executor: "boat", snapshot: "ci-base-a" }),
+    webEnvironment({ executor: "github" }),
+  );
+  assert.notEqual(
+    webEnvironment({ executor: "boat", snapshot: "ci-base-a" }),
+    webEnvironment({ executor: "boat", snapshot: "ci-base-b" }),
+  );
+});
+
 test("native pass identity distinguishes warning policy before FFI preparation", async () => {
   const { execFileSync } = await import("node:child_process");
   const command = new URL("./ci-environment.ts", import.meta.url).pathname;

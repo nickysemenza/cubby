@@ -21,6 +21,8 @@
         "scripts/ci-policy.ts!",
         "scripts/ci-environment.ts!",
         "scripts/ci-summary.ts!",
+        "scripts/boat-ci.ts!",
+        "scripts/boat-ci-worker.ts!",
         "scripts/check-rust.ts!",
         "scripts/stack-preflight.ts!",
         "scripts/dev-db.ts!"
