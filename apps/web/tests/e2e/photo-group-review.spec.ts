@@ -1104,20 +1104,14 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     name: "New product name",
     exact: true,
   });
-  await group
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/desktop-concern.png",
-    });
+  await group.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/desktop-concern.png",
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await group.scrollIntoViewIfNeeded();
-  await group
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/phone-concern.png",
-    });
+  await group.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/phone-concern.png",
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await name.fill("Synthetic jacket blue XL");
   await name.blur();
@@ -1163,9 +1157,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
 }) => {
   test.setTimeout(90_000);
   const productName = "Synthetic shell jacket blue XL";
-  const existing = await seedProductPrerequisite(page, {
+  const existing = await createEntityFixture(page, "product", {
     name: productName,
     manufacturer: "Synthetic Outfitters",
+    model: "SJ-104",
   });
   const seed = await seedPhotoGroupReviewRun(
     page,
@@ -1259,17 +1254,12 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
-  await attach
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
-    });
-  await page
-    .getByRole("navigation", { name: "Section index" })
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/desktop-nav.png",
-    });
+  await attach.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
+  });
+  await page.getByRole("navigation", { name: "Section index" }).screenshot({
+    path: "../../artifacts/photo-review-polish/desktop-nav.png",
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await attach.scrollIntoViewIfNeeded();
   expect(
@@ -1277,12 +1267,9 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await attach
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
-    });
+  await attach.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
+  });
   await page.getByRole("button", { name: /Jump to:/ }).click();
   await expect(
     page
@@ -1306,31 +1293,23 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     0,
   );
   await expect(create.locator(".decision-step-action")).toHaveCount(0);
-  const nameField = create
-    .locator("[data-photo-field]")
-    .filter({
-      has: create.getByRole("textbox", {
-        name: "New product name",
-        exact: true,
-      }),
-    });
+  const nameField = create.locator("[data-photo-field]").filter({
+    has: create.getByRole("textbox", {
+      name: "New product name",
+      exact: true,
+    }),
+  });
   await expect(
     nameField.getByRole("button", { name: "Add ‘blue’ to name", exact: true }),
   ).toBeVisible();
   await expect(nameField.getByText(/label adds/)).toBeVisible();
-  await create
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
-    });
+  await create.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  await create
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/phone-create-mark.png",
-    });
+  await create.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/phone-create-mark.png",
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create
     .getByRole("button", { name: "Add ‘xl’ to name", exact: true })
@@ -1350,7 +1329,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await page.setViewportSize({ width: 1440, height: 1000 });
   await seedPhotoReviewLabelText(
     seed.itemImage.shortcode,
-    "Synthetic shell jacket blue XL",
+    "Synthetic Outfitters\nSJ-104\nSynthetic shell jacket blue XL",
   );
   await page.reload();
   await expect(
@@ -1360,27 +1339,20 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     attach.getByRole("columnheader", { name: "Photo label", exact: true }),
   ).toBeVisible();
   await expect(
-    attach.getByText(
-      "No label evidence for manufacturer, model, identifiers, colour, size",
-      { exact: true },
-    ),
+    attach.getByText("No label evidence for identifiers, colour, size", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     attach.locator('[aria-label="Field cross-checks"] tbody tr'),
-  ).toHaveCount(1);
-  await attach
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
-    });
+  ).toHaveCount(3);
+  await attach.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  await attach
-    .locator('[data-slot="card"]')
-    .first()
-    .screenshot({
-      path: "../../artifacts/photo-review-polish/phone-attach-label.png",
-    });
+  await attach.locator('[data-slot="card"]').first().screenshot({
+    path: "../../artifacts/photo-review-polish/phone-attach-label.png",
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })

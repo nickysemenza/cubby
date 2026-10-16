@@ -761,7 +761,7 @@ function FieldMark({
   value,
 }: {
   check: PhotoFieldCrossCheck;
-  value?: string;
+  value?: string | null;
 }) {
   const additions = check.tokens.filter(
     (token) =>
@@ -823,7 +823,7 @@ function FieldCrossChecks({
   const absent = checks.filter((check) => !hasEvidence(check));
   const fieldLabel = (field: PhotoFieldCrossCheck["field"]) =>
     field === "color" ? "colour" : field;
-  if (!labelText && !evidenced.length) return null;
+  if (!labelText.trim()) return null;
   return (
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
       {evidenced.length ? (
@@ -1256,18 +1256,19 @@ function ProductPanel({
         proposal.crossCheck ??
         [])
       : (proposal.crossCheck ?? []);
-  const selectedEvidence = useQuery(
-    photoImport.productEvidence.queryOptions(
-      {
-        runId,
-        productId:
-          product.kind === "existing" && product.existing
-            ? product.existing.id
-            : productShortcode.parse("PRD-4K7M"),
-      },
-      { enabled: product.kind === "existing" && Boolean(product.existing) },
-    ),
-  );
+  const selectedEvidence = useQuery({
+    ...photoImport.productEvidence.queryOptions({
+      runId,
+      productId:
+        product.kind === "existing" && product.existing
+          ? product.existing.id
+          : productShortcode.parse("PRD-4K7M"),
+    }),
+    enabled:
+      step === "identity" &&
+      product.kind === "existing" &&
+      Boolean(product.existing),
+  });
   const [showCandidates, setShowCandidates] = useState(false);
   const [identityAccepted, setIdentityAccepted] = useState(false);
   const queryClient = useQueryClient();
@@ -1699,10 +1700,6 @@ function PhotoProductSuggestions({
               }
               detail={
                 <Stack gap="xs">
-                  <FieldCrossChecks
-                    checks={candidate.crossCheck ?? []}
-                    name={candidate.name}
-                  />
                   <p className="text-xs">
                     Recorded count:{" "}
                     {candidate.quantity?.onHandUnits ?? "Not counted"} ·
