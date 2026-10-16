@@ -36,6 +36,8 @@ Native photo review renders the server's `DecisionStep[]` and `blockedReason`; i
 
 Photo and label text lead on narrow layouts and sit beside the steps when space permits. Existing Product evidence loads with selection, independently of candidate ranking. Deterministic agreement alone draws a checkmark; missing or model evidence draws a question or warning mark. Ownership and inventory answers save natively through `saveGroups`, preserving the proposal's photo roster, Product edits and explicit ownership. Agent concerns are read-only and use the explicit Resolved operation with an optional reply.
 
+Identity shows every pending Product edit with its current and proposed values and a Remove control that saves through `saveGroups`. The approval effect sentence also enumerates the edits, including when Identity is collapsed. Rejecting the selected Product switches to a create draft named from the observed label, clears Product edits, and drops any inventory link to the rejected Product. Candidate reads track group keys and proposal revisions; changes during a read coalesce into one replacement refresh, and superseded results are not published.
+
 ## Run evidence pilot
 
 Every entity retains its native detail renderer. A Run’s native console and detail offer one hosted destination for transcript, logs, and AI usage. Native overview, actions, photo review, editors, routing, and coverage remain in place. The evidence sheet has native Done and hands record links back to the native navigator; it does not own record history.

@@ -48,12 +48,25 @@ struct PhotoReviewPolicyTests {
                  "skip":[{"id":"IMG-7K4M","reason":"Blurred"}],
                  "product":{"kind":"existing","existing":{"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null}},
                  "review":{"observedName":"Synthetic shirt","unresolvedReason":"Check label","stockIntent":"counted",
-                   "productChanges":{"notes":"Synthetic label"},
+                   "productChanges":{"name":"Synthetic revised shirt","notes":"Synthetic label"},
                    "resolvedConcerns":[{"reason":"Synthetic old concern","reply":null,"by":"synthetic-member","at":"2026-10-01T10:00:00Z"}]},
                  "inventory":{"locationId":"LOC-4K7M","locationName":"Example shelf","quantity":2,
                    "mode":"add","ownershipMode":"explicit","ownerPartyId":null},
                  "evidence":"Synthetic evidence","missingImageCount":0,"updatedAt":"2026-10-01T12:00:00Z"}
                 """.utf8))
+        // Removing one pending edit must retain the roster, concern, ownership and other edits.
+        let removed = try PhotoReviewEdits.removingProductChange(group: group, field: "notes")
+        #expect(removed["review"]?["productChanges"]?["notes"] == nil)
+        #expect(removed["review"]?["productChanges"]?["name"]?.stringValue == "Synthetic revised shirt")
+        #expect(removed["review"]?["unresolvedReason"]?.stringValue == "Check label")
+        #expect(removed["inventory"]?["ownerPartyId"] == .null)
+        let rejected = try PhotoReviewEdits.createAfterRejection(group: group)
+        #expect(rejected["product"]?["kind"]?.stringValue == "create")
+        #expect(rejected["product"]?["create"]?["name"]?.stringValue == "Synthetic shirt")
+        #expect(rejected["review"]?["productChanges"] == nil)
+        #expect(rejected["inventory"]?["mode"]?.stringValue == "create")
+        #expect(rejected["inventory"]?["existingEntryId"] == nil)
+        #expect(rejected["images"] == removed["images"])
         let edit = try PhotoReviewEdits.ownership(group: group, locationID: "LOC-4K7M", quantity: 3)
         #expect(edit["product"]?["existingId"]?.stringValue == "PRD-4K7M")
         #expect(edit["review"]?["unresolvedReason"]?.stringValue == "Check label")
