@@ -93,11 +93,7 @@ gigabytes behind. After 30 minutes without an HTTP request or a watched file
 change, the runtime stops the supervisor (`CUBBY_DEV_IDLE_MINUTES`, `0` keeps
 it). An open HMR socket is not activity: forgotten preview panes and test
 browsers hold one indefinitely. A runtime whose supervisor was killed closes
-itself within 15 seconds. The supervisor restarts the runtime, keeping the
-session and database, when its process group's physical footprint (compressed
-pages included) exceeds 1536 MB (`CUBBY_DEV_MEMORY_LIMIT_MB`, `0` disables).
-Built preview (`wrangler dev`) gets the memory restart but not the idle or
-orphan exit.
+itself within 15 seconds. Built preview (`wrangler dev`) has neither exit.
 
 ## Tooling layout
 

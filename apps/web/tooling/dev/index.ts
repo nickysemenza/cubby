@@ -19,7 +19,6 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
-import { devMemoryLimitBytes, processGroupFootprint } from "./lifecycle.ts";
 
 import { z } from "zod";
 import {
@@ -236,7 +235,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
   profile = resolveDevProfile(root, selectedEnvironment);
   mkdirSync(profile.stateDir, { recursive: true });
   let child: ChildProcess | undefined;
-  let watchdog: NodeJS.Timeout | undefined;
   let interrupted = false;
   const session: Session = {
     schemaVersion: 1,
@@ -326,40 +324,37 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           path.join(profile.stateDir, "cloudflare"),
         ]
       : ["exec", "vite", "dev"];
+    child = spawn("pnpm", args, {
+      cwd: profile.webRoot,
+      // The runtime's lifecycle plugin exits if this supervisor dies.
+      env: {
+        ...devProcessEnvironment(profile),
+        CUBBY_DEV_SUPERVISOR_PID: String(process.pid),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    });
+    ownedChildren.add(child);
+    child.once("close", () => ownedChildren.delete(child!));
+    child.on("error", () => {
+      interrupted = true;
+    });
     let logs = "";
-    const launchRuntime = (): ChildProcess => {
-      const runtime = spawn("pnpm", args, {
-        cwd: profile.webRoot,
-        env: {
-          ...devProcessEnvironment(profile),
-          CUBBY_DEV_SUPERVISOR_PID: String(process.pid),
-          CUBBY_DEV_SESSION_FILE: sessionPath(profile),
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: true,
-      });
-      ownedChildren.add(runtime);
-      runtime.once("close", () => ownedChildren.delete(runtime));
-      runtime.on("error", () => {
-        interrupted = true;
-      });
-      for (const stream of [runtime.stdout, runtime.stderr])
-        stream?.on("data", (chunk) => {
-          const text = String(chunk);
-          logs = (logs + text).slice(-64_000);
-          process.stdout.write(text);
-          writeFileSync(path.join(profile.stateDir, "runtime.log"), logs, {
-            mode: 0o600,
-          });
+    for (const stream of [child.stdout, child.stderr])
+      stream?.on("data", (chunk) => {
+        const text = String(chunk);
+        logs = (logs + text).slice(-64_000);
+        process.stdout.write(text);
+        writeFileSync(path.join(profile.stateDir, "runtime.log"), logs, {
+          mode: 0o600,
         });
-      session.runtimePid = runtime.pid;
-      session.runtimeIdentity = runtime.pid
-        ? processIdentity(runtime.pid)
-        : undefined;
-      writeSession(profile, session);
-      return runtime;
-    };
-    const waitHealthy = async () => {
+      });
+    session.runtimePid = child.pid;
+    session.runtimeIdentity = child.pid
+      ? processIdentity(child.pid)
+      : undefined;
+    writeSession(profile, session);
+    await phase("runtime", async () => {
       let lastError: unknown;
       for (let attempt = 0; attempt < 180; attempt++) {
         if (interrupted || child?.exitCode !== null)
@@ -384,9 +379,7 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
         }
       }
       throw new Error(`Worker did not become healthy: ${String(lastError)}`);
-    };
-    child = launchRuntime();
-    await phase("runtime", waitHealthy);
+    });
     await phase("application", async () => {
       const response = await fetch(`${profile.origin}/api/auth/get-session`, {
         signal: AbortSignal.timeout(60_000),
@@ -421,64 +414,24 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     writeSession(profile, session);
     printLinks(session);
     console.log(`[dev] Startup phases (ms): ${JSON.stringify(session.phases)}`);
-    // A long-lived Vite + workerd runtime has grown past 5 GB; restarting it
-    // keeps the session and its database while returning the memory.
-    const memoryLimit = devMemoryLimitBytes();
-    let restarting = false;
-    if (memoryLimit > 0)
-      watchdog = setInterval(() => {
-        const pgid = child?.pid;
-        if (restarting || !pgid || child?.exitCode !== null) return;
-        void processGroupFootprint(pgid).then(
-          (bytes) => {
-            if (bytes <= memoryLimit || restarting || child?.pid !== pgid)
-              return;
-            restarting = true;
-            console.warn(
-              `[dev] Runtime footprint ${Math.round(bytes / 2 ** 20)} MB exceeds ${Math.round(memoryLimit / 2 ** 20)} MB; restarting it`,
-            );
-            for (const [signal, after] of [
-              ["SIGTERM", 0],
-              ["SIGKILL", 10_000],
-            ] as const)
-              setTimeout(() => {
-                try {
-                  process.kill(-pgid, signal);
-                } catch {
-                  /* Already exited. */
-                }
-              }, after);
-          },
-          () => undefined,
-        );
-      }, 60_000);
-    for (;;) {
-      const runtime = child;
-      const code =
-        runtime.exitCode ??
-        (await new Promise<number | null>((resolve) =>
-          runtime.once("close", resolve),
-        ));
-      if (restarting && !interrupted) {
-        session.readiness = "starting";
-        child = launchRuntime();
-        await waitHealthy();
-        restarting = false;
-        session.readiness = "ready";
-        writeSession(profile, session);
-        continue;
-      }
-      if (interrupted || code === 0) break;
-      throw new Error(
-        `Worker exited ${code}; see ${profile.stateDir}/runtime.log`,
+    await new Promise<void>((resolve, reject) => {
+      if (child?.exitCode !== null)
+        return reject(new Error("Worker exited during startup"));
+      child?.once("close", (code) =>
+        interrupted || code === 0
+          ? resolve()
+          : reject(
+              new Error(
+                `Worker exited ${code}; see ${profile.stateDir}/runtime.log`,
+              ),
+            ),
       );
-    }
+    });
     session.readiness = "stopped";
   } catch (error) {
     session.readiness = interrupted ? "stopped" : "failed";
     throw error;
   } finally {
-    clearInterval(watchdog);
     signal();
     await Promise.all(
       [...ownedChildren].map(
