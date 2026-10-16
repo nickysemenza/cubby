@@ -14,7 +14,7 @@ const ctx = withTestDb();
 // newest results. Missing keys default to empty arrays, explicit null is
 // invalid, and equal timestamps use the retained history's descending ID tie.
 it("selects newest local summary evidence without changing null or missing semantics", async () => {
-  const images = [];
+  const images: Awaited<ReturnType<typeof createUploadedImageRecord>>[] = [];
   for (let index = 0; index < 7; index++)
     images.push(
       await createUploadedImageRecord(ctx.db, {
