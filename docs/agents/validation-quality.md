@@ -25,8 +25,9 @@ Scoped lint tests temporarily write under `apps/web/src/server/.lint-fixture-*`
 so path-sensitive rules execute. Knip excludes only that disposable directory
 pattern because its scan runs concurrently with those tests; lint still checks
 the fixtures and removes them afterward. Persisted sampled-path regressions
-select their path explicitly through the existing service ports rather than
-hoping randomly generated record IDs enter the production sample.
+select their path explicitly through the existing service ports, including
+legacy/resumed preparation and target execution. Keep that policy consistent
+through every transition rather than falling back to production UUID sampling.
 
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.

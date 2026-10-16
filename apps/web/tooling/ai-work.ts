@@ -70,7 +70,7 @@ export async function driveAiWork(
       : 0;
   try {
     for (let cycle = 0; cycle < 205; cycle++) {
-      const pending = await advanceAiWorkRun(db, { runId: id, attempt });
+      const pending = await advanceAiWorkRun(db, { runId: id, attempt }, ports);
       if (!pending?.length) return;
       for (const item of pending) {
         if (item.state === "retry_wait")
@@ -95,7 +95,7 @@ export async function driveAiWork(
               ),
           ).length;
           if (done >= ports.sweep.pauseAfter) {
-            await advanceAiWorkRun(db, { runId: id, attempt });
+            await advanceAiWorkRun(db, { runId: id, attempt }, ports);
             await getDb(db)
               .update(run)
               .set({ status: "paused" })
