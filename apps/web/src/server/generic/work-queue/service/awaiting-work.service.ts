@@ -20,9 +20,9 @@ import {
   countCullablePendingImages,
   countImagesStaleMetadata,
   selectImagesForMetadataExtraction,
+  cullPendingImageStorage,
 } from "~/server/domains/image/repo/image";
 import { buildImageMetadataExtractionTasks } from "~/server/domains/image/repo/image-metadata-tasks";
-import { cullPendingImageStorage } from "~/server/domains/image/repo/pending-image-cull";
 import {
   countStaleRecipeTotals,
   selectAllStaleRecipeIds,

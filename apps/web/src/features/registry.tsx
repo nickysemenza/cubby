@@ -78,6 +78,12 @@ import { createUnitMappingsColumn } from "~/features/units/unit-mappings-column"
  * points call `installFeatures()` (see `entity/feature-registry.ts`).
  */
 
+/** `lazy` wants a default export; expose one named export as it. */
+const named = <M, K extends keyof M>(
+  module: Promise<M>,
+  name: K,
+): Promise<{ default: M[K] }> => module.then((m) => ({ default: m[name] }));
+
 /** The Run slots that are nothing but their server-composed report. */
 type RunReportSlotId =
   keyof typeof import("~/features/run/slots").runReportSlots;
@@ -126,181 +132,142 @@ const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
 const detailSlots = {
   email: {
     review: slot<"email">(() =>
-      import("~/entity/entity-detail/email-review").then((m) => ({
-        default: m.EmailReview,
-      })),
+      named(import("~/entity/entity-detail/email-review"), "EmailReview"),
     ),
   },
   imageJob: { attempts: reportSlot<"imageJob">("imageJob.attempts") },
   product: {
     ownership: slot(() =>
-      import("~/features/product/product-runs").then((m) => ({
-        default: m.ProductOwnershipEvidence,
-      })),
+      named(
+        import("~/features/product/product-runs"),
+        "ProductOwnershipEvidence",
+      ),
     ),
     nutrition: slot(() =>
-      import("~/features/product/slots").then((m) => ({
-        default: m.ProductNutrition,
-      })),
+      named(import("~/features/product/slots"), "ProductNutrition"),
     ),
     "unit-mappings": slot(() =>
-      import("~/features/product/slots").then((m) => ({
-        default: m.ProductUnitMappings,
-      })),
+      named(import("~/features/product/slots"), "ProductUnitMappings"),
     ),
     "fits-with": slot(() =>
-      import("~/features/product/slots").then((m) => ({
-        default: m.ProductFitsWith,
-      })),
+      named(import("~/features/product/slots"), "ProductFitsWith"),
     ),
     cookbooks: slot(
-      () =>
-        import("~/features/product/slots").then((m) => ({
-          default: m.ProductCookbooks,
-        })),
+      () => named(import("~/features/product/slots"), "ProductCookbooks"),
       (product) => product.cookbooks.length > 0,
     ),
     "recipe-appearances": slot(
       () =>
-        import("~/features/product/slots").then((m) => ({
-          default: m.ProductRecipeAppearances,
-        })),
+        named(import("~/features/product/slots"), "ProductRecipeAppearances"),
       (product) => product.ingredient !== null,
     ),
     labels: slot(() =>
-      import("~/features/product/slots").then((m) => ({
-        default: m.ProductLabels,
-      })),
+      named(import("~/features/product/slots"), "ProductLabels"),
     ),
     runs: slot(() =>
-      import("~/features/product/product-runs").then((m) => ({
-        default: m.ProductRuns,
-      })),
+      named(import("~/features/product/product-runs"), "ProductRuns"),
     ),
   },
   recipe: {
     workflow: slot(() =>
-      import("~/features/recipe/slots").then((m) => ({
-        default: m.RecipeWorkflow,
-      })),
+      named(import("~/features/recipe/slots"), "RecipeWorkflow"),
     ),
   },
   ingredient: {
     "nutrition-product": slot(() =>
-      import("~/features/ingredient/slots").then((m) => ({
-        default: m.IngredientNutritionProduct,
-      })),
+      named(
+        import("~/features/ingredient/slots"),
+        "IngredientNutritionProduct",
+      ),
     ),
     "recipe-usages": slot(() =>
-      import("~/features/ingredient/slots").then((m) => ({
-        default: m.IngredientRecipeUsages,
-      })),
+      named(import("~/features/ingredient/slots"), "IngredientRecipeUsages"),
     ),
   },
   cookbook: {
     toc: slot(() =>
-      import("~/features/cookbook/slots").then((m) => ({
-        default: m.CookbookContents,
-      })),
+      named(import("~/features/cookbook/slots"), "CookbookContents"),
     ),
     "import-progress": slot(() =>
-      import("~/features/cookbook/slots").then((m) => ({
-        default: m.CookbookImportProgress,
-      })),
+      named(import("~/features/cookbook/slots"), "CookbookImportProgress"),
     ),
   },
   location: {
     "contents-valuation": slot(() =>
-      import("~/features/location/slots").then((m) => ({
-        default: m.LocationContentsValuation,
-      })),
+      named(import("~/features/location/slots"), "LocationContentsValuation"),
     ),
     "ai-description": slot(() =>
-      import("~/features/location/slots").then((m) => ({
-        default: m.LocationAiDescription,
-      })),
+      named(import("~/features/location/slots"), "LocationAiDescription"),
     ),
   },
   meal: {
     composition: slot(() =>
-      import("~/features/meal/slots").then((m) => ({
-        default: m.MealComposition,
-      })),
+      named(import("~/features/meal/slots"), "MealComposition"),
     ),
     nutrition: slot(() =>
-      import("~/features/meal/slots").then((m) => ({
-        default: m.MealNutrition,
-      })),
+      named(import("~/features/meal/slots"), "MealNutrition"),
     ),
   },
   project: {
     schedule: slot(() =>
-      import("~/features/project/slots").then((m) => ({
-        default: m.ProjectSchedule,
-      })),
+      named(import("~/features/project/slots"), "ProjectSchedule"),
     ),
     budget: slot(() =>
-      import("~/features/project/slots").then((m) => ({
-        default: m.ProjectBudget,
-      })),
+      named(import("~/features/project/slots"), "ProjectBudget"),
     ),
     contribution: slot(() =>
-      import("~/features/project/slots").then((m) => ({
-        default: m.ProjectContribution,
-      })),
+      named(import("~/features/project/slots"), "ProjectContribution"),
     ),
     analytics: slot(() =>
-      import("~/features/project/slots").then((m) => ({
-        default: m.ProjectAnalytics,
-      })),
+      named(import("~/features/project/slots"), "ProjectAnalytics"),
     ),
   },
   productCategory: {
     "spending-classification": slot(() =>
-      import("~/features/finance/spending-classification-review").then((m) => ({
-        default: m.ProductCategoryClassification,
-      })),
+      named(
+        import("~/features/finance/spending-classification-review"),
+        "ProductCategoryClassification",
+      ),
     ),
   },
   vendor: {
     "spending-classification": slot(() =>
-      import("~/features/finance/spending-classification-review").then((m) => ({
-        default: m.VendorClassification,
-      })),
+      named(
+        import("~/features/finance/spending-classification-review"),
+        "VendorClassification",
+      ),
     ),
   },
   purchase: {
-    runs: slot(() =>
-      import("~/features/purchase/slots").then((m) => ({
-        default: m.Runs,
-      })),
-    ),
+    runs: slot(() => named(import("~/features/purchase/slots"), "Runs")),
     "project-allocation": slot(() =>
-      import("~/features/purchase/project-allocation-table").then((m) => ({
-        default: m.PurchaseProjectAllocation,
-      })),
+      named(
+        import("~/features/purchase/project-allocation-table"),
+        "PurchaseProjectAllocation",
+      ),
     ),
     receiving: slot(() =>
-      import("~/features/purchase/receive-purchase-section").then((m) => ({
-        default: m.PurchaseReceiving,
-      })),
+      named(
+        import("~/features/purchase/receive-purchase-section"),
+        "PurchaseReceiving",
+      ),
     ),
     reconciliation: slot(() =>
-      import("~/features/purchase/slots").then((m) => ({
-        default: m.PurchaseReconciliation,
-      })),
+      named(import("~/features/purchase/slots"), "PurchaseReconciliation"),
     ),
     "financial-settlement": slot(() =>
-      import("~/features/purchase/financial-settlement-body").then((m) => ({
-        default: m.PurchaseFinancialSettlement,
-      })),
+      named(
+        import("~/features/purchase/financial-settlement-body"),
+        "PurchaseFinancialSettlement",
+      ),
     ),
   },
   expense: {
     settlement: slot(() =>
-      import("~/features/expense/expense-settlement-body").then((m) => ({
-        default: m.ExpenseSettlement,
-      })),
+      named(
+        import("~/features/expense/expense-settlement-body"),
+        "ExpenseSettlement",
+      ),
     ),
   },
   run: {
@@ -309,9 +276,10 @@ const detailSlots = {
     "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>
-        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportControls,
-        })),
+        named(
+          import("~/features/purchase/purchase-import-run-detail"),
+          "RunImportControls",
+        ),
       isImportRun,
     ),
     "import-stats": runReportSlot("import-stats", isImportRun),
@@ -321,9 +289,10 @@ const detailSlots = {
     ),
     "import-agent-live": slot(
       () =>
-        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportAgentActive,
-        })),
+        named(
+          import("~/features/purchase/purchase-import-run-detail"),
+          "RunImportAgentActive",
+        ),
       isImportRun,
     ),
     "import-purchases": runReportSlot("import-purchases", isImportRun),
@@ -340,39 +309,32 @@ const detailSlots = {
     ),
     "import-agent-stopped": slot(
       () =>
-        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportAgentStopped,
-        })),
+        named(
+          import("~/features/purchase/purchase-import-run-detail"),
+          "RunImportAgentStopped",
+        ),
       isImportRun,
     ),
     "import-timeline": runReportSlot("import-timeline"),
     "import-debug-log": runReportSlot("import-debug-log"),
     suggestions: slot(
-      () =>
-        import("~/features/run/slots").then((m) => ({
-          default: m.RunSuggestions,
-        })),
+      () => named(import("~/features/run/slots"), "RunSuggestions"),
       (run) => run.purpose === "suggestion_sweep",
     ),
     "photo-batch": slot(
       () =>
-        import("~/features/purchase/purchase-import-run-detail").then((m) => ({
-          default: m.RunPhotoBatch,
-        })),
+        named(
+          import("~/features/purchase/purchase-import-run-detail"),
+          "RunPhotoBatch",
+        ),
       (run) => run.purpose === "photo_inventory",
     ),
     "ai-usage": runReportSlot("ai-usage"),
-    changes: slot(() =>
-      import("~/features/run/slots").then((m) => ({
-        default: m.RunChanges,
-      })),
-    ),
+    changes: slot(() => named(import("~/features/run/slots"), "RunChanges")),
   },
   image: {
     associations: slot(() =>
-      import("~/features/image/slots").then((m) => ({
-        default: m.ImageAssociations,
-      })),
+      named(import("~/features/image/slots"), "ImageAssociations"),
     ),
   },
 } satisfies DetailSlotTable;
@@ -446,49 +408,40 @@ const headerAction = <E extends GenericDetailEntity>(
 /** `HeaderActionTable`: each entity's own header controls. */
 const headerActions: HeaderActionTable = {
   purchase: headerAction<"purchase">(() =>
-    import("~/entity/entity-detail/report-slot").then((m) => ({
-      default: m.PurchaseDetailActions,
-    })),
+    named(
+      import("~/entity/entity-detail/report-slot"),
+      "PurchaseDetailActions",
+    ),
   ),
   expense: headerAction<"expense">(() =>
-    import("~/entity/entity-detail/report-slot").then((m) => ({
-      default: m.ExpenseDetailActions,
-    })),
+    named(import("~/entity/entity-detail/report-slot"), "ExpenseDetailActions"),
   ),
   product: headerAction<"product">(() =>
-    import("~/features/product/product-runs").then((m) => ({
-      default: m.ProductDetailActions,
-    })),
+    named(import("~/features/product/product-runs"), "ProductDetailActions"),
   ),
   image: headerAction<"image">(() =>
-    import("~/features/image/image-processing-panel").then((m) => ({
-      default: m.ImageDetailActions,
-    })),
+    named(
+      import("~/features/image/image-processing-panel"),
+      "ImageDetailActions",
+    ),
   ),
   run: headerAction<"run">(() =>
-    import("~/features/run/detail-actions").then((m) => ({
-      default: m.RunDetailActions,
-    })),
+    named(import("~/features/run/detail-actions"), "RunDetailActions"),
   ),
   inventory: headerAction<"inventory">(() =>
-    import("~/entity/display/detail-field-renderers/inventory-expense").then(
-      (m) => ({
-        default: m.InventoryRecordExpenseAction,
-      }),
+    named(
+      import("~/entity/display/detail-field-renderers/inventory-expense"),
+      "InventoryRecordExpenseAction",
     ),
   ),
   recipe: headerAction<"recipe">(() =>
-    import("~/features/recipe/slots").then((m) => ({
-      default: m.RecipeActions,
-    })),
+    named(import("~/features/recipe/slots"), "RecipeActions"),
   ),
   cookbook: headerAction<"cookbook">(() =>
-    import("~/features/cookbook/slots").then((m) => ({
-      default: m.CookbookActions,
-    })),
+    named(import("~/features/cookbook/slots"), "CookbookActions"),
   ),
   meal: headerAction<"meal">(() =>
-    import("~/features/meal/slots").then((m) => ({ default: m.MealActions })),
+    named(import("~/features/meal/slots"), "MealActions"),
   ),
 };
 
@@ -500,31 +453,33 @@ const sectionAction = <E extends GenericDetailEntity>(
 const sectionActions = {
   purchase: {
     matchStatement: sectionAction(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.MatchStatementAction,
-      })),
+      named(
+        import("~/features/purchase/section-actions"),
+        "MatchStatementAction",
+      ),
     ),
     linkExpenses: sectionAction(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.LinkExpensesAction,
-      })),
+      named(
+        import("~/features/purchase/section-actions"),
+        "LinkExpensesAction",
+      ),
     ),
     linkProducts: sectionAction(() =>
-      import("~/features/purchase/section-actions").then((m) => ({
-        default: m.LinkProductsAction,
-      })),
+      named(
+        import("~/features/purchase/section-actions"),
+        "LinkProductsAction",
+      ),
     ),
   },
   expense: {
     splitExpense: sectionAction(() =>
-      import("~/features/expense/section-actions").then((m) => ({
-        default: m.SplitExpenseAction,
-      })),
+      named(import("~/features/expense/section-actions"), "SplitExpenseAction"),
     ),
     receiveExpense: sectionAction(() =>
-      import("~/features/expense/section-actions").then((m) => ({
-        default: m.ReceiveExpenseAction,
-      })),
+      named(
+        import("~/features/expense/section-actions"),
+        "ReceiveExpenseAction",
+      ),
     ),
   },
 } satisfies SectionActionTable;
@@ -538,19 +493,13 @@ const collectionAction = <E extends GenericDetailEntity>(
 /** `CollectionActionTable`: every report `records` block action. */
 const collectionActions = {
   analyzeLocation: collectionAction<"location">(() =>
-    import("~/features/location/slots").then((m) => ({
-      default: m.AnalyzeLocationAction,
-    })),
+    named(import("~/features/location/slots"), "AnalyzeLocationAction"),
   ),
   attachImage: collectionAction<"image">(() =>
-    import("~/features/image/slots").then((m) => ({
-      default: m.AttachImageAction,
-    })),
+    named(import("~/features/image/slots"), "AttachImageAction"),
   ),
   reviewLabelNutrition: collectionAction<"product">(() =>
-    import("~/features/product/slots").then((m) => ({
-      default: m.ReviewLabelNutritionAction,
-    })),
+    named(import("~/features/product/slots"), "ReviewLabelNutritionAction"),
   ),
 } satisfies CollectionActionTable;
 
@@ -558,21 +507,21 @@ const collectionActions = {
 const detailEditOverrides = {
   recipe: RecipeEditRedirect,
   cookbook: lazy(() =>
-    import("~/features/cookbook/cookbook-edit-dialog").then((module) => ({
-      default: module.CookbookEditDialog,
-    })),
+    named(
+      import("~/features/cookbook/cookbook-edit-dialog"),
+      "CookbookEditDialog",
+    ),
   ),
   image: lazy(() =>
-    import("~/features/image/image-edit-dialog").then((module) => ({
-      default: module.ImageEditDialog,
-    })),
+    named(import("~/features/image/image-edit-dialog"), "ImageEditDialog"),
   ),
 } satisfies DetailEditOverrideTable;
 
 const SpendingCategoryMergeReview = lazy(() =>
-  import("~/features/finance/spending-classification-review").then((m) => ({
-    default: m.SpendingCategoryMergeReview,
-  })),
+  named(
+    import("~/features/finance/spending-classification-review"),
+    "SpendingCategoryMergeReview",
+  ),
 );
 
 /** Installs every feature fill; idempotent, so each entry point may call it. */

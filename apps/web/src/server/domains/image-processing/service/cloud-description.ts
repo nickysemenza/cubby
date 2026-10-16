@@ -76,7 +76,7 @@ export async function completeCloudImageDescription(
   if (!completion.adopted) return false;
   await refreshDirectImageOwnerSearchDocuments(db, input.imageId);
   const { publishImageProcessingWakeups } =
-    await import("~/server/domains/image-processing/repo/image-processing-wakeups");
+    await import("~/server/domains/image-processing/repo/image-processing-maintenance");
   await publishImageProcessingWakeups(
     db,
     await findImageProcessingWakeupsForImage(db, input.imageId),

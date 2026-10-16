@@ -46,7 +46,7 @@ import {
   type AiEvaluationRow,
 } from "../repo/ai-work-state";
 import { ensureRun } from "../repo/ensure-run";
-import { withRunTransaction } from "../repo/run-transaction";
+import { withRunTransaction } from "../repo/run";
 import {
   jsonValue,
   pauseRunningSuggestionSweep,

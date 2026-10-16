@@ -114,8 +114,8 @@ import {
 } from "~/server/db/schema";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
 import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
+import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
-import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-wakeups";
 import {
   recordImportSightings,
   resolveDeviceSightingContext,

@@ -22,7 +22,7 @@ import {
   type RecoveryCursor,
   type RecoveryEmail,
 } from "../repo/reclassification-recovery-state";
-import { withRunTransaction } from "../repo/run-transaction";
+import { withRunTransaction } from "../repo/run";
 
 const fulfilled = new Set([
   "replaced",

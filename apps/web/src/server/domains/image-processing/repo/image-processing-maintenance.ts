@@ -18,6 +18,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
@@ -192,4 +193,25 @@ export async function pruneExecutorlessWaitingAttempts(
     SELECT count(*)::int AS pruned FROM deleted`);
   return z.array(z.object({ pruned: z.number() })).parse(result.rows)[0]!
     .pruned;
+}
+
+const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
+
+/** Background wakeups for image-processing jobs; paused processing publishes
+ * none. Queue payloads only wake durable rows, so repeats and repairs are harmless. */
+export async function publishImageProcessingWakeups(
+  db: Database,
+  jobIds: readonly string[],
+): Promise<void> {
+  const settings = await readImageProcessingSettings(db);
+  if (settings.paused || jobIds.length === 0) return;
+  await publishBackgroundTasks(
+    db,
+    [...new Set(jobIds)].map((jobId) => ({
+      kind: "image-processing.wakeup" as const,
+      requestedAt: new Date().toISOString(),
+      jobId,
+    })),
+    { source: IMAGE_PROCESSING_WAKEUP_SOURCE },
+  );
 }
