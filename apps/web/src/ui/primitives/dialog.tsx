@@ -51,10 +51,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeDisabled = false,
   size = "sm",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  closeDisabled?: boolean;
   size?: DialogSize;
 }) {
   return (
@@ -73,6 +75,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
+            disabled={closeDisabled}
             render={
               <Button
                 variant="outline"

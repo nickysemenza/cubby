@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -25,7 +26,6 @@ import {
 } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Table,
@@ -287,14 +287,12 @@ export function FeedbackSection() {
             <Button variant="outline" onClick={() => setDialogOpen(true)}>
               Open dialog
             </Button>
-            <ResponsiveDialog
+            <Overlay
               open={dialogOpen}
               onOpenChange={setDialogOpen}
               title="Illustrative edit"
               description="A synthetic form in the shared dialog shell."
-              footer={
-                <Button onClick={() => setDialogOpen(false)}>Done</Button>
-              }
+              cancelLabel="Done"
             >
               <FormFieldGroup label="Item name">
                 <Input
@@ -302,7 +300,7 @@ export function FeedbackSection() {
                   defaultValue="Illustrative item"
                 />
               </FormFieldGroup>
-            </ResponsiveDialog>
+            </Overlay>
           </CardContent>
         </Card>
         <Card>

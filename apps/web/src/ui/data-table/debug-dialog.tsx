@@ -1,19 +1,14 @@
-import type React from "react";
+import { useState, type ReactElement } from "react";
 
 import { MutedBox } from "~/ui/layout/muted-box";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/ui/primitives/dialog";
+import { Overlay } from "~/ui/overlays/overlay";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 
 import JsonRenderer from "../text/json-renderer";
 
 interface DebugDialogProps {
   data: unknown;
-  trigger: React.ReactElement;
+  trigger: ReactElement;
   title?: string;
 }
 
@@ -22,22 +17,18 @@ export function DebugDialog({
   trigger,
   title = "Debug Data",
 }: DebugDialogProps) {
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog>
-      <DialogTrigger render={trigger} />
-      <DialogContent
-        size="full"
-        className="flex max-h-[80vh] flex-col overflow-hidden"
-      >
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 overflow-auto">
-          <MutedBox className="overflow-auto">
-            <JsonRenderer input={data} pretty />
-          </MutedBox>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <Overlay
+      open={open}
+      onOpenChange={setOpen}
+      title={title}
+      size="full"
+      trigger={<DialogTrigger render={trigger} />}
+    >
+      <MutedBox className="overflow-auto">
+        <JsonRenderer input={data} pretty />
+      </MutedBox>
+    </Overlay>
   );
 }

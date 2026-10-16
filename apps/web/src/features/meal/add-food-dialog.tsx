@@ -34,10 +34,9 @@ import {
 } from "~/lib/unit-mapping-utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { FoodAmountEditor } from "./food-amount-editor";
 
@@ -165,29 +164,28 @@ function FoodEntryForm({
     save.mutate(parsed.data);
   };
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(open) => {
         if (!save.isPending) onOpenChange(open);
       }}
       title={editing ? "Edit food" : "Add food"}
       description={`For ${date}`}
-      footer={
-        kind === "recipe" ? undefined : (
-          <DialogFormActions
-            onCancel={() => onOpenChange(false)}
-            submitLabel={editing ? "Save changes" : "Add food"}
-            pending={save.isPending}
-            submitDisabled={
-              !selectedEater ||
-              (kind === "product" && !productItem) ||
-              (kind === "ingredient" && !ingredientItem)
+      onCancel={() => onOpenChange(false)}
+      primary={
+        kind === "recipe"
+          ? undefined
+          : {
+              label: editing ? "Save changes" : "Add food",
+              pending: save.isPending,
+              disabled:
+                !selectedEater ||
+                (kind === "product" && !productItem) ||
+                (kind === "ingredient" && !ingredientItem),
+              onClick: submit,
             }
-            error={error}
-            onSubmit={submit}
-          />
-        )
       }
+      error={error}
     >
       <Stack gap="lg">
         {!editing && (
@@ -210,7 +208,7 @@ function FoodEntryForm({
           onRecipe={onRecipe}
         />
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }
 

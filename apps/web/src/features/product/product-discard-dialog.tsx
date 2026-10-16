@@ -32,9 +32,9 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 
@@ -234,7 +234,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   });
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={close}
       title="Discard"
@@ -316,6 +316,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
           </Stack>
         )}
       </Stack>
-    </WorkflowDialog>
+    </Overlay>
   );
 };

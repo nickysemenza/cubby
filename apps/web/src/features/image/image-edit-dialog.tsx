@@ -5,10 +5,9 @@ import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 const SOURCE_OPTIONS: readonly PickerOption[] = [
   { value: "own", label: "Our photo" },
@@ -39,37 +38,34 @@ export function ImageEditDialog({
   const update = useImageUpdateMutation({
     mutationFn: () => imageOperations.update.mutationOptions(),
   });
-  const save = () => {
+  const save = async () => {
     const next = filename.trim();
     if (!next) return;
-    void update
-      .mutateAsync({
-        id: record.id,
-        data: {
-          filename: next,
-          source,
-          sourceName: sourceName.trim() || null,
-          sourcePageUrl: sourcePageUrl.trim() || null,
-          sourceAssetUrl: sourceAssetUrl.trim() || null,
-        },
-      })
-      .then(onClose);
+    await update.mutateAsync({
+      id: record.id,
+      data: {
+        filename: next,
+        source,
+        sourceName: sourceName.trim() || null,
+        sourcePageUrl: sourcePageUrl.trim() || null,
+        sourceAssetUrl: sourceAssetUrl.trim() || null,
+      },
+    });
+    onClose();
   };
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       title="Edit image"
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel="Save changes"
-          pending={update.isPending}
-          onSubmit={save}
-        />
-      }
+      onCancel={onClose}
+      primary={{
+        label: "Save changes",
+        pending: update.isPending,
+        onClick: save,
+      }}
     >
       <div className="space-y-3">
         <Label htmlFor="image-filename">Filename</Label>
@@ -121,6 +117,6 @@ export function ImageEditDialog({
           />
         </div>
       </div>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

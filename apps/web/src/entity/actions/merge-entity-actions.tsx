@@ -21,13 +21,7 @@ import {
   vendor,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 import { useActionMutation } from "../hooks/use-action-mutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
@@ -193,24 +187,19 @@ function useMergeSpendingCategoriesEntityAction(): EntityActionHandles {
       <>
         {action.dialog}
         {review && (
-          <Dialog
+          <Overlay
             open
             onOpenChange={(open) => {
               if (!open) setReview(null);
             }}
+            title="Review spending category merge"
+            description="Preview how past spending moves before applying the merge."
+            onCancel={() => setReview(null)}
           >
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Review spending category merge</DialogTitle>
-                <DialogDescription>
-                  Preview how past spending moves before applying the merge.
-                </DialogDescription>
-              </DialogHeader>
-              <Suspense fallback={null}>
-                <SpendingCategoryMergeReviewFill {...review} />
-              </Suspense>
-            </DialogContent>
-          </Dialog>
+            <Suspense fallback={null}>
+              <SpendingCategoryMergeReviewFill {...review} />
+            </Suspense>
+          </Overlay>
         )}
       </>
     ),

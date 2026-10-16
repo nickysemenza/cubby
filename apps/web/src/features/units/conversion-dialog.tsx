@@ -15,17 +15,11 @@ import type { Result } from "~/lib/result-types";
 import { wasm } from "~/lib/wasm";
 import { FormWrapper } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/ui/primitives/dialog";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 import { Label } from "~/ui/primitives/label";
 import {
   Tooltip,
@@ -84,10 +78,12 @@ const formatConversionPath = (path: readonly WConversionStep[]): string => {
 function ConversionDialogContent({
   mappings,
   onClose,
+  formId,
   kinds,
 }: {
   mappings: UnitMapping[];
   onClose: () => void;
+  formId: string;
   kinds?: readonly BaseKind[];
 }) {
   // BaseKind ⊆ AmountKind, so a restricted set just narrows the rows shown.
@@ -173,14 +169,7 @@ function ConversionDialogContent({
   }, [form, performConversions]);
 
   return (
-    <DialogContent size="2xl">
-      <DialogHeader>
-        <DialogTitle>Unit Conversion</DialogTitle>
-        <DialogDescription>
-          Enter an amount to see live conversions to different unit types.
-        </DialogDescription>
-      </DialogHeader>
-
+    <>
       <Stack gap="sm" className="py-2">
         {nutrientCount > 0 && (
           <Row align="center" gap="sm">
@@ -218,6 +207,8 @@ function ConversionDialogContent({
           <div>
             <FormWrapper
               form={form}
+              id={formId}
+              hideActions
               onSubmit={() => {
                 onClose();
               }}
@@ -272,7 +263,7 @@ function ConversionDialogContent({
           </div>
         </div>
       </Stack>
-    </DialogContent>
+    </>
   );
 }
 
@@ -282,39 +273,50 @@ export function ConversionDialog({
   kinds,
 }: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
+  const formId = useId();
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <DialogTrigger
-          render={
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size={compact ? "icon-sm" : "sm"}
-                  // Compact mode drops the "Convert" text, leaving only the
-                  // icon — the tooltip below doesn't supply an accessible
-                  // name, so mirror its wording here.
-                  aria-label={compact ? "Open unit converter" : undefined}
-                  className="flex items-center gap-1 text-muted-foreground"
-                />
-              }
-            />
-          }
-        >
-          <CalculatorIcon className="size-3" />
-          {!compact && <span>Convert</span>}
-        </DialogTrigger>
-        <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
-      </Tooltip>
+    <Overlay
+      open={open}
+      onOpenChange={setOpen}
+      size="2xl"
+      title="Unit Conversion"
+      description="Enter an amount to see live conversions to different unit types."
+      primary={{ label: "Apply", form: formId }}
+      trigger={
+        <Tooltip>
+          <DialogTrigger
+            render={
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size={compact ? "icon-sm" : "sm"}
+                    // Compact mode drops the "Convert" text, leaving only the
+                    // icon — the tooltip below doesn't supply an accessible
+                    // name, so mirror its wording here.
+                    aria-label={compact ? "Open unit converter" : undefined}
+                    className="flex items-center gap-1 text-muted-foreground"
+                  />
+                }
+              />
+            }
+          >
+            <CalculatorIcon className="size-3" />
+            {!compact && <span>Convert</span>}
+          </DialogTrigger>
+          <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
+        </Tooltip>
+      }
+    >
       {open && (
         <ConversionDialogContent
           mappings={mappings}
+          formId={formId}
           onClose={() => setOpen(false)}
           kinds={kinds}
         />
       )}
-    </Dialog>
+    </Overlay>
   );
 }

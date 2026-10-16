@@ -4,15 +4,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 /**
  * What the pending write would do to one row, as opposed to which row it is.
@@ -108,127 +100,96 @@ export function BulkActionDialog<T extends { id: string }>({
       : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* `md` only where a projection is shown: a `current → next` line beside a
-          long product name does not fit the 384px confirmation width. */}
-      <DialogContent size={effect ? "md" : "sm"}>
-        <DialogHeader>
-          <DialogTitle>
-            {action} {count} {itemWord}?
-          </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-
-        {/* `min-w-0` here and on every wrapper below is load-bearing, not
-            tidying. DialogContent is a `grid` whose items default to
-            `min-width: auto`, so one long name sets a min-content width that
-            spills past the dialog's `max-w` — and the popup only scrolls on Y,
-            so the overflow is simply unreachable. Break the chain anywhere and
-            `truncate` stops working. */}
-        <div className="min-w-0 space-y-2">
-          <ul
-            className={cn(
-              "min-w-0 space-y-1 overflow-y-auto text-sm text-muted-foreground",
-              effect ? "max-h-48" : "max-h-32",
-            )}
-          >
-            {rows.map(({ item, rendered, effect: itemEffect }) => (
-              <li
-                key={item.id}
-                className={cn("min-w-0", itemEffect?.unchanged && "opacity-60")}
-              >
-                {itemEffect ? (
-                  <div className="flex min-w-0 flex-col gap-x-3 sm:flex-row sm:items-baseline sm:justify-between">
-                    {/* The full name stays reachable on hover — a truncated
-                        name is often not enough to tell two rows apart. */}
-                    <span
-                      className="min-w-0 flex-1 truncate"
-                      title={
-                        z.string().safeParse(rendered).success
-                          ? z.string().parse(rendered)
-                          : undefined
-                      }
-                    >
-                      {rendered}
-                    </span>
-                    {itemEffect.blocked ? (
-                      <span
-                        className="min-w-0 truncate text-destructive sm:max-w-[55%]"
-                        title={itemEffect.blocked}
-                      >
-                        {itemEffect.blocked}
-                      </span>
-                    ) : (
-                      <span className="flex min-w-0 items-baseline gap-1 sm:max-w-[55%]">
-                        {itemEffect.from !== undefined && (
-                          <>
-                            <span className="min-w-0 truncate">
-                              {itemEffect.from}
-                            </span>
-                            <span aria-hidden="true" className="shrink-0">
-                              →
-                            </span>
-                            <span className="sr-only">changes to</span>
-                          </>
-                        )}
-                        <span className="min-w-0 truncate font-medium text-foreground">
-                          {itemEffect.to}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  rendered
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {children}
-
-        {blockedReasons.length > 0 ? (
-          <div
-            role="alert"
-            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {blockedCount} of {count}{" "}
-            {pluralize(itemNoun.toLowerCase(), blockedCount)} cannot proceed:{" "}
-            {blockedReasons.join("; ")}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div
-            role="alert"
-            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        ) : null}
-
-        <DialogFooter
-          className={cn(footerNote && "sm:items-center sm:justify-between")}
+    <Overlay
+      open={open}
+      onOpenChange={onOpenChange}
+      size={effect ? "md" : "sm"}
+      title={`${action} ${count} ${itemWord}?`}
+      description={description}
+      summary={footerNote}
+      error={error}
+      primary={{
+        label: actionLabel ?? action,
+        pendingLabel: pendingLabel ?? `${action}ing...`,
+        pending: isPending,
+        disabled: submissionDisabled || blockedCount > 0,
+        variant,
+        onClick: onSubmit,
+      }}
+    >
+      {/* Long identities must not force the projection past the viewport. */}
+      <div className="min-w-0 space-y-2">
+        <ul
+          className={cn(
+            "min-w-0 space-y-1 overflow-y-auto text-sm text-muted-foreground",
+            effect ? "max-h-48" : "max-h-32",
+          )}
         >
-          {footerNote ? (
-            <p className="text-xs text-muted-foreground">{footerNote}</p>
-          ) : null}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant={variant}
-              onClick={onSubmit}
-              disabled={isPending || submissionDisabled || blockedCount > 0}
+          {rows.map(({ item, rendered, effect: itemEffect }) => (
+            <li
+              key={item.id}
+              className={cn("min-w-0", itemEffect?.unchanged && "opacity-60")}
             >
-              {isPending
-                ? (pendingLabel ?? `${action}ing...`)
-                : (actionLabel ?? action)}
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              {itemEffect ? (
+                <div className="flex min-w-0 flex-col gap-x-3 sm:flex-row sm:items-baseline sm:justify-between">
+                  {/* The full name stays reachable on hover — a truncated
+                        name is often not enough to tell two rows apart. */}
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    title={
+                      z.string().safeParse(rendered).success
+                        ? z.string().parse(rendered)
+                        : undefined
+                    }
+                  >
+                    {rendered}
+                  </span>
+                  {itemEffect.blocked ? (
+                    <span
+                      className="min-w-0 truncate text-destructive sm:max-w-[55%]"
+                      title={itemEffect.blocked}
+                    >
+                      {itemEffect.blocked}
+                    </span>
+                  ) : (
+                    <span className="flex min-w-0 items-baseline gap-1 sm:max-w-[55%]">
+                      {itemEffect.from !== undefined && (
+                        <>
+                          <span className="min-w-0 truncate">
+                            {itemEffect.from}
+                          </span>
+                          <span aria-hidden="true" className="shrink-0">
+                            →
+                          </span>
+                          <span className="sr-only">changes to</span>
+                        </>
+                      )}
+                      <span className="min-w-0 truncate font-medium text-foreground">
+                        {itemEffect.to}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              ) : (
+                rendered
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {children}
+
+      {blockedReasons.length > 0 ? (
+        <div
+          role="alert"
+          className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          {blockedCount} of {count}{" "}
+          {pluralize(itemNoun.toLowerCase(), blockedCount)} cannot proceed:{" "}
+          {blockedReasons.join("; ")}
+        </div>
+      ) : null}
+    </Overlay>
   );
 }

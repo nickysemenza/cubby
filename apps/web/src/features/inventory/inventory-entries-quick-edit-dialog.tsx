@@ -15,8 +15,7 @@ import {
 import { EditableAmountCell } from "~/entity/table/editable-cell";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Overlay } from "~/ui/overlays/overlay";
 
 /**
  * The location search provider for every entry row's `EditableEntityCell` —
@@ -72,23 +71,13 @@ export function InventoryEntriesQuickEditDialog({
   });
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open={open}
       onOpenChange={onOpenChange}
       size="md"
       title="Edit Inventory"
       description={`Amounts and locations for "${productName}". Changes save immediately.`}
-      footer={
-        <Row justify="end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Done
-          </Button>
-        </Row>
-      }
+      cancelLabel="Done"
     >
       <Stack gap="xs">
         {entries.length === 0 ? (
@@ -130,6 +119,6 @@ export function InventoryEntriesQuickEditDialog({
           ))
         )}
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

@@ -37,8 +37,8 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Description } from "~/ui/primitives/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
@@ -305,7 +305,7 @@ export function LinkExpensesDialog({
   });
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={resetAndClose}
       size="xl"
@@ -370,6 +370,6 @@ export function LinkExpensesDialog({
         />
       </div>
       <Description size="xs">{candidatesQuery.data?.caution}</Description>
-    </WorkflowDialog>
+    </Overlay>
   );
 }

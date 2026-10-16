@@ -34,10 +34,10 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
@@ -671,7 +671,8 @@ function CalendarDaySheet({
   renderItem: (item: CalendarItem) => ReactNode;
 }) {
   return (
-    <ResponsiveSheet
+    <Overlay
+      placement="panel"
       open={Boolean(day)}
       onOpenChange={onOpenChange}
       title={
@@ -737,7 +738,7 @@ function CalendarDaySheet({
           ))}
         </Stack>
       </Stack>
-    </ResponsiveSheet>
+    </Overlay>
   );
 }
 

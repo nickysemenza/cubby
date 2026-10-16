@@ -12,9 +12,9 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { DialogTrigger } from "~/ui/primitives/dialog";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -372,7 +372,7 @@ export function CalendarConnectDialog() {
   };
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={onOpenChange}
       title="Connect Calendar"
@@ -435,6 +435,6 @@ export function CalendarConnectDialog() {
           />
         </Stack>
       )}
-    </WorkflowDialog>
+    </Overlay>
   );
 }

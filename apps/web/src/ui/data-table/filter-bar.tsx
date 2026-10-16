@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Pill } from "~/ui/primitives/pill";
@@ -19,7 +20,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import {
   type Filter,
@@ -689,7 +689,8 @@ export function MobileFilterTier<TData extends RowData>({
         </div>
       )}
 
-      <ResponsiveSheet
+      <Overlay
+        placement="panel"
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         title={
@@ -748,7 +749,7 @@ export function MobileFilterTier<TData extends RowData>({
             </button>
           </div>
         )}
-      </ResponsiveSheet>
+      </Overlay>
     </div>
   );
 }

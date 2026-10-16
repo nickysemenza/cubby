@@ -4,9 +4,8 @@ import { useState } from "react";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 /** A disabled-reason resolver that refuses every location in `sources`. */
 export const refuseSourceLocations =
@@ -108,23 +107,21 @@ export function LocationMoveDialog({
   };
 
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
       title={title}
       description={description}
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel={submitLabel}
-          pending={pending}
-          error={error}
-          submitDisabled={destination === null}
-          onSubmit={() => destination && void submit(destination.id)}
-        />
-      }
+      onCancel={onClose}
+      error={error}
+      primary={{
+        label: submitLabel,
+        pending,
+        disabled: destination === null,
+        onClick: () => destination && submit(destination.id),
+      }}
     >
       <Stack gap="md">
         {shortcut && (
@@ -148,6 +145,6 @@ export function LocationMoveDialog({
           }}
         />
       </Stack>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

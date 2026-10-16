@@ -11,16 +11,9 @@ import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/ui/primitives/dialog";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
@@ -156,114 +149,113 @@ export function UploadImageDialog({
     drafts.some((draft) => draft.state === "uploading");
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button>
-            <UploadIcon className="size-3.5" />
-            Upload
-          </Button>
-        }
-      />
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Upload images</DialogTitle>
-          <DialogDescription>
-            Add one or more image files, or import from a URL.
-          </DialogDescription>
-        </DialogHeader>
-        <Stack gap="md">
-          <Stack gap="xs">
-            <Label>From your device</Label>
-            <FileDropField
-              accept="image/*"
-              label="Choose images"
-              description="JPEG, PNG, GIF, WebP, or HEIC"
-              mode="compact"
-              multiple
-              onFilesAdded={(files) => void handleFilesSelected(files)}
-              disabled={busy}
-            />
-            {drafts.length > 0 ? (
-              <PhotoGrid
-                images={drafts}
-                className="mt-2"
-                onSelect={(_draft, index) => setViewingDraftIndex(index)}
-                renderOverlay={(draft) => (
-                  <div className="absolute inset-x-1 bottom-1 z-20 flex items-center justify-between gap-1 rounded bg-background/90 p-1 text-xs">
-                    <span>
-                      {draft.state === "uploading"
-                        ? "Uploading…"
-                        : "Upload failed"}
-                    </span>
-                    <div className="flex gap-1">
-                      {draft.state === "failed" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => void uploadDraft(draft)}
-                          disabled={busy}
-                        >
-                          Retry
-                        </Button>
-                      ) : null}
+    <Overlay
+      open={open}
+      onOpenChange={setOpen}
+      title="Upload images"
+      description="Add one or more image files, or import from a URL."
+      size="md"
+      trigger={
+        <DialogTrigger
+          render={
+            <Button>
+              <UploadIcon className="size-3.5" />
+              Upload
+            </Button>
+          }
+        />
+      }
+    >
+      <Stack gap="md">
+        <Stack gap="xs">
+          <Label>From your device</Label>
+          <FileDropField
+            accept="image/*"
+            label="Choose images"
+            description="JPEG, PNG, GIF, WebP, or HEIC"
+            mode="compact"
+            multiple
+            onFilesAdded={(files) => void handleFilesSelected(files)}
+            disabled={busy}
+          />
+          {drafts.length > 0 ? (
+            <PhotoGrid
+              images={drafts}
+              className="mt-2"
+              onSelect={(_draft, index) => setViewingDraftIndex(index)}
+              renderOverlay={(draft) => (
+                <div className="absolute inset-x-1 bottom-1 z-20 flex items-center justify-between gap-1 rounded bg-background/90 p-1 text-xs">
+                  <span>
+                    {draft.state === "uploading"
+                      ? "Uploading…"
+                      : "Upload failed"}
+                  </span>
+                  <div className="flex gap-1">
+                    {draft.state === "failed" ? (
                       <Button
                         type="button"
-                        size="icon"
-                        variant="outline"
-                        className="size-6"
-                        aria-label={`Remove ${draft.filename}`}
-                        onClick={() => removeDraft(draft.id)}
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void uploadDraft(draft)}
+                        disabled={busy}
                       >
-                        <XIcon className="size-3.5" />
+                        Retry
                       </Button>
-                    </div>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="size-6"
+                      aria-label={`Remove ${draft.filename}`}
+                      onClick={() => removeDraft(draft.id)}
+                    >
+                      <XIcon className="size-3.5" />
+                    </Button>
                   </div>
-                )}
-              />
-            ) : null}
-            <PhotoViewer
-              images={drafts}
-              index={viewingDraftIndex}
-              onOpenChange={(nextOpen) => {
-                if (!nextOpen) setViewingDraftIndex(null);
-              }}
-              onIndexChange={setViewingDraftIndex}
+                </div>
+              )}
             />
-          </Stack>
-          <Stack gap="xs">
-            <Label htmlFor={urlInputId}>From a URL</Label>
-            <Row gap="sm">
-              <Input
-                id={urlInputId}
-                type="url"
-                placeholder="https://example.com/photo.jpg"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleImportUrl();
-                  }
-                }}
-                disabled={busy}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleImportUrl}
-                disabled={busy || !url.trim()}
-              >
-                <LinkIcon className="size-3.5" />
-                Import
-              </Button>
-            </Row>
-          </Stack>
+          ) : null}
+          <PhotoViewer
+            images={drafts}
+            index={viewingDraftIndex}
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) setViewingDraftIndex(null);
+            }}
+            onIndexChange={setViewingDraftIndex}
+          />
         </Stack>
-        <DialogFooter showCloseButton />
-      </DialogContent>
-    </Dialog>
+        <Stack gap="xs">
+          <Label htmlFor={urlInputId}>From a URL</Label>
+          <Row gap="sm">
+            <Input
+              id={urlInputId}
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleImportUrl();
+                }
+              }}
+              disabled={busy}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleImportUrl}
+              disabled={busy || !url.trim()}
+            >
+              <LinkIcon className="size-3.5" />
+              Import
+            </Button>
+          </Row>
+        </Stack>
+      </Stack>
+    </Overlay>
   );
 }

@@ -20,10 +20,10 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -496,7 +496,8 @@ export function DecisionsCatalog({
         currentRowId={selected}
         emptyState="No decisions are declared."
       />
-      <ResponsiveSheet
+      <Overlay
+        placement="panel"
         open={current !== undefined}
         onOpenChange={(open) => {
           if (!open) onSelect(undefined);
@@ -505,7 +506,7 @@ export function DecisionsCatalog({
         description={current?.key}
       >
         {current ? <DecisionDetail row={current} /> : null}
-      </ResponsiveSheet>
+      </Overlay>
     </Stack>
   );
 }

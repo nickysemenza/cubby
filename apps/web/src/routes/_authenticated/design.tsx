@@ -164,11 +164,8 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: SlidersHorizontalIcon,
         description: (
           <ComponentsLine
-            components={["CommandDialog", "WorkflowDialog"]}
-            source={[
-              "ui/primitives/command.tsx",
-              "ui/dialogs/workflow-dialog.tsx",
-            ]}
+            components={["CommandDialog", "Overlay"]}
+            source={["ui/primitives/command.tsx", "ui/overlays/overlay.tsx"]}
           />
         ),
         content: <ActionWorkflowSection />,
@@ -314,13 +311,7 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: ChatCircleTextIcon,
         description: (
           <ComponentsLine
-            components={[
-              "Alert",
-              "Skeleton",
-              "Empty",
-              "ResponsiveDialog",
-              "Tabs",
-            ]}
+            components={["Alert", "Skeleton", "Empty", "Overlay", "Tabs"]}
             source={["ui/primitives/"]}
           />
         ),

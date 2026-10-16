@@ -5,10 +5,9 @@ import { useState } from "react";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ChipsInput } from "~/ui/forms/chips-input";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 /**
  * A cookbook is born from an import, so its Edit action is title, authors and
@@ -31,29 +30,29 @@ export function CookbookEditDialog({
     success: "Cookbook updated",
     error: (error) => getErrorMessage(error) || "Failed to update cookbook",
   });
-  const save = () => {
+  const save = async () => {
     const title = name.trim();
     if (!title) return;
-    update
-      .mutateAsync({ id: record.id, data: { name: title, author, subjects } })
-      .then(onClose, () => undefined); // The mutation toasts the failure.
+    await update.mutateAsync({
+      id: record.id,
+      data: { name: title, author, subjects },
+    });
+    onClose();
   };
   return (
-    <ResponsiveDialog
+    <Overlay
       open
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       title="Edit cookbook"
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel="Save changes"
-          pending={update.isPending}
-          submitDisabled={!name.trim()}
-          onSubmit={save}
-        />
-      }
+      onCancel={onClose}
+      primary={{
+        label: "Save changes",
+        pending: update.isPending,
+        disabled: !name.trim(),
+        onClick: save,
+      }}
     >
       <div className="space-y-3">
         <div className="space-y-2">
@@ -83,6 +82,6 @@ export function CookbookEditDialog({
           />
         </div>
       </div>
-    </ResponsiveDialog>
+    </Overlay>
   );
 }

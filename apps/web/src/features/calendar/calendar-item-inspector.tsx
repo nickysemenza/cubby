@@ -21,6 +21,7 @@ import {
 } from "~/ui/forms/form-utils";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
@@ -29,7 +30,6 @@ import {
   PopoverHeader,
   PopoverTitle,
 } from "~/ui/primitives/popover";
-import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import { DuplicateMealButton } from "../meal/copy-meals";
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";
@@ -78,7 +78,8 @@ function CalendarInspectorOverlay({
 
   if (isMobile) {
     return (
-      <ResponsiveSheet
+      <Overlay
+        placement="panel"
         open={open}
         onOpenChange={(open) => {
           if (!open) handle.close();
@@ -88,7 +89,7 @@ function CalendarInspectorOverlay({
         className="sm:max-w-md"
       >
         {content}
-      </ResponsiveSheet>
+      </Overlay>
     );
   }
 

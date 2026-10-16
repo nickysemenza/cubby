@@ -33,8 +33,8 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Row } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Description } from "~/ui/primitives/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
@@ -171,7 +171,7 @@ export function LinkProductsDialog({
   });
 
   return (
-    <WorkflowDialog
+    <Overlay
       open={open}
       onOpenChange={resetAndClose}
       size="lg"
@@ -223,6 +223,6 @@ export function LinkProductsDialog({
           }
         />
       </div>
-    </WorkflowDialog>
+    </Overlay>
   );
 }

@@ -34,16 +34,9 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/ui/primitives/dialog";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
@@ -261,70 +254,69 @@ function NewCollectionDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={
-          <Button variant="outline" disabled={rows.length === 0}>
-            <PlusIcon /> New Collection
-          </Button>
-        }
-      />
-      <DialogContent size="md">
-        <form
-          id={formId}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!slug || !memberId) return;
-            create.mutate({
-              collection: slug,
-              subject,
-              id: memberId,
-            });
-          }}
-        >
-          <Stack gap="md">
-            <DialogHeader>
-              <DialogTitle>New Collection</DialogTitle>
-              <DialogDescription>
-                Start with one {subject}. You can assign more as soon as its
-                column appears.
-              </DialogDescription>
-            </DialogHeader>
-            <Stack gap="xs">
-              <Label htmlFor={nameId}>Name</Label>
-              <Input
-                id={nameId}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Painting"
-                ref={focusOnMount}
-              />
-            </Stack>
-            <Stack gap="xs">
-              <Label htmlFor={memberSelectId}>First {subject}</Label>
-              <Picker
-                inputId={memberSelectId}
-                entity={subject}
-                label={`First ${subject}`}
-                items={memberItems}
-                value={member}
-                setValue={(item) => setMemberId(item?.id ?? "")}
-              />
-              <p className="text-2xs text-muted-foreground">
-                Choose from the current filtered page.
-              </p>
-            </Stack>
-            <DialogFormActions
-              form={formId}
-              onCancel={() => handleOpenChange(false)}
-              submitLabel="Create Collection"
-              pending={create.isPending}
-              submitDisabled={!slug || !memberId}
+    <Overlay
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="New Collection"
+      description={`Start with one ${subject}. You can assign more as soon as its column appears.`}
+      trigger={
+        <DialogTrigger
+          render={
+            <Button variant="outline" disabled={rows.length === 0}>
+              <PlusIcon /> New Collection
+            </Button>
+          }
+        />
+      }
+      size="md"
+      primary={{
+        form: formId,
+        label: "Create Collection",
+        pending: create.isPending,
+        disabled: !slug || !memberId,
+      }}
+      onCancel={() => handleOpenChange(false)}
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!slug || !memberId) return;
+          create.mutate({
+            collection: slug,
+            subject,
+            id: memberId,
+          });
+        }}
+      >
+        <Stack gap="md">
+          <Stack gap="xs">
+            <Label htmlFor={nameId}>Name</Label>
+            <Input
+              id={nameId}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Painting"
+              ref={focusOnMount}
             />
           </Stack>
-        </form>
-      </DialogContent>
-    </Dialog>
+          <Stack gap="xs">
+            <Label htmlFor={memberSelectId}>First {subject}</Label>
+            <Picker
+              inputId={memberSelectId}
+              entity={subject}
+              label={`First ${subject}`}
+              items={memberItems}
+              value={member}
+              setValue={(item) => setMemberId(item?.id ?? "")}
+            />
+            <p className="text-2xs text-muted-foreground">
+              Choose from the current filtered page.
+            </p>
+          </Stack>
+        </Stack>
+      </form>
+    </Overlay>
   );
 }
 

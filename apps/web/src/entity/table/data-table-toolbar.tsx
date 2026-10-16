@@ -11,6 +11,7 @@ import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -22,7 +23,6 @@ import {
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
@@ -156,13 +156,13 @@ function ActionsMenu<TData extends RowData>({
         </DropdownMenuContent>
       </DropdownMenu>
       {showColumns && (
-        <ResponsiveDialog
+        <Overlay
           open={columnsOpen}
           onOpenChange={setColumnsOpen}
           title="Columns"
         >
           <TableLayoutCustomizer table={table} />
-        </ResponsiveDialog>
+        </Overlay>
       )}
     </>
   );

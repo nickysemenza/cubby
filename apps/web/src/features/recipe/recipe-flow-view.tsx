@@ -30,17 +30,11 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -420,55 +414,49 @@ function SelectedOperationDialog({
     : [];
 
   return (
-    <Dialog
+    <Overlay
       open={selectedOperation != null}
       onOpenChange={(open) => {
         if (!open) onSelectOperation(null);
       }}
+      size="md"
+      title={selectedOperation?.label ?? "Recipe instruction"}
+      description="AI-generated label; the authored instructions below remain the source of truth."
     >
-      <DialogContent size="md">
-        {selectedOperation && (
-          <>
-            <DialogHeader>
-              <DialogTitle>{selectedOperation.label}</DialogTitle>
-              <DialogDescription>
-                AI-generated label; the authored instructions below remain the
-                source of truth.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2">
-              {selectedOperation.annotations.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {selectedOperation.annotations.map((annotation) => (
-                    <Badge
-                      variant="outline"
-                      key={`${annotation.kind}:${annotation.text}`}
-                      className="font-sans tracking-normal normal-case"
-                    >
-                      {annotation.text}
-                    </Badge>
-                  ))}
+      {selectedOperation && (
+        <>
+          <div className="grid gap-2">
+            {selectedOperation.annotations.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedOperation.annotations.map((annotation) => (
+                  <Badge
+                    variant="outline"
+                    key={`${annotation.kind}:${annotation.text}`}
+                    className="font-sans tracking-normal normal-case"
+                  >
+                    {annotation.text}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {instructions.map((instruction) => (
+              <div
+                key={instruction.key}
+                className="border border-[var(--border)] px-2 py-2"
+              >
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
+                  {instruction.sectionName ?? "Method"} · step{" "}
+                  {instruction.instructionIndex + 1}
                 </div>
-              )}
-              {instructions.map((instruction) => (
-                <div
-                  key={instruction.key}
-                  className="border border-[var(--border)] px-2 py-2"
-                >
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">
-                    {instruction.sectionName ?? "Method"} · step{" "}
-                    {instruction.instructionIndex + 1}
-                  </div>
-                  <MarkdownText className="[&_p]:my-0">
-                    {instruction.text}
-                  </MarkdownText>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+                <MarkdownText className="[&_p]:my-0">
+                  {instruction.text}
+                </MarkdownText>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Overlay>
   );
 }
 

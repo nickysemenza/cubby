@@ -172,6 +172,12 @@ for (const width of [1440, 402]) {
     await expect(
       dialog.getByRole("button", { name: "Cancel", exact: true }),
     ).toBeDisabled();
+    if (width === 1440)
+      await expect(
+        dialog.getByRole("button", { name: "Close", exact: true }),
+      ).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("alert")).toContainText("SQLSTATE 23514");
     await expect(dialog.getByText("1 category", { exact: true })).toBeVisible();
     await expect(

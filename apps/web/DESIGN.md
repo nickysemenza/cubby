@@ -73,10 +73,18 @@ styling. Share lower-level behavior and tokens where the contracts agree:
 - Interactive lists, static tables, matrices, record evidence and detail facts
   retain their distinct structures; [table contracts](docs/web-ui-reference.md#tables)
   own the choice of shared renderer.
-- Dialog and Sheet share Base UI Dialog; responsive wrappers own placement,
-  scroll regions and form actions. WorkflowDialog composes that responsive shell
-  and shared actions; its phone description, summary and raw errors stay in the body so promoted
-  phone actions cannot hide them. AlertDialog retains confirmation semantics.
+- `Overlay` owns ordinary dialogs and workspace panels: placement, independent
+  body scrolling, explicit primary/native-form actions, summary and raw diagnostics.
+  Phone writes use a full-height sheet with Cancel/title/primary in its header;
+  desktop actions stay in the fixed footer. Form owners pass the same form id to
+  `primary.form` and `FormWrapper`, hide the form's own actions, and forward
+  `onSubmittingChange` into the overlay's `pending` state. This covers resolver
+  validation, custom commits, suggestion receipts and completion callbacks.
+  Cancel, close, Escape and backdrop dismissal are blocked throughout a primary
+  write; controlled success closure still restores focus. Independent row actions
+  remain dismissible. Command search, the full photo viewer and modeless/graph
+  inspectors retain their specialized presentations; AlertDialog retains explicit
+  confirmation semantics. Dialog and Sheet remain low-level Base UI surfaces.
 - Chart, relationship-map and specialized layout engines follow the
   [visualization contracts](#data-visualization); a common frame does not require
   one renderer.
