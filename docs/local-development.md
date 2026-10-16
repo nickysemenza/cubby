@@ -149,13 +149,21 @@ pnpm dev seed problems
 ```
 
 For performance investigations, `pnpm dev seed performance` adds a larger
-connected history: 6,000 Products, 12,000 Expenses, 8,000 retained Emails,
-5,000 completed mail Runs and their outcome receipts, 1,000 Purchases, and
+connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with
+original-content records, 5,000 completed mail Runs and their outcome receipts, 1,000 Purchases, and
 3,000 kit edges. Nested kits, explicitly priced siblings, unpriced stock,
 signed exits and future Expenses exercise the same pricing, quantity and
 Email-history queries as real records. Values and relationships are entirely
-synthetic and deterministic; providers are never dispatched. It is opt-in and
-does not enlarge the core or required CI fixtures. Volume rows are inserted in
+synthetic and deterministic; providers are never dispatched. Three quarters of
+originals include 32 KiB of fixed deterministic padding, mixing raw hash text
+with repeated synthetic prose and HTML, and short or absent snippets. The rest
+model cleared text. This exercises out-of-line TOAST reads with both
+compressible and incompressible originals rather than just row counts.
+Fingerprints are derived
+from the original content and reused by Email, Run rosters and receipts; later
+content clearing preserves those fingerprints and records its clearing time.
+The full pack is opt-in; core development stays small and CI uses only a small
+copy of the graph. Volume rows are inserted in
 bounded batches in one transaction, with database identity/relationship constraints
 active. The pack then uses the canonical bulk audit and search writers; it does
 not replay interactive commands for every historical record. It updates planner

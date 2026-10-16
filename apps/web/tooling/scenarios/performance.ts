@@ -57,6 +57,24 @@ export async function seedPerformanceCorpus(
   options: z.input<typeof optionsSchema> = {},
 ) {
   const { bundles } = optionsSchema.parse(options);
+  const bodyBytes = 32768;
+  // Distinct blocks keep the raw profile out of line. Repeated prose models
+  // compression too; both reuse bounded padding instead of per-record entropy.
+  const hashBlocks = Array.from(
+    { length: Math.ceil(bodyBytes / 64) },
+    (_, index) =>
+      createHash("sha256")
+        .update(`Synthetic content block ${index}`)
+        .digest("hex"),
+  );
+  const rawPadding = hashBlocks.join("").slice(0, bodyBytes);
+  const prosePadding = hashBlocks
+    .map(
+      (hash) =>
+        `Synthetic supplier delivery information. This paragraph is invented for local performance fixtures. Reference ${hash}. Synthetic terms and packaging details follow.\n`,
+    )
+    .join("")
+    .slice(0, bodyBytes);
   const context = buildKernelContext(db, userId);
   const [member] = await getDb(db)
     .select()
@@ -196,14 +214,37 @@ export async function seedPerformanceCorpus(
       created("expense", row.id);
     }
     for (let message = 0; message < 8; message++) {
-      const bodyText = `${label} invented receipt ${message + 1}. Order SYNTHETIC-PERF-${bundle + 1}. Total 120 USD.`;
-      const checksum = createHash("sha256").update(bodyText).digest("hex");
+      const snippet = `${label} invented receipt ${message + 1}. Order SYNTHETIC-PERF-${bundle + 1}. Total 120 USD.`;
+      const body = `${snippet}\n${message % 4 === 0 ? rawPadding : prosePadding}`;
+      const original =
+        message % 4 === 0
+          ? { snippet, bodyText: body, bodyHtml: null }
+          : message % 4 === 2
+            ? {
+                snippet: " ",
+                bodyText: null,
+                bodyHtml: `<article><p>${body.replaceAll("\n", "</p><p>")}</p></article>`,
+              }
+            : { snippet: null, bodyText: body, bodyHtml: null };
+      const checksum = createHash("sha256")
+        .update(
+          JSON.stringify([
+            original.snippet,
+            original.bodyText,
+            original.bodyHtml,
+          ]),
+        )
+        .digest("hex");
+      const cleared = message % 4 === 3;
+      const content = cleared
+        ? { snippet: null, bodyText: null, bodyHtml: null }
+        : original;
       const mail = {
         id: randomUUID(),
         ledgerPartyId: member.id,
         vendorId: supplier.id,
         rawChecksum: checksum,
-        content: { bodyText, bodyHtml: null, snippet: bodyText },
+        content,
       };
       mails.push(mail);
       const historical = message < 5;
@@ -240,6 +281,7 @@ export async function seedPerformanceCorpus(
         subject: `${label} receipt ${message + 1}`,
         receivedAt: new Date("2026-01-15T12:00:00Z"),
         checksum,
+        contentClearedAt: cleared ? new Date("2026-01-16T12:00:00Z") : null,
         classification: historical ? "related" : "uncertain",
         classificationStage: "rule",
         classificationVersion: "synthetic-performance/v1",
