@@ -9,15 +9,11 @@ import { formatEstimate, formatKcal } from "~/lib/nutrition-format";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
-import { StatusText } from "~/ui/primitives/status-text";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+  StaticTable,
+  type StaticTableColumn,
+} from "~/ui/primitives/static-table";
+import { StatusText } from "~/ui/primitives/status-text";
 
 import { CopyJsonButton } from "./copy-debug-button";
 
@@ -86,6 +82,80 @@ const MeasureCell: React.FC<{
     </span>
   );
 };
+
+const DIAGNOSTIC_COLUMNS: StaticTableColumn<RowDiagnosticOut>[] = [
+  {
+    id: "row",
+    header: "Row",
+    cell: (d) => (
+      <>
+        {" "}
+        {d.name}
+        {d.sectionName && (
+          <span className="block text-2xs text-muted-foreground">
+            {d.sectionName}
+          </span>
+        )}{" "}
+      </>
+    ),
+  },
+  {
+    id: "usage",
+    header: "Usage",
+    cell: (d) => (
+      <>
+        {" "}
+        <Badge variant="outline">{d.usage}</Badge>
+        {!d.measured && (
+          <span className="block text-2xs text-muted-foreground">
+            unmeasured
+            {d.basisGrams != null && ` · basis ${Math.round(d.basisGrams)} g`}
+          </span>
+        )}{" "}
+      </>
+    ),
+  },
+  {
+    id: "cost",
+    header: "Cost",
+    cell: (d) => (
+      <>
+        {" "}
+        <span className="block text-2xs text-muted-foreground">
+          {sourceLabel(d.plan.cost)}
+        </span>
+        <MeasureCell diag={d.price} path={d.paths?.money} />{" "}
+      </>
+    ),
+  },
+  {
+    id: "weight",
+    header: "Weight",
+    cell: (d) => (
+      <>
+        {" "}
+        <span className="block text-2xs text-muted-foreground">
+          {sourceLabel(d.plan.weight)}
+        </span>
+        <MeasureCell diag={d.gram} path={d.paths?.weight} />{" "}
+      </>
+    ),
+  },
+  {
+    id: "nutrients",
+    header: "Nutrients",
+    cell: (d) => (
+      <>
+        {" "}
+        <span className="block text-2xs text-muted-foreground">
+          {sourceLabel(d.plan.nutrients)}
+          {d.nutritionSource && ` · ${d.nutritionSource}`}
+        </span>
+        <MeasureCell diag={d.nutrient} path={d.paths?.calories} />{" "}
+      </>
+    ),
+  },
+];
 
 export const RecipeCostingDebugCard: React.FC<{
   recipeId: RecipeShortcode;
@@ -165,60 +235,15 @@ export const RecipeCostingDebugCard: React.FC<{
         )}
 
         {/* Per-row trace: usage, fired rule per measure, value-or-error + path. */}
-        <Table className="table-auto">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Row</TableHead>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Usage</TableHead>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Cost</TableHead>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Weight</TableHead>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Nutrients</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {computed.diagnostics.map((d) => (
-              <TableRow key={d.id} className="align-top">
-                <TableCell className={CELL_CLASS}>
-                  {d.name}
-                  {d.sectionName && (
-                    <span className="block text-2xs text-muted-foreground">
-                      {d.sectionName}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className={CELL_CLASS}>
-                  <Badge variant="outline">{d.usage}</Badge>
-                  {!d.measured && (
-                    <span className="block text-2xs text-muted-foreground">
-                      unmeasured
-                      {d.basisGrams != null &&
-                        ` · basis ${Math.round(d.basisGrams)} g`}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className={CELL_CLASS}>
-                  <span className="block text-2xs text-muted-foreground">
-                    {sourceLabel(d.plan.cost)}
-                  </span>
-                  <MeasureCell diag={d.price} path={d.paths?.money} />
-                </TableCell>
-                <TableCell className={CELL_CLASS}>
-                  <span className="block text-2xs text-muted-foreground">
-                    {sourceLabel(d.plan.weight)}
-                  </span>
-                  <MeasureCell diag={d.gram} path={d.paths?.weight} />
-                </TableCell>
-                <TableCell className={CELL_CLASS}>
-                  <span className="block text-2xs text-muted-foreground">
-                    {sourceLabel(d.plan.nutrients)}
-                    {d.nutritionSource && ` · ${d.nutritionSource}`}
-                  </span>
-                  <MeasureCell diag={d.nutrient} path={d.paths?.calories} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <StaticTable
+          className="table-auto"
+          rows={computed.diagnostics}
+          columns={DIAGNOSTIC_COLUMNS}
+          rowKey={(row) => row.id}
+          headClassName="h-auto py-1 pr-2 pl-0"
+          cellClassName={CELL_CLASS}
+          rowClassName="align-top"
+        />
       </CardContent>
     </Card>
   );

@@ -18,6 +18,12 @@ import {
   FoundationsSection,
 } from "~/features/design/sections/basics-section";
 import {
+  ActionWorkflowSection,
+  SuggestionReviewSection,
+  SectionCompositionsSection,
+  QualityChartsSection,
+} from "~/features/design/sections/compositions-section";
+import {
   LocationTreeSection,
   RecipeUnitsSection,
 } from "~/features/design/sections/household-section";
@@ -65,7 +71,7 @@ const GROUPS: IndexedSectionGroup[] = [
             source={[
               "ui/combobox/picker.tsx",
               "ui/combobox/picker-visual.tsx",
-              "ui/forms/form-utils/picker-field.tsx",
+              "entity/forms/picker-field.tsx",
             ]}
           />
         ),
@@ -120,9 +126,9 @@ const GROUPS: IndexedSectionGroup[] = [
               "createPlainDateColumn",
             ]}
             source={[
-              "ui/data-table/table.tsx",
-              "ui/data-table/list-workbench.tsx",
-              "ui/data-table/column-helpers.tsx",
+              "entity/table/table.tsx",
+              "entity/table/list-workbench.tsx",
+              "entity/table/column-helpers.tsx",
             ]}
           />
         ),
@@ -145,6 +151,76 @@ const GROUPS: IndexedSectionGroup[] = [
             scrolling, and a “Jump to” menu below 800px.
           </p>
         ),
+      },
+    ],
+  },
+  {
+    id: "detail-group-compositions",
+    title: "Working compositions",
+    sections: [
+      {
+        id: "action-workflows",
+        title: "Action search and workflows",
+        icon: SlidersHorizontalIcon,
+        description: (
+          <ComponentsLine
+            components={["CommandDialog", "WorkflowDialog"]}
+            source={[
+              "ui/primitives/command.tsx",
+              "ui/dialogs/workflow-dialog.tsx",
+            ]}
+          />
+        ),
+        content: <ActionWorkflowSection />,
+      },
+      {
+        id: "suggestion-review",
+        title: "Suggestion review",
+        icon: ChatCircleTextIcon,
+        description: (
+          <ComponentsLine
+            components={["SuggestionReview"]}
+            source={["entity/suggestions/suggestion-review.tsx"]}
+          />
+        ),
+        content: <SuggestionReviewSection />,
+      },
+      {
+        id: "section-compositions",
+        title: "Sections, dashboard and forms",
+        icon: ListBulletsIcon,
+        description: (
+          <ComponentsLine
+            components={[
+              "SectionHeading",
+              "DashboardCard",
+              "FormSection",
+              "CollapsibleSection",
+            ]}
+            source={[
+              "ui/layout/section.tsx",
+              "ui/layout/dashboard-card.tsx",
+              "ui/forms/form-section.tsx",
+              "ui/layout/collapsible-section.tsx",
+            ]}
+          />
+        ),
+        content: <SectionCompositionsSection />,
+      },
+      {
+        id: "quality-charts",
+        title: "Record quality and charts",
+        icon: TableIcon,
+        description: (
+          <ComponentsLine
+            components={["QualityResult", "RankedBarBreakdown"]}
+            source={[
+              "entity/entity-detail/record-quality.tsx",
+              "ui/charts/kit.tsx",
+            ]}
+          />
+        ),
+        content: <QualityChartsSection />,
       },
     ],
   },
@@ -183,6 +259,7 @@ const GROUPS: IndexedSectionGroup[] = [
               "ui/primitives/enum-pill.tsx",
               "entity/work-queue/work-queue-display.tsx",
               "ui/data-table/filter-bar.tsx",
+              "ui/data-table/scope-chip.tsx",
             ]}
           />
         ),
@@ -216,7 +293,7 @@ const GROUPS: IndexedSectionGroup[] = [
         description: (
           <ComponentsLine
             components={["Page", "Card", "Badge"]}
-            source={["styles.css", "ui/layout/page.tsx"]}
+            source={["styles.css", "entity/page/page.tsx"]}
           />
         ),
         content: <FoundationsSection />,

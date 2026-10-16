@@ -21,6 +21,10 @@ test("design showcase renders every section and its live demos", async ({
     "LocationTree",
     "Dates, pills and filters",
     "Recipe text and unit conversion",
+    "Action search and workflows",
+    "Suggestion review",
+    "Sections, dashboard and forms",
+    "Record quality and charts",
     "Controls",
     "Feedback, dialogs and tabs",
   ]) {
@@ -62,5 +66,106 @@ test("design showcase renders every section and its live demos", async ({
     oatMilk.getByRole("cell", { name: "3", exact: true }),
   ).toBeVisible();
 
+  await page
+    .getByRole("button", { name: "Search demo actions", exact: true })
+    .click();
+  const command = page.getByRole("dialog", { name: "Demo actions" });
+  await command.getByRole("combobox").fill("Review supplies");
+  await command.getByRole("combobox").press("Enter");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Review supplies selected" }),
+  ).toBeVisible();
+
+  const review = page.locator("figure").filter({
+    has: page.getByText("SuggestionReview · inline", { exact: true }),
+  });
+  await review.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(review.getByRole("status")).toHaveText("Accepted locally");
+
+  const sections = page.locator("#section-compositions");
+  await sections.getByRole("button", { name: "Notes", exact: true }).click();
+  await sections
+    .getByRole("textbox", { name: "Task note" })
+    .fill("Check spare parts");
+  await sections.getByRole("button", { name: "Notes", exact: true }).click();
+  await sections.getByRole("button", { name: "Notes", exact: true }).click();
+  await expect(
+    sections.getByRole("textbox", { name: "Task note" }),
+  ).toHaveValue("Check spare parts");
+  await expect(page.getByRole("button", { name: "Edit JSON" })).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
+
+// The workflow shares one shell on both viewports. A trigger must open the
+// sheet as well as the desktop dialog; promoted actions must not hide errors.
+for (const width of [1440, 402]) {
+  test(`design workflow preserves pending and retry at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/design");
+    await page
+      .getByRole("button", { name: "Open demo workflow", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Review supplies for the workshop maintenance project",
+    });
+    await expect(
+      dialog
+        .getByText("A synthetic workflow; no record is written.", {
+          exact: true,
+        })
+        .filter({ visible: true }),
+    ).toBeVisible();
+    if (width === 402) {
+      const cancel = await dialog
+        .getByRole("button", { name: "Cancel", exact: true })
+        .boundingBox();
+      const save = await dialog
+        .getByRole("button", { name: "Save preview", exact: true })
+        .boundingBox();
+      const title = await dialog
+        .getByRole("heading", {
+          name: "Review supplies for the workshop maintenance project",
+        })
+        .boundingBox();
+      expect(cancel).not.toBeNull();
+      expect(save).not.toBeNull();
+      expect(title).not.toBeNull();
+      expect(cancel!.height).toBeGreaterThanOrEqual(44);
+      expect(save!.height).toBeGreaterThanOrEqual(44);
+      expect(cancel!.x + cancel!.width).toBeLessThanOrEqual(title!.x);
+      expect(title!.x + title!.width).toBeLessThanOrEqual(save!.x);
+      expect(save!.x + save!.width).toBeLessThanOrEqual(width);
+    }
+    await dialog
+      .getByRole("textbox", { name: "Category name" })
+      .fill("Synthetic tool supplies");
+    await dialog
+      .getByRole("button", { name: "Save preview", exact: true })
+      .click();
+    await expect(
+      dialog.getByRole("button", { name: /Saving preview…/ }),
+    ).toBeDisabled();
+    await expect(
+      dialog.getByRole("button", { name: "Cancel", exact: true }),
+    ).toBeDisabled();
+    await expect(dialog.getByRole("alert")).toContainText("SQLSTATE 23514");
+    await expect(dialog.getByText("1 category", { exact: true })).toBeVisible();
+    await expect(
+      dialog.getByRole("textbox", { name: "Category name" }),
+    ).toHaveValue("Synthetic tool supplies");
+    await dialog
+      .getByRole("button", { name: "Retry preview", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open demo workflow", exact: true }),
+    ).toBeFocused();
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Preview saved: Synthetic tool supplies" }),
+    ).toBeVisible();
+  });
+}
