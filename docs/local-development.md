@@ -70,12 +70,16 @@ never uses FORCE for collection.
 IntegreSQL coordinates one migration-keyed base template for tests and dev.
 A second layer, keyed by migrations, `LOCAL_FIXTURE_VERSION`, corpus/application
 sources, shared code and fixture bytes, seeds once through application code.
-The key hashes all application `src` TypeScript/TSX and tooling TypeScript,
-including cookbook/category fixtures, factories and scenarios, plus bundled
-wardrobe PNGs and Rust/shared/schema inputs. This deliberately trades extra
-rebuilds for complete invalidation of indirect application calculations; source
-changes need no separate reseed flag. Existing checkout edits still survive
-startup; `pnpm dev reset` adopts the current template.
+The key follows the corpus preparation entry's runtime module graph with esbuild,
+including dynamic imports, server calculations and write paths, tooling fixtures,
+factories and scenarios. Shared/schema sources, Rust/WASM inputs, migrations,
+lockfiles and bundled wardrobe PNG bytes are also hashed. Unrelated UI sources
+(features, UI, routes and components outside that graph) do not invalidate the
+seed. Existing checkout edits survive startup; `pnpm dev reset` adopts the
+current template. For an exceptional dependency outside the discovered graph or
+a new reference day, run `pnpm dev reset --reseed`. It persists a fresh generation
+in that instance's state directory, seeds a new template, and uses it on later
+resets; other instances keep their generations.
 It inserts the synthetic account with Better Auth's password hasher, then runs
 the entity kernel and specialist repositories. Before a Worker exists, its
 background publications are stored in the template's development-only
@@ -93,7 +97,9 @@ container's own IP and uses its port 5432 for Worker and local Hyperdrive
 connections, bypassing the published-port proxy. Docker uses loopback 55432.
 Every preparation entry point inspects the owned container before connecting;
 an inherited address must equal that derived endpoint. This address is derived,
-not a user override. The container preloads
+not a user override. Repeated readiness/reset preparation carries the verified
+address and its database URLs together; it must never mix a direct address with
+inherited loopback URLs. The container preloads
 `pg_stat_statements`; database preparation enables it for the selected
 checkout, providing normalized query counts, execution times and buffer
 statistics for local performance investigations. A container started with
@@ -122,7 +128,8 @@ instead of grepping another checkout's `.env`.
 
 Ctrl-C stops the owned runtime and keeps the checkout's database. `pnpm dev down` stops
 that checkout's supervisor. `pnpm dev reset` stops it, re-clones its database from the current corpus template,
-and removes its Worker state. The next startup restores the three bundled PNGs
+and removes its Worker state. Add `--reseed` to build a fresh corpus generation
+instead of reusing a finalized template. The next startup restores the three bundled PNGs
 into local R2 when missing. `pnpm dev seed` checks the core marker without
 resetting edits. Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.

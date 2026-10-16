@@ -13,7 +13,7 @@ test("Docker dev down stops the owned server and refuses a foreign one", async (
   try {
     const config = {
       Name: "/cubby-dev-pg",
-      State: { Status: "running" },
+      State: { Status: "running", StartedAt: "2026-01-01T00:00:00Z" },
       Config: {
         Image: "docker.io/pgvector/pgvector:pg17",
         Env: [

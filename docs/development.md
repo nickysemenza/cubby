@@ -180,14 +180,24 @@ native PostgreSQL installation remain owned by their existing runners.
   afterwards. A common migration-keyed base template feeds each checkout's
   namespaced test pools and the shared dev-corpus template.
   All template layers use IntegreSQL's initializer election without a template
-  lock. Pending initializer records under the system temporary directory's `cubby-template-initializers`
-  are keyed by service URL and hash and record host, PID and process start time.
-  A live or unverifiable owner is never discarded; waiting is bounded to two
-  minutes. A proven-dead owner redirects permanently to a deterministic successor
-  hash, with at most eight recovery generations. Concurrent recoverers discard
-  only the abandoned hash through IntegreSQL's API, so they cannot delete a new
-  initializer's template. A kill before the owner record exists times out rather
-  than guessing ownership. Successful finalization removes its pending record.
+  lock. Recovery supports one Mac or one CI runner: all clients must share the
+  same host temporary marker directory and service incarnation. Separate machines,
+  containers with separate temp directories, and unmarked pending owners time out;
+  there is no cross-host recovery. Pending records under `cubby-template-initializers`
+  are keyed by service URL, incarnation and hash and record host, PID and a
+  versioned process birth identity read with `TZ=UTC LC_ALL=C`. A live or
+  unverifiable owner is never discarded; waiting is bounded to two minutes.
+  A proven-dead owner redirects to a deterministic successor hash. Only newly
+  created redirects consume the eight-interruption budget; established redirects
+  may be traversed across any number of past interruptions within the deadline.
+  Concurrent recoverers discard only the abandoned hash through IntegreSQL's API.
+  A kill before the owner record exists times out rather than guessing ownership.
+  Successful finalization removes its pending record. Managed startup derives
+  `CUBBY_TEMPLATE_SERVICE_ID` from both containers' start identities and retires
+  markers from previous incarnations; recycling and teardown remove service
+  markers. External services must provide a shared, fresh ID whenever either
+  service restarts (CI uses its fresh job's identity). Without it, initialization
+  and finalized-template reuse work, but pending-owner recovery fails closed.
   Local development clones that corpus to its stable `cubby_dev_*` name
   ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
   second VM: Virtualization.framework guests never return freed memory to
@@ -204,6 +214,12 @@ native PostgreSQL installation remain owned by their existing runners.
   removed, an idle one of a superseded configuration (or an earlier revision's
   `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
   than 100 databases is recreated with its `integresql_*` databases dropped.
+  This is an idle-start recycling threshold, not a hard database cap: a managed
+  run sharing the service defers it, and external mode bypasses it. Each distinct
+  corpus hash (including explicit reseeds) retains its template and pool until
+  that recycling/teardown; continuous sharing or externally owned services can
+  accumulate beyond 100. Superseded templates are retained because another
+  initializer/lease may still use them; external owners manage that lifetime.
   Apple container is the macOS default; Docker is the Linux default and can be
   selected on macOS with `CUBBY_DEV_SERVICES=docker`. Docker publishes IntegreSQL
   on an assigned loopback port; IntegreSQL and PostgreSQL communicate on the

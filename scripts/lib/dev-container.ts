@@ -23,7 +23,7 @@ export function devContainerBackend(
 const dockerInspection = z.array(
   z.object({
     Name: z.string(),
-    State: z.object({ Status: z.string() }),
+    State: z.object({ Status: z.string(), StartedAt: z.string() }),
     Config: z.object({
       Image: z.string(),
       Env: z.array(z.string()).nullable(),
@@ -87,7 +87,10 @@ export async function devContainerCli(
     return JSON.stringify(
       entries.map((entry) => ({
         id: entry.Name.replace(/^\//, ""),
-        status: { state: entry.State.Status },
+        status: {
+          state: entry.State.Status,
+          startedDate: entry.State.StartedAt,
+        },
         configuration: {
           image: { reference: entry.Config.Image },
           initProcess: { environment: entry.Config.Env ?? [] },

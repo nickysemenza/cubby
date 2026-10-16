@@ -1,9 +1,17 @@
+import { buildSync } from "esbuild";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { setCfEnv } from "../../src/server/cf-env";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { existsSync, globSync, readFileSync, realpathSync } from "node:fs";
+import {
+  existsSync,
+  globSync,
+  readFileSync,
+  realpathSync,
+  mkdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { resolveDevProfile } from "../../../../scripts/lib/dev-profile";
 import { Client } from "pg";
@@ -26,25 +34,51 @@ import {
   LOCAL_FIXTURE_VERSION,
 } from "./state";
 
-/** Hash all application code that can affect the corpus, not just its entry file. */
-export function corpusTemplateHash(root = process.cwd()): string {
+/** Hash the seed runtime graph plus workspace/byte inputs that bundling externalizes. */
+export function corpusTemplateHash(
+  root = process.cwd(),
+  generation = "",
+): string {
   const hash = createHash("sha1")
     .update(hashSchemaTemplateInputs())
-    .update(String(LOCAL_FIXTURE_VERSION));
-  for (const file of globSync(
-    [
-      "tooling/**/*.ts",
-      "src/**/*.ts",
-      "src/**/*.tsx",
-      "../../packages/schemas/src/**/*.ts",
-      "../../packages/shared/src/**/*.ts",
-      "../../recipebridge/**/*.rs",
-      "../../Cargo.lock",
-      "../../pnpm-lock.yaml",
-      "tests/e2e/fixtures/synthetic-wardrobe-*.png",
-    ],
-    { cwd: root },
-  )
+    .update(String(LOCAL_FIXTURE_VERSION))
+    .update(generation);
+  // Resolve runtime imports (including dynamic imports and aliases) without
+  // executing application modules. Workspace packages/byte inputs stay explicit.
+  const graph = buildSync({
+    absWorkingDir: root,
+    entryPoints: ["tooling/dev/corpus-template.ts"],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    packages: "external",
+    write: false,
+    metafile: true,
+    logLevel: "silent",
+    loader: { ".wasm": "file" },
+    outdir: join(root, ".cubby-corpus-graph"),
+  });
+  for (const file of [
+    ...new Set([
+      ...Object.keys(graph.metafile.inputs),
+      ...globSync(
+        [
+          "../../packages/schemas/src/**/*.ts",
+          "../../packages/shared/src/**/*.ts",
+          "../../recipebridge/**/*.rs",
+          "../../recipebridge/**/Cargo.toml",
+          "../../packages/wasm/**/*.{js,ts,wasm}",
+          "../../Cargo.toml",
+          "../../rust-toolchain.toml",
+          "tsconfig.json",
+          "../../Cargo.lock",
+          "../../pnpm-lock.yaml",
+          "tests/e2e/fixtures/synthetic-wardrobe-*.png",
+        ],
+        { cwd: root },
+      ),
+    ]),
+  ]
     .filter((file) => !/\.(?:test|spec)\.tsx?$/u.test(file))
     .sort())
     hash
@@ -87,6 +121,7 @@ export async function prepareDevDatabase(
   name: string,
   checkout: string,
   databaseUrl: string,
+  generation = "",
 ): Promise<void> {
   const adminUrl = assertDevDatabaseUrl(databaseUrl);
   if (adminUrl.pathname !== `/${name}` || !checkout.startsWith("/"))
@@ -104,7 +139,7 @@ export async function prepareDevDatabase(
     if (!present.rowCount) {
       const client = templateClient();
       const hash = await initializeRecoverableTemplate(
-        corpusTemplateHash(),
+        corpusTemplateHash(process.cwd(), generation),
         async (config) => {
           await cloneSchemaTemplate(config.database);
           const pool = createPostgresPool({
@@ -217,5 +252,13 @@ if (import.meta.main) {
   const profile = await resolveOwnedDevProfile(root);
   await ensureDevSeedArtifacts(root);
   Object.assign(process.env, devProcessEnvironment(profile));
-  await prepareDevDatabase(profile.name, root, profile.databaseUrl);
+  const generationFile = join(profile.stateDir, "corpus-generation");
+  if (process.argv.includes("--reseed")) {
+    mkdirSync(profile.stateDir, { recursive: true });
+    writeFileSync(generationFile, randomUUID());
+  }
+  const generation = existsSync(generationFile)
+    ? readFileSync(generationFile, "utf8")
+    : "";
+  await prepareDevDatabase(profile.name, root, profile.databaseUrl, generation);
 }

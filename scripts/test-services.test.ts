@@ -1,3 +1,8 @@
+import { existsSync, writeFileSync } from "node:fs";
+import {
+  templateMarkerDirectory,
+  retireTemplateMarkers,
+} from "./lib/template-markers.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -39,4 +44,26 @@ test("teardown keeps every pair a live run uses", () => {
       "cubby-test-cccccccc-postgres",
     ],
   );
+});
+
+// Restarted services must not inherit permanent redirects, and cleanup must
+// retain the active incarnation and other independently owned services.
+test("retires redirects by service incarnation and clears them on teardown", () => {
+  const url = `http://synthetic-${process.pid}.example.test:5000`;
+  const other = `http://synthetic-other-${process.pid}.example.test:5000`;
+  const old = templateMarkerDirectory(url, "synthetic-old-birth");
+  const current = templateMarkerDirectory(url, "synthetic-current-birth");
+  const unrelated = templateMarkerDirectory(other, "synthetic-other-birth");
+  try {
+    writeFileSync(`${old}/redirect.json`, "{}");
+    retireTemplateMarkers(url, "synthetic-current-birth");
+    assert.equal(existsSync(old), false);
+    assert.equal(existsSync(current), true);
+    assert.equal(existsSync(unrelated), true);
+    retireTemplateMarkers(url);
+    assert.equal(existsSync(current), false);
+  } finally {
+    retireTemplateMarkers(url);
+    retireTemplateMarkers(other);
+  }
 });

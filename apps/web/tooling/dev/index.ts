@@ -1,3 +1,4 @@
+import { processIdentity } from "../../../../scripts/lib/process-identity.ts";
 import { createPostgresPool } from "../postgres-pool";
 import {
   devSessionSchema as sessionSchema,
@@ -41,16 +42,6 @@ interface DiagnosticChecks {
   database?: boolean | string;
 }
 
-function processIdentity(pid: number): string {
-  try {
-    return execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "";
-  }
-}
 function sessionPath(profile: DevProfile): string {
   return path.join(profile.stateDir, "session.json");
 }
@@ -590,7 +581,11 @@ async function main(): Promise<void> {
   if (command === "down") return stop(profile);
   if (command === "reset") {
     await stop(profile);
-    await run(profile, process.execPath, ["scripts/dev-db.ts", "reset"]);
+    await run(profile, process.execPath, [
+      "scripts/dev-db.ts",
+      "reset",
+      ...(args.includes("--reseed") ? ["--reseed"] : []),
+    ]);
     rmSync(path.join(profile.stateDir, "cloudflare"), {
       recursive: true,
       force: true,

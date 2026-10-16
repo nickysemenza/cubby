@@ -1,18 +1,18 @@
 import type { IntegreSQLClient } from "@devoxa/integresql-client";
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
   renameSync,
 } from "node:fs";
-import { hostname, tmpdir } from "node:os";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
+import { processIdentity } from "../../../scripts/lib/process-identity.ts";
+import { templateMarkerDirectory } from "../../../scripts/lib/template-markers.ts";
 import { testServiceConfig } from "./test-service-config";
 import { templateClient } from "./schema-template";
 
@@ -21,15 +21,13 @@ const initializer = z.object({
   pid: z.number().int().positive(),
   start: z.string().min(1),
   host: z.string(),
+  redirect: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/u)
+    .optional(),
 });
 type Initializer = z.infer<typeof initializer>;
 
-function startTime(pid: number): string {
-  return execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
-}
 function provenDead(owner: Initializer): boolean {
   if (owner.host !== hostname()) return false;
   try {
@@ -38,18 +36,19 @@ function provenDead(owner: Initializer): boolean {
     return error instanceof Error && "code" in error && error.code === "ESRCH";
   }
   try {
-    const start = startTime(owner.pid);
-    return !!start && start !== owner.start;
+    const start = processIdentity(owner.pid);
+    return (
+      !!start && owner.start.startsWith("ps-utc-v1:") && start !== owner.start
+    );
   } catch {
     return false;
   }
 }
 function marker(hash: string): string {
-  const service = createHash("sha1")
-    .update(testServiceConfig().url)
-    .digest("hex");
-  const directory = join(tmpdir(), "cubby-template-initializers", service);
-  mkdirSync(directory, { recursive: true });
+  const directory = templateMarkerDirectory(
+    testServiceConfig().url,
+    process.env.CUBBY_TEMPLATE_SERVICE_ID,
+  );
   return join(directory, `${hash}.json`);
 }
 function ownerAt(file: string): Initializer | undefined {
@@ -77,7 +76,9 @@ export async function initializeRecoverableTemplate(
   const client = templateClient();
   const deadline = Date.now() + timeoutMs;
   let hash = initialHash;
-  for (let generation = 0; generation < 8;) {
+  let recoveries = 0;
+  const visited = new Set<string>();
+  while (true) {
     if (Date.now() >= deadline)
       throw new Error(
         `Timed out waiting for IntegreSQL template ${hash}; initializer is live, unknown, or not finalized`,
@@ -85,18 +86,45 @@ export async function initializeRecoverableTemplate(
     const file = marker(hash);
     const owner = ownerAt(file);
     if (owner) {
+      // Separate hosts/temp namespaces cannot prove ownership; external callers
+      // without an incarnation may wait, but must never discard a pending owner.
+      if (!process.env.CUBBY_TEMPLATE_SERVICE_ID || owner.host !== hostname()) {
+        await delay(50);
+        continue;
+      }
+      if (owner.redirect) {
+        if (visited.has(hash))
+          throw new Error(`Cyclic template redirect at ${hash}`);
+        visited.add(hash);
+        hash = owner.redirect;
+        continue;
+      }
       if (!provenDead(owner)) {
         await delay(50);
         continue;
       }
+      if (recoveries >= 8)
+        throw new Error(
+          `Too many new interrupted IntegreSQL template generations for ${initialHash}`,
+        );
       await client.api.discardTemplate(hash).catch((error: unknown) => {
         if (status(error) !== 404) throw error;
       });
-      hash = createHash("sha1")
+      const redirect = createHash("sha1")
         .update(hash)
-        .update(JSON.stringify(owner))
+        .update(
+          JSON.stringify({
+            pid: owner.pid,
+            start: owner.start,
+            host: owner.host,
+          }),
+        )
         .digest("hex");
-      generation++;
+      const pending = `${file}.${process.pid}.tmp`;
+      writeFileSync(pending, JSON.stringify({ ...owner, redirect }));
+      renameSync(pending, file);
+      recoveries++;
+      hash = redirect;
       continue;
     }
     let response: Awaited<ReturnType<typeof client.api.initializeTemplate>>;
@@ -140,7 +168,7 @@ export async function initializeRecoverableTemplate(
     if (ownerAt(file)) continue;
     const identity = {
       pid: process.pid,
-      start: startTime(process.pid),
+      start: processIdentity(process.pid),
       host: hostname(),
     };
     initializer.parse(identity);
@@ -166,7 +194,4 @@ export async function initializeRecoverableTemplate(
       throw error;
     }
   }
-  throw new Error(
-    `Too many interrupted IntegreSQL template generations for ${initialHash}`,
-  );
 }

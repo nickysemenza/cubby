@@ -343,7 +343,9 @@ jobs:
           PGPASSWORD: password
         ports:
           - 5000:5000
+    # Each job owns fresh services and one host marker namespace.
     env: &web-lane-env
+      CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
       NODE_OPTIONS: "--max-old-space-size=4096"
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
       CUBBY_SOURCE_COMMIT: ${{ github.sha }}

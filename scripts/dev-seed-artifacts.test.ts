@@ -9,6 +9,10 @@ import { ensureDevSeedArtifacts } from "./lib/dev-seed-artifacts.ts";
 test("prepares WASM before generated seed inputs and propagates failures", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "cubby-seed-build-"));
   try {
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ type: "module" }),
+    );
     await mkdir(path.join(root, "scripts"));
     const ensure = path.join(root, "scripts/ensure.ts");
     const log = path.join(root, "calls");

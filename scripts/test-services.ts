@@ -1,3 +1,4 @@
+import { retireTemplateMarkers } from "./lib/template-markers.ts";
 import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -199,10 +200,10 @@ async function connectDockerPostgres(): Promise<void> {
 }
 
 /** Reach the local service through Apple's address or Docker's assigned port. */
-async function integresqlAddress(): Promise<string> {
+async function integresqlAddress(name = INTEGRESQL): Promise<string> {
   if (devContainerBackend() === "apple")
-    return `http://${await containerAddress(INTEGRESQL)}:5000`;
-  const [info] = JSON.parse(await containerCli(["inspect", INTEGRESQL]));
+    return `http://${await containerAddress(name)}:5000`;
+  const [info] = JSON.parse(await containerCli(["inspect", name]));
   const ports = z
     .array(z.object({ containerPort: z.number(), hostPort: z.number() }))
     .parse(info.configuration.publishedPorts);
@@ -238,7 +239,9 @@ async function integresqlDatabases(): Promise<string[]> {
 
 /** Recreate IntegreSQL empty; only when no live run uses it. */
 async function createIntegresql(postgresHost: string): Promise<void> {
+  const previousUrl = await integresqlAddress().catch(() => undefined);
   await stopAndRemove(INTEGRESQL);
+  if (previousUrl) retireTemplateMarkers(previousUrl);
   const stale = await integresqlDatabases();
   if (stale.length > 0) {
     await psql(
@@ -294,6 +297,10 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       others,
       configuration,
     )) {
+      if (name.endsWith("-integresql")) {
+        const url = await integresqlAddress(name).catch(() => undefined);
+        if (url) retireTemplateMarkers(url);
+      }
       await stopAndRemove(name);
       console.log(`[test-services] Removed idle ${name}`);
     }
@@ -328,7 +335,24 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
     console.log(
       `[test-services] Ready: PostgreSQL ${postgresHost}:5432, IntegreSQL ${integresqlUrl}`,
     );
+    const births = z
+      .array(
+        z.object({
+          id: z.string(),
+          status: z.object({ startedDate: z.string().min(1) }),
+        }),
+      )
+      .parse(
+        JSON.parse(
+          await containerCli(["inspect", SHARED_POSTGRES, INTEGRESQL]),
+        ),
+      );
+    const incarnation = createHash("sha256")
+      .update(JSON.stringify(births))
+      .digest("hex");
+    retireTemplateMarkers(integresqlUrl, incarnation);
     const overlay: NodeJS.ProcessEnv = {
+      CUBBY_TEMPLATE_SERVICE_ID: incarnation,
       CUBBY_TEST_SERVICES: "external",
       INTEGRESQL_URL: integresqlUrl,
       INTEGRESQL_DATABASE_HOST:
@@ -363,6 +387,10 @@ async function stopIdleServices(): Promise<void> {
         .map((entry) => entry.id),
       live,
     )) {
+      if (name.endsWith("-integresql")) {
+        const url = await integresqlAddress(name).catch(() => undefined);
+        if (url) retireTemplateMarkers(url);
+      }
       await stopAndRemove(name);
       console.log(`[test-services] Removed ${name}`);
     }

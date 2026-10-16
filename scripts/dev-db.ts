@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveDevProfile } from "./lib/dev-profile.ts";
+import { resolveDevProfile, DEV_DATABASE_ENV_KEYS } from "./lib/dev-profile.ts";
 import { spawnToExit } from "./lib/run.ts";
 
 import {
@@ -30,6 +30,9 @@ const webRoot = path.join(__dirname, "../apps/web");
 async function bindOwnedProfile(): Promise<void> {
   profile = await resolveOwnedDevProfile(profile.repoRoot);
   process.env.CUBBY_DEV_DB_ADDRESS = new URL(profile.databaseUrl).host;
+  // Repeated readiness/reset binding must validate one consistent endpoint.
+  for (const key of DEV_DATABASE_ENV_KEYS)
+    if (process.env[key]) process.env[key] = profile.databaseUrl;
 }
 
 async function up(): Promise<void> {
@@ -65,7 +68,7 @@ function runInWebWorkspace(
 }
 
 /** Each checkout's selected database is created on first use. */
-async function ensureDatabase(): Promise<void> {
+async function ensureDatabase(reseed = false): Promise<void> {
   const code = await spawnToExit(
     "node",
     [
@@ -75,6 +78,7 @@ async function ensureDatabase(): Promise<void> {
       "exec",
       "tsx",
       "tooling/dev/corpus-template.ts",
+      ...(reseed ? ["--reseed"] : []),
     ],
     { cwd: webRoot, stdio: "inherit", env: process.env },
   );
@@ -86,9 +90,9 @@ async function ensureDatabase(): Promise<void> {
   await psql("SELECT 1 FROM pg_stat_statements LIMIT 1", devDatabaseName);
 }
 
-async function ready(): Promise<number> {
+async function ready(reseed = false): Promise<number> {
   await up();
-  await ensureDatabase();
+  await ensureDatabase(reseed);
   const migrated = await runInWebWorkspace("db-migrate.ts", ["--target=dev"]);
   if (migrated !== 0) {
     console.error(
@@ -103,7 +107,7 @@ async function reset(): Promise<number> {
   await assertRunningOwnedContainer();
   // The shared service contains other checkouts' databases.
   await psql(`DROP DATABASE IF EXISTS "${devDatabaseName}" WITH (FORCE)`);
-  return ready();
+  return ready(process.argv.includes("--reseed"));
 }
 
 async function main(): Promise<number> {
