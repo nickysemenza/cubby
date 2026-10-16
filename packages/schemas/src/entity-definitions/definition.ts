@@ -2186,6 +2186,12 @@ const buildMetadataSchemas = () => {
        */
       currentMember: z.literal(true).optional(),
       /**
+       * A declared exception to any-of: the filter accepts one value, and
+       * `reason` says why (Email's scope record anchors `linkState`).
+       * Clients pick one record.
+       */
+      singleValue: z.object({ reason: nonEmptyString() }).strict().optional(),
+      /**
        * Named states an `idMulti` filter accepts beside entity codes (an
        * Owner filter's `@household`). Clients offer each as a meta option;
        * the derived schema accepts each literal; the repository owns meaning.

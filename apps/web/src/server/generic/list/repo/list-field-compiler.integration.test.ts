@@ -128,7 +128,7 @@ describe("compiled list fields", () => {
     const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Presence household",
     });
-    const child = await insertWithShortcode(ctx.db, "spendingCategory", {
+    await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Presence utilities",
       parentId: parent.id,
     });
@@ -152,10 +152,10 @@ describe("compiled list fields", () => {
     ]);
     expect(
       await named({
-        parentId: [child.shortcode],
+        parentId: [parent.shortcode],
         parentIdPresenceFilter: "none",
       }),
-    ).toEqual(["Presence household", "Presence travel"]);
+    ).toEqual(["Presence household", "Presence travel", "Presence utilities"]);
     expect(await named({ parentId: [other.shortcode] })).toEqual([]);
 
     // Related (`via`) field: No value is a product with no category.

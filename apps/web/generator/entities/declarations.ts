@@ -112,6 +112,8 @@ export type FilterDescriptor = Readonly<{
   subtree: string | null;
   /** Accepts `@me` (ADR 0018). */
   currentMember: boolean;
+  /** The declared reason this filter accepts one value, not an any-of. */
+  singleValue: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;

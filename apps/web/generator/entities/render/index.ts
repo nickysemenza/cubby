@@ -1437,7 +1437,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
         '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
-        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; subtree: string | null; currentMember: boolean; sentinels: readonly { value: string; label: string }[] | null;\n" +
+        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

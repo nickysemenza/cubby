@@ -458,7 +458,15 @@ export function encodeFilters(
   get: (columnId: string) => FilterValue,
 ) {
   const params: Record<string, string | undefined> = {};
+  // A parent's column state owns its folded subtree toggle, so the toggle's
+  // standalone descriptor must not overwrite it.
+  const folded = new Set(
+    specs.flatMap((spec) =>
+      spec.subtree && !spec.urlOnly ? [spec.subtree] : [],
+    ),
+  );
   for (const spec of specs) {
+    if (folded.has(filterUrlKey(spec))) continue;
     const raw = get(spec.columnId);
     const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
     const exact = all.includes(FILTER_EXACT);

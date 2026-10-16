@@ -30,16 +30,40 @@ const baseline = z
 /** A list scaffold binding: `listScaffold(...)` results are named `*Scaffold`. */
 const scaffoldName = /(?:^s|S)caffold$/;
 
+/** Same-file condition lists: `const name = [...]` and each `name.push(...)`. */
+type ConditionLists = {
+  arrays: Map<string, ESTree.ArrayExpression>;
+  pushed: Map<string, number>;
+};
+
 /**
- * Hand-written conditions passed to a list scaffold's `where(filters, [...])`.
- * An opaque (non-literal) condition list counts as one.
+ * Hand-written conditions in a list scaffold's `where(filters, [...])`. A
+ * condition list named in the same file counts its elements and every
+ * argument pushed onto it; any other opaque list or spread counts as one.
  */
-const handWrittenConditions = (node: ESTree.CallExpression): number => {
-  const computed = node.arguments[1];
-  if (computed === undefined) return 0;
-  return computed.type === "ArrayExpression"
-    ? computed.elements.filter((element) => element !== null).length
-    : 1;
+const countConditions = (
+  node: ESTree.Node | null,
+  lists: ConditionLists,
+  seen: Set<string>,
+): number => {
+  if (node === null) return 0;
+  if (node.type === "ArrayExpression")
+    return node.elements.reduce(
+      (total, element) => total + countConditions(element, lists, seen),
+      0,
+    );
+  if (node.type === "SpreadElement")
+    return countConditions(node.argument, lists, seen);
+  if (node.type === "Identifier" && !seen.has(node.name)) {
+    const array = lists.arrays.get(node.name);
+    if (array) {
+      seen.add(node.name);
+      return (
+        countConditions(array, lists, seen) + (lists.pushed.get(node.name) ?? 0)
+      );
+    }
+  }
+  return 1;
 };
 
 export const noHandWrittenFilterPredicateRule = defineRule({
@@ -63,15 +87,35 @@ export const noHandWrittenFilterPredicateRule = defineRule({
     const relativeFilename = filename.startsWith(`${repoRoot}/`)
       ? filename.slice(repoRoot.length + 1)
       : filename;
-    const violations: { node: ESTree.Node; count: number }[] = [];
-    let actual = 0;
+    const calls: ESTree.CallExpression[] = [];
+    const lists: ConditionLists = { arrays: new Map(), pushed: new Map() };
     let program: ESTree.Program | undefined;
     return {
       Program(node) {
         program = node;
       },
+      VariableDeclarator(node) {
+        if (
+          node.id.type === "Identifier" &&
+          node.init?.type === "ArrayExpression"
+        )
+          lists.arrays.set(node.id.name, node.init);
+      },
       CallExpression(node) {
         const callee = node.callee;
+        if (
+          callee.type === "MemberExpression" &&
+          callee.property.type === "Identifier" &&
+          callee.property.name === "push" &&
+          callee.object.type === "Identifier"
+        ) {
+          const name = callee.object.name;
+          lists.pushed.set(
+            name,
+            (lists.pushed.get(name) ?? 0) + node.arguments.length,
+          );
+          return;
+        }
         if (
           callee.type !== "MemberExpression" ||
           callee.property.type !== "Identifier" ||
@@ -80,12 +124,19 @@ export const noHandWrittenFilterPredicateRule = defineRule({
           !scaffoldName.test(callee.object.name)
         )
           return;
-        const count = handWrittenConditions(node);
-        if (count === 0) return;
-        actual += count;
-        violations.push({ node, count });
+        calls.push(node);
       },
       "Program:exit"() {
+        const violations = calls
+          .map((node) => ({
+            node,
+            count: countConditions(node.arguments[1] ?? null, lists, new Set()),
+          }))
+          .filter(({ count }) => count > 0);
+        const actual = violations.reduce(
+          (total, { count }) => total + count,
+          0,
+        );
         const allowed = baseline[relativeFilename] ?? 0;
         if (actual < allowed) {
           context.report({

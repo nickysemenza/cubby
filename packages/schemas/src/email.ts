@@ -6,10 +6,17 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "./identifiers";
-import { oneOrMany } from "./pagination";
+import { oneOrMany, oneOrManyValues } from "./pagination";
 import { emailBaseFilterFields } from "./generated/email.gen";
 
 export { emailOut, type EmailOut } from "./generated/email.gen";
+
+/** A scope filter's declared `singleValue`: one record, as a scalar or a one-element list. */
+const oneScopeValue = <T extends z.ZodTypeAny>(code: T) =>
+  oneOrMany(code).refine(
+    (value) => (oneOrManyValues(value)?.length ?? 0) <= 1,
+    "Scope an Email list by one record.",
+  );
 
 /**
  * The derived Emails-section scopes (ADR 0011): Emails related to a Purchase
@@ -20,9 +27,9 @@ export { emailOut, type EmailOut } from "./generated/email.gen";
  */
 export const emailFilterFields = {
   ...emailBaseFilterFields,
-  purchaseId: oneOrMany(purchaseShortcode).optional(),
-  vendorId: oneOrMany(vendorShortcode).optional(),
-  vendorAccountId: oneOrMany(vendorAccountShortcode).optional(),
+  purchaseId: oneScopeValue(purchaseShortcode).optional(),
+  vendorId: oneScopeValue(vendorShortcode).optional(),
+  vendorAccountId: oneScopeValue(vendorAccountShortcode).optional(),
   linkState: oneOrMany(emailLinkState).optional(),
 };
 export const emailFilters = z.object(emailFilterFields);

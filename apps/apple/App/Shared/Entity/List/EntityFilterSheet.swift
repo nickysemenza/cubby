@@ -274,7 +274,10 @@ struct EntityFilterSheet: View {
             }
             .sheet(item: $picking) { filter in
                 if let target = filter.targetEntity {
-                    EntityPickerSheet(target: target, multiple: true, selected: pickedIDs(filter)) { picks in
+                    // A declared `singleValue` scope filter takes one record.
+                    EntityPickerSheet(
+                        target: target, multiple: filter.singleValue != true, selected: pickedIDs(filter)
+                    ) { picks in
                         // The picker never sees a token ("Me", Household), so keep them across a pick.
                         let kept = EntityFilterDraft.tokens(filter).map(\.value).filter {
                             draft.selects($0, in: filter)

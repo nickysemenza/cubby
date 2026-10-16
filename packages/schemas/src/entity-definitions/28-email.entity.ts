@@ -26,6 +26,10 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   create: null,
   update: null,
 });
+// `linkState` and link order are relative to one scope record.
+const EMAIL_SCOPE_REASON =
+  "Link state is relative to one Purchase, Vendor or Vendor account.";
+
 const relevanceOptions = mailboxClassification.options.map((value) => ({
   value,
   label: MAILBOX_CLASSIFICATION_LABEL[value],
@@ -653,6 +657,7 @@ export default defineEntity({
         placeholder: "Emails for Purchase...",
         brandRef: { entity: "purchase" },
         urlOnly: true,
+        singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {
         columnId: "vendorId",
@@ -660,6 +665,7 @@ export default defineEntity({
         placeholder: "Emails for Vendor...",
         brandRef: { entity: "vendor" },
         urlOnly: true,
+        singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {
         columnId: "vendorAccountId",
@@ -667,6 +673,7 @@ export default defineEntity({
         placeholder: "Emails for Vendor account...",
         brandRef: { entity: "vendorAccount" },
         urlOnly: true,
+        singleValue: { reason: EMAIL_SCOPE_REASON },
       },
       {
         columnId: "reviewConflict",

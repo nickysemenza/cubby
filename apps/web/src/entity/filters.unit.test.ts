@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   compileFilterCodec,
   buildFiltersFromManifest,
+  encodeFilters,
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
@@ -605,6 +606,24 @@ describe("compileFilterCodec", () => {
     expect(
       codec.encode((columnId) =>
         columnId === "parent" ? ["SCAT-4K7M", FILTER_EXACT] : undefined,
+      ),
+    ).toEqual({ parent: "SCAT-4K7M", includeSubCategories: "false" });
+  });
+
+  it("keeps a folded toggle when its standalone descriptor is also encoded", () => {
+    // Link builders encode the full descriptor list, companion included.
+    expect(
+      encodeFilters(
+        [
+          {
+            columnId: "parent",
+            kind: "idMulti",
+            subtree: "includeSubCategories",
+          },
+          { columnId: "includeSubCategories", kind: "boolean" },
+        ],
+        (columnId) =>
+          columnId === "parent" ? ["SCAT-4K7M", FILTER_EXACT] : undefined,
       ),
     ).toEqual({ parent: "SCAT-4K7M", includeSubCategories: "false" });
   });

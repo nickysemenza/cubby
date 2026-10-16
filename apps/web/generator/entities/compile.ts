@@ -1164,6 +1164,10 @@ const validateFilterReference = (
     throw new EntityDeclarationError(
       `${context} currentMember (@me) applies only to an idMulti filter over ledgerParty.`,
     );
+  if (value.singleValue !== undefined && (!isIdentifier || !value.urlOnly))
+    throw new EntityDeclarationError(
+      `${context} singleValue applies only to a urlOnly idMulti scope filter.`,
+    );
 };
 
 /**
@@ -1302,6 +1306,7 @@ const filterDescriptor = (
         : null,
     subtree: null,
     currentMember: value.currentMember === true,
+    singleValue: value.singleValue?.reason ?? null,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
@@ -1975,6 +1980,7 @@ const suggestionFilterDescriptors = (
       match: null,
       subtree: null,
       currentMember: false,
+      singleValue: null,
       wire: { kind: "param", name: "suggestionKind" },
     },
   ];
@@ -2119,6 +2125,7 @@ export const compileEntity = (
           match: null,
           subtree: null,
           currentMember: false,
+          singleValue: null,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2154,6 +2161,7 @@ export const compileEntity = (
           match: null,
           subtree: null,
           currentMember: false,
+          singleValue: null,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

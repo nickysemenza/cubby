@@ -1318,15 +1318,18 @@ else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and o
 Choices the clients cannot offer are disabled with their reason (§7 of the
 [list-fields plan](plans/manifest-driven-list-fields.md)).
 
-Hand-written predicates passed to `<entity>Scaffold.where(filters, [...])`
-are counted per file by the `cubby/no-hand-written-filter-predicate` Oxlint
+Hand-written predicates passed to `<entity>Scaffold.where(filters, [...])`,
+including the elements of and pushes onto a condition list named in the same
+file, are counted per file by the `cubby/no-hand-written-filter-predicate` Oxlint
 rule against `tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json`.
 The baseline only shrinks: declaring a predicate lowers its file's count, and
 a new one must be declared instead. A filter that cannot be declared is a
-declared exception whose doc comment gives the reason: Email's
-`purchaseId`/`vendorId`/`vendorAccountId` accept exactly one value because
-`linkState` is relative to one scope record, and inventory's `valuationStatus`
-is a `model.derived` predicate.
+declared exception with its reason. Email's urlOnly
+`purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
+(`linkState` is relative to one scope record): their schemas accept one value,
+the native picker chooses one record, and the repository rejects more than one
+across the three. Inventory's `valuationStatus` is a `model.derived`
+predicate.
 
 A `stored` descriptor names the standard predicate over stored columns, and
 `declaredFilterPredicates` composes it for the repository: `stored: true`

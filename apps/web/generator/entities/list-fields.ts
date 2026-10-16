@@ -201,6 +201,7 @@ const toggleDescriptor = (
     match: null,
     subtree: null,
     currentMember: false,
+    singleValue: null,
     wire: { kind: "param", name: key },
   };
 };

@@ -222,6 +222,7 @@ const filterJSON = (
   matchParam: filter.match?.field ?? null,
   subtreeParam: filter.subtree,
   currentMember: filter.currentMember,
+  singleValue: filter.singleValue !== null,
   // Filter metadata steers web-only rendering.
   wire:
     filter.wire.kind === "param"

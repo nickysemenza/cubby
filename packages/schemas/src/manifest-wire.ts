@@ -152,6 +152,7 @@ export const manifestWire = {
       matchParam: "string~",
       subtreeParam: "string~",
       currentMember: "boolean",
+      singleValue: "boolean~",
       wire: "FilterWire",
       targetEntity: "EntityKey~",
     },
