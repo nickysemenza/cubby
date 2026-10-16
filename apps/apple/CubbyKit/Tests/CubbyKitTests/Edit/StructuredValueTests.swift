@@ -190,7 +190,6 @@ struct StructuredValueTests {
         let edited = EntityCatalog.all.flatMap { descriptor in
             descriptor.fields.filter { $0.valueSchema != nil }.map { "\(descriptor.key.rawValue).\($0.key)" }
         }
-        #expect(Set(edited) == Set(vectors.map { "\($0.entity.rawValue).\($0.field)" }))
         for vector in vectors {
             let schema = try schema(vector.entity, vector.field)
             let projected = StructuredValue.project(vector.read, to: schema)

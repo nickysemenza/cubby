@@ -7,7 +7,8 @@ import CubbyKit
 /// generator refuses to build unless every renderer, slot, and hero action is classified. A
 /// non-nil unsupported reason is intentional: callers surface one web disclosure instead of
 /// silently dropping a field or slot. To change a status, edit that declaration (and implement
-/// the native view path for `implemented`; `NativeCoverageViewPathTests` enforces both).
+/// the native view path for `implemented`; the generated per-status id enums make the compiler
+/// enforce both).
 enum NativePresentationCoverage {
     typealias Status = NativeCoverageStatus
 

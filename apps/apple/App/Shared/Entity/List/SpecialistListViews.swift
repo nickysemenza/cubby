@@ -46,19 +46,21 @@ private final class SpecialistLoader<Value> {
     }
 }
 
-/// The declared list slots native draws. Exactly the slots `packages/schemas/src/native-coverage.ts`
-/// marks `implemented`; `NativeCoverageViewPathTests` fails when the two sets differ.
+/// The declared list slots native draws: one case per slot `packages/schemas/src/native-coverage.ts`
+/// marks `implemented`, so the compiler holds the two together.
 enum ListSlotRegistry {
-    typealias Builder = @MainActor (_ client: CubbyClient, _ filters: EntityFilterState) -> AnyView
-
     @MainActor
-    static let builders: [EntityListSlotID: Builder] = [
-        .mealCalendar: { AnyView(MealCalendarListView(client: $0, filters: $1)) },
-        .taskBoard: { AnyView(TaskBoardListView(client: $0, filters: $1)) },
-        .locationGallery: { AnyView(LocationGalleryListView(client: $0, filters: $1)) },
-        .projectAnalytics: { AnyView(ProjectAnalyticsListView(client: $0, filters: $1)) },
-        .expenseAnalytics: { AnyView(ExpenseAnalyticsListView(client: $0, filters: $1)) },
-    ]
+    static func view(
+        _ slot: ImplementedListSlotID, client: CubbyClient, filters: EntityFilterState
+    ) -> AnyView {
+        switch slot {
+        case .mealCalendar: AnyView(MealCalendarListView(client: client, filters: filters))
+        case .taskBoard: AnyView(TaskBoardListView(client: client, filters: filters))
+        case .locationGallery: AnyView(LocationGalleryListView(client: client, filters: filters))
+        case .projectAnalytics: AnyView(ProjectAnalyticsListView(client: client, filters: filters))
+        case .expenseAnalytics: AnyView(ExpenseAnalyticsListView(client: client, filters: filters))
+        }
+    }
 }
 
 private struct SpecialistLoadView<Value, Content: View>: View {

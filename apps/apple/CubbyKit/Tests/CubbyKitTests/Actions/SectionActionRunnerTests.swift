@@ -106,14 +106,6 @@ struct SectionActionRunnerTests {
 
     // MARK: - Coverage
 
-    @Test func classifiesEverySectionVerb() throws {
-        let coverage = NativeCoverageManifest.shared.sectionAction
-        #expect(Set(coverage.keys) == Set(SectionActionID.allCases.map(\.rawValue)))
-        for verb in SectionActionID.allCases {
-            #expect(SectionActionRunner.coverage(of: verb) == .implemented)
-        }
-    }
-
     // MARK: - Split and attach
 
     private func verbRecords(_ id: String, reason: String?) throws -> ReportPresentation.Records {

@@ -370,8 +370,8 @@ struct EntityListView: View {
     @ViewBuilder
     private func specialistSlot(_ id: String, model: GenericEntityListModel) -> some View {
         let filters = specialistFilters(model)
-        if let slot = EntityListSlotID(rawValue: id), let build = ListSlotRegistry.builders[slot] {
-            build(appModel.client, filters)
+        if let slot = ImplementedListSlotID(rawValue: id) {
+            ListSlotRegistry.view(slot, client: appModel.client, filters: filters)
         } else {
             ContentUnavailableView("View unavailable", systemImage: "square.dashed")
         }

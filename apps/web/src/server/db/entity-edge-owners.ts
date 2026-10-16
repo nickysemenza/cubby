@@ -12,12 +12,15 @@
  * - `excluded`: workflow, history, or review rows whose columns are evidence
  *   about entities rather than relationships between them.
  *
- * `entity-edge-owners.unit.test.ts` fails when an `ENTITY_EDGES` table is
- * missing here, so a new join table must decide its owner explicitly.
+ * The map is typed to exactly the non-entity tables `ENTITY_EDGES` names, so a
+ * new join table must decide its owner explicitly and a stale entry fails to
+ * compile.
  */
 
+import type { EntityManifest } from "@cubby/schemas/entity-manifest";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import type { ENTITY_EDGES } from "./entity-edges";
 import {
   emailFinancialAssociation,
   entityAttachment,
@@ -42,6 +45,19 @@ import {
   recipeSectionIngredient,
   statementRow,
 } from "./schema";
+
+// `edges()` holds each key to its column's literal `Table.column` name, so the
+// key's first segment is the table that carries the edge column.
+type EdgeKey = {
+  [E in keyof typeof ENTITY_EDGES]: keyof (typeof ENTITY_EDGES)[E] & string;
+}[keyof typeof ENTITY_EDGES];
+type EdgeTable<K extends string> = K extends `EntityLink[${string}`
+  ? "EntityLink"
+  : K extends `${infer Table}.${string}`
+    ? Table
+    : never;
+type EntityTable = NonNullable<EntityManifest[keyof EntityManifest]["dbTable"]>;
+type NonEntityEdgeTable = Exclude<EdgeTable<EdgeKey>, EntityTable>;
 
 export type EntityEdgeOwner =
   | { owner: AnyPgColumn }
@@ -136,4 +152,4 @@ export const ENTITY_EDGE_OWNERS = {
   MerchantVendorRule: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
-} satisfies Record<string, EntityEdgeOwner>;
+} satisfies Record<NonEntityEdgeTable, EntityEdgeOwner>;

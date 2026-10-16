@@ -5,81 +5,120 @@ import SwiftUI
 /// Unsupported declaration features are surfaced by the detail screen. The slot ids are
 /// entity-qualified, so no `(entity, slot)` pairing is needed.
 enum DetailSlotRegistry {
-    typealias Builder = @MainActor (_ row: EntityRow) -> AnyView?
-
-    /// Exactly the slots `packages/schemas/src/native-coverage.ts` marks `implemented`;
-    /// `NativeCoverageViewPathTests` fails when the two sets differ. A builder may still return
-    /// nil for a row it does not apply to (the section is then skipped).
+    /// One case per slot `packages/schemas/src/native-coverage.ts` marks `implemented`, so a
+    /// declaration without a view, or a view for a slot that is not implemented, fails to compile.
+    /// A slot may still return nil for a row it does not apply to (the section is then skipped).
     @MainActor
-    static let builders: [EntityDetailSlotID: Builder] = [
-        .productNutrition: { AnyView(ProductNutritionDetailSlot(row: $0)) },
-        .productUnitMappings: { AnyView(ProductUnitMappingsDetailSlot(row: $0)) },
-        .productFitsWith: { AnyView(ProductSimilarityDetailSlot(productID: $0.id)) },
-        .productRuns: { reportSlot(.product_runs, $0) },
-        .productOwnership: { row in
+    private static func build(_ slot: ImplementedDetailSlotID, _ row: EntityRow) -> AnyView? {
+        switch slot {
+        case .productNutrition:
+            return AnyView(ProductNutritionDetailSlot(row: row))
+        case .productUnitMappings:
+            return AnyView(ProductUnitMappingsDetailSlot(row: row))
+        case .productFitsWith:
+            return AnyView(ProductSimilarityDetailSlot(productID: row.id))
+        case .productRuns:
+            return reportSlot(.product_runs, row)
+        case .productOwnership:
             guard let detail = try? row.decode(ProductDetail.self) else { return nil }
             return AnyView(ProductJourneySummaryView(product: detail))
-        },
-        .mealNutrition: { AnyView(MealNutritionSlot(mealID: $0.id)) },
-        .recipeWorkflow: { AnyView(RecipeWorkflowDetailSlot(row: $0)) },
-        .ingredientNutritionProduct: { AnyView(IngredientNutritionProductSlot(row: $0)) },
-        .ingredientRecipeUsages: { reportSlot(.ingredient_recipeUsages, $0) },
-        .cookbookToc: { row in
-            AnyView(
+        case .mealNutrition:
+            return AnyView(MealNutritionSlot(mealID: row.id))
+        case .recipeWorkflow:
+            return AnyView(RecipeWorkflowDetailSlot(row: row))
+        case .ingredientNutritionProduct:
+            return AnyView(IngredientNutritionProductSlot(row: row))
+        case .ingredientRecipeUsages:
+            return reportSlot(.ingredient_recipeUsages, row)
+        case .cookbookToc:
+            return AnyView(
                 CookbookContentsSlot(
                     cookbookID: row.id,
                     hasReadableExtraction: row.raw["needsReextract"]?.boolValue != true))
-        },
-        .cookbookImportProgress: { AnyView(CookbookImportProgressSlot(row: $0)) },
-        .mealComposition: { reportSlot(.meal_composition, $0) },
-        .projectBudget: { reportSlot(.project_budget, $0) },
-        .projectContribution: { reportSlot(.project_contribution, $0) },
-        .projectAnalytics: { reportSlot(.project_analytics, $0) },
-        .projectSchedule: { reportSlot(.project_schedule, $0) },
-        .locationContentsValuation: { reportSlot(.location_contentsValuation, $0) },
-        .productLabels: { reportSlot(.product_labels, $0) },
-        .productCookbooks: { reportSlot(.product_cookbooks, $0) },
-        .productRecipeAppearances: { reportSlot(.product_recipeAppearances, $0) },
-        .imageAssociations: { reportSlot(.image_associations, $0) },
-        .imageJobAttempts: { reportSlot(.imageJob_attempts, $0) },
-        .purchaseRuns: { reportSlot(.purchase_runs, $0) },
-        .locationAiDescription: { reportSlot(.location_aiDescription, $0) },
-        .purchaseReconciliation: { reportSlot(.purchase_reconciliation, $0) },
-        .purchaseProjectAllocation: { reportSlot(.purchase_projectAllocation, $0) },
-        .purchaseFinancialSettlement: { reportSlot(.purchase_financialSettlement, $0) },
-        .expenseSettlement: { reportSlot(.expense_settlement, $0) },
-        .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
-        .productCategorySpendingClassification: {
-            AnyView(SpendingClassificationView(key: .productCategory, row: $0))
-        },
-        .purchaseReceiving: { AnyView(PurchaseReceivingSlot(purchaseID: $0.id)) },
-        .runLiveProgress: { runReportSlot(.run_liveProgress, $0, imports: false) },
-        .runImportStats: { runReportSlot(.run_importStats, $0) },
-        .runImportProgressLive: { runReportSlot(.run_importProgressLive, $0, liveness: true) },
-        .runImportProgressStopped: { runReportSlot(.run_importProgressStopped, $0, liveness: false) },
-        .runImportPurchases: { runReportSlot(.run_importPurchases, $0) },
-        .runImportApprovals: { runReportSlot(.run_importApprovals, $0) },
-        .runImportFindings: { runReportSlot(.run_importFindings, $0) },
-        .runImportTargets: { runReportSlot(.run_importTargets, $0) },
-        .runImportPreparedOrders: { runReportSlot(.run_importPreparedOrders, $0) },
-        .runImportTimeline: { runReportSlot(.run_importTimeline, $0) },
-        .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
-        .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },
-        .runSuggestions: { runReportSlot(.run_suggestions, $0, imports: false) },
-        .runChanges: { runReportSlot(.run_changes, $0, imports: false) },
+        case .cookbookImportProgress:
+            return AnyView(CookbookImportProgressSlot(row: row))
+        case .mealComposition:
+            return reportSlot(.meal_composition, row)
+        case .projectBudget:
+            return reportSlot(.project_budget, row)
+        case .projectContribution:
+            return reportSlot(.project_contribution, row)
+        case .projectAnalytics:
+            return reportSlot(.project_analytics, row)
+        case .projectSchedule:
+            return reportSlot(.project_schedule, row)
+        case .locationContentsValuation:
+            return reportSlot(.location_contentsValuation, row)
+        case .emailReview:
+            return reportSlot(.email_review, row)
+        case .productLabels:
+            return reportSlot(.product_labels, row)
+        case .productCookbooks:
+            return reportSlot(.product_cookbooks, row)
+        case .productRecipeAppearances:
+            return reportSlot(.product_recipeAppearances, row)
+        case .imageAssociations:
+            return reportSlot(.image_associations, row)
+        case .imageJobAttempts:
+            return reportSlot(.imageJob_attempts, row)
+        case .purchaseRuns:
+            return reportSlot(.purchase_runs, row)
+        case .locationAiDescription:
+            return reportSlot(.location_aiDescription, row)
+        case .purchaseReconciliation:
+            return reportSlot(.purchase_reconciliation, row)
+        case .purchaseProjectAllocation:
+            return reportSlot(.purchase_projectAllocation, row)
+        case .purchaseFinancialSettlement:
+            return reportSlot(.purchase_financialSettlement, row)
+        case .expenseSettlement:
+            return reportSlot(.expense_settlement, row)
+        case .vendorSpendingClassification:
+            return AnyView(SpendingClassificationView(key: .vendor, row: row))
+        case .productCategorySpendingClassification:
+            return AnyView(SpendingClassificationView(key: .productCategory, row: row))
+        case .purchaseReceiving:
+            return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
+        case .runLiveProgress:
+            return runReportSlot(.run_liveProgress, row, imports: false)
+        case .runImportStats:
+            return runReportSlot(.run_importStats, row)
+        case .runImportProgressLive:
+            return runReportSlot(.run_importProgressLive, row, liveness: true)
+        case .runImportProgressStopped:
+            return runReportSlot(.run_importProgressStopped, row, liveness: false)
+        case .runImportPurchases:
+            return runReportSlot(.run_importPurchases, row)
+        case .runImportApprovals:
+            return runReportSlot(.run_importApprovals, row)
+        case .runImportFindings:
+            return runReportSlot(.run_importFindings, row)
+        case .runImportTargets:
+            return runReportSlot(.run_importTargets, row)
+        case .runImportPreparedOrders:
+            return runReportSlot(.run_importPreparedOrders, row)
+        case .runImportTimeline:
+            return runReportSlot(.run_importTimeline, row)
+        case .runImportDebugLog:
+            return runReportSlot(.run_importDebugLog, row)
+        case .runAiUsage:
+            return runReportSlot(.run_aiUsage, row, imports: false)
+        case .runSuggestions:
+            return runReportSlot(.run_suggestions, row, imports: false)
+        case .runChanges:
+            return runReportSlot(.run_changes, row, imports: false)
         // Native has no control command (resume and stop are web's), so a paused import says so
         // and hands off to web; other states have nothing to show.
-        .runImportControls: { row in
+        case .runImportControls:
             guard SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? ""),
                 RunPausedHandoff.pausedStatuses.contains(row.raw["status"]?.stringValue ?? "")
             else { return nil }
             return AnyView(RunPausedHandoff(runID: row.id))
-        },
-        .runPhotoBatch: { row in
+        case .runPhotoBatch:
             guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
             return AnyView(RunPhotoBatchSlot(runID: row.id))
-        },
-    ]
+        }
+    }
 
     /// The server-composed report slots share one generic view; the row id is the record's code.
     @MainActor
@@ -112,8 +151,8 @@ enum DetailSlotRegistry {
     /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).
     @MainActor
     static func view(slot: String, row: EntityRow) -> AnyView? {
-        guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
-        return builders[slot]?(row)
+        guard let slot = ImplementedDetailSlotID(rawValue: slot) else { return nil }
+        return build(slot, row)
     }
 
     /// Record-specific affordances beside the generic sections; none is a manifest hero action.

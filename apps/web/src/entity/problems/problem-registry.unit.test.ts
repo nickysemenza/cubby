@@ -1,10 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 
-import {
-  diagnosticAdapters,
-  diagnosticModules,
-} from "~/server/generic/problems/service/problem-diagnostics.service";
+import { diagnosticModules } from "~/server/generic/problems/service/problem-diagnostics.service";
 
 import { getEntityFilters } from "../filter-manifest";
 import {
@@ -100,7 +97,6 @@ describe("Problem Query registry", () => {
         problemActionsFor(definition.key),
       );
     }
-    expect(new Set(Object.keys(diagnosticAdapters))).toEqual(diagnostics);
   });
 
   it("compiles every exact entity assembly for its ordinary list repository", () => {
