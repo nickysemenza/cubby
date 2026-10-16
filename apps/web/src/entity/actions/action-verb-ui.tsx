@@ -206,7 +206,7 @@ export function VerbButton({
       render={render && !isDisabled ? render : undefined}
       nativeButton={render && !isDisabled ? false : undefined}
     >
-      {pending ? <Spinner /> : <Icon />}
+      {pending ? <Spinner aria-hidden="true" /> : <Icon />}
       <span className={phoneIconOnly ? "hidden sm:inline" : undefined}>
         {text}
       </span>

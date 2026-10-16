@@ -652,11 +652,14 @@ function InfiniteScrollFooter({
             disabled={isFetchingNextPage}
             onClick={() => infiniteScroll.fetchNextPage()}
           >
-            {isFetchingNextPage ? (
-              <Spinner size="sm" className="text-muted-foreground" />
-            ) : (
-              "Show 50 more"
+            {isFetchingNextPage && (
+              <Spinner
+                size="sm"
+                className="text-muted-foreground"
+                aria-hidden="true"
+              />
             )}
+            Show 50 more
           </Button>
         </div>
       )}

@@ -77,7 +77,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   body scrolling, explicit primary/native-form actions, summary and raw diagnostics.
   Phone writes use a full-height sheet with Cancel/title/primary in its header;
   desktop actions stay in the fixed footer. Pending-action spinners are decorative;
-  the action text supplies the button's accessible name. Form owners pass the same form id to
+  the action text supplies the button's accessible name and stays mounted while
+  pending, including pagination. Mark each spinner decorative even when a caller
+  sometimes supplies an explicit `aria-label`. Form owners pass the same form id to
   `primary.form` and `FormWrapper`, hide the form's own actions, and forward
   `onSubmittingChange` into the overlay's `pending` state. This covers resolver
   validation, custom commits, suggestion receipts and completion callbacks.

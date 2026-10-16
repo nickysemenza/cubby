@@ -113,3 +113,14 @@ describe("VerbButton", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 });
+
+// The normal mode has no explicit aria-label; pending glyphs must not supply one.
+it("keeps the verb action name while pending in text and icon modes", () => {
+  const { rerender } = render(<VerbButton verb="duplicate" pending />);
+  expect(screen.getByRole("button", { name: "Duplicate" })).toBeDisabled();
+  rerender(<VerbButton verb="duplicate" pending phoneIconOnly />);
+  expect(screen.getByRole("button", { name: "Duplicate" })).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+});
