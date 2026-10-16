@@ -299,8 +299,8 @@ const emailQualityRead = (ids?: SQL, predicate?: SQL) => {
 
 export const emailQualityReadSql = (ids?: SQL) => emailQualityRead(ids);
 
-/** Every Email gap excludes unrelated messages. Leave their bodies and review
- * evidence outside filter joins; ordinary hydration still reads all classes. */
+/** No derived-reading check expects unrelated or unclassified Emails. Leave
+ * their evidence outside filter joins; ordinary hydration reads all classes. */
 export const emailQualityFilterReadSql = () =>
   emailQualityRead(
     undefined,
