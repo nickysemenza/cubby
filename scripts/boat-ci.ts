@@ -254,10 +254,11 @@ export function assessBoatResults(
 const capture = promisify(execFile);
 const defaultRoot = path.resolve(import.meta.dirname, "..");
 
-async function cli(args: string[], timeout = 90_000) {
+async function cli(args: string[], timeout = 90_000, signal?: AbortSignal) {
   const result = await capture("boat", [...args, "--no-update"], {
     timeout,
     maxBuffer: 8 * 1024 * 1024,
+    signal,
   });
   return result.stdout;
 }
@@ -338,6 +339,14 @@ export async function coordinatePilot(root: string) {
       );
       if (!Number.isInteger(count) || count < 1 || count > 8)
         throw new Error("BOAT_MACHINES must be 1–8");
+      if (
+        !(
+          Number(available.maxActiveSandboxes) -
+            Number(available.activeSandboxes) >=
+          count
+        )
+      )
+        throw new Error("Boat lacks free slots for the selected machine count");
       const groups = Array.from({ length: count }, (_, index) =>
         jobs.filter((_, job) => job % count === index),
       );
@@ -455,40 +464,49 @@ export async function coordinatePilot(root: string) {
             if (id) {
               const destination = path.join(output, `machine-${index}`);
               mkdirSync(destination, { recursive: true });
-              try {
-                await cli([
-                  "scp",
-                  "-r",
-                  `${id}:/home/user/boat-results/.`,
-                  destination,
-                ]);
-                const evidence = JSON.parse(
-                  readFileSync(path.join(destination, "results.json"), "utf8"),
-                );
-                if (Array.isArray(evidence))
-                  reports.push(
-                    ...evidence.map((record) => {
-                      const job = group.find((task) => task.id === record.id);
-                      const status = job
-                        ? pilotEvidenceStatus(
-                            path.join(destination, record.id),
-                            job,
-                            revision,
-                          )
-                        : "missing";
-                      return {
-                        ...record,
-                        evidenceFailed:
-                          record.evidenceFailed || status === "failed",
-                        evidenceComplete: status === "passed",
-                      };
-                    }),
+              if (!cancelled) {
+                try {
+                  await cli(
+                    [
+                      "scp",
+                      "-r",
+                      `${id}:/home/user/boat-results/.`,
+                      destination,
+                    ],
+                    90_000,
+                    abort.signal,
                   );
-              } catch (error) {
-                console.error(
-                  `[Boat evidence ${index}]`,
-                  error instanceof Error ? error.message : String(error),
-                );
+                  const evidence = JSON.parse(
+                    readFileSync(
+                      path.join(destination, "results.json"),
+                      "utf8",
+                    ),
+                  );
+                  if (Array.isArray(evidence))
+                    reports.push(
+                      ...evidence.map((record) => {
+                        const job = group.find((task) => task.id === record.id);
+                        const status = job
+                          ? pilotEvidenceStatus(
+                              path.join(destination, record.id),
+                              job,
+                              revision,
+                            )
+                          : "missing";
+                        return {
+                          ...record,
+                          evidenceFailed:
+                            record.evidenceFailed || status === "failed",
+                          evidenceComplete: status === "passed",
+                        };
+                      }),
+                    );
+                } catch (error) {
+                  console.error(
+                    `[Boat evidence ${index}]`,
+                    error instanceof Error ? error.message : String(error),
+                  );
+                }
               }
               try {
                 await cli(["delete", id, "--yes", "--json"]);

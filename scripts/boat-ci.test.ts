@@ -279,6 +279,7 @@ test("a second run cannot reuse diagnostics left by an earlier transfer", async 
 test("capacity exhaustion and executor-off perform no remote allocations", async () => {
   for (const flags of [
     { FAKE_NO_CAPACITY: "1" },
+    { FAKE_ONE_SLOT: "1", BOAT_MACHINES: "2" },
     { BOAT_CI_ENABLED: "false" },
   ]) {
     const fixture = fakeBoatFixture();
@@ -325,6 +326,7 @@ test("cancellation cleans up without authorizing fallback", async () => {
       /outcome=cancelled/,
     );
     assert.ok(existsSync(path.join(fixture.root, "deleted")));
+    assert.equal(existsSync(path.join(fixture.root, "collected")), false);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -339,7 +341,7 @@ function fakeBoatFixture() {
   git("init");
   writeFileSync(
     path.join(root, ".gitignore"),
-    "/bin/\n/artifacts/\n/created\n/manifest.json\n/deleted\n/summary\n/output\n",
+    "/bin/\n/artifacts/\n/created\n/collected\n/manifest.json\n/deleted\n/summary\n/output\n",
   );
   git("add", ".gitignore");
   git(
@@ -361,7 +363,7 @@ import path from 'node:path';
 const root = process.env.FAKE_BOAT_ROOT;
 const args = process.argv.slice(2);
 const log = (value) => console.log(JSON.stringify(value));
-if (args[0] === 'limits') log({canStart: process.env.FAKE_NO_CAPACITY !== '1', creditBalanceSeconds: 1000});
+if (args[0] === 'limits') log({canStart: process.env.FAKE_NO_CAPACITY !== '1', creditBalanceSeconds: 1000, maxActiveSandboxes: 2, activeSandboxes: process.env.FAKE_ONE_SLOT==='1'?1:0});
 else if (args[0] === 'new') { writeFileSync(path.join(root, 'created'), 'yes'); log({event:'ready',id:'bx_synthetic'}); }
 else if (args[0] === 'exec') {
   if (!args.includes('--json')) process.exit(3);
@@ -372,6 +374,7 @@ else if (args[0] === 'exec') {
   }
   if (process.env.FAKE_WAIT === '1') { console.log('FAKE_RUNNING'); setTimeout(() => {}, 30000); }
 } else if (args[0] === 'scp' && args[1] === '-r') {
+  writeFileSync(path.join(root, 'collected'), 'yes');
   if (process.env.FAKE_SKIP_COLLECTION === '1') process.exit(0);
   if (process.env.FAKE_COLLECTION_FAILURE === '1') process.exit(2);
   const manifest = JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8'));

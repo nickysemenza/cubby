@@ -164,7 +164,9 @@ uses Boat's documented CLI download, without a separate version-pin process.
 
 `.github/boat/prepare.sh` prepares a credential-free snapshot with Node/pnpm,
 Rust/WASM, persisted Chromium and the images in `.github/boat/images.json`.
-Save the named snapshot and delete its preparation machine. Runtime AI
+Create the preparation VM with snapshots enabled (`boat new --no-env --type
+default --ttl 1800 --json`); only test VMs use `--no-snapshots`. Save the named
+snapshot and delete its preparation machine. Runtime AI
 credentials stay outside the snapshot and artifacts. Keep trial billing;
 the pilot uses two default machines and leaves ordinary required CI unchanged.
 
@@ -173,7 +175,9 @@ Task-result caching is disabled and diagnostics are cleared for fresh evidence.
 Source fetch has a 150-second budget, setup commands 180 seconds, and tasks
 retain lane deadlines. The coordinator validates transferred reports and
 preserves streamed failures independently of transfer success. Cancellation
-cleans up without fallback. GitHub fallback runs the same tasks sequentially.
+skips report downloads and deletes machines without fallback. Preflight requires
+free slots for the selected machine count. GitHub fallback runs the same tasks
+sequentially.
 
 Artifacts retain source records, browser HTML/blobs/traces, PostgreSQL JSON,
 and optional `ai-smoke=true` product-rename evidence and usage. AI remains
