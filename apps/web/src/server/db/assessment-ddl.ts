@@ -6,6 +6,9 @@ SELECT id,(data->>'eventId')::uuid AS "eventId",(data->>'purchaseId')::uuid AS "
 FROM "AssessmentState" WHERE family='email_link' AND active;
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_event_purchase_key" ON "AssessmentState" ((data->>'eventId'),(data->>'purchaseId')) WHERE family='email_link' AND active;
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_one_link_key" ON "AssessmentState" ((data->>'eventId')) WHERE family='email_link' AND active AND data->>'decision'='linked';
+-- Match linked association reads: both the UUID key and linked predicate keep
+-- the planner from choosing an unselective scan of the text uniqueness key.
+CREATE INDEX IF NOT EXISTS "AssessmentState_email_linked_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active AND data->>'decision'='linked';
 
 -- Operational mail authority follows retained events, independently of Email lifecycle.
 CREATE OR REPLACE FUNCTION "assessment_mail_lifecycle"() RETURNS trigger LANGUAGE plpgsql AS $$
