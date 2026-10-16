@@ -58,8 +58,9 @@ import { updateImageProcessingSettings } from "~/server/domains/image-processing
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   approvePhotoGroupProposals,
-  updatePhotoGroupProductDraft,
+  resolvePhotoGroupConcern,
 } from "~/server/domains/photo-import/repo/run/proposals";
+import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
 import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -318,6 +319,11 @@ describe("current purchase-agent system boundaries", () => {
               images: [{ id: imageFixture.shortcode, purpose: "item" }],
               product: { kind: "create", create: { name: productName } },
               inventory: { locationId: closet.id, quantity: 1 },
+              review: {
+                observedName: productName,
+                unresolvedReason: "Confirm the printed size from the label",
+                stockIntent: "receive",
+              },
               evidence:
                 "Synthetic item photo; review the proposed identity before creating a Product.",
             },
@@ -406,13 +412,74 @@ describe("current purchase-agent system boundaries", () => {
           eq(imageProcessingJob.sourceContentHash, checksum),
         ),
       );
-    // Approval itself records member confirmation (#2422); there is no
-    // separate confirm gate to fail first.
-    await updatePhotoGroupProductDraft(ctx.db, {
-      runId: run.publicId,
-      groupKey: "synthetic-wardrobe-item",
-      name: productName,
+    // The direct writer cannot turn an unreviewed proposal into Product/stock.
+    await expect(
+      commitPhotoGroup(
+        ctx.db,
+        {
+          runId: runShortcode.parse(run.publicId),
+          groupKey: "synthetic-unreviewed-write",
+          images: [{ id: imageFixture.shortcode, purpose: "item" }],
+          product: { kind: "create", create: { name: productName } },
+          inventory: { locationId: closet.id, quantity: 1 },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("explicit photo group review intent");
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    const unconfirmed = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.publicId },
+      ctx.actor,
+    );
+    expect(unconfirmed.results[0]).toMatchObject({
+      outcome: "failed",
+      error: "Confirm the printed size from the label",
     });
+    expect(unconfirmed.proposals[0]).toMatchObject({
+      state: "proposed",
+      review: { confirmation: null },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    const resolved = await resolvePhotoGroupConcern(
+      ctx.db,
+      {
+        runId: run.publicId,
+        groupKey: "synthetic-wardrobe-item",
+        reply: "Synthetic label size checked",
+      },
+      ctx.actor,
+    );
+    expect(resolved.proposals[0]?.review).toMatchObject({
+      unresolvedReason: null,
+      confirmation: null,
+      resolvedConcerns: [
+        {
+          reason: "Confirm the printed size from the label",
+          reply: "Synthetic label size checked",
+          by: ctx.actor.userId,
+        },
+      ],
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
     const approval = await approvePhotoGroupProposals(
       ctx.db,
       { runId: run.publicId },
@@ -420,6 +487,10 @@ describe("current purchase-agent system boundaries", () => {
     );
     photoApproval = approval;
     expect(approval.results[0]).toMatchObject({ outcome: "committed" });
+    expect(approval.proposals[0]?.review?.confirmation).toMatchObject({
+      by: ctx.actor.userId,
+      at: expect.any(String),
+    });
     expect((await runRow(run.id)).status).toBe("completed");
     const [created, ...extra] = await getDb(ctx.db)
       .select({ id: product.id })
@@ -447,6 +518,15 @@ describe("current purchase-agent system boundaries", () => {
     expect(replay.results).toEqual([
       { groupKey: "synthetic-wardrobe-item", outcome: "replayed" },
     ]);
+    expect(replay.proposals[0]?.review?.confirmation).toEqual(
+      approval.proposals[0]?.review?.confirmation,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toEqual([created]);
     expect(
       await getDb(ctx.db)
         .select()

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  aiAnalysis,
   photoRunImage,
   assessmentState as suggestion,
   runFinding,
@@ -38,6 +39,82 @@ import type { ToolArguments } from "./tools/tool-registration";
 
 describe("MCP catalog", () => {
   const ctx = withTestDb("mcp");
+
+  // Retained model text must survive the real read and MCP serialization,
+  // while the internal analysis row remains outside both response encodings.
+  it("photo context reads current-source descriptions without internal analysis handles", async () => {
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic photo evidence member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      actorUserId: ctx.actor.userId,
+    });
+    const hash = "a".repeat(64);
+    const photo = await createImageFixture(ctx.db, "synthetic-context-photo", {
+      status: "UPLOADED",
+      sha256: hash,
+    });
+    await getDb(ctx.db)
+      .insert(photoRunImage)
+      .values({
+        runId: run.id,
+        imageId: parseImageId.parse(photo.id),
+        position: 0,
+        state: "pending",
+        targetFingerprint: hash,
+      });
+    const createdAt = new Date("2026-10-01T00:00:00.000Z");
+    const claims = [{ text: "Red", evidenceKind: "visual" as const }];
+    const [analysis] = await getDb(ctx.db)
+      .insert(aiAnalysis)
+      .values({
+        entityKind: "image",
+        entityId: photo.id,
+        feature: "image-description",
+        provider: "synthetic",
+        model: "synthetic-description-model",
+        promptVersion: "1",
+        resultSchemaRevision: 1,
+        inputFingerprint: JSON.stringify({ sourceContentHash: hash }),
+        result: {
+          description: "Synthetic red boot",
+          claims,
+          cutoutEligibility: "review",
+        },
+        createdAt,
+      })
+      .returning({ id: aiAnalysis.id });
+    expect(analysis).toBeDefined();
+    const result = await callMcpTool(
+      createMcpServer(),
+      "imports_read",
+      { action: "photo_context", runId: run.publicId },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(result.isError).not.toBe(true);
+    const output = z
+      .object({
+        images: z.array(
+          z.object({
+            id: z.string(),
+            description: z.string(),
+          }),
+        ),
+      })
+      .parse(result.structuredContent);
+    expect(output.images).toHaveLength(1);
+    expect(output.images[0]).toEqual({
+      id: photo.shortcode,
+      description: "Synthetic red boot",
+    });
+    expect(JSON.stringify(result)).not.toContain(analysis!.id);
+  });
 
   it("runs one happy-path action through every tool", async () => {
     const kernel = entityKernelContextSchema.parse(

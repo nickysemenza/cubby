@@ -529,7 +529,7 @@ export const photoRunContextImage = photoRunImage
     targetState: true,
     describe: true,
     description: true,
-    descriptionEvidence: true,
+    // runContext serves bounded prose; rich description evidence is review-only.
     recognizedText: true,
   })
   .extend({
