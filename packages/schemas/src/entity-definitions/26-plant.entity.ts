@@ -403,6 +403,8 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by ingredient...",
         brandRef: { entity: "ingredient" },
+        deriveSchema: true,
+        stored: true,
       },
     ],
   },

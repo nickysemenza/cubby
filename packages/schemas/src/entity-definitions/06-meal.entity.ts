@@ -509,7 +509,11 @@ Rules:
     bulk: [],
     audit: [],
     // Slot order (`mealTypeValues` is clock order), not slug order.
-    derived: { mealType: { type: "enum", options: [...mealTypeValues] } },
+    derived: {
+      mealType: { type: "enum", options: [...mealTypeValues] },
+      // A live recipe whose priced ingredients are incomplete.
+      recipeCostCoverage: { type: "boolean" },
+    },
     sort: {
       fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
     },
@@ -600,6 +604,8 @@ Rules:
         urlKey: "mealDate",
         kind: "range",
         wire: { kind: "range", from: "from", to: "to" },
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter by meal date...",
       },
       {
@@ -647,6 +653,7 @@ Rules:
         columnId: "recipeCostCoverage",
         field: "recipeCostCoverage",
         kind: "boolean",
+        derived: true,
         placeholder: "Filter recipe cost coverage...",
         options: [{ value: "true", label: "Understated" }],
       },

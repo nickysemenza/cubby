@@ -1,13 +1,7 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
-import {
-  gardenEntryShortcode,
-  plantShortcode,
-  locationShortcode,
-  productShortcode,
-  taskShortcode,
-} from "./identifiers";
+import { locationShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import {
   plantingBaseFilterFields,
@@ -26,11 +20,6 @@ export {
 export const plantingFilterFields = {
   ...plantingBaseFilterFields,
   locationId: oneOrMany(locationShortcode).optional(),
-  plantId: oneOrMany(plantShortcode).optional(),
-  taskId: oneOrMany(taskShortcode).optional(),
-  sourceProductId: oneOrMany(productShortcode).optional(),
-  /** Plantings a garden entry is logged against (`gardenEntryPlanting`). */
-  gardenEntryId: oneOrMany(gardenEntryShortcode).optional(),
   activeOn: plainDate.optional(),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);

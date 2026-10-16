@@ -375,16 +375,20 @@ export const relatedExistsSql = (
   return sql`EXISTS (SELECT 1 FROM ${from} WHERE ${root}."id" = ${outerId} AND ${condition})`;
 };
 
-/** The id subquery of the requested public shortcodes of `target`. */
+/**
+ * The id subquery of the requested public shortcodes of live `target` rows,
+ * resolved inside the list query (#2333): an unknown or soft-deleted code
+ * matches nothing.
+ */
 export const shortcodeIdsSql = (
   target: Entity,
   condition: (shortcode: SQL) => SQL | undefined,
 ): SQL => {
-  const table = entityManifest[target].dbTable;
-  if (table === null) throw new Error(`${target} has no table to filter by`);
-  return sql`(SELECT ref."id" FROM ${sql.identifier(table)} ref WHERE ${
+  const { dbTable, softDelete } = entityManifest[target];
+  if (dbTable === null) throw new Error(`${target} has no table to filter by`);
+  return sql`(SELECT ref."id" FROM ${sql.identifier(dbTable)} ref WHERE ${
     condition(sql`ref."shortcode"`) ?? sql`false`
-  })`;
+  }${softDelete ? sql` AND ref."deletedAt" IS NULL` : sql``})`;
 };
 
 /**

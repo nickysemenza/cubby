@@ -19,7 +19,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
-  flagCondition,
   getDb,
   imageJoinBindings,
   insertAndReturn,
@@ -211,6 +210,7 @@ const mealScaffold = listScaffold("meal", meal, {
     mealType: sql`array_position(${sql.raw(
       `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
     )}, ${meal.mealType})`,
+    recipeCostCoverage: gapCondition("meal", "meal_recipe_cost_incomplete"),
   },
 });
 
@@ -218,22 +218,7 @@ const mealScaffold = listScaffold("meal", meal, {
 export const buildMealWhere = (
   _db: Database,
   filters: MealFilters,
-): SQL | undefined => {
-  // `mealType` (OR-ed with its presence filter — "unslotted" is a value of the
-  // same picker, so selecting it alongside `dinner` means "dinner or
-  // unslotted") and `mealKind` are declared stored filters — applied by
-  // `mealScaffold.where` before the conditions below.
-  return mealScaffold.where(filters, [
-    // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
-    // the manifest renders its control — omitting this is the #588 drift, where
-    // the UI sends a filter the server silently ignores.
-    filters.from ? gte(meal.date, filters.from) : undefined,
-    filters.to ? lte(meal.date, filters.to) : undefined,
-    flagCondition(filters.recipeCostCoverage, () =>
-      gapCondition("meal", "meal_recipe_cost_incomplete"),
-    ),
-  ]);
-};
+): SQL | undefined => mealScaffold.where(filters);
 
 export const mealListRead = async (
   db: Database,

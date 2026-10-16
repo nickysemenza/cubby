@@ -296,6 +296,13 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
     ],
+    derived: {
+      submissionId: {
+        predicate: "text",
+        reason:
+          "A job joins every submission that scheduled or retried it, and a submission is not an entity",
+      },
+    },
     sort: { fields: ["createdAt", "completedAt", "state", "kind"] },
   },
   fields: {
@@ -390,6 +397,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by submission...",
         urlOnly: true,
+        derived: true,
       },
       {
         columnId: "createdAt",

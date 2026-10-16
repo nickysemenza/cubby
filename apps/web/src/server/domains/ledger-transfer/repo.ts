@@ -59,7 +59,6 @@ import {
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -562,22 +561,8 @@ export async function updateLedgerTransfer(
 
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
 
-export async function buildLedgerTransferWhere(
-  db: Database,
-  filters: LedgerTransferFilters,
-) {
-  const fromIds = filters.fromPartyId
-    ? await resolveAllPresent(db, "ledgerParty", [filters.fromPartyId].flat())
-    : undefined;
-  const toIds = filters.toPartyId
-    ? await resolveAllPresent(db, "ledgerParty", [filters.toPartyId].flat())
-    : undefined;
-  return ledgerTransferScaffold.where(filters, [
-    fromIds?.length === 0 || toIds?.length === 0 ? sql`false` : undefined,
-    fromIds ? inArray(ledgerTransfer.fromPartyId, fromIds) : undefined,
-    toIds ? inArray(ledgerTransfer.toPartyId, toIds) : undefined,
-  ]);
-}
+export const buildLedgerTransferWhere = (filters: LedgerTransferFilters) =>
+  ledgerTransferScaffold.where(filters);
 
 export const listLedgerTransfersRead = async (
   db: Database,
@@ -590,7 +575,7 @@ export const listLedgerTransfersRead = async (
     db,
     { filters, sorts, pagination, projection },
     {
-      where: await buildLedgerTransferWhere(db, filters),
+      where: buildLedgerTransferWhere(filters),
       select: (page) =>
         selectTransfersRead(db, projection)
           .where(page.where)

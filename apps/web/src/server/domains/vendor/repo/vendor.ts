@@ -50,7 +50,6 @@ import {
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
-  rangeConditions,
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
@@ -496,34 +495,14 @@ const vendorScaffold = listScaffold("vendor", vendor, {
     purchaseCount: vendorPurchaseCount,
     // A vendor with no purchases leads a newest-first list.
     latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
+    needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
+    hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
 });
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildVendorWhereClause = (filters: VendorFilters) =>
-  vendorScaffold.where(filters, [
-    filters.needsClassification === undefined
-      ? undefined
-      : sql`(${vendor.defaultSpendingCategoryId} IS NULL) = ${filters.needsClassification}`,
-    ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
-    ...rangeConditions(vendorSpend, filters, "spend"),
-    filters.latestPurchaseDatePresenceFilter === "has"
-      ? sql`${vendorLatestPurchaseDate} IS NOT NULL`
-      : filters.latestPurchaseDatePresenceFilter === "none"
-        ? sql`${vendorLatestPurchaseDate} IS NULL`
-        : undefined,
-    filters.latestPurchaseDateFrom
-      ? sql`${vendorLatestPurchaseDate} >= ${filters.latestPurchaseDateFrom}`
-      : undefined,
-    filters.latestPurchaseDateTo
-      ? sql`${vendorLatestPurchaseDate} <= ${filters.latestPurchaseDateTo}`
-      : undefined,
-    filters.logoPresenceFilter === "has"
-      ? sql`${vendorHasDisplayableLogo}`
-      : filters.logoPresenceFilter === "none"
-        ? sql`NOT ${vendorHasDisplayableLogo}`
-        : undefined,
-  ]);
+  vendorScaffold.where(filters);
 
 export const vendorListRead = async (
   db: Database,

@@ -534,6 +534,9 @@ export default defineEntity({
       "finishedOn",
       "taskId",
     ],
+    derived: {
+      gardenEntryId: { via: "entries" },
+    },
     sort: {
       fields: ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"],
     },
@@ -642,18 +645,24 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by plant...",
         brandRef: { entity: "plant" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "taskId",
         kind: "idMulti",
         placeholder: "Filter by task...",
         brandRef: { entity: "task" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "sourceProductId",
         kind: "idMulti",
         placeholder: "Filter by seed source...",
         brandRef: { entity: "product" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         // Plantings a garden entry is logged against (`gardenEntryPlanting`).
@@ -662,6 +671,8 @@ export default defineEntity({
         placeholder: "Filter by garden entry...",
         brandRef: { entity: "gardenEntry" },
         urlOnly: true,
+        deriveSchema: true,
+        derived: true,
       },
     ],
   },
