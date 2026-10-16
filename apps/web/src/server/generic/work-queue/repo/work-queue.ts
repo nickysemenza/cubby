@@ -442,7 +442,7 @@ async function workQueueProjection(
       SELECT 1 FROM unnest(authority.owners) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId"
     ) THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END AS owners,
     false AS shared, NULL::text AS "problemKey",
-    ${workRecordFactColumns(sql`identity.kind`, sql`finding."entityId"`)}
+    ${workRecordFactColumns(sql`identity.kind`, sql`finding."entityId"`, scope.facts)}
     FROM "RunFinding" finding
     JOIN "Entity" identity ON identity.id = finding."entityId" AND identity.kind = finding."entityKind" AND identity."deletedAt" IS NULL
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
@@ -561,6 +561,17 @@ async function queryWorkQueue(
   memberOnly: boolean,
   record?: WorkQueueScope["record"],
 ) {
+  const sorts = workQueueSortSchema.parse(
+    normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
+  );
+  const facts = (["amount", "date", "vendor"] as const).filter(
+    (fact) =>
+      sorts.some((sort) => sort.orderBy === fact) ||
+      (fact === "vendor" && input.vendor !== undefined),
+  );
+  const candidateConditions: SQL[] = [];
+  if (input.source) candidateConditions.push(sql`source = ${input.source}`);
+  if (input.kind) candidateConditions.push(sql`kind = ${input.kind}`);
   const projection = await workQueueProjection(
     db,
     {
@@ -568,6 +579,7 @@ async function queryWorkQueue(
       kind: input.kind,
       check: input.check === undefined ? undefined : [input.check].flat(),
       record,
+      facts,
     },
     problemSelections,
   );
@@ -596,10 +608,8 @@ async function queryWorkQueue(
     conditions.push(
       sql`waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode = ${input.waitingFor} AND member.id = ANY(owners))`,
     );
-  if (input.kind) conditions.push(sql`kind = ${input.kind}`);
-  if (input.source) conditions.push(sql`source = ${input.source}`);
   if (input.vendor)
-    conditions.push(
+    candidateConditions.push(
       sql`vendor_id = (SELECT v.id FROM "Vendor" v WHERE v.shortcode = ${input.vendor})`,
     );
   if (input.query)
@@ -622,9 +632,6 @@ async function queryWorkQueue(
     date: sql`date`,
     vendor: sql`(SELECT v.name FROM "Vendor" v WHERE v.id = eligible.vendor_id AND v."deletedAt" IS NULL)`,
   };
-  const sorts = workQueueSortSchema.parse(
-    normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
-  );
   // Every sort places nulls last in both directions; name and key break ties.
   const orderBy = sql.join(
     [
@@ -637,21 +644,29 @@ async function queryWorkQueue(
     ],
     sql`, `,
   );
+  // Keep routed candidates behind a statement-local boundary before eligibility:
+  // search pushdown can turn bulk quality joins into repeated nested-loop work.
+  // Only sort/filter facts enter that population; page facts share their declaration.
+  // Limit the correctly filtered/sorted population before assigning JSON order,
+  // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
     WITH members AS (
       SELECT id, shortcode, name FROM "LedgerParty" WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
-    ), candidates AS (${projection}), routed AS (
+    ), candidates AS (${projection}), routed AS MATERIALIZED (
       SELECT candidates.*, CASE
         WHEN shared THEN ${either}
         WHEN cardinality(owners) > 0 AND NOT EXISTS (
           SELECT 1 FROM unnest(owners) owner WHERE owner IS NULL OR NOT EXISTS (SELECT 1 FROM members member WHERE member.id = owner)
         ) THEN ${members} ELSE ${unresolved} END AS waiting_kind
-      FROM candidates
+      FROM candidates ${candidateConditions.length ? sql`WHERE ${sql.join(candidateConditions, sql` AND `)}` : sql``}
     ), eligible AS (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), ordered AS (
-      SELECT *, row_number() OVER (ORDER BY ${orderBy}) AS position FROM eligible
+      SELECT * FROM eligible ORDER BY ${orderBy} LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
     ), page AS (
-      SELECT * FROM ordered ORDER BY position LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
+      SELECT entity, id, name, key, source, kind, reason, "nextAction", owners, shared, "problemKey", waiting_kind,
+        row_number() OVER (ORDER BY ${orderBy}) AS position,
+        ${workRecordFactColumns(sql`eligible.entity`, sql`eligible.id`, undefined, "shortcode")}
+      FROM ordered eligible
     ) SELECT
       (SELECT count(*)::int FROM eligible) AS total,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
