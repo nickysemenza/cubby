@@ -66,13 +66,13 @@ export function EntityEditFieldScopeProvider({
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
-import { FormSection } from "~/ui/forms/form-section";
 import {
   NullableNumericField,
   PlainDateField,
   SideBySideFields,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
+import { Section } from "~/ui/layout";
 import { Row } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
@@ -873,7 +873,7 @@ function renderSingularReference({
  * "specialized"` field dispatches to `controlRendererCoverage`, and
  * everything else falls through to `renderPrimitiveField` — the exact
  * per-kind switch `EntityPrimitiveFields` uses. Extracted so the section
- * grammar below can lay these nodes out into `FormSection`s without
+ * grammar below can lay these nodes out into `Section`s without
  * duplicating the dispatch, and exported (with `requiredFieldModel` above) so
  * a bespoke, section-composed form (`FinancialAccountFields`/
  * `FinancialTransactionFormFields`) can embed one named specialized field
@@ -989,7 +989,7 @@ export function renderIntentField({
 export type DeclaredEditSection = CompiledEditSection;
 
 /** One rendered bucket of `EntityIntentFields`' fields. `title: null` is the
- * untitled `main` section, rendered with no `FormSection` wrapper. */
+ * untitled `main` section, rendered with no `Section` wrapper. */
 export type FieldGroup = Readonly<{
   id: string;
   title: string | null;
@@ -1262,14 +1262,15 @@ export function EntityIntentFields({
         );
         if (group.title === null) return nodes;
         return (
-          <FormSection
+          <Section
+            headingAs="h4"
             key={group.id}
             title={group.title}
-            first={index === 0}
-            collapsed={group.collapsed}
+            className={index === 0 ? undefined : "!mt-3"}
+            disclosure={group.collapsed ? {} : undefined}
           >
             {nodes}
-          </FormSection>
+          </Section>
         );
       })}
     </>

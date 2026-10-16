@@ -9,41 +9,45 @@ import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-pan
 import { HierarchySunburst } from "~/features/product-category/hierarchy-view";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
 import { Grid, Stack } from "~/ui/layout";
-import { DashboardCard } from "~/ui/layout/dashboard-card";
+import { Section } from "~/ui/layout";
 import IngredientNetwork from "~/ui/visualizations/ingredient-network";
 
 /** Exploration-only visualizations, requested only when Insights opens. */
 export function HomeInsights() {
   return (
     <Grid cols="pair" gap="md">
-      <DashboardCard
-        icon={ChartPieIcon}
+      <Section
+        headingAs="h3"
+        icon={<ChartPieIcon />}
         title="Which categories hold our products?"
         description="Distribution across categories — click a ring to open one."
       >
         <HierarchySunburst entity="productCategory" />
-      </DashboardCard>
-      <DashboardCard
-        icon={MapPinIcon}
+      </Section>
+      <Section
+        headingAs="h3"
+        icon={<MapPinIcon />}
         title="Where is our inventory?"
         description="How owned-item counts are distributed across your locations."
       >
         <HierarchySunburst entity="location" />
-      </DashboardCard>
-      <DashboardCard
-        icon={ShareNetworkIcon}
+      </Section>
+      <Section
+        headingAs="h3"
+        icon={<ShareNetworkIcon />}
         title="Which ingredients travel together?"
         description="Ingredients that co-occur across recipes; larger nodes are used more."
       >
         <IngredientNetwork />
-      </DashboardCard>
-      <DashboardCard
-        icon={ListChecksIcon}
+      </Section>
+      <Section
+        headingAs="h3"
+        icon={<ListChecksIcon />}
         title="Which ingredients power our recipes?"
         description="How many recipes use each ingredient; scope by cookbook."
       >
         <IngredientUsageSection />
-      </DashboardCard>
+      </Section>
     </Grid>
   );
 }

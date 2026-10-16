@@ -1,15 +1,28 @@
-import type * as React from "react";
-import type { ReactNode } from "react";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import {
+  useId,
+  useState,
+  type HTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { cn } from "~/lib/utils";
-import { stackVariants } from "~/styles/layouts";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/ui/primitives/collapsible";
 
-/** One compact heading band for page regions, record sections, and dashboards. */
+type HeadingLevel = "h2" | "h3" | "h4";
+
+/** One compact heading band, with actions outside any disclosure trigger. */
 export function SectionHeading({
   title,
   description,
   actions,
   meta,
+  icon,
   as: Heading = "h2",
   id,
   muted = false,
@@ -18,14 +31,15 @@ export function SectionHeading({
   description?: ReactNode;
   actions?: ReactNode;
   meta?: ReactNode;
-  as?: "h2" | "h3" | "h4";
+  icon?: ReactNode;
+  as?: HeadingLevel;
   id?: string;
   muted?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-sm bg-muted/60 px-2 py-1">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-sm border-b border-border/60 bg-muted/60 px-2 py-1">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {title && (
             <Heading
               id={id}
@@ -34,55 +48,129 @@ export function SectionHeading({
                 muted && "text-muted-foreground",
               )}
             >
+              {icon && (
+                <span
+                  aria-hidden
+                  className="shrink-0 text-muted-foreground [&>svg]:size-3.5"
+                >
+                  {icon}
+                </span>
+              )}
               {title}
             </Heading>
           )}
-          {meta}
+          {meta && (
+            <div className="min-w-0 text-xs text-muted-foreground tabular-nums">
+              {meta}
+            </div>
+          )}
         </div>
         {description && (
           <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         )}
       </div>
-      {actions && <div className="max-w-full min-w-0">{actions}</div>}
+      {actions && (
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
 
-interface SectionProps extends Omit<
-  React.HTMLAttributes<HTMLElement>,
-  "title"
-> {
-  /** Section heading (rendered as an `h2`). */
+interface SectionDisclosure {
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Keep child-local state only when the caller deliberately accepts eager work. */
+  keepMounted?: boolean;
+}
+
+interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
-  /** Muted sub-line under the title. */
   description?: ReactNode;
-  ref?: React.Ref<HTMLElement>;
+  icon?: ReactNode;
+  meta?: ReactNode;
+  actions?: ReactNode;
+  headingAs?: HeadingLevel;
+  disclosure?: SectionDisclosure;
+  ref?: Ref<HTMLElement>;
 }
 
 /**
- * A titled, transparent page region: an optional `title / description` header
- * over a {@link Stack} body. Owns the section heading typography in one place.
- * Use {@link Card} instead when the content needs a bordered/elevated surface.
+ * Dense page, dashboard and form region. A disclosure defers its descendants
+ * until open; form values that must survive closing belong to the form owner.
  */
 export function Section({
   title,
   description,
+  icon,
+  meta,
+  actions,
+  headingAs = "h2",
+  disclosure,
   className,
   children,
   ref,
   ...props
 }: SectionProps) {
-  const hasHeader = title || description;
+  const titleId = useId();
+  const [localOpen, setLocalOpen] = useState(disclosure?.defaultOpen ?? false);
+  const open = disclosure?.open ?? localOpen;
+  const changeOpen = (next: boolean) => {
+    setLocalOpen(next);
+    disclosure?.onOpenChange?.(next);
+  };
+  const header = (title || description || meta || actions) && (
+    <SectionHeading
+      id={titleId}
+      as={headingAs}
+      title={
+        disclosure ? (
+          <CollapsibleTrigger className="-my-1 -ml-2 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1 text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-ring sm:min-h-0">
+            <CaretRightIcon
+              aria-hidden
+              className={cn("size-3 shrink-0", open && "rotate-90")}
+            />
+            <span className="min-w-0 break-words">{title}</span>
+          </CollapsibleTrigger>
+        ) : (
+          title
+        )
+      }
+      description={description}
+      icon={icon}
+      meta={meta}
+      actions={actions}
+    />
+  );
+  const body = (
+    <div className="min-w-0 space-y-2 px-2 text-xs/relaxed">{children}</div>
+  );
   return (
     <section
-      className={cn(stackVariants({ gap: "md" }), className)}
+      aria-labelledby={title && !props["aria-label"] ? titleId : undefined}
+      className={cn("flex min-w-0 flex-col gap-2", className)}
       ref={ref}
       {...props}
     >
-      {hasHeader && <SectionHeading title={title} description={description} />}
-      {children}
+      {disclosure ? (
+        <Collapsible
+          open={open}
+          onOpenChange={changeOpen}
+          className="min-w-0 space-y-2"
+        >
+          {header}
+          <CollapsibleContent keepMounted={disclosure.keepMounted}>
+            {open || disclosure.keepMounted ? body : null}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <>
+          {header}
+          {body}
+        </>
+      )}
     </section>
   );
 }
-
-Section.displayName = "Section";

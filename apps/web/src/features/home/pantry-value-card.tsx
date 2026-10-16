@@ -5,8 +5,7 @@ import { useId } from "react";
 
 import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { Row } from "~/ui/layout";
-import { CardActionLink, DashboardCard } from "~/ui/layout/dashboard-card";
+import { Row, Section, SectionActionLink } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -36,28 +35,30 @@ export function PantryValueCard() {
   const bars = data?.locations ?? [];
 
   const inventoryAction = (
-    <CardActionLink to="/inventory">Inventory</CardActionLink>
+    <SectionActionLink to="/inventory">Inventory</SectionActionLink>
   );
 
   if (isLoading) {
     return (
-      <DashboardCard
-        icon={WalletIcon}
+      <Section
+        headingAs="h3"
+        icon={<WalletIcon />}
         title="Pantry value"
-        action={inventoryAction}
+        actions={inventoryAction}
       >
         <Skeleton className="h-7 w-24" />
         <Skeleton className="mt-4 h-24 w-full" />
-      </DashboardCard>
+      </Section>
     );
   }
 
   if (isError) {
     return (
-      <DashboardCard
-        icon={WalletIcon}
+      <Section
+        headingAs="h3"
+        icon={<WalletIcon />}
         title="Pantry value"
-        action={inventoryAction}
+        actions={inventoryAction}
       >
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -72,31 +73,33 @@ export function PantryValueCard() {
             Retry
           </Button>
         </div>
-      </DashboardCard>
+      </Section>
     );
   }
 
   if (bars.length === 0) {
     return (
-      <DashboardCard
-        icon={WalletIcon}
+      <Section
+        headingAs="h3"
+        icon={<WalletIcon />}
         title="Pantry value"
-        action={inventoryAction}
+        actions={inventoryAction}
       >
         <p className="text-sm text-muted-foreground">
           Add inventory to see where its value lives.
         </p>
-      </DashboardCard>
+      </Section>
     );
   }
   const max = bars[0]!.value;
 
   return (
-    <DashboardCard
-      icon={WalletIcon}
+    <Section
+      headingAs="h3"
+      icon={<WalletIcon />}
       title="Pantry value"
       description="Where is pantry value stored?"
-      action={inventoryAction}
+      actions={inventoryAction}
     >
       <div className="font-mono text-xl font-semibold tabular-nums">
         {formatCurrency(total)}
@@ -146,6 +149,6 @@ export function PantryValueCard() {
           ))}
         </ul>
       </figure>
-    </DashboardCard>
+    </Section>
   );
 }

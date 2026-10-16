@@ -80,17 +80,18 @@ styling. Share lower-level behavior and tokens where the contracts agree:
 - Chart, relationship-map and specialized layout engines follow the
   [visualization contracts](#data-visualization); a common frame does not require
   one renderer.
-- `FormSection` owns labeled form groups and optional local disclosure;
-  `CollapsibleSection` gates dashboard content and its queries until open.
-  Neither promises to preserve a collapsed child's mounted state. Drafts that
-  must survive a disclosure belong in the form's state owner.
+- `Section` owns headings, actions, body spacing and optional disclosure across
+  pages, dashboards and forms. Its disclosure defers children until open;
+  `keepMounted` is explicit when a caller accepts eager work. Drafts that must
+  survive closing belong in the form state owner, not a disclosure child.
 - Badge owns named semantic tones, EnumPill owns declaration-driven category
   color/description, and Pill owns shared geometry and suggestion treatment.
 - Apple keeps native SwiftUI controls and platform geometry; shared semantic
   tokens and declarations do not require a shared rendering implementation.
 
-Dashboard frames use `SectionHeading` and an open body directly rather than
-canceling Card's surface styles. Canvas text uses the shared system font token;
+Dashboard frames use `Section` with the same compact heading band and body
+inset as page and form regions. Heading actions are siblings of disclosure
+triggers, so using an action never opens or closes its section. Canvas text uses the shared system font token;
 web typography needs no bundled font faces.
 
 ### Custom-built signature components
@@ -107,14 +108,14 @@ The showcase is a curated reference using fixed synthetic fixtures and real
 module interactions, without fixture editors. Working compositions cover
 command actions and responsive workflow retry (`/design#action-workflows`),
 inline/cell suggestion review (`/design#suggestion-review`), owner-held form
-state and dashboard disclosure (`/design#section-compositions`), and quality
+state and shared Section disclosure (`/design#section-compositions`), and quality
 states with signed/empty chart data (`/design#quality-charts`). Source labels
 name current modules rather than historical locations. Debug JSON remains
 read-only and expandable through `ui/text/json-renderer.tsx`.
 
 ### Shared headings and actions
 
-`Page` is the sole list/detail shell; `src/entity/page/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the wrapping gray heading band for details, forms, and home. `FormSection` uses it with sentence-case headings and retains explicit local disclosure behavior.
+`Page` is the sole list/detail shell; `src/entity/page/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the wrapping gray heading band for details, forms, and home. `Section` uses it with sentence-case headings, explicit heading levels and a shared disclosure trigger; forms use the same interface.
 
 ### Controls and suggestions
 

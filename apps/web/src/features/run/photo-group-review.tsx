@@ -59,7 +59,7 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { CollapsibleSection, Row, Section, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
@@ -2814,8 +2814,10 @@ export function PhotoGroupReview({
                     />
                   </DeferredPhotoGroup>
                 ) : (
-                  <CollapsibleSection
+                  <Section
+                    headingAs="h3"
                     className="min-w-0 border-t border-border pt-3"
+                    disclosure={{}}
                     title={
                       <span>
                         {selected.state === "committed"
@@ -2867,7 +2869,9 @@ export function PhotoGroupReview({
                     )}
                     {selected.state === "committed" &&
                       selected.product.kind === "create" && (
-                        <CollapsibleSection
+                        <Section
+                          headingAs="h4"
+                          disclosure={{}}
                           className="mt-4 border-t border-border pt-3"
                           title="Review possible matches"
                         >
@@ -2876,9 +2880,9 @@ export function PhotoGroupReview({
                             proposal={selected}
                             settled
                           />
-                        </CollapsibleSection>
+                        </Section>
                       )}
-                  </CollapsibleSection>
+                  </Section>
                 )}
               </div>
             ))}

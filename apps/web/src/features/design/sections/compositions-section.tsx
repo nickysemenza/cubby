@@ -11,10 +11,7 @@ import { SuggestionReview } from "~/entity/suggestions/suggestion-review";
 import { Demo, DemoGrid } from "~/features/design/components/design-section";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
-import { FormSection } from "~/ui/forms/form-section";
 import { Section, SectionHeading } from "~/ui/layout";
-import { CollapsibleSection } from "~/ui/layout/collapsible-section";
-import { DashboardCard } from "~/ui/layout/dashboard-card";
 import { Button } from "~/ui/primitives/button";
 import {
   CommandDialog,
@@ -225,7 +222,7 @@ export function SectionCompositionsSection() {
   const [count, setCount] = useState(2);
   return (
     <DemoGrid className="xl:grid-cols-2">
-      <Demo name="SectionHeading · DashboardCard · CollapsibleSection">
+      <Demo name="Section · headings, actions and deferred context">
         <SectionHeading
           as="h3"
           title="Current work"
@@ -242,30 +239,38 @@ export function SectionCompositionsSection() {
             </Button>
           }
         />
-        <DashboardCard
+        <Section
+          headingAs="h3"
           title="Workshop tasks"
-          icon={ListBulletsIcon}
+          icon={<ListBulletsIcon />}
           description="Synthetic household work"
         >
           <p>{count} tasks awaiting review</p>
-        </DashboardCard>
-        <CollapsibleSection
+        </Section>
+        <Section
+          aria-label="Household context demo"
           title="Explore household context"
-          summary="Optional detail"
+          meta={"Optional detail"}
+          disclosure={{}}
+          actions={
+            <Button size="sm" variant="ghost" onClick={() => setCount(2)}>
+              Reset demo task count
+            </Button>
+          }
         >
           <p className="text-xs">
             The workshop shelf has space for spare parts.
           </p>
-        </CollapsibleSection>
+        </Section>
       </Demo>
       <Demo
-        name="FormSection · owner-held draft"
+        name="Section · owner-held draft"
         note="Collapse and reopen Notes: the draft belongs to the form owner."
       >
-        <FormSection title="Task details" first>
+        <Section headingAs="h4" title="Task details">
           <p className="text-xs">Workshop shelf inspection</p>
-        </FormSection>
-        <FormSection title="Notes" collapsed>
+        </Section>
+        <Section headingAs="h4" title="Notes" disclosure={{}}>
           <label
             htmlFor="design-task-note"
             className="flex flex-col gap-1 text-xs"
@@ -277,7 +282,7 @@ export function SectionCompositionsSection() {
               onChange={(event) => setDraft(event.target.value)}
             />
           </label>
-        </FormSection>
+        </Section>
       </Demo>
     </DemoGrid>
   );
