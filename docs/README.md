@@ -16,6 +16,8 @@ the repository.
 - [CI](ci.md), [Infrastructure](infrastructure.md), and the operational
   runbooks cover operations. Check the relevant code and deployed
   state before following an operational procedure.
+- [Sentry triage](runbooks/sentry-triage.md) links to error views, GitHub-linked
+  issues, Release Health, and ingestion statistics.
 - [GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the active backlog;
   [issue workflow](agents/issues.md) explains selection and updates. Items are proposals until
   implementation evidence says otherwise.

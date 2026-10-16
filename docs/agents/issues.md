@@ -84,6 +84,15 @@ rather than adding duplicate PR cards.
 
 ## Agent workflow with gh
 
+Before implementation, briefly search open GitHub issues using the requested
+outcome, affected feature, component, or error. Read plausible matches and their
+acceptance criteria, including Project fields and native relationships below.
+For a crash, runtime error, regression, or supplied Sentry reference, also check
+the relevant [Sentry issues](../runbooks/sentry-triage.md) and their native GitHub
+links. Keep discovery focused on the task; routine documentation and feature
+work does not require a Sentry search. A related issue does not expand the
+authorized scope, and similar symptoms alone do not prove the same cause.
+
 Authenticate with repository access and the `project` scope. List issues with
 `gh issue list --repo nickysemenza/cubby`; read an issue with `gh issue view`.
 Inspect native relationships before starting:
@@ -117,8 +126,12 @@ Relates to currently requires the UI or the [related-issue API](https://docs.git
 the API's target `issue_id` is an internal numeric ID, not the issue number.
 Keep updates on the existing issue rather than creating a parallel task.
 
-Link the implementing PR with `Fixes #<number>` for work accepted on merge to
-the default branch. Include focused validation evidence. Only use Verify when
+Before opening the PR, compare the implemented outcome and validation against
+the matched issues' acceptance criteria. Put `Fixes #<number>` in the PR body
+only for issues fully satisfied and accepted on merge to the default branch;
+use `Related to #<number>` for partial or supporting work. Reference issues in
+individual commits when useful; repeating closing keywords in every commit is
+unnecessary. Include focused validation evidence. Only use Verify when
 the issue explicitly needs acceptance after deployment; use a plain issue
 reference in that PR and close the issue after verification instead of promising
 automatic closure. Completing a household operational pass needs verified
