@@ -23,6 +23,13 @@ const validateExpressions = (
   validateSql: (sql: string) => void,
 ) => {
   for (const field of table.columns) {
+    if (field.generated) {
+      if (field.default !== undefined || field.onUpdateNow)
+        throw new EntityDeclarationError(
+          `${table.name}.${field.key} generated column cannot have a default or update callback.`,
+        );
+      validateSql(field.generated);
+    }
     if (field.reference)
       target(field.reference.table, [field.reference.column]);
     if (field.values && field.kind !== "text")

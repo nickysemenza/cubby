@@ -236,7 +236,10 @@ environment, workload, cache state, and unavailable measurements. The harness
 separates declaration-only requested shape from observed work; unsupported shape
 metadata and unprovided bounded operator context stay null. Never use an input
 fingerprint as anonymization or copy arbitrary input keys into evidence, including
-private samples. A query timing
+private samples. Captured SQL can contain data-dependent dictionaries and resolved ID sets.
+Recompile or resolve those bindings against the comparison database and pass the
+same current bindings to both variants; scalar parameter types do not prove
+that values are dataset-independent. A query timing
 does not establish page latency, and HTTP success does not establish RPC success.
 Attribute repeated plan work by its relation or alias and owning SQL producer;
 a shared CTE name alone does not establish an identical computation.

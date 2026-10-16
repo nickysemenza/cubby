@@ -1309,6 +1309,11 @@ types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
 and Drizzle relations. Child storage does not acquire an entity identity,
 shortcode, client manifest, or automatic indexes. SQL constraint expressions
 use `{columnKey}` placeholders validated against that child's columns.
+A column's `generated` SQL uses the same placeholders and emits a stored
+PostgreSQL generated column; it cannot also declare a default or update callback.
+Retained mail stores text presence this way, preserving the nullable and
+space-trimming rules as content changes. Email quality reads this scalar rather
+than decompressing original bodies during list and Work queue filtering.
 
 Mail, statement-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned
