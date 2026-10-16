@@ -1,5 +1,9 @@
-import pg from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg, { type Pool } from "pg";
 import { afterAll, afterEach, vi } from "vitest";
+import type { DatabaseRuntime } from "../src/server/db/database-runtime";
+import * as schema from "../src/server/db/schema";
+import { createPostgresPool } from "./postgres-pool";
 import { closeTestDb } from "./test-setup";
 
 /**
@@ -45,6 +49,43 @@ afterEach(() => {
 });
 
 /**
+ * `~/server/db`'s module runtime, on a pool the per-test reset owns. The
+ * workerd harness points E2E_DATABASE_URL at this file's database, so
+ * in-process code that loads `db.ts` afterwards connects there (Better Auth
+ * seeds its OAuth resource on import); a plain module pool would leave an idle
+ * session the reset refuses to evict. Connects lazily, where `db.ts` would.
+ */
+let modulePool: Pool | undefined;
+let moduleClient: DatabaseRuntime["client"] | undefined;
+const connectModulePool = () => {
+  if (modulePool) return modulePool;
+  modulePool = createPostgresPool({
+    connectionString: process.env.E2E_DATABASE_URL || process.env.DATABASE_URL,
+    max: 25,
+  });
+  // The reset's termination surfaces on the idle client; the pool reconnects.
+  modulePool.on("error", () => {});
+  return modulePool;
+};
+const moduleRuntime: DatabaseRuntime = {
+  get client() {
+    return (moduleClient ??= drizzle({ client: connectModulePool(), schema }));
+  },
+  withConnection: async (fn) => {
+    const connection = await connectModulePool().connect();
+    try {
+      return await fn(drizzle({ client: connection, schema }));
+    } finally {
+      connection.release();
+    }
+  },
+};
+// Replaced per file: `db.ts` reads this global when each file's graph loads.
+Object.assign(globalThis, {
+  [Symbol.for("cubby.database.runtime")]: moduleRuntime,
+});
+
+/**
  * File-level teardown for the integration project (a vitest `setupFiles`
  * entry, so this `afterAll` is scoped to the whole test file).
  *
@@ -53,6 +94,7 @@ afterEach(() => {
  * is what makes it file-scoped — see `closeTestDb`.
  */
 afterAll(async () => {
+  await modulePool?.end();
   await closeTestDb();
 });
 
