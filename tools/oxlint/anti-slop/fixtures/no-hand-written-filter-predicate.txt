@@ -10,3 +10,14 @@ export const named = () => {
   computed.push(b, c);
   return thingScaffold.where({}, [...computed, a]);
 };
+
+export const first = () => {
+  const conditions = [a, b];
+  return thingScaffold.where({}, conditions);
+};
+
+export const second = () => {
+  const conditions = [a];
+  conditions.push(...[b, c]);
+  return thingScaffold.where({}, conditions);
+};

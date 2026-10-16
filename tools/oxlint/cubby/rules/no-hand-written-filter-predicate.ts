@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRule } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
 import { z } from "zod";
 
 const repoRoot = resolve(
@@ -30,36 +30,71 @@ const baseline = z
 /** A list scaffold binding: `listScaffold(...)` results are named `*Scaffold`. */
 const scaffoldName = /(?:^s|S)caffold$/;
 
-/** Same-file condition lists: `const name = [...]` and each `name.push(...)`. */
-type ConditionLists = {
-  arrays: Map<string, ESTree.ArrayExpression>;
-  pushed: Map<string, number>;
+const resolveVariable = (
+  sourceCode: SourceCode,
+  identifier: ESTree.IdentifierReference,
+): Variable | null => {
+  let scope: Scope | null = sourceCode.getScope(identifier);
+  while (scope !== null) {
+    const variable = scope.set.get(identifier.name);
+    if (variable !== undefined) return variable;
+    scope = scope.upper;
+  }
+  return null;
 };
+
+/** The `[...]` a `const` condition list is initialized with. */
+const declaredArray = (variable: Variable): ESTree.ArrayExpression | null => {
+  const [definition] = variable.defs;
+  const declarator = definition?.node;
+  return declarator?.type === "VariableDeclarator" &&
+    declarator.init?.type === "ArrayExpression"
+    ? declarator.init
+    : null;
+};
+
+/** Every argument list of a `list.push(...)` on this binding. */
+const pushedArguments = (variable: Variable) =>
+  variable.references.flatMap((reference) => {
+    const member = reference.identifier.parent;
+    const call = member?.parent;
+    return member?.type === "MemberExpression" &&
+      member.object === reference.identifier &&
+      member.property.type === "Identifier" &&
+      member.property.name === "push" &&
+      call?.type === "CallExpression" &&
+      call.callee === member
+      ? call.arguments
+      : [];
+  });
 
 /**
  * Hand-written conditions in a list scaffold's `where(filters, [...])`. A
- * condition list named in the same file counts its elements and every
- * argument pushed onto it; any other opaque list or spread counts as one.
+ * condition list bound in the file counts its elements and everything pushed
+ * onto that binding, through spreads; any other opaque value counts as one.
  */
 const countConditions = (
   node: ESTree.Node | null,
-  lists: ConditionLists,
-  seen: Set<string>,
+  sourceCode: SourceCode,
+  seen: Set<Variable>,
 ): number => {
   if (node === null) return 0;
+  const count = (child: ESTree.Node | null) =>
+    countConditions(child, sourceCode, seen);
   if (node.type === "ArrayExpression")
-    return node.elements.reduce(
-      (total, element) => total + countConditions(element, lists, seen),
-      0,
-    );
-  if (node.type === "SpreadElement")
-    return countConditions(node.argument, lists, seen);
-  if (node.type === "Identifier" && !seen.has(node.name)) {
-    const array = lists.arrays.get(node.name);
-    if (array) {
-      seen.add(node.name);
+    return node.elements.reduce((total, element) => total + count(element), 0);
+  if (node.type === "SpreadElement") return count(node.argument);
+  if (node.type === "Identifier") {
+    const variable = resolveVariable(sourceCode, node);
+    const array = variable ? declaredArray(variable) : null;
+    if (variable && array && !seen.has(variable)) {
+      seen.add(variable);
       return (
-        countConditions(array, lists, seen) + (lists.pushed.get(node.name) ?? 0)
+        count(array) +
+        pushedArguments(variable).reduce(
+          (total, argument) => total + count(argument),
+          0,
+        )
       );
     }
   }
@@ -88,34 +123,13 @@ export const noHandWrittenFilterPredicateRule = defineRule({
       ? filename.slice(repoRoot.length + 1)
       : filename;
     const calls: ESTree.CallExpression[] = [];
-    const lists: ConditionLists = { arrays: new Map(), pushed: new Map() };
     let program: ESTree.Program | undefined;
     return {
       Program(node) {
         program = node;
       },
-      VariableDeclarator(node) {
-        if (
-          node.id.type === "Identifier" &&
-          node.init?.type === "ArrayExpression"
-        )
-          lists.arrays.set(node.id.name, node.init);
-      },
       CallExpression(node) {
         const callee = node.callee;
-        if (
-          callee.type === "MemberExpression" &&
-          callee.property.type === "Identifier" &&
-          callee.property.name === "push" &&
-          callee.object.type === "Identifier"
-        ) {
-          const name = callee.object.name;
-          lists.pushed.set(
-            name,
-            (lists.pushed.get(name) ?? 0) + node.arguments.length,
-          );
-          return;
-        }
         if (
           callee.type !== "MemberExpression" ||
           callee.property.type !== "Identifier" ||
@@ -130,7 +144,11 @@ export const noHandWrittenFilterPredicateRule = defineRule({
         const violations = calls
           .map((node) => ({
             node,
-            count: countConditions(node.arguments[1] ?? null, lists, new Set()),
+            count: countConditions(
+              node.arguments[1] ?? null,
+              context.sourceCode,
+              new Set(),
+            ),
           }))
           .filter(({ count }) => count > 0);
         const actual = violations.reduce(
