@@ -212,7 +212,7 @@ export function Overlay({
             </Button>
             {primary && (
               <Button {...submitProps} variant={primary.variant}>
-                {busy && <Spinner size="sm" />}
+                {busy && <Spinner size="sm" aria-hidden="true" />}
                 {submitLabel}
               </Button>
             )}

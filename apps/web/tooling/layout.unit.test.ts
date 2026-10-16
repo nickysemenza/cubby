@@ -63,7 +63,7 @@ const CROWDED_FOLDERS = {
   "apps/web/src/lib": 89,
   "apps/web/src/server/domains/product/repo": 43,
   "apps/web/src/ui/data-table": 52,
-  "apps/web/src/ui/primitives": 53,
+  "apps/web/src/ui/primitives": 50,
 } satisfies Record<string, number>;
 
 describe("repository layout", () => {
