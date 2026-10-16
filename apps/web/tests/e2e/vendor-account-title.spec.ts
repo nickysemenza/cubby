@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
@@ -10,7 +11,7 @@ import {
   waitForFormHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { getFixtureDb } from "./fixtures/core";
+import { createEntityFixture, getFixtureDb } from "./fixtures/core";
 
 // An account is named only by its Vendor and member: the form offers no
 // label to type, and renaming the Vendor renames the account everywhere.
@@ -22,9 +23,9 @@ test("vendor accounts take their title from the current vendor and member", asyn
     name: "Synthetic Title Member",
     kind: "member",
   });
-  const store = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Title Store",
-  });
+  const storeName = "Synthetic Title Store";
+  // The typed picker searches SearchDocument; a raw insert bypasses its creation.
+  const store = await createEntityFixture(page, "vendor", { name: storeName });
 
   await gotoAuthenticatedPage(page, "/vendor-accounts?create=true");
   await waitForFormHydration(page);
@@ -36,7 +37,8 @@ test("vendor accounts take their title from the current vendor and member", asyn
   await selectComboboxItem(
     page,
     dialog.getByRole("combobox", { name: "Vendor", exact: true }),
-    store.name,
+    storeName,
+    { query: storeName, code: store.id },
   );
   await selectComboboxItem(
     page,
@@ -49,13 +51,13 @@ test("vendor accounts take their title from the current vendor and member", asyn
   await gotoAuthenticatedPage(page, "/vendor-accounts");
   const title = (name: string) =>
     page.getByRole("link", { name: `${name} · ${member.name}`, exact: true });
-  await expect(title(store.name)).toBeVisible();
+  await expect(title(storeName)).toBeVisible();
 
   await getDb(db)
     .update(vendor)
     .set({ name: "Synthetic Renamed Store" })
-    .where(eq(vendor.id, store.id));
+    .where(eq(vendor.shortcode, parseShortcodeFor("vendor", store.id)));
   await reloadAuthenticatedPage(page);
   await expect(title("Synthetic Renamed Store")).toBeVisible();
-  await expect(title(store.name)).toHaveCount(0);
+  await expect(title(storeName)).toHaveCount(0);
 });

@@ -12,6 +12,11 @@ any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+Create searchable picker fixtures through `createEntityFixture` so the entity
+kernel also creates their SearchDocument. A raw row insert can appear in the
+initial picker list and disappear when typed search resolves. For typed search,
+use the picker helper's query/code option to wait for the actual search response
+before selecting the record.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
