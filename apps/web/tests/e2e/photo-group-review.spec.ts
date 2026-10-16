@@ -1091,6 +1091,23 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
   await expect(
     group.getByText("Agent's concern: Check the sleeve label", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Select all resolved items", exact: true })
+    .click();
+  await expect(
+    group.getByRole("checkbox", { name: /for batch approval/ }),
+  ).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .click();
+  await expect(
+    page
+      .locator("#photo-group-g2")
+      .getByRole("heading", { name: /Approved ·/ }),
+  ).toBeVisible();
+  await expect(
+    group.getByRole("button", { name: "Create product", exact: true }),
+  ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
   await expect(
     group.getByRole("checkbox", { name: /for batch approval/ }),
@@ -1184,6 +1201,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await create.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({
     path: "../../artifacts/photo-review/phone-create.png",
     fullPage: true,

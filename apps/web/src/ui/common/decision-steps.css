@@ -19,6 +19,9 @@
 .decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {
   column-gap: var(--brand-space-2);
 }
+.decision-steps-ledger.ledger[data-ledger="records"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
 .decision-step-summary {
   min-width: 0;
   overflow: hidden;

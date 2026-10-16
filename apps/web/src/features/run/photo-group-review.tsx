@@ -849,7 +849,10 @@ function SelectedProductEvidence({
       ) : null}
       <p>On hand: {product.quantity?.onHandUnits ?? "Not counted"}</p>
       {product.inventoryEntries?.map((entry) => (
-        <p key={entry.id}>{entry.location?.name ?? "Location unknown"}</p>
+        <p key={entry.id}>
+          {entry.amount.value} {entry.amount.unit} ·{" "}
+          {entry.location?.name ?? "Location unknown"}
+        </p>
       ))}
       <Row gap="sm" wrap>
         {product.ownPhotos?.map((photo) => (
@@ -1135,7 +1138,12 @@ function ProductPanel({
     (group) => group.groupKey === proposal.groupKey,
   );
   const checks =
-    candidates?.selectedComparison?.crossCheck ?? proposal.crossCheck ?? [];
+    product.kind === "existing" &&
+    candidates?.selectedComparison?.id === product.existing?.id
+      ? (candidates?.selectedComparison?.crossCheck ??
+        proposal.crossCheck ??
+        [])
+      : (proposal.crossCheck ?? []);
   const [showCandidates, setShowCandidates] = useState(false);
   const [identityAccepted, setIdentityAccepted] = useState(false);
   const queryClient = useQueryClient();
@@ -1453,6 +1461,9 @@ function PhotoProductSuggestions({
     (item) => item.groupKey === proposal.groupKey,
   );
   const closest = group?.candidates[0];
+  const strongDuplicate =
+    proposal.product.kind === "create" &&
+    closest?.duplicateStrength === "strong";
   const [open, setOpen] = useState(expanded);
   useEffect(() => {
     if (expanded) setOpen(true);
@@ -1485,15 +1496,13 @@ function PhotoProductSuggestions({
       ) : closest ? (
         <div
           className={
-            closest.duplicateStrength === "strong"
+            strongDuplicate
               ? "bg-warning/10 p-2 text-xs text-warning"
               : "text-xs text-muted-foreground"
           }
         >
-          {closest.duplicateStrength === "strong"
-            ? "Possible duplicate"
-            : "Closest existing"}
-          : {closest.name} ·{" "}
+          {strongDuplicate ? "Possible duplicate" : "Closest existing"}:{" "}
+          {closest.name} ·{" "}
           <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
             Compare
           </Button>
@@ -1643,7 +1652,6 @@ function InventoryFields({
       : null;
   return (
     <div className="border-t border-border pt-3">
-      <h4 className="mb-2 text-sm font-semibold">Own it now?</h4>
       <div className="mb-2 flex flex-col gap-1 text-xs">
         Own it now?
         <Picker
