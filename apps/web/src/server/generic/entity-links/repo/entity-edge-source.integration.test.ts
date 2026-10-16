@@ -121,10 +121,24 @@ describe("entity edge source", () => {
       makeLocationInput({ name: "Edge orphan shelf" }),
       TEST_ACTOR,
     );
+    // A same-kind parent edge connects its target, but does not make an
+    // otherwise empty child location occupied.
+    const parent = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Edge parent shelf" }),
+      TEST_ACTOR,
+    );
+    const child = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Edge empty child", parentId: parent.id }),
+      TEST_ACTOR,
+    );
     const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
     const codes = orphans.items.map((entry) => entry.id);
     expect(codes).toContain(lonely.id);
     expect(codes).not.toContain(shelf.id);
+    expect(codes).not.toContain(parent.id);
+    expect(codes).toContain(child.id);
     // Products are left to the dedicated orphaned-products detector.
     expect(codes).not.toContain(item.id);
     expect(orphans.count).toBeGreaterThanOrEqual(1);
