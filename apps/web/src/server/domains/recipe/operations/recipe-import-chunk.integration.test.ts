@@ -4,7 +4,14 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { getDb } from "~/server/db/helpers";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";

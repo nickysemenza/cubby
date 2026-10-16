@@ -1,0 +1,45 @@
+import { createHash } from "node:crypto";
+import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+function serviceDirectory(url: string): string {
+  return join(
+    tmpdir(),
+    "cubby-template-initializers",
+    createHash("sha1").update(url).digest("hex"),
+  );
+}
+
+/** Clients must share both this host directory and the service incarnation. */
+export function templateMarkerDirectory(
+  url: string,
+  incarnation?: string,
+): string {
+  const directory = join(
+    serviceDirectory(url),
+    incarnation
+      ? createHash("sha1").update(incarnation).digest("hex")
+      : "unverified",
+  );
+  mkdirSync(directory, { recursive: true });
+  return directory;
+}
+
+/** The service owner can prove only named prior incarnations are gone. */
+export function retireTemplateMarkers(url: string, incarnation?: string): void {
+  const directory = serviceDirectory(url);
+  if (!existsSync(directory)) return;
+  const keep = incarnation
+    ? createHash("sha1").update(incarnation).digest("hex")
+    : undefined;
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    // Legacy files and unverified scopes may still belong to live older clients.
+    if (
+      entry.isDirectory() &&
+      /^[0-9a-f]{40}$/u.test(entry.name) &&
+      entry.name !== keep
+    )
+      rmSync(join(directory, entry.name), { recursive: true, force: true });
+  }
+}

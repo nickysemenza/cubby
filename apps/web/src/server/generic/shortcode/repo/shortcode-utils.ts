@@ -1,17 +1,11 @@
 /**
  * Shortcode minting — the write half of the public-id layer.
  *
- * A shortcode is non-null, immutable, and never reused, including after a soft
- * delete. Two mechanisms enforce that together, and they are not redundant:
- *
- * 1. `generateUniqueShortcode` pre-checks against the WHOLE table — soft-deleted
- *    rows included — so a retired code is a permanent tombstone. A pre-check
- *    filtered on `notDeleted` would let a retired code end up shared between a
- *    deleted row and a live one.
- * 2. The `<Table>_shortcode_unique` index is authoritative. `insertWithShortcode`
- *    treats a violation of it as a lost race and retries with a fresh code rather
- *    than trusting the pre-check, which is only advisory across concurrent
- *    connections.
+ * A shortcode is non-null, immutable, and never reused. Payload indexes and
+ * the permanent Entity identity index enforce that, including tombstones.
+ * Inserts mint a candidate directly and retry a rejected collision inside a
+ * savepoint. An advisory preflight SELECT costs a round trip without closing
+ * the race; only callers that need a free code before inserting use it.
  *
  * The read half — resolving a code back to a row — lives in `shortcode-resolver`.
  */
@@ -245,13 +239,14 @@ export async function insertWithShortcode<T extends ShortcodeType>(
 
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const shortcode = await generateUniqueShortcode(db, entity, generator);
+    const shortcode = generator.generate(entity);
     // SAFETY: values is the insert model for this generic entity with only its
     // shortcode omitted; adding the schema-parsed branded shortcode completes it.
     const row = { ...values, shortcode } as InferInsertModel<ShortcodeTable>;
     try {
-      const created = isTransaction(db)
-        ? await db.transaction((savepoint) =>
+      const client = unwrapDb(db);
+      const created = isTransaction(client)
+        ? await client.transaction((savepoint) =>
             insertAndReturn(savepoint, table, row),
           )
         : await insertAndReturn(db, table, row);

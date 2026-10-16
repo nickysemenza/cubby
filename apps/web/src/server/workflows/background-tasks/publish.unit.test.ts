@@ -7,6 +7,7 @@ import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { Database } from "~/server/db";
 
 import {
+  enqueueBackgroundTask,
   MAX_TASKS_PER_SEND,
   planSendBatches,
   publishBackgroundTasks,
@@ -66,6 +67,20 @@ describe("planSendBatches", () => {
 
 describe("publishBackgroundTasks", () => {
   afterEach(() => setCfEnv(undefined));
+
+  it("rejects work without a queue instead of executing it in Node", async () => {
+    setCfEnv(undefined);
+    await expect(
+      publishBackgroundTasks(db, [recipeTask("missing")], { source: "test" }),
+    ).rejects.toThrow("BACKGROUND_QUEUE binding is required");
+  });
+
+  it("rejects a database-free enqueue without a binding instead of dropping it", async () => {
+    setCfEnv(undefined);
+    await expect(
+      enqueueBackgroundTask(recipeTask("missing"), { source: "test" }),
+    ).rejects.toThrow("BACKGROUND_QUEUE binding is required");
+  });
 
   it("awaits queue acceptance and reports the queue transport", async () => {
     const sent: unknown[][] = [];

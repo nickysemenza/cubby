@@ -3,7 +3,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { shoppingListInput } from "@cubby/schemas/meal";
 import { createRecipeKernelTestCaller } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   getIngredientByID,
@@ -19,12 +19,18 @@ import {
 import { createRecipe } from "~/server/domains/recipe/repo/crud";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   seedIngredientWithStock,
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 describe("AvailabilityService.getRecipeAvailability", () => {
   const tdb = withTestDb();

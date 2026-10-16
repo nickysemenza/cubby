@@ -1034,7 +1034,8 @@ All generic entity work enters through `executeEntity(context, command)` in
 - baseline get/list/create/update/delete/merge/search commands;
 - declared attach/detach relation families;
 - in-transaction search projections, then post-commit object cleanup and
-  best-effort background task publication;
+  best-effort background task publication using the captured projection
+  dependency wave;
 - one normalized delete result with public references and affected-edge data.
 
 Repositories own database access, transactions, invariants, and the exact

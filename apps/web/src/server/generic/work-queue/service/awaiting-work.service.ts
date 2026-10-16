@@ -75,7 +75,7 @@ export async function countAwaitingWork(db: Database): Promise<AwaitingWork> {
 
 /**
  * Republish every waiting item. Nothing here waits for completion — the queue
- * (or the inline dev path) does the work, and the counts above shrink as it
+ * consumer does the work, and the counts above shrink as it
  * lands. Idempotent: republishing already-published work only costs each
  * handler its freshness check.
  */
@@ -91,7 +91,6 @@ export async function settleAwaitingWork(
   const config = getSemanticEmbeddingConfig();
   const requestedAt = new Date().toISOString();
   let publishedEmbeddingTasks = 0;
-  let transport: SettleAwaitingWorkOut["transport"] = "queue";
   let page = await selectUnembeddedSearchDocumentRefs(db, config);
   for (;;) {
     if (page.refs.length > 0) {
@@ -106,7 +105,6 @@ export async function settleAwaitingWork(
         { source: "maintenance.settle-awaiting-work" },
       );
       publishedEmbeddingTasks += receipt.count;
-      transport = receipt.transport;
     }
     if (!page.nextCursor) break;
     page = await selectUnembeddedSearchDocumentRefs(db, config, {
@@ -128,7 +126,6 @@ export async function settleAwaitingWork(
       { source: "maintenance.settle-awaiting-work" },
     );
     publishedImageMetadataTasks = receipt.count;
-    transport = receipt.transport;
   }
 
   return {
@@ -136,6 +133,6 @@ export async function settleAwaitingWork(
     publishedEmbeddingTasks,
     culledUploads: culled.count,
     publishedImageMetadataTasks,
-    transport,
+    transport: "queue",
   };
 }

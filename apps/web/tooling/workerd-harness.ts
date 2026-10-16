@@ -1,3 +1,6 @@
+import { fromPartial } from "@total-typescript/shoehorn";
+import { setCfEnv } from "../src/server/cf-env";
+import type { BackgroundQueueProducer } from "../src/server/workflows/background-queue-types";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -488,6 +491,13 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
       USDA_RELEASE: { getByName(name: string): UsdaReleaseStatus };
     }>()
     .getEnv();
+  // Node scenario writers use this harness's real queue producer and its
+  // declared consumer profile, rather than falling back to handler execution.
+  const { BACKGROUND_QUEUE } = await harness
+    .getWorker<{ BACKGROUND_QUEUE: BackgroundQueueProducer }>()
+    .getEnv();
+  setCfEnv(fromPartial<Env>({ BACKGROUND_QUEUE }));
+  cleanup.defer(() => setCfEnv(undefined));
   await seedUsdaRelease(env.USDA_RELEASES, SYNTHETIC_USDA_RELEASE);
   await waitForUsdaRelease(
     env.USDA_RELEASE.getByName(usdaReleaseObjectName(SYNTHETIC_USDA_RELEASE)),

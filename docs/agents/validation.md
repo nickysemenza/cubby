@@ -45,6 +45,10 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 ## During implementation
 
+Test subprocesses invoke Node/the installed tool directly and inherit the
+necessary parent environment. Never invoke a package manager from a test: its
+dependency verification can install or prune modules under concurrent suites.
+
 Scripted block edits use bounded, unique markers. Inspect the affected diff
 and parse the edited source before reporting it ready.
 

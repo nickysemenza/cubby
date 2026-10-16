@@ -17,6 +17,7 @@ import {
   type ListGroupSummary,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
+import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -50,7 +51,7 @@ import {
 import {
   isMutationSideEffectRef,
   type MutationSideEffectEvent,
-  refreshProjectionsForEvent,
+  projectMutationEvent,
   runMutationSideEffects,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
@@ -145,7 +146,7 @@ const writeWithProjections = async <
   action: "created" | "updated",
   source: string,
   write: (context: EntityKernelContext) => Promise<TResult>,
-): Promise<TResult> => {
+): Promise<TResult & { projectedRefs: SearchableEntityRef[] }> => {
   // Every declared write, including identity-only entities, uses the transaction-bound context.
   // Everything the adapter reaches through the context must run on the
   // transaction: a service still bound to the request pool would UPDATE a row
@@ -172,8 +173,10 @@ const writeWithProjections = async <
         result.entityId,
         source,
       );
-      if (event) await refreshProjectionsForEvent(transactionDb, event);
-      return result;
+      const projectedRefs = event
+        ? await projectMutationEvent(transactionDb, event)
+        : [];
+      return { ...result, projectedRefs };
     },
   );
   await deferred.flush(context.db);
@@ -200,12 +203,14 @@ const runSideEffects = async <
   action: "created" | "updated",
   entityId: EntityInternalId<E>,
   source: string,
+  projectedRefs: SearchableEntityRef[],
 ): Promise<void> => {
   const event = sideEffectEventFor(binding, action, entityId, source);
   if (!event) return;
   // The projections were refreshed inside the write transaction above.
   await runMutationSideEffects(ctx.db, event, undefined, {
     projection: "skip",
+    projectedRefs,
   });
 };
 
@@ -476,6 +481,7 @@ export const defineEntityOperations = <
           "created",
           created.entityId,
           `${binding.entity}.create`,
+          created.projectedRefs,
         ),
       )
       .output(({ created }) =>
@@ -644,6 +650,7 @@ export const defineEntityOperations = <
           "updated",
           updated.entityId,
           `${binding.entity}.update`,
+          updated.projectedRefs,
         ),
       )
       .output(({ updated }) =>

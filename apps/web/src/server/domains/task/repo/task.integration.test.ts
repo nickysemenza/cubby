@@ -4,7 +4,14 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { getDb } from "~/server/db/helpers";
 import { auditLog, entityLink } from "~/server/db/schema";
@@ -59,11 +66,8 @@ describe("task reorder workflow", () => {
       ]),
     );
     expect(result.sideEffects).toEqual(EMPTY_MUTATION_SIDE_EFFECTS);
-    // The bulk-reorder workflow's effect step fans out entity-embedding
-    // refreshes for both reordered tasks; with no queue bound in tests that
-    // runs inline and refreshes the search-document projection first (see
-    // refreshEntityEmbedding), so a live projection is the observable proof
-    // the fanout ran.
+    // The queue consumer must refresh the reordered tasks' projections.
+    await backgroundQueue.drain(ctx.db);
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "task", first.entityId),
     ).not.toBeNull();

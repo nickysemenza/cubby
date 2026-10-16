@@ -105,9 +105,7 @@ export function AwaitingWorkCard({
           : null,
       ].filter((part): part is string => part !== null);
       if (parts.length === 0) return "Nothing was waiting.";
-      return result.transport === "inline"
-        ? `Ran ${parts.join(", ")} inline.`
-        : `Published ${parts.join(", ")}; they run in the background.`;
+      return `Published ${parts.join(", ")}; they run in the background.`;
     },
   });
 

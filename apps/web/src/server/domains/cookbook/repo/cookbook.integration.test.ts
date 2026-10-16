@@ -5,7 +5,7 @@ import {
 import type { CookbookFilters } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -28,6 +28,8 @@ import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { singularAttachmentImageIds } from "~/server/entity-kernel/repo/singular-attachment";
 import { requireActor } from "~/server/http/request-context";
+// EPUB importer suite — actor audits as an epub import, not the UI.
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
   makeCookbookExtraction,
@@ -45,8 +47,12 @@ import {
   setCookbookProduct,
   upsertCookbook,
 } from "./cookbook";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
-// EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
   const ctx = withTestDb();
   const workflowContext = () =>

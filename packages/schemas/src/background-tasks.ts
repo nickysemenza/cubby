@@ -158,7 +158,7 @@ export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
  * how many tasks it produced. No batch or job identity exists to return.
  */
 export const backgroundTaskReceiptSchema = z.object({
-  transport: z.enum(["queue", "inline"]),
+  transport: z.literal("queue"),
   count: z.number().int().nonnegative(),
 });
 export type BackgroundTaskReceipt = z.infer<typeof backgroundTaskReceiptSchema>;

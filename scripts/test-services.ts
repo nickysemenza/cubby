@@ -1,7 +1,9 @@
+import { retireTemplateMarkers } from "./lib/template-markers.ts";
 import type { ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
+  renameSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -13,16 +15,17 @@ import { z } from "zod";
 
 import {
   containerAddress,
-  containerCli,
-  findContainer,
   httpReady,
-  listContainers,
-  runDetached,
-  stopAndRemove,
   waitFor,
 } from "./apple/lib/apple-container.ts";
-import { devContainerBackend } from "./lib/dev-container.ts";
-import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
+import {
+  devContainerBackend,
+  devContainerCli as containerCli,
+  findDevContainer as findContainer,
+  stopDevContainer as stopAndRemove,
+} from "./lib/dev-container.ts";
+import { holdLock, worktreeRoot } from "./lib/harness-lock.ts";
+import { processStatus } from "./lib/process-identity.ts";
 import { spawnToExit } from "./lib/run.ts";
 import {
   SHARED_POSTGRES,
@@ -35,6 +38,9 @@ const integresqlImage =
   "ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a";
 
 const integresqlArgs = (postgresHost: string) => [
+  ...(devContainerBackend() === "docker"
+    ? ["--network", "cubby-local", "--publish", "127.0.0.1::5000"]
+    : []),
   "--cpus",
   "1",
   "--memory",
@@ -88,9 +94,9 @@ const STATE_LOCK = { path: STATE, label: "test services", staleMs: 30_000 };
 const RECYCLE_DATABASE_COUNT = 100;
 
 const runRecord = z.object({
-  pid: z.number(),
+  pid: z.number().int().positive(),
   // The command's detached process group; it can outlive a SIGKILLed wrapper.
-  group: z.number().optional(),
+  group: z.number().int().positive().optional(),
   configuration: z.string(),
   root: z.string(),
 });
@@ -119,42 +125,57 @@ function groupIsAlive(group: number): boolean {
     process.kill(-group, 0);
     return true;
   } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
+    return !(
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ESRCH"
+    );
   }
 }
 
-/**
- * Live run records; a dead or unreadable record is deleted. A run stays live
- * while its wrapper or its command's process group runs.
- */
-function liveRuns(): RunRecord[] {
-  mkdirSync(RUNS, { recursive: true });
-  return readdirSync(RUNS).flatMap((file) => {
-    let record: ReturnType<typeof runRecord.safeParse> | undefined;
-    try {
-      record = runRecord.safeParse(
-        JSON.parse(readFileSync(path.join(RUNS, file), "utf8")),
-      );
-    } catch {
-      // Unreadable: removed below.
-    }
-    if (
-      record?.success &&
-      (ownerIsAlive(record.data.pid) ||
-        (record.data.group !== undefined && groupIsAlive(record.data.group)))
-    )
-      return [record.data];
-    rmSync(path.join(RUNS, file), { force: true });
-    return [];
-  });
+/** Publish adoption without exposing a truncated record to concurrent readers. */
+export function writeRunRecord(file: string, record: RunRecord): void {
+  const pending = `${file}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(pending, JSON.stringify(record));
+    renameSync(pending, file);
+  } finally {
+    rmSync(pending, { force: true });
+  }
 }
 
-const serviceModeSchema = z.enum(["apple", "external"]);
+/** Unknown records block lifecycle work; only proven-dead owners are pruned. */
+export function liveRuns(directory = RUNS): RunRecord[] {
+  mkdirSync(directory, { recursive: true });
+  return readdirSync(directory)
+    .filter((file) => !file.endsWith(".tmp"))
+    .flatMap((file) => {
+      const recordFile = path.join(directory, file);
+      let record: RunRecord;
+      try {
+        record = runRecord.parse(JSON.parse(readFileSync(recordFile, "utf8")));
+      } catch (cause) {
+        throw new Error(
+          `Test service run ${recordFile}: ownership unknown; preserve this record and stop its clients, then repair or remove it manually only after verifying its owners are gone`,
+          { cause },
+        );
+      }
+      if (
+        processStatus(record.pid, undefined) !== "dead" ||
+        (record.group !== undefined && groupIsAlive(record.group))
+      )
+        return [record];
+      rmSync(recordFile, { force: true });
+      return [];
+    });
+}
+
+const serviceModeSchema = z.enum(["managed", "external"]);
 type ServiceMode = z.infer<typeof serviceModeSchema>;
 
 function serviceMode(env: NodeJS.ProcessEnv): ServiceMode {
   return serviceModeSchema
-    .default("apple")
+    .default("managed")
     .parse(env.CUBBY_TEST_SERVICES || undefined);
 }
 
@@ -165,6 +186,49 @@ function logPhase(label: string, startedAt: number): void {
 const INTEGRESQL_DATABASES =
   "SELECT datname FROM pg_database WHERE datname LIKE 'integresql\\_%'";
 
+/** Docker's loopback publication is host-only; peers use their own network. */
+async function connectDockerPostgres(): Promise<void> {
+  if (devContainerBackend() !== "docker") return;
+  const networks = JSON.parse(
+    await containerCli(["network", "ls", "--format", "json"]).then(
+      (output) => `[${output.split("\n").filter(Boolean).join(",")}]`,
+    ),
+  );
+  const present = z
+    .array(z.object({ Name: z.string() }))
+    .parse(networks)
+    .some((network) => network.Name === "cubby-local");
+  if (!present) await containerCli(["network", "create", "cubby-local"]);
+  const [network] = z
+    .array(
+      z.object({
+        Containers: z.record(z.string(), z.object({ Name: z.string() })),
+      }),
+    )
+    .parse(
+      JSON.parse(await containerCli(["network", "inspect", "cubby-local"])),
+    );
+  if (
+    !Object.values(network?.Containers ?? {}).some(
+      (container) => container.Name === SHARED_POSTGRES,
+    )
+  )
+    await containerCli(["network", "connect", "cubby-local", SHARED_POSTGRES]);
+}
+
+/** Reach the local service through Apple's address or Docker's assigned port. */
+async function integresqlAddress(name = INTEGRESQL): Promise<string> {
+  if (devContainerBackend() === "apple")
+    return `http://${await containerAddress(name)}:5000`;
+  const [info] = JSON.parse(await containerCli(["inspect", name]));
+  const ports = z
+    .array(z.object({ containerPort: z.number(), hostPort: z.number() }))
+    .parse(info.configuration.publishedPorts);
+  const port = ports.find((entry) => entry.containerPort === 5000)?.hostPort;
+  if (!port) throw new Error("IntegreSQL has no published API port");
+  return `http://localhost:${port}`;
+}
+
 /** Whether IntegreSQL answers and targets the shared server's current address. */
 async function healthyIntegresql(postgresHost: string): Promise<boolean> {
   const integresql = await findContainer(INTEGRESQL);
@@ -174,13 +238,11 @@ async function healthyIntegresql(postgresHost: string): Promise<boolean> {
     info?.configuration?.initProcess?.environment ?? [];
   if (!environment.includes(`PGHOST=${postgresHost}`)) return false;
   try {
-    const integresqlHost = await containerAddress(INTEGRESQL);
+    const integresqlUrl = await integresqlAddress();
     // Generous: another worktree's suite may be loading it.
-    await waitFor(
-      "IntegreSQL",
-      () => httpReady(`http://${integresqlHost}:5000`),
-      { timeoutMs: 15_000 },
-    );
+    await waitFor("IntegreSQL", () => httpReady(integresqlUrl), {
+      timeoutMs: 15_000,
+    });
     return true;
   } catch {
     console.log("[test-services] IntegreSQL is unhealthy");
@@ -194,7 +256,9 @@ async function integresqlDatabases(): Promise<string[]> {
 
 /** Recreate IntegreSQL empty; only when no live run uses it. */
 async function createIntegresql(postgresHost: string): Promise<void> {
+  const previousUrl = await integresqlAddress().catch(() => undefined);
   await stopAndRemove(INTEGRESQL);
+  if (previousUrl) retireTemplateMarkers(previousUrl);
   const stale = await integresqlDatabases();
   if (stale.length > 0) {
     await psql(
@@ -207,8 +271,11 @@ async function createIntegresql(postgresHost: string): Promise<void> {
   }
   const startedAt = Date.now();
   console.log(`[test-services] Starting ${INTEGRESQL}`);
-  await runDetached(INTEGRESQL, integresqlArgs(postgresHost));
-  const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+  await containerCli(
+    ["run", "--detach", "--name", INTEGRESQL, ...integresqlArgs(postgresHost)],
+    180_000,
+  );
+  const integresqlUrl = await integresqlAddress();
   await waitFor("IntegreSQL", () => httpReady(integresqlUrl));
   logPhase("IntegreSQL ready", startedAt);
 }
@@ -225,28 +292,38 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
   const record = path.join(RUNS, `${process.pid}.json`);
   const leave = () => rmSync(record, { force: true });
   const write = (group?: number) =>
-    writeFileSync(
-      record,
-      JSON.stringify({
-        pid: process.pid,
-        group,
-        configuration,
-        root: worktreeRoot,
-      } satisfies RunRecord),
-    );
+    writeRunRecord(record, {
+      pid: process.pid,
+      group,
+      configuration,
+      root: worktreeRoot,
+    });
   try {
     const others = liveRuns();
     write();
     for (const name of removablePairContainers(
-      (await listContainers()).map((entry) => entry.id),
+      z
+        .array(z.object({ id: z.string() }))
+        .parse(
+          JSON.parse(await containerCli(["list", "--all", "--format", "json"])),
+        )
+        .map((entry) => entry.id),
       others,
       configuration,
     )) {
+      if (name.endsWith("-integresql")) {
+        const url = await integresqlAddress(name).catch(() => undefined);
+        if (url) retireTemplateMarkers(url);
+      }
       await stopAndRemove(name);
       console.log(`[test-services] Removed idle ${name}`);
     }
     await ensureSharedPostgres();
-    const postgresHost = await containerAddress(SHARED_POSTGRES);
+    await connectDockerPostgres();
+    const postgresHost =
+      devContainerBackend() === "apple"
+        ? await containerAddress(SHARED_POSTGRES)
+        : SHARED_POSTGRES;
     let healthy = await healthyIntegresql(postgresHost);
     const sharing = others.filter((run) => run.configuration === configuration);
     // Recreating IntegreSQL drops databases a live run is using; a transient
@@ -268,15 +345,34 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       healthy = false;
     }
     if (!healthy) await createIntegresql(postgresHost);
-    const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+    const integresqlUrl = await integresqlAddress();
     console.log(
       `[test-services] Ready: PostgreSQL ${postgresHost}:5432, IntegreSQL ${integresqlUrl}`,
     );
+    const births = z
+      .array(
+        z.object({
+          id: z.string(),
+          status: z.object({ startedDate: z.string().min(1) }),
+        }),
+      )
+      .parse(
+        JSON.parse(
+          await containerCli(["inspect", SHARED_POSTGRES, INTEGRESQL]),
+        ),
+      );
+    const incarnation = createHash("sha256")
+      .update(JSON.stringify(births))
+      .digest("hex");
+    retireTemplateMarkers(integresqlUrl, incarnation);
     const overlay: NodeJS.ProcessEnv = {
+      CUBBY_TEMPLATE_SERVICE_ID: incarnation,
       CUBBY_TEST_SERVICES: "external",
       INTEGRESQL_URL: integresqlUrl,
-      INTEGRESQL_DATABASE_HOST: postgresHost,
-      INTEGRESQL_DATABASE_PORT: "5432",
+      INTEGRESQL_DATABASE_HOST:
+        devContainerBackend() === "apple" ? postgresHost : "localhost",
+      INTEGRESQL_DATABASE_PORT:
+        devContainerBackend() === "apple" ? "5432" : "55432",
       VITEST_MAX_WORKERS: env.VITEST_MAX_WORKERS ?? "6",
       // A report server after a failed browser run would keep the run live.
       PLAYWRIGHT_HTML_OPEN: env.PLAYWRIGHT_HTML_OPEN ?? "never",
@@ -297,9 +393,18 @@ async function stopIdleServices(): Promise<void> {
   try {
     const live = liveRuns();
     for (const name of removablePairContainers(
-      (await listContainers()).map((entry) => entry.id),
+      z
+        .array(z.object({ id: z.string() }))
+        .parse(
+          JSON.parse(await containerCli(["list", "--all", "--format", "json"])),
+        )
+        .map((entry) => entry.id),
       live,
     )) {
+      if (name.endsWith("-integresql")) {
+        const url = await integresqlAddress(name).catch(() => undefined);
+        if (url) retireTemplateMarkers(url);
+      }
       await stopAndRemove(name);
       console.log(`[test-services] Removed ${name}`);
     }
@@ -324,10 +429,9 @@ export async function runWithTestServices(
       "Usage: node scripts/test-services.ts -- <command> [arguments]",
     );
   }
-  const managed =
-    serviceMode(env) === "apple" && !env.CI && platform === "darwin";
-  // Managed means macOS, where the command runs as its own process group.
-  const detachedCommand = managed;
+  const managed = serviceMode(env) === "managed" && !env.CI;
+  // Managed commands keep their process group registered while services are in use.
+  const detachedCommand = managed && platform !== "win32";
   let child: ChildProcess | undefined;
   let interrupted: NodeJS.Signals | undefined;
   let killTimer: NodeJS.Timeout | undefined;
@@ -363,10 +467,6 @@ export async function runWithTestServices(
   try {
     let childEnv = env;
     if (managed) {
-      if (devContainerBackend(env, platform) !== "apple")
-        throw new Error(
-          "Managed test services share the Apple container PostgreSQL; unset CUBBY_DEV_SERVICES or use CUBBY_TEST_SERVICES=external",
-        );
       // Startup is not interrupted mid-create: the pair is shared, and a
       // finished create leaves it usable for the next run.
       const joined = await joinSharedServices(env);

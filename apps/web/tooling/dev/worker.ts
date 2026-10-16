@@ -1,7 +1,9 @@
+import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { Client } from "pg";
 import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
+import { setCfEnv } from "../../src/server/cf-env";
 import worker from "../../src/cf-server";
 import { activeUsdaRelease } from "../../src/server/domains/usda-release/service/client";
 import { PREVIEW_DOCUMENT } from "./preview/document";
@@ -225,6 +227,64 @@ export default {
       for (const cookie of signIn.headers.getSetCookie())
         headers.append("Set-Cookie", cookie);
       return new Response(null, { status: 303, headers });
+    }
+    if (url.pathname === "/__dev/background-tasks") {
+      if (request.method !== "POST") return new Response(null, { status: 405 });
+      const input = z
+        .object({
+          database: z.string(),
+          messages: z.array(backgroundTaskMessageSchema).max(100),
+        })
+        .parse(await request.json());
+      if (input.database !== env.CUBBY_DEV_DB_NAME)
+        return new Response("Background queue database identity mismatch", {
+          status: 409,
+        });
+      await env.BACKGROUND_QUEUE.sendBatch(
+        input.messages.map((body) => ({ body })),
+      );
+      return Response.json({ published: input.messages.length });
+    }
+    if (url.pathname === "/__dev/seed") {
+      if (request.method !== "POST")
+        return new Response(null, { status: 405, headers: { Allow: "POST" } });
+      const started = performance.now();
+      setCfEnv(env);
+      try {
+        const { seedCoreFixtures } = await import("./seed-core");
+        await seedCoreFixtures({
+          databaseUrl: env.DATABASE_URL,
+          origin: url.origin,
+          bucket: env.R2_BUCKET_NAME,
+          keyPrefix: env.R2_KEY_PREFIX,
+          // The first auth request also binds the Worker env, which gives the
+          // corpus's writes the local background queue.
+          post: (path, body) =>
+            worker.fetch(
+              new Request(new URL(path, url.origin), {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Origin: url.origin,
+                },
+                body: JSON.stringify(body),
+              }),
+              env,
+              ctx,
+            ),
+        });
+      } catch (error) {
+        return new Response(
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error),
+          { status: 500, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      return Response.json(
+        { pack: "core", ms: Math.round(performance.now() - started) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
     if (url.pathname === "/__dev/preview") {
       if (request.method !== "GET")

@@ -1,9 +1,13 @@
 # Local development
 
 `pnpm dev` starts Cubby with Vite HMR inside workerd. The supervisor prepares
-PostgreSQL, WASM, and local auxiliary workers before starting the
-app. It seeds the synthetic core corpus through the running Better Auth service
-and reports readiness only after the database, fixtures, and Worker agree.
+the owned PostgreSQL endpoint, then WASM and generated artifacts before any
+corpus initialization (including low-level ready/migrate/reset), and local auxiliary workers before starting the
+app. A shared IntegreSQL corpus template supplies the synthetic core household;
+the Worker restores its bundled photos into checkout-local R2 and reports
+readiness only after the database, fixtures, and Worker agree. Vite compiles
+application/auth routes on their first request; startup does not warm SSR with
+an otherwise unused auth-session request.
 
 ## Start and discover
 
@@ -12,10 +16,9 @@ and reports readiness only after the database, fixtures, and Worker agree.
 The Cloud Agent environment starts Docker and `pnpm dev` on boot. Readiness is
 `http://localhost:3000/__dev/ready`; sign in at `http://localhost:3000/__dev/login`.
 On this Linux image the dev server accepts `localhost` (IPv6) and refuses
-`127.0.0.1`. Test Postgres/IntegreSQL is separate from that dev database. On
-Linux/CI start it with `docker compose -p cubby up -d --wait`; on macOS
-`pnpm test:postgres` starts its own Apple `container` services on first use
-([development](development.md)), so do not pre-check for Docker.
+`127.0.0.1`. Development and tests share container PostgreSQL and IntegreSQL.
+Local commands start them on first use ([development](development.md)); CI uses
+its externally managed service pair.
 
 ### Checkout runtime
 
@@ -23,8 +26,8 @@ Install dependencies with `pnpm install`. On macOS, local development defaults
 to Apple `container`; run `container system start`. Linux defaults to Docker.
 To use Docker on macOS, start its daemon and export
 `CUBBY_DEV_SERVICES=docker` for development commands. Both backends use the same
-loopback port and checkout database guards. Neither keeps a volume: the
-synthetic databases are rebuilt by the next `pnpm dev`. Then run:
+checkout database guards. Neither keeps a data volume: after container
+recreation, the next `pnpm dev` rebuilds its templates. Then run:
 
 ```sh
 pnpm dev
@@ -40,6 +43,18 @@ running origin; ports can differ between checkouts. `/__dev/health` reports
 runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
 release has loaded (`usdaReady`).
+
+Dev sessions and template recovery share one process-liveness contract: `alive`
+means equal verified birth identities; `dead` means an absent PID or a verified
+different birth in the same identity format; everything unreadable or in another
+format is `unknown`. Unknown ownership never authorizes termination, replacement,
+reset, or template discard. Unprefixed legacy identities are unknown because their
+original timezone/locale was not recorded. For local birth uncertainty, the
+diagnostic names the PID: stop that local process with `kill <pid>`, then run
+`pnpm dev down` before retrying. Foreign-host or missing-service-incarnation
+uncertainty requires shared-service recovery instead; see
+[template recovery](development.md#worktrees-and-test-services). Session and
+persistent data stay intact until ownership is resolved.
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
 Debug Swift apps launched with `--cubby-dev-server <origin>` use
@@ -48,15 +63,57 @@ cache without a browser redirect. This mode accepts only loopback HTTP servers
 and rejects redirects; it is absent from release app builds.
 
 A real checkout path determines a stable development id. Its database is
-`cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with
+`cubby_dev_<id>` (published at `localhost:55432`), and its Worker resources are named with
 that id. PostgreSQL's container is shared with every checkout and with test runs'
 IntegreSQL databases; databases, D1/R2/DO/queue state, and session files
 belong to each checkout. The server runs with JIT off (Neon's PostgreSQL has
 no JIT provider; the local image's LLVM compiler otherwise adds substantial
 compilation time to complex quality queries) and durability off (`fsync`,
 `synchronous_commit`, `full_page_writes`) and no volume: local data is
-synthetic, and `pnpm dev` re-creates, migrates and seeds a missing checkout
-database. The container preloads
+synthetic. Databases survive runtime and idle restarts for the lifetime of the
+checkout. Each clone's database comment records the absolute checkout path;
+every preparation refreshes that label, including an existing database.
+Provisioning collects only idle databases whose name exactly matches the default
+id derived from the labelled, now-missing checkout path. Explicit names and
+instance names are retained unless they match that default derivation. The
+requested target is excluded, active connections prevent collection, and DROP
+never uses FORCE for collection.
+
+IntegreSQL coordinates one migration-keyed base template for tests and dev.
+A second layer, keyed by migrations, `LOCAL_FIXTURE_VERSION`, corpus/application
+sources, shared code and fixture bytes, seeds once through application code.
+The key follows the corpus preparation entry's runtime module graph with esbuild,
+including dynamic imports, server calculations and write paths, tooling fixtures,
+factories and scenarios. All workspace packages' runtime sources and package
+manifests (including USDA and Worker tracing), workspace resolution configuration,
+Rust/WASM inputs, migrations, lockfiles and bundled wardrobe PNG bytes are also
+hashed. Unrelated UI sources
+(features, UI, routes and components outside that graph) do not invalidate the
+seed. Existing checkout edits survive startup; `pnpm dev reset` adopts the
+current template. For an exceptional dependency outside the discovered graph or
+a new reference day, run `pnpm dev reset --reseed`. It persists a fresh generation
+in that instance's state directory, seeds a new template, and uses it on later
+resets; other instances keep their generations.
+It inserts the synthetic account with Better Auth's password hasher, then runs
+the entity kernel and specialist repositories. Before a Worker exists, its
+background publications are stored in the template's development-only
+`cubby_dev_background_task` outbox. Clones hand those envelopes to the local
+Worker queue on startup, deleting them only after acceptance. A partial handoff
+may redeliver; handlers retain their freshness checks. Import, account and corpus
+timings
+are logged separately. Once finalized, a new checkout database is a physical
+`CREATE DATABASE … TEMPLATE …` clone. Test pools remain per namespace and
+checkout; idle IntegreSQL recycling drops only `integresql_*` databases, so
+checkout clones survive and a discarded template rebuilds on demand.
+
+On Apple container, the supervisor derives `CUBBY_DEV_DB_ADDRESS` from the
+container's own IP and uses its port 5432 for Worker and local Hyperdrive
+connections, bypassing the published-port proxy. Docker uses loopback 55432.
+Every preparation entry point inspects the owned container before connecting;
+an inherited address must equal that derived endpoint. This address is derived,
+not a user override. Repeated readiness/reset preparation carries the verified
+address and its database URLs together; it must never mix a direct address with
+inherited loopback URLs. The container preloads
 `pg_stat_statements`; database preparation enables it for the selected
 checkout, providing normalized query counts, execution times and buffer
 statistics for local performance investigations. A container started with
@@ -84,9 +141,11 @@ then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
 Ctrl-C stops the owned runtime and keeps the checkout's database. `pnpm dev down` stops
-that checkout's supervisor. `pnpm dev reset` stops it and resets its database and
-Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev seed`
-reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
+that checkout's supervisor. `pnpm dev reset` stops it, re-clones its database from the current corpus template,
+and removes its Worker state. Add `--reseed` to build a fresh corpus generation
+instead of reusing a finalized template. The next startup restores the three bundled PNGs
+into local R2 when missing. `pnpm dev seed` checks the core marker without
+resetting edits. Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.
 
 A session nobody uses ends on its own, so a settled agent thread cannot leave
@@ -134,9 +193,25 @@ providers. Inventory remains unchanged when meals are logged.
 
 Faker uses a fixed independent seed. Story chronology (projects, purchases,
 expenses, settlement, transfers, sowing work, plantings, journal entries, email,
-and meals) is anchored to the household-local day when the database is seeded; an explicit
-`referenceDate` makes artifact dates reproducible. Reseeding a completed pack is a
-no-op, so reset the ephemeral database to refresh its dates or version.
+and meals) is anchored to the household-local day when the corpus template is seeded; an
+explicit `referenceDate` makes artifact dates reproducible. Reseeding a completed
+pack is a no-op. Reset adopts the current template and retains its chronology;
+a changed template hash or a recycled template seeds a new reference day.
+Background tasks always use a queue; publishing nonempty work without a
+`BACKGROUND_QUEUE` producer throws with the publication source. Post-commit
+publication errors remain logged and reported, with durable stale markers for
+repair. No Node fallback runs handlers. Node opt-in pack writers forward queue
+envelopes to the running development Worker at `/__dev/background-tasks`; the
+receiver checks the writer's database identity before accepting work. Opt-in
+packs use the discovered session origin. Built workerd harnesses install
+their queue producer for Node scenarios, retaining the selected profile's
+consumer routing.
+Integration tests install `captureBackgroundQueue()` and explicitly `drain(db)`
+when asserting consumer effects. Workflow finalizers and retry fallbacks also
+need a producer even when a test reads only synchronous writes. The bounded
+drain runs real handlers, including
+follow-up publications, and retains a failed task for diagnosis.
+
 Optional packs still add small focused graphs to the running session:
 
 ```sh
@@ -252,6 +327,12 @@ HEAD/ETag metadata, and a single HTTP byte range (206 or 416).
 `/cdn-cgi/image/<options>/<key>` passes through the original local bytes; it
 does not reproduce Cloudflare CDN resizing, compression, or cache behavior.
 Validate those transformations against the deployed boundary when relevant.
+
+Port probes do not reserve ports. If Vite/workerd exits with `EADDRINUSE`
+before readiness, the supervisor reaps that launch, selects fresh app
+and inspector ports, re-resolves all origin-derived settings and rewrites the
+session discovery file and built-preview JSON bindings before relaunching. It retries at most three times;
+other failures and exits after readiness are reported directly.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes
 the Worker debugging target. To inspect PostgreSQL directly, use the connection

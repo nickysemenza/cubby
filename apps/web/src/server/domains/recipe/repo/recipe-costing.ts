@@ -527,9 +527,9 @@ export class RecipeCostingService {
         recipeIds: recipeIds.slice(i, i + RECIPE_RECOMPUTE_CHUNK_SIZE),
       });
     }
-    const receipt = await this.publish(this.db, tasks, { source });
+    await this.publish(this.db, tasks, { source });
     log.info(
-      `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} transport=${receipt.transport} source=${source}`,
+      `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} source=${source}`,
     );
   }
 
@@ -566,9 +566,9 @@ export class RecipeCostingService {
   /**
    * The single entry for recompute triggered by a request-path mutation. Every
    * dispatch first marks the affected recipes stale — the durable record — then
-   * publishes bounded tasks. In production the queue drains each chunk in its
-   * own invocation with a fresh CPU/memory budget; on the dev Node server (no
-   * binding) the same handler runs inline. Returns the count of recipes
+   * publishes bounded tasks. The queue drains each chunk in its
+   * own invocation with a fresh CPU/memory budget. Node callers must configure
+   * an explicit queue producer. Returns the count of recipes
    * invalidated.
    */
   async dispatchRecompute(
@@ -630,8 +630,7 @@ export class RecipeCostingService {
    * Recompute-all: mark every active recipe stale and publish bounded
    * `recipe-totals.recompute` tasks — instead of holding a single request open
    * to do the full CPU-heavy pass inline. The work then survives a navigate-
-   * away / PWA background / Worker CPU limit: it runs on the queue (or inline
-   * in dev, where there's no binding). This is the same path every
+   * away / Worker CPU limit: it runs on the queue. This is the same path every
    * mutation-triggered recompute uses ({@link dispatchRecompute}); a full
    * recompute is just the widest possible affected set.
    */

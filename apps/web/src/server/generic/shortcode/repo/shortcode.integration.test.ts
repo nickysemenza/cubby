@@ -24,7 +24,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { databaseForTransaction, getDb } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import {
   createLocationFixture as createLocation,
@@ -131,41 +131,44 @@ describe("uniqueness spans soft-deleted rows", () => {
 describe("insertWithShortcode", () => {
   const ctx = withTestDb();
 
-  it("survives a collision inside an open transaction via its savepoint", async () => {
-    // Without the SAVEPOINT the 23505 aborts the CALLER's transaction, and every
-    // later statement in it fails with "current transaction is aborted" — the
-    // retry would be strictly worse than no retry at all. So: force a collision
-    // inside a transaction, then keep using that same transaction.
-    const contested = `${SHORTCODE_PREFIX.product}YYYY`;
+  it.each(["transaction", "facade"])(
+    "survives a collision inside an open %s via its savepoint",
+    async (mode) => {
+      // Without the SAVEPOINT the 23505 aborts the CALLER's transaction, and every
+      // later statement in it fails with "current transaction is aborted" — the
+      // retry would be strictly worse than no retry at all. So: force a collision
+      // inside a transaction, then keep using that same transaction.
+      const contested = `${SHORTCODE_PREFIX.product}YYYY`;
 
-    await getDb(ctx.db).transaction(async (tx) => {
-      await tx.insert(product).values({
-        name: "Squatter",
-        manufacturer: "ACME",
-        shortcode: contested,
-      });
-
-      const generator = createPinnedShortcodeGenerator();
-      generator.pin(contested);
-      const created = await insertWithShortcode(
-        tx,
-        "product",
-        {
-          name: "Retried",
+      await getDb(ctx.db).transaction(async (tx) => {
+        await tx.insert(product).values({
+          name: "Squatter",
           manufacturer: "ACME",
-        },
-        generator.port,
-      );
-      expect(created.shortcode).not.toBe(contested);
+          shortcode: contested,
+        });
 
-      // The caller's transaction is still alive — this is the assertion that
-      // fails loudly if the savepoint is ever removed.
-      const rows = await tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(product);
-      expect(rows[0]?.n).toBeGreaterThanOrEqual(2);
-    });
-  });
+        const generator = createPinnedShortcodeGenerator();
+        generator.pin(contested);
+        const created = await insertWithShortcode(
+          mode === "facade" ? databaseForTransaction(tx) : tx,
+          "product",
+          {
+            name: "Retried",
+            manufacturer: "ACME",
+          },
+          generator.port,
+        );
+        expect(created.shortcode).not.toBe(contested);
+
+        // The caller's transaction is still alive — this is the assertion that
+        // fails loudly if the savepoint is ever removed.
+        const rows = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(product);
+        expect(rows[0]?.n).toBeGreaterThanOrEqual(2);
+      });
+    },
+  );
 });
 
 describe("resolution", () => {

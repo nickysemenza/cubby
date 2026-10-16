@@ -2,7 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -461,6 +468,7 @@ describe("garden workflows", () => {
         ),
       );
     expect(liveRows).toHaveLength(1);
+    await backgroundQueue.drain(ctx.db);
     const refreshedSearchText = await getSearchDocumentEmbeddingText(
       ctx.db,
       "gardenEntry",

@@ -2,7 +2,7 @@ import type { RecipeId, RecipeShortcode } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -21,6 +21,7 @@ import {
 } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   ingredientRef,
   makeProductInput,
@@ -43,7 +44,11 @@ describe("recipe totals cascade", () => {
       }),
     ).services.recipeCosting;
 
-  afterEach(() => setCfEnv(undefined));
+  let queue: ReturnType<typeof captureBackgroundQueue>;
+  beforeEach(() => {
+    queue = captureBackgroundQueue();
+  });
+  afterEach(() => queue.restore());
 
   /** A queue that records what was published, and can refuse. */
   const installQueue = (options: { fail?: boolean } = {}) => {
@@ -162,6 +167,23 @@ describe("recipe totals cascade", () => {
       ctx.actor,
     );
   };
+
+  it("drains real cascading tasks and bounds unfinished follow-up work", async () => {
+    const tree = await seedTree();
+    await queue.drain(ctx.db);
+    await changePrice(tree.product, 9);
+    await costing().dispatchRecompute([tree.child]);
+    expect(await stale(tree.child)).toBe(true);
+    await expect(queue.drain(ctx.db, 1)).rejects.toThrow(
+      "possible cascade cycle",
+    );
+    expect(queue.tasks.length).toBeGreaterThan(0);
+    expect(await queue.drain(ctx.db)).toBeGreaterThan(0);
+    expect(queue.tasks).toEqual([]);
+    expect(await stale(tree.child)).toBe(false);
+    expect(await stale(tree.parent)).toBe(false);
+    expect(await stale(tree.grandparent)).toBe(false);
+  });
 
   it("commits the child and stales its parent together, then publishes the parent", async () => {
     const tree = await seedTree();

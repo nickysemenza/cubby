@@ -1,6 +1,7 @@
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, afterEach, expect, it } from "vitest";
 import { createPostgresPool } from "../postgres-pool";
 import { TEST_USER_ID, withTestDb } from "../test-setup";
 import { readHouseholdCoverage, seedCorpus } from "./corpus";
@@ -12,6 +13,11 @@ import { seedNativeQa } from "./native-qa";
 // Curated chronology must move together with the reference day, and every
 // synthetic member must have the same user-backed identity as production.
 const ctx = withTestDb();
+let queue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  queue = captureBackgroundQueue();
+});
+afterEach(() => queue.restore());
 const objects = new Map<string, Buffer>();
 const storage = createServer(async (request, response) => {
   const chunks: Buffer[] = [];

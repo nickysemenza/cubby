@@ -1,3 +1,7 @@
+import {
+  processIdentity,
+  processStatus,
+} from "../../../../scripts/lib/process-identity.ts";
 import { createPostgresPool } from "../postgres-pool";
 import {
   devSessionSchema as sessionSchema,
@@ -5,6 +9,7 @@ import {
 } from "./state";
 import { localSimulatorServer } from "../../../../scripts/apple/lib/simulator-server.ts";
 import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
+import { resolveOwnedDevProfile } from "../../../../scripts/lib/shared-postgres.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -15,12 +20,15 @@ import {
   renameSync,
 } from "node:fs";
 import net from "node:net";
+import { previewConfig } from "./preview-config";
+import { shouldRetryRuntime } from "./runtime-retry.ts";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
 
 import { z } from "zod";
+import { devFixturePackSchema } from "./fixtures.ts";
 import {
   devProcessEnvironment,
   resolveDevProfile,
@@ -37,16 +45,6 @@ interface DiagnosticChecks {
   database?: boolean | string;
 }
 
-function processIdentity(pid: number): string {
-  try {
-    return execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "";
-  }
-}
 function sessionPath(profile: DevProfile): string {
   return path.join(profile.stateDir, "session.json");
 }
@@ -66,10 +64,15 @@ function readSession(profile: DevProfile): Session | undefined {
   return session;
 }
 function alive(session: Session): boolean {
-  return (
-    !!session.supervisorIdentity &&
-    processIdentity(session.supervisorPid) === session.supervisorIdentity
-  );
+  return ownedProcessAlive(session.supervisorPid, session.supervisorIdentity);
+}
+function ownedProcessAlive(pid: number, identity: string | undefined): boolean {
+  const status = processStatus(pid, identity);
+  if (status === "unknown")
+    throw new Error(
+      `PID ${pid} ownership unknown; stop that process (kill ${pid}), then run pnpm dev down before retrying. Persistent data retained`,
+    );
+  return status === "alive";
 }
 function writeSession(profile: DevProfile, session: Session): void {
   const destination = sessionPath(profile);
@@ -139,6 +142,21 @@ function installEnvironment(profile: DevProfile): void {
     if (!(key in safe)) delete process.env[key];
   Object.assign(process.env, safe);
 }
+/** The core corpus seeds inside the dev Worker (tooling/dev/seed-core.ts). */
+async function seedCore(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/__dev/seed`, {
+    method: "POST",
+    signal: AbortSignal.timeout(180_000),
+  });
+  if (!response.ok)
+    throw new Error(
+      `Core fixture seeding failed (${response.status}): ${await response.text()}`,
+    );
+  console.log(
+    `[dev-db] Core fixtures seeded in ${z.object({ ms: z.number() }).parse(await response.json()).ms} ms`,
+  );
+}
+
 async function readiness(session: Session) {
   const response = await fetch(`${session.origin}/__dev/ready`, {
     signal: AbortSignal.timeout(3_000),
@@ -164,16 +182,17 @@ const untilGone = (isAlive: () => boolean, timeoutMs: number) =>
 async function stop(profile: DevProfile): Promise<void> {
   const session = readSession(profile);
   if (!session) return;
+  const runtimeAlive = () =>
+    !!session.runtimePid &&
+    ownedProcessAlive(session.runtimePid, session.runtimeIdentity);
+  // Verify both owners before signalling either or changing persistent state.
+  runtimeAlive();
   if (alive(session)) process.kill(session.supervisorPid, "SIGTERM");
   await untilGone(() => alive(session), 5000);
   if (alive(session))
     throw new Error(
       "Development supervisor did not stop; persistent data retained",
     );
-  const runtimeAlive = () =>
-    !!session.runtimePid &&
-    !!session.runtimeIdentity &&
-    processIdentity(session.runtimePid) === session.runtimeIdentity;
   if (runtimeAlive() && session.runtimePid) {
     process.kill(-session.runtimePid, "SIGTERM");
     await untilGone(runtimeAlive, 5000);
@@ -269,14 +288,20 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     writeSession(profile, session);
   };
   try {
-    await phase("database", () =>
-      run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
+    await phase("postgres", () =>
+      run(profile, process.execPath, ["scripts/dev-db.ts", "up"]),
     );
+    profile = await resolveOwnedDevProfile(root, selectedEnvironment);
+    const address = new URL(profile.databaseUrl).host;
+    process.env.CUBBY_DEV_DB_ADDRESS = address;
     await phase("wasm", () =>
       run(profile, process.execPath, ["scripts/ensure.ts", "wasm"]),
     );
     await phase("generator", () =>
       run(profile, process.execPath, ["scripts/ensure.ts", "generate"]),
+    );
+    await phase("database", () =>
+      run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
     );
     if (preview)
       await phase("build", async () => {
@@ -286,130 +311,154 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           ["--dir", profile.webRoot, "run", "build:cf"],
           { CUBBY_DEV_PREVIEW_BUILD: "true" },
         );
+      });
+    for (let launchAttempt = 0; ; launchAttempt++) {
+      if (preview) {
         const builtRoot = path.join(profile.webRoot, "dist/server");
-        const config = z
-          .object({
-            main: z.string(),
-            assets: z.object({ directory: z.string() }).passthrough(),
-          })
-          .passthrough()
-          .parse(
-            JSON.parse(
-              readFileSync(path.join(builtRoot, "wrangler.json"), "utf8"),
-            ),
-          );
-        config.main = path.resolve(builtRoot, config.main);
-        config.assets.directory = path.resolve(
-          builtRoot,
-          config.assets.directory,
-        );
         writeFileSync(
           path.join(profile.stateDir, "config/preview.json"),
-          JSON.stringify(config),
+          JSON.stringify(
+            previewConfig(
+              JSON.parse(
+                readFileSync(path.join(builtRoot, "wrangler.json"), "utf8"),
+              ),
+              builtRoot,
+              profile,
+            ),
+          ),
         );
+      }
+      const args = preview
+        ? [
+            "exec",
+            "wrangler",
+            "dev",
+            "--config",
+            path.join(profile.stateDir, "config/preview.json"),
+            "--port",
+            String(profile.port),
+            "--inspector-port",
+            String(profile.inspectorPort),
+            "--local",
+            "--persist-to",
+            path.join(profile.stateDir, "cloudflare"),
+          ]
+        : ["exec", "vite", "dev"];
+      child = spawn("pnpm", args, {
+        cwd: profile.webRoot,
+        // The runtime's lifecycle plugin exits if this supervisor dies.
+        env: {
+          ...devProcessEnvironment(profile),
+          CUBBY_DEV_SUPERVISOR_PID: String(process.pid),
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: true,
       });
-    const args = preview
-      ? [
-          "exec",
-          "wrangler",
-          "dev",
-          "--config",
-          path.join(profile.stateDir, "config/preview.json"),
-          "--port",
-          String(profile.port),
-          "--inspector-port",
-          String(profile.inspectorPort),
-          "--local",
-          "--persist-to",
-          path.join(profile.stateDir, "cloudflare"),
-        ]
-      : ["exec", "vite", "dev"];
-    child = spawn("pnpm", args, {
-      cwd: profile.webRoot,
-      // The runtime's lifecycle plugin exits if this supervisor dies.
-      env: {
-        ...devProcessEnvironment(profile),
-        CUBBY_DEV_SUPERVISOR_PID: String(process.pid),
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
-    });
-    ownedChildren.add(child);
-    child.once("close", () => ownedChildren.delete(child!));
-    child.on("error", () => {
-      interrupted = true;
-    });
-    let logs = "";
-    for (const stream of [child.stdout, child.stderr])
-      stream?.on("data", (chunk) => {
-        const text = String(chunk);
-        logs = (logs + text).slice(-64_000);
-        process.stdout.write(text);
-        writeFileSync(path.join(profile.stateDir, "runtime.log"), logs, {
-          mode: 0o600,
-        });
+      ownedChildren.add(child);
+      const launched = child;
+      child.once("close", () => ownedChildren.delete(launched));
+      child.on("error", () => {
+        interrupted = true;
       });
-    session.runtimePid = child.pid;
-    session.runtimeIdentity = child.pid
-      ? processIdentity(child.pid)
-      : undefined;
-    writeSession(profile, session);
-    await phase("runtime", async () => {
-      let lastError: unknown;
-      for (let attempt = 0; attempt < 180; attempt++) {
-        if (interrupted || child?.exitCode !== null)
-          throw new Error("Worker exited before readiness");
-        try {
-          const response = await fetch(`${profile.origin}/__dev/health`, {
-            signal: AbortSignal.timeout(3_000),
+      let logs = "";
+      for (const stream of [child.stdout, child.stderr])
+        stream?.on("data", (chunk) => {
+          const text = String(chunk);
+          logs = (logs + text).slice(-64_000);
+          process.stdout.write(text);
+          writeFileSync(path.join(profile.stateDir, "runtime.log"), logs, {
+            mode: 0o600,
           });
-          const body = z
-            .object({ devId: z.string(), database: z.string() })
-            .parse(await response.json());
-          if (
-            !response.ok ||
-            body.devId !== profile.id ||
-            body.database !== profile.name
-          )
-            throw new Error("Worker health identity mismatch");
-          return;
-        } catch (error) {
-          lastError = error;
-          await delay(500);
+        });
+      session.runtimePid = child.pid;
+      session.runtimeIdentity = child.pid
+        ? processIdentity(child.pid)
+        : undefined;
+      writeSession(profile, session);
+      try {
+        await phase("runtime", async () => {
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 180; attempt++) {
+            if (interrupted || child?.exitCode !== null)
+              throw new Error("Worker exited before readiness");
+            try {
+              const response = await fetch(`${profile.origin}/__dev/health`, {
+                signal: AbortSignal.timeout(3_000),
+              });
+              const body = z
+                .object({ devId: z.string(), database: z.string() })
+                .parse(await response.json());
+              if (
+                !response.ok ||
+                body.devId !== profile.id ||
+                body.database !== profile.name
+              )
+                throw new Error("Worker health identity mismatch");
+              return;
+            } catch (error) {
+              lastError = error;
+              await delay(500);
+            }
+          }
+          throw new Error(
+            `Worker did not become healthy: ${String(lastError)}`,
+          );
+        });
+        await phase("fixtures", () => seedCore(profile.origin));
+        await phase("readiness", async () => {
+          for (let attempt = 0; ; attempt++) {
+            try {
+              await readiness(session);
+              return;
+            } catch (error) {
+              if (cancelled || child?.exitCode !== null || attempt >= 9)
+                throw error;
+              await delay(500);
+            }
+          }
+        });
+        break;
+      } catch (error) {
+        if (
+          !shouldRetryRuntime({
+            exited: child.exitCode !== null,
+            ready: false,
+            cancelled: interrupted || cancelled,
+            logs,
+            attempt: launchAttempt,
+          })
+        )
+          throw error;
+        // A failed Vite can leave workerd children holding ports; reap this launch.
+        if (child.pid) {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            /* Already exited. */
+          }
         }
-      }
-      throw new Error(`Worker did not become healthy: ${String(lastError)}`);
-    });
-    await phase("application", async () => {
-      const response = await fetch(`${profile.origin}/api/auth/get-session`, {
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!response.ok)
-        throw new Error(
-          `Local application initialization failed (${response.status}): ${await response.text()}`,
+        const port = await freePort(profile.port + 1, false);
+        const inspectorPort = await freePort(
+          Math.max(profile.inspectorPort + 1, port + 1),
+          false,
         );
-    });
-    await phase("fixtures", async () => {
-      const { seedDevDatabase } = await import("./fixtures.ts");
-      installEnvironment(profile);
-      await seedDevDatabase({
-        databaseUrl: profile.databaseUrl,
-        baseURL: profile.origin,
-        pack: "core",
-      });
-    });
-    await phase("readiness", async () => {
-      for (let attempt = 0; ; attempt++) {
-        try {
-          await readiness(session);
-          return;
-        } catch (error) {
-          if (cancelled || child?.exitCode !== null || attempt >= 9)
-            throw error;
-          await delay(500);
-        }
+        selectedEnvironment.PORT = String(port);
+        selectedEnvironment.CUBBY_DEV_INSPECTOR_PORT = String(inspectorPort);
+        profile = resolveDevProfile(root, {
+          ...selectedEnvironment,
+          ...(address ? { CUBBY_DEV_DB_ADDRESS: address } : {}),
+        });
+        session.origin = profile.origin;
+        session.explorerURL = `${profile.origin}/cdn-cgi/local/explorer`;
+        session.inspectorURL = `http://localhost:${profile.inspectorPort}`;
+        session.runtimePid = undefined;
+        session.runtimeIdentity = undefined;
+        writeSession(profile, session);
+        console.log(
+          `[dev] Runtime port collision; relaunch ${launchAttempt + 1}/3 on ${profile.origin}, inspector ${profile.inspectorPort}`,
+        );
       }
-    });
+    }
     session.readiness = "ready";
     writeSession(profile, session);
     printLinks(session);
@@ -469,11 +518,12 @@ async function diagnostics(
 ): Promise<void> {
   const checks: DiagnosticChecks = {
     session: !!session,
-    process: !!session && alive(session),
+    process: false,
     ready: false,
     tools: {},
   };
   try {
+    checks.process = !!session && alive(session);
     if (!session || !alive(session))
       throw new Error("No live development session");
     await readiness(session);
@@ -541,7 +591,11 @@ async function main(): Promise<void> {
   if (command === "down") return stop(profile);
   if (command === "reset") {
     await stop(profile);
-    await run(profile, process.execPath, ["scripts/dev-db.ts", "reset"]);
+    await run(profile, process.execPath, [
+      "scripts/dev-db.ts",
+      "reset",
+      ...(args.includes("--reseed") ? ["--reseed"] : []),
+    ]);
     rmSync(path.join(profile.stateDir, "cloudflare"), {
       recursive: true,
       force: true,
@@ -560,6 +614,8 @@ async function main(): Promise<void> {
     return launchLocalDevSimulator(session.origin, args.slice(1));
   }
   if (command === "seed") {
+    const pack = devFixturePackSchema.parse(args[1] ?? "core");
+    if (pack === "core") return seedCore(session.origin);
     installEnvironment({
       ...profile,
       origin: session.origin,
@@ -571,12 +627,11 @@ async function main(): Promise<void> {
         R2_PUBLIC_URL: session.origin,
       },
     });
-    const { seedDevDatabase, devFixturePackSchema } =
-      await import("./fixtures.ts");
+    const { seedDevDatabase } = await import("./fixtures.ts");
     return seedDevDatabase({
       databaseUrl: profile.databaseUrl,
       baseURL: session.origin,
-      pack: devFixturePackSchema.parse(args[1] ?? "core"),
+      pack,
     });
   }
   throw new Error(`Unknown dev command: ${command}`);

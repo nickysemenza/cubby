@@ -12,7 +12,14 @@ import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
@@ -43,6 +50,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import {
+  projectMutationEvent,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
   type MutationSideEffectEvent,
@@ -136,16 +144,19 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
 
+    // The publication must use exactly the dependency wave projected in the
+    // write transaction, including Inventory and Task documents.
+    const event = {
+      action: "updated" as const,
+      entity: { entity: "product" as const, id: product.entityId },
+      source: "test.product.update",
+    };
+    const projectedRefs = await projectMutationEvent(ctx.db, event);
     const ports = capturingPorts();
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "product", id: product.entityId },
-        source: "test.product.update",
-      },
-      ports,
-    );
+    await runMutationSideEffects(ctx.db, event, ports, {
+      projection: "skip",
+      projectedRefs,
+    });
 
     const refs = embeddingRefreshRefs(ports.published.flat());
     expect(refs).toEqual(

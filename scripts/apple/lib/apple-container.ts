@@ -58,37 +58,6 @@ export function containerCli(
   });
 }
 
-export async function listContainers(): Promise<ContainerListEntry[]> {
-  const raw = JSON.parse(
-    await containerCli(["list", "--all", "--format", "json"]),
-  );
-  if (!Array.isArray(raw)) throw new Error("Invalid container list response");
-  return raw;
-}
-
-export async function findContainer(
-  name: string,
-): Promise<ContainerListEntry | undefined> {
-  return (await listContainers()).find((entry) => entry.id === name);
-}
-
-/** `container run --detach --rm ...`. Resolves once the create RPC completes. */
-export async function runDetached(name: string, args: string[]): Promise<void> {
-  await containerCli(
-    [
-      "run",
-      "--detach",
-      "--rm",
-      "--platform",
-      "linux/arm64",
-      "--name",
-      name,
-      ...args,
-    ],
-    180_000,
-  );
-}
-
 export async function containerAddress(name: string): Promise<string> {
   const info = JSON.parse(await containerCli(["inspect", name]));
   const ip =
@@ -96,24 +65,6 @@ export async function containerAddress(name: string): Promise<string> {
     "";
   if (isIP(ip) !== 4) throw new Error(`No IPv4 address for ${name}`);
   return ip;
-}
-
-export async function stopAndRemove(
-  name: string,
-  { logsOnFailure = false } = {},
-): Promise<void> {
-  const current = await findContainer(name);
-  if (!current) return;
-  if (logsOnFailure) {
-    console.error(
-      `[apple-container] Logs: ${name}\n${await containerCli(["logs", name]).catch(String)}`,
-    );
-  }
-  if (current.status.state === "running")
-    await containerCli(["stop", "--time", "5", name]);
-  const remaining = await listContainers();
-  if (remaining.some((entry) => entry.id === name))
-    await containerCli(["delete", name]);
 }
 
 /** Wait until `probe` stops throwing. */

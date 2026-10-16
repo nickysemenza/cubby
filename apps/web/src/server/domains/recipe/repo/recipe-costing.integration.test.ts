@@ -5,7 +5,14 @@ import {
   withMacros,
 } from "@cubby/schemas/nutrition";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { updateProduct } from "~/server/domains/product/repo/crud";

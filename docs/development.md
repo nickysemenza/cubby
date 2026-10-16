@@ -173,12 +173,46 @@ native PostgreSQL installation remain owned by their existing runners.
   synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
   The route exists only in the local dev Worker entry and the button only in
   Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
-- On macOS, every worktree's database and browser test commands share one
-  Apple `container` IntegreSQL (`cubby-test-<config>-integresql`) on the same
+- Every worktree's database, browser tests and local development share one
+  container IntegreSQL (`cubby-test-<config>-integresql`) on the same
   PostgreSQL as local development (`cubby-dev-pg`,
   `scripts/lib/shared-postgres.ts`), started on first use and reused
-  afterwards; each worktree gets its own IntegreSQL templates and disposable
-  databases. One capped server (1.5 GB, 4 CPUs, durability off) replaces a
+  afterwards. A common migration-keyed base template feeds each checkout's
+  namespaced test pools and the shared dev-corpus template.
+  All template layers use IntegreSQL's initializer election without a template
+  lock. Recovery supports one Mac or one CI runner: all clients must share the
+  same host temporary marker directory and service incarnation. Separate machines,
+  containers with separate temp directories, and unmarked pending owners fail closed;
+  there is no cross-host recovery. Pending records under `cubby-template-initializers`
+  are keyed by service URL, incarnation and hash and record host, PID and a
+  versioned process birth identity read with `TZ=UTC LC_ALL=C`. A live or
+  unverifiable owner is never discarded. Recovery uses the shared
+  [tri-state process-liveness contract](local-development.md#checkout-runtime);
+  local birth uncertainty reports the local PID to stop before retrying, while
+  live owners wait at most two minutes. Foreign-host markers and missing service
+  IDs reject before PID inspection: never kill a local PID based on a foreign
+  marker. Stop all shared-service clients, run `pnpm test:services:down`, then
+  restart via the managed runner. External service owners must recycle the
+  service and supply a fresh `CUBBY_TEMPLATE_SERVICE_ID` shared by all clients.
+  If legacy/unverified markers still block recovery, the service owner must
+  remove only that retired service's marker scope after confirming all its
+  initializers have stopped; managed cleanup deliberately preserves those scopes.
+  A proven-dead owner redirects to a deterministic successor hash. Only newly
+  created redirects consume the eight-interruption budget; established redirects
+  may be traversed across any number of past interruptions within the deadline.
+  Concurrent recoverers discard only the abandoned hash through IntegreSQL's API.
+  A kill before the owner record exists times out rather than guessing ownership.
+  Successful finalization removes its pending record. Managed startup derives
+  `CUBBY_TEMPLATE_SERVICE_ID` from both containers' start identities and retires
+  named directories from previous incarnations; recycling and teardown remove
+  named incarnation directories. Legacy-layout marker files and unverified scopes
+  remain untouched because they cannot prove a gone service incarnation and an
+  older live initializer still needs its pending file for finalization. External
+  services must provide a shared, fresh ID whenever either
+  service restarts (CI uses its fresh job's identity). Without it, initialization
+  and finalized-template reuse work, but pending-owner recovery fails closed.
+  Local development clones that corpus to its stable `cubby_dev_*` name
+  ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
   second VM: Virtualization.framework guests never return freed memory to
   macOS. A test reset selects a fixed
   server session set, protects its registered clients across pools on the same
@@ -189,13 +223,29 @@ native PostgreSQL installation remain owned by their existing runners.
   until socket closure; other database errors remain failures. Workers, peers and Playwright
   listen on OS-assigned ports, so worktrees never collide. Startup runs under
   the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
-  itself in `/tmp/cubby-test-services/runs`: IntegreSQL a live run uses is never
+  itself in `/tmp/cubby-test-services/runs`. Record creation and command-group
+  adoption use atomic rename; temporary files are not published records.
+  Unreadable or invalid records remain intact and block startup/teardown before
+  any service changes. Stop the record's clients and verify its owners are gone
+  before manually repairing/removing it; automatic pruning requires a proven
+  absent wrapper and command group. IntegreSQL a live run uses is never
   removed, an idle one of a superseded configuration (or an earlier revision's
   `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
-  than 250 databases is recreated with its `integresql_*` databases dropped.
-  - `CUBBY_TEST_SERVICES=external` connects to services already running; it
-    does not start a container runtime. Linux and CI use this mode with Docker
-    services (`docker compose -p cubby up -d` for local Linux setup). For another
+  than 100 databases is recreated with its `integresql_*` databases dropped.
+  This is an idle-start recycling threshold, not a hard database cap: a managed
+  run sharing the service defers it, and external mode bypasses it. Each distinct
+  corpus hash (including explicit reseeds) retains its template and pool until
+  that recycling/teardown; continuous sharing or externally owned services can
+  accumulate beyond 100. Superseded templates are retained because another
+  initializer/lease may still use them; external owners manage that lifetime.
+  Apple container is the macOS default; Docker is the Linux default and can be
+  selected on macOS with `CUBBY_DEV_SERVICES=docker`. Docker publishes IntegreSQL
+  on an assigned loopback port; IntegreSQL and PostgreSQL communicate on the
+  `cubby-local` Docker network.
+  - `CUBBY_TEST_SERVICES=managed` is the local default.
+    `CUBBY_TEST_SERVICES=external` connects to services already running; it
+    does not start a container runtime. CI uses this mode with Docker services;
+    `docker compose -p cubby up -d` also supports explicit external local runs. For another
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
   - A killed run's record is ignored once its PID is gone; a reused PID is

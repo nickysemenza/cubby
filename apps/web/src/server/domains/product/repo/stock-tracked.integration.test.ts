@@ -219,6 +219,13 @@ describe("effective Product stock tracking", () => {
       return detail;
     };
 
+    // A create assembled from RETURNING must agree with the relational reader.
+    expect(stockTrackingRead.parse(inherited)).toEqual(
+      await read(inherited.id),
+    );
+    expect(stockTrackingRead.parse(overridden)).toEqual(
+      await read(overridden.id),
+    );
     expect(await read(inherited.id)).toMatchObject({
       stockTracked: null,
       fieldResolutions: {
