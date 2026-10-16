@@ -43,7 +43,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
         cost: lineKind === "tax" ? 0.01 : 1,
         lineKind,
         costType: "materials",
-        trade: "other",
+        trade: lineKind === "tax" ? null : "other",
         future: false,
       });
       if (lineKind === "tax") firstTax ??= line.id;
@@ -92,7 +92,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     "1",
   ]);
   // Trade and cost-type projections must retain rounded adjustment shares
-  // even when category resolution is omitted from the requested dimensions.
+  // and inherited trade when category resolution is not requested.
   for (const scope of [
     { trades: ["other"] as const },
     { costTypes: ["materials"] as const },
