@@ -2,7 +2,7 @@ import { imageAnalysisSummarySchema } from "@cubby/schemas/image";
 import type { ImageAnalysisSummary } from "@cubby/schemas/image";
 import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
 import { imageDescriptionResult } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -56,37 +56,48 @@ export function composeImageAnalysisSummary(
 
 /**
  * Newest non-deleted row per image (keyed by the public `IMG-` shortcode) for
- * one `aiAnalysis` feature, in one query. Joins to `Image` rather than taking
+ * local analysis, in one query. SQL selects one row and only classifications/OCR
+ * per image; full historical payloads stay in retained storage. Equal timestamps
+ * use descending IDs; full timestamp precision is retained. Joins to `Image` rather than taking
  * internal ids because `aiAnalysis.entityId` is a uuid this reader's own
  * callers don't all have on hand — the Product mapper's image rows carry only
  * the shortcode (`MappableImageRecord` deliberately drops the uuid).
  */
-async function loadNewestAnalysisByImage(
+async function loadNewestLocalAnalysisByImage(
   db: Database | DrizzleTransaction,
   imageShortcodes: readonly string[],
-  feature: string,
 ): Promise<Map<string, unknown>> {
-  const rows = await unwrapDb(db)
-    .select({ shortcode: image.shortcode, result: aiAnalysis.result })
+  const latest = unwrapDb(db)
+    .selectDistinctOn([image.shortcode], {
+      shortcode: image.shortcode,
+      result: aiAnalysis.result,
+    })
     .from(aiAnalysis)
     .innerJoin(image, eq(image.id, aiAnalysis.entityId))
     .where(
       and(
         eq(aiAnalysis.entityKind, "image"),
         inArray(image.shortcode, [...imageShortcodes]),
-        eq(aiAnalysis.feature, feature),
+        eq(aiAnalysis.feature, "photo-local-analysis"),
         notDeleted(aiAnalysis),
       ),
     )
-    .orderBy(desc(aiAnalysis.createdAt));
-  const newest = new Map<string, unknown>();
-  for (const row of rows) {
-    // Ordered newest-first: the first row seen per image wins.
-    if (!newest.has(row.shortcode)) {
-      newest.set(row.shortcode, row.result);
-    }
-  }
-  return newest;
+    .orderBy(image.shortcode, desc(aiAnalysis.createdAt), desc(aiAnalysis.id))
+    .as("newest_local_analysis");
+  // Select the winners before inspecting JSON, so history is not detoasted
+  // just to discard it. Missing keys default to [], explicit null stays invalid.
+  const rows = await unwrapDb(db)
+    .select({
+      shortcode: latest.shortcode,
+      result: sql<unknown>`CASE WHEN jsonb_typeof(${latest.result}) = 'object' THEN
+        CASE WHEN ${latest.result} ? 'classifications'
+          THEN jsonb_build_object('classifications', ${latest.result}->'classifications') ELSE '{}'::jsonb END
+        || CASE WHEN ${latest.result} ? 'recognizedText'
+          THEN jsonb_build_object('recognizedText', ${latest.result}->'recognizedText') ELSE '{}'::jsonb END
+        ELSE 'null'::jsonb END`,
+    })
+    .from(latest);
+  return new Map(rows.map((row) => [row.shortcode, row.result]));
 }
 
 /**
@@ -121,7 +132,7 @@ export async function loadImageAnalysisEvidence(
 
   const [localByImage, descriptionEvidence, identificationByImage] =
     await Promise.all([
-      loadNewestAnalysisByImage(db, shortcodes, "photo-local-analysis"),
+      loadNewestLocalAnalysisByImage(db, shortcodes),
       loadSelectedDescriptionEvidence(db, shortcodes),
       loadImageIdentifications(db, shortcodes),
     ]);
