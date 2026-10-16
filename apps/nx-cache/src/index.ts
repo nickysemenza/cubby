@@ -208,7 +208,7 @@ export default {
         headers: { allow: "GET, PUT" },
       });
     } catch (error) {
-      record(env, request.method, "error", 0, start);
+      if (hash !== "0") record(env, request.method, "error", 0, start);
       return new Response(String(error), {
         status: 500,
         headers: { "cache-control": "no-store" },

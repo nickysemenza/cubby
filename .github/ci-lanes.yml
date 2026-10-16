@@ -85,6 +85,8 @@ aux.1:
   - ".gitignore"
   - ".nvmrc"
   - "Cargo.{toml,lock}"
+  - "apps/nx-cache/package.json"
+  - "apps/nx-cache/project.json"
   - "apps/web/package.json"
   - "apps/web/project.json"
   - "cubby-ffi/**"

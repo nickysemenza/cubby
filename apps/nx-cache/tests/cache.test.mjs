@@ -150,3 +150,33 @@ test("stats only query bounded aggregates and preserve independent query errors"
   assert.ok(queries.every((q) => q.includes("LIMIT") && !q.includes("secret")));
   assert.ok(queries.some((q) => q.includes("usageReportTimestamp")));
 });
+
+test("public query strings share one edge snapshot, including partial failures", async (t) => {
+  const original = globalThis.caches;
+  const entries = new Map();
+  globalThis.caches = {
+    default: {
+      async match(request) {
+        return entries.get(request.url)?.clone();
+      },
+      async put(request, response) {
+        entries.set(request.url, response.clone());
+      },
+    },
+  };
+  t.after(() => {
+    if (original === undefined) delete globalThis.caches;
+    else globalThis.caches = original;
+  });
+  const { env, request } = setup();
+  let queries = 0;
+  env.ANALYTICS_SQL.query = async () => {
+    queries++;
+    throw new Error("synthetic query failure");
+  };
+  const first = await request("/stats.json?arbitrary=1");
+  assert.equal(first.headers.get("cache-control"), "public, max-age=10");
+  const second = await request("/stats.json?arbitrary=2");
+  assert.equal(queries, 2);
+  assert.deepEqual(await second.json(), await first.json());
+});

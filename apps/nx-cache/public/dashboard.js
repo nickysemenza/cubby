@@ -147,6 +147,12 @@ async function refresh() {
         error.message +
         ". Use Refresh to retry; any previous values remain visible.",
     );
+    if (!byId("activity").dataset.ready) {
+      for (const id of ["results", "hours"]) {
+        byId(id).replaceChildren();
+        row(byId(id), ["Statistics unavailable", "—", "—", "—"]);
+      }
+    }
     byId("updated").textContent = "Statistics unavailable";
   } finally {
     button.disabled = false;
