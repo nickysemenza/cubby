@@ -274,6 +274,17 @@ off when its recorded controls or end state no longer match.
 
 ## Web coverage additions
 
+`record-picker-desktop` and `record-picker-phone` exercise purchase relationship
+names and inline vendor/project selection against a roster longer than the
+popup. Each opens the picker without typing or scrolling, checks that its current
+option is visible, searches for a replacement project, and verifies the stored
+project and unchanged vendor through SQL. Record links must have names rather
+than code-only labels; graph and diagnostic code metadata is outside that check.
+Known inline field buttons use centered SDK setup below
+sticky chrome; the option-reveal assertion itself never scrolls or taps and
+compares row/list bounds in one browser read. Run them with
+`pnpm test:e2e:agent:web -- --journey record-picker-desktop,record-picker-phone`.
+
 The existing web harness supports `TESTER_ARMY_WEB_MODE=visual` for three SDK
 `toHaveScreenshot` assertions: the structured source-claim editor, cent-short
 split refusal, and phone-width Inventory empty state. Normal model-driven and hybrid SDK

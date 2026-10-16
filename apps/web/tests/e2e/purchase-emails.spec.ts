@@ -47,7 +47,7 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
     .getByRole("row")
     .filter({ has: page.getByText("Synthetic order receipt") });
   await expect(
-    vendorRow.getByRole("link", { name: seed.purchase.shortcode }),
+    vendorRow.getByRole("link", { name: "SYN-ORDER-1001", exact: true }),
   ).toHaveAttribute("href", `/purchases/${seed.purchase.shortcode}`);
   await expect(vendorRow.getByText("Linked").first()).toBeVisible();
 

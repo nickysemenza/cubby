@@ -22,6 +22,8 @@ export type JourneyControl = {
   swipe?: SwipeOptions;
   /** A correction can revisit an input above a form footer. */
   scrollDirection?: "up" | "down";
+  /** Web setup: center an exactly labelled button below sticky chrome. */
+  center?: boolean;
   within?: { role: Role; name: string } | { testId: string };
 };
 
@@ -71,6 +73,8 @@ export type RunWait = {
 };
 
 export type StepCheck = {
+  /** The open picker must reveal these options without agent scrolling. */
+  visibleOptions?: (ids: JourneyIds) => string[];
   /** Exact text that must be on screen as soon as this step ends. */
   visible?: (ids: JourneyIds) => string[];
   /** Confirms that a refused UI operation cannot be submitted. */
@@ -135,6 +139,8 @@ export type Journey = {
   visible: (ids: JourneyIds) => string[];
   /** Exact on-screen text that must be absent (for example a rejected edit). */
   absent?: (ids: JourneyIds) => string[];
+  /** Linked record identity must not fall back to these code-only labels. */
+  absentLinks?: (ids: JourneyIds) => string[];
   db: DbCheck[];
 };
 

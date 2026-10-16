@@ -25,12 +25,14 @@ import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
+import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { matchKindLabel } from "~/entity/presentation/search-utils";
+import { readPathValue } from "~/entity/read-path";
 import { formatCount } from "~/lib/number-format";
 import type {
   ComboboxItem,
@@ -52,8 +54,8 @@ const MAX_TRAILING = 2;
 
 /**
  * A record's row data from its manifest phone-row projection: the field in
- * the `subtitle` slot reads inline after the name, and `trailing` fields
- * become right-aligned chips. The same declaration drives the phone list row
+ * the `subtitle` slot supplies the secondary/status column, and `trailing`
+ * fields become right-aligned chips. The same declaration drives the phone list row
  * and native, so a picker row says what the record's card says.
  */
 function recordRowProjection<E extends ShortcodeType>(
@@ -70,10 +72,22 @@ function recordRowProjection<E extends ShortcodeType>(
     .sort((a, b) => a.priority - b.priority);
   const text = (entry: (typeof slotted)[number]) =>
     compactFieldText(entity, record, entry.field);
-  const secondary = slotted
+  const subtitle = slotted
     .filter((entry) => entry.slot === "subtitle")
-    .map(text)
-    .find((value): value is string => !!value);
+    .find((entry) => !!text(entry));
+  const secondary = subtitle ? text(subtitle) : null;
+  const rawSubtitle = subtitle
+    ? readPathValue(
+        record,
+        subtitle.field.display.readPath ??
+          subtitle.field.readKey ??
+          subtitle.field.key,
+      )
+    : undefined;
+  const status =
+    subtitle?.field.kind === "enum" && typeof rawSubtitle === "string"
+      ? enumDisplayValue(entity, subtitle.field, rawSubtitle)
+      : null;
   const trailing = slotted
     .filter((entry) => entry.slot === "trailing")
     .flatMap((entry): PickerChip[] => {
@@ -81,7 +95,11 @@ function recordRowProjection<E extends ShortcodeType>(
       return value ? [{ text: value }] : [];
     })
     .slice(0, MAX_TRAILING);
-  return { ...(secondary && { secondary }), trailing };
+  return {
+    ...(secondary && !status && { secondary }),
+    ...(status && { status: { text: status.label, color: status.color } }),
+    trailing,
+  };
 }
 
 /** `displayImages[0]` is the server-resolved cover for every entity that
@@ -103,7 +121,7 @@ function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
 /**
  * A picker row for any manifest entity: the declared `titleField` is the
  * name, aliases stay searchable, the cover is the picture, and the phone-row
- * projection supplies the inline secondary and trailing chips.
+ * projection supplies the secondary/status and trailing columns.
  */
 export function buildRecordComboboxItem<E extends ShortcodeType>(
   entity: E,
@@ -112,7 +130,7 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   const shortcode = parseShortcodeFor(entity, record.id);
   const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
-  const { secondary, trailing } = recordRowProjection(entity, record);
+  const { secondary, status, trailing } = recordRowProjection(entity, record);
   return {
     id: shortcode,
     shortcode,
@@ -123,7 +141,9 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
     ...(aliases && { aliases }),
     thumb: recordThumb(entity, record),
     ...(secondary && { secondary }),
-    ...(trailing.length > 0 && { presentation: { trailing } }),
+    ...((status || trailing.length > 0) && {
+      presentation: { status, trailing },
+    }),
   };
 }
 

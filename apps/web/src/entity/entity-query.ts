@@ -10,7 +10,7 @@ import {
   detailEntities,
 } from "./generated/entity-details.gen";
 
-const isDetailEntity = (entity: Entity): entity is DetailEntity =>
+export const isDetailEntity = (entity: Entity): entity is DetailEntity =>
   detailEntities.some((candidate) => candidate === entity);
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);

@@ -5,6 +5,7 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -31,6 +32,15 @@ function ImportEmail({ command }: { command: ReportCommand }) {
 it("imports a shipment without an order ID and links every server-created Run", async () => {
   const harness = createBrowserTestHarness();
   const calls: unknown[] = [];
+  // Keep names available so only refreshed source operands can clear the links.
+  for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries()) {
+    const queryKey = entityPreviewQueryOptions("run", ref).queryKey;
+    harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
+    harness.queryClient.setQueryData(queryKey, {
+      id: ref,
+      displayName: `Synthetic import ${index + 1}`,
+    });
+  }
   const restore = overrideStartDispatch(async (operation, input) => {
     if (operation !== "purchaseImport.emailImport")
       throw new Error(`Unexpected operation: ${operation}`);
@@ -44,11 +54,12 @@ it("imports a shipment without an order ID and links every server-created Run", 
     fireEvent.click(
       await screen.findByRole("button", { name: "Import this Email" }),
     );
-    for (const ref of ["RUN-4K7M", "RUN-5K8N"])
-      expect(await screen.findByRole("link", { name: ref })).toHaveAttribute(
-        "href",
-        `/runs/${ref}`,
-      );
+    for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries())
+      expect(
+        await screen.findByRole("link", {
+          name: `Synthetic import ${index + 1}`,
+        }),
+      ).toHaveAttribute("href", `/runs/${ref}`);
     expect(calls).toEqual([
       { items: [{ id: "EML-4K7M", expectedChecksum: original }] },
     ]);
@@ -65,8 +76,10 @@ it("imports a shipment without an order ID and links every server-created Run", 
         })}
       />,
     );
-    for (const ref of ["RUN-4K7M", "RUN-5K8N"])
-      expect(screen.queryByRole("link", { name: ref })).toBeNull();
+    for (const [index] of ["RUN-4K7M", "RUN-5K8N"].entries())
+      expect(
+        screen.queryByRole("link", { name: `Synthetic import ${index + 1}` }),
+      ).toBeNull();
   } finally {
     restore();
     harness.dispose();
