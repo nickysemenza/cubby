@@ -11,6 +11,7 @@ import {
   productShortcode,
   expenseShortcode,
   purchaseShortcode,
+  vendorShortcode,
 } from "./identifier-fields";
 import { decisionStep } from "./decision-step";
 import { userId } from "./identifiers";
@@ -602,6 +603,7 @@ export const photoProductCandidate = z.object({
         date: z.string().nullable(),
         dateLabel: z.enum(["Ordered", "Paid"]).optional(),
         vendor: z.string().nullable().optional(),
+        vendorId: vendorShortcode.nullable().optional(),
         cost: z.number().nullable(),
         productQuantity: z.number().nullable(),
         movement: z.enum(["acquired", "exited", "adjusted", "unknown"]),

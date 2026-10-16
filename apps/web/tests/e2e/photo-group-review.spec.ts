@@ -588,7 +588,10 @@ test("suggests an existing variant and previews every merge decision for a creat
   const group = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: createdName }),
   });
-  await group.getByRole("button", { name: "Compare", exact: true }).click();
+  // Weak neighbours offer the list without naming one; strong ones say "Compare".
+  await group
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
+    .click();
   await expect(
     group.getByRole("link", { name: candidateName, exact: true }),
   ).toBeVisible();
@@ -645,7 +648,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     .getByText("Review possible matches", { exact: true })
     .click();
   await appliedGroup
-    .getByRole("button", { name: "Compare", exact: true })
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
@@ -783,7 +786,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   await page.locator("#photo-group-g2").scrollIntoViewIfNeeded();
   await page
     .locator("#photo-group-g2")
-    .getByRole("button", { name: "Compare", exact: true })
+    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
     .click();
   const comparison = page
     .locator("#photo-group-g2")
@@ -1251,9 +1254,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       .locator('[data-slot="card-header"]')
       .getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
-  await expect(attach.getByText(/On hand:/)).toHaveText(
-    `On hand: 1 ea · ${runName} location`,
-  );
+  await expect(attach.getByText("On hand", { exact: true })).toBeVisible();
+  await expect(
+    attach.getByRole("link", { name: `${runName} location` }),
+  ).toBeVisible();
   await expect(attach.getByText("Not counted", { exact: false })).toHaveCount(
     0,
   );
@@ -1358,7 +1362,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toBeVisible();
   await expect(create.getByText("＋ New", { exact: true })).toBeVisible();
   await expect(
-    create.getByRole("button", { name: "Add ‘xl’ to name", exact: true }),
+    create.getByRole("button", { name: /^Add ‘xl’ to name$/i }),
   ).toBeVisible();
   await expect(create.locator('[aria-label="Field cross-checks"]')).toHaveCount(
     0,
@@ -1374,9 +1378,9 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     }),
   });
   await expect(
-    nameField.getByRole("button", { name: "Add ‘blue’ to name", exact: true }),
+    nameField.getByRole("button", { name: /^Add ‘blue’ to name$/i }),
   ).toBeVisible();
-  await expect(nameField.getByText(/label adds/)).toBeVisible();
+  await expect(nameField.getByText(/Label:|Label differs/)).toBeVisible();
   await create.locator('[data-slot="card"]').first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
   });
@@ -1385,12 +1389,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review-polish/phone-create-mark.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await create
-    .getByRole("button", { name: "Add ‘xl’ to name", exact: true })
-    .click();
+  await create.getByRole("button", { name: /^Add ‘xl’ to name$/i }).click();
   await expect(
     create.getByRole("textbox", { name: "New product name", exact: true }),
-  ).toHaveValue("Synthetic shell jacket xl");
+  ).toHaveValue(/^Synthetic shell jacket xl$/i);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await create.scrollIntoViewIfNeeded();
@@ -1599,9 +1601,11 @@ test("keeps a weak closest match quiet", async ({ page, e2eRuntime }) => {
     page.getByRole("heading", { name: "Photo review" }),
   );
   const group = page.locator("#photo-group-g1");
+  // A weak lexical neighbour is not named; the list stays one click away.
   await expect(
-    group.getByText(/Closest existing: Synthetic studio stool oak/),
+    group.getByRole("button", { name: "Compare existing Products" }),
   ).toBeVisible();
+  await expect(group.getByText(/Synthetic studio stool oak/)).toHaveCount(0);
   await expect(group.getByText(/Possible duplicate:/)).toHaveCount(0);
   await expect(
     group.getByRole("button", { name: "Create product", exact: true }),

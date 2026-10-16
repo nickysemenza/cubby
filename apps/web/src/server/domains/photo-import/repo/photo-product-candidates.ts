@@ -670,6 +670,9 @@ export async function loadPhotoProductEvidence(
           vendor: sql<
             string | null
           >`(SELECT v.name FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND v."deletedAt" IS NULL)`,
+          vendorCode: sql<
+            string | null
+          >`(SELECT v.shortcode FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND v."deletedAt" IS NULL)`,
           cost: expense.cost,
           productQuantity: expense.productQuantity,
           lineKind: expense.lineKind,
@@ -743,6 +746,9 @@ export async function loadPhotoProductEvidence(
               ? ("Ordered" as const)
               : ("Paid" as const),
             vendor: row.vendor,
+            vendorId: row.vendorCode
+              ? parseShortcodeFor("vendor", row.vendorCode)
+              : null,
             cost: row.cost,
             productQuantity: row.productQuantity,
             movement:
