@@ -6,8 +6,8 @@ import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/number-format";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { HorizontalBarChart } from "./horizontal-bar-chart";
@@ -57,7 +57,11 @@ export function TradeActivity({
   if (data.length === 0) {
     return (
       <div>
-        <ChartEmpty icon={HammerIcon} title="No trade spend yet." />
+        <Visualization
+          state={{ status: "empty" }}
+          icon={HammerIcon}
+          message="No trade spend yet."
+        />
         {creditsNote}
       </div>
     );

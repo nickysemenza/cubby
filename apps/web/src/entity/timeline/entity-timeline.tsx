@@ -34,7 +34,6 @@ import { formatDateSpan } from "~/lib/date-span";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn } from "~/lib/utils";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -58,6 +57,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 type EntityTimelineMode = "events" | "lifecycles";
 
@@ -447,9 +447,10 @@ function EventGroup({
 function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
   if (groups.length === 0)
     return (
-      <ChartEmpty
+      <Visualization
+        state={{ status: "empty" }}
         icon={CalendarCheckIcon}
-        title="Nothing dated in this window."
+        message="Nothing dated in this window."
       />
     );
   const dated = groups.filter((group) => group.date !== null);
@@ -490,9 +491,10 @@ function LifecyclesView({
   );
   if (!extent || rows.length === 0)
     return (
-      <ChartEmpty
+      <Visualization
+        state={{ status: "empty" }}
         icon={CalendarCheckIcon}
-        title="Nothing dated in this window."
+        message="Nothing dated in this window."
       />
     );
   const start = parsePlainDate(extent.from).getTime();

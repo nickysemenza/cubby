@@ -1,7 +1,10 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 
 import { Section, Stack } from "~/ui/layout";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
 import { OpenTasksByProject } from "./charts/open-tasks-by-project";
@@ -11,6 +14,8 @@ import { TradeActivity } from "./charts/trade-activity";
 export type ProjectPortfolioAnalyticsViewProps = {
   data: ProjectPortfolioAnalyticsOut | undefined;
   isLoading: boolean;
+  error: unknown;
+  onRetry: () => void;
 };
 
 /**
@@ -21,40 +26,51 @@ export type ProjectPortfolioAnalyticsViewProps = {
 export function ProjectPortfolioAnalyticsView({
   data,
   isLoading,
+  error,
+  onRetry,
 }: ProjectPortfolioAnalyticsViewProps) {
-  if (isLoading || !data) {
-    return <Skeleton className="h-[400px] w-full" />;
-  }
-
   return (
-    <Stack className="pt-4">
-      <Section
-        title="Cost vs Estimate"
-        description="% of budget spent — projects with an estimate only"
-      >
-        <CostVsEstimate data={data.costVsEstimate} />
-      </Section>
+    <Visualization
+      state={visualizationState({
+        data,
+        isLoading,
+        error,
+        empty: false,
+        onRetry,
+      })}
+      height={400}
+    >
+      {data && (
+        <Stack className="pt-4">
+          <Section
+            title="Cost vs Estimate"
+            description="% of budget spent — projects with an estimate only"
+          >
+            <CostVsEstimate data={data.costVsEstimate} />
+          </Section>
 
-      <Section
-        title="Planned vs Actual"
-        description="Committed spend vs future-flagged expenses, by month"
-      >
-        <PlannedVsActualByMonth data={data.plannedVsActual} />
-      </Section>
+          <Section
+            title="Planned vs Actual"
+            description="Committed spend vs future-flagged expenses, by month"
+          >
+            <PlannedVsActualByMonth data={data.plannedVsActual} />
+          </Section>
 
-      <Section
-        title="Spend by Trade"
-        description="Actual + committed spend per trade"
-      >
-        <TradeActivity data={data.tradeActivity} />
-      </Section>
+          <Section
+            title="Spend by Trade"
+            description="Actual + committed spend per trade"
+          >
+            <TradeActivity data={data.tradeActivity} />
+          </Section>
 
-      <Section
-        title="Open Tasks by Project"
-        description="Where open work is concentrated"
-      >
-        <OpenTasksByProject data={data.taskHeatmap} />
-      </Section>
-    </Stack>
+          <Section
+            title="Open Tasks by Project"
+            description="Where open work is concentrated"
+          >
+            <OpenTasksByProject data={data.taskHeatmap} />
+          </Section>
+        </Stack>
+      )}
+    </Visualization>
   );
 }

@@ -11,13 +11,13 @@ import {
   nivoMotion,
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import {
   ResponsiveBar,
   ResponsiveLine,
   ResponsivePie,
 } from "~/ui/charts/nivo-responsive";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 // Shared building blocks behind Field Guide charts: a horizontal
 // bar primitive, a "top-N by absolute value, signed color" bar breakdown, a
@@ -138,7 +138,13 @@ export function RankedBarBreakdown<T extends BarDatum>({
   );
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={emptyIcon} title={emptyTitle} />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={emptyIcon}
+        message={emptyTitle}
+      />
+    );
   }
 
   const colorFor =
@@ -253,7 +259,13 @@ export function CategoryDonut({
   const total = useMemo(() => sumBy(data, (d) => d.value), [data]);
 
   if (data.length === 0) {
-    return <ChartEmpty icon={emptyIcon} title={emptyTitle} />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={emptyIcon}
+        message={emptyTitle}
+      />
+    );
   }
 
   const selected =

@@ -5,8 +5,8 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { formatCurrency } from "~/lib/number-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
+import { Visualization } from "~/ui/visualizations/visualization";
 
-import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
 interface TreemapNode {
@@ -93,7 +93,8 @@ export default function RecipeCostTreemap({
     treemapData.children?.every((c) => !c.hasPrice)
   ) {
     return (
-      <VisualizationPlaceholder
+      <Visualization
+        state={{ status: "empty" }}
         message="No cost data available"
         subMessage="Add pricing to ingredients to see cost breakdown"
         height={300}

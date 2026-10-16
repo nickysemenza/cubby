@@ -3,8 +3,8 @@ import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo } from "react";
 
 import { monthLabel } from "~/features/project/project-formatting";
-import { ChartEmpty } from "~/ui/charts/chart-empty";
 import { SpendTrend } from "~/ui/charts/kit";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 /**
  * Monthly cumulative net spend — the analytics-view lens over
@@ -24,7 +24,13 @@ export function CumulativeSpend({
   );
 
   if (points.length === 0) {
-    return <ChartEmpty icon={TrendUpIcon} title="No dated expense data." />;
+    return (
+      <Visualization
+        state={{ status: "empty" }}
+        icon={TrendUpIcon}
+        message="No dated expense data."
+      />
+    );
   }
 
   const ys = points.map((p) => p.y);

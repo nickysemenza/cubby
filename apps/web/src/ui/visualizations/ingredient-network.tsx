@@ -16,10 +16,12 @@ import {
 } from "react";
 
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getAppErrorDetails } from "~/lib/error-utils";
 import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
-import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
 interface NetworkNode extends IngredientNode, d3Force.SimulationNodeDatum {}
@@ -44,37 +46,22 @@ export default function IngredientNetwork() {
     recipe.getIngredientCooccurrence.queryOptions({ minEdgeWeight: 2 }),
   );
 
-  if (isLoading) {
-    return (
-      <VisualizationPlaceholder
-        message="Loading ingredient data..."
-        height={400}
-      />
-    );
-  }
-
-  if (isError) {
-    return (
-      <VisualizationPlaceholder
-        message="Ingredient relationships are unavailable"
-        subMessage={getAppErrorDetails(error).message}
-        height={400}
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (!data || data.nodes.length === 0 || data.edges.length === 0) {
-    return (
-      <VisualizationPlaceholder
-        message="No ingredient relationships to display"
-        subMessage="Add more recipes with shared ingredients to see connections"
-        height={400}
-      />
-    );
-  }
-
-  return <NetworkGraph nodes={data.nodes} edges={data.edges} />;
+  return (
+    <Visualization
+      state={visualizationState({
+        data,
+        isLoading,
+        error: isError ? error : null,
+        empty: !data?.nodes.length || !data?.edges.length,
+        onRetry: () => void refetch(),
+      })}
+      message="No ingredient relationships to display"
+      subMessage="Add more recipes with shared ingredients to see connections"
+      height={400}
+    >
+      {data && <NetworkGraph nodes={data.nodes} edges={data.edges} />}
+    </Visualization>
+  );
 }
 
 interface NetworkGraphProps {

@@ -22,13 +22,13 @@ import {
   categoryNodeColor,
   useCategoryHierarchy,
 } from "~/features/product-category/use-category-hierarchy";
-import { getAppErrorDetails } from "~/lib/error-utils";
-import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
 import { Grid } from "~/ui/layout";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
-import { VisualizationPanel } from "../../ui/visualizations/visualization-panel";
-import { VisualizationPlaceholder } from "../../ui/visualizations/visualization-placeholder";
 import { VizTooltip } from "../../ui/visualizations/viz-overlay";
 
 export type HierarchyEntity = "location" | "productCategory";
@@ -120,25 +120,21 @@ function HierarchyResult({
   error: Error | null;
   refetch: () => void;
 }) {
-  if (isLoading)
-    return <VisualizationPlaceholder message="Loading…" height={height} />;
-  if (isError)
-    return (
-      <VisualizationPlaceholder
-        message="This hierarchy is unavailable"
-        subMessage={getAppErrorDetails(error).message}
-        height={height}
-        onRetry={() => void refetch()}
-      />
-    );
-  if (!data || data.total === 0)
-    return (
-      <VisualizationPlaceholder
-        message={`No ${UNIT[entity]} to display`}
-        height={height}
-      />
-    );
-  return children(data);
+  return (
+    <Visualization
+      state={visualizationState({
+        data: data ?? (isLoading || isError ? undefined : null),
+        isLoading,
+        error: isError ? error : null,
+        empty: !data || data.total === 0,
+        onRetry: () => void refetch(),
+      })}
+      message={`No ${UNIT[entity]} to display`}
+      height={height}
+    >
+      {data && children(data)}
+    </Visualization>
+  );
 }
 
 type ArcNode = d3Hierarchy.HierarchyRectangularNode<HierarchyNode>;
@@ -550,20 +546,20 @@ export function HierarchyView({ entity }: { entity: HierarchyEntity }) {
   const unit = UNIT[entity];
   return (
     <Grid cols="pair">
-      <VisualizationPanel
+      <Visualization
+        state={{ status: "ready" }}
         title="Tree"
         description={`Each count includes the ${unit} in every node below it; hollow dots have none.`}
-        fallback={<SimpleLoading text="Loading tree..." />}
       >
         <HierarchyTree entity={entity} />
-      </VisualizationPanel>
-      <VisualizationPanel
+      </Visualization>
+      <Visualization
+        state={{ status: "ready" }}
         title="Sunburst"
         description={`Rings go one level deeper each, sized by ${unit}.`}
-        fallback={<SimpleLoading text="Loading sunburst..." />}
       >
         <HierarchySunburst entity={entity} />
-      </VisualizationPanel>
+      </Visualization>
     </Grid>
   );
 }

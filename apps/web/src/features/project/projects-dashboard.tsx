@@ -145,20 +145,38 @@ function DashboardContent({
   coverImages,
   analyticsData,
   analyticsLoading,
+  analyticsError,
+  retryAnalytics,
 }: {
   view: DashboardView;
   data: ProjectDashboardSummaryOut;
   coverImages: CoverImages | undefined;
   analyticsData: ProjectPortfolioAnalyticsViewProps["data"] | undefined;
   analyticsLoading: boolean;
+  analyticsError: unknown;
+  retryAnalytics: () => void;
 }) {
   if (view === "overview") {
     return <OverviewView data={data} coverImages={coverImages} />;
   }
   if (view === "analytics") {
-    return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
+    return (
+      <AnalyticsView
+        data={analyticsData}
+        isLoading={analyticsLoading}
+        error={analyticsError}
+        onRetry={retryAnalytics}
+      />
+    );
   }
-  return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
+  return (
+    <AnalyticsView
+      data={analyticsData}
+      isLoading={analyticsLoading}
+      error={analyticsError}
+      onRetry={retryAnalytics}
+    />
+  );
 }
 
 function MainDashboard({ view }: { view: DashboardView }) {
@@ -237,7 +255,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
     enabled: imageProjectIds.length > 0,
   });
 
-  if (dashboardQuery.isError) {
+  if (dashboardQuery.isError && !dashboardQuery.data) {
     return (
       <ErrorDisplay
         error={dashboardQuery.error}
@@ -255,6 +273,13 @@ function MainDashboard({ view }: { view: DashboardView }) {
   // to the stable empty arrays while `data` is still undefined.
   return (
     <Stack>
+      {dashboardQuery.isError && data && (
+        <ErrorDisplay
+          error={dashboardQuery.error}
+          title="the latest project dashboard"
+          onRetry={() => void dashboardQuery.refetch()}
+        />
+      )}
       <DashboardToolbar
         filterControl={
           <DashboardFilters
@@ -285,6 +310,8 @@ function MainDashboard({ view }: { view: DashboardView }) {
           coverImages={coverImages}
           analyticsData={analyticsQuery.data}
           analyticsLoading={analyticsQuery.isLoading}
+          analyticsError={analyticsQuery.error}
+          retryAnalytics={() => void analyticsQuery.refetch()}
         />
       )}
     </Stack>
@@ -448,16 +475,10 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
   );
 }
 
-function AnalyticsView({
-  data,
-  isLoading,
-}: {
-  data: ProjectPortfolioAnalyticsViewProps["data"];
-  isLoading: boolean;
-}) {
+function AnalyticsView(props: ProjectPortfolioAnalyticsViewProps) {
   return (
     <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-      <ProjectAnalytics data={data} isLoading={isLoading} />
+      <ProjectAnalytics {...props} />
     </Suspense>
   );
 }

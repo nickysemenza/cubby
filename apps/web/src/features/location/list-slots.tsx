@@ -5,12 +5,11 @@ import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
 import LocationTreeView from "~/features/inventory/location-tree-view";
 import { LocationGallery } from "~/features/location/location-gallery";
 import { HierarchyView } from "~/features/product-category/hierarchy-view";
-import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";
-import { VisualizationPanel } from "~/ui/visualizations/visualization-panel";
+import { Visualization } from "~/ui/visualizations/visualization";
 
 const LocationGallerySlot: ListSlotComponent = () => (
-  <Suspense fallback={<SimpleLoading text="Loading gallery..." />}>
+  <Suspense>
     <LocationGallery />
   </Suspense>
 );
@@ -19,12 +18,9 @@ const LocationGallerySlot: ListSlotComponent = () => (
 const LocationVisualizationsSlot: ListSlotComponent = () => (
   <Stack gap="md">
     <HierarchyView entity="location" />
-    <VisualizationPanel
-      title="Tree View"
-      fallback={<SimpleLoading text="Loading tree view..." />}
-    >
+    <Visualization state={{ status: "ready" }} title="Tree View">
       <LocationTreeView />
-    </VisualizationPanel>
+    </Visualization>
   </Stack>
 );
 
