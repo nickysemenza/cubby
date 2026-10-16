@@ -483,7 +483,7 @@ function GroupEvidence({
   proposal: PhotoGroupProposal;
   imagesById: ImagesById;
 }) {
-  const photos = proposal.images.flatMap((entry) => {
+  const photos = [...proposal.images, ...proposal.skip].flatMap((entry) => {
     const photo = imagesById.get(entry.id);
     return photo ? [photo] : [];
   });
