@@ -96,6 +96,8 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
   for (const scope of [
     { trades: ["other"] as const },
     { costTypes: ["materials"] as const },
+    { trades: ["other"] as const, categoryPresence: "none" as const },
+    { costTypes: ["materials"] as const, projectIds: [project.id] },
   ]) {
     const costs = await unwrapDb(ctx.db).execute<{
       expenseId: string;
