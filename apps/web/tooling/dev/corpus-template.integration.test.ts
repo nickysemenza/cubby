@@ -1,20 +1,25 @@
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
 import { expect, it } from "vitest";
 import { prepareDevDatabase, pruneCheckoutDatabases } from "./corpus-template";
 import { testServiceConfig } from "../test-service-config";
+import { resolveDevProfile } from "../../../../scripts/lib/dev-profile";
 import { databaseIdentifier } from "../schema-template";
 
 // Failure modes: clone loses auth/audit/search/image rows; startup overwrites
 // edits; collection drops an active checkout or an unlabelled local database.
 it("clones the application corpus, retains checkout edits, and collects only abandoned labelled checkouts", async () => {
-  const { host, port } = testServiceConfig();
-  const name = `cubby_dev_contract_${randomUUID().replaceAll("-", "")}`;
-  const checkout = mkdtempSync(join(tmpdir(), "cubby-template-contract-"));
+  const config = testServiceConfig();
+  const host = config.host;
+  const port = ["localhost", "127.0.0.1"].includes(host) ? 55432 : config.port;
+  const checkout = realpathSync(
+    mkdtempSync(join(tmpdir(), "cubby-template-contract-")),
+  );
+  const name = resolveDevProfile(checkout, {}).name;
   const url = `postgresql://postgres:password@${host}:${port}/${name}`;
   const admin = new Client({
     connectionString: `postgresql://postgres:password@${host}:${port}/postgres`,
@@ -51,7 +56,7 @@ it("clones the application corpus, retains checkout edits, and collects only aba
           )
         ).rows[0].state,
       ).toBe("retained");
-      await pruneCheckoutDatabases(admin);
+      await pruneCheckoutDatabases(admin, "cubby_dev_requested");
       expect(
         (
           await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [
@@ -63,7 +68,7 @@ it("clones the application corpus, retains checkout edits, and collects only aba
       await db.end();
     }
     rmSync(checkout, { recursive: true, force: true });
-    await pruneCheckoutDatabases(admin);
+    await pruneCheckoutDatabases(admin, "cubby_dev_requested");
     expect(
       (await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name]))
         .rowCount,
@@ -76,3 +81,84 @@ it("clones the application corpus, retains checkout edits, and collects only aba
     rmSync(checkout, { recursive: true, force: true });
   }
 }, 120_000);
+
+// Collection must preserve explicit/instance names, connected databases and the
+// requested target even when their original checkout has disappeared.
+it("collects only idle derived checkout names and refreshes reused ownership", async () => {
+  const config = testServiceConfig();
+  const port = ["localhost", "127.0.0.1"].includes(config.host)
+    ? 55432
+    : config.port;
+  const base = `postgresql://postgres:password@${config.host}:${port}`;
+  const admin = new Client({ connectionString: `${base}/postgres` });
+  await admin.connect();
+  const checkout = realpathSync(
+    mkdtempSync(join(tmpdir(), "cubby-collection-")),
+  );
+  const nextCheckout = realpathSync(
+    mkdtempSync(join(tmpdir(), "cubby-collection-next-")),
+  );
+  const derived = resolveDevProfile(checkout, {}).name;
+  const explicit = `cubby_dev_review_${randomUUID().replaceAll("-", "")}`;
+  const instance = resolveDevProfile(checkout, {
+    CUBBY_DEV_INSTANCE: "review",
+  }).name;
+  const connected = new Client({ connectionString: `${base}/${derived}` });
+  try {
+    for (const name of [derived, explicit, instance]) {
+      await admin.query(`CREATE DATABASE ${databaseIdentifier(name)}`);
+      await admin.query(
+        `COMMENT ON DATABASE ${databaseIdentifier(name)} IS '${checkout}'`,
+      );
+    }
+    await connected.connect();
+    rmSync(checkout, { recursive: true, force: true });
+    await pruneCheckoutDatabases(admin, "cubby_dev_requested");
+    expect(
+      (await connected.query("SELECT 1 AS retained")).rows[0].retained,
+    ).toBe(1);
+    for (const name of [derived, explicit, instance])
+      expect(
+        (
+          await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [
+            name,
+          ])
+        ).rowCount,
+      ).toBe(1);
+    await connected.end();
+    await pruneCheckoutDatabases(admin, derived);
+    expect(
+      (
+        await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [
+          derived,
+        ])
+      ).rowCount,
+    ).toBe(1);
+    await pruneCheckoutDatabases(admin, "cubby_dev_requested");
+    expect(
+      (
+        await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [
+          derived,
+        ])
+      ).rowCount,
+    ).toBe(0);
+    await prepareDevDatabase(explicit, nextCheckout, `${base}/${explicit}`);
+    expect(
+      (
+        await admin.query(
+          "SELECT shobj_description(oid, 'pg_database') AS checkout FROM pg_database WHERE datname=$1",
+          [explicit],
+        )
+      ).rows[0].checkout,
+    ).toBe(nextCheckout);
+  } finally {
+    await connected.end();
+    for (const name of [derived, explicit, instance])
+      await admin.query(
+        `DROP DATABASE IF EXISTS ${databaseIdentifier(name)} WITH (FORCE)`,
+      );
+    await admin.end();
+    rmSync(checkout, { recursive: true, force: true });
+    rmSync(nextCheckout, { recursive: true, force: true });
+  }
+});

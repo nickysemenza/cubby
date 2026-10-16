@@ -1,11 +1,10 @@
 import { createPostgresPool } from "./postgres-pool";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 import { migrateDatabase } from "./db-migrate";
+import { initializeRecoverableTemplate } from "./template-recovery";
 import { cloneSchemaTemplate } from "./schema-template";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -13,7 +12,7 @@ import {
   assertSimulatorDatabaseName,
 } from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
-import { holdLock, worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
+import { worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
 
 /**
  * Disposable databases for Vitest, browser E2E and native runners.
@@ -71,84 +70,21 @@ function connectionUrl(config: {
   return integreSQL().databaseConfigToConnectionUrl({ ...config, host, port });
 }
 
-/**
- * Create and migrate the namespace's template unless IntegreSQL already holds
- * one for the current schema. A run's global setup calls it before any
- * {@link leaseDatabase}; a failed migration discards the template. When another
- * process is already initializing the same template this returns at once, and
- * IntegreSQL holds each checkout until that template is finalized.
- */
+const preparedHashes = new Map<TemplateNamespace, string>();
+
+/** IntegreSQL coordinates preparation; dead initializers recover without locks. */
 export async function prepareTemplate(
   namespace: TemplateNamespace,
 ): Promise<void> {
-  const hash = templateHash(namespace);
-  // A run killed between creating and finalizing the template leaves it
-  // unfinished: IntegreSQL answers the next initialize with 423 (which the
-  // client treats as "someone else is initializing") and holds every checkout
-  // until a finalize that never comes. Preparation holds a per-hash lock, so a
-  // marker seen under it was left by an initialization that never finished;
-  // discard that template and start over.
-  const markers = join(
-    worktreeRoot,
-    "node_modules/.cache/cubby-test-templates",
-  );
-  const marker = join(markers, `${hash}.pending`);
-  mkdirSync(markers, { recursive: true });
-  const release = await holdLock({
-    path: join(markers, hash),
-    label: `${namespace} template preparation`,
-  });
-  try {
-    await initializeOwnedTemplate(namespace, hash, marker);
-  } finally {
-    await release();
-  }
-}
-
-async function initializeOwnedTemplate(
-  namespace: TemplateNamespace,
-  hash: string,
-  marker: string,
-): Promise<void> {
-  if (existsSync(marker)) {
-    console.log(
-      `[test database] Discarding the abandoned ${namespace} template`,
-    );
-    await integreSQL()
-      .api.discardTemplate(hash)
-      .catch(() => {});
-  }
-  writeFileSync(marker, "");
-  // The client discards the template after a failed migration and rethrows,
-  // but a failed discard replaces the migration error; keep both.
-  let migrationError: unknown;
-  try {
-    await integreSQL().initializeTemplate(hash, async (config) => {
+  const hash = await initializeRecoverableTemplate(
+    templateHash(namespace),
+    async (config) => {
       console.log(`[test database] Migrating the ${namespace} template`);
-      try {
-        await cloneSchemaTemplate(config.database);
-      } catch (error) {
-        migrationError = error;
-        throw error;
-      }
+      await cloneSchemaTemplate(config.database);
       console.log(`[test database] Migrated the ${namespace} template`);
-    });
-    // Finalized, or already initialized by an earlier run.
-    rmSync(marker, { force: true });
-  } catch (error) {
-    // The client discarded the template after the failed migration. Any other
-    // failure (e.g. finalize never reached IntegreSQL) keeps the marker so the
-    // next preparation discards the unfinished template.
-    if (error === migrationError) rmSync(marker, { force: true });
-    if (migrationError !== undefined && error !== migrationError) {
-      throw new AggregateError(
-        [migrationError, error],
-        `Migrating the ${namespace} template failed, then discarding it failed`,
-        { cause: error },
-      );
-    }
-    throw error;
-  }
+    },
+  );
+  preparedHashes.set(namespace, hash);
 }
 
 /**
@@ -164,7 +100,9 @@ export async function leaseDatabase<T>(
   namespace: TemplateNamespace,
   setup: (lease: DatabaseLease) => Promise<T>,
 ): Promise<{ lease: DatabaseLease; prepared: T }> {
-  const hash = templateHash(namespace);
+  if (!preparedHashes.has(namespace)) await prepareTemplate(namespace);
+  const hash = preparedHashes.get(namespace);
+  if (!hash) throw new Error(`Missing prepared ${namespace} template`);
   const { id, database } = await integreSQL().api.getTestDatabase(hash);
   const name = database.config.database;
   let released: Promise<void> | undefined;

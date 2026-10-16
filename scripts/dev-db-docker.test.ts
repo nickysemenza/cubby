@@ -32,21 +32,34 @@ test("Docker dev down stops the owned server and refuses a foreign one", async (
       `#!${process.execPath}\nimport fs from 'node:fs';\nconst args = process.argv.slice(2);\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n');\nif(args[0]==='ps') console.log('synthetic-container');\nif(args[0]==='inspect') { const entry=${JSON.stringify(config)}; if(process.env.FOREIGN_DB) entry.Config.Image='docker.io/library/postgres:17'; console.log(JSON.stringify([entry])); }\n`,
       { mode: 0o755 },
     );
-    const run = (foreign: boolean) =>
+    const run = (foreign: boolean, address?: string, command = "down") =>
       spawnSync(
         process.execPath,
-        [path.join(import.meta.dirname, "dev-db.ts"), "down"],
+        [path.join(import.meta.dirname, "dev-db.ts"), command],
         {
           env: {
             ...process.env,
             CUBBY_DEV_SERVICES: "docker",
             PATH: `${directory}:${process.env.PATH}`,
             FOREIGN_DB: foreign ? "1" : "",
+            ...(address ? { CUBBY_DEV_DB_ADDRESS: address } : {}),
           },
           encoding: "utf8",
           timeout: 10_000,
         },
       );
+    for (const command of ["ready", "migrate", "reset"]) {
+      const rejected = run(false, "192.168.1.50:5432", command);
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /Refusing inherited CUBBY_DEV_DB_ADDRESS/u);
+      const rejectedCalls: string[][] = (await readFile(log, "utf8"))
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+      assert.ok(rejectedCalls.every((args) => args[0] !== "exec"));
+      await writeFile(log, "");
+    }
     const owned = run(false);
     assert.equal(owned.status, 0, owned.stderr);
     const calls: string[][] = (await readFile(log, "utf8"))

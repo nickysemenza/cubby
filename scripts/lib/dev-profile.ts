@@ -22,18 +22,20 @@ export interface DevProfile {
 /** The release id of the synthetic USDA release (`apps/web/tooling/dev/usda-synthetic-release.ts`). */
 export const SYNTHETIC_USDA_RELEASE = "2000-01";
 
+export const DEV_DATABASE_ENV_KEYS = [
+  "DATABASE_URL",
+  "E2E_DATABASE_URL",
+  "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
+  "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
+  "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
+  "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
+] as const;
+
 function assertDatabaseOverrides(
   inherited: Partial<NodeJS.ProcessEnv>,
   databaseUrl: string,
 ): void {
-  for (const key of [
-    "DATABASE_URL",
-    "E2E_DATABASE_URL",
-    "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-    "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-    "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-    "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-  ]) {
+  for (const key of DEV_DATABASE_ENV_KEYS) {
     const value = inherited[key];
     if (value && value.replace("@127.0.0.1:", "@localhost:") !== databaseUrl)
       throw new Error(
@@ -178,7 +180,7 @@ export function resolveDevProfile(
     throw new Error(
       "CUBBY_DEV_DB_NAME must be cubby_dev or cubby_dev_<a-z0-9_>",
     );
-  // The supervisor sets the shared container's direct address once it runs.
+  // Preparation entry points verify this candidate against the owned container.
   const address = inherited.CUBBY_DEV_DB_ADDRESS ?? "localhost:55432";
   if (!/^(?:localhost:55432|192\.168\.\d{1,3}\.\d{1,3}:5432)$/u.test(address))
     throw new Error(

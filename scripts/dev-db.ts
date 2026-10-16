@@ -7,6 +7,7 @@ import {
   ensureSharedPostgres,
   psql,
   sharedPostgresRunning,
+  resolveOwnedDevProfile,
   stopSharedPostgres,
 } from "./lib/shared-postgres.ts";
 import { devContainerBackend } from "./lib/dev-container.ts";
@@ -17,19 +18,26 @@ import { devContainerBackend } from "./lib/dev-container.ts";
  * checkout. `up` is idempotent; a recreated container starts empty and `ready`
 rebuilds the database.
  */
-const profile = resolveDevProfile(
+let profile = resolveDevProfile(
   path.resolve(import.meta.dirname, ".."),
   process.env,
 );
 const devDatabaseName = profile.name;
-const DEV_DATABASE_URL = profile.databaseUrl;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "../apps/web");
 
+async function bindOwnedProfile(): Promise<void> {
+  profile = await resolveOwnedDevProfile(profile.repoRoot);
+  process.env.CUBBY_DEV_DB_ADDRESS = new URL(profile.databaseUrl).host;
+}
+
 async function up(): Promise<void> {
+  // Verify inherited addresses before ensureSharedPostgres can issue readiness SQL.
+  if (process.env.CUBBY_DEV_DB_ADDRESS) await bindOwnedProfile();
   await ensureSharedPostgres();
-  console.log(`[dev-db] Ready: ${DEV_DATABASE_URL}`);
+  await bindOwnedProfile();
+  console.log(`[dev-db] Ready: ${profile.databaseUrl}`);
 }
 
 async function assertRunningOwnedContainer(): Promise<void> {
@@ -37,6 +45,7 @@ async function assertRunningOwnedContainer(): Promise<void> {
     throw new Error(
       "Start the shared PostgreSQL container with `pnpm db:dev:up` first",
     );
+  await bindOwnedProfile();
 }
 
 /** Migrations need apps/web's own database dependencies. */
@@ -50,32 +59,26 @@ function runInWebWorkspace(
     {
       cwd: webRoot,
       stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: DEV_DATABASE_URL },
+      env: { ...process.env, DATABASE_URL: profile.databaseUrl },
     },
   );
 }
 
 /** Each checkout's selected database is created on first use. */
 async function ensureDatabase(): Promise<void> {
-  const exists = await psql(
-    `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
+  const code = await spawnToExit(
+    "node",
+    [
+      path.join(__dirname, "test-services.ts"),
+      "--",
+      "pnpm",
+      "exec",
+      "tsx",
+      "tooling/dev/corpus-template.ts",
+    ],
+    { cwd: webRoot, stdio: "inherit", env: process.env },
   );
-  if (exists.trim() !== "1") {
-    const code = await spawnToExit(
-      "node",
-      [
-        path.join(__dirname, "test-services.ts"),
-        "--",
-        "pnpm",
-        "exec",
-        "tsx",
-        "tooling/dev/corpus-template.ts",
-      ],
-      { cwd: webRoot, stdio: "inherit", env: process.env },
-    );
-    if (code !== 0) throw new Error("Dev corpus template preparation failed");
-    console.log(`[dev-db] Cloned ${devDatabaseName}`);
-  }
+  if (code !== 0) throw new Error("Dev corpus template preparation failed");
   await psql(
     "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
     devDatabaseName,

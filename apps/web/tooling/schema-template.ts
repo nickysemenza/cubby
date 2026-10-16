@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 import { migrateDatabase } from "./db-migrate";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
+import { initializeRecoverableTemplate } from "./template-recovery";
 import { testServiceConfig } from "./test-service-config";
 
 export const templateClient = () =>
@@ -32,19 +33,21 @@ export function databaseIdentifier(name: string): string {
 export async function cloneSchemaTemplate(target: string): Promise<void> {
   if (!/^integresql_template_[0-9a-f]{40}$/u.test(target))
     throw new Error("Schema clones require an IntegreSQL template target");
-  const hash = hashSchemaTemplateInputs();
   const client = templateClient();
-  await client.initializeTemplate(hash, async (config) => {
-    const connection = new Client({
-      connectionString: templateConnectionUrl(config),
-    });
-    await connection.connect();
-    try {
-      await migrateDatabase(drizzle(connection));
-    } finally {
-      await connection.end();
-    }
-  });
+  const hash = await initializeRecoverableTemplate(
+    hashSchemaTemplateInputs(),
+    async (config) => {
+      const connection = new Client({
+        connectionString: templateConnectionUrl(config),
+      });
+      await connection.connect();
+      try {
+        await migrateDatabase(drizzle(connection));
+      } finally {
+        await connection.end();
+      }
+    },
+  );
   const lease = await client.api.getTestDatabase(hash);
   const adminUrl = new URL(templateConnectionUrl(lease.database.config));
   adminUrl.pathname = "/postgres";

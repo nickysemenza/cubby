@@ -178,8 +178,17 @@ native PostgreSQL installation remain owned by their existing runners.
   PostgreSQL as local development (`cubby-dev-pg`,
   `scripts/lib/shared-postgres.ts`), started on first use and reused
   afterwards. A common migration-keyed base template feeds each checkout's
-  namespaced test pools and the shared dev-corpus template; local development
-  clones that corpus to its stable `cubby_dev_*` name
+  namespaced test pools and the shared dev-corpus template.
+  All template layers use IntegreSQL's initializer election without a template
+  lock. Pending initializer records under the system temporary directory's `cubby-template-initializers`
+  are keyed by service URL and hash and record host, PID and process start time.
+  A live or unverifiable owner is never discarded; waiting is bounded to two
+  minutes. A proven-dead owner redirects permanently to a deterministic successor
+  hash, with at most eight recovery generations. Concurrent recoverers discard
+  only the abandoned hash through IntegreSQL's API, so they cannot delete a new
+  initializer's template. A kill before the owner record exists times out rather
+  than guessing ownership. Successful finalization removes its pending record.
+  Local development clones that corpus to its stable `cubby_dev_*` name
   ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
   second VM: Virtualization.framework guests never return freed memory to
   macOS. A test reset selects a fixed

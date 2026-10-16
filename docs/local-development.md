@@ -1,7 +1,8 @@
 # Local development
 
 `pnpm dev` starts Cubby with Vite HMR inside workerd. The supervisor prepares
-PostgreSQL, WASM, and local auxiliary workers before starting the
+the owned PostgreSQL endpoint, then WASM and generated artifacts before any
+corpus initialization (including low-level ready/migrate/reset), and local auxiliary workers before starting the
 app. A shared IntegreSQL corpus template supplies the synthetic core household;
 the Worker restores its bundled photos into checkout-local R2 and reports
 readiness only after the database, fixtures, and Worker agree. Vite compiles
@@ -59,12 +60,22 @@ compilation time to complex quality queries) and durability off (`fsync`,
 `synchronous_commit`, `full_page_writes`) and no volume: local data is
 synthetic. Databases survive runtime and idle restarts for the lifetime of the
 checkout. Each clone's database comment records the absolute checkout path;
-provisioning collects labelled `cubby_dev_*` databases whose checkout no longer
-exists, leaving unlabelled databases alone.
+every preparation refreshes that label, including an existing database.
+Provisioning collects only idle databases whose name exactly matches the default
+id derived from the labelled, now-missing checkout path. Explicit names and
+instance names are retained unless they match that default derivation. The
+requested target is excluded, active connections prevent collection, and DROP
+never uses FORCE for collection.
 
 IntegreSQL coordinates one migration-keyed base template for tests and dev.
 A second layer, keyed by migrations, `LOCAL_FIXTURE_VERSION`, corpus/application
 sources, shared code and fixture bytes, seeds once through application code.
+The key hashes all application `src` TypeScript/TSX and tooling TypeScript,
+including cookbook/category fixtures, factories and scenarios, plus bundled
+wardrobe PNGs and Rust/shared/schema inputs. This deliberately trades extra
+rebuilds for complete invalidation of indirect application calculations; source
+changes need no separate reseed flag. Existing checkout edits still survive
+startup; `pnpm dev reset` adopts the current template.
 It inserts the synthetic account with Better Auth's password hasher, then runs
 the entity kernel and specialist repositories. Before a Worker exists, its
 background publications are stored in the template's development-only
@@ -80,7 +91,9 @@ checkout clones survive and a discarded template rebuilds on demand.
 On Apple container, the supervisor derives `CUBBY_DEV_DB_ADDRESS` from the
 container's own IP and uses its port 5432 for Worker and local Hyperdrive
 connections, bypassing the published-port proxy. Docker uses loopback 55432.
-This address is derived, not a user override. The container preloads
+Every preparation entry point inspects the owned container before connecting;
+an inherited address must equal that derived endpoint. This address is derived,
+not a user override. The container preloads
 `pg_stat_statements`; database preparation enables it for the selected
 checkout, providing normalized query counts, execution times and buffer
 statistics for local performance investigations. A container started with
@@ -287,7 +300,7 @@ Validate those transformations against the deployed boundary when relevant.
 Port probes do not reserve ports. If Vite/workerd exits with `EADDRINUSE`
 before readiness, the supervisor reaps that launch, selects fresh app
 and inspector ports, re-resolves all origin-derived settings and rewrites the
-session discovery file before relaunching. It retries at most three times;
+session discovery file and built-preview JSON bindings before relaunching. It retries at most three times;
 other failures and exits after readiness are reported directly.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes

@@ -5,7 +5,7 @@ import {
 } from "./state";
 import { localSimulatorServer } from "../../../../scripts/apple/lib/simulator-server.ts";
 import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
-import { sharedPostgresAddress } from "../../../../scripts/lib/shared-postgres.ts";
+import { resolveOwnedDevProfile } from "../../../../scripts/lib/shared-postgres.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -16,6 +16,7 @@ import {
   renameSync,
 } from "node:fs";
 import net from "node:net";
+import { previewConfig } from "./preview-config";
 import { shouldRetryRuntime } from "./runtime-retry.ts";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -287,24 +288,20 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     writeSession(profile, session);
   };
   try {
-    await phase("database", () =>
-      run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
+    await phase("postgres", () =>
+      run(profile, process.execPath, ["scripts/dev-db.ts", "up"]),
     );
-    const address = await sharedPostgresAddress();
-    if (address) {
-      // Every later child inherits this, so Vite, local Hyperdrive and the
-      // Worker connect past the container's published-port proxy.
-      process.env.CUBBY_DEV_DB_ADDRESS = address;
-      profile = resolveDevProfile(root, {
-        ...selectedEnvironment,
-        CUBBY_DEV_DB_ADDRESS: address,
-      });
-    }
+    profile = await resolveOwnedDevProfile(root, selectedEnvironment);
+    const address = new URL(profile.databaseUrl).host;
+    process.env.CUBBY_DEV_DB_ADDRESS = address;
     await phase("wasm", () =>
       run(profile, process.execPath, ["scripts/ensure.ts", "wasm"]),
     );
     await phase("generator", () =>
       run(profile, process.execPath, ["scripts/ensure.ts", "generate"]),
+    );
+    await phase("database", () =>
+      run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
     );
     if (preview)
       await phase("build", async () => {
@@ -314,29 +311,23 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           ["--dir", profile.webRoot, "run", "build:cf"],
           { CUBBY_DEV_PREVIEW_BUILD: "true" },
         );
-        const builtRoot = path.join(profile.webRoot, "dist/server");
-        const config = z
-          .object({
-            main: z.string(),
-            assets: z.object({ directory: z.string() }).passthrough(),
-          })
-          .passthrough()
-          .parse(
-            JSON.parse(
-              readFileSync(path.join(builtRoot, "wrangler.json"), "utf8"),
-            ),
-          );
-        config.main = path.resolve(builtRoot, config.main);
-        config.assets.directory = path.resolve(
-          builtRoot,
-          config.assets.directory,
-        );
-        writeFileSync(
-          path.join(profile.stateDir, "config/preview.json"),
-          JSON.stringify(config),
-        );
       });
     for (let launchAttempt = 0; ; launchAttempt++) {
+      if (preview) {
+        const builtRoot = path.join(profile.webRoot, "dist/server");
+        writeFileSync(
+          path.join(profile.stateDir, "config/preview.json"),
+          JSON.stringify(
+            previewConfig(
+              JSON.parse(
+                readFileSync(path.join(builtRoot, "wrangler.json"), "utf8"),
+              ),
+              builtRoot,
+              profile,
+            ),
+          ),
+        );
+      }
       const args = preview
         ? [
             "exec",

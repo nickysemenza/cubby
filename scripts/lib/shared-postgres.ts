@@ -1,3 +1,4 @@
+import { resolveDevProfile, DEV_DATABASE_ENV_KEYS } from "./dev-profile.ts";
 import { createHash } from "node:crypto";
 
 import {
@@ -147,8 +148,12 @@ export async function ensureSharedPostgres(): Promise<void> {
  * 5 ms at p90 per query (mean 1.5 ms) against 0.3 ms direct, and a seeded
  * write issues ~45 queries. Docker keeps the published loopback port.
  */
-export async function sharedPostgresAddress(): Promise<string | undefined> {
-  if (devContainerBackend() !== "apple") return undefined;
+async function sharedPostgresAddress(): Promise<string> {
+  if (!(await sharedPostgresRunning()))
+    throw new Error(
+      "Start the shared PostgreSQL container with `pnpm db:dev:up` first",
+    );
+  if (devContainerBackend() !== "apple") return "localhost:55432";
   return `${await containerAddress(SHARED_POSTGRES)}:5432`;
 }
 
@@ -177,4 +182,31 @@ export function psql(
     "-tA",
     ...[statements].flat().flatMap((statement) => ["-c", statement]),
   ]);
+}
+
+/** Verify the owned endpoint before any client-side database preparation. */
+export async function resolveOwnedDevProfile(
+  root: string,
+  inherited: NodeJS.ProcessEnv = process.env,
+) {
+  const address = await sharedPostgresAddress();
+  if (
+    inherited.CUBBY_DEV_DB_ADDRESS &&
+    inherited.CUBBY_DEV_DB_ADDRESS !== address
+  )
+    throw new Error(
+      `Refusing inherited CUBBY_DEV_DB_ADDRESS: expected owned container address ${address}`,
+    );
+  // Validate inherited application overrides against the candidate profile
+  // before rebinding supervisor-generated loopback URLs to the direct endpoint.
+  const candidate = resolveDevProfile(root, inherited);
+  const selected: NodeJS.ProcessEnv = {
+    ...inherited,
+    CUBBY_DEV_DB_ADDRESS: address,
+  };
+  const url = new URL(candidate.databaseUrl);
+  url.host = address;
+  for (const key of DEV_DATABASE_ENV_KEYS)
+    if (selected[key]) selected[key] = url.href;
+  return resolveDevProfile(root, selected);
 }
