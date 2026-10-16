@@ -55,6 +55,7 @@ import {
   runMutationSideEffects,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
 import { deferPublications } from "~/server/workflows/background-tasks/publish";
@@ -364,15 +365,17 @@ export const defineEntityOperations = <
       .call("page", async ({ context }, { validated }) => {
         return binding.repository.list(
           context,
-          Object.assign(
-            {},
-            validated.filters,
-            validated.ids === undefined ? {} : { ids: validated.ids },
-            { nesting: validated.nesting },
+          withListGroupBy(
+            Object.assign(
+              {},
+              validated.filters,
+              validated.ids === undefined ? {} : { ids: validated.ids },
+              { nesting: validated.nesting },
+            ),
+            validated.groupBy,
           ),
           validated.sorts,
           validated.pagination,
-          validated.groupBy,
         );
       })
       .call("mediaPage", async ({ context }, { page }) => ({

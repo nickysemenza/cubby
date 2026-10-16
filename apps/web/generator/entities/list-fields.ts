@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { humanize } from "../../../../packages/shared/src/text-case.ts";
 
 import {
   type CompiledEntity,
@@ -60,6 +61,49 @@ type CompiledListField =
       group: string;
     }>;
 
+type GroupOption = Readonly<{ value: string; label: string }>;
+
+/**
+ * What a section key reads: an own column, a to-one related record (keyed by
+ * its public id, labelled by its title), a related record's field, or a
+ * derived value the repository supplies. `options` orders and labels enum
+ * sections in declared order; text sections order by value.
+ */
+type GroupValue =
+  | Readonly<{
+      kind: "column";
+      column: string;
+      options: readonly GroupOption[] | null;
+    }>
+  | Readonly<{
+      kind: "record";
+      steps: readonly RelationshipPathStep[];
+      target: string;
+      titleColumn: string;
+    }>
+  | Readonly<{
+      kind: "field";
+      steps: readonly RelationshipPathStep[];
+      target: string;
+      column: string;
+      options: readonly GroupOption[] | null;
+    }>
+  | Readonly<{ kind: "derived"; options: readonly GroupOption[] | null }>;
+
+/**
+ * One `model.grouping` choice. `value` is null exactly when `reason` says why
+ * the field cannot group. `filter` is the column filter a section header
+ * applies (the same path), and whether it can select the no-value section.
+ */
+type CompiledGroupChoice = Readonly<{
+  key: string;
+  label: string;
+  noValueLabel: string;
+  reason: string | null;
+  value: GroupValue | null;
+  filter: Readonly<{ columnId: string; noValue: boolean }> | null;
+}>;
+
 export type CompiledEntityListFields = Readonly<{
   derived: Readonly<Record<string, CompiledListField>>;
   hierarchy: Readonly<{
@@ -69,8 +113,8 @@ export type CompiledEntityListFields = Readonly<{
   }> | null;
   /** Filter key → its generated "Include sub-…" toggle's filter key. */
   subtree: Readonly<Record<string, string>>;
-  /** Group rejections for model fields (multi-valued fields). */
-  fieldGroup: Readonly<Record<string, string>>;
+  /** `model.grouping`, in menu order. */
+  grouping: readonly CompiledGroupChoice[];
 }>;
 
 const pascal = (text: string) =>
@@ -245,6 +289,204 @@ const withViaKeys = (
   };
 };
 
+const enumOptions = (
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
+): readonly GroupOption[] | null =>
+  field?.kind !== "enum"
+    ? null
+    : (field.display.valueOptions ?? field.control?.options ?? []).map(
+        ({ value, label }) => ({ value, label }),
+      );
+
+/**
+ * Compiles one `model.grouping` key. A model field groups by its own column,
+ * or by its referenced record; a `model.derived` key groups through its
+ * `via` path or the repository's value. A field that holds several values
+ * per row, a to-many path, or a filter-only predicate stays a choice with
+ * the reason derived from the declaration.
+ */
+const compileGroupChoice = (
+  entity: CompiledEntity,
+  key: string,
+  derived: Readonly<Record<string, CompiledListField>>,
+  descriptors: readonly FilterDescriptor[],
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  context: string,
+): CompiledGroupChoice => {
+  const where = `${context}.model.grouping ${key}`;
+  const field = entity.fieldModel.fields.find(
+    (candidate) => candidate.key === key,
+  );
+  const stored = entity.fieldModel.storage.find(
+    (candidate) => candidate.key === key,
+  );
+  const bound = derived[key];
+  /**
+   * The value filter on the same path: the field's own filter, or for a
+   * one-step reference, the filter on that foreign key.
+   */
+  const filterOn = (value: GroupValue | null) => {
+    const edge =
+      value !== null && value.kind !== "column" && value.kind !== "derived"
+        ? value.steps.length === 1 && value.steps[0]?.direction === "outgoing"
+          ? value.steps[0].edge.split(".").at(-1)
+          : undefined
+        : undefined;
+    const keys = [
+      key,
+      ...entity.fieldModel.storage
+        .filter((column) => edge !== undefined && column.column === edge)
+        .map((column) => column.key),
+    ];
+    return descriptors.find(
+      (candidate) =>
+        !candidate.urlOnly &&
+        (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
+        (keys.includes(candidate.columnId) ||
+          (candidate.stored?.columns.length === 1 &&
+            keys.includes(candidate.stored.columns[0]!))),
+    );
+  };
+  if (field === undefined && bound === undefined)
+    throw new EntityDeclarationError(
+      `${where} names no model.fields or model.derived key.`,
+    );
+  const label =
+    field?.label ??
+    filterOn(null)?.label ??
+    entity.relations.find((relation) => relation.key === key)?.label ??
+    (bound?.shape === "via"
+      ? byKey.get(bound.target)?.inspector.singular
+      : undefined) ??
+    humanize(key);
+  const choice = (
+    value: GroupValue | null,
+    reason: string | null,
+  ): CompiledGroupChoice => {
+    const descriptor = reason === null ? filterOn(value) : undefined;
+    return {
+      key,
+      label,
+      noValueLabel: `No ${label.toLowerCase()}`,
+      reason,
+      value,
+      filter:
+        descriptor === undefined
+          ? null
+          : {
+              columnId: descriptor.columnId,
+              noValue: Boolean(descriptor.nullable),
+            },
+    };
+  };
+  const viaValue = (via: Extract<CompiledListField, { shape: "via" }>) => {
+    if (via.group !== null) return choice(null, via.group);
+    if (via.terminal.kind === "field") {
+      const target = byKey.get(via.target);
+      const terminalColumn = via.terminal.column;
+      return choice(
+        {
+          kind: "field",
+          steps: via.steps,
+          target: via.target,
+          column: terminalColumn,
+          options: enumOptions(
+            target?.fieldModel.fields.find(
+              (candidate) =>
+                target.fieldModel.storage.find(
+                  (column) => column.key === candidate.key,
+                )?.column === terminalColumn,
+            ),
+          ),
+        },
+        null,
+      );
+    }
+    if (via.terminal.titleColumn === null)
+      throw new EntityDeclarationError(
+        `${where}: ${via.target} has no stored title.`,
+      );
+    return choice(
+      {
+        kind: "record",
+        steps: via.steps,
+        target: via.target,
+        titleColumn: via.terminal.titleColumn,
+      },
+      null,
+    );
+  };
+  if (field?.kind === "text-array" || field?.reference?.multiple)
+    return choice(
+      null,
+      `A record can have several ${field.label}, so it would appear in more than one group.`,
+    );
+  if (bound?.shape === "via") return viaValue(bound);
+  if (bound?.shape === "predicate") return choice(null, bound.group);
+  if (stored !== undefined && field !== undefined) {
+    if (field.reference !== null) {
+      const relation = entity.relations.find((candidate) => {
+        const provenance = relationshipProvenanceSchema.safeParse(
+          candidate.provenance,
+        );
+        const steps = provenance.success ? provenance.data.steps : undefined;
+        return (
+          candidate.cardinality === "one" &&
+          steps?.length === 1 &&
+          steps[0]?.direction === "outgoing" &&
+          steps[0].edge.endsWith(`.${stored.column}`)
+        );
+      });
+      if (relation === undefined)
+        throw new EntityDeclarationError(
+          `${where}: no to-one relation follows ${stored.column}.`,
+        );
+      return viaValue(compileVia(entity, relation.key, byKey, where));
+    }
+    if (field.kind === "enum" || field.kind === "text")
+      return choice(
+        { kind: "column", column: stored.column, options: enumOptions(field) },
+        null,
+      );
+  }
+  if (
+    bound?.shape === "value" &&
+    (bound.type === "enum" || bound.type === "text")
+  )
+    return choice(
+      {
+        kind: "derived",
+        options:
+          bound.options?.map((value) => ({
+            value,
+            label: value[0]!.toUpperCase() + value.slice(1),
+          })) ?? null,
+      },
+      null,
+    );
+  throw new EntityDeclarationError(
+    `${where} is not an enum, text, reference or to-one related field.`,
+  );
+};
+
+/**
+ * Every saved view's `groupBy` names a choice the list can group by.
+ */
+const validateSavedViewGrouping = (
+  entity: CompiledEntity,
+  grouping: readonly CompiledGroupChoice[],
+  context: string,
+) => {
+  for (const view of entity.inspector.list.savedViews) {
+    if (view.groupBy === null) continue;
+    const choice = grouping.find(({ key }) => key === view.groupBy);
+    if (choice === undefined || choice.reason !== null)
+      throw new EntityDeclarationError(
+        `${context}.presentation.list.savedViews[${view.id}].groupBy ${view.groupBy} is not a model.grouping choice this list can group by${choice?.reason ? `: ${choice.reason}` : ""}.`,
+      );
+  }
+};
+
 /**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
@@ -281,25 +523,12 @@ export const compileListFields = (
                 group: `Filter only: ${entry.reason}.`,
               };
     }
-    const fieldGroup: Record<string, string> = {};
-    for (const field of entity.fieldModel.fields) {
-      if (field.kind === "text-array" || field.reference?.multiple)
-        fieldGroup[field.key] =
-          `A record can have several ${field.label}, so it would appear in more than one group.`;
-    }
     const sort = entity.fieldModel.sort;
     for (const key of sort?.fields ?? []) {
       const reason = derived[key]?.sort;
       if (reason)
         throw new EntityDeclarationError(
           `${context}.model.sort.fields ${key}: ${reason}`,
-        );
-    }
-    for (const key of sort?.groupable ?? []) {
-      const reason = derived[key]?.group ?? fieldGroup[key];
-      if (reason)
-        throw new EntityDeclarationError(
-          `${context}.model.sort.groupable ${key}: ${reason}`,
         );
     }
     const subtree: Record<string, string> = {};
@@ -358,6 +587,24 @@ export const compileListFields = (
       throw new EntityDeclarationError(
         `${context}.model.hierarchy.parentField ${hierarchy.parentField} is not stored.`,
       );
+    if (
+      new Set(entity.fieldModel.grouping).size !==
+      entity.fieldModel.grouping.length
+    )
+      throw new EntityDeclarationError(
+        `${context}.model.grouping repeats a field.`,
+      );
+    const grouping = entity.fieldModel.grouping.map((key) =>
+      compileGroupChoice(
+        entity,
+        key,
+        derived,
+        filterDescriptors,
+        byKey,
+        context,
+      ),
+    );
+    validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
       derived,
       hierarchy:
@@ -365,7 +612,7 @@ export const compileListFields = (
           ? null
           : { ...hierarchy, column: parentColumn },
       subtree,
-      fieldGroup,
+      grouping,
     };
     return {
       ...entity,

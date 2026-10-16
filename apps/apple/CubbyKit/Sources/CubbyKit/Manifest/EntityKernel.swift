@@ -31,7 +31,6 @@ struct EntityKernelCapabilities: Decodable, Sendable {
     let imageAttach: Bool
     let imageOrder: Bool
     let parameters: [String: Parameter]
-    let groupBy: [String]
 }
 
 enum EntityKernelCatalog {
@@ -70,8 +69,11 @@ extension EntityKey {
 extension EntityDescriptor {
     /// The kernel list body (`entity.list`, `entity.listBase`, `entity.listSummary`): flat
     /// filter names re-nested and typed from the catalog, a 1-based page as the 0-based
-    /// `pageIndex`, and `sort` (`name,-createdAt`) as `[{orderBy, direction}]`.
-    func listInput(page: Int, pageSize: Int, sort: String?, filters: EntityFilterState) throws -> JSONValue {
+    /// `pageIndex`, `sort` (`name,-createdAt`) as `[{orderBy, direction}]`, and the
+    /// `model.grouping` choice as `groupBy`.
+    func listInput(
+        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState, groupBy: String? = nil
+    ) throws -> JSONValue {
         var input: [String: JSONValue] = [
             "entity": .string(key.rawValue),
             "filters": .object(try filterBody(filters, includeWindow: false)),
@@ -88,7 +90,7 @@ extension EntityDescriptor {
                     ])
                 })
         }
-        if let group = filters["groupBy"] { input["groupBy"] = .string(try group.string("groupBy")) }
+        if let groupBy { input["groupBy"] = .string(groupBy) }
         return .object(input)
     }
 
@@ -100,10 +102,12 @@ extension EntityDescriptor {
 
     /// One page of rows as the dynamic projection `EntityRow` reads.
     func listPage(
-        client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState
+        client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
+        groupBy: String? = nil
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
-        let body = try listInput(page: page, pageSize: pageSize, sort: sort, filters: filters)
+        let body = try listInput(
+            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
         let response = try JSONValue(
             encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
@@ -185,7 +189,7 @@ extension EntityDescriptor {
     func filterBody(_ filters: EntityFilterState, includeWindow: Bool) throws -> [String: JSONValue] {
         let parameters = key.kernel?.parameters ?? [:]
         var result: [String: JSONValue] = [:]
-        for name in filters.names where name != "groupBy" {
+        for name in filters.names {
             guard let value = filters[name] else { continue }
             guard let parameter = parameters[name], includeWindow || parameter.path.first != "window" else {
                 throw EntityFilterError.unknownParameter(key, name)

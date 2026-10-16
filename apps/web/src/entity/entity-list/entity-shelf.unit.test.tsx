@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ShelfGrid } from "~/entity/table/shelf";
@@ -39,35 +40,46 @@ describe("entity cards", () => {
     expect(screen.getByText("Synthetic media failure")).toBeVisible();
   });
 
-  it.each([false, true])(
-    "shows every server group and full count with compact=%s before later cards load",
-    (compact) => {
-      render(
-        <ShelfGrid
-          items={[
-            { id: "loaded", group: "b" },
-            { id: "unlisted", group: "c" },
-          ]}
-          renderCard={(item) => <div key={item.id}>{item.id}</div>}
-          groups={[
-            { key: "a", label: "First group", count: 4 },
-            { key: "b", label: "Second group", count: 9 },
-          ]}
-          getGroupKey={(item) => item.group}
-          compact={compact}
-        />,
-      );
-      expect(
-        screen
-          .getAllByRole("heading", { level: 2 })
-          .map((heading) => heading.textContent),
-      ).toEqual(["First group", "Second group", "c"]);
-      expect(screen.getByText("4")).toBeVisible();
-      expect(screen.getByText("9")).toBeVisible();
-      expect(screen.getByText("loaded")).toBeVisible();
-      expect(screen.getByText("unlisted")).toBeVisible();
-    },
-  );
+  it("sections loaded cards by position and filters to a section", () => {
+    const onFilter = vi.fn();
+    render(
+      <ShelfGrid
+        items={["Alpha one", "Alpha two", "Beta one", "No value one"]}
+        renderCard={(item) => <div key={item}>{item}</div>}
+        grouping={{
+          choice: {
+            key: "category",
+            label: "Category",
+            noValueLabel: "No category",
+            reason: null,
+            value: { kind: "derived", options: null },
+            filter: { columnId: "category", noValue: false },
+          },
+          groups: [
+            { key: "alpha", label: "Alpha", count: 2 },
+            { key: "beta", label: "Beta", count: 1 },
+            { key: FILTER_NONE, label: "No category", count: 1 },
+            { key: "gamma", label: "Gamma", count: 3 },
+          ],
+          onFilter,
+        }}
+      />,
+    );
+    const sections = screen.getAllByRole("region");
+    expect(
+      sections.map((section) => section.getAttribute("aria-label")),
+    ).toEqual(["Alpha", "Beta", "No category"]);
+    expect(within(sections[0]!).getByText("2")).toBeVisible();
+    expect(within(sections[1]!).getByText("Beta one")).toBeVisible();
+    expect(within(sections[2]!).getByText("No value one")).toBeVisible();
+    expect(
+      within(sections[2]!).queryByRole("button", { name: /Filter to this/ }),
+    ).toBeNull();
+    fireEvent.click(
+      within(sections[1]!).getByRole("button", { name: /Filter to this/ }),
+    );
+    expect(onFilter).toHaveBeenCalledWith("beta");
+  });
 
   it("uses uploaded image records directly and keeps unfinished uploads as icon tiles", () => {
     harness = createBrowserTestHarness();

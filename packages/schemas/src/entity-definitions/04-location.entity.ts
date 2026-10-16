@@ -1,6 +1,5 @@
 import { labelField } from "./label-field.js";
 import { defineEntity } from "./definition.js";
-import { LOCATION_UNSPECIFIED_GROUP_KEY } from "../group-keys";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   imageShortcode,
@@ -606,14 +605,8 @@ Rules:
         "valuation",
         "inventoryEntries",
       ],
-      groupable: ["type"],
-      // The web list groups locations by their own `type` value, so no
-      // `labelField` is needed — the field's own value is the label.
-      grouping: {
-        field: "type",
-        nullGroupKey: LOCATION_UNSPECIFIED_GROUP_KEY,
-      },
     },
+    grouping: ["type", "parent", "tags"],
     intents: {
       fields: {
         // Quick add: alternate names, collections, and photos are filled in

@@ -279,10 +279,6 @@ export const compileDataQuality = (
       sort: {
         ...sort,
         fields: [sort.fields[0], ...sort.fields.slice(1), DATA_QUALITY_SORT],
-        // An empty `groupable` means "every sortable field groups"; a json
-        // score column cannot group, so pin the declared roster instead.
-        groupable:
-          sort.groupable.length === 0 ? [...sort.fields] : sort.groupable,
       },
     },
     // An entity with no `filters.schema` has no list-filter surface to bind

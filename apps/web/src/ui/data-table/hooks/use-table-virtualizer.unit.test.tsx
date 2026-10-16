@@ -6,6 +6,7 @@ import {
   flatRowToVirtualIndex,
   type GroupedItem,
   resolveVirtualIndex,
+  stickyHeaderIndex,
   tableVirtualItemKey,
   useTableVirtualizer,
 } from "./use-table-virtualizer";
@@ -244,10 +245,10 @@ describe("useTableVirtualizer pane scrolling", () => {
 });
 
 const grouped: GroupedItem[] = [
-  { kind: "header", title: "A", count: 2, color: "var(--chart-1)" },
+  { kind: "header", key: "A", title: "A", count: 2 },
   { kind: "row", rowIndex: 0, groupRowIndex: 0 },
   { kind: "row", rowIndex: 1, groupRowIndex: 1 },
-  { kind: "header", title: "B", count: 1, color: "var(--chart-2)" },
+  { kind: "header", key: "B", title: "B", count: 1 },
   { kind: "row", rowIndex: 2, groupRowIndex: 0 },
 ];
 
@@ -266,6 +267,17 @@ describe("tableOverscan", () => {
   });
 });
 
+describe("stickyHeaderIndex", () => {
+  // The pinned header must stay mounted after its own index scrolls out of
+  // the virtualized range, so it is the last header at or above the range.
+  it("pins the section the first visible row belongs to", () => {
+    expect(stickyHeaderIndex([0, 3], 0)).toBe(0);
+    expect(stickyHeaderIndex([0, 3], 2)).toBe(0);
+    expect(stickyHeaderIndex([0, 3], 4)).toBe(3);
+    expect(stickyHeaderIndex([], 4)).toBeNull();
+  });
+});
+
 describe("resolveVirtualIndex", () => {
   it("maps virtual index directly to a flat row index when ungrouped", () => {
     expect(resolveVirtualIndex(0, null)).toEqual({ kind: "row", rowIndex: 0 });
@@ -273,18 +285,8 @@ describe("resolveVirtualIndex", () => {
   });
 
   it("returns the header item at header positions when grouped", () => {
-    expect(resolveVirtualIndex(0, grouped)).toEqual({
-      kind: "header",
-      title: "A",
-      count: 2,
-      color: "var(--chart-1)",
-    });
-    expect(resolveVirtualIndex(3, grouped)).toEqual({
-      kind: "header",
-      title: "B",
-      count: 1,
-      color: "var(--chart-2)",
-    });
+    expect(resolveVirtualIndex(0, grouped)).toEqual(grouped[0]);
+    expect(resolveVirtualIndex(3, grouped)).toEqual(grouped[3]);
   });
 
   it("resolves grouped row positions to their flat row index (offset by headers)", () => {

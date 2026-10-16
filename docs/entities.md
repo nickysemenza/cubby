@@ -795,9 +795,9 @@ reads an expanded row's first children page through the same query; a status
 row after its children shows that read loading, a failed read or deferred
 group with Retry, and Load more while the server counts more children.
 Expansion resets when filters or sort change. `tree.toggle` adds a
-nested/flat switch beside Grouped (rows of the phone Filter sheet), persisted
-as `nest=on|off` (absent is `tree.defaultNested`, default nested); the grouped
-switch is `grouped=on`. Cards and the timeline stay flat. A whole-tree view
+nested/flat switch (a row of the phone Filter sheet), persisted as
+`nest=on|off` (absent is `tree.defaultNested`, default nested). Grouped
+nested rows section by their roots. Cards and the timeline stay flat. A whole-tree view
 (the category hierarchy chart) reads `useServerTree`: the roots, then each
 counted parent's children, level by level. A structured
 value that every client would otherwise re-word declares where the record
@@ -922,8 +922,8 @@ Unknown detail override keys and computed-fact anchors fail explicitly.
 (`entitySectionFields(entity, id)`) instead of a local field subset, so the
 declaration owns each section's labels and membership.
 
-`model.sort` owns the declared list-sort roster: `fields` (the ordered, complete
-sortable-column list) and an optional `groupable` subset.
+`model.sort` owns the declared list-sort roster: `fields`, the ordered,
+complete sortable-column list.
 `defaultOverride` replaces `createdAt` (or the first sort field), and
 `directionOverride` replaces the field-kind-based direction.
 Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
@@ -935,15 +935,35 @@ emits the roster as `generatedEntitySort` in
 `packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
 derives the kernel's `EntitySortContract` from that map, so no repository
 hand-lists its own sort roster. The compiler enforces
-`default ∈ fields` and `groupable ⊆ fields`, and rejects a sort or group entry
-whose derived field cannot order (below). The same
-roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
-an enum of `groupable`, or of `fields` when `groupable` is empty), so a
-`groupable` entry must stay an identifier the Swift generator can name.
+`default ∈ fields` and rejects a sort entry whose derived field cannot order
+(below). The same roster narrows the `/api/v1` list route (`sort` refined to
+`fields`).
 The native `EntityDescriptor.sortFields` is emitted from that same roster;
 generic table headers enable server sorting only for those column ids. Native
 sort changes restart pagination and replay the active search with its current
 filters, rather than sorting only the already loaded page.
+
+`model.grouping` is the ordered Group by roster: `model.fields` or
+`model.derived` keys, including one to-one related path (Inventory's
+`category` is `product.category`). The generator compiles each key into a
+choice (`generatedEntityListFields[entity].grouping`, and the native
+`EntityDescriptor.grouping`) with its label, its "No ‹label›" section, the
+filter that addresses the same value, and a reason when it cannot group: a
+multi-valued field, a `via` path through a to-many hop, or a filter-only
+predicate. Clients list such choices disabled with the reason; the kernel
+rejects them as `LIST_GROUP_BY_FIELD_UNSUPPORTED` with the same reason over
+HTTP and MCP. A related-record section's key is the record's public id and its
+label the record's title, ordered by label; an enum section follows declared
+option order. The no-value section is always last. `listScaffold.list` puts
+the group order ahead of the sort, and its summary query (key, label, count
+over the whole filtered set, `meta.groups`) shares that order, so loaded rows
+are a prefix of the sections and clients assign them by position. A list spec
+with a custom `count` must pass `joins`, which the summary reuses. A saved
+view's `groupBy` opens the list grouped; web keeps the choice in `?groupBy=`
+and Apple in the list's view state. Timeline is already arranged by date, so
+both clients disable Group by there. A section header's "Filter to this" sets
+the section's value (and turns an "Include sub-…" toggle off) as the field's
+include filter, and exists only when the choice declares a filter.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields
@@ -1414,7 +1434,7 @@ reads it; a caller that already holds a prepare's data passes it as
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
 receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
-hierarchy, subtree toggles, and group rejections.
+hierarchy, subtree toggles, and Group by choices.
 
 An id filter (stored or `via`) whose target declares `model.hierarchy` matches
 the selected records and their live descendants through

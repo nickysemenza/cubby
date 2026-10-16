@@ -19,6 +19,10 @@ struct EntityShelfView: View {
     var density: ListPresentationChoice = .cards
     var section: AppSection = .browse
     var subtitleOverride: ((EntityRow) -> String?)? = nil
+    /// The list's Group by sections; each gets a header pinned while its cards scroll.
+    var sections: [EntityListSection]? = nil
+    /// "Filter to this" for a section, nil when the section has no filter value.
+    var sectionFilter: ((EntityListSection) -> (() -> Void)?)? = nil
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -51,22 +55,45 @@ struct EntityShelfView: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: gridSpacing) {
-            ForEach(rows) { row in
-                destination(for: row)
-                    .contextMenu {
-                        Button("Copy link", systemImage: "link") {
-                            Clipboard.copy(
-                                appModel.webURL(for: descriptor.key, id: row.id).absoluteString)
-                        }
-                        Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                        ShareLink(item: appModel.webURL(for: descriptor.key, id: row.id))
+        if let sections {
+            LazyVGrid(
+                columns: columns, alignment: .leading, spacing: gridSpacing,
+                pinnedViews: [.sectionHeaders]
+            ) {
+                ForEach(sections) { section in
+                    Section {
+                        cards(section.rows)
+                    } header: {
+                        EntityListSectionHeader(
+                            section: section, entity: descriptor.key,
+                            onFilter: sectionFilter?(section))
                     }
-                    .accessibilityIdentifier(accessibilityIdentifier(for: row))
+                }
             }
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
+        } else {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: gridSpacing) {
+                cards(rows)
+            }
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
         }
-        .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.sm)
+    }
+
+    private func cards(_ rows: [EntityRow]) -> some View {
+        ForEach(rows) { row in
+            destination(for: row)
+                .contextMenu {
+                    Button("Copy link", systemImage: "link") {
+                        Clipboard.copy(
+                            appModel.webURL(for: descriptor.key, id: row.id).absoluteString)
+                    }
+                    Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
+                    ShareLink(item: appModel.webURL(for: descriptor.key, id: row.id))
+                }
+                .accessibilityIdentifier(accessibilityIdentifier(for: row))
+        }
     }
 
     @ViewBuilder

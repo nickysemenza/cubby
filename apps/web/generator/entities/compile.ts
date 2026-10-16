@@ -402,14 +402,10 @@ const compileHierarchy = (
 };
 
 /**
- * Compiles a declared `model.sort` roster: every `fields`/`default`/
- * `groupable` cross-reference, plus the one opt-in `grouping` contract a
- * list's web/native detail renders group by (`field` must itself be
- * `groupable` — the compiler-enforced half of the list-grouping contract;
- * see `entity-definitions/definition.ts` and `docs/entities.md`). A roster
- * entry is a model field, a `model.derived` key, or a `related:<view>`
- * related-view column; cardinality and filter-only rejections need the
- * other entities and run in `compileListFields`.
+ * Compiles a declared `model.sort` roster: every `fields`/`default`
+ * cross-reference. A roster entry is a model field, a `model.derived` key,
+ * or a `related:<view>` related-view column; cardinality and filter-only
+ * rejections need the other entities and run in `compileListFields`.
  */
 const compileSort = (
   sortValue: EntityFieldModelMetadata["sort"],
@@ -420,7 +416,6 @@ const compileSort = (
 ): EntityFieldModel["sort"] => {
   if (sortValue === undefined) return null;
   const sortContext = `${context}.sort`;
-  const groupable = sortValue.groupable ?? [];
   const [first, ...rest] = sortValue.fields;
   if (first === undefined)
     throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
@@ -440,29 +435,9 @@ const compileSort = (
     throw new EntityDeclarationError(
       `${sortContext}.default ${defaultField} must be one of sort.fields.`,
     );
-  for (const key of groupable) {
-    if (!sortValue.fields.includes(key))
-      throw new EntityDeclarationError(
-        `${sortContext}.groupable ${key} must be one of sort.fields.`,
-      );
-  }
-  const grouping = sortValue.grouping ?? null;
-  if (grouping !== null && !groupable.includes(grouping.field))
-    throw new EntityDeclarationError(
-      `${sortContext}.grouping.field ${grouping.field} must be one of sort.groupable.`,
-    );
   return {
     fields: [first, ...rest] as const,
     default: defaultField,
-    groupable,
-    grouping:
-      grouping === null
-        ? null
-        : {
-            field: grouping.field,
-            nullGroupKey: grouping.nullGroupKey,
-            labelField: grouping.labelField ?? null,
-          },
     direction:
       sortValue.direction ??
       (["text", "enum"].includes(
@@ -539,6 +514,7 @@ const compileFieldModel = (
       sort: null,
       derived: {},
       hierarchy: null,
+      grouping: [],
       intents: null,
     };
   }
@@ -856,6 +832,7 @@ const compileFieldModel = (
     sort,
     derived,
     hierarchy,
+    grouping: model.grouping ?? [],
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
     research: model.research,
   };
@@ -2287,7 +2264,12 @@ export const compileEntity = (
     filterAudit,
     filterDescriptors: filterDescriptorsWithAudit,
     // Resolved across entities by `compileListFields`.
-    listFields: { derived: {}, hierarchy: null, subtree: {}, fieldGroup: {} },
+    listFields: {
+      derived: {},
+      hierarchy: null,
+      subtree: {},
+      grouping: [],
+    },
     bulkUpdateFields,
     ports,
     imagePolicy: declaration.capabilities.images,

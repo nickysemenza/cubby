@@ -68,14 +68,27 @@ export const parseGroupBy = <
   groupBy: string | undefined,
 ) => {
   if (groupBy === undefined) return undefined;
-  const groupable = binding.sort.groupable ?? binding.sort.fields;
-  const result = z.enum(groupable).safeParse(groupBy);
-  if (!result.success)
+  const choices = generatedEntityListFields[binding.entity].grouping;
+  const choice = choices.find(({ key }) => key === groupBy);
+  // A declared choice the compiler cannot group by (several values per row,
+  // a to-many path, a filter-only predicate) is rejected with the reason its
+  // declaration derives, the same text the Group by menus show.
+  if (choice?.reason)
     throw createAppError(
       "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      `Unsupported groupBy field "${groupBy}" for ${binding.entity}; expected one of ${groupable.join(", ")}`,
+      `Cannot group ${binding.entity} by "${groupBy}": ${choice.reason}`,
     );
-  return result.data;
+  if (choice === undefined)
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `Unsupported groupBy field "${groupBy}" for ${binding.entity}; expected one of ${
+        choices
+          .filter(({ reason }) => reason === null)
+          .map(({ key }) => key)
+          .join(", ") || "none (the list declares no model.grouping)"
+      }`,
+    );
+  return choice.key;
 };
 
 /**

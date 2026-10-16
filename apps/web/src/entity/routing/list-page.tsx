@@ -4,6 +4,7 @@ import {
   listPresentationLabel,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
@@ -21,6 +22,7 @@ import {
   EntityListCardDensityProvider,
   GenericEntityList,
   type GenericEntityListProps,
+  listGroupBy,
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
@@ -31,7 +33,10 @@ import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 
@@ -87,12 +92,19 @@ const VIEW_ICONS = {
   timeline: CalendarCheckIcon,
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
-/** One view menu, with choices derived from the manifest at every width. */
+const TIMELINE_GROUP_REASON = "Timeline is already arranged by date.";
+
+/**
+ * One view menu, with choices derived from the manifest at every width: the
+ * presentations, then Group by over the declared `model.grouping` choices.
+ * A choice that cannot group stays listed, disabled, with its reason.
+ */
 function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
   const { views, view } = resolveListView(entity, search);
-  if (views.length < 2) return null;
+  const grouping = generatedEntityListFields[entity].grouping;
+  if (views.length < 2 && grouping.length === 0) return null;
   const options = views.flatMap((candidate) => {
     const id = listViewId(candidate);
     const choice = {
@@ -126,7 +138,21 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
     setDensity("cards");
     navigate({ view: next === defaultView ? undefined : next });
   };
+  const timeline = view === "timeline";
+  const groupBy = timeline ? undefined : listGroupBy(search);
+  const activeGroup = grouping.find(
+    (choice) => choice.key === groupBy && choice.reason === null,
+  );
+  const groupChoices = [
+    { key: undefined, label: "None", reason: null },
+    ...grouping,
+  ].map((choice) => ({
+    ...choice,
+    reason: timeline && choice.key ? TIMELINE_GROUP_REASON : choice.reason,
+  }));
   const SelectedIcon = selectedOption?.icon;
+  const viewLabel =
+    options.length > 1 ? (selectedOption?.label ?? selected) : "View";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -134,29 +160,63 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
           <Button
             variant="ghost"
             size="sm"
-            aria-label={`${entities[entity].pluralLabel} view: ${selectedOption?.label ?? selected}`}
+            aria-label={`${entities[entity].pluralLabel} view: ${viewLabel}${activeGroup ? `, grouped by ${activeGroup.label}` : ""}`}
           />
         }
       >
-        {SelectedIcon && <SelectedIcon className="size-3.5" />}
-        {selectedOption?.label ?? selected}
+        {options.length > 1 && SelectedIcon && (
+          <SelectedIcon className="size-3.5" />
+        )}
+        {viewLabel}
+        {activeGroup && (
+          <span className="text-muted-foreground">· {activeGroup.label}</span>
+        )}
         <CaretDownIcon className="size-3.5" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {options.map((option) => (
-          <DropdownMenuItem
-            key={option.value}
-            aria-label={`${option.label} view`}
-            aria-current={option.value === selected ? "true" : undefined}
-            onClick={() => onValueChange(option.value)}
-          >
-            {option.icon && <option.icon className="size-3.5" />}
-            {option.label}
-            {option.value === selected && (
-              <CheckIcon className="ml-auto size-3.5" />
-            )}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" className="min-w-52">
+        {options.length > 1 &&
+          options.map((option) => (
+            <DropdownMenuItem
+              key={option.value}
+              aria-label={`${option.label} view`}
+              aria-current={option.value === selected ? "true" : undefined}
+              onClick={() => onValueChange(option.value)}
+            >
+              {option.icon && <option.icon className="size-3.5" />}
+              {option.label}
+              {option.value === selected && (
+                <CheckIcon className="ml-auto size-3.5" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        {options.length > 1 && grouping.length > 0 && <DropdownMenuSeparator />}
+        {grouping.length > 0 && (
+          <DropdownMenuGroup aria-label="Group by">
+            <DropdownMenuLabel>Group by</DropdownMenuLabel>
+            {groupChoices.map((choice) => {
+              const current = choice.key === activeGroup?.key;
+              return (
+                <DropdownMenuItem
+                  key={choice.key ?? "none"}
+                  disabled={choice.reason !== null}
+                  aria-label={`Group by ${choice.label}`}
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => navigate({ groupBy: choice.key })}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span>{choice.label}</span>
+                    {choice.reason && (
+                      <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
+                        {choice.reason}
+                      </span>
+                    )}
+                  </span>
+                  {current && <CheckIcon className="ml-auto size-3.5" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuGroup>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -12,7 +11,11 @@ import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { orderedGroupSections } from "../../ui/data-table/use-grouped-list";
+import { SectionHeader } from "../../ui/data-table/section-header";
+import {
+  type GroupConfig,
+  groupSections,
+} from "../../ui/data-table/use-grouped-list";
 import { useInfiniteScrollSentinel } from "../../ui/hooks/use-infinite-scroll-sentinel";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
 
@@ -288,40 +291,13 @@ function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
  * Photo-first "shelf" grid with loading / empty / error states and optional
  * infinite-scroll. The reusable half of the Shelf/Table pattern — feed it items
  * and a `renderCard` (use ShelfCard) and pair it with a segmented `Picker`.
+ * When `grouping` is set, each server section gets its own grid beneath a
+ * header pinned under the app chrome.
  */
-function shelfItems<T>(
-  items: T[],
-  renderCard: (item: T) => ReactNode,
-  groups?: readonly { key: string; label: string; count: number }[],
-  getGroupKey?: (item: T) => string | null | undefined,
-): ReactNode[] {
-  if (!groups) return items.map(renderCard);
-  const groupedItems = new Map<string, T[]>();
-  for (const item of items) {
-    const key = getGroupKey?.(item) ?? "(unspecified)";
-    const section = groupedItems.get(key);
-    if (section) section.push(item);
-    else groupedItems.set(key, [item]);
-  }
-  return orderedGroupSections(groupedItems, groups).flatMap((group) => [
-    <div
-      key={`group-${group.key}`}
-      className="col-span-full flex items-baseline gap-2 border-y border-[var(--border)] bg-muted/40 px-2 py-2"
-    >
-      <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-      <span className="text-2xs text-muted-foreground tabular-nums">
-        {group.count}
-      </span>
-    </div>,
-    ...group.items.map(renderCard),
-  ]);
-}
-
 export function ShelfGrid<T>({
   items,
   renderCard,
-  groups,
-  getGroupKey,
+  grouping,
   isLoading,
   error,
   infiniteScroll,
@@ -332,8 +308,7 @@ export function ShelfGrid<T>({
   items: T[];
   /** Must return a keyed element (e.g. a ShelfCard with `key`). */
   renderCard: (item: T) => ReactNode;
-  groups?: readonly ListGroupSummary[];
-  getGroupKey?: (item: T) => string | null | undefined;
+  grouping?: GroupConfig;
   isLoading?: boolean;
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
@@ -358,18 +333,36 @@ export function ShelfGrid<T>({
   if (isLoading && items.length === 0)
     return <ShelfSkeleton compact={compact} />;
 
-  if (items.length === 0 && !groups?.length) return <>{emptyState}</>;
+  if (items.length === 0) return <>{emptyState}</>;
 
   return (
     <div aria-busy={infiniteScroll?.isTransitioning ?? false}>
       {failure}
       <div
-        className={shelfGridClass(compact)}
+        className={grouping ? undefined : shelfGridClass(compact)}
         data-testid="entity-card-grid"
         data-compact={compact ? "true" : "false"}
         inert={infiniteScroll?.isTransitioning ? true : undefined}
       >
-        {shelfItems(items, renderCard, groups, getGroupKey)}
+        {grouping
+          ? groupSections(items, grouping).map((section) => (
+              <section
+                key={section.key}
+                aria-label={section.label}
+                className="pb-3"
+              >
+                <SectionHeader
+                  title={section.label}
+                  count={section.count}
+                  onFilter={section.onFilter}
+                  className="sticky top-[var(--app-chrome-top)] z-10 mb-3 rounded-md border"
+                />
+                <div className={shelfGridClass(compact)}>
+                  {section.items.map(renderCard)}
+                </div>
+              </section>
+            ))
+          : items.map(renderCard)}
       </div>
       {infiniteScroll?.isTransitioning && (
         <output className="flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground">

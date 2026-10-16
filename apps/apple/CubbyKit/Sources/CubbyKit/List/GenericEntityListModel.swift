@@ -81,6 +81,9 @@ public final class GenericEntityListModel {
     public private(set) var sort: String?
     /// The selected declared view; `select(view:)` loads the timeline when it is `.timeline`.
     public private(set) var view: ListView
+    /// The `model.grouping` choice the declared list is grouped by, kept with the view state; a
+    /// saved view's `groupBy` sets it. Nil is a flat list.
+    public private(set) var groupBy: String?
     public private(set) var timeline: EntityTimelineOut?
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
@@ -112,6 +115,19 @@ public final class GenericEntityListModel {
 
     public var views: [ListView] { descriptor.presentation.listViews }
 
+    /// The active Group by choice; Timeline is already arranged by date, so it has none.
+    public var groupChoice: GroupChoice? {
+        view == .timeline ? nil : descriptor.groupChoice(groupBy)
+    }
+
+    /// The loaded base rows in the server's sections, or nil when the list is not grouped.
+    /// Search results stay flat.
+    public var sections: [EntityListSection]? {
+        guard groupChoice != nil, let groups = meta?.groups else { return nil }
+        return EntityListSection.sections(
+            rows: rows, groups: groups.map { (key: $0.key, label: $0.label, count: $0.count) })
+    }
+
     public var activeSavedView: SavedView? {
         descriptor.presentation.savedViews.first { savedView in
             filters == savedView.filterState && sort == savedView.sortParameter
@@ -138,6 +154,7 @@ public final class GenericEntityListModel {
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
         view: ListView? = nil,
+        groupBy: String? = nil,
         progressive: Bool = true,
         searchLoader: EntityListSearchModel.PageLoader? = nil,
         searchDebounceNanoseconds: UInt64 = 250_000_000
@@ -152,6 +169,7 @@ public final class GenericEntityListModel {
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
+        self.groupBy = descriptor.groupChoice(groupBy)?.id
         self.searchModel =
             searchLoader.map {
                 EntityListSearchModel(
@@ -254,18 +272,39 @@ public final class GenericEntityListModel {
         await refreshQuery()
     }
 
-    /// Apply filters and ordering together so a saved view never sends an intermediate scope.
+    /// Apply filters, ordering and grouping together so a saved view never sends an
+    /// intermediate scope. A view that declares no `groupBy` keeps the current grouping.
     public func apply(savedView: SavedView) async {
         guard source == nil else { return }
         let newFilters = savedView.filterState
         let newSort = savedView.sortParameter
+        let newGroupBy = descriptor.groupChoice(savedView.groupBy)?.id ?? groupBy
         // The view mode is not part of active-view matching (`activeSavedView`): switching it
         // never changes the query, so it must not depend on whether the query changed.
         if let newView = savedView.listView(in: descriptor) { await select(view: newView) }
-        guard filters != newFilters || sort != newSort else { return }
+        guard filters != newFilters || sort != newSort || groupBy != newGroupBy else { return }
         filters = newFilters
         sort = newSort
+        groupBy = newGroupBy
         await refreshQuery()
+    }
+
+    /// Groups the declared list by a `model.grouping` choice, or flattens it with nil. A choice
+    /// with a reason it cannot group is ignored.
+    public func apply(groupBy newGroupBy: String?) async {
+        guard source == nil else { return }
+        let resolved = descriptor.groupChoice(newGroupBy)?.id
+        guard resolved == newGroupBy, resolved != groupBy else { return }
+        groupBy = resolved
+        await refreshQuery()
+    }
+
+    /// "Filter to this" on a section header; see `EntityDescriptor.filtering(_:to:of:)`.
+    public func filter(to section: EntityListSection) async {
+        guard let choice = groupChoice,
+            let next = descriptor.filtering(filters, to: section, of: choice)
+        else { return }
+        await apply(filters: next)
     }
 
     /// Sortable fields come from the same declaration the server validates. Injected page
@@ -437,14 +476,17 @@ public final class GenericEntityListModel {
         let pageSize = pageSize
         let sort = sort
         let filters = filters
+        let groupBy = groupBy
         let standard = progressive && (view == .table || view == .shelf)
         return { page in
             if standard {
                 return try await client.progressiveList(
-                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
+                    groupBy: groupBy)
             }
             return try await client.list(
-                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
+                groupBy: groupBy)
         }
     }
 

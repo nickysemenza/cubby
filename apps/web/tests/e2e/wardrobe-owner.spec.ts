@@ -1,4 +1,9 @@
-import { seedWardrobePrerequisites } from "./fixtures/catalog";
+import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
+import {
+  seedProductCategoryPrerequisite,
+  seedWardrobePrerequisites,
+} from "./fixtures/catalog";
+import { createEntityFixture } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -80,4 +85,51 @@ test("home pins open the viewer's wardrobe as a generic saved view", async ({
   expect(href.searchParams.get("owner")).toBe("@me");
   expect(href.searchParams.get("categoryFeature")).toBe("apparel");
   expect(href.searchParams.get("view")).toBe("shelf");
+  expect(href.searchParams.get("groupBy")).toBe("category");
+});
+
+test("wardrobe cards section by clothing type and a header filters to one type", async ({
+  page,
+}) => {
+  const name = `Wardrobe groups ${Date.now()}`;
+  const { owner, location } = await seedWardrobePrerequisites(page, name);
+  for (const type of ["Tops", "Outerwear"]) {
+    const category = await seedProductCategoryPrerequisite(page, {
+      name: `${name} ${type}`,
+      parentId: taxonomyShortcode("apparel"),
+    });
+    const product = await createEntityFixture(page, "product", {
+      name: `${name} ${type} item`,
+      manufacturer: "Fixture",
+      categoryId: category.id,
+    });
+    await createEntityFixture(page, "inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 1, unit: "each" },
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: owner.id,
+    });
+  }
+  const sections = page.getByTestId("entity-card-grid").getByRole("region");
+  const tops = sections.filter({ hasText: `${name} Tops` });
+  await gotoAuthenticatedPage(
+    page,
+    `${wardrobeUrl(owner.id)}&groupBy=category`,
+    tops,
+  );
+  // Related-record sections follow their labels; the seed shirt sits in the
+  // Apparel root itself.
+  await expect(sections).toHaveText([
+    /^Apparel/,
+    new RegExp(`^${name} Outerwear`),
+    new RegExp(`^${name} Tops`),
+  ]);
+  await tops.hover();
+  await tops.getByRole("button", { name: /Filter to this/ }).click();
+  await expect(sections).toHaveText([new RegExp(`^${name} Tops`)]);
+  await expect(
+    tops.getByRole("link", { name: new RegExp(`^${name} Tops item`) }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("groupBy")).toBe("category");
 });

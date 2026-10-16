@@ -3,7 +3,11 @@ import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import {
+  defaultRangeExtractor,
+  type Range,
+  useWindowVirtualizer,
+} from "@tanstack/react-virtual";
 import {
   type CSSProperties,
   Fragment,
@@ -31,6 +35,7 @@ import { Checkbox } from "~/ui/primitives/checkbox";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
+import { stickyHeaderIndex } from "../../ui/data-table/hooks/use-table-virtualizer";
 import { SectionHeader } from "../../ui/data-table/section-header";
 import type {
   CubbyRow as Row,
@@ -49,6 +54,10 @@ import {
   useMobileListModel,
 } from "./use-mobile-list-model";
 
+// A tree's child rows follow their parent without taking a section place.
+const isNestedModel = (model: { row: { depth: number } }) =>
+  model.row.depth > 0;
+
 // Absolutely-positioned virtualizer row wrapper — virtualizer mechanics
 // (measureElement ref + data-index + translateY), shared by all 3 render sites.
 type WindowVirtualizer = ReturnType<typeof useWindowVirtualizer>;
@@ -59,24 +68,36 @@ function VirtualRow({
   virtualizer,
   children,
   role,
+  sticky = false,
 }: {
   vi: VirtualItem;
   virtualizer: WindowVirtualizer;
   children: ReactNode;
   role?: "listitem" | "presentation";
+  /** The section header pinned under the app chrome while its rows scroll. */
+  sticky?: boolean;
 }) {
   return (
     <li
       ref={virtualizer.measureElement}
       data-index={vi.index}
       role={role}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-      }}
+      style={
+        sticky
+          ? {
+              position: "sticky",
+              top: "var(--app-chrome-top, 0px)",
+              zIndex: 1,
+              width: "100%",
+            }
+          : {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+            }
+      }
     >
       {children}
     </li>
@@ -696,10 +717,8 @@ interface MobileCardViewProps<TItem extends RowData> {
   renderRowFooter?: (item: TItem) => ReactNode;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
-  /** Group configuration for section headers */
-  groupConfig?: GroupConfig<TItem>;
-  /** Whether grouping is currently active */
-  grouped?: boolean;
+  /** The active Group by choice and its server sections. */
+  groupConfig?: GroupConfig;
   isTransitioning?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
@@ -715,7 +734,6 @@ export function MobileCardView<TItem extends RowData>({
   renderRowFooter,
   infiniteScroll,
   groupConfig,
-  grouped = false,
   isTransitioning = false,
   rowContentVersion,
   emptyState,
@@ -732,22 +750,24 @@ export function MobileCardView<TItem extends RowData>({
   // Group the live mobile models themselves. `useTable` keeps its table
   // instance stable while replacing the row model as infinite pages arrive,
   // so deriving from `table` would leave grouped mobile lists on stale data.
-  // Keeping each model as the grouped item also prevents a sorted section from
-  // being resolved back through an index belonging to the pre-grouped order.
-  const mobileGroupConfig = useMemo(
+  const groupedItems = useGroupedList(mobileRows, groupConfig, isNestedModel);
+  const headerIndexes = useMemo(
     () =>
-      groupConfig
-        ? {
-            field: groupConfig.field,
-            keyFn: (model: (typeof mobileRows)[number]) =>
-              groupConfig.keyFn(model.row.original),
-            colorFn: groupConfig.colorFn,
-            groups: groupConfig.groups,
-          }
-        : undefined,
-    [groupConfig],
+      groupedItems?.flatMap((item, index) =>
+        item.kind === "header" ? [index] : [],
+      ) ?? [],
+    [groupedItems],
   );
-  const groupedItems = useGroupedList(mobileRows, mobileGroupConfig, grouped);
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const sticky = stickyHeaderIndex(headerIndexes, range.startIndex);
+      const indexes = defaultRangeExtractor(range);
+      return sticky === null || indexes.includes(sticky)
+        ? indexes
+        : [sticky, ...indexes];
+    },
+    [headerIndexes],
+  );
 
   // Determine virtualizer item count and estimate sizes
   const itemCount = groupedItems ? groupedItems.length : mobileRows.length;
@@ -778,7 +798,7 @@ export function MobileCardView<TItem extends RowData>({
         const item = groupedItems[index];
         if (!item) return `missing:${index}`;
         return item.kind === "header"
-          ? `group:${item.key ?? item.title}`
+          ? `group:${item.section.key}`
           : `row:${item.item.row.id}`;
       }
       return `row:${mobileRows[index]?.row.id ?? index}`;
@@ -796,6 +816,7 @@ export function MobileCardView<TItem extends RowData>({
     // it did; 4 still covers ~600px on the dense lists.
     overscan: 4,
     scrollMargin: listRef.current?.offsetTop ?? 0,
+    rangeExtractor,
   });
 
   const sentinelRef = useInfiniteScrollSentinel(infiniteScroll, "200px");
@@ -817,6 +838,9 @@ export function MobileCardView<TItem extends RowData>({
   }, [anySelected]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const stickyIndex = virtualizer.range
+    ? stickyHeaderIndex(headerIndexes, virtualizer.range.startIndex)
+    : null;
 
   const renderVirtualItem = (vi: (typeof virtualItems)[number]) => {
     if (groupedItems) {
@@ -826,15 +850,16 @@ export function MobileCardView<TItem extends RowData>({
       if (gItem.kind === "header") {
         return (
           <VirtualRow
-            key={`header-${gItem.key ?? gItem.title}`}
+            key={`header-${gItem.section.key}`}
             vi={vi}
             virtualizer={virtualizer}
             role="presentation"
+            sticky={vi.index === stickyIndex}
           >
             <SectionHeader
-              title={gItem.title}
-              count={gItem.count}
-              color={gItem.color}
+              title={gItem.section.label}
+              count={gItem.section.count}
+              onFilter={gItem.section.onFilter}
             />
           </VirtualRow>
         );

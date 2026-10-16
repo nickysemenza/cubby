@@ -13,6 +13,7 @@ import {
 } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { expandListGroups } from "~/server/generic/list/repo/list-projection";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
@@ -72,14 +73,20 @@ export function defineProgressiveListOperations<
       binding.schemas.filters,
       parseFilters(input),
     );
-  /** The page's filters plus its nesting scope; totals stay over the filters. */
+  /**
+   * The page's filters plus its nesting scope and `groupBy`, both carried
+   * beside the filters; totals stay over the filters.
+   */
   const scopedFilters = async (
     context: EntityKernelContext,
     input: z.output<typeof inputSchema>,
   ) =>
-    Object.assign(await filtersFor(context, input.filters), {
-      nesting: parseNesting(binding, input.nesting),
-    });
+    withListGroupBy(
+      Object.assign(await filtersFor(context, input.filters), {
+        nesting: parseNesting(binding, input.nesting),
+      }),
+      parseGroupBy(binding, input.groupBy),
+    );
   const reader = () => {
     if (!binding.repository.listRead)
       throw new Error(`Missing progressive list reader: ${binding.entity}`);
@@ -152,7 +159,6 @@ export function defineProgressiveListOperations<
               ),
               pagination,
               { kind: "base" },
-              parseGroupBy(binding, input.groupBy),
             ),
         ),
       { "entity.kind": binding.entity },

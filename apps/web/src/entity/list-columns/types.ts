@@ -36,7 +36,6 @@ type ListOverrideListOptions<
     | "filterOptions"
     | "getMappings"
     | "mappingsReadFields"
-    | "groupConfig"
     | "hiddenFilterColumns"
     | "initialColumnVisibility"
     | "nameClassName"

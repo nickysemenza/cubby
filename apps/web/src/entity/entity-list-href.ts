@@ -9,12 +9,14 @@ type ListState = {
   filters: readonly ViewDefinition["filters"][number][];
   sort?: readonly { id: string; desc: boolean }[];
   view?: string;
+  groupBy?: string;
 };
 
 /**
- * The list route search that reproduces declared filter, sort, and view state
- * exactly: the same column-filter encoding the list writes itself. An
- * undeclared filter id throws rather than yielding a silently wider list.
+ * The list route search that reproduces declared filter, sort, view, and
+ * grouping state exactly: the same column-filter encoding the list writes
+ * itself. An undeclared filter id throws rather than yielding a silently wider
+ * list.
  */
 export const entityListSearch = (
   entity: BrowserRoutedEntity,
@@ -35,6 +37,7 @@ export const entityListSearch = (
   const sort = state.sort && sortToParam([...state.sort]);
   if (sort) search.sort = sort;
   if (state.view) search.view = state.view;
+  if (state.groupBy) search.groupBy = state.groupBy;
   return search;
 };
 

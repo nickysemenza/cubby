@@ -26,14 +26,12 @@ export function useDataTableController<TItem extends RowData>({
   table,
   infiniteScroll,
   groupConfig,
-  grouped,
   verticalAlign,
   onRowClick,
 }: {
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
-  groupConfig?: GroupConfig<TItem>;
-  grouped: boolean;
+  groupConfig?: GroupConfig;
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
@@ -62,7 +60,7 @@ export function useDataTableController<TItem extends RowData>({
   const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
 
   // Desktop group detection (server trusts ordering)
-  const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
+  const groupedItems = useDesktopGroupedRows(rows, groupConfig);
 
   // Pane scroll restoration. The pane carries `data-scroll-restoration-id`
   // (see Table.tsx) so the router snapshots its offset against a stable
@@ -88,6 +86,7 @@ export function useDataTableController<TItem extends RowData>({
     totalSize,
     resolveIndex,
     flatRowToVirtualIndex,
+    stickyIndex,
     scrollToIndex,
   } = useTableVirtualizer({
     rowCount: rows.length,
@@ -220,6 +219,7 @@ export function useDataTableController<TItem extends RowData>({
     rows,
     rowContentVersion,
     scrollRestorationId,
+    stickyIndex,
     styles,
     tableContainerRef,
     paneWrapperRef,

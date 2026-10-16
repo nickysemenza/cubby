@@ -1,10 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ListNesting } from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useSearch } from "@tanstack/react-router";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import { browserEntityDefinition, entities } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
+  FILTER_EXACT,
   filterGetterFromColumnFilters,
   summarizeListState,
 } from "~/entity/filters";
@@ -202,7 +203,11 @@ export interface UseEntityListOptions<
   nameSuffix?: (row: TData) => ReactNode;
   namePrefix?: (row: TData) => ReactNode;
   hiddenFilterColumns?: string[];
-  groupConfig?: GroupConfig<TData>;
+  /**
+   * The active `model.grouping` choice. A key with a reason, or none the
+   * entity declares, leaves the list flat.
+   */
+  groupBy?: string;
   tree?: EntityListTreeConfig<TData, TRow>;
   /**
    * Nest under the entity's declared `list.tree` on the server: page the
@@ -373,7 +378,7 @@ export function useEntityList<
   nameSuffix,
   namePrefix,
   hiddenFilterColumns,
-  groupConfig,
+  groupBy,
   tree,
   serverTree = false,
   nestToggle,
@@ -384,9 +389,11 @@ export function useEntityList<
   TRow
 > {
   const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
-  const navigate = useNavigate();
-  // `grouped=on` is URL state, so a reload or shared link keeps the grouping.
-  const grouped = Boolean(groupConfig) && routeSearch.grouped === "on";
+  const groupChoice = groupBy
+    ? generatedEntityListFields[entity].grouping.find(
+        (choice) => choice.key === groupBy && choice.reason === null,
+      )
+    : undefined;
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
     previewOptions,
@@ -394,24 +401,7 @@ export function useEntityList<
   const effectiveOnInspectRow =
     onInspectRow ?? (previewOptions ? inspection.inspectRow : undefined);
 
-  const onGroupedChange = useCallback(
-    (value: boolean) => {
-      // SAFETY: every route that passes a `groupConfig` validates `grouped`
-      // through its generated search schema.
-      void navigate({
-        search: (previous: z.infer<typeof routeSearchSchema>) => ({
-          ...previous,
-          grouped: value ? "on" : undefined,
-        }),
-        replace: true,
-      } as never);
-    },
-    [navigate],
-  );
-
   const effectiveDeletable = useContractDeletable(entity, deletable);
-
-  const groupByField = grouped ? groupConfig?.field : undefined;
 
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
@@ -514,7 +504,7 @@ export function useEntityList<
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
-    groupBy: groupByField,
+    groupBy: groupChoice?.key,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     visibleFields: requestedReadFields,
   });
@@ -529,24 +519,32 @@ export function useEntityList<
     timing,
     refreshControls,
   } = infiniteResult;
-  // Once the server has returned full-set `groups`, the row key it matches
-  // sections by must be the raw grouped field's value (the id or enum the
-  // server grouped on), read through the override's `rawKeyFn` — not
-  // whatever label `keyFn` renders for the local, groups-less fallback below
-  // — falling back to the entity's declared null-group key
-  // (`packages/schemas/src/entity-definitions/*.entity.ts`'s `sort.grouping`,
-  // emitted as `generatedEntitySort[entity].grouping`).
-  const effectiveGroupConfig = useMemo(() => {
-    if (!groupConfig || !grouped || !groups) return groupConfig;
-    const grouping = generatedEntitySort[entity]?.grouping;
-    const rawKeyFn = groupConfig.rawKeyFn;
-    if (!grouping || !rawKeyFn) return { ...groupConfig, groups };
+  const { setColumnFilters } = tableState;
+  const groupConfig = useMemo((): GroupConfig | undefined => {
+    if (!groupChoice || !groups) return undefined;
+    const filter = groupChoice.filter;
+    const spec = filter
+      ? getEntityFilters(entity).find(
+          (candidate) => candidate.columnId === filter.columnId,
+        )
+      : undefined;
     return {
-      ...groupConfig,
+      choice: groupChoice,
       groups,
-      keyFn: (item: TData) => rawKeyFn(item) ?? grouping.nullGroupKey,
+      // "Filter to this" includes the section's own value only: an "Include
+      // sub-…" toggle goes off so the filtered list keeps one section.
+      onFilter: filter
+        ? (key) =>
+            setColumnFilters((previous) => [
+              ...previous.filter(({ id }) => id !== filter.columnId),
+              {
+                id: filter.columnId,
+                value: spec?.subtree ? [key, FILTER_EXACT] : [key],
+              },
+            ])
+        : undefined,
     };
-  }, [entity, groupConfig, grouped, groups]);
+  }, [entity, groupChoice, groups, setColumnFilters]);
 
   const serverTotals = useMemo(
     () => ({ totalCount, sums }),
@@ -849,9 +847,7 @@ export function useEntityList<
       deleteDialog: presentationState.deleteDialog,
       infiniteScroll: infiniteResult.infiniteScroll,
       refreshControls,
-      grouped,
-      onGroupedChange,
-      groupConfig: effectiveGroupConfig,
+      groupConfig,
       nestToggle,
     },
     currentFilters,

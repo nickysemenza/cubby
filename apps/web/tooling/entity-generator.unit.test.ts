@@ -791,10 +791,7 @@ describe("typed entity compiler", () => {
         model: {
           ...model,
           derived: { score: { type: "number" } },
-          sort: {
-            fields: ["name", "score", "related:example.count"],
-            groupable: ["name"],
-          },
+          sort: { fields: ["name", "score", "related:example.count"] },
         },
       },
     ])[0]!;
@@ -802,8 +799,6 @@ describe("typed entity compiler", () => {
       fields: ["name", "score", "related:example.count"],
       default: "name",
       direction: "asc",
-      groupable: ["name"],
-      grouping: null,
     });
   });
 
@@ -914,6 +909,61 @@ describe("typed entity compiler", () => {
       ).toThrow(message);
     });
 
+    it("compiles Group by choices with their filter and the reasons they cannot group", () => {
+      const { listFields } = compile(
+        {
+          derived: {
+            childName: { via: "children.name" },
+            flagged: { predicate: "boolean", reason: "Spans two tables" },
+          },
+          grouping: ["parentId", "childName", "flagged"],
+        },
+        {
+          descriptors: [
+            {
+              columnId: "parentId",
+              kind: "idMulti",
+              placeholder: "Parent",
+              brandRef: { entity: "alpha" },
+              deriveSchema: true,
+              stored: true,
+            },
+          ],
+        },
+      );
+      expect(listFields.grouping).toEqual([
+        {
+          key: "parentId",
+          label: "Parent",
+          noValueLabel: "No parent",
+          reason: null,
+          value: {
+            kind: "record",
+            steps: [{ edge: "Alpha.parentId", direction: "outgoing" }],
+            target: "alpha",
+            titleColumn: "name",
+          },
+          filter: { columnId: "parentId", noValue: true },
+        },
+        expect.objectContaining({
+          key: "childName",
+          reason:
+            "Goes through a list of Alphas. Only paths that lead to a single record can group.",
+          filter: null,
+        }),
+        expect.objectContaining({
+          key: "flagged",
+          reason: "Filter only: Spans two tables.",
+        }),
+      ]);
+      expect(() => compile({ grouping: ["name", "name"] })).toThrow(
+        "model.grouping repeats a field",
+      );
+      expect(() => compile({ grouping: ["missing"] })).toThrow(
+        "names no model.fields or model.derived key",
+      );
+    });
+
     it("lets a value or path declare a stored field's order, never a predicate", () => {
       expect(
         compile({ derived: { parentId: { via: "parent" } } }).listFields.derived
@@ -960,45 +1010,6 @@ describe("typed entity compiler", () => {
     expect(entity.fieldModel.sort).toBeNull();
   });
 
-  it("compiles a declared list-grouping contract", () => {
-    const entity = compileEntityDeclarations([
-      {
-        ...base,
-        model: {
-          ...model,
-          sort: {
-            fields: ["name"],
-            groupable: ["name"],
-            grouping: { field: "name", nullGroupKey: "__unspecified__" },
-          },
-        },
-      },
-    ])[0]!;
-    expect(entity.fieldModel.sort?.grouping).toEqual({
-      field: "name",
-      nullGroupKey: "__unspecified__",
-      labelField: null,
-    });
-  });
-
-  it("rejects a list-grouping contract whose field isn't groupable", () => {
-    expect(() =>
-      compileEntityDeclarations([
-        {
-          ...base,
-          model: {
-            ...model,
-            sort: {
-              fields: ["name"],
-              groupable: [],
-              grouping: { field: "name", nullGroupKey: "__unspecified__" },
-            },
-          },
-        },
-      ]),
-    ).toThrow("grouping.field name must be one of sort.groupable");
-  });
-
   it("derives a detail overview from readable fields unless sections are opted out", () => {
     const displayed = {
       ...base,
@@ -1038,10 +1049,6 @@ describe("typed entity compiler", () => {
     [
       { fields: ["name"], defaultOverride: "missing" },
       "default missing must be one of sort.fields",
-    ],
-    [
-      { fields: ["name"], defaultOverride: "name", groupable: ["missing"] },
-      "groupable missing must be one of sort.fields",
     ],
   ])("rejects an invalid sort declaration: %j", (sort, message) => {
     expect(() =>

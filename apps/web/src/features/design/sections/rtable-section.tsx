@@ -27,6 +27,7 @@ import {
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 import {
   type DemoProduct,
@@ -34,11 +35,27 @@ import {
   demoProducts,
 } from "../data/samples";
 
-const GROUP_CONFIG: GroupConfig<DemoProduct> = {
-  field: "domain",
-  keyFn: (row) => capitalize(row.domain),
-  colorFn: (label) => `var(--domain-${label.toLowerCase()})`,
+const DOMAIN_GROUP_CHOICE: GroupConfig["choice"] = {
+  key: "domain",
+  label: "Domain",
+  noValueLabel: "No domain",
+  reason: null,
+  value: { kind: "derived", options: null },
+  filter: null,
 };
+
+/** The server's contract, played locally: contiguous sections with counts. */
+function domainSections(rows: readonly DemoProduct[]) {
+  const sorted = [...rows].sort((a, b) => a.domain.localeCompare(b.domain));
+  const groups: { key: string; label: string; count: number }[] = [];
+  for (const row of sorted) {
+    const last = groups.at(-1);
+    if (last?.key === row.domain) last.count += 1;
+    else
+      groups.push({ key: row.domain, label: capitalize(row.domain), count: 1 });
+  }
+  return { sorted, groupConfig: { choice: DOMAIN_GROUP_CHOICE, groups } };
+}
 
 export function RTableSection() {
   const [rows, setRows] = useState(demoProducts);
@@ -55,6 +72,11 @@ export function RTableSection() {
       );
     },
     [],
+  );
+
+  const grouping = useMemo(
+    () => (grouped ? domainSections(rows) : undefined),
+    [grouped, rows],
   );
 
   const helper = useMemo(() => createCubbyColumnHelper<DemoProduct>(), []);
@@ -153,7 +175,7 @@ export function RTableSection() {
     columns,
   });
   const table = useCubbyTable({
-    data: rows,
+    data: grouping?.sorted ?? rows,
     columns: tableColumns,
     initialState: {
       columnOrder: defaultLayout.columnOrder,
@@ -209,9 +231,17 @@ export function RTableSection() {
         embedded
         showColumnMenu
         showCellSelectionStats
-        groupConfig={GROUP_CONFIG}
-        grouped={grouped}
-        onGroupedChange={setGrouped}
+        groupConfig={grouping?.groupConfig}
+        additionalToolbarContent={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={grouped}
+            onClick={() => setGrouped((value) => !value)}
+          >
+            Group by domain
+          </Button>
+        }
         bulkActionBar={
           <BulkActionBar
             selectedCount={selectedRows.length}

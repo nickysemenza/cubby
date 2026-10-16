@@ -172,7 +172,6 @@ export interface EntitySortContract {
   fields: readonly [string, ...string[]];
   default: string;
   direction: "asc" | "desc";
-  groupable?: readonly [string, ...string[]];
 }
 
 export interface EntityLifecycleContract {
@@ -208,7 +207,6 @@ export type EntityRepository<
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
-    groupBy?: string,
   ): Promise<ListReadPage<ListReadRow>>;
   listSummary?(
     ctx: EntityKernelContext,
@@ -223,7 +221,6 @@ export type EntityRepository<
     filters: ZodOutput<S["filters"]>,
     sorts: SortParams[],
     pagination: PaginationParams,
-    groupBy?: string,
   ): Promise<ListReadPage<ZodOutput<S["repositoryList"]>>>;
   create?(
     ctx: EntityKernelContext,

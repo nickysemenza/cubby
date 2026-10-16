@@ -182,7 +182,8 @@ struct EntityListView: View {
                     descriptor: descriptor, client: appModel.client,
                     sort: initialSavedView?.sortParameter,
                     filters: descriptor.openingFilters(savedView: initialSavedView, explicit: initialFilters),
-                    view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table)
+                    view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table,
+                    groupBy: initialSavedView?.groupBy)
             }
             await model?.loadInitial()
         }
@@ -248,6 +249,11 @@ struct EntityListView: View {
                     presentationPicker(model)
                 }
             }
+            if let model, !descriptor.grouping.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    groupByMenu(model)
+                }
+            }
             if !descriptor.filters.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -301,6 +307,9 @@ struct EntityListView: View {
                 }
             }
         }
+        if let model, !descriptor.grouping.isEmpty {
+            groupByMenu(model)
+        }
         if !descriptor.filters.isEmpty {
             Button {
                 showingFilters = true
@@ -308,6 +317,50 @@ struct EntityListView: View {
                 Label(filterAccessibilityLabel, systemImage: "line.3.horizontal.decrease.circle")
             }
             .accessibilityIdentifier("browse.\(key.rawValue).filter")
+        }
+    }
+
+    /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
+    /// reason as the subtitle.
+    private func groupByMenu(_ model: GenericEntityListModel) -> some View {
+        let timeline = model.view == .timeline
+        return Menu("Group by", systemImage: "rectangle.grid.1x2") {
+            Button {
+                Task { await model.apply(groupBy: nil) }
+            } label: {
+                if model.groupChoice == nil && !timeline {
+                    Label("None", systemImage: "checkmark")
+                } else {
+                    Text("None")
+                }
+            }
+            .accessibilityIdentifier("browse.\(key.rawValue).group.none")
+            ForEach(descriptor.grouping) { choice in
+                let reason = timeline ? "Timeline is already arranged by date." : choice.reason
+                Button {
+                    Task { await model.apply(groupBy: choice.id) }
+                } label: {
+                    if model.groupChoice?.id == choice.id {
+                        Label(choice.label, systemImage: "checkmark")
+                    } else {
+                        Text(choice.label)
+                    }
+                    if let reason { Text(reason) }
+                }
+                .disabled(reason != nil)
+                .accessibilityIdentifier("browse.\(key.rawValue).group.\(choice.id)")
+            }
+        }
+        .accessibilityIdentifier("browse.\(key.rawValue).group-by")
+    }
+
+    /// "Filter to this" for a section header, nil when the choice declares no filter for it.
+    private func sectionFilter(_ model: GenericEntityListModel) -> (EntityListSection) -> (() -> Void)? {
+        { section in
+            guard let choice = model.groupChoice,
+                descriptor.filtering(model.filters, to: section, of: choice) != nil
+            else { return nil }
+            return { Task { await model.filter(to: section) } }
         }
     }
 
@@ -519,7 +572,9 @@ struct EntityListView: View {
                 }
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
-                    section: .browse)
+                    section: .browse,
+                    sections: model.isSearching ? nil : model.sections,
+                    sectionFilter: sectionFilter(model))
                 loadMore(model).padding(FieldGuideTokens.Space.md)
             }
         }
@@ -717,6 +772,8 @@ struct EntityListView: View {
     private func tableView(_ model: GenericEntityListModel) -> some View {
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
+        let sections = model.isSearching ? nil : model.sections
+        let filter = sectionFilter(model)
         #if os(macOS)
             // Native table cells are rehosted when sorting replaces the rows. Capture the
             // owning model before that boundary so explanation views keep their dependency.
@@ -725,7 +782,7 @@ struct EntityListView: View {
         VStack(spacing: 0) {
             tableControls(model)
             #if os(macOS)
-                Table(visibleRows, selection: tableSelection, sortOrder: tableSortOrder(model)) {
+                Table(of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model)) {
                     if descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(
                             Text(tableTitleLabel),
@@ -763,6 +820,19 @@ struct EntityListView: View {
                             .customizationID(field.key)
                         }
                     }
+                } rows: {
+                    if let sections {
+                        ForEach(sections) { section in
+                            Section {
+                                ForEach(section.rows) { TableRow($0) }
+                            } header: {
+                                EntityListSectionHeader(
+                                    section: section, entity: key, onFilter: filter(section))
+                            }
+                        }
+                    } else {
+                        ForEach(visibleRows) { TableRow($0) }
+                    }
                 }
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
@@ -776,7 +846,7 @@ struct EntityListView: View {
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #else
                 ScrollView([.horizontal, .vertical]) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                         HStack(spacing: 0) {
                             sortHeading(
                                 tableTitleLabel,
@@ -792,35 +862,17 @@ struct EntityListView: View {
                         .padding(.horizontal, FieldGuideTokens.Space.md)
                         .padding(.vertical, FieldGuideTokens.Space.sm)
                         .background(.quaternary.opacity(0.5))
-                        ForEach(visibleRows) { row in
-                            HStack(spacing: 0) {
-                                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                                    Text(row.title)
-                                        .font(.body.weight(.medium))
-                                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                                        .frame(width: 240, alignment: .leading)
-                                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                                        .contentShape(Rectangle())
-                                        .accessibilityIdentifier(
-                                            "browse.\(key.rawValue).table.row.\(row.id)")
-                                }
-                                .buttonStyle(.plain)
-                                ForEach(tableFields, id: \.key) { field in
-                                    tableCell(field, row: row)
-                                        .frame(width: 180, alignment: .leading)
+                        if let sections {
+                            ForEach(sections) { section in
+                                Section {
+                                    ForEach(section.rows) { row in compactTableRow(row) }
+                                } header: {
+                                    EntityListSectionHeader(
+                                        section: section, entity: key, onFilter: filter(section))
                                 }
                             }
-                            .padding(.horizontal, FieldGuideTokens.Space.md)
-                            .frame(minHeight: 48)
-                            .contentShape(Rectangle())
-                            .contextMenu {
-                                Button("Copy link", systemImage: "link") {
-                                    Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
-                                }
-                                Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                                ShareLink(item: appModel.webURL(for: key, id: row.id))
-                            }
-                            Divider()
+                        } else {
+                            ForEach(visibleRows) { row in compactTableRow(row) }
                         }
                     }
                 }
@@ -840,6 +892,41 @@ struct EntityListView: View {
             }
         }
     }
+
+    #if !os(macOS)
+        private func compactTableRow(_ row: EntityRow) -> some View {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                        Text(row.title)
+                            .font(.body.weight(.medium))
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                            .frame(width: 240, alignment: .leading)
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                            .contentShape(Rectangle())
+                            .accessibilityIdentifier(
+                                "browse.\(key.rawValue).table.row.\(row.id)")
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(tableFields, id: \.key) { field in
+                        tableCell(field, row: row)
+                            .frame(width: 180, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, FieldGuideTokens.Space.md)
+                .frame(minHeight: 48)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Button("Copy link", systemImage: "link") {
+                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                    }
+                    Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
+                    ShareLink(item: appModel.webURL(for: key, id: row.id))
+                }
+                Divider()
+            }
+        }
+    #endif
 
     @ViewBuilder
     private func tableReference(_ reference: EntityFieldValue.Reference, value: String) -> some View {
@@ -920,7 +1007,24 @@ struct EntityListView: View {
         if let meta = visibleMeta {
             listSummary(meta: meta, shown: visibleRows.count)
         }
-        ForEach(visibleRows) { row in
+        if !model.isSearching, let sections = model.sections {
+            let filter = sectionFilter(model)
+            ForEach(sections) { section in
+                Section {
+                    listRows(section.rows)
+                } header: {
+                    EntityListSectionHeader(section: section, entity: key, onFilter: filter(section))
+                        .listRowInsets(EdgeInsets())
+                }
+            }
+        } else {
+            listRows(visibleRows)
+        }
+        if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore { loadMore(model) }
+    }
+
+    private func listRows(_ rows: [EntityRow]) -> some View {
+        ForEach(rows) { row in
             rowContent(row)
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
@@ -931,7 +1035,6 @@ struct EntityListView: View {
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }
-        if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore { loadMore(model) }
     }
 
     private func listSummary(meta: ListPageMeta, shown: Int) -> some View {

@@ -194,7 +194,7 @@ describe("MCP entity kernel boundary", () => {
     });
   });
 
-  it("refuses a declared field the compiler cannot order with its declared reason, unmasked", async () => {
+  it("refuses a declared field the compiler cannot order or group with its declared reason, unmasked", async () => {
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
         auth: { userId: testUserId("test-user-id") },
@@ -260,6 +260,43 @@ describe("MCP entity kernel boundary", () => {
       code: "BAD_REQUEST",
       reason: "LIST_SORT_FIELD_UNSUPPORTED",
       message: reason,
+    });
+
+    // A declared Group by choice whose field holds several values per row.
+    const groupReason =
+      'Cannot group product by "tags": A record can have several Tags, so it would appear in more than one group.';
+    const grouped = {
+      action: "list" as const,
+      entity: "product" as const,
+      filters: {},
+      groupBy: "tags",
+    };
+    await expect(executeEntity(entityKernel, grouped)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      message: groupReason,
+    });
+    expect(
+      JSON.stringify((await callKernel(grouped, entityKernel)).content),
+    ).toContain("A record can have several Tags");
+    const groupedViaHttp = await http(
+      new Request("https://cubby.example/api/v1/entity/list", {
+        method: "POST",
+        body: JSON.stringify({
+          entity: "product",
+          filters: {},
+          groupBy: "tags",
+        }),
+        headers: {
+          "content-type": "application/json",
+          origin: "https://cubby.example",
+        },
+      }),
+    );
+    expect(groupedViaHttp.status).toBe(400);
+    expect(await groupedViaHttp.json()).toMatchObject({
+      reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      message: groupReason,
     });
   });
 

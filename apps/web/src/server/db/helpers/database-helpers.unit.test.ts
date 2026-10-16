@@ -85,41 +85,18 @@ describe("buildOrderBy", () => {
     expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
 
-  it("puts group, resolver, and cosmetic tie-breakers before the unique id", () => {
+  it("puts resolver and cosmetic tie-breakers before the unique id", () => {
     const sql = renderSql(
-      buildOrderBy(
-        product,
-        [{ orderBy: "name", direction: "asc" }],
-        ["categoryId", "name"],
-        {
-          groupBy: "categoryId",
-          resolve: (sort) =>
-            sort.orderBy === "name" ? [asc(product.manufacturer)] : null,
-          tieBreaker: asc(product.shortcode),
-        },
-      ),
+      buildOrderBy(product, [{ orderBy: "name", direction: "asc" }], ["name"], {
+        resolve: (sort) =>
+          sort.orderBy === "name" ? [asc(product.manufacturer)] : null,
+        tieBreaker: asc(product.shortcode),
+      }),
     );
 
-    expect(sql).toHaveLength(4);
-    expect(sql[0]).toContain('"Product"."categoryId" asc nulls last');
+    expect(sql).toHaveLength(3);
+    expect(sql[0]).toContain('"Product"."manufacturer" asc');
     expect(sql.at(-1)).toContain('"Product"."id" asc');
-  });
-
-  it("promotes a later group-field sort ahead of the other sorts", () => {
-    const clauses = renderSql(
-      buildOrderBy(
-        product,
-        [
-          { orderBy: "name", direction: "asc" },
-          { orderBy: "categoryId", direction: "desc" },
-        ],
-        ["name", "categoryId"],
-        { groupBy: "categoryId" },
-      ),
-    );
-    expect(clauses).toHaveLength(3);
-    expect(clauses[0]).toContain('"Product"."categoryId" desc nulls last');
-    expect(clauses[1]).toContain('"Product"."name" asc');
   });
 });
 

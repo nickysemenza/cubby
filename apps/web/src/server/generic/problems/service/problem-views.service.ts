@@ -92,9 +92,8 @@ const SAMPLE_SIZE = 12;
 
 /**
  * Server adapters for the Problem read seam. The declaration registry remains
- * data-only; these wrappers localize each repo's concrete filter type and the
- * product/location groupBy parameter instead of erasing thirteen incompatible
- * functions into one cast.
+ * data-only; these wrappers localize each repo's concrete filter type instead
+ * of erasing thirteen incompatible functions into one cast.
  */
 type ListRow = { id: string };
 type EntityReadKind = "sample" | "count";
@@ -194,7 +193,6 @@ const ENTITY_READERS = {
         parsedFiltersFor("location", filters),
         sorts,
         pagination,
-        undefined,
         kind,
       ),
   },
@@ -209,7 +207,6 @@ const ENTITY_READERS = {
         parsedFiltersFor("product", filters),
         sorts,
         pagination,
-        undefined,
         kind,
       ),
   },

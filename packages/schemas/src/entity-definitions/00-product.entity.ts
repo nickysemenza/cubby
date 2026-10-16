@@ -1,6 +1,5 @@
 import { productChildren } from "../child-tables/product.js";
 import { defineEntity } from "./definition.js";
-import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -2085,16 +2084,8 @@ Rules:
         "related:product.vendors",
         "related:product.purchases",
       ],
-      groupable: ["categoryId"],
-      // The web list groups products by category; `labelField` names the
-      // relation whose formatted path is the group's label (the field
-      // itself only carries the category id).
-      grouping: {
-        field: "categoryId",
-        nullGroupKey: PRODUCT_UNCLASSIFIED_GROUP_KEY,
-        labelField: "category",
-      },
     },
+    grouping: ["categoryId", "manufacturer", "tags"],
     intents: {
       fields: {
         // The list's "New" dialog and the picker's "Create product" open

@@ -44,9 +44,7 @@ export interface ListWorkbenchModel<TItem extends RowData> {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
-  groupConfig?: GroupConfig<TItem>;
-  grouped?: boolean;
-  onGroupedChange?: (value: boolean) => void;
+  groupConfig?: GroupConfig;
   /** A server tree's nested/flat switch (`list.tree.toggle`). */
   nestToggle?: NestToggle;
 }
@@ -65,8 +63,6 @@ export interface ServerListWorkbenchModel<
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
-  grouped: boolean;
-  onGroupedChange: (value: boolean) => void;
 }
 
 type CallerOwnedProps<TItem extends RowData> = Pick<
@@ -198,8 +194,6 @@ export function ListWorkbench<TItem extends RowData>({
         infiniteScroll={model.infiniteScroll}
         refreshControls={model.refreshControls}
         groupConfig={model.groupConfig}
-        grouped={model.grouped}
-        onGroupedChange={model.onGroupedChange}
         nestToggle={model.nestToggle}
         embedded={embedded}
         toolbarMode={embedded ? "internal" : "auto"}

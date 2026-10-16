@@ -43,8 +43,8 @@ interface SavedViewsMenuProps {
   onResetPage?: () => void;
   /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
   onApplyLayout?: (layout: SavedLayout) => void;
-  /** Switches the list view (`?view=`) a saved view opens in. */
-  onApplyListView?: (view: string) => void;
+  /** Sets the list view (`?view=`) and grouping (`?groupBy=`) a saved view opens with. */
+  onApplyListSearch?: (patch: { view?: string; groupBy?: string }) => void;
 }
 
 /**
@@ -109,11 +109,11 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
       onApplyFilters={(filters) => table.setColumnFilters(filters)}
       onApplySort={(sort) => table.setSorting(sort)}
       onApplyLayout={(savedLayout) => applyTableLayout(table, savedLayout)}
-      onApplyListView={(view) =>
+      onApplyListSearch={(patch) =>
         // SAFETY: as in `useListSearch`, route-specific search keys are erased;
-        // every generated index route validates `view`.
+        // every generated index route validates `view` and `groupBy`.
         void navigate({
-          search: (previous: ListSearch) => ({ ...previous, view }),
+          search: (previous: ListSearch) => ({ ...previous, ...patch }),
         } as never)
       }
       onResetPage={() => table.setPageIndex(0)}
@@ -146,7 +146,7 @@ function SavedViewsMenuItems({
   onApplySort,
   onResetPage,
   onApplyLayout,
-  onApplyListView,
+  onApplyListSearch,
 }: SavedViewsMenuProps) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
@@ -157,8 +157,13 @@ function SavedViewsMenuItems({
     // Layout does not participate in active-state matching: manual column
     // adjustments keep the view checked while its filter/sort contract holds.
     if (view.layout) onApplyLayout?.(view.layout);
-    // Like layout, the list view stays out of active-state matching.
-    if (view.view) onApplyListView?.(view.view);
+    // Like layout, the list view and grouping stay out of active-state
+    // matching; a view that declares neither leaves them as they are.
+    const listSearch = {
+      ...(view.view ? { view: view.view } : {}),
+      ...(view.groupBy ? { groupBy: view.groupBy } : {}),
+    };
+    if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
     onResetPage?.();
   };
 

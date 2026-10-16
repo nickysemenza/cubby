@@ -63,23 +63,14 @@ export const productRepository = defineRepository("product", {
   },
   get: (ctx, shortcode) =>
     readProductDetail({ db: ctx.db, usdaClient: ctx.usdaClient }, shortcode),
-  list: (ctx, filters, sorts, pagination, groupBy) =>
-    productList(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      groupBy,
-      "page",
-      ctx.usdaClient,
-    ),
-  listRead: (ctx, filters, sorts, pagination, projection, groupBy) =>
+  list: (ctx, filters, sorts, pagination) =>
+    productList(ctx.db, filters, sorts, pagination, "page", ctx.usdaClient),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
     listProductsRead(
       ctx.db,
       filters,
       sorts,
       pagination,
-      groupBy,
       "page",
       ctx.usdaClient,
       projection,

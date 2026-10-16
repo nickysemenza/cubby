@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type LocationId,
   type ProductId,
@@ -839,27 +838,18 @@ export const buildLocationWhere = async (
   ]);
 };
 
-// Read from the manifest instead of re-hardcoding: `sort.grouping` on
-// `04-location.entity.ts` is this entity's one declared list-grouping
-// contract, compiler-checked to name a `sort.groupable` field.
-const LOCATION_GROUPING = generatedEntitySort.location.grouping;
-if (!LOCATION_GROUPING)
-  throw new Error("location entity declares no list-grouping contract.");
-
 export const locationListRead = async (
   db: Database,
   filters: LocationFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection,
-  groupBy?: string,
   readIntent: ListReadIntent = "page",
 ) => {
   const whereClause = await buildLocationWhere(db, filters);
   const context = await locationScaffold.context(db, {
     filters,
     sorts,
-    groupBy,
     readIntent,
     projection,
   });
@@ -876,31 +866,9 @@ export const locationListRead = async (
   const orderByClause: SQL[] =
     readIntent === "count"
       ? []
-      : locationScaffold.orderBy(
-          sorts,
-          {
-            groupBy: groupBy === LOCATION_GROUPING.field ? undefined : groupBy,
-          },
-          filters,
-          context,
-        );
+      : locationScaffold.orderBy(sorts, {}, filters, context);
 
-  const groupDirection =
-    sorts.find((sort) => sort.orderBy === LOCATION_GROUPING.field)?.direction ??
-    "asc";
-  const groupOrder = sql`${location.type} ${sql.raw(groupDirection)} nulls last`;
-  const groups =
-    groupBy === LOCATION_GROUPING.field && readIntent === "page"
-      ? await getDb(db)
-          .select({ type: location.type, count: sql<number>`count(*)::int` })
-          .from(location)
-          .where(whereClause)
-          .groupBy(location.type)
-          .orderBy(groupOrder)
-      : null;
-  if (groups) orderByClause.unshift(groupOrder);
-
-  const page = await locationScaffold.list(
+  return locationScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -992,16 +960,6 @@ export const locationListRead = async (
       },
     },
   );
-  return groups
-    ? {
-        ...page,
-        groups: groups.map(({ type, count }) => ({
-          key: type ?? LOCATION_GROUPING.nullGroupKey,
-          label: type ?? "(unspecified)",
-          count,
-        })),
-      }
-    : page;
 };
 
 /**
@@ -1426,7 +1384,6 @@ export const locationList = async (
   filters: LocationFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy?: string,
   readIntent: ListReadIntent = "page",
 ) => {
   const page = await locationListRead(
@@ -1435,7 +1392,6 @@ export const locationList = async (
     sorts,
     pagination,
     { kind: "full" },
-    groupBy,
     readIntent,
   );
   return parseCompleteListRead(locationListItemOut, Promise.resolve(page));

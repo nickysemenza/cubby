@@ -129,16 +129,21 @@ export const renderSearchArtifacts = (
       const timelineFields = timeline
         ? 'timelineFrom:urlPlainDateParam,\ntimelineTo:urlPlainDateParam,\ntimelineOrder:z.enum(["asc","desc"]).optional().catch(undefined),\ntimelineMode:z.enum(["events","lifecycles"]).optional().catch(undefined),\n'
         : "";
-      // The nested/flat switch and the grouped toggle are URL state, so a
+      // The nested/flat switch and the Group by choice are URL state, so a
       // reload or shared link keeps the presentation; absent is the default.
       const nestToggle = entity.inspector.list.tree?.toggle === true;
-      const grouped = entity.fieldModel.sort?.grouping != null;
+      const groupKeys = entity.listFields.grouping
+        .filter(({ reason }) => reason === null)
+        .map(({ key }) => key);
+      const grouped = groupKeys.length > 0;
       const presentationFields = [
         ...(nestToggle
           ? ['nest:z.enum(["on","off"]).optional().catch(undefined),']
           : []),
         ...(grouped
-          ? ['grouped:z.enum(["on"]).optional().catch(undefined),']
+          ? [
+              `groupBy:z.enum(${JSON.stringify(groupKeys)}).optional().catch(undefined),`,
+            ]
           : []),
       ].join("\n");
       const keys = [
@@ -150,7 +155,7 @@ export const renderSearchArtifacts = (
         ...slotKeys,
         ...(timeline ? timelineKeys : []),
         ...(nestToggle ? ["nest"] : []),
-        ...(grouped ? ["grouped"] : []),
+        ...(grouped ? ["groupBy"] : []),
       ];
       if (new Set(keys).size !== keys.length)
         throw new EntityDeclarationError(
