@@ -1,0 +1,47 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_b1862692c496ab::t_e5971ab4e4a633 324-325,327,332,340,577,776,1011
+apps/apple/CubbyKit/Sources/CubbyKit/List/GenericEntityListModel.swift
+  s_b1862692c496ab::t_9980430ae0df0c 118-127,129
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/GenericEntityListModelTests.swift
+  s_b1862692c496ab::t_c44871c9657501 171-193
+apps/web/generator/entities/list-fields.ts
+  s_b1862692c496ab::t_d6a5ae9627d22a 346
+apps/web/src/entity/table/mobile-card-view.tsx
+  s_b1862692c496ab::t_e9cc0b8e1cd5cf 921
+apps/web/src/entity/table/mobile-list-screen.tsx
+  s_b1862692c496ab::t_8e29bce2ce998b 95
+apps/web/src/server/generic/list/repo/list-grouping.integration.test.ts
+  s_b1862692c496ab::t_2bbcfaaebb4c2f 254-265
+apps/web/src/server/generic/list/repo/list.ts
+  s_b1862692c496ab::t_e720a9e38874d7 14,267-271,276-280
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_b1862692c496ab::t_e437cd1597bde3 184-185,189,196-197
+apps/web/src/ui/data-table/hooks/use-table-virtualizer.ts
+  s_b1862692c496ab::t_ebdb4ce84371f6 16
+apps/web/src/ui/data-table/section-header.tsx
+  s_b1862692c496ab::t_5593290995c86f 5-10,34
+apps/web/src/ui/primitives/pull-to-refresh.tsx
+  s_b1862692c496ab::t_b9cc7f2f5bfd64 96-103
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_b1862692c496ab::t_b438b5edc0ae13 136-178
+apps/web/tooling/entity-generator.unit.test.ts
+  s_b1862692c496ab::t_1e4070686e2042 959-977
+docs/entities.md
+  s_b1862692c496ab::t_a9e6d68580ce6a 964-966,1342-1344,1394-1398
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a2f557f47cb4c683cba7b7a962ff45a2656f72e3",
+  "prompts": {},
+  "sessions": {
+    "s_b1862692c496ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3aa3422-0ad3-4108-8c39-05cdcaa5b6ee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
