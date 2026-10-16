@@ -1383,6 +1383,17 @@ shared research and unresolved for missing private ownership. This is a read
 projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
+
+The shared population query materializes routed candidates within each SQL
+statement, after source/kind narrowing and before eligibility/search. This keeps
+search selectivity from turning bulk quality joins into repeated nested-loop
+work; it is not a cache across requests. Only typed facts required by the
+requested sorts or vendor filter are projected across the population. Other amount/date/vendor facts use
+the same record-fact declarations after page selection. Full eligible counts
+remain independent of the page; the correct filter and stable sort precede
+LIMIT/OFFSET, and only selected rows receive the window position used for JSON
+order. Quality and display-image hydration remain page-scoped.
+
 Every source excludes Purchases dated after the current household day, and
 Purchases with live Expense lines all marked `future`. Purchase has no stored
 `future` flag; Expense does. Deleted lines do not count, mixed planned/incurred

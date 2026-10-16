@@ -25,6 +25,8 @@ export type WorkQueueScope = Partial<Pick<WorkQueueRow, "source" | "kind">> & {
   /** Only gap-carrying branches survive, narrowed to these checks. */
   check?: readonly DataCheck[];
   record?: { entity: ShortcodeEntity; id: string };
+  /** Typed facts needed for population filtering/sorting; others load on the page. */
+  facts?: readonly (keyof RecordFacts)[];
 };
 
 type RecordFacts = { amount: SQL; date: SQL; vendor: SQL };
@@ -77,24 +79,34 @@ const FACT_TYPES = {
   vendor: sql.raw("uuid"),
 } satisfies Record<keyof RecordFacts, SQL>;
 
-const factColumns = (facts: RecordFacts): SQL =>
-  sql`(${facts.amount})::${FACT_TYPES.amount} AS amount, (${facts.date})::${FACT_TYPES.date} AS date, (${facts.vendor})::${FACT_TYPES.vendor} AS vendor_id`;
+const factColumns = (
+  facts: RecordFacts,
+  selected?: WorkQueueScope["facts"],
+): SQL => {
+  const pick = (fact: keyof RecordFacts) =>
+    selected === undefined || selected.includes(fact) ? facts[fact] : sql`NULL`;
+  return sql`(${pick("amount")})::${FACT_TYPES.amount} AS amount, (${pick("date")})::${FACT_TYPES.date} AS date, (${pick("vendor")})::${FACT_TYPES.vendor} AS vendor_id`;
+};
 
-/** Facts for a row that names its record by (kind, uuid), such as a finding. */
-export const workRecordFactColumns = (kind: SQL, id: SQL): SQL => {
+/** Facts for a finding's UUID or a selected page row's public identity. */
+export const workRecordFactColumns = (
+  kind: SQL,
+  id: SQL,
+  selected?: WorkQueueScope["facts"],
+  identity: "id" | "shortcode" = "id",
+): SQL => {
   const pick = (fact: keyof RecordFacts) =>
     sql`CASE ${kind} ${sql.join(
       Object.entries(recordFacts).map(
         ([entity, facts]) =>
-          sql`WHEN ${entity} THEN (SELECT (${facts[fact]})::${FACT_TYPES[fact]} FROM ${facts.table} WHERE ${facts.table}.id = ${id})`,
+          sql`WHEN ${entity} THEN (SELECT (${facts[fact]})::${FACT_TYPES[fact]} FROM ${facts.table} WHERE ${facts.table}.${sql.identifier(identity)} = ${id})`,
       ),
       sql` `,
     )} END`;
-  return factColumns({
-    amount: pick("amount"),
-    date: pick("date"),
-    vendor: pick("vendor"),
-  });
+  return factColumns(
+    { amount: pick("amount"), date: pick("date"), vendor: pick("vendor") },
+    selected,
+  );
 };
 
 export const NO_FACT_COLUMNS = factColumns(NO_FACTS);
@@ -142,7 +154,7 @@ export const workQueueCandidate = (
   ${details.source}::text AS source, ${details.kind}::text AS kind,
   ${details.reason}::text AS reason, ${details.nextAction}::text AS "nextAction",
   ${owners}::uuid[] AS owners, ${shared}::boolean AS shared, NULL::text AS "problemKey",
-  ${factColumns(factsOf(entity))}
+  ${factColumns(factsOf(entity), scope.facts)}
   FROM ${table} WHERE (${where ?? sql`true`})${record}`,
   ];
 };
