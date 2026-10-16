@@ -175,4 +175,3 @@ panels. [DESIGN.md](../DESIGN.md) owns its
 presentation and submission-lifetime contract. Pass actions directly from the
 owner; forms use a shared native form id. Specialized command, photo and
 modeless inspector surfaces keep their existing engines.
-
