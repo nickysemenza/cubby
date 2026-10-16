@@ -86,7 +86,10 @@ type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
 export const expenseJointAllocationSql = (
   expenseIds?: ExpenseIdSelection,
   draft?: ExpenseSpendingCategoryResolutionDraft,
-  { categories = true }: { categories?: boolean } = {},
+  {
+    categories = true,
+    trades = categories,
+  }: { categories?: boolean; trades?: boolean } = {},
 ): SQL => sql`
   WITH ${
     expenseIds
@@ -123,12 +126,12 @@ export const expenseJointAllocationSql = (
       ${effectiveExpenseProjectSql("e")} AS "projectId",
       ${
         // Resolve policy with set-based joins across the selected principals.
-        // Project-only reads omit category resolution entirely.
+        // Reads without a category projection or scope omit its resolution.
         categories
           ? sql`principal_categories."spendingCategoryId"`
           : sql`NULL::uuid`
       } AS "spendingCategoryId",
-      ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
+      ${trades ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
       e."costType"::text AS "costType",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase,

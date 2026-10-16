@@ -91,6 +91,20 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     "0",
     "1",
   ]);
+  // Trade and cost-type projections must retain rounded adjustment shares
+  // even when category resolution is omitted from the requested dimensions.
+  for (const scope of [
+    { trades: ["other"] as const },
+    { costTypes: ["materials"] as const },
+  ]) {
+    const costs = await unwrapDb(ctx.db).execute<{
+      expenseId: string;
+      cost: number;
+    }>(
+      expenseDerivedReadSql("costs", { scope, expenseIds: sparse.expenseIds }),
+    );
+    expect(costs.rows).toMatchObject([{ expenseId: firstTax!, cost: 0.01 }]);
+  }
   const scope = { projectIds: [project.id] };
   const contexts = {
     broad: { ...prepared, scope },

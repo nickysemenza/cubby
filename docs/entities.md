@@ -220,6 +220,9 @@ purchases to resolve, while every live principal sibling supplies the
 denominator. Stored Expense list predicates narrow that relational selection
 before allocation membership; quality and caller-supplied derived conditions
 remain outside it. Reads without stored constraints keep the whole-ledger path.
+Trade and cost-type scopes do not request spending-category resolution unless
+the projection or another scope uses categories; trade inheritance remains
+available independently of category resolution.
 Prepared ledger selections remain SQL relations through batching;
 wrapping their IDs in `ARRAY(SELECT ...)` hides broad cardinality and causes
 repeated allocation scans. Analytical callers use `expenseSelectionForWhere`;
