@@ -78,8 +78,8 @@ path can end in a hierarchy (Inventory → `product.category` with descendants,
 | Shape         | Example                                                                                                    | Compiles through                                                                                            |
 | ------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Own column    | `inventory.condition`                                                                                      | today's `stored` path in `declaredFilterPredicates`                                                         |
-| Related path  | Inventory → `product.category`                                                                             | `compileTraversal`                                                                                          |
-| Derived field | project `stalled`, inventory `valuationStatus`                                                             | SQL in `db/computed/`, declared through `sort.computed`                                                     |
+| Related path  | Inventory → `product.category`, declared `{ via }` in `model.derived`                                      | `compileTraversal`                                                                                          |
+| Derived field | project `stalled`, inventory `valuationStatus`                                                             | SQL the domain repo passes into `listScaffold`, declared in `model.derived`                                 |
 | Hierarchy     | location, product category, project; task's `parentTaskId` is declared but no list filter expands it today | one recursive-descendant generator, applied to an own column or to the terminal reference of a related path |
 
 ### Cardinality
@@ -92,24 +92,74 @@ path can end in a hierarchy (Inventory → `product.category` with descendants,
 
 ### Derived fields
 
-A derived field declares its name and type in the entity definition by
-extending `sort.computed`, not through a second declaration. Its SQL lives in
-`db/computed/`. The domain repo passes a `{ [name]: SQL }` map into
-`listScaffold` beside `hydrate` (`list.ts:344`); it replaces today's
-caller-supplied `computed: SQL[]` conditions (`list.ts:505`). The map's keys are
-typed against the declaration, so a declared derived field without SQL fails to
-compile. There is no module-level registry
-([ADR 0019](../adr/0019-domain-first-server-layout.md)).
+Approved shape (2026-10-15). `model.derived` replaces `sort.computed`: one
+map of every list field that isn't a table column. Keys are identifiers, so
+URL params, the `groupBy` enum, and Swift can name them; `sort.fields`,
+`grouping`, and filter descriptors refer to them like any field.
 
-This is the riskiest interface in the plan. #2408's adversarial plan review
-settles its exact shape, and the user approves it, before any domain migrates.
+```ts
+derived: {
+  category:        { via: "product.category" },
+  valuation:       { type: "number" },
+  valuationStatus: { type: "enum", options: ["valued", "missing", "priceable"] },
+  categoryFeature: { predicate: "multiselect", options: featureOptions,
+                     reason: "Inherited through category ancestors; not a row value" },
+}
+```
+
+- **`via`** names a related path. The compiler builds it (`EXISTS` for
+  filters, a scalar subquery for sort and group), even when the repo already
+  joins that table: knowing each repo's FROM would be per-entity knowledge. If
+  the query-plan check in §10 shows a real cost, add a declared index rather
+  than a join-aware compiler.
+- **`type`** is a value. The generic forms in §4 (any-of, Any value / No
+  value, ranges), sort, and group follow from the type.
+- **`predicate`** is filter-only and must declare a `reason`. It is the
+  declared-exception form from [Generic by default](../entities.md#generic-by-default),
+  so predicates are countable and should shrink.
+
+The domain repo supplies SQL once, when it builds the scaffold, as an
+argument rather than a registry ([ADR 0019](../adr/0019-domain-first-server-layout.md)):
+
+```ts
+const inventoryList = listScaffold("inventory", inventoryEntry, {
+  derived: {
+    valuation: {
+      prepare: (db) => loadLiveInventoryValuations(db),
+      sql: (valuations) => inventoryValuationSql(valuations, inventoryEntry.id),
+    },
+    valuationStatus: {
+      prepare: "valuation",
+      sql: (valuations) => valuationStatusSql(valuations),
+    },
+    categoryFeature: (values) =>
+      categoryFeatureInSql(sql`${product.categoryId}`, values),
+  },
+});
+```
+
+- The `derived` argument's type is generated from the declaration and must
+  cover every `type` and `predicate` key, so a declared field without SQL
+  fails to compile.
+- `prepare` loads request data only when the request filters, sorts, groups,
+  or projects on that field. It runs at most once per request, may be shared
+  by naming another field, and its result is available to `hydrate`. This
+  keeps inventory's rule that rows, sort, filter, and footer read one
+  valuation map.
+- `scaffold.where` needs prepared data before it builds, so it either becomes
+  async or follows a `scaffold.context(db, request)` step. #2408 picks one
+  while rewiring the 28 callers. The `computed: SQL[]` argument
+  (`list.ts:505`) shrinks as fields move into `derived`.
 
 ### Hierarchy
 
 Declare `hierarchy: { parentField }` separately from `list.tree`. `list.tree`
 refers to the hierarchy and keeps controlling nested display. Location, task,
 and project gain `hierarchy` without gaining `tree`, so their lists keep their
-current UX. Descendant expansion reads
+current UX. A filter on a hierarchical reference, own or at the end of a
+`via` path, gets a generated **Include sub-‹entity›** toggle, on by default.
+It replaces paired filters such as inventory's `locationIdFilter` and
+`locationSubtreeFilter`. Descendant expansion reads
 `hierarchy` and replaces the helpers only where list filters use them
 (`project/repo/lookup.ts:236`, `task/repo/lookup.ts:147`,
 `inventory/repo/crud.ts:374,378`). About 10 non-list `collectDescendantIds`
@@ -250,7 +300,7 @@ MCP reject the same request with the same text, unmasked
 
 | Issue                                                      | Scope                                                                                                                                                                                                                             |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#2408](https://github.com/nickysemenza/cubby/issues/2408) | Field compiler: four shapes, cardinality rule, ORDER BY, `hierarchy` declaration, list-filter descendant helpers.                                                                                                                 |
+| [#2408](https://github.com/nickysemenza/cubby/issues/2408) | Field compiler: four shapes, `model.derived` replacing `sort.computed`, the `listScaffold` `derived` argument, cardinality rule, ORDER BY, `hierarchy` declaration and sub-entity toggle, list-filter descendant helpers.         |
 | [#2409](https://github.com/nickysemenza/cubby/issues/2409) | Filters 2a: delete `select`/`id`, generated Any value / No value, match all, `@me` declared, work queue, data quality, Apple wire, baseline, simple entities (device, vendor-account, ledger-party, spending-category, cookbook). |
 | [#2410](https://github.com/nickysemenza/cubby/issues/2410) | Filters 2b: product, inventory, project.                                                                                                                                                                                          |
 | [#2411](https://github.com/nickysemenza/cubby/issues/2411) | Filters 2c: remaining domains and vendor; live shortcode subqueries via `referencePredicate`; deletes the baseline.                                                                                                               |
@@ -260,9 +310,10 @@ MCP reject the same request with the same text, unmasked
 
 ## 10. Risks
 
-- **Derived-field interface.** Passing derived SQL into `listScaffold` without
-  a registry must stay typed against the declaration. #2408 resolves the shape
-  first.
+- **Request-scoped derived data.** A `prepare` that runs when no requested
+  field needs it costs a full load (inventory valuations run WASM over every
+  row). Test that a list read without the field skips it, and that one read
+  with it loads once.
 - **Sections across pages.** If the page and summary queries order
   differently, a section splits or its count disagrees with its rows. Test a
   related-key grouping across a page boundary, including the no-value
@@ -306,8 +357,9 @@ An orchestrating session runs the issues in §9 order, one T3 thread and
 `nicky/` worktree per issue, with #2412 alongside the filter work. Each PR
 follows [model routing](../agents/model-routing.md) for its independent review
 and merges itself once final-head CI passes and the review has no unresolved
-findings; merging deploys web. The chain pauses once for the user, to approve
-the #2408 derived-field interface. #2259 attaches web and simulator
+findings; merging deploys web. The derived-field shape in §3 is approved, so
+the chain does not pause for it; a material change to that shape stops the
+chain for the user. #2259 attaches web and simulator
 screenshots of Wardrobe grouped by clothing type without waiting on them. Work
 that can't finish returns as a blocked issue with the reason. TestFlight
 follows §10: one build at the end.
