@@ -403,7 +403,8 @@ Local and preview environments retain password login.
 All billed application, Tester Army, live-evaluation, and integration-enabled
 development calls use gateway `cubby`. Production uses the Workers AI Gateway
 binding: `AI.run` with an explicit gateway for Workers AI models, and
-`AI.gateway("cubby").run` for other providers. Tools outside Workers use
+`AI.gateway("cubby").run` for managed providers. Named subscriber-credit BYOK
+uses native authenticated passthrough instead; see setup below. Tools outside Workers use
 explicitly authenticated REST requests. Workers AI REST calls use the account
 `/ai/run` endpoint with gateway routing, metadata, caching, and timeout controls
 in `cf-aig-*` headers (not body options), avoiding a nested

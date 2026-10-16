@@ -53,12 +53,8 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   ]);
 });
 
-function anthropicStream(
-  events: ({ type: string } & Record<
-    string,
-    z.infer<ReturnType<typeof z.json>>
-  >)[],
-) {
+const syntheticAnthropicEvent = z.looseObject({ type: z.string() });
+function anthropicStream(events: z.infer<typeof syntheticAnthropicEvent>[]) {
   return new Response(
     events
       .map(
