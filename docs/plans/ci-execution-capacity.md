@@ -193,8 +193,8 @@ Measure total turnaround under five simultaneous PR runs, plus the separate
 queue, setup, build, scenario, aggregation and cleanup phases. Verify test
 collection/partition completeness and retain the existing named regressions.
 
-Start with the current two-worker browser command when comparing shard counts;
-measure alternative worker counts separately. Compare modest and larger shard
+Use the browser worker setting declared in Playwright configuration when
+comparing shard counts; measure alternative worker counts separately. Compare modest and larger shard
 counts, then select the smallest machine/shard arrangement that meets the goal
 without moving contention into machine resources or Boat's start allowance.
 No particular shard count or provider-specific speedup is established yet.
