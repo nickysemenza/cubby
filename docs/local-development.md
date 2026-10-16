@@ -4,7 +4,9 @@
 PostgreSQL, WASM, and local auxiliary workers before starting the
 app. A shared IntegreSQL corpus template supplies the synthetic core household;
 the Worker restores its bundled photos into checkout-local R2 and reports
-readiness only after the database, fixtures, and Worker agree.
+readiness only after the database, fixtures, and Worker agree. Vite compiles
+application/auth routes on their first request; startup does not warm SSR with
+an otherwise unused auth-session request.
 
 ## Start and discover
 

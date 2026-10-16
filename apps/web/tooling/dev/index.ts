@@ -407,15 +407,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
       }
       throw new Error(`Worker did not become healthy: ${String(lastError)}`);
     });
-    await phase("application", async () => {
-      const response = await fetch(`${profile.origin}/api/auth/get-session`, {
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!response.ok)
-        throw new Error(
-          `Local application initialization failed (${response.status}): ${await response.text()}`,
-        );
-    });
     await phase("fixtures", () => seedCore(profile.origin));
     await phase("readiness", async () => {
       for (let attempt = 0; ; attempt++) {
