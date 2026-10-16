@@ -27,7 +27,7 @@ export const productCoverageProblemQueries = [
       entity: "product",
       filters: [
         { id: "ingredient", value: FILTER_ANY },
-        { id: "conversionCoverage", value: "partial" },
+        { id: "conversionCoverage", value: "true" },
       ],
       sort: [{ id: "name", desc: false }],
       columnVisibility: {
@@ -50,7 +50,7 @@ export const productCoverageProblemQueries = [
     source: {
       kind: "entity",
       entity: "product",
-      filters: [{ id: "conversionTopology", value: "islanded" }],
+      filters: [{ id: "conversionTopology", value: "true" }],
       sort: [{ id: "name", desc: false }],
       columnVisibility: { unitMappingQuality: true, price: true },
     },

@@ -21,6 +21,7 @@ import {
   listNestingSchema,
   type PaginationParams,
   presenceFilter,
+  type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import {
@@ -31,6 +32,7 @@ import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
   and,
+  arrayContains,
   asc,
   desc,
   getTableColumns,
@@ -97,9 +99,17 @@ import {
 import { type HierarchyEntity, hierarchyDescendantsSql } from "./hierarchy";
 import { type ListProjection, wantsListGroup } from "./list-projection";
 
-const suggestionFilterValue = z
-  .enum(["any", "addition", "correction"])
-  .optional();
+const suggestionKinds = z
+  .union([
+    z.enum(["addition", "correction"]),
+    z.array(z.enum(["addition", "correction"])),
+  ])
+  .optional()
+  .transform((value) => (value === undefined ? [] : [value].flat()));
+const matchAll = z
+  .enum(["any", "all"])
+  .optional()
+  .transform((value) => value === "all");
 const optionalText = z.string().optional();
 const optionalNumber = z.number().optional();
 const optionalDate = z.string().optional();
@@ -119,6 +129,7 @@ interface StoredDescriptorView {
     array: boolean;
   }> | null;
   readonly nullable: Readonly<{ field: string }> | null;
+  readonly match: Readonly<{ field: string }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
   readonly derived: boolean;
   readonly wire:
@@ -232,8 +243,8 @@ const referencePredicate = (
   { column, reference }: StoredColumn,
   codes: readonly string[] | undefined,
   includeDescendants: boolean,
+  presence: PresenceFilter,
 ): SQL | undefined => {
-  if (codes === undefined) return undefined;
   const target = Object.keys(SHORTCODE_TABLE).find(
     (key): key is ShortcodeEntity => key === reference,
   );
@@ -241,8 +252,30 @@ const referencePredicate = (
     throw new Error(
       `${entity} id filter over ${column.name} references ${String(reference)}, which has no shortcode table`,
     );
-  return sql`${column} IN ${requestedIdsSql(target, codes, includeDescendants)}`;
+  return or(
+    codes === undefined || codes.length === 0
+      ? undefined
+      : sql`${column} IN ${requestedIdsSql(target, codes, includeDescendants)}`,
+    presenceCondition(column, presence),
+  );
 };
+
+/**
+ * A text-array multiselect: overlap (any picked value) or containment (Match
+ * all), ORed with the generated Any value / No value.
+ */
+const arrayPredicate = (
+  { column, nullable }: StoredColumn,
+  values: readonly string[] | undefined,
+  presence: PresenceFilter,
+  all: boolean,
+): SQL | undefined =>
+  all && values !== undefined && values.length > 0
+    ? or(
+        arrayContains(column, [...values]),
+        arrayOverlapOrPresence(column, undefined, presence, nullable),
+      )
+    : arrayOverlapOrPresence(column, values, presence, nullable);
 
 /** A generated subtree toggle reads absent as on. */
 const subtreeToggle = (
@@ -297,7 +330,7 @@ const derivedFilterPredicates = (
         ? optionalBoolean.parse(value)
         : field.predicate === "text"
           ? optionalText.parse(value)?.trim() || undefined
-          : optionalTextList.parse(value);
+          : nonEmpty(optionalTextList.parse(value));
     if (parsed === undefined) return [];
     return [
       derivedPredicateSql(
@@ -350,11 +383,46 @@ const derivedFilterPredicates = (
       }
     }
   }
+  /** Whether a related row (with a value, for a field terminal) exists. */
+  const relatedPresence = (presence: PresenceFilter): SQL | undefined => {
+    if (presence === undefined) return undefined;
+    const exists = relatedExistsSql(entity, field, table.id, (_leaf, column) =>
+      field.terminal.kind === "field" ? sql`${column} IS NOT NULL` : sql`true`,
+    );
+    return presence === "has" ? exists : sql`NOT ${exists}`;
+  };
+  const presence = descriptor.nullable
+    ? presenceFilter.parse(values[descriptor.nullable.field])
+    : undefined;
+  const all =
+    descriptor.match !== null && matchAll.parse(values[descriptor.match.field]);
+  /**
+   * Any-of is one `EXISTS` over the picked values; Match all is one per
+   * value. Either is ORed with the generated Any value / No value.
+   */
+  const anyOrAll = (
+    picked: readonly string[] | undefined,
+    matches: (leaf: SQL, column: SQL, items: readonly string[]) => SQL,
+  ): SQL | undefined =>
+    or(
+      picked === undefined || picked.length === 0
+        ? undefined
+        : all
+          ? and(
+              ...picked.map((item) =>
+                relatedExistsSql(entity, field, table.id, (leaf, column) =>
+                  matches(leaf, column, [item]),
+                ),
+              ),
+            )
+          : relatedExistsSql(entity, field, table.id, (leaf, column) =>
+              matches(leaf, column, picked),
+            ),
+      relatedPresence(presence),
+    );
   switch (descriptor.kind) {
-    case "id":
     case "idMulti": {
       const codes = optionalTextList.parse(value);
-      if (codes === undefined || codes.length === 0) return [];
       const target = Object.keys(SHORTCODE_TABLE).find(
         (entry): entry is ShortcodeEntity => entry === field.target,
       );
@@ -362,34 +430,17 @@ const derivedFilterPredicates = (
         throw new Error(
           `${entity}.${key} targets ${field.target}, which has no shortcode`,
         );
-      const ids = requestedIdsSql(
-        target,
-        codes,
-        subtreeToggle(entity, key, values),
-      );
+      const toggle = subtreeToggle(entity, key, values);
       return [
-        relatedExistsSql(
-          entity,
-          field,
-          table.id,
-          (leaf) => sql`${leaf}."id" IN ${ids}`,
+        anyOrAll(
+          codes,
+          (leaf, _column, items) =>
+            sql`${leaf}."id" IN ${requestedIdsSql(target, items, toggle)}`,
         ),
       ];
     }
-    case "presence": {
-      const presence = presenceFilter.parse(value);
-      if (presence === undefined) return [];
-      const exists = relatedExistsSql(
-        entity,
-        field,
-        table.id,
-        (_leaf, column) =>
-          field.terminal.kind === "field"
-            ? sql`${column} IS NOT NULL`
-            : sql`true`,
-      );
-      return [presence === "has" ? exists : sql`NOT ${exists}`];
-    }
+    case "presence":
+      return [relatedPresence(presenceFilter.parse(value))];
     case "text": {
       const term = optionalText.parse(value)?.trim();
       if (!term) return [];
@@ -411,24 +462,22 @@ const derivedFilterPredicates = (
         ),
       ];
     }
-    default: {
-      const list = optionalTextList.parse(value);
-      if (list === undefined || list.length === 0) return [];
+    default:
       return [
-        relatedExistsSql(
-          entity,
-          field,
-          table.id,
-          (_leaf, column) =>
+        anyOrAll(
+          optionalTextList.parse(value),
+          (_leaf, column, items) =>
             sql`${column} IN (${sql.join(
-              list.map((item) => sql`${item}`),
+              items.map((item) => sql`${item}`),
               sql`, `,
             )})`,
         ),
       ];
-    }
   }
 };
+
+const nonEmpty = <T>(list: readonly T[] | undefined) =>
+  list === undefined || list.length === 0 ? undefined : list;
 
 const dateRange = (
   column: AnyColumn,
@@ -438,6 +487,43 @@ const dateRange = (
   from === undefined ? undefined : sql`${column} >= ${from}`,
   to === undefined ? undefined : sql`${column} <= ${to}`,
 ];
+
+/**
+ * A pending field suggestion of any of the picked kinds, ORed with the
+ * generated Any value (any pending suggestion) / No value (none).
+ */
+const suggestionPredicate = (
+  entity: Entity,
+  table: PgTable,
+  kinds: readonly ("addition" | "correction")[],
+  presence: PresenceFilter,
+): SQL | undefined => {
+  const pending = (kind: SQL) => sql`EXISTS (
+    SELECT 1 FROM "AssessmentState" s
+    INNER JOIN "Run" r ON r."id" = s."runId"
+    WHERE s."entity" = ${entity}
+      AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
+      AND s."status" = ${suggestionStatus.enum.pending}
+      AND r."deletedAt" IS NULL
+      AND (s."pairKey" IS NULL OR r."input"->>'decisionModel' = s."model")
+      ${kind}
+  )`;
+  return or(
+    kinds.length === 0
+      ? undefined
+      : pending(
+          sql`AND s."kind" IN (${sql.join(
+            kinds.map((kind) => sql`${kind}`),
+            sql`, `,
+          )})`,
+        ),
+    presence === undefined
+      ? undefined
+      : presence === "has"
+        ? pending(sql``)
+        : sql`NOT ${pending(sql``)}`,
+  );
+};
 
 /**
  * The predicates a repository owes to descriptors declared `stored`: the
@@ -459,27 +545,18 @@ export function declaredFilterPredicates<Filters extends object>(
   derivedInput?: DerivedFilterInput,
 ): Array<SQL | undefined> {
   const values = listFilterValues.parse(filters);
-  const suggestionKind = suggestionFilterValue.parse(
-    values.suggestionPresenceFilter,
-  );
   const hasSuggestTargets = fieldModelFor(entity)?.fields.some(
     (field) => field.control?.suggest != null,
   );
-  const suggestionPredicate =
-    suggestionKind && hasSuggestTargets
-      ? sql`EXISTS (
-        SELECT 1 FROM "AssessmentState" s
-        INNER JOIN "Run" r ON r."id" = s."runId"
-        WHERE s."entity" = ${entity}
-          AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
-          AND s."status" = ${suggestionStatus.enum.pending}
-          AND r."deletedAt" IS NULL
-          AND (s."pairKey" IS NULL OR r."input"->>'decisionModel' = s."model")
-          ${suggestionKind === "any" ? sql`` : sql`AND s."kind" = ${suggestionKind}`}
-      )`
-      : undefined;
   return [
-    suggestionPredicate,
+    hasSuggestTargets
+      ? suggestionPredicate(
+          entity,
+          table,
+          suggestionKinds.parse(values.suggestionKind),
+          presenceFilter.parse(values.suggestionPresenceFilter),
+        )
+      : undefined,
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.derived)
       .flatMap((descriptor) =>
@@ -507,25 +584,22 @@ export function declaredFilterPredicates<Filters extends object>(
             return [textPredicate(columns, optionalText.parse(value)?.trim())];
           case "boolean":
             return [booleanPredicate(first, optionalBoolean.parse(value))];
-          case "select":
           case "multiselect":
             return [
               descriptor.stored?.array
-                ? arrayOverlapOrPresence(
-                    first.column,
+                ? arrayPredicate(
+                    first,
                     optionalTextList.parse(value),
                     presence,
-                    first.nullable,
+                    descriptor.match !== null &&
+                      matchAll.parse(values[descriptor.match.field]),
                   )
-                : descriptor.nullable
-                  ? eqAnyOrPresence(first.column, value, presence)
-                  : eqAny(first.column, value),
+                : eqAnyOrPresence(first.column, value, presence),
             ];
           case "presence":
             return [
               presenceCondition(first.column, presenceFilter.parse(value)),
             ];
-          case "id":
           case "idMulti":
             return [
               referencePredicate(
@@ -533,6 +607,7 @@ export function declaredFilterPredicates<Filters extends object>(
                 first,
                 optionalTextList.parse(value),
                 subtreeToggle(entity, key, values),
+                presence,
               ),
             ];
           case "range":

@@ -29,14 +29,15 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  anyOfCondition,
   buildPartialUpdateValues,
   eqAny,
   getDb,
   type ListReadIntent,
   notDeleted,
+  touchUpdatedAt,
   unwrapDb,
   withTransaction,
-  touchUpdatedAt,
 } from "~/server/db/helpers";
 import {
   financialTransaction,
@@ -478,16 +479,18 @@ export async function buildFinancialTransactionWhere(
       : filters.purchasePresenceFilter === "none"
         ? sql`NOT ${hasAnyAllocation()}`
         : undefined,
-    filters.itemization
-      ? sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')} = ${filters.itemization}`
-      : undefined,
-    filters.allocationIntegrity === "defect"
-      ? gapCondition(
-          "financialTransaction",
-          "financial_transaction_allocation_integrity",
-          financialTransaction,
-        )
-      : undefined,
+    anyOfCondition(
+      filters.itemization,
+      (itemization) =>
+        sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')} = ${itemization}`,
+    ),
+    anyOfCondition(filters.allocationIntegrity, () =>
+      gapCondition(
+        "financialTransaction",
+        "financial_transaction_allocation_integrity",
+        financialTransaction,
+      ),
+    ),
     refsCondition(
       filters.source ? [filters.source].flat() : undefined,
       filters.externalId ? [filters.externalId].flat() : undefined,

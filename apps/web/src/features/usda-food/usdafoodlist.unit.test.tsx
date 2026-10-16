@@ -118,7 +118,8 @@ describe("USDAFoodList", () => {
     expect(reads.at(-1)).toMatchObject({
       filters: {
         nameFilter: "Example",
-        dataTypeFilter: "branded_food",
+        // A single URL value reads as a one-element any-of list.
+        dataTypeFilter: ["branded_food"],
         foodsOnly: false,
         linkedProductsOnly: true,
       },

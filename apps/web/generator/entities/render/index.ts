@@ -3,6 +3,7 @@ import {
   entityFieldControlKinds as fieldControlKinds,
   entityFieldKinds as fieldKinds,
 } from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
+import { CURRENT_MEMBER_FILTER } from "../../../../../packages/shared/src/filter.ts";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import {
   EntityDeclarationError,
@@ -100,7 +101,7 @@ interface DerivedFilterNeeds {
   z: boolean;
   oneOrMany: boolean;
   entityFilterList: boolean;
-  partyFilterList: boolean;
+  tokenFilterList: boolean;
   shortcodeSchema: boolean;
   presence: boolean;
   numeric: boolean;
@@ -167,7 +168,7 @@ const derivedFilterImports = (
   }
   const pagination = [
     ...(needs.entityFilterList ? ["entityFilterList"] : []),
-    ...(needs.partyFilterList ? ["partyFilterList"] : []),
+    ...(needs.tokenFilterList ? ["tokenFilterList"] : []),
     ...(needs.oneOrMany ? ["oneOrMany"] : []),
     ...(needs.presence ? ["presenceFilter"] : []),
   ];
@@ -223,7 +224,7 @@ const renderDerivedFilterFields = (
     z: false,
     oneOrMany: false,
     entityFilterList: false,
-    partyFilterList: false,
+    tokenFilterList: false,
     shortcodeSchema: false,
     presence: false,
     numeric: false,
@@ -239,66 +240,87 @@ const renderDerivedFilterFields = (
       );
     return `definition.model.fields[${index}].validation.read`;
   };
-  const entries = entity.filterDescriptors
-    .filter((descriptor) => descriptor.deriveSchema)
-    .map((descriptor) => {
-      const name = descriptor.field ?? descriptor.columnId;
-      const key = JSON.stringify(name);
-      const describe =
-        descriptor.schemaDescription === null
-          ? ""
-          : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
-      switch (descriptor.kind) {
-        case "text": {
-          if (!descriptor.schemaFromRead) needs.z = true;
-          const base = descriptor.schemaFromRead
-            ? readRef(descriptor)
-            : "z.string()";
-          return `${key}:${base}.optional()${describe}`;
-        }
-        case "boolean":
-          needs.z = true;
-          return `${key}:z.boolean().optional()${describe}`;
-        case "presence":
-          needs.presence = true;
-          return `${key}:presenceFilter${describe}`;
-        case "select":
-        case "multiselect":
-          needs.oneOrMany = true;
-          return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
-        case "range":
-          return derivedRangeEntry(entity, descriptor, name, needs);
-        // The referenced entity's branded shortcode — never the field's
-        // read schema, which is nullable for an optional foreign key.
-        case "id":
-        case "idMulti": {
-          const target = descriptor.brandRef?.entity;
-          if (target === undefined)
-            throw new EntityDeclarationError(
-              `${entity.key} filter ${descriptor.columnId} derives an id schema without brandRef.`,
-            );
-          needs.shortcodeSchema = true;
-          const code = `shortcodeSchema(${JSON.stringify(target)})`;
-          if (descriptor.kind === "id")
-            return `${key}:${code}.optional()${describe}`;
-          // A Ledger Party filter also accepts `@me` (CURRENT_MEMBER_FILTER).
-          if (target === "ledgerParty") {
-            needs.partyFilterList = true;
-            const sentinels = (descriptor.sentinels ?? []).map(
-              (sentinel) => sentinel.value,
-            );
-            const extra =
-              sentinels.length === 0 ? "" : `,${JSON.stringify(sentinels)}`;
-            return `${key}:partyFilterList(${code}${extra}).optional()${describe}`;
-          }
-          needs.entityFilterList = true;
-          return `${key}:entityFilterList(${code}).optional()${describe}`;
-        }
-        default:
-          throw new EntityDeclarationError(
-            `${entity.key} filter ${descriptor.columnId} cannot derive a ${descriptor.kind} schema.`,
-          );
+  const valueEntry = (descriptor: FilterDescriptor): string => {
+    const name = descriptor.field ?? descriptor.columnId;
+    const key = JSON.stringify(name);
+    const describe =
+      descriptor.schemaDescription === null
+        ? ""
+        : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
+    switch (descriptor.kind) {
+      case "text": {
+        if (!descriptor.schemaFromRead) needs.z = true;
+        const base = descriptor.schemaFromRead
+          ? readRef(descriptor)
+          : "z.string()";
+        return `${key}:${base}.optional()${describe}`;
       }
+      case "boolean":
+        needs.z = true;
+        return `${key}:z.boolean().optional()${describe}`;
+      case "presence":
+        needs.presence = true;
+        return `${key}:presenceFilter${describe}`;
+      case "multiselect":
+        needs.oneOrMany = true;
+        return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
+      case "range":
+        return derivedRangeEntry(entity, descriptor, name, needs);
+      // The referenced entity's branded shortcode — never the field's
+      // read schema, which is nullable for an optional foreign key.
+      case "idMulti": {
+        const target = descriptor.brandRef?.entity;
+        if (target === undefined)
+          throw new EntityDeclarationError(
+            `${entity.key} filter ${descriptor.columnId} derives an id schema without brandRef.`,
+          );
+        needs.shortcodeSchema = true;
+        const code = `shortcodeSchema(${JSON.stringify(target)})`;
+        // `@me` (declared `currentMember`) and declared sentinels are
+        // public tokens beside the shortcodes.
+        const tokens = [
+          ...(descriptor.currentMember ? [CURRENT_MEMBER_FILTER] : []),
+          ...(descriptor.sentinels ?? []).map(({ value }) => value),
+        ];
+        if (tokens.length > 0) {
+          needs.tokenFilterList = true;
+          return `${key}:tokenFilterList(${code},${JSON.stringify(tokens)}).optional()${describe}`;
+        }
+        needs.entityFilterList = true;
+        return `${key}:entityFilterList(${code}).optional()${describe}`;
+      }
+    }
+  };
+  const entries = entity.filterDescriptors
+    // A compiled filter's generated keys reach its schema even when the value
+    // key is hand-written.
+    .filter(
+      (descriptor) =>
+        descriptor.deriveSchema ||
+        descriptor.stored !== null ||
+        descriptor.derived,
+    )
+    .flatMap((descriptor) => {
+      const label =
+        descriptor.nullable?.label ??
+        (descriptor.label ?? descriptor.columnId).toLowerCase();
+      // The generated Any value / No value and Match all keys ride beside
+      // the value key, so a request can say "has a value" or "all of these".
+      if (descriptor.nullable !== null) needs.presence = true;
+      if (descriptor.match !== null) needs.z = true;
+      return [
+        ...(descriptor.deriveSchema ? [valueEntry(descriptor)] : []),
+        ...(descriptor.nullable === null
+          ? []
+          : [
+              `${JSON.stringify(descriptor.nullable.field)}:presenceFilter.describe(${JSON.stringify(`has/none ${label}, ORed with picked values`)})`,
+            ]),
+        ...(descriptor.match === null
+          ? []
+          : [
+              `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe(${JSON.stringify(`all: every picked ${label}`)})`,
+            ]),
+      ];
     });
   return { imports: derivedFilterImports(needs, refs), entries };
 };
@@ -1319,7 +1341,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         ' * "Include sub-…" toggle; `fieldGroup` holds group rejections for\n' +
         " * multi-valued model fields.\n" +
         " */\n" +
-        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "select" | "multiselect" | "boolean"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
+        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "boolean"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
@@ -1415,7 +1437,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
         '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
-        "  urlOnly: boolean; nullable: { field: string; label: string } | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
+        "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

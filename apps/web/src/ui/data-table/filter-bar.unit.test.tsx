@@ -2,8 +2,19 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { FilterBar } from "./filter-bar";
-import type { Filter, FilterBarField } from "./filter-bar-core";
+import {
+  FILTER_ALL,
+  FILTER_ANY,
+  FILTER_EXACT,
+  FILTER_NONE,
+} from "~/entity/filters";
+
+import { FilterBar, filterSummary } from "./filter-bar";
+import {
+  type Filter,
+  type FilterBarField,
+  nextPickedValues,
+} from "./filter-bar-core";
 
 const fields: FilterBarField[] = [
   { key: "name", label: "Name", type: "text" },
@@ -335,5 +346,71 @@ describe("FilterBar", () => {
     expect(
       screen.queryByRole("button", { name: /^Name:/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers Match all only on a multi-valued field and applies it", async () => {
+    const single = renderBar([]);
+    fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
+    await screen.findByRole("option", { name: "Home" });
+    expect(screen.queryByRole("button", { name: "Match all" })).toBeNull();
+    single.unmount();
+
+    const { onChange } = renderBar([], {
+      fields: [{ ...fields[2]!, matchAll: true }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tags: any" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Match all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ field: "tags", values: ["home", FILTER_ALL] }),
+    ]);
+  });
+});
+
+describe("filterSummary", () => {
+  const tags = fields[2]!;
+  const chip = (values: string[]) =>
+    filterSummary(tags, {
+      id: "filter-tags",
+      field: "tags",
+      operator: "is_any_of",
+      values,
+    });
+
+  it("joins values with or, and with and under Match all", () => {
+    expect(chip(["home", "urgent"])).toBe("Home or Urgent");
+    expect(chip(["home", "urgent", FILTER_ALL])).toBe("Home and Urgent");
+  });
+
+  it("reads Any value as has a value only while active", () => {
+    expect(chip([FILTER_ANY])).toBe("has a value");
+    expect(filterSummary(tags, undefined)).toBe("any");
+  });
+
+  it("names No value beside picked values", () => {
+    expect(chip([FILTER_NONE])).toBe("no value");
+    expect(chip(["home", FILTER_NONE])).toBe("Home or no value");
+  });
+
+  it("treats a lone mode token as inactive", () => {
+    expect(chip([FILTER_ALL])).toBe("any");
+    expect(chip([FILTER_EXACT])).toBe("any");
+  });
+});
+
+describe("nextPickedValues", () => {
+  it("lets Any value clear picked values and a pick clear Any value", () => {
+    expect(
+      nextPickedValues(["home", FILTER_ALL], ["home", FILTER_ANY]),
+    ).toEqual([FILTER_ANY, FILTER_ALL]);
+    expect(nextPickedValues([FILTER_ANY], [FILTER_ANY, "home"])).toEqual([
+      "home",
+    ]);
+    expect(nextPickedValues(["home"], ["home", FILTER_NONE])).toEqual([
+      "home",
+      FILTER_NONE,
+    ]);
   });
 });

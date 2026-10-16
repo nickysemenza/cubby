@@ -72,7 +72,8 @@ const COUNT_WHERE = {
   ingredient: (db) => buildIngredientListWhere(db, {}),
   cookbook: () => cookbookListWhere(),
   location: (db) => buildLocationWhere(db, {}),
-  inventory: (db) => buildInventoryWhere(db, {}),
+  // Movable stock: a fixture is not something to count.
+  inventory: (db) => buildInventoryWhere(db, { placementFilter: ["stock"] }),
   meal: (db) => buildMealWhere(db, {}),
   project: (db) => buildProjectWhere(db, {}),
   task: (db) => buildTaskWhere(db, {}),

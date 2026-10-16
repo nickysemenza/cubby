@@ -115,6 +115,13 @@ export const renderFilterArtifacts = (
       ...(descriptor.nullable === null
         ? []
         : [`nullable:${compactLiteral(descriptor.nullable)}`]),
+      ...(descriptor.match === null
+        ? []
+        : [`match:${compactLiteral(descriptor.match)}`]),
+      ...(descriptor.subtree === null
+        ? []
+        : [`subtree:${JSON.stringify(descriptor.subtree)}`]),
+      ...(descriptor.currentMember ? ["currentMember:true"] : []),
       ...(descriptor.sentinels === null
         ? []
         : [`sentinels:${compactLiteral(descriptor.sentinels)}`]),

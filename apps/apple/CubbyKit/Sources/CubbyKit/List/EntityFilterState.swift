@@ -1,27 +1,16 @@
 import Foundation
 
-/// One list filter's value as it travels on the wire: a scalar parameter, or an array parameter
-/// whose key repeats once per element (`tagFilters=a&tagFilters=b`).
-public enum EntityFilterValue: Sendable, Hashable {
-    case single(String)
-    case many([String])
-
-    /// A filter with nothing in it is not a filter; `EntityFilterState.set` drops it.
-    public var isEmpty: Bool {
-        switch self {
-        case .single(let value): value.isEmpty
-        case .many(let values): values.isEmpty
-        }
-    }
-}
-
 /// The active filters of one entity list, keyed by wire parameter name (a `FilterDescriptor`'s
 /// compiled `wire` name), so a filter sheet, a route, and the request all speak the same key.
+/// Every value is a list: a scalar parameter holds one element, and an array parameter repeats
+/// its key once per element (`tagFilters=a&tagFilters=b`). `EntityKernel.swift` types each list
+/// from the kernel parameter, so a scalar route still receives a JSON scalar.
 public struct EntityFilterState: Sendable, Hashable {
-    public private(set) var values: [String: EntityFilterValue]
+    public private(set) var values: [String: [String]]
 
-    public init(_ values: [String: EntityFilterValue] = [:]) {
-        self.values = values.filter { !$0.value.isEmpty }
+    /// An empty string is never a value, so a parameter left with none is dropped.
+    public init(_ values: [String: [String]] = [:]) {
+        self.values = values.mapValues { $0.filter { !$0.isEmpty } }.filter { !$0.value.isEmpty }
     }
 
     public var isEmpty: Bool { values.isEmpty }
@@ -32,15 +21,12 @@ public struct EntityFilterState: Sendable, Hashable {
     /// Parameter names in a stable order, for rendering and for deterministic request URLs.
     public var names: [String] { values.keys.sorted() }
 
-    public subscript(name: String) -> EntityFilterValue? { values[name] }
+    public subscript(name: String) -> [String]? { values[name] }
 
-    /// Sets `value` for `name`; an empty value removes the parameter instead.
-    public mutating func set(_ value: EntityFilterValue, for name: String) {
-        if value.isEmpty {
-            values[name] = nil
-        } else {
-            values[name] = value
-        }
+    /// Sets `value` for `name`; a list with no non-empty string removes the parameter instead.
+    public mutating func set(_ value: [String], for name: String) {
+        let value = value.filter { !$0.isEmpty }
+        values[name] = value.isEmpty ? nil : value
     }
 
     public mutating func remove(_ name: String) {
@@ -58,7 +44,7 @@ extension EntityFilterState {
                 let name = EntityCatalog[entity].filters.first(where: { $0.urlKey == urlKey })?.wire.names
                     .first
             else { continue }
-            set(.single(value), for: name)
+            set([value], for: name)
         }
     }
 }
@@ -70,13 +56,7 @@ extension FilterDescriptor: Identifiable {
 
 extension SavedView {
     /// The generator expands column filters into query parameters, including nullable presence.
-    public var filterState: EntityFilterState {
-        EntityFilterState(
-            Dictionary(
-                uniqueKeysWithValues: filters.map { filter in
-                    (filter.id, filter.isList ? .many(filter.values) : .single(filter.values.first ?? ""))
-                }))
-    }
+    public var filterState: EntityFilterState { EntityFilterState(filters: filters) }
 
     public var sortParameter: String? {
         guard !sort.isEmpty else { return nil }
@@ -90,6 +70,22 @@ extension SavedView {
     }
 }
 
+extension EntityFilterState {
+    /// Saved-view filters (a saved view, a presentation's `initialFilters`) keyed by wire name.
+    public init(filters: [SavedViewFilter]) {
+        self.init(Dictionary(filters.map { ($0.id, $0.values) }, uniquingKeysWith: { _, last in last }))
+    }
+}
+
+extension EntityDescriptor {
+    /// The filters a list opens with: a saved view's own, else the route's explicit filters,
+    /// else the presentation's `initialFilters` (inventory opens on `placementFilter=stock`).
+    public func openingFilters(savedView: SavedView?, explicit: EntityFilterState) -> EntityFilterState {
+        if let savedView { return savedView.filterState }
+        return explicit.isEmpty ? EntityFilterState(filters: presentation.initialFilters) : explicit
+    }
+}
+
 /// Thrown by `EntityKernel.swift` when a filter cannot be sent.
 public enum EntityFilterError: Error, Sendable, Hashable {
     /// The name is not a kernel filter of the entity.
@@ -100,24 +96,14 @@ public enum EntityFilterError: Error, Sendable, Hashable {
 // The conversions `EntityKernel.swift` and the USDA adapter apply to filter text. Each maps the
 // wire string(s) onto the JSON kind the body carries; a value that kind cannot hold throws before
 // any request is sent.
-extension EntityFilterValue {
-    public var strings: [String] {
-        switch self {
-        case .single(let value): [value]
-        case .many(let values): values
-        }
-    }
-
+extension [String] {
+    /// The one value a scalar parameter carries.
     func string(_ name: String) throws -> String {
-        switch self {
-        case .single(let value): return value
-        case .many(let values):
-            guard values.count == 1, let value = values.first else {
-                throw EntityFilterError.invalidValue(
-                    parameter: name, value: values.joined(separator: ","), expected: "one value")
-            }
-            return value
+        guard count == 1, let value = first else {
+            throw EntityFilterError.invalidValue(
+                parameter: name, value: joined(separator: ","), expected: "one value")
         }
+        return value
     }
 
     func double(_ name: String) throws -> Double {
@@ -145,17 +131,8 @@ extension EntityFilterValue {
         }
     }
 
-    func enumCase<Case: RawRepresentable>(_ name: String) throws -> Case where Case.RawValue == String {
-        let raw = try string(name)
-        guard let value = Case(rawValue: raw) else {
-            throw EntityFilterError.invalidValue(
-                parameter: name, value: raw, expected: "one of the enum's cases")
-        }
-        return value
-    }
-
     func enumCases<Case: RawRepresentable>(_ name: String) throws -> [Case] where Case.RawValue == String {
-        try strings.map { raw in
+        try map { raw in
             guard let value = Case(rawValue: raw) else {
                 throw EntityFilterError.invalidValue(
                     parameter: name, value: raw, expected: "one of the enum's cases")

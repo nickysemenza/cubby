@@ -282,12 +282,12 @@ final class PhotoEntityChooserModel {
         if descriptor.field(key)?.kind == .timestamp {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(-3_600))), for: from)
-            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(3_600))), for: to)
+            result.set([formatter.string(from: captureDate.addingTimeInterval(-3_600))], for: from)
+            result.set([formatter.string(from: captureDate.addingTimeInterval(3_600))], for: to)
         } else {
             let day = plainDate(captureDate, calendar: calendar)
-            result.set(.single(day), for: from)
-            result.set(.single(day), for: to)
+            result.set([day], for: from)
+            result.set([day], for: to)
         }
         return result
     }

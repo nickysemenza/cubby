@@ -15,6 +15,8 @@ import {
   createSortParamsSchema,
   mcpPaginationFields,
   oneOrMany,
+  partyFilterList,
+  presenceFilter,
 } from "./pagination";
 import { problemRowSchema } from "./problems";
 
@@ -163,22 +165,25 @@ export const workQueueSortSchema = createSortParamsSchema(
 export const workQueuePageInput = z.object({
   ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   query: z.string().max(500).optional(),
-  kind: workQueueKindSchema.optional(),
-  source: workQueueSourceSchema.optional(),
+  kind: oneOrMany(workQueueKindSchema).optional(),
+  source: oneOrMany(workQueueSourceSchema).optional(),
   /** Gap rows failing any of these checks; every other row drops out. */
   check: oneOrMany(dataCheck).optional(),
-  vendor: vendorShortcode.optional(),
+  vendor: oneOrMany(vendorShortcode).optional(),
   sort: workQueueSortSchema.optional(),
 });
 
 /** Household UI filters select routing metadata; they confer no source access. */
 export const workQueueHouseholdInput = workQueuePageInput.extend({
-  waitingFor: z
-    .union([
-      z.enum(["all", "me", "either", "unresolved"]),
-      ledgerPartyShortcode,
-    ])
-    .default("all"),
+  /**
+   * Any of: `@me` (work routed to me or Either), `either` (shared work), or a
+   * member shortcode (work routed to that member).
+   */
+  waitingFor: partyFilterList(ledgerPartyShortcode, ["either"]).optional(),
+  /** `none` is Unresolved routing; `has` is resolved (members or Either). */
+  waitingForPresence: presenceFilter.describe(
+    "has/none waiting for, ORed with picked members",
+  ),
 });
 
 export const workQueueOutSchema = z.object({

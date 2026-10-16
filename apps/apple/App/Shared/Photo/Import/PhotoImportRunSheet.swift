@@ -216,8 +216,8 @@ final class PhotoImportRunFlow {
         loadingRuns = true
         defer { loadingRuns = false }
         var filters = EntityFilterState()
-        filters.set(.many(["running", "needs_review", "completed"]), for: "status")
-        filters.set(.many(["photo_inventory"]), for: "purpose")
+        filters.set(["running", "needs_review", "completed"], for: "status")
+        filters.set(["photo_inventory"], for: "purpose")
         openRuns =
             (try? await client.list(EntityCatalog[.run], pageSize: 50, filters: filters))?
             .items ?? []

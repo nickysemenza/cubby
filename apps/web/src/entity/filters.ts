@@ -1,6 +1,11 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import {
+  FILTER_ALL,
+  FILTER_ANY,
+  FILTER_EXACT,
+  FILTER_NONE,
+} from "@cubby/schemas/filter-sentinel-fields";
 import {
   CURRENT_MEMBER_FILTER,
   humanize,
@@ -12,10 +17,9 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 
 /**
- * text: substring match. select: one enum value. multiselect: any-of a set of
- * enum values. presence: "has" | "none". boolean: "true" | "false". id: one
- * branded entity id. idMulti: any-of a set of branded entity ids. range:
- * preset key expanding to a {from,to} pair.
+ * text: substring match. multiselect: any-of a set of enum values. presence:
+ * "has" | "none". boolean: "true" | "false". idMulti: any-of a set of branded
+ * entity ids. range: preset key expanding to a {from,to} pair.
  */
 export type FilterKind = (typeof FILTER_KINDS)[number];
 
@@ -72,14 +76,25 @@ export interface FilterSpecCore {
    */
   urlOnly?: boolean;
   /**
-   * Marks a picklist as covering a NULLABLE column: the control gains the two
-   * sentinel options below, and the builder routes them to `field` (a
-   * `presenceFilter`) instead of into the value list. `multiselect` / `idMulti`
-   * only — a `presence` kind IS this filter, for relations with no picklist.
+   * Marks a picklist as covering a NULLABLE column: the control gains the
+   * Any value / No value options below, and the builder routes them to
+   * `field` (a `presenceFilter`) instead of into the value list. `multiselect`
+   * / `idMulti` only — a `presence` kind IS this filter, for relations with
+   * no picklist.
    *
-   * `label` is the noun in "Has {label}".
+   * `label` is the noun in a tab title's "Has {label}".
    */
   nullable?: { field: string; label: string };
+  /** A multi-valued field's Match all key: the control offers Match any | all. */
+  match?: { field: string };
+  /**
+   * The key of the reference's generated "Include sub-…" toggle (on unless
+   * `false`). Its control sits in this filter's editor, and the column state
+   * carries it as {@link FILTER_EXACT}; the URL keeps the toggle's own key.
+   */
+  subtree?: string;
+  /** Offers `@me`, the signed-in member (ADR 0018). */
+  currentMember?: boolean;
   /** Token values (Household, Unknown) offered beside the roster and sent
    * unbranded; the server resolves them. */
   sentinels?: ReadonlyArray<{ value: string; label: string }>;
@@ -93,24 +108,30 @@ export interface FilterSpecCore {
  * `buildFiltersFromManifest` partitions them out and emits a `presenceFilter`
  * instead, so the runtime input schemas never see them.
  */
-export { FILTER_ANY, FILTER_NONE };
+// `FILTER_EXACT` (an "Include sub-…" toggle switched off) is the one token
+// the URL codec writes under another key: the toggle's own
+// (`includeSubLocations=false`).
+export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE };
 
 const isSentinel = (value: string): boolean =>
-  value === FILTER_ANY || value === FILTER_NONE;
+  value === FILTER_ANY ||
+  value === FILTER_NONE ||
+  value === FILTER_ALL ||
+  value === FILTER_EXACT;
 
 /**
  * The two options a `nullable` picklist prepends to its roster.
  *
  * `meta` renders them in the eyebrow register (mono/uppercase/slate, with a
  * rule beneath) so a predicate about the data doesn't read as a row of it.
- * `label` stays a plain string — `LedgerFilters` and the collapsed
- * multi-combobox summary interpolate it into `"(none) +2"`.
  */
-export const nullableSentinelOptions = (
-  label: string,
-): Array<{ value: string; label: string; meta: true }> => [
-  { value: FILTER_ANY, label: `Has ${label}`, meta: true },
-  { value: FILTER_NONE, label: "(none)", meta: true },
+export const nullableSentinelOptions = (): Array<{
+  value: string;
+  label: string;
+  meta: true;
+}> => [
+  { value: FILTER_ANY, label: "Any value", meta: true },
+  { value: FILTER_NONE, label: "No value", meta: true },
 ];
 
 /** A column filter's state: TanStack stores whatever we set on it. */
@@ -159,8 +180,7 @@ export function buildFiltersFromManifest(
   const brand = (spec: FilterSpecCore, value: string): string => {
     // `@me` stays a token on the wire; the entity kernel resolves it.
     if (
-      (value === CURRENT_MEMBER_FILTER &&
-        spec.referenceEntity === "ledgerParty") ||
+      (value === CURRENT_MEMBER_FILTER && spec.currentMember) ||
       spec.sentinels?.some((sentinel) => sentinel.value === value)
     )
       return value;
@@ -179,7 +199,7 @@ export function buildFiltersFromManifest(
     const field = spec.field ?? spec.columnId;
 
     const patch = match(spec.kind)
-      .with("text", "select", "presence", () => {
+      .with("text", "presence", () => {
         const value = single(raw);
         return value ? { [field]: value } : undefined;
       })
@@ -189,38 +209,36 @@ export function buildFiltersFromManifest(
           ? { [field]: value === "true" }
           : undefined;
       })
-      .with("id", () => {
-        const value = single(raw);
-        if (!value) return undefined;
-        const parsed = brand(spec, value);
-        return { [field]: parsed };
-      })
       .with("multiselect", "idMulti", () => {
         const values = many(raw);
         if (!values) return undefined;
-        // Only `idMulti` carries a brand, so the two kinds share one arm.
-        const brandAll = (items: string[]) =>
-          items.map((value) => brand(spec, value));
-        const nullable = spec.nullable;
-        if (!nullable) {
-          const parsed = brandAll(values);
-          return parsed.length ? { [field]: parsed } : undefined;
-        }
-
-        // Partition BEFORE branding — a sentinel is not an entity id, and
+        // Partition BEFORE branding — a token is not an entity id, and
         // `unsafe*Id` would happily brand the string into a lie.
-        const [sentinels, rest] = partition(values, isSentinel);
-        const wantsNone = sentinels.includes(FILTER_NONE);
-        const wantsAny = sentinels.includes(FILTER_ANY);
+        // Only the tokens this spec declares; anything else is a value.
+        const [tokens, rest] = partition(
+          values,
+          (value) =>
+            (spec.nullable !== undefined &&
+              (value === FILTER_ANY || value === FILTER_NONE)) ||
+            (spec.match !== undefined && value === FILTER_ALL) ||
+            (spec.subtree !== undefined && value === FILTER_EXACT),
+        );
+        const wantsNone = tokens.includes(FILTER_NONE);
+        const wantsAny = tokens.includes(FILTER_ANY);
         // `IS NULL OR IS NOT NULL` is every row, and the OR swallows any value
-        // selection sitting alongside it — so both sentinels together mean no
+        // selection sitting alongside it — so both together mean no
         // constraint at all. Degenerate, but the control permits it.
         if (wantsNone && wantsAny) return undefined;
-        const presence = wantsNone ? "none" : wantsAny ? "has" : undefined;
         const patch: FilterPatch = {};
-        const parsed = brandAll(rest);
+        // Any value already includes every picked value.
+        const parsed = wantsAny ? [] : rest.map((value) => brand(spec, value));
         if (parsed.length) patch[field] = parsed;
-        if (presence) patch[nullable.field] = presence;
+        if (spec.nullable && (wantsNone || wantsAny))
+          patch[spec.nullable.field] = wantsNone ? "none" : "has";
+        if (spec.match && parsed.length && tokens.includes(FILTER_ALL))
+          patch[spec.match.field] = "all";
+        if (spec.subtree && parsed.length && tokens.includes(FILTER_EXACT))
+          patch[spec.subtree] = false;
         return Object.keys(patch).length ? patch : undefined;
       })
       .with("range", () =>
@@ -243,6 +261,7 @@ export function buildFiltersFromManifest(
 
 /**
  * Does one cell value satisfy a multiselect column filter?
+ * (Client-side tables hold one value per cell, so Match all is moot here.)
  *
  * Sentinels mirror `eqAnyOrPresence` server-side, including its OR rule:
  * `["projA", FILTER_NONE]` is "project A *or* unassigned", not a contradiction.
@@ -263,8 +282,10 @@ function matchesMultiSelect<TFilterValue>(
   if (wantsNone && wantsAny) return true;
   if (wantsNone && isEmpty) return true;
   if (wantsAny && !isEmpty) return true;
+  const picked = selected.filter((item) => !isSentinel(item));
+  if (picked.length === 0 && !wantsNone && !wantsAny) return true;
 
-  return !isEmpty && selected.includes(value);
+  return !isEmpty && picked.includes(value);
 }
 
 /**
@@ -347,10 +368,27 @@ export const filterUrlKey = (
  * specs `useTableState` decodes into state, encodes back out, or claims a URL
  * key for. See `urlOnly` on the spec for why the second list is held apart.
  */
-export const partitionFilterSpecs = (
-  specs: readonly FilterSpecCore[],
-): [FilterSpecCore[], FilterSpecCore[]] =>
-  partition(specs, (spec) => !spec.urlOnly);
+export const partitionFilterSpecs = <TSpec extends FilterSpecCore>(
+  specs: readonly TSpec[],
+): [TSpec[], TSpec[]] => {
+  // A column filter's "Include sub-…" toggle rides in that filter's state,
+  // so it is neither a column of its own nor a URL-only scope.
+  const companions = new Set(
+    specs.flatMap((spec) =>
+      spec.subtree && !spec.urlOnly ? [spec.subtree] : [],
+    ),
+  );
+  return partition(
+    specs.filter((spec) => !companions.has(spec.columnId)),
+    (spec) => !spec.urlOnly,
+  );
+};
+
+/** The URL keys a spec writes: its own, plus a folded-in subtree toggle's. */
+const ownedUrlKeys = (spec: FilterSpecCore): string[] =>
+  spec.subtree && !spec.urlOnly
+    ? [filterUrlKey(spec), spec.subtree]
+    : [filterUrlKey(spec)];
 
 /**
  * Everything a table needs to move filters between state and the URL,
@@ -382,7 +420,7 @@ export const compileFilterCodec = (
   return {
     columnSpecs,
     urlOnlySpecs,
-    columnKeys: columnSpecs.map(filterUrlKey),
+    columnKeys: columnSpecs.flatMap(ownedUrlKeys),
     urlOnlyKeys: urlOnlySpecs.map(filterUrlKey),
     encode: (get) => encodeFilters(columnSpecs, get),
     decodeColumns: (search) => decodeFilters(columnSpecs, search),
@@ -420,14 +458,26 @@ export function encodeFilters(
   get: (columnId: string) => FilterValue,
 ) {
   const params: Record<string, string | undefined> = {};
+  // A parent's column state owns its folded subtree toggle, so the toggle's
+  // standalone descriptor must not overwrite it.
+  const folded = new Set(
+    specs.flatMap((spec) =>
+      spec.subtree && !spec.urlOnly ? [spec.subtree] : [],
+    ),
+  );
   for (const spec of specs) {
+    if (folded.has(filterUrlKey(spec))) continue;
     const raw = get(spec.columnId);
-    const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const exact = all.includes(FILTER_EXACT);
+    const values = all.filter((value) => value !== FILTER_EXACT);
     // undefined, never "" — `stripSearchParams` only strips on undefined, so
     // an empty string would stick in the URL forever.
     params[filterUrlKey(spec)] = values.length
       ? values.join(LIST_SEPARATOR)
       : undefined;
+    if (spec.subtree && !spec.urlOnly)
+      params[spec.subtree] = exact && values.length ? "false" : undefined;
   }
   return params;
 }
@@ -449,11 +499,20 @@ export function decodeFilters<TSearch extends {}>(
     if (parts.length === 0) continue;
     const first = parts[0];
     if (first === undefined) continue;
+    const exact =
+      spec.subtree !== undefined &&
+      !spec.urlOnly &&
+      parsedSearch[spec.subtree] === "false";
     filters.push({
       id: spec.columnId,
       // A multi column always holds an array, even for one value — mixing the
-      // two shapes is what splits the React Query cache.
-      value: isMultiFilterKind(spec.kind) ? parts : first,
+      // two shapes is what splits the React Query cache. A single value in a
+      // URL or saved view therefore reads as a one-element list.
+      value: isMultiFilterKind(spec.kind)
+        ? exact
+          ? [...parts, FILTER_EXACT]
+          : parts
+        : first,
     });
   }
   return filters;
@@ -620,47 +679,38 @@ function describeFilter(
   return (
     match(spec.kind)
       .with("text", () => first)
-      // A range preset's value is a bare key (`30d`, `ytd`) that means nothing on
-      // its own — the roster label ("Last 30 days") is the whole point. Same shape
-      // as `select`, so they share the lookup; `humanize` is only the fallback for
-      // a spec whose options are supplied at runtime.
-      .with(
-        "select",
-        "range",
-        () => optionLabel(spec, first) ?? humanize(first),
-      )
+      // A range preset's value is a bare key (`30d`, `ytd`) that means nothing
+      // on its own — the roster label ("Last 30 days") is the whole point.
+      // `humanize` is only the fallback for a spec whose options are supplied
+      // at runtime.
+      .with("range", () => optionLabel(spec, first) ?? humanize(first))
       .with("presence", () => describePresence(spec, first))
       .with("boolean", () => {
         const noun = humanize(spec.columnId);
         return first === "false" ? `No ${noun.toLowerCase()}` : noun;
       })
-      .with("multiselect", () => {
-        const [sentinels, rest] = partition(values, isSentinel);
-        const labels = [
-          ...rest.map((value) => optionLabel(spec, value) ?? value),
-          ...(spec.nullable
-            ? sentinels.map((value) =>
+      .with("multiselect", "idMulti", () => {
+        const [tokens, rest] = partition(values, isSentinel);
+        // Values of a reference are entity UUIDs whose names are only
+        // resolvable at runtime, so a count is the most this surface can say.
+        const picked =
+          spec.kind === "idMulti"
+            ? rest.length
+              ? [countLabel(rest.length, humanize(spec.columnId).toLowerCase())]
+              : []
+            : rest.map((value) => optionLabel(spec, value) ?? value);
+        const presence = spec.nullable
+          ? tokens
+              .filter((value) => value === FILTER_ANY || value === FILTER_NONE)
+              .map((value) =>
                 describeSentinel(spec.nullable?.label ?? "", value),
               )
-            : []),
-        ];
-        return labels.length
-          ? collapse(labels, MAX_VALUES_PER_FILTER)
-          : undefined;
-      })
-      .with("id", "idMulti", () => {
-        // Values are entity UUIDs and their names are only resolvable at runtime,
-        // so the count is the most this surface can honestly say.
-        const [sentinels, rest] = partition(values, isSentinel);
-        const parts = spec.nullable
-          ? sentinels.map((value) =>
-              describeSentinel(spec.nullable?.label ?? "", value),
-            )
           : [];
-        if (rest.length) {
-          const noun = humanize(spec.columnId).toLowerCase();
-          parts.unshift(countLabel(rest.length, noun));
-        }
+        const joined =
+          picked.length > MAX_VALUES_PER_FILTER
+            ? collapse(picked, MAX_VALUES_PER_FILTER)
+            : picked.join(tokens.includes(FILTER_ALL) ? " and " : " or ");
+        const parts = [...(joined ? [joined] : []), ...presence];
         return parts.length ? parts.join(", ") : undefined;
       })
       .exhaustive()

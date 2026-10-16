@@ -2,6 +2,7 @@ import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
 import type { ManifestWire } from "../../../../../packages/schemas/src/manifest-wire.ts";
 import { capitalize } from "../../../../../packages/shared/src/text-case.ts";
 import {
+  FILTER_ALL,
   FILTER_ANY,
   FILTER_NONE,
 } from "../../../../../packages/schemas/src/filter-sentinel-fields.ts";
@@ -217,6 +218,11 @@ const filterJSON = (
   label: filter.label ?? null,
   options: options(filter.options),
   sentinels: options(filter.sentinels),
+  presenceParam: filter.nullable?.field ?? null,
+  matchParam: filter.match?.field ?? null,
+  subtreeParam: filter.subtree,
+  currentMember: filter.currentMember,
+  singleValue: filter.singleValue !== null,
   // Filter metadata steers web-only rendering.
   wire:
     filter.wire.kind === "param"
@@ -434,7 +440,10 @@ const listViewJSON = (
 
 /** Native saved views send the same wire patch as the browser, never column ids or sentinels. */
 const savedViewFilters = (
-  view: CompiledEntity["inspector"]["list"]["savedViews"][number],
+  view: {
+    id: string;
+    filters: CompiledEntity["inspector"]["list"]["initialFilter"];
+  },
   descriptors: CompiledEntity["filterDescriptors"],
 ) =>
   view.filters.flatMap((filter) => {
@@ -446,11 +455,7 @@ const savedViewFilters = (
     const values = Array.isArray(filter.value)
       ? [...filter.value]
       : [filter.value];
-    const wireFilter = (id: string, values: string[], isList = false) => ({
-      id,
-      values,
-      isList,
-    });
+    const wireFilter = (id: string, values: string[]) => ({ id, values });
     if (descriptor.kind === "range") {
       const value = values[0];
       const expansion = descriptor.options?.find(
@@ -474,25 +479,26 @@ const savedViewFilters = (
       throw new Error(
         `Saved view ${view.id} has a non-parameter filter ${filter.id}.`,
       );
-    const isList =
-      descriptor.kind === "multiselect" || descriptor.kind === "idMulti";
-    if (isList && descriptor.nullable) {
-      const none = values.includes(FILTER_NONE);
-      const any = values.includes(FILTER_ANY);
-      if (none && any) return [];
-      const selected = values.filter(
-        (value) => value !== FILTER_NONE && value !== FILTER_ANY,
-      );
-      return [
-        ...(selected.length
-          ? [wireFilter(descriptor.wire.name, selected, true)]
-          : []),
-        ...(none || any
-          ? [wireFilter(descriptor.nullable.field, [none ? "none" : "has"])]
-          : []),
-      ];
-    }
-    return [wireFilter(descriptor.wire.name, values, isList)];
+    const none = values.includes(FILTER_NONE);
+    const any = values.includes(FILTER_ANY);
+    const all = values.includes(FILTER_ALL);
+    const selected = values.filter(
+      (value) =>
+        value !== FILTER_NONE && value !== FILTER_ANY && value !== FILTER_ALL,
+    );
+    // Any value already includes every picked value.
+    if (none && any) return [];
+    return [
+      ...(selected.length && !any
+        ? [wireFilter(descriptor.wire.name, selected)]
+        : []),
+      ...(descriptor.nullable && (none || any)
+        ? [wireFilter(descriptor.nullable.field, [none ? "none" : "has"])]
+        : []),
+      ...(descriptor.match && all && selected.length
+        ? [wireFilter(descriptor.match.field, ["all"])]
+        : []),
+    ];
   });
 
 const presentationJSON = (
@@ -548,6 +554,11 @@ const presentationJSON = (
       start,
       end,
     })),
+    // The filter a fresh list opens with, as the same wire patch.
+    initialFilters: savedViewFilters(
+      { id: "initialFilter", filters: list.initialFilter },
+      filterDescriptors,
+    ),
     savedViews: list.savedViews.map((view) => ({
       id: view.id,
       label: view.label,

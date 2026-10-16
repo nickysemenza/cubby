@@ -91,6 +91,17 @@ export type RelativeDateFilter = z.infer<typeof relativeDateFilter>;
 export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
   z.union([schema, z.array(schema)]);
 
+const isValueList = <T>(value: T | readonly T[]): value is readonly T[] =>
+  Array.isArray(value);
+
+/** Reads a parsed {@link oneOrMany} value as a list for in-memory matching. */
+export const oneOrManyValues = <T>(
+  value: T | readonly T[] | undefined,
+): readonly T[] | undefined => {
+  if (value === undefined) return undefined;
+  return isValueList(value) ? value : [value];
+};
+
 /**
  * A route asked for an exact entity filter, but its value was not a valid
  * shortcode. This value is deliberately NOT a shortcode: the route boundary
@@ -126,32 +137,45 @@ export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
   oneOrMany(entityFilter(schema));
 
 /**
- * A Ledger Party filter: canonical shortcodes plus `@me`, the signed-in
- * member, which the entity kernel resolves before any repository reads it.
- * Unlike the internal match-nothing value, `@me` is public, so the published
- * pattern advertises it beside the shortcode pattern.
+ * An entity filter that also accepts named tokens beside canonical shortcodes:
+ * `@me`, the signed-in member, which the entity kernel resolves before any
+ * repository reads it, and a declaration's own sentinels (`@household`).
+ * Unlike the internal match-nothing value, tokens are public, so the
+ * published pattern advertises them beside the shortcode pattern.
  */
-export const partyFilter = <T extends z.ZodTypeAny>(
+export const tokenFilter = <T extends z.ZodTypeAny>(
   schema: T,
-  sentinels: readonly string[] = [],
+  tokens: readonly [string, ...string[]],
 ) => {
   const jsonSchema = z.toJSONSchema(schema);
   const shortcode = String(jsonSchema.pattern).replace(/^\^|\$$/gu, "");
-  const tokens = [CURRENT_MEMBER_FILTER, ...sentinels];
+  const sentinels = tokens.filter((token) => token !== CURRENT_MEMBER_FILTER);
+  const member = tokens.includes(CURRENT_MEMBER_FILTER)
+    ? `, ${CURRENT_MEMBER_FILTER} for the signed-in member`
+    : "";
   return z
     .union([entityFilter(schema), ...tokens.map((token) => z.literal(token))])
     .meta({
       type: jsonSchema.type,
       pattern: `^(?:${tokens.join("|")}|${shortcode})$`,
-      description: `${String(jsonSchema.description)}, ${CURRENT_MEMBER_FILTER} for the signed-in member${sentinels.length === 0 ? "" : `, or ${sentinels.join(" / ")}`}`,
+      description: `${String(jsonSchema.description)}${member}${sentinels.length === 0 ? "" : `, or ${sentinels.join(" / ")}`}`,
     });
 };
 
-/** `sentinels` are a declaration's named states beside party codes. */
+export const tokenFilterList = <T extends z.ZodTypeAny>(
+  schema: T,
+  tokens: readonly [string, ...string[]],
+) => oneOrMany(tokenFilter(schema, tokens));
+
+/** A Ledger Party filter offering `@me` (ADR 0018). */
+export const partyFilter = <T extends z.ZodTypeAny>(schema: T) =>
+  tokenFilter(schema, [CURRENT_MEMBER_FILTER]);
+
+/** A Ledger Party filter offering `@me` (ADR 0018), plus any declared sentinels. */
 export const partyFilterList = <T extends z.ZodTypeAny>(
   schema: T,
   sentinels: readonly string[] = [],
-) => oneOrMany(partyFilter(schema, sentinels));
+) => tokenFilterList(schema, [CURRENT_MEMBER_FILTER, ...sentinels]);
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),

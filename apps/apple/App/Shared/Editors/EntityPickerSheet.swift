@@ -247,7 +247,7 @@ struct EntityPickerSheet: View {
                 }
                 // Search stays on the scoped list route; a global search would widen candidates.
                 var scopedFilters = filters
-                if let searchKey { scopedFilters.set(.single(query), for: searchKey) }
+                if let searchKey { scopedFilters.set([query], for: searchKey) }
                 return try await client.progressiveList(
                     descriptor, page: page, pageSize: 25, filters: scopedFilters)
             })

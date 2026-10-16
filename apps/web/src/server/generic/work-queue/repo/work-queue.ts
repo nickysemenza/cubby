@@ -18,7 +18,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
-import { normalizeSorts } from "@cubby/schemas/pagination";
+import { normalizeSorts, oneOrManyValues } from "@cubby/schemas/pagination";
 import { photoGroupProposalState } from "@cubby/schemas/photo-import-run";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
@@ -38,8 +38,8 @@ import {
   type WorkQueueGap,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
-import { parseShortcode } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import { CURRENT_MEMBER_FILTER, parseShortcode } from "@cubby/shared";
+import { or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
@@ -559,6 +559,12 @@ const vendorOf = (uuid: SQL) =>
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'id'/'name' are the response's JSON property names, not vocabulary values.
   sql`(SELECT jsonb_build_object('id', v.shortcode, 'name', v.name) FROM "Vendor" v WHERE v.id = ${uuid} AND v."deletedAt" IS NULL)`;
 
+const textList = (values: readonly string[]): SQL =>
+  sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  );
+
 async function queryWorkQueue(
   db: Database,
   problemSelections: WorkProblemSelections,
@@ -576,8 +582,12 @@ async function queryWorkQueue(
       (fact === "vendor" && input.vendor !== undefined),
   );
   const candidateConditions: SQL[] = [];
-  if (input.source) candidateConditions.push(sql`source = ${input.source}`);
-  if (input.kind) candidateConditions.push(sql`kind = ${input.kind}`);
+  const sources = oneOrManyValues(input.source);
+  if (sources?.length)
+    candidateConditions.push(sql`source IN (${textList(sources)})`);
+  const kinds = oneOrManyValues(input.kind);
+  if (kinds?.length)
+    candidateConditions.push(sql`kind IN (${textList(kinds)})`);
   let needsPriceEvidence = false;
   let needsOnHandEvidence = false;
   const productReadContext: QualityReadContext = {
@@ -599,8 +609,8 @@ async function queryWorkQueue(
   const projection = await workQueueProjection(
     db,
     {
-      source: input.source,
-      kind: input.kind,
+      sources,
+      kinds,
       check: input.check === undefined ? undefined : [input.check].flat(),
       record,
       facts,
@@ -623,19 +633,33 @@ async function queryWorkQueue(
     conditions.push(
       sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners) AND NOT EXISTS (SELECT 1 FROM unnest(owners) owner WHERE owner <> ${currentPartyId}::uuid)))`,
     );
-  else if (input.waitingFor === "me")
-    conditions.push(
-      sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners)))`,
+  else {
+    const waitingFor = oneOrManyValues(input.waitingFor) ?? [];
+    const codes = waitingFor.filter(
+      (value) => value !== CURRENT_MEMBER_FILTER && value !== either,
     );
-  else if (input.waitingFor === "either" || input.waitingFor === "unresolved")
-    conditions.push(sql`waiting_kind = ${input.waitingFor}`);
-  else if (input.waitingFor !== "all")
-    conditions.push(
-      sql`waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode = ${input.waitingFor} AND member.id = ANY(owners))`,
+    // Me is the work I can do (mine or Either); a picked member is only the
+    // work routed to them; Either is shared work.
+    const routed = or(
+      waitingFor.includes(CURRENT_MEMBER_FILTER)
+        ? sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners)))`
+        : undefined,
+      waitingFor.includes(either) ? sql`waiting_kind = ${either}` : undefined,
+      codes.length
+        ? sql`(waiting_kind = ${members} AND EXISTS (SELECT 1 FROM members member WHERE member.shortcode IN (${textList(codes)}) AND member.id = ANY(owners)))`
+        : undefined,
+      input.waitingForPresence === "none"
+        ? sql`waiting_kind = ${unresolved}`
+        : input.waitingForPresence === "has"
+          ? sql`waiting_kind <> ${unresolved}`
+          : undefined,
     );
-  if (input.vendor)
+    if (routed) conditions.push(routed);
+  }
+  const vendors = oneOrManyValues(input.vendor);
+  if (vendors?.length)
     candidateConditions.push(
-      sql`vendor_id = (SELECT v.id FROM "Vendor" v WHERE v.shortcode = ${input.vendor})`,
+      sql`vendor_id IN (SELECT v.id FROM "Vendor" v WHERE v.shortcode IN (${textList(vendors)}))`,
     );
   if (input.query)
     conditions.push(

@@ -1,3 +1,9 @@
+import {
+  FILTER_ALL,
+  FILTER_ANY,
+  FILTER_EXACT,
+  FILTER_NONE,
+} from "@cubby/schemas/filter-sentinel-fields";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -20,12 +26,16 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Switch } from "~/ui/primitives/switch";
 
 import {
   type Filter,
   type FilterBarField,
   hasFilterValue,
+  nextPickedValues,
   operatorFor,
+  pickerValues,
+  withMode,
 } from "./filter-bar-core";
 import { sortableColumns, SortSection } from "./mobile-sort-sheet";
 import type { CubbyTable as Table } from "./table-features";
@@ -56,23 +66,44 @@ function visibleOptions(field: FilterBarField, filter: Filter | undefined) {
     : options;
 }
 
-/** The chip's value text — "any" is the declared-but-inactive state, per DESIGN.md. */
-function filterSummary(
+/**
+ * The chip's value text. "any" is the declared-but-inactive state, per
+ * DESIGN.md; an active Any value reads "has a value" so the two never look
+ * alike. Picked values join with "or", or "and" under Match all.
+ */
+export function filterSummary(
   field: FilterBarField,
   filter: Filter | undefined,
 ): string {
   if (filter === undefined || !isFieldActive(filter)) return "any";
   if (field.type === "text") return filter.values[0] ?? "any";
+  if (filter.values.includes(FILTER_ANY)) return "has a value";
   const labels = new Map(
     visibleOptions(field, filter).map((option) => [option.value, option.label]),
   );
-  return filter.values.map((value) => labels.get(value) ?? value).join(", ");
+  const picked = filter.values
+    .filter(
+      (value) =>
+        value !== FILTER_NONE && value !== FILTER_ALL && value !== FILTER_EXACT,
+    )
+    .map((value) => labels.get(value) ?? value)
+    .join(filter.values.includes(FILTER_ALL) ? " and " : " or ");
+  if (!filter.values.includes(FILTER_NONE)) return picked;
+  return picked ? `${picked} or no value` : "no value";
 }
 
 /**
  * Multiselect editor: the one Picker in `multiple` mode, editing a draft so
  * the table re-queries once, on Apply — Clear and Apply sit in its footer.
+ * Any value / No value lead the roster above its divider; a multi-valued
+ * field adds Match any | Match all, a hierarchical reference its
+ * "Include sub-…" switch.
  */
+const MATCH_OPTIONS = [
+  { value: "any", label: "Match any" },
+  { value: "all", label: "Match all" },
+];
+
 function MultiselectEditor({
   field,
   filter,
@@ -86,19 +117,50 @@ function MultiselectEditor({
 }) {
   const [draft, setDraft] = useState<string[]>(() => filter?.values ?? []);
   const options = visibleOptions(field, filter);
+  const label = field.label ?? field.key;
   useEffect(() => {
     field.onActivate?.(filter?.values ?? []);
   }, [field, filter?.values]);
+  // Inside the picker's popup: anything beside it would sit behind the
+  // popup's modal focus scope, unreachable while the list is open.
+  const header =
+    field.matchAll || field.subtree ? (
+      <>
+        {field.matchAll && (
+          <Picker
+            mode="segmented"
+            label={`Match ${label}`}
+            options={MATCH_OPTIONS}
+            value={draft.includes(FILTER_ALL) ? "all" : "any"}
+            onValueChange={(value) => {
+              if (value) setDraft(withMode(draft, FILTER_ALL, value === "all"));
+            }}
+          />
+        )}
+        {field.subtree && (
+          <label className="flex items-center justify-between gap-3 px-1 text-xs">
+            {field.subtree.label}
+            <Switch
+              checked={!draft.includes(FILTER_EXACT)}
+              onCheckedChange={(checked: boolean) =>
+                setDraft(withMode(draft, FILTER_EXACT, !checked))
+              }
+            />
+          </label>
+        )}
+      </>
+    ) : undefined;
   return (
     <Picker
       multiple
       openOnMount
-      label={`Filter ${field.label ?? field.key}`}
+      label={`Filter ${label}`}
       options={options}
-      values={draft}
-      onValuesChange={setDraft}
+      values={pickerValues(draft)}
+      onValuesChange={(values) => setDraft(nextPickedValues(draft, values))}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
+      header={header}
       footer={
         <>
           <Button

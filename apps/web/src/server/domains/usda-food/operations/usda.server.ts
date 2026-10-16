@@ -1,6 +1,7 @@
 import {
   buildPaginatedResponse,
   normalizeSorts,
+  oneOrManyValues,
 } from "@cubby/schemas/pagination";
 import type { z } from "zod";
 
@@ -88,13 +89,21 @@ export async function suggestUsdaFoodsForProduct(
 
 export const usdaFoodHandlers = implementOperationDomain(usdaFoodContract, {
   list: async (context, input) => {
+    // The `dataTypeFilter` any-of narrows the `dataTypes` set, which (like a
+    // single `dataTypeFilter`) overrides `foodsOnly`.
+    const picked = oneOrManyValues(input.filters.dataTypeFilter);
+    const dataTypes = picked?.length
+      ? picked.filter((type) => input.filters.dataTypes?.includes(type) ?? true)
+      : input.filters.dataTypes;
+    if (picked?.length && !dataTypes?.length)
+      return buildPaginatedResponse(input.pagination, [], 0);
     const { data, count } = await context.usdaService.listFoods(
       input.filters.nameFilter,
-      input.filters.dataTypeFilter,
+      undefined,
       normalizeSorts(input.sort)[0]!,
       input.pagination,
       input.filters.foodsOnly,
-      input.filters.dataTypes,
+      dataTypes,
       input.filters.linkedProductsOnly,
     );
     return buildPaginatedResponse(input.pagination, data, count);

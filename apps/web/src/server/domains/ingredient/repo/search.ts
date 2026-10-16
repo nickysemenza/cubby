@@ -39,6 +39,7 @@ import {
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import {
   buildSearchConditions,
+  flagCondition,
   getDb,
   idSetPresence,
   imageOrder,
@@ -573,11 +574,14 @@ export const buildIngredientListWhere = async (
     ),
   );
 
-  if (filters.mappingGap === "gap")
-    computed.push(
-      inArray(ingredient.id, ingredientIdsInLiveRecipes),
-      notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
-    );
+  computed.push(
+    flagCondition(filters.mappingGap, () =>
+      and(
+        inArray(ingredient.id, ingredientIdsInLiveRecipes),
+        notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
+      ),
+    ),
+  );
 
   const whereClause = ingredientScaffold.where(filters, computed);
   return whereClause;

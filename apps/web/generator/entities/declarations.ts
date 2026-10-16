@@ -73,15 +73,7 @@ export type FilterDescriptor = Readonly<{
   columnId: string;
   field: string | null;
   urlKey: string;
-  kind:
-    | "text"
-    | "select"
-    | "multiselect"
-    | "presence"
-    | "boolean"
-    | "id"
-    | "idMulti"
-    | "range";
+  kind: "text" | "multiselect" | "presence" | "boolean" | "idMulti" | "range";
   placeholder: string;
   options:
     | readonly Readonly<{
@@ -112,7 +104,16 @@ export type FilterDescriptor = Readonly<{
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
   urlOnly: boolean;
+  /** The Any value / No value request key (`presenceFilter`). */
   nullable: Readonly<{ field: string; label: string }> | null;
+  /** The Match all request key of a multi-valued compiled filter. */
+  match: Readonly<{ field: string }> | null;
+  /** The generated "Include sub-…" toggle's request key. */
+  subtree: string | null;
+  /** Accepts `@me` (ADR 0018). */
+  currentMember: boolean;
+  /** The declared reason this filter accepts one value, not an any-of. */
+  singleValue: string | null;
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;

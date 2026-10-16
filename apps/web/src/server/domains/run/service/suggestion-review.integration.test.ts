@@ -835,7 +835,11 @@ describe("Suggestion review", () => {
       const result = await executeEntity(context, {
         action: "list",
         entity: "product",
-        filters: { suggestionPresenceFilter: kind },
+        // Any value replaced the old `any` option.
+        filters:
+          kind === "any"
+            ? { suggestionPresenceFilter: "has" }
+            : { suggestionKind: [kind] },
         pagination: { pageIndex: 0, pageSize: 100 },
       });
       if (result.action !== "list") throw new Error("Expected list result");

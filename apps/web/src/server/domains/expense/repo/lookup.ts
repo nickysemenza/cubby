@@ -1,5 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { expenseListItemOut } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
@@ -21,6 +22,7 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
+  anyOfCondition,
   eqAny,
   formatSearchTerm,
   getDb,
@@ -206,15 +208,12 @@ const vendorFilterCondition = (
 
 const relativeDateCondition = (
   relative: ExpenseFilters["dateRelative"],
-): SQL | undefined => {
-  if (relative === "beforeToday") {
-    return lt(expense.date, householdLocalDate());
-  }
-  if (relative === "onOrBeforeToday") {
-    return lte(expense.date, householdLocalDate());
-  }
-  return undefined;
-};
+): SQL | undefined =>
+  anyOfCondition(relative, (value) =>
+    value === "beforeToday"
+      ? lt(expense.date, householdLocalDate())
+      : lte(expense.date, householdLocalDate()),
+  );
 
 const disposalPurchaseCondition = (
   db: Database,
@@ -250,7 +249,7 @@ const loadExpenseFilterReferences = async (
   const productIds = await resolveAllPresent(
     db,
     "product",
-    filters.productId ? [filters.productId] : [],
+    oneOrManyValues(filters.productId) ?? [],
   );
   return { vendorIds, purchaseIds, productIds };
 };
@@ -368,8 +367,9 @@ export const buildExpenseWhereClause = async (
     // plain SQL comparison semantics; `costPresenceFilter: "none"` is the
     // filter for "no cost recorded".
     presenceCondition(expense.cost, filters.costPresenceFilter),
-    filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
-    filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
+    anyOfCondition(filters.costSign, (sign) =>
+      sign === "negative" ? lt(expense.cost, 0) : gt(expense.cost, 0),
+    ),
     disposalPurchaseCondition(db, filters.disposalPurchasePresenceFilter),
     // Quantity is nullable evidence, never an inferred one-unit default.
     // Bounds naturally exclude unknown rows; the presence filter is the

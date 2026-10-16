@@ -602,7 +602,7 @@ struct EntityDetailContent: View {
         timelineError = nil
         do {
             timeline = try await appModel.client.timeline(
-                descriptor, filters: EntityFilterState(["ids": .many([row.id])]))
+                descriptor, filters: EntityFilterState(["ids": [row.id]]))
         } catch {
             timelineError = error.userMessage
             Diagnostics.report(error, context: "detail.timeline")

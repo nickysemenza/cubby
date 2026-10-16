@@ -80,6 +80,7 @@ import {
   assertNoDependents,
   associatePendingImages,
   countWhere,
+  flagCondition,
   formatSearchTerm,
   getDb,
   idSetPresence,
@@ -88,11 +89,11 @@ import {
   type ListReadIntent,
   mapImages,
   notDeleted,
-  shortcodeSetCondition,
-  textArrayMatches,
   presenceCondition,
   rangeConditions,
   relations,
+  shortcodeSetCondition,
+  textArrayMatches,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
@@ -851,58 +852,58 @@ export const buildProductWhere = async (
       filters.servingAsLocationPresenceFilter,
       productIdsServingAsLocations,
     ),
-    filters.inventoryMultiplicity === "duplicate_within_placement"
-      ? and(
-          eq(product.expectedQuantity, 1),
-          inArray(product.id, productIdsWithDuplicatePlacement),
-        )
-      : undefined,
+    flagCondition(filters.inventoryMultiplicity, () =>
+      and(
+        eq(product.expectedQuantity, 1),
+        inArray(product.id, productIdsWithDuplicatePlacement),
+      ),
+    ),
   ];
 
   const inventoryConditions = () => [
-    filters.kitAccounting === "double_counted"
-      ? and(
-          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
-          sql`${partsAccountedKitsSql(product.id)} > 0`,
-          sql`${onHandUnitsFilterSql(product.id, readContext)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
-        )
-      : undefined,
-    filters.ownershipReconciliation === "disposed_still_on_hand"
-      ? and(
-          inArray(product.id, productIdsWithRecordedDisposal),
-          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
-          sql`${expectedQuantityFilterSql(product.id)} <= 0`,
-          sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
-        )
-      : undefined,
-    filters.conversionCoverage === "partial"
-      ? inArray(
-          product.id,
-          dbClient
-            .select({ id: productConversionCoverage.productId })
-            .from(productConversionCoverage)
-            .where(
-              and(
-                currentProductConversionCoverageCondition(),
-                eq(productConversionCoverage.coverageTier, "partial"),
-              ),
+    flagCondition(filters.kitAccounting, () =>
+      and(
+        sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
+        sql`${partsAccountedKitsSql(product.id)} > 0`,
+        sql`${onHandUnitsFilterSql(product.id, readContext)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
+      ),
+    ),
+    flagCondition(filters.ownershipReconciliation, () =>
+      and(
+        inArray(product.id, productIdsWithRecordedDisposal),
+        sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
+        sql`${expectedQuantityFilterSql(product.id)} <= 0`,
+        sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
+      ),
+    ),
+    flagCondition(filters.conversionCoverage, () =>
+      inArray(
+        product.id,
+        dbClient
+          .select({ id: productConversionCoverage.productId })
+          .from(productConversionCoverage)
+          .where(
+            and(
+              currentProductConversionCoverageCondition(),
+              eq(productConversionCoverage.coverageTier, "partial"),
             ),
-        )
-      : undefined,
-    filters.conversionTopology === "islanded"
-      ? inArray(
-          product.id,
-          dbClient
-            .select({ id: productConversionCoverage.productId })
-            .from(productConversionCoverage)
-            .where(
-              and(
-                currentProductConversionCoverageCondition(),
-                sql`${productConversionCoverage.islandCount} >= 2`,
-              ),
+          ),
+      ),
+    ),
+    flagCondition(filters.conversionTopology, () =>
+      inArray(
+        product.id,
+        dbClient
+          .select({ id: productConversionCoverage.productId })
+          .from(productConversionCoverage)
+          .where(
+            and(
+              currentProductConversionCoverageCondition(),
+              sql`${productConversionCoverage.islandCount} >= 2`,
             ),
-        )
-      : undefined,
+          ),
+      ),
+    ),
     ...rangeConditions(
       productExpenseCountFilterSql(product.id),
       filters,

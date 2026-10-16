@@ -17,6 +17,7 @@ import { domainLayersRule } from "./rules/domain-layers.ts";
 import { noDomainBarrelRule } from "./rules/no-domain-barrel.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
 import { noHandRolledPluralRule } from "./rules/no-hand-rolled-plural.ts";
+import { noHandWrittenFilterPredicateRule } from "./rules/no-hand-written-filter-predicate.ts";
 import { noRawEnumLiteralInSqlRule } from "./rules/no-raw-enum-literal-in-sql.ts";
 import { noSwallowedCatchRule } from "./rules/no-swallowed-catch.ts";
 import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
@@ -36,6 +37,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-hand-parsed-create-input": noHandParsedCreateInputRule,
     "no-hand-rolled-plural": noHandRolledPluralRule,
     "no-hand-rolled-record-list": noHandRolledRecordListRule,
+    "no-hand-written-filter-predicate": noHandWrittenFilterPredicateRule,
     "no-kernel-action-guard": noKernelActionGuardRule,
     "no-native-select": noNativeSelectRule,
     "no-raw-value-control": noRawValueControlRule,

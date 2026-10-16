@@ -11,14 +11,15 @@ struct EntityFilterDraft: Hashable {
         self.state = state
     }
 
-    /// Ledger Party filters accept this literal alongside shortcodes; the server resolves it to
-    /// the signed-in member (docs/adr/0018-current-member-filter-token.md).
+    /// A filter that accepts it (`currentMember`) takes this literal alongside shortcodes; the
+    /// server resolves it to the signed-in member (docs/adr/0018-current-member-filter-token.md).
     static let currentMemberToken = "@me"
 
-    /// The named states an id filter accepts beside record codes, sent unbranded: "Me" on any
-    /// Ledger Party filter, then the declaration's own `sentinels` (an Owner filter's Household).
+    /// The named states an id filter accepts beside record codes, sent unbranded: "Me" when the
+    /// filter declares `currentMember`, then the declaration's own `sentinels` (an Owner
+    /// filter's Household).
     static func tokens(_ filter: FilterDescriptor) -> [LabeledOption] {
-        (filter.targetEntity == .ledgerParty ? [LabeledOption(value: currentMemberToken, label: "Me")] : [])
+        (filter.currentMember ? [LabeledOption(value: currentMemberToken, label: "Me")] : [])
             + (filter.sentinels ?? [])
     }
 
@@ -27,40 +28,102 @@ struct EntityFilterDraft: Hashable {
         tokens(filter).first { $0.value == value }?.label ?? value
     }
 
-    /// `text`, `select`, `id`: the one string under the parameter, empty when unset.
-    func single(_ filter: FilterDescriptor) -> String {
-        guard case .param(let name) = filter.wire else { return "" }
-        return state[name]?.strings.first ?? ""
-    }
-
-    mutating func setSingle(_ value: String, for filter: FilterDescriptor) {
-        guard case .param(let name) = filter.wire else { return }
-        state.set(.single(value), for: name)
-    }
-
-    func selects(_ token: String, in filter: FilterDescriptor) -> Bool {
-        (filter.kind == .idMulti ? many(filter) : [single(filter)]).contains(token)
-    }
-
-    /// Adds or removes a token; other picked ids stay (a single-valued filter holds one value).
-    mutating func set(_ token: String, _ on: Bool, for filter: FilterDescriptor) {
-        if filter.kind == .idMulti {
-            let rest = many(filter).filter { $0 != token }
-            setMany(on ? [token] + rest : rest, for: filter)
-        } else if on || single(filter) == token {
-            setSingle(on ? token : "", for: filter)
+    /// The filters the sheet renders as sections. A reference filter's generated subtree toggle
+    /// and a value filter's presence parameter render inside that filter's own section, so their
+    /// standalone descriptors would write the same parameter twice.
+    static func sections(of descriptor: EntityDescriptor) -> [FilterDescriptor] {
+        let embedded = Set(
+            descriptor.filters.flatMap { [$0.subtreeParam, $0.presenceParam].compactMap(\.self) })
+        return descriptor.filters.filter { filter in
+            guard case .param(let name) = filter.wire else { return true }
+            return !embedded.contains(name)
         }
     }
 
-    /// `multiselect`, `idMulti`: the array under the parameter.
-    func many(_ filter: FilterDescriptor) -> [String] {
-        guard case .param(let name) = filter.wire else { return [] }
-        return state[name]?.strings ?? []
+    /// `text`, `boolean`, `presence`, and a one-parameter `range`: the one string under the
+    /// parameter, empty when unset.
+    func value(_ filter: FilterDescriptor) -> String {
+        values(filter).first ?? ""
     }
 
-    mutating func setMany(_ values: [String], for filter: FilterDescriptor) {
+    mutating func setValue(_ value: String, for filter: FilterDescriptor) {
         guard case .param(let name) = filter.wire else { return }
-        state.set(.many(values), for: name)
+        state.set([value], for: name)
+    }
+
+    /// `multiselect`, `idMulti`: the picked values (any-of).
+    func values(_ filter: FilterDescriptor) -> [String] {
+        guard case .param(let name) = filter.wire else { return [] }
+        return state[name] ?? []
+    }
+
+    /// Picking a specific value clears Any value, which already includes it; No value stays.
+    mutating func setValues(_ values: [String], for filter: FilterDescriptor) {
+        guard case .param(let name) = filter.wire else { return }
+        state.set(values, for: name)
+        if !values.isEmpty, presence(filter) == Self.anyValue, let param = filter.presenceParam {
+            state.remove(param)
+        }
+    }
+
+    func selects(_ value: String, in filter: FilterDescriptor) -> Bool {
+        values(filter).contains(value)
+    }
+
+    /// Adds or removes one value; the other picks stay.
+    mutating func set(_ value: String, _ on: Bool, for filter: FilterDescriptor) {
+        let rest = values(filter).filter { $0 != value }
+        setValues(on ? [value] + rest : rest, for: filter)
+    }
+
+    /// The presence parameter's values: Any value (`has`) and No value (`none`).
+    static let anyValue = "has"
+    static let noValue = "none"
+
+    /// `has`, `none`, or nil when the filter has no presence parameter or it is unset.
+    func presence(_ filter: FilterDescriptor) -> String? {
+        filter.presenceParam.flatMap { state[$0]?.first }
+    }
+
+    /// Any value includes every specific value, so turning it on clears them and No value.
+    mutating func setAnyValue(_ on: Bool, for filter: FilterDescriptor) {
+        guard let param = filter.presenceParam else { return }
+        if on {
+            if case .param(let name) = filter.wire { state.remove(name) }
+            state.set([Self.anyValue], for: param)
+        } else if presence(filter) == Self.anyValue {
+            state.remove(param)
+        }
+    }
+
+    /// No value combines with specific values ("A or no value") and replaces Any value.
+    mutating func setNoValue(_ on: Bool, for filter: FilterDescriptor) {
+        guard let param = filter.presenceParam else { return }
+        if on {
+            state.set([Self.noValue], for: param)
+        } else if presence(filter) == Self.noValue {
+            state.remove(param)
+        }
+    }
+
+    /// Match all (`matchParam=all`) on a multi-valued field; absent means Match any.
+    func matchesAll(_ filter: FilterDescriptor) -> Bool {
+        filter.matchParam.flatMap { state[$0]?.first } == "all"
+    }
+
+    mutating func setMatchesAll(_ on: Bool, for filter: FilterDescriptor) {
+        guard let param = filter.matchParam else { return }
+        state.set(on ? ["all"] : [], for: param)
+    }
+
+    /// Include sub-‹entity› on a hierarchical reference: on by default, so only "false" is sent.
+    func includesSubtree(_ filter: FilterDescriptor) -> Bool {
+        filter.subtreeParam.flatMap { state[$0]?.first } != "false"
+    }
+
+    mutating func setIncludesSubtree(_ on: Bool, for filter: FilterDescriptor) {
+        guard let param = filter.subtreeParam else { return }
+        state.set(on ? [] : ["false"], for: param)
     }
 
     /// `range`: the `from`/`to` bounds and the presence arm, each empty when unset.
@@ -79,25 +142,31 @@ struct EntityFilterDraft: Hashable {
     func range(_ filter: FilterDescriptor) -> Range {
         guard case .range(let from, let to, let presence) = filter.wire else { return Range() }
         return Range(
-            from: state[from]?.strings.first ?? "",
-            to: state[to]?.strings.first ?? "",
-            presence: presence.flatMap { state[$0]?.strings.first } ?? "")
+            from: state[from]?.first ?? "",
+            to: state[to]?.first ?? "",
+            presence: presence.flatMap { state[$0]?.first } ?? "")
     }
 
     mutating func setRange(_ range: Range, for filter: FilterDescriptor) {
         guard case .range(let from, let to, let presence) = filter.wire else { return }
-        state.set(.single(range.from), for: from)
-        state.set(.single(range.to), for: to)
-        if let presence { state.set(.single(range.presence), for: presence) }
+        state.set([range.from], for: from)
+        state.set([range.to], for: to)
+        if let presence { state.set([range.presence], for: presence) }
+    }
+
+    /// Every parameter the filter's section writes: its wire names plus presence, match, and
+    /// subtree parameters.
+    private static func parameters(_ filter: FilterDescriptor) -> [String] {
+        filter.wire.names + [filter.presenceParam, filter.matchParam, filter.subtreeParam].compactMap(\.self)
     }
 
     /// Whether any of the filter's parameters carry a value.
     func isActive(_ filter: FilterDescriptor) -> Bool {
-        filter.wire.names.contains { state[$0] != nil }
+        Self.parameters(filter).contains { state[$0] != nil }
     }
 
     mutating func clear(_ filter: FilterDescriptor) {
-        for name in filter.wire.names { state.remove(name) }
+        for name in Self.parameters(filter) { state.remove(name) }
     }
 
     /// A `range` filter edits dates when its column is a date/timestamp field, else numbers.
@@ -109,7 +178,7 @@ struct EntityFilterDraft: Hashable {
         return field.kind == .date || field.kind == .timestamp
     }
 
-    /// The choices a `select`/`multiselect` offers: declared `options`, else the list route's
+    /// The choices a `multiselect` offers: declared `options`, else the list route's
     /// enum values under the wire name.
     struct Option: Hashable, Identifiable {
         let value: String
@@ -137,8 +206,8 @@ struct EntityFilterDraft: Hashable {
     }
 }
 
-/// Every declared filter of one entity as a form, applied in one go. The eight `EntityFilterKind`s
-/// map to native controls; a filter the sheet cannot edit (an id picker whose target has no
+/// Every declared filter of one entity as a form, applied in one go. Each `EntityFilterKind`
+/// maps to a native control; a filter the sheet cannot edit (an id picker whose target has no
 /// descriptor) is left untouched rather than dropped.
 struct EntityFilterSheet: View {
     let descriptor: EntityDescriptor
@@ -165,7 +234,7 @@ struct EntityFilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                ForEach(descriptor.filters, id: \.columnId) { filter in
+                ForEach(EntityFilterDraft.sections(of: descriptor), id: \.columnId) { filter in
                     Section {
                         control(for: filter)
                     } header: {
@@ -205,22 +274,15 @@ struct EntityFilterSheet: View {
             }
             .sheet(item: $picking) { filter in
                 if let target = filter.targetEntity {
+                    // A declared `singleValue` scope filter takes one record.
                     EntityPickerSheet(
-                        target: target,
-                        multiple: filter.kind == .idMulti,
-                        selected: pickedIDs(filter)
+                        target: target, multiple: filter.singleValue != true, selected: pickedIDs(filter)
                     ) { picks in
                         // The picker never sees a token ("Me", Household), so keep them across a pick.
                         let kept = EntityFilterDraft.tokens(filter).map(\.value).filter {
                             draft.selects($0, in: filter)
                         }
-                        if filter.kind == .idMulti {
-                            draft.setMany(kept + picks.map(\.id), for: filter)
-                        } else if let first = picks.first {
-                            draft.setSingle(first.id, for: filter)
-                        } else if kept.isEmpty {
-                            draft.setSingle("", for: filter)
-                        }
+                        draft.setValues(kept + picks.map(\.id), for: filter)
                     }
                 }
             }
@@ -231,127 +293,36 @@ struct EntityFilterSheet: View {
     /// The ids the picker preselects: real records only, never a token.
     private func pickedIDs(_ filter: FilterDescriptor) -> [String] {
         let tokens = Set(EntityFilterDraft.tokens(filter).map(\.value))
-        return (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
-            .filter { !$0.isEmpty && !tokens.contains($0) }
+        return draft.values(filter).filter { !tokens.contains($0) }
+    }
+
+    private func valueBinding(_ filter: FilterDescriptor) -> Binding<String> {
+        Binding(get: { draft.value(filter) }, set: { draft.setValue($0, for: filter) })
     }
 
     @ViewBuilder
     private func control(for filter: FilterDescriptor) -> some View {
         switch filter.kind {
         case .text:
-            TextField(
-                filter.placeholder,
-                text: Binding(get: { draft.single(filter) }, set: { draft.setSingle($0, for: filter) })
-            )
-            .textFieldStyle(.plain)
-        case .select:
-            Picker(
-                EntityFilterDraft.label(for: filter, in: descriptor),
-                selection: Binding(get: { draft.single(filter) }, set: { draft.setSingle($0, for: filter) })
-            ) {
-                Text("Any").tag("")
-                ForEach(EntityFilterDraft.options(for: filter, in: descriptor)) { option in
-                    Text(option.label).tag(option.value)
-                }
-            }
-            .labelsHidden()
+            TextField(filter.placeholder, text: valueBinding(filter))
+                .textFieldStyle(.plain)
         case .multiselect:
-            let selected = Set(draft.many(filter))
-            let options = EntityFilterDraft.options(for: filter, in: descriptor)
-            // The server supplies these choices to the web filter bar (distinct column values);
-            // native has no such read, so an option-less multiselect takes typed values.
-            if options.isEmpty {
-                ForEach(draft.many(filter), id: \.self) { value in
-                    HStack {
-                        Text(value)
-                        Spacer()
-                        Button("Remove", systemImage: "xmark.circle.fill") {
-                            draft.setMany(draft.many(filter).filter { $0 != value }, for: filter)
-                        }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.secondary)
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Remove \(value)")
-                    }
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-                TextField(
-                    filter.placeholder,
-                    text: Binding(
-                        get: { pendingTokens[filter.columnId] ?? "" },
-                        set: { pendingTokens[filter.columnId] = $0 })
-                )
-                .onSubmit {
-                    let value = (pendingTokens[filter.columnId] ?? "").trimmingCharacters(in: .whitespaces)
-                    guard !value.isEmpty, !selected.contains(value) else { return }
-                    draft.setMany(draft.many(filter) + [value], for: filter)
-                    pendingTokens[filter.columnId] = nil
-                }
-            }
-            ForEach(options) { option in
-                Button {
-                    var values = draft.many(filter)
-                    if let index = values.firstIndex(of: option.value) {
-                        values.remove(at: index)
-                    } else {
-                        values.append(option.value)
-                    }
-                    draft.setMany(values, for: filter)
-                } label: {
-                    HStack {
-                        Text(option.label).foregroundStyle(FieldGuideTokens.graphite)
-                        Spacer()
-                        if selected.contains(option.value) {
-                            Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
-                        }
-                    }
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected.contains(option.value) ? .isSelected : [])
-            }
+            valueModes(filter)
+            multiselectValues(filter)
+            subtreeToggle(filter)
+        case .idMulti:
+            valueModes(filter)
+            idValues(filter)
+            subtreeToggle(filter)
         case .presence:
             threeState(filter, on: ("has", "Has"), off: ("none", "None"))
         case .boolean:
             threeState(filter, on: ("true", "Yes"), off: ("false", "No"))
-        case .id, .idMulti:
-            let ids = (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
-                .filter { !$0.isEmpty }
-                .map { EntityFilterDraft.displayName(forFilterValue: $0, in: filter) }
-            ForEach(EntityFilterDraft.tokens(filter), id: \.value) { token in
-                Toggle(
-                    token.label,
-                    isOn: Binding(
-                        get: { draft.selects(token.value, in: filter) },
-                        set: { draft.set(token.value, $0, for: filter) })
-                )
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-                // `@me` → `filter.<column>.me`, `@household` → `filter.<column>.household`.
-                .accessibilityIdentifier("filter.\(filter.columnId).\(token.value.trimmingPrefix("@"))")
-            }
-            Button {
-                picking = filter
-            } label: {
-                LabeledContent(filter.kind == .idMulti ? "Choose…" : "Choose one…") {
-                    Text(ids.isEmpty ? "Any" : ids.joined(separator: ", "))
-                        .font(ids.isEmpty ? .fieldGuideBody : .fieldGuideCode)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(filter.targetEntity == nil)
         case .range:
             // A `range` bound to one parameter (product `price`) is its presence arm alone.
             if case .param = filter.wire {
-                Picker(
-                    EntityFilterDraft.label(for: filter, in: descriptor),
-                    selection: Binding(
-                        get: { draft.single(filter) }, set: { draft.setSingle($0, for: filter) })
-                ) {
+                Picker(EntityFilterDraft.label(for: filter, in: descriptor), selection: valueBinding(filter))
+                {
                     Text("Any").tag("")
                     ForEach(EntityFilterDraft.options(for: filter, in: descriptor)) { option in
                         Text(option.label).tag(option.value)
@@ -364,13 +335,153 @@ struct EntityFilterSheet: View {
         }
     }
 
+    /// The rows above a value filter's values: Match any | Match all on a multi-valued field,
+    /// then Any value and No value on a nullable one. The grouped form's row separator below them
+    /// is the divider from the values.
+    @ViewBuilder
+    private func valueModes(_ filter: FilterDescriptor) -> some View {
+        if filter.matchParam != nil {
+            Picker(
+                "Match",
+                selection: Binding(
+                    get: { draft.matchesAll(filter) }, set: { draft.setMatchesAll($0, for: filter) })
+            ) {
+                Text("Match any").tag(false)
+                Text("Match all").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityIdentifier("filter.\(filter.columnId).matchAll")
+        }
+        if filter.presenceParam != nil {
+            checkRow(
+                "Any value", selected: draft.presence(filter) == EntityFilterDraft.anyValue,
+                identifier: "filter.\(filter.columnId).any"
+            ) { draft.setAnyValue($0, for: filter) }
+            checkRow(
+                "No value", selected: draft.presence(filter) == EntityFilterDraft.noValue,
+                identifier: "filter.\(filter.columnId).none"
+            ) { draft.setNoValue($0, for: filter) }
+        }
+    }
+
+    @ViewBuilder
+    private func multiselectValues(_ filter: FilterDescriptor) -> some View {
+        let selected = Set(draft.values(filter))
+        let options = EntityFilterDraft.options(for: filter, in: descriptor)
+        // The server supplies these choices to the web filter bar (distinct column values);
+        // native has no such read, so an option-less multiselect takes typed values.
+        if options.isEmpty {
+            ForEach(draft.values(filter), id: \.self) { value in
+                HStack {
+                    Text(value)
+                    Spacer()
+                    Button("Remove", systemImage: "xmark.circle.fill") {
+                        draft.set(value, false, for: filter)
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove \(value)")
+                }
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+            TextField(
+                filter.placeholder,
+                text: Binding(
+                    get: { pendingTokens[filter.columnId] ?? "" },
+                    set: { pendingTokens[filter.columnId] = $0 })
+            )
+            .onSubmit {
+                let value = (pendingTokens[filter.columnId] ?? "").trimmingCharacters(in: .whitespaces)
+                guard !value.isEmpty, !selected.contains(value) else { return }
+                draft.setValues(draft.values(filter) + [value], for: filter)
+                pendingTokens[filter.columnId] = nil
+            }
+        }
+        ForEach(options) { option in
+            checkRow(
+                option.label, selected: selected.contains(option.value),
+                identifier: "filter.\(filter.columnId).value.\(option.value)"
+            ) {
+                draft.set(option.value, $0, for: filter)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func idValues(_ filter: FilterDescriptor) -> some View {
+        let ids = pickedIDs(filter)
+        ForEach(EntityFilterDraft.tokens(filter), id: \.value) { token in
+            Toggle(
+                token.label,
+                isOn: Binding(
+                    get: { draft.selects(token.value, in: filter) },
+                    set: { draft.set(token.value, $0, for: filter) })
+            )
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            // `@me` → `filter.<column>.me`, `@household` → `filter.<column>.household`.
+            .accessibilityIdentifier("filter.\(filter.columnId).\(token.value.trimmingPrefix("@"))")
+        }
+        Button {
+            picking = filter
+        } label: {
+            LabeledContent("Choose…") {
+                Text(ids.isEmpty ? "Any" : ids.joined(separator: ", "))
+                    .font(ids.isEmpty ? .fieldGuideBody : .fieldGuideCode)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(filter.targetEntity == nil)
+    }
+
+    /// Include sub-‹entity›: the toggle's own descriptor supplies its label.
+    @ViewBuilder
+    private func subtreeToggle(_ filter: FilterDescriptor) -> some View {
+        if let param = filter.subtreeParam {
+            let own = descriptor.filters.first { $0.wire.names == [param] }
+            let target = filter.targetEntity.map { EntityCatalog[$0].plural.lowercased() } ?? "records"
+            let label = own?.label ?? "Include sub-\(target)"
+            Toggle(
+                label,
+                isOn: Binding(
+                    get: { draft.includesSubtree(filter) }, set: { draft.setIncludesSubtree($0, for: filter) }
+                )
+            )
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            .accessibilityIdentifier("filter.\(filter.columnId).subtree")
+        }
+    }
+
+    private func checkRow(
+        _ label: String, selected: Bool, identifier: String, toggle: @escaping (Bool) -> Void
+    ) -> some View {
+        Button {
+            toggle(!selected)
+        } label: {
+            HStack {
+                Text(label).foregroundStyle(FieldGuideTokens.graphite)
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
+                }
+            }
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+    }
+
     private func threeState(_ filter: FilterDescriptor, on: (String, String), off: (String, String))
         -> some View
     {
-        Picker(
-            EntityFilterDraft.label(for: filter, in: descriptor),
-            selection: Binding(get: { draft.single(filter) }, set: { draft.setSingle($0, for: filter) })
-        ) {
+        Picker(EntityFilterDraft.label(for: filter, in: descriptor), selection: valueBinding(filter)) {
             Text("Any").tag("")
             Text(on.1).tag(on.0)
             Text(off.1).tag(off.0)

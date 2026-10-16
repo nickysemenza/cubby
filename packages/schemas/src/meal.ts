@@ -37,7 +37,7 @@ import {
   nutritionTotalsPartial,
   measureEstimate,
 } from "./nutrition";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
 import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
 export {
@@ -116,14 +116,8 @@ export const mealRecipeIdInput = z.object({
 
 export const mealFilterFields = {
   ...mealBaseFilterFields,
-  /**
-   * `meal.mealType` is nullable, so `"none"` is the unslotted worklist. OR-ed
-   * with `mealType` rather than narrowing it (see
-   * `taskFilterFields.projectPresenceFilter`).
-   */
-  mealTypePresenceFilter: presenceFilter,
   recipeCostCoverage: z
-    .enum(["understated"])
+    .boolean()
     .optional()
     .describe(
       "Meals with a live recipe whose priced ingredients are incomplete.",

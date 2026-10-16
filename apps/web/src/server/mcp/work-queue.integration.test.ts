@@ -5,11 +5,12 @@ import {
   workQueueHouseholdInput,
   workQueueOutSchema,
 } from "@cubby/schemas/work-queue";
-import { generateShortcode } from "@cubby/shared";
+import { CURRENT_MEMBER_FILTER, generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { type z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -608,7 +609,7 @@ describe("member actionable Work queue", () => {
         workQueueHouseholdInput.parse({
           source: "research",
           query: id,
-          waitingFor: "unresolved",
+          waitingForPresence: "none",
         }),
         false,
       );
@@ -653,7 +654,7 @@ describe("member actionable Work queue", () => {
         sourceOwner.id,
         workQueueHouseholdInput.parse({
           source: "finding",
-          waitingFor: "unresolved",
+          waitingForPresence: "none",
           query: target,
         }),
         false,
@@ -1132,7 +1133,7 @@ describe("member actionable Work queue", () => {
     const overview = await readWorkQueue(
       ctx.db,
       first.id,
-      workQueueHouseholdInput.parse({ waitingFor: "unresolved" }),
+      workQueueHouseholdInput.parse({ waitingForPresence: "none" }),
       false,
     );
     expect(overview.items.map((row) => row.id)).toContain(
@@ -1158,6 +1159,47 @@ describe("member actionable Work queue", () => {
     expect(
       overview.items.every((row) => row.waitingFor.kind === "unresolved"),
     ).toBe(true);
+    // Waiting for is any-of: a member pick also matches Either work, `@me`
+    // is the reader, and No value (Unresolved) ORs beside them.
+    const household = async (input: z.input<typeof workQueueHouseholdInput>) =>
+      (
+        await readWorkQueue(
+          ctx.db,
+          first.id,
+          workQueueHouseholdInput.parse(input),
+          false,
+        )
+      ).items.map((row) => row.id);
+    // A picked member is only the work routed to them, never shared work.
+    const forSecond = await household({ waitingFor: second.shortcode });
+    expect(forSecond).toContain(theirs.shortcode);
+    expect(forSecond).not.toContain(shared.id);
+    expect(forSecond).not.toContain(mine.shortcode);
+    const sharedOrSecond = await household({
+      waitingFor: ["either", second.shortcode],
+    });
+    expect(sharedOrSecond).toEqual(
+      expect.arrayContaining([shared.id, theirs.shortcode]),
+    );
+    expect(sharedOrSecond).not.toContain(mine.shortcode);
+    expect(forSecond).not.toContain(unknownPurchase.shortcode);
+    const mineOrUnresolved = await household({
+      waitingFor: ["@me"],
+      waitingForPresence: "none",
+    });
+    expect(mineOrUnresolved).toEqual(
+      expect.arrayContaining([
+        mine.shortcode,
+        shared.id,
+        unknownPurchase.shortcode,
+      ]),
+    );
+    expect(mineOrUnresolved).not.toContain(theirs.shortcode);
+    expect(
+      await household({
+        waitingFor: [CURRENT_MEMBER_FILTER, second.shortcode],
+      }),
+    ).toEqual(expect.arrayContaining([mine.shortcode, theirs.shortcode]));
     const read = (actorUserId: typeof otherUserId, fields = {}) =>
       callMcpTool(
         createMcpServer(),

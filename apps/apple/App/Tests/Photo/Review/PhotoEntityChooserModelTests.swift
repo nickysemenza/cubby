@@ -61,7 +61,7 @@ struct PhotoEntityChooserModelTests {
                     await (call == 1 ? firstQuery : secondQuery).hold()
                     return Self.page([Self.row("MEA-\(query)", date: "2026-08-01")], page: page, total: 1)
                 }
-                if let day = filters["from"]?.strings.first {
+                if let day = filters["from"]?.first {
                     if page == 1, day == "2026-09-05" { await scopeB.hold() }
                     if page == 1, day == "2026-09-01" { await scopeC.hold() }
                     return Self.page([Self.row("MEA-\(day)-\(page)", date: day)], page: page, total: 2)
@@ -129,7 +129,7 @@ struct PhotoEntityChooserModelTests {
             calendar: Self.utcCalendar,
             now: Self.day("2026-09-17"),
             loader: { filters, _, page, _ in
-                if let day = filters["from"]?.strings.first {
+                if let day = filters["from"]?.first {
                     return Self.page([Self.row("MEA-\(day)", date: day)], page: page, total: 1)
                 }
                 requested.withLock { $0.append(page) }
@@ -168,7 +168,7 @@ struct PhotoEntityChooserModelTests {
             calendar: Self.utcCalendar,
             now: Self.day("2026-09-17"),
             loader: { filters, _, page, _ in
-                if let day = filters["from"]?.strings.first {
+                if let day = filters["from"]?.first {
                     return Self.page([Self.row("MEA-\(day)", date: day)], page: page, total: 1)
                 }
                 let call = calls.withLock { calls in
@@ -488,10 +488,10 @@ struct PhotoEntityChooserModelTests {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         #expect(
-            filters["verifiedFrom"]?.strings.first
+            filters["verifiedFrom"]?.first
                 == formatter.string(from: captureDate.addingTimeInterval(-3_600)))
         #expect(
-            filters["verifiedTo"]?.strings.first
+            filters["verifiedTo"]?.first
                 == formatter.string(from: captureDate.addingTimeInterval(3_600)))
     }
 

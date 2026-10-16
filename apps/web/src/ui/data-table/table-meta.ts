@@ -16,6 +16,10 @@ export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select" | "multiselect";
   options?: PickerOption[];
+  /** A multi-valued field: the editor offers Match any | Match all. */
+  matchAll?: boolean;
+  /** A hierarchical reference: the editor shows its "Include sub-…" toggle. */
+  subtree?: { label: string };
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
   /** Deferred/server-backed option roster activation and search controls. */

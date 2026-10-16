@@ -45,7 +45,7 @@ type USDAListRow = UsdaFoodListRow & {
 
 type USDAListFilters = {
   nameFilter?: string;
-  dataTypeFilter?: DataType;
+  dataTypeFilter?: DataType[];
   linkedProductsOnly?: boolean;
   foodsOnly: boolean;
 };
@@ -73,10 +73,12 @@ const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => {
     nameFilter:
       declared.nameFilter ?? tableState.getColumnFilter("description"),
     dataTypeFilter:
-      declared.dataTypeFilter ??
-      dataTypeEnum
-        .optional()
-        .parse(tableState.getColumnFilter("foodInfo-data_type")),
+      declared.dataTypeFilter === undefined
+        ? dataTypeEnum
+            .array()
+            .optional()
+            .parse(tableState.getColumnFilterValues("foodInfo-data_type"))
+        : [declared.dataTypeFilter].flat(),
     linkedProductsOnly:
       declared.linkedProductsOnly ??
       (tableState.getColumnFilter("linkedProducts") === "linked" || undefined),
@@ -178,7 +180,7 @@ export function USDAFoodList({
               mobile: { slot: "subtitle", priority: 10 },
               filterConfig: {
                 placeholder: "Filter by type...",
-                filterType: "select" as const,
+                filterType: "multiselect" as const,
                 options: Object.values(dataTypeEnum.enum).map((type) => ({
                   value: type,
                   label: dataTypeLabel(type),

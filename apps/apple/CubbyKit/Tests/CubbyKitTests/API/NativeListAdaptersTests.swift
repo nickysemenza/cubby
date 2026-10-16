@@ -68,19 +68,19 @@ struct NativeListAdaptersTests {
     @Test func kernelFiltersAreTypedFromTheCatalog() async throws {
         let descriptor = EntityCatalog[.product]
         var filters = EntityFilterState()
-        filters.set(.single("has"), for: "imagePresenceFilter")
-        filters.set(.single("LOC-AAAA"), for: "locationIdFilter")
+        filters.set(["has"], for: "imagePresenceFilter")
+        filters.set(["LOC-AAAA"], for: "locationIdFilter")
         let input = try descriptor.listInput(page: 1, pageSize: 20, sort: nil, filters: filters)
         #expect(input["filters"] == ["imagePresenceFilter": "has", "locationIdFilter": ["LOC-AAAA"]])
         #expect(descriptor.filterValues(for: "imagePresenceFilter") == ["has", "none"])
 
-        filters.set(.single("sometimes"), for: "imagePresenceFilter")
+        filters.set(["sometimes"], for: "imagePresenceFilter")
         #expect(throws: EntityFilterError.self) {
             _ = try descriptor.listInput(page: 1, pageSize: 20, sort: nil, filters: filters)
         }
         #expect(throws: EntityFilterError.unknownParameter(.product, "noSuchFilter")) {
             _ = try descriptor.listInput(
-                page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(["noSuchFilter": .single("x")]))
+                page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(["noSuchFilter": ["x"]]))
         }
     }
 
@@ -95,10 +95,10 @@ struct NativeListAdaptersTests {
         }
 
         var filters = EntityFilterState()
-        filters.set(.single("12345"), for: "nameFilter")
-        filters.set(.single("branded_food"), for: "dataTypeFilter")
-        filters.set(.single("false"), for: "foodsOnly")
-        filters.set(.single("true"), for: "linkedProductsOnly")
+        filters.set(["12345"], for: "nameFilter")
+        filters.set(["branded_food"], for: "dataTypeFilter")
+        filters.set(["false"], for: "foodsOnly")
+        filters.set(["true"], for: "linkedProductsOnly")
         let page = try await makeClient().list(
             EntityCatalog[.usdaFood], page: 2, pageSize: 4, sort: "-fdc_id", filters: filters)
 
@@ -109,7 +109,7 @@ struct NativeListAdaptersTests {
             JSONDecoder().decode(JSONValue.self, from: encoded).objectValue)
         let expectedFilters: JSONValue = [
             "nameFilter": "12345",
-            "dataTypeFilter": "branded_food",
+            "dataTypeFilter": ["branded_food"],
             "foodsOnly": false,
             "linkedProductsOnly": true,
         ]

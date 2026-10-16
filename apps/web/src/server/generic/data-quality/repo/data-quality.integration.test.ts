@@ -252,6 +252,11 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(complete.has(weak.id)).toBe(false);
     const defects = await listed({ dataStatus: "defect" });
     expect(defects.has(catalogOnly.id)).toBe(true);
+    // Any-of: every picked status, not only the first.
+    const either = await listed({ dataStatus: ["needs_data", "defect"] });
+    expect(either.has(weak.id)).toBe(true);
+    expect(either.has(middling.id)).toBe(true);
+    expect(either.has(catalogOnly.id)).toBe(true);
 
     const noMaker = await listed({ dataGap: ["product_manufacturer"] });
     expect(noMaker.has(weak.id)).toBe(true);

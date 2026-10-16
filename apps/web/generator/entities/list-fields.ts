@@ -33,6 +33,8 @@ type CompiledListField =
       steps: readonly RelationshipPathStep[];
       target: string;
       terminal: Terminal;
+      /** The path passes through a to-many step, so a row has several values. */
+      many: boolean;
       sort: string | null;
       group: string | null;
     }>
@@ -45,7 +47,7 @@ type CompiledListField =
     }>
   | Readonly<{
       shape: "predicate";
-      predicate: "text" | "select" | "multiselect" | "boolean";
+      predicate: "text" | "multiselect" | "boolean";
       options: readonly string[] | null;
       reason: string;
       sort: string;
@@ -143,6 +145,7 @@ const compileVia = (
     steps,
     target: current.key,
     terminal: resolved,
+    many: many !== null,
     sort: reason("sort"),
     group: reason("group"),
   };
@@ -159,11 +162,11 @@ const compatibleKinds = (
         ? ["range"]
         : field.type === "boolean"
           ? ["boolean"]
-          : ["text", "select", "multiselect"];
+          : ["text", "multiselect"];
     case "via":
       return field.terminal.kind === "record"
-        ? ["id", "idMulti", "text", "presence"]
-        : ["text", "select", "multiselect", "boolean", "presence"];
+        ? ["idMulti", "text", "presence"]
+        : ["text", "multiselect", "boolean", "presence"];
   }
 };
 
@@ -195,7 +198,42 @@ const toggleDescriptor = (
     urlOnly: parent.urlOnly,
     nullable: null,
     sentinels: null,
+    match: null,
+    subtree: null,
+    currentMember: false,
+    singleValue: null,
     wire: { kind: "param", name: key },
+  };
+};
+
+/**
+ * A value filter over a `via` path gets the generated keys a stored filter
+ * gets in `compile.ts`: Any value / No value (a related record exists or not),
+ * and Match all when the path holds several records per row.
+ */
+const withViaKeys = (
+  descriptor: FilterDescriptor,
+  derived: Readonly<Record<string, CompiledListField>>,
+  context: string,
+): FilterDescriptor => {
+  const bound = descriptor.derived ? derived[descriptor.columnId] : undefined;
+  if (
+    bound?.shape !== "via" ||
+    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
+    descriptor.urlOnly
+  )
+    return descriptor;
+  if (descriptor.nullable !== null)
+    throw new EntityDeclarationError(
+      `${context}.filters ${descriptor.columnId} is compiled, so its Any value / No value key is generated; remove nullable.`,
+    );
+  return {
+    ...descriptor,
+    nullable: {
+      field: `${descriptor.columnId}PresenceFilter`,
+      label: (descriptor.label ?? descriptor.columnId).toLowerCase(),
+    },
+    match: bound.many ? { field: `${descriptor.columnId}Match` } : null,
   };
 };
 
@@ -258,7 +296,10 @@ export const compileListFields = (
     }
     const subtree: Record<string, string> = {};
     const toggles: FilterDescriptor[] = [];
-    for (const descriptor of entity.filterDescriptors) {
+    const compiled: FilterDescriptor[] = [];
+    for (const declared of entity.filterDescriptors) {
+      const descriptor = withViaKeys(declared, derived, context);
+      compiled.push(descriptor);
       const bound = descriptor.derived
         ? derived[descriptor.columnId]
         : undefined;
@@ -273,7 +314,7 @@ export const compileListFields = (
         throw new EntityDeclarationError(
           `${context}.filters ${descriptor.columnId} is a ${descriptor.kind} filter over derived ${bound.shape} field; expected ${compatibleKinds(bound).join(" | ")}.`,
         );
-      if (descriptor.kind !== "id" && descriptor.kind !== "idMulti") continue;
+      if (descriptor.kind !== "idMulti") continue;
       const referenced =
         bound?.shape === "via" && bound.terminal.kind === "record"
           ? bound.target
@@ -286,10 +327,14 @@ export const compileListFields = (
       if (target?.fieldModel.hierarchy == null) continue;
       const toggle = toggleDescriptor(target, descriptor);
       subtree[descriptor.field ?? descriptor.columnId] = toggle.columnId;
+      compiled[compiled.length - 1] = {
+        ...descriptor,
+        subtree: toggle.columnId,
+      };
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
     }
-    const filterDescriptors = [...entity.filterDescriptors, ...toggles];
+    const filterDescriptors = [...compiled, ...toggles];
     const urlKeys = filterDescriptors.map(({ urlKey }) => urlKey);
     if (new Set(urlKeys).size !== urlKeys.length)
       throw new EntityDeclarationError(

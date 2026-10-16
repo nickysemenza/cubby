@@ -50,6 +50,8 @@ export {
   eqAnyOrPresence,
   eqAnyRequested,
   executeListQueryWithCount,
+  anyOfCondition,
+  flagCondition,
   formatSearchTerm,
   householdDayRangeConditions,
   householdDaySql,

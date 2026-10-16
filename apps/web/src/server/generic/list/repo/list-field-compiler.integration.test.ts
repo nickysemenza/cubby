@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { vendor as vendorTable } from "~/server/db/schema";
+import { cookbookList } from "~/server/domains/cookbook/repo/cookbook";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
   inventoryentryList,
@@ -14,12 +15,15 @@ import { locationList } from "~/server/domains/location/repo/crud";
 import { productList } from "~/server/domains/product/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { vendorList } from "~/server/domains/vendor/repo/vendor";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  makeCookbookExtraction,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -35,7 +39,9 @@ const page = { pageIndex: 0, pageSize: 50 };
  * per-entity resolver into `model.derived` (a GTIN, a `related:` view, an
  * effective reference, a multi-hop path) orders differently or surfaces
  * empties first; a field that kept its resolver's NULL placement (empties
- * first under desc) flips to last; a count read rejects a sort it never runs.
+ * first under desc) flips to last; a count read rejects a sort it never runs;
+ * generated Any value / No value narrows instead of ORing beside picked
+ * values; Match all matches any.
  */
 describe("compiled list fields", () => {
   const ctx = withTestDb();
@@ -116,6 +122,125 @@ describe("compiled list fields", () => {
       "count",
     );
     expect(counted.count).toBe(1);
+  });
+
+  it("ORs generated No value beside picked values on stored and related fields", async () => {
+    const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Presence household",
+    });
+    await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Presence utilities",
+      parentId: parent.id,
+    });
+    const other = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Presence travel",
+    });
+    const named = async (
+      filters: Parameters<typeof listSpendingCategories>[1],
+    ) =>
+      (await listSpendingCategories(ctx.db, filters, [], page)).data
+        .map((row) => row.name)
+        .filter((name) => name.startsWith("Presence"))
+        .sort();
+
+    expect(await named({ parentIdPresenceFilter: "none" })).toEqual([
+      "Presence household",
+      "Presence travel",
+    ]);
+    expect(await named({ parentIdPresenceFilter: "has" })).toEqual([
+      "Presence utilities",
+    ]);
+    expect(
+      await named({
+        parentId: [parent.shortcode],
+        parentIdPresenceFilter: "none",
+      }),
+    ).toEqual(["Presence household", "Presence travel", "Presence utilities"]);
+    expect(await named({ parentId: [other.shortcode] })).toEqual([]);
+
+    // Related (`via`) field: No value is a product with no category.
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Presence shelf",
+        type: "shelf",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const category = await createRepoEntity(ctx, "productCategory", {
+      name: "Presence lamps",
+    });
+    const stock = async (
+      name: string,
+      categoryId?: typeof category.output.id,
+    ) => {
+      const product = await createProductFixture(
+        ctx.db,
+        makeProductInput(categoryId ? { name, categoryId } : { name }),
+        ctx.actor,
+      );
+      return createInventoryFixture(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    };
+    const lamp = await stock("Presence lamp", category.output.id);
+    const loose = await stock("Presence loose item");
+    const ids = async (filters: Parameters<typeof inventoryentryList>[1]) =>
+      (await inventoryentryList(ctx.db, filters, [], page)).data
+        .map((row) => row.id)
+        .filter((id) => id === lamp.id || id === loose.id)
+        .sort();
+    expect(await ids({ categoryPresenceFilter: "none" })).toEqual([loose.id]);
+    expect(
+      await ids({
+        categoryFilter: [category.output.id],
+        categoryPresenceFilter: "none",
+      }),
+    ).toEqual([lamp.id, loose.id].sort());
+  });
+
+  it("matches every picked value under Match all on a multi-valued field", async () => {
+    for (const [name, subjects] of [
+      ["Match baking and bread", ["baking", "bread"]],
+      ["Match baking only", ["baking"]],
+      ["Match no subjects", []],
+    ] as const)
+      await insertWithShortcode(ctx.db, "cookbook", {
+        name,
+        subjects: [...subjects],
+        sourceLabel: name,
+        rawJson: makeCookbookExtraction(),
+      });
+    const named = async (filters: Parameters<typeof cookbookList>[1]) =>
+      (await cookbookList(ctx.db, filters, [], page)).data
+        .map((row) => row.name)
+        .filter((name) => name.startsWith("Match"))
+        .sort();
+
+    expect(await named({ subjectFilters: ["baking", "bread"] })).toEqual([
+      "Match baking and bread",
+      "Match baking only",
+    ]);
+    expect(
+      await named({
+        subjectFilters: ["baking", "bread"],
+        subjectsMatch: "all",
+      }),
+    ).toEqual(["Match baking and bread"]);
+    expect(
+      await named({
+        subjectFilters: ["baking", "bread"],
+        subjectsMatch: "all",
+        subjectsPresenceFilter: "none",
+      }),
+    ).toEqual(["Match baking and bread", "Match no subjects"]);
   });
 
   it("includes every level below a selected project", async () => {

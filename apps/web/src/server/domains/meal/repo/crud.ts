@@ -19,6 +19,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
+  flagCondition,
   getDb,
   imageJoinBindings,
   insertAndReturn,
@@ -228,9 +229,9 @@ export const buildMealWhere = (
     // the UI sends a filter the server silently ignores.
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
-    filters.recipeCostCoverage === "understated"
-      ? gapCondition("meal", "meal_recipe_cost_incomplete")
-      : undefined,
+    flagCondition(filters.recipeCostCoverage, () =>
+      gapCondition("meal", "meal_recipe_cost_incomplete"),
+    ),
   ]);
 };
 

@@ -13,7 +13,7 @@ import {
   type WorkQueueMember,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
-import { humanize } from "@cubby/shared";
+import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -39,7 +39,11 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { type FilterSpecCore } from "~/entity/filters";
+import {
+  buildFiltersFromManifest,
+  type FilterSpecCore,
+  nullableSentinelOptions,
+} from "~/entity/filters";
 import {
   type DeferredEntityRoster,
   useDeferredEntityRosters,
@@ -103,7 +107,13 @@ const INITIAL_VISIBILITY = { nextAction: false };
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 type QueueFilters = Pick<
   QueueInput,
-  "query" | "waitingFor" | "source" | "kind" | "check" | "vendor"
+  | "query"
+  | "waitingFor"
+  | "waitingForPresence"
+  | "source"
+  | "kind"
+  | "check"
+  | "vendor"
 >;
 // A work row is identified by its reason, independently of its source record.
 type QueueTableRow = Omit<WorkQueueRow, "id"> & {
@@ -118,11 +128,16 @@ const INITIAL_PAGINATION = { pageIndex: 0, pageSize: 25 };
 const PREVIEW_OPTIONS = { responsiveInspector: true };
 const FILTER_SPECS: readonly FilterSpecCore[] = [
   { columnId: "name", urlKey: "query", kind: "text" },
-  { columnId: "waitingFor", kind: "select" },
-  { columnId: "source", kind: "select" },
-  { columnId: "kind", kind: "select" },
-  { columnId: "reason", urlKey: "check", kind: "multiselect" },
-  { columnId: "vendor", kind: "select" },
+  {
+    columnId: "waitingFor",
+    kind: "multiselect",
+    currentMember: true,
+    nullable: { field: "waitingForPresence", label: "waiting for" },
+  },
+  { columnId: "source", kind: "multiselect" },
+  { columnId: "kind", kind: "multiselect" },
+  { columnId: "reason", field: "check", urlKey: "check", kind: "multiselect" },
+  { columnId: "vendor", kind: "multiselect" },
 ];
 const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
   actions: [
@@ -143,16 +158,13 @@ const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
 };
 const buildQueueFilters = (state: TableStateReturn): QueueFilters => {
   const parsed = workQueueHouseholdInput.parse({
+    ...buildFiltersFromManifest(FILTER_SPECS, state.getColumnFilterValues),
     query: state.getColumnFilter("name"),
-    waitingFor: state.getColumnFilter("waitingFor"),
-    source: state.getColumnFilter("source"),
-    kind: state.getColumnFilter("kind"),
-    check: state.getColumnFilterValues("reason"),
-    vendor: state.getColumnFilter("vendor"),
   });
   return {
     query: parsed.query,
     waitingFor: parsed.waitingFor,
+    waitingForPresence: parsed.waitingForPresence,
     source: parsed.source,
     kind: parsed.kind,
     check: parsed.check,
@@ -377,7 +389,7 @@ function queueColumns(
         mobile: { slot: "meta", priority: 0, label: "Kind" },
         filterConfig: {
           placeholder: "Filter kind",
-          filterType: "select",
+          filterType: "multiselect",
           options: KIND_OPTIONS,
         },
       }),
@@ -443,11 +455,12 @@ function queueColumns(
           ),
           filterConfig: {
             placeholder: "Filter waiting for",
-            filterType: "select",
+            filterType: "multiselect",
+            // Me also matches Either work; No value is Unresolved.
             options: [
-              { value: "me", label: "Me or Either" },
+              ...nullableSentinelOptions(),
+              { value: CURRENT_MEMBER_FILTER, label: "Me" },
               { value: "either", label: "Either" },
-              { value: "unresolved", label: "Unresolved" },
               ...memberOptions,
             ],
           },
@@ -474,7 +487,7 @@ function queueColumns(
           ),
           filterConfig: {
             placeholder: "Filter vendor",
-            filterType: "select",
+            filterType: "multiselect",
             options: vendorOptions?.options ?? [],
             onActivate: vendorOptions?.onActivate,
             onSearchChange: vendorOptions?.onSearchChange,
@@ -527,7 +540,7 @@ function queueColumns(
         mobile: { slot: "meta", priority: 3, label: "Source" },
         filterConfig: {
           placeholder: "Filter source",
-          filterType: "select",
+          filterType: "multiselect",
           options: SOURCE_OPTIONS,
         },
       }),

@@ -81,11 +81,9 @@ export const WAYFINDING_DOMAIN_PRESENTATION = {
  */
 export const FILTER_KINDS = [
   "text",
-  "select",
   "multiselect",
   "presence",
   "boolean",
-  "id",
   "idMulti",
   "range",
 ] as const;
@@ -857,7 +855,7 @@ const buildMetadataSchemas = () => {
       .strict(),
     z
       .object({
-        predicate: z.enum(["text", "select", "multiselect", "boolean"]),
+        predicate: z.enum(["text", "multiselect", "boolean"]),
         options: z.array(nonEmptyString()).min(1).optional(),
         reason: nonEmptyString(),
       })
@@ -2172,11 +2170,27 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional(),
       urlOnly: z.boolean({ error: "must be a boolean" }).optional(),
+      /**
+       * The Any value / No value request key of a hand-written value filter.
+       * A compiled (`stored`/`derived`) filter over a nullable field gets it
+       * generated (`<columnId>PresenceFilter`) and never declares it.
+       */
       nullable: z
         .object({ field: nonEmptyString(), label: nonEmptyString() })
         .strict()
         .nullable()
         .optional(),
+      /**
+       * A Ledger Party filter that also accepts `@me`, the signed-in member
+       * (ADR 0018). Clients offer it as "Me"; the entity kernel resolves it.
+       */
+      currentMember: z.literal(true).optional(),
+      /**
+       * A declared exception to any-of: the filter accepts one value, and
+       * `reason` says why (Email's scope record anchors `linkState`).
+       * Clients pick one record.
+       */
+      singleValue: z.object({ reason: nonEmptyString() }).strict().optional(),
       /**
        * Named states an `idMulti` filter accepts beside entity codes (an
        * Owner filter's `@household`). Clients offer each as a meta option;

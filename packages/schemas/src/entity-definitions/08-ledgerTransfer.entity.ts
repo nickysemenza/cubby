@@ -412,6 +412,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by from party...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
       {
@@ -419,6 +420,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by to party...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
       {

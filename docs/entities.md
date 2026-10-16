@@ -838,7 +838,7 @@ Reads expose effective `assigneeId`, `assigneeName`, and `fieldResolutions.assig
 list filters and sorts use the same effective SQL as hydration. Explicit null
 means None and reset clears the stored override. Project’s field label is
 Default assignee; task’s is Assignee. The static My tasks saved view combines
-open status with `assigneeId: @me`; every Ledger Party filter accepts `@me`,
+open status with `assigneeId: @me`; a filter declared `currentMember` accepts `@me`,
 which the entity kernel resolves to the actor's linked member (nothing matches
 without one; [ADR 0018](adr/0018-current-member-filter-token.md)). Unassigned uses the assignee presence filter. Both reuse the generic saved-view and resolution-badge paths.
 
@@ -968,7 +968,7 @@ schemas; canonical modules spread that map and add only computed filters (a
 canonical key that shadows a generated one fails the identity test). The key
 is `field ?? columnId`. `text` derives an optional string (or the model
 field's read schema with `schemaFromRead`), `boolean` an optional boolean,
-`presence` the shared presence filter, `select`/`multiselect` `oneOrMany` of
+`presence` the shared presence filter, `multiselect` `oneOrMany` of
 the read schema (`schemaFromRead`), a named enum export (`schemaRef`), the
 static option values, or a plain string, and `range` the shared min/max or
 from/to fields, with the numeric/date kind inferred from the model field
@@ -1299,10 +1299,37 @@ page-sized quantity reads; missing history still yields a known balance of zero.
 A filter declaration compiles its Zod-field binding and canonical URL keys used
 by shared route search-parameter assembly, inspector metadata, and generated
 contract cases. Static and deferred controls still live in the explicit filter
-catalog; compound presets retain explicit codecs and option loaders. SQL
-predicates remain repository behavior and are checked through the real-query
-differential matrix—the compiler does not infer database behavior from a URL
-key, except for descriptors declared `stored` or `derived`.
+catalog; compound presets retain explicit codecs and option loaders. A
+descriptor declared `stored` or `derived` compiles its predicate; the compiler
+infers no database behavior from any other URL key.
+
+Every value filter is any-of: `multiselect` and `idMulti` (a single-option
+flag is a `boolean`), and a single value in a URL, saved view, or MCP call
+reads as a one-element list (`oneOrMany`). A compiled filter over a nullable
+field generates `<columnId>PresenceFilter`; clients offer it as Any value /
+No value options ORed with the picked values, so there is no `all` option or
+separate presence filter. A hand-written value filter declares the same key as
+`nullable: { field, label }`. A filter over several values per row (a
+`text[]` column or a `via` path through a list) also generates
+`<columnId>Match` (`any`/`all`), the Match all control, which appears nowhere
+else. `currentMember: true` marks a Ledger Party filter that accepts `@me` and offers Me
+([ADR 0018](adr/0018-current-member-filter-token.md)). Chips join values with
+"or" (or "and" under Match all); an active Any value chip reads "has a value".
+Choices the clients cannot offer are disabled with their reason (§7 of the
+[list-fields plan](plans/manifest-driven-list-fields.md)).
+
+Hand-written predicates passed to `<entity>Scaffold.where(filters, [...])`,
+including the elements of and pushes onto a condition list named in the same
+file, are counted per file by the `cubby/no-hand-written-filter-predicate` Oxlint
+rule against `tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json`.
+The baseline only shrinks: declaring a predicate lowers its file's count, and
+a new one must be declared instead. A filter that cannot be declared is a
+declared exception with its reason. Email's urlOnly
+`purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
+(`linkState` is relative to one scope record): their schemas accept one value,
+the native picker chooses one record, and the repository rejects more than one
+across the three. Inventory's `valuationStatus` is a `model.derived`
+predicate.
 
 A `stored` descriptor names the standard predicate over stored columns, and
 `declaredFilterPredicates` composes it for the repository: `stored: true`
@@ -1314,7 +1341,7 @@ OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds. The compiler rejects every other shape. Predicates that
 join, OR across filters, or resolve ids stay hand-written next to the spread,
-with a comment saying why.
+with a comment saying why, and count against the baseline.
 
 `model.derived` declares a list field that is not a stored column, or the
 value a stored field orders and groups by when its column is not that value
@@ -1509,8 +1536,9 @@ until its inputs change.
 The dedicated `/work-queue` page combines those predicates with interactive
 Problems, Email attention, findings and account work. It derives a filterable
 Waiting for column from current source/account authority, with Either for
-shared research and unresolved for missing private ownership. This is a read
-projection, not a new entity or assignment ledger. MCP `activity.work_queue`
+shared research and unresolved for missing private ownership. Its filter is
+any-of: Me (mine or Either), Either, a member (routed to them only), and No
+value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 

@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   urlEnumListParam,
   urlShortcodeListParam,
-  urlShortcodeParam,
   urlStringParam,
 } from "./search-params";
 
@@ -72,15 +71,5 @@ describe("validated URL filter params", () => {
     expect(productsParam.parse("LOC-4K7M")).toBe(UNRESOLVABLE_ENTITY_FILTER);
     expect(productsParam.parse("PRD-0OIL")).toBe(UNRESOLVABLE_ENTITY_FILTER);
     expect(productsParam.parse(486242)).toBe(UNRESOLVABLE_ENTITY_FILTER);
-  });
-
-  it("preserves invalid exact scopes as a match-nothing filter", () => {
-    const productParam = urlShortcodeParam("product");
-
-    expect(productParam.parse("PRD-4K7M")).toBe("PRD-4K7M");
-    expect(productParam.parse("PRD-4K7M,PRD-2ABC")).toBe(
-      UNRESOLVABLE_ENTITY_FILTER,
-    );
-    expect(productParam.parse(undefined)).toBeUndefined();
   });
 });

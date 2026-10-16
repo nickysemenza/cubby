@@ -30,7 +30,6 @@ import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
-  entityFilter,
   entityFilterList,
   oneOrMany,
 } from "./pagination";
@@ -66,13 +65,10 @@ export const inventoryPlacement = cycleSafeInventoryPlacement;
 export { inventoryValuation } from "./inventory-fields";
 
 /**
- * Tri-state, and explicitly NOT `inventoryPlacement.optional()`.
- *
- * "Empty filter field means unrestricted" is the repo-wide rule, so an omitted
- * two-value filter would hand the UI the stock set while MCP `list_inventory`
- * and direct transport callers got the unfiltered one — the two disagreeing
- * silently is the exact class of bug this whole change exists to remove. The
- * default lives server-side in `inventoryentryList`.
+ * The location operations' placement scope (`inventoryLocationIdsInput`):
+ * one placement, or `all`. List filters are any-of over the placements
+ * instead, and an omitted list filter is unrestricted; the inventory list
+ * opens on stock through its declared `initialFilter`.
  */
 export const inventoryPlacementFilter = z.enum([
   ...inventoryPlacementValues,
@@ -91,19 +87,19 @@ export const inventoryFilterFields = {
     .string()
     .optional()
     .describe("Filter by location name (substring)"),
-  locationIdFilter: entityFilter(locationShortcode)
+  locationIdFilter: entityFilterList(locationShortcode)
     .optional()
     .describe(
-      "Filter by exact location ID (direct stock only; use locationSubtreeFilter to include descendants)",
+      "Filter by exact location IDs (direct stock only; use locationSubtreeFilter to include descendants)",
     ),
   locationSubtreeFilter: entityFilterList(locationShortcode)
     .optional()
     .describe(
       "Filter to stock in the selected locations or any of their descendants",
     ),
-  productIdFilter: entityFilter(productShortcode)
+  productIdFilter: entityFilterList(productShortcode)
     .optional()
-    .describe("Filter by exact product ID"),
+    .describe("Filter by exact product IDs"),
   manufacturerFilter: z
     .string()
     .optional()
@@ -116,23 +112,25 @@ export const inventoryFilterFields = {
   categoryFilter: oneOrMany(productCategoryShortcode)
     .optional()
     .describe("Filter by product category"),
-  placementFilter: inventoryPlacementFilter
+  placementFilter: oneOrMany(inventoryPlacement)
     .optional()
     .describe(
-      "Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.",
+      "Filter by placement: 'stock' (movable stock) and/or 'installed' (fixtures). Omitted returns both.",
     ),
   locationRole: z
-    .enum(["global_unknown"])
+    .boolean()
     .optional()
-    .describe("Filter by a stable household location role."),
+    .describe(
+      "true: stock parked in the household-wide Unknown location; false: stock with a real location.",
+    ),
   verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
   /**
    * Derived valuation integrity. `missing_with_priced_product` is the precise
    * "the Product has a price, but this stored unit cannot reach it" state.
    */
-  valuationStatus: z
-    .enum(["valued", "missing", "missing_with_priced_product"])
-    .optional(),
+  valuationStatus: oneOrMany(
+    z.enum(["valued", "missing", "missing_with_priced_product"]),
+  ).optional(),
   ...dateRangeFields("verified"),
 };
 

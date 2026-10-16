@@ -767,7 +767,7 @@ export function renderCompactFieldValue<TRecord extends object>(
 const LEDGER_FILTER_ACTION_CLASS = "size-11 md:size-6";
 
 /** Filter kinds whose URL value is one option or one id. */
-const COHORT_FILTER_KINDS = new Set(["select", "multiselect", "id", "idMulti"]);
+const COHORT_FILTER_KINDS = new Set(["multiselect", "idMulti"]);
 
 /**
  * The list filter a detail field can seed: a descriptor on the same entity

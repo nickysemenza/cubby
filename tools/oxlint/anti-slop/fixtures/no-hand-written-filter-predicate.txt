@@ -1,0 +1,23 @@
+declare const thingScaffold: { where: (filters: object, extra: unknown[]) => unknown };
+declare const a: unknown;
+declare const b: unknown;
+declare const c: unknown;
+
+export const literal = () => thingScaffold.where({}, [a, b]);
+
+export const named = () => {
+  const computed = [a];
+  computed.push(b, c);
+  return thingScaffold.where({}, [...computed, a]);
+};
+
+export const first = () => {
+  const conditions = [a, b];
+  return thingScaffold.where({}, conditions);
+};
+
+export const second = () => {
+  const conditions = [a];
+  conditions.push(...[b, c]);
+  return thingScaffold.where({}, conditions);
+};

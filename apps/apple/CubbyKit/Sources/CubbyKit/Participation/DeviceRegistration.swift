@@ -47,7 +47,7 @@ public enum DeviceRegistration {
     public static func sync(_ info: Info, client: CubbyClient) async throws {
         let descriptor = EntityCatalog[.device]
         let installationID = info.installationID.uuidString.lowercased()
-        let filters = EntityFilterState(["installationId": .single(installationID)])
+        let filters = EntityFilterState(["installationId": [installationID]])
         let page = try await client.list(descriptor, page: 1, pageSize: 1, filters: filters)
 
         var body: [String: JSONValue] = ["automaticWork": .bool(info.automaticWork)]

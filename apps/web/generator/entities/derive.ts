@@ -381,7 +381,7 @@ const backFilter = (
 ): { descriptor: string } | { gap: string } => {
   const candidates = target.filterDescriptors.filter(
     (descriptor) =>
-      (descriptor.kind === "id" || descriptor.kind === "idMulti") &&
+      descriptor.kind === "idMulti" &&
       descriptor.brandRef?.entity === entity.key &&
       !used.has(descriptor.columnId),
   );

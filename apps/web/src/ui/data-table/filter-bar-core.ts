@@ -1,3 +1,8 @@
+import {
+  FILTER_ALL,
+  FILTER_ANY,
+  FILTER_EXACT,
+} from "@cubby/schemas/filter-sentinel-fields";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
@@ -16,6 +21,10 @@ export type FilterFieldConfig = {
   min?: number;
   max?: number;
   description?: string;
+  /** Offers Match any | Match all (multi-valued fields only). */
+  matchAll?: boolean;
+  /** The "Include sub-…" toggle inside a hierarchical reference's editor. */
+  subtree?: { label: string };
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
@@ -52,12 +61,47 @@ export function operatorFor(field: FilterBarField): string {
   return "is";
 }
 
+/** Editor modes riding in a value list: they shape a pick but are not one. */
+const MODE_TOKENS: ReadonlySet<string> = new Set([FILTER_ALL, FILTER_EXACT]);
+
 /** A filter is active (counts toward "Clear N", tints its chip) once it has a real value. */
 export function hasFilterValue(filter: Filter): boolean {
-  return (
-    filter.values.length > 0 && filter.values.some((value) => value !== "")
-  );
+  return filter.values.some((value) => value !== "" && !MODE_TOKENS.has(value));
 }
+
+/**
+ * A picker change to a value filter, under the Any value rule: picking Any
+ * value clears the specific values (it already includes them), and picking
+ * anything else clears Any value. No value combines with specific values.
+ * Mode tokens (Match all, Include sub-… off) carry through untouched.
+ */
+export function nextPickedValues(
+  previous: readonly string[],
+  picked: readonly string[],
+): string[] {
+  const modes = previous.filter((value) => MODE_TOKENS.has(value));
+  const added = picked.filter((value) => !previous.includes(value));
+  const values = added.includes(FILTER_ANY)
+    ? [FILTER_ANY]
+    : added.length > 0
+      ? picked.filter((value) => value !== FILTER_ANY)
+      : [...picked];
+  return [...values, ...modes];
+}
+
+/** The values a picker shows: every value except the editor's mode tokens. */
+export const pickerValues = (values: readonly string[]): string[] =>
+  values.filter((value) => !MODE_TOKENS.has(value));
+
+/** Sets or clears one mode token in a value list. */
+export const withMode = (
+  values: readonly string[],
+  token: typeof FILTER_ALL | typeof FILTER_EXACT,
+  on: boolean,
+): string[] => [
+  ...values.filter((value) => value !== token),
+  ...(on ? [token] : []),
+];
 
 export function filterStateToBarFilters(
   columnFilters: ColumnFiltersState,
@@ -144,6 +188,8 @@ export function barFieldFromConfig(
           hint: optionHints?.[option.value] ?? option.hint,
         }))
       : undefined,
+    matchAll: config.matchAll,
+    subtree: config.subtree,
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,

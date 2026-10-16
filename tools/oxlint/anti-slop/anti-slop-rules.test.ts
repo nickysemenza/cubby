@@ -400,3 +400,26 @@ test("relative dialog imports resolve against the caller", () => {
     [1, 2, 3],
   );
 });
+
+test("hand-written filter predicates count each bound condition list and its pushes", () => {
+  const diagnostics = lintFixture(
+    "no-hand-written-filter-predicate",
+    "no-hand-written-filter-predicate.txt",
+    "cubby",
+  );
+
+  // Outside the baseline every call reports: 2 literal; 3 + 1 named; then two
+  // same-named locals (2, and 1 + a spread push of 2) that must not merge.
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => [
+      diagnostic.labels[0]?.span.line,
+      JSON.stringify(diagnostic).match(/(\d+) hand-written/)?.[1],
+    ]),
+    [
+      [6, "2"],
+      [11, "4"],
+      [16, "2"],
+      [22, "3"],
+    ],
+  );
+});

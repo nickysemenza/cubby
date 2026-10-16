@@ -78,49 +78,49 @@ struct EntityFilterTests {
         let shape: String
         let entity: EntityKey
         let wire: String
-        let value: EntityFilterValue
+        let value: [String]
         /// The whole `filters` object the list body carries.
         let expected: JSONValue
     }
 
     static let rows: [Row] = [
         Row(
-            shape: "string", entity: .product, wire: "nameFilter", value: .single("pan"),
+            shape: "string", entity: .product, wire: "nameFilter", value: ["pan"],
             expected: ["nameFilter": "pan"]),
         Row(
-            shape: "number", entity: .product, wire: "expectedQuantityMin", value: .single("1.5"),
+            shape: "number", entity: .product, wire: "expectedQuantityMin", value: ["1.5"],
             expected: ["expectedQuantityMin": 1.5]),
         Row(
-            shape: "integer", entity: .product, wire: "expenseCountMin", value: .single("2"),
+            shape: "integer", entity: .product, wire: "expenseCountMin", value: ["2"],
             expected: ["expenseCountMin": 2]),
         Row(
-            shape: "boolean", entity: .product, wire: "taskOpenOnly", value: .single("true"),
+            shape: "boolean", entity: .product, wire: "taskOpenOnly", value: ["true"],
             expected: ["taskOpenOnly": true]),
         Row(
-            shape: "string enum", entity: .product, wire: "imagePresenceFilter", value: .single("none"),
+            shape: "string enum", entity: .product, wire: "imagePresenceFilter", value: ["none"],
             expected: ["imagePresenceFilter": "none"]),
         Row(
-            shape: "strings", entity: .product, wire: "tagFilters", value: .many(["a", "b"]),
+            shape: "strings", entity: .product, wire: "tagFilters", value: ["a", "b"],
             expected: ["tagFilters": ["a", "b"]]),
         Row(
             shape: "strings enum", entity: .product, wire: "categoryFeatureFilter",
-            value: .many(["food", "tools"]), expected: ["categoryFeatureFilter": ["food", "tools"]]),
+            value: ["food", "tools"], expected: ["categoryFeatureFilter": ["food", "tools"]]),
         Row(
-            shape: "string id", entity: .inventory, wire: "productIdFilter",
-            value: .single("PRD-2345"), expected: ["productIdFilter": "PRD-2345"]),
+            shape: "strings id", entity: .inventory, wire: "productIdFilter",
+            value: ["PRD-2345"], expected: ["productIdFilter": ["PRD-2345"]]),
         Row(
             shape: "strings with the unresolvable sentinel", entity: .product, wire: "locationIdFilter",
-            value: .many(["LOC-2345", "__unresolvable_entity_filter__"]),
+            value: ["LOC-2345", "__unresolvable_entity_filter__"],
             expected: ["locationIdFilter": ["LOC-2345", "__unresolvable_entity_filter__"]]),
         Row(
             shape: "strings enum (union)", entity: .purchase, wire: "dataGap",
-            value: .many(["order_id", "product_image"]), expected: ["dataGap": ["order_id", "product_image"]]),
+            value: ["order_id", "product_image"], expected: ["dataGap": ["order_id", "product_image"]]),
         Row(
             shape: "strings minLength", entity: .financialAccount, wire: "source",
-            value: .many(["synthetic-bank"]), expected: ["source": ["synthetic-bank"]]),
+            value: ["synthetic-bank"], expected: ["source": ["synthetic-bank"]]),
         Row(
             shape: "nested", entity: .expense, wire: "projectScopeKinds",
-            value: .many(["garden"]), expected: ["projectScope": ["kinds": ["garden"]]]),
+            value: ["garden"], expected: ["projectScope": ["kinds": ["garden"]]]),
     ]
 
     @Test(arguments: rows)
@@ -145,7 +145,7 @@ struct EntityFilterTests {
         let body = try await requestBody { client in
             _ = try await client.list(
                 EntityCatalog[.ledgerTransfer],
-                filters: EntityFilterState([from: .single("2026-01-01"), to: .single("2026-01-31")]))
+                filters: EntityFilterState([from: ["2026-01-01"], to: ["2026-01-31"]]))
         }
         #expect(body["filters"] == .object([from: "2026-01-01", to: "2026-01-31"]))
     }
@@ -157,7 +157,7 @@ struct EntityFilterTests {
             #"{"groups":[],"stats":[],"notes":[],"#
             + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
         let filters = EntityFilterState([
-            "ids": .many(["PRD-2345"]), "order": .single("desc"), "tagFilters": .single("a"),
+            "ids": ["PRD-2345"], "order": ["desc"], "tagFilters": ["a"],
         ])
         let body = try await requestBody(answering: Data(response.utf8), path: "/api/v1/entity/timeline") {
             client in
@@ -195,16 +195,16 @@ struct EntityFilterTests {
         let client = try makeClient()
         await #expect(throws: EntityFilterError.unknownParameter(.product, "nope")) {
             _ = try await client.list(
-                EntityCatalog[.product], filters: EntityFilterState(["nope": .single("x")]))
+                EntityCatalog[.product], filters: EntityFilterState(["nope": ["x"]]))
         }
         await #expect(throws: EntityFilterError.self) {
             _ = try await client.list(
-                EntityCatalog[.product], filters: EntityFilterState(["imagePresenceFilter": .single("maybe")])
+                EntityCatalog[.product], filters: EntityFilterState(["imagePresenceFilter": ["maybe"]])
             )
         }
         await #expect(throws: EntityFilterError.self) {
             _ = try await client.list(
-                EntityCatalog[.product], filters: EntityFilterState(["expenseCountMin": .single("two")]))
+                EntityCatalog[.product], filters: EntityFilterState(["expenseCountMin": ["two"]]))
         }
     }
 }

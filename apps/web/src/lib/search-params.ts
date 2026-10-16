@@ -103,15 +103,3 @@ export const urlShortcodeListParam = (
     .transform((value) => value?.split(",").map(canonical).join(","))
     .catch(UNRESOLVABLE_ENTITY_FILTER);
 };
-
-/** A single exact shortcode scope (not a multi-select). */
-export const urlShortcodeParam = (type: ShortcodeType) =>
-  urlShortcodeListParam(type)
-    .refine(
-      (value) =>
-        value === undefined ||
-        value === UNRESOLVABLE_ENTITY_FILTER ||
-        !value.includes(","),
-      "Expected one entity shortcode",
-    )
-    .catch(UNRESOLVABLE_ENTITY_FILTER);
