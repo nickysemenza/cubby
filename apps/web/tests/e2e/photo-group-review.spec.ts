@@ -1460,6 +1460,10 @@ test("shows Retry for a failed automatic candidate check without blocking apply"
     `Synthetic failed check ${Date.now()}`,
     e2eRuntime.objectStorageUrl,
   );
+  // Earlier cases create the shared shirt; retry must exercise apply, not duplicate refusal.
+  const retryName = `Synthetic retry shirt ${Date.now()}`;
+  seed.groups[0]!.product = { kind: "create", create: { name: retryName } };
+  if (seed.groups[0]!.review) seed.groups[0]!.review.observedName = retryName;
   const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: seed.groups,
