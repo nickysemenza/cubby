@@ -13,6 +13,7 @@
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
 //   pnpm apple test          swift test for CubbyKit
 //   pnpm apple check [host|app|lint]  cached native checks (all by default)
+//   pnpm apple clean [--apply]  preview/remove this checkout's build artifacts
 //
 // Options: --device <name> (ios; default: the first paired iPhone),
 // --sim <name> (sim; default: the booted simulator, else the first iPhone),
@@ -31,8 +32,15 @@ import { spawnSync } from "node:child_process";
 import { checkApple } from "./apple-validation.ts";
 
 import { captureSyncChecked, runSyncChecked } from "../lib/run.ts";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localSimulatorServer } from "./lib/simulator-server.ts";
@@ -55,7 +63,7 @@ const BUNDLE_ID = APPLE_APP_IDENTITIES.production.bundleIdentifier;
 const PRODUCT = `${APPLE_APP_IDENTITIES.production.productName}.app`;
 const MAC_IDENTITY = APPLE_APP_IDENTITIES.development;
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check|clean> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [--apply (clean)] [-- <cli args>]`;
 
 type Options = {
   command: string;
@@ -64,16 +72,23 @@ type Options = {
   server?: string;
   verbose: boolean;
   timing: boolean;
+  apply: boolean;
   rest: string[];
 };
 
 const parseArguments = (argv: readonly string[]): Options => {
   const [command, ...tail] = argv;
   if (!command) throw new Error(usage);
-  const options: Options = { command, verbose: false, timing: false, rest: [] };
+  const options: Options = {
+    command,
+    verbose: false,
+    timing: false,
+    apply: false,
+    rest: [],
+  };
   // Everything after `cli` belongs to the CLI, flags included; the other
   // commands take only the options above.
-  if (command === "cli" || command === "check") {
+  if (command === "cli" || command === "check" || command === "build-check") {
     options.rest = [...tail];
     return options;
   }
@@ -104,6 +119,11 @@ const parseArguments = (argv: readonly string[]): Options => {
           throw new Error(`--timing requires mac, ios, or sim\n${usage}`);
         }
         options.timing = true;
+        break;
+      case "--apply":
+        if (command !== "clean")
+          throw new Error(`--apply requires clean\n${usage}`);
+        options.apply = true;
         break;
       case "--verbose":
         options.verbose = true;
@@ -142,6 +162,97 @@ const ensureProject = () =>
     "--use-cache",
   ]);
 
+// Package checkouts and build databases stay checkout-local. Only the compiler's
+// content-addressed cache is shared, so concurrent branches never share outputs.
+export const appleBuildArguments = (
+  apple: string,
+  derived: string,
+  ci = !!process.env.CI,
+) => [
+  "-derivedDataPath",
+  derived,
+  "-clonedSourcePackagesDirPath",
+  join(apple, "SourcePackages"),
+  "-skipPackagePluginValidation",
+  "-skipMacroValidation",
+  "COMPILATION_CACHE_ENABLE_CACHING=YES",
+  "COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES",
+  "COMPILATION_CACHE_LIMIT_SIZE=10G",
+  `COMPILATION_CACHE_CAS_PATH=${ci ? join(derived, "CompilationCache.noindex") : join(homedir(), "Library/Caches/cubby/xcode")}`,
+  "COMPILER_INDEX_STORE_ENABLE=NO",
+];
+
+export function cleanApple(root: string, apply: boolean) {
+  const apple = join(realpathSync(root), "apps/apple");
+  // A redirected parent would make an apparently local cleanup destructive.
+  if (realpathSync(apple) !== apple)
+    throw new Error("Refusing symlink in Apple cleanup path");
+  const paths = ["DerivedData", "SourcePackages", "CubbyKit/.build"]
+    .map((path) => join(apple, path))
+    .filter((path) => {
+      if (!existsSync(path)) return false;
+      if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path)
+        throw new Error(`Refusing symlink in Apple cleanup path: ${path}`);
+      return true;
+    });
+  for (const path of paths) {
+    const size = captureSyncChecked("du", ["-sk", path], root).split("\t")[0];
+    process.stdout.write(
+      `${apply ? "Candidate" : "Would remove"} ${size} KiB  ${path}\n`,
+    );
+  }
+  if (!apply) {
+    process.stdout.write(
+      "Preview only; use pnpm apple clean --apply after stopping builds and closing Xcode. Shared caches are retained.\n",
+    );
+    return;
+  }
+  // Fail closed if lsof cannot inspect the tree. Recheck all paths before any
+  // deletion, so an active build leaves the whole cleanup unapplied.
+  for (const path of paths) {
+    const result = spawnSync("lsof", ["-t", "+D", path], { encoding: "utf8" });
+    if (result.error) throw result.error;
+    if (result.status !== 1 || result.stdout.trim() || result.stderr.trim())
+      throw new Error(
+        `Refusing cleanup: open files or inspection failure in ${path}. Close Xcode and stop builds first.\n${result.stderr}`,
+      );
+  }
+  for (const path of paths) {
+    if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path)
+      throw new Error(`Refusing symlink in Apple cleanup path: ${path}`);
+    rmSync(path, { recursive: true });
+    process.stdout.write(`Removed ${path}\n`);
+  }
+}
+
+const buildCheck = (scope: string | undefined) => {
+  if (scope !== "host" && scope !== "app")
+    throw new Error("build-check requires host or app");
+  const host = scope === "host";
+  const derived = host ? join(KIT, ".build/xcode") : DERIVED;
+  run(
+    "xcodebuild",
+    [
+      ...(host ? [] : ["-project", PROJECT]),
+      "-scheme",
+      host ? "CubbyKit-Package" : "Cubby-iOS",
+      "-configuration",
+      "Debug",
+      "-destination",
+      host ? "platform=macOS,arch=arm64" : "generic/platform=iOS Simulator",
+      ...appleBuildArguments(APPLE, derived),
+      ...(host ? ["-onlyUsePackageVersionsFromResolvedFile"] : []),
+      "-showBuildTimingSummary",
+      "SWIFT_ENABLE_BATCH_MODE=YES",
+      "ARCHS=arm64",
+      "ONLY_ACTIVE_ARCH=YES",
+      "CODE_SIGNING_ALLOWED=NO",
+      host ? "test" : "build",
+    ],
+    host ? KIT : ROOT,
+  );
+};
+
 const xcodebuild = (
   scheme: "Cubby-iOS" | "Cubby-macOS",
   destination: string,
@@ -156,8 +267,7 @@ const xcodebuild = (
     "Debug",
     "-destination",
     destination,
-    "-derivedDataPath",
-    DERIVED,
+    ...appleBuildArguments(APPLE, DERIVED),
     // Automatic signing (project.yml) may need to mint a profile for a new
     // device or a rotated team certificate. -allowProvisioningUpdates alone
     // refreshes profiles but never registers a device, so a machine that has
@@ -165,13 +275,8 @@ const xcodebuild = (
     // "isn't registered" → "No profiles found"; the second flag adds it.
     "-allowProvisioningUpdates",
     "-allowProvisioningDeviceRegistration",
-    // CubbyAPI is generated by swift-openapi-generator's build plugin.
-    "-skipPackagePluginValidation",
     ...(options.verbose || options.timing ? [] : ["-quiet"]),
     ...(options.timing ? ["-showBuildTimingSummary"] : []),
-    // The index store only feeds Xcode's IDE navigation; a command-line build
-    // has no reader for it. Left out of project.yml so GUI builds still index.
-    "COMPILER_INDEX_STORE_ENABLE=NO",
     "build",
   ]);
 
@@ -427,6 +532,12 @@ const test = () => {
 const main = () => {
   const options = parseArguments(process.argv.slice(2));
   switch (options.command) {
+    case "clean":
+      return cleanApple(ROOT, options.apply);
+    case "build-check":
+      if (options.rest.length !== 1)
+        throw new Error("build-check requires host or app");
+      return buildCheck(options.rest[0]);
     case "cli":
       return cli(options);
     case "mac":
@@ -453,11 +564,12 @@ const main = () => {
   }
 };
 
-try {
-  await main();
-} catch (error) {
-  process.stderr.write(
-    `apple: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exit(1);
-}
+if (import.meta.main)
+  try {
+    await main();
+  } catch (error) {
+    process.stderr.write(
+      `apple: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(1);
+  }

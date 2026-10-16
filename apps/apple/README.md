@@ -71,14 +71,36 @@ time, and then:
 Add `--timing` to `mac`, `ios`, or `sim` for the full build log and Xcode's task timing
 summary. Without it, each command still prints the wall-clock time of each build/install step.
 
-XcodeGen configures Xcode's GUI DerivedData location inside each checkout at
-`apps/apple/DerivedData/Cubby`, so removing a worktree also removes its GUI build
-artifacts. The command-line app builds retain `apps/apple/DerivedData`; GUI and
-command-line outputs are separate, and compiled outputs stay isolated between
-worktrees. Existing global DerivedData is not moved or deleted by generation.
-Local Swift package commands disable the index store, matching CI; Xcode GUI
-indexing stays enabled. Regenerating the project applies the location setting
-while preserving other workspace preferences.
+XcodeGen points GUI and command-line app builds at the same checkout-local
+`apps/apple/DerivedData`. Regenerate with `pnpm apple gen` to apply it. Different
+worktrees retain separate build databases/products and package checkouts, so they
+can build concurrently; avoid overlapping builds within one checkout.
+
+Xcode compilation results use a shared content-addressed cache at
+`~/Library/Caches/cubby/xcode`, with Xcode-managed trimming to a 10 GB limit.
+Project settings enable it for GUI app targets; the existing Apple command also
+passes it to package targets for app launches and native checks. This saves
+repeated compiler-cache storage and lets compatible compilations be reused across
+worktrees. Package pins and compiler inputs still decide reuse; a fresh worktree
+must resolve its own package graph, generate sources, and link its own products.
+SwiftPM CLI builds/tests keep their own `.build` outputs and SwiftPM's normal
+shared download cache. Mutable package checkout directories are never shared
+between worktrees. Launches and checks use one `apps/apple/SourcePackages` per
+checkout; GUI package resolution remains managed by Xcode.
+
+CI checks and TestFlight archives retain their existing DerivedData-local compiler
+cache paths for hosted cache restore/save. Local GUI indexing stays enabled;
+command-line builds disable the index store.
+
+`pnpm apple clean` previews allocated KiB for this checkout's `DerivedData`,
+`SourcePackages`, and `CubbyKit/.build`. Stop builds and close Xcode, then use
+`pnpm apple clean --apply` to delete those rebuildable directories. Cleanup refuses
+symlinked paths and directories with open files, and retains source files,
+generated FFI, global caches, archives, simulator data, and other worktrees.
+The open-file check is a guard, not synchronization: do not start a build during
+cleanup. Existing GUI data under `DerivedData/Cubby` is included in that preview;
+generation does not move or delete old artifacts. Removing a worktree still
+removes its local build artifacts, while the shared compiler cache survives.
 
 None of these attach a debugger; for breakpoints use the Xcode schemes below.
 

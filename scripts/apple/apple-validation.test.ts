@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
+  openSync,
+  closeSync,
+  symlinkSync,
   cpSync,
   mkdirSync,
   mkdtempSync,
@@ -56,7 +60,7 @@ test("host test failures still run the independent OpenAPI warning gate", (t) =>
   mkdirSync(join(root, "apps/apple/CubbyKit"), { recursive: true });
   for (const [name, body] of Object.entries({
     "bin/xcode-select": "exit 0",
-    "bin/xcodebuild": "echo synthetic-host-failure; exit 1",
+    "bin/node": "echo synthetic-host-failure; exit 1",
     "apps/apple/scripts/prepare-project.sh": "exit 0",
     "apps/apple/scripts/check-openapi-warnings.sh":
       "echo synthetic-warning-check; exit 0",
@@ -78,6 +82,7 @@ test("host test failures still run the independent OpenAPI warning gate", (t) =>
     },
   );
   assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /synthetic-host-failure/);
   assert.match(result.stdout, /synthetic-warning-check/);
 });
 
@@ -186,4 +191,38 @@ test("native pass replay needs no FFI; misses prepare once and execute sequentia
   );
   assert.match(calls, /--targets=host-tests,simulator-build/);
   assert.match(calls, /--parallel=1/);
+});
+
+// Cleanup must be preview-only by default and never traverse outside a checkout
+// or remove files that an active build has open.
+test("Apple cleanup previews, preserves open build files, and refuses redirected roots", async (t) => {
+  if (process.platform !== "darwin")
+    return t.skip("Apple cleanup uses macOS lsof");
+  const { cleanApple } = await import("./apple.ts");
+  const root = mkdtempSync(join(tmpdir(), "apple-clean-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const derived = join(root, "apps/apple/DerivedData");
+  mkdirSync(derived, { recursive: true });
+  const output = join(derived, "synthetic-output");
+  writeFileSync(output, "synthetic build output");
+  const source = join(root, "apps/apple/source.swift");
+  writeFileSync(source, "// synthetic source");
+  cleanApple(root, false);
+  assert.ok(existsSync(output));
+  const fd = openSync(output, "r");
+  try {
+    assert.throws(() => cleanApple(root, true), /open files/);
+    assert.ok(existsSync(output));
+  } finally {
+    closeSync(fd);
+  }
+  cleanApple(root, true);
+  assert.ok(!existsSync(derived));
+  assert.ok(existsSync(source));
+  const outside = join(root, "outside");
+  mkdirSync(outside);
+  writeFileSync(join(outside, "keep"), "synthetic unrelated file");
+  symlinkSync(outside, derived);
+  assert.throws(() => cleanApple(root, true), /symlink/);
+  assert.ok(existsSync(join(outside, "keep")));
 });
