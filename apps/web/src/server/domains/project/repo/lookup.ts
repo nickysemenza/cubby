@@ -276,7 +276,7 @@ export const buildProjectListQuery = async (
 
   const orderByArray = projectScaffold.orderBy(sorts, {}, filters);
 
-  return { tree: loadedTree, whereClause, orderByArray };
+  return { tree: loadedTree, whereClause, orderByArray, context };
 };
 
 /**
@@ -330,13 +330,8 @@ export const projectListRead = async (
   readIntent: ListReadIntent = "page",
   preparedTree?: ProjectTree,
 ) => {
-  const { tree, whereClause, orderByArray } = await buildProjectListQuery(
-    db,
-    filters,
-    sorts,
-    undefined,
-    preparedTree,
-  );
+  const { tree, whereClause, orderByArray, context } =
+    await buildProjectListQuery(db, filters, sorts, undefined, preparedTree);
   // Both start beside the page read rather than after it.
   const sumsRead =
     readIntent === "page" && projection.kind === "full"
@@ -355,6 +350,7 @@ export const projectListRead = async (
       { filters, sorts, pagination, readIntent, projection },
       {
         where: whereClause,
+        context,
         orderBy: orderByArray,
         hydrate: async (rows) => {
           if (projection.kind === "base")

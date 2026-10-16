@@ -128,6 +128,13 @@ describe("product list declared filters", () => {
       status: "in_progress",
       trade: "other",
     });
+    await createRepoEntity(ctx, "task", {
+      name: "Parity bag flour",
+      subjectProductId: flour.id,
+      status: "done",
+      dueDate: "2026-09-01",
+      trade: "other",
+    });
     return { garage, rack, drivers, driver, flour, misc, kit, bit, tote };
   };
 
@@ -175,6 +182,10 @@ describe("product list declared filters", () => {
       ],
       [{ taskStatusFilter: ["in_progress"] }, [w.flour]],
       [{ taskOpenOnly: true }, [w.flour]],
+      // Status and due constrain the same task: the in-progress task has no
+      // due date and the dated one is done.
+      [{ taskStatusFilter: ["in_progress"], taskDueTo: "2026-12-31" }, []],
+      [{ taskOpenOnly: false }, all],
       [{ stockTrackedPresenceFilter: "has" }, [w.driver]],
       // The generated sub-category toggle: on by default, off is exact.
       [

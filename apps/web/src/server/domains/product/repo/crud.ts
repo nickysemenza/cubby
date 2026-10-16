@@ -341,9 +341,39 @@ const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelN
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-/** Products with a live task whose effective subject is the product. */
-const productHasTask = (condition: SQL | undefined) =>
-  inArray(
+const productTaskKeys = z.object({
+  taskStatusFilter: z
+    .union([taskStatusSchema, z.array(taskStatusSchema)])
+    .optional()
+    .catch(undefined),
+  taskOpenOnly: z.boolean().optional().catch(undefined),
+  taskDueFrom: z.string().optional().catch(undefined),
+  taskDueTo: z.string().optional().catch(undefined),
+});
+
+// Status, open, and due constrain ONE task. Each key's predicate reads all
+// three from the request, and only the first present key renders the subquery.
+const productTasks = listPrepare(async (_db, filters) =>
+  productTaskKeys.parse(filters),
+);
+
+/** Products with a live task, whose effective subject is the product, matching every task key. */
+const productHasTask = ({
+  taskStatusFilter,
+  taskOpenOnly,
+  taskDueFrom,
+  taskDueTo,
+}: z.output<typeof productTaskKeys>) => {
+  const statuses =
+    taskStatusFilter === undefined ? [] : [taskStatusFilter].flat();
+  if (
+    statuses.length === 0 &&
+    !taskOpenOnly &&
+    taskDueFrom === undefined &&
+    taskDueTo === undefined
+  )
+    return undefined;
+  return inArray(
     product.id,
     qb
       .select({ productId: effectiveTaskSubjectProductSql() })
@@ -352,10 +382,18 @@ const productHasTask = (condition: SQL | undefined) =>
         and(
           notDeleted(task),
           isNotNull(effectiveTaskSubjectProductSql()),
-          condition,
+          statuses.length > 0 ? inArray(task.status, statuses) : undefined,
+          taskOpenOnly ? ne(task.status, "done") : undefined,
+          taskDueFrom === undefined
+            ? undefined
+            : sql`${task.dueDate} >= ${taskDueFrom}`,
+          taskDueTo === undefined
+            ? undefined
+            : sql`${task.dueDate} <= ${taskDueTo}`,
         ),
       ),
   );
+};
 
 const productScaffold = listScaffold("product", product, {
   derived: {
@@ -520,28 +558,16 @@ const productScaffold = listScaffold("product", product, {
           : sql`${onHand} = ${expected}`,
       );
     },
-    taskStatus: ({ values }) =>
-      productHasTask(
-        inArray(
-          task.status,
-          values.flatMap((value) => {
-            const status = taskStatusSchema.safeParse(value);
-            return status.success ? [status.data] : [];
-          }),
-        ),
-      ),
-    taskOpen: (open) =>
-      open ? productHasTask(ne(task.status, "done")) : undefined,
+    taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
+    taskOpen: productTasks.predicate((keys) =>
+      keys.taskStatusFilter === undefined ? productHasTask(keys) : undefined,
+    ),
     // Presence is the related view's `taskPresenceFilter`.
-    taskDue: ({ from, to }) =>
-      from === undefined && to === undefined
-        ? undefined
-        : productHasTask(
-            and(
-              from === undefined ? undefined : sql`${task.dueDate} >= ${from}`,
-              to === undefined ? undefined : sql`${task.dueDate} <= ${to}`,
-            ),
-          ),
+    taskDue: productTasks.predicate((keys) =>
+      keys.taskStatusFilter === undefined && !keys.taskOpenOnly
+        ? productHasTask(keys)
+        : undefined,
+    ),
   },
 });
 
@@ -863,19 +889,28 @@ export const getProductsByShortcodes = async (
  */
 type ProductListFilters = ProductFilters & { ids?: readonly string[] };
 
+/** The list WHERE and the context it prepared, which the page read reuses. */
+const productWhere = async (
+  db: Database,
+  filters: ProductListFilters,
+  readContext?: QualityReadContext,
+) => {
+  // Filter-only: owners resolve only when a filter asks.
+  const context = await productScaffold.context(db, {
+    filters,
+    readIntent: "count",
+  });
+  return {
+    where: productScaffold.where(filters, [], { context, readContext }),
+    context,
+  };
+};
+
 export const buildProductWhere = async (
   db: Database,
   filters: ProductListFilters,
   readContext?: QualityReadContext,
-) =>
-  productScaffold.where(filters, [], {
-    // Filter-only: owners resolve only when a filter asks.
-    context: await productScaffold.context(db, {
-      filters,
-      readIntent: "count",
-    }),
-    readContext,
-  });
+) => (await productWhere(db, filters, readContext)).where;
 
 const loadProductListSums = async (
   db: Database,
@@ -931,7 +966,7 @@ type ProductSelectedPageRow = typeof product.$inferSelect &
 /** The authoritative filtered, sorted page is shared by every projection. */
 const readProductListPage = async (
   db: Database,
-  whereClause: SQL | undefined,
+  { where: whereClause, context }: Awaited<ReturnType<typeof productWhere>>,
   filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
@@ -975,6 +1010,7 @@ const readProductListPage = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
+      context,
       orderBy: orderByArray,
       load:
         projection.kind === "base"
@@ -1007,7 +1043,8 @@ export const productList = async (
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
 ) => {
-  const whereClause = await buildProductWhere(db, filters);
+  const filtered = await productWhere(db, filters);
+  const whereClause = filtered.where;
   if (readIntent === "count")
     return {
       data: [],
@@ -1018,7 +1055,7 @@ export const productList = async (
   const [{ results, totalCount, groups }, sums] = await Promise.all([
     readProductListPage(
       db,
-      whereClause,
+      filtered,
       filters,
       sorts,
       pagination,
@@ -1135,10 +1172,10 @@ export const listProductsRead = async (
     if (groups) result.groups = groups;
     return result;
   }
-  const whereClause = await buildProductWhere(db, filters);
+  const filtered = await productWhere(db, filters);
   const { results, totalCount, groups } = await readProductListPage(
     db,
-    whereClause,
+    filtered,
     filters,
     sorts,
     pagination,
