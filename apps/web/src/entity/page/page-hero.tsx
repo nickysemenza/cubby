@@ -13,6 +13,7 @@ import { z } from "zod";
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
 import { EntityCover } from "~/entity/components/entity-cover";
+import { entityHeroWhen } from "~/entity/display/entity-display";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
@@ -231,7 +232,7 @@ interface DetailPlateProps {
   wayfinding?: DetailWayfinding | false;
   /** The big plate title (entity name). */
   name: ReactNode;
-  /** Raw entity used for the added-date metadata. */
+  /** Raw entity used for the `hero.when` and added-date metadata. */
   rawData?: unknown;
   /** Reference code shown in the breadcrumb (e.g. the product shortcode). */
   heroNo?: string;
@@ -266,6 +267,9 @@ function DetailPlate({
     : undefined;
   const validCreatedAt =
     createdAt !== undefined && !Number.isNaN(new Date(createdAt).getTime());
+  const when = parsedRawData.success
+    ? entityHeroWhen(entity, parsedRawData.data)
+    : null;
   const cover = heroImages?.[0];
   return (
     <header
@@ -315,9 +319,15 @@ function DetailPlate({
                   {heroStamp.label}
                 </Badge>
               )}
+              {when && (
+                <span>
+                  {when.label} {when.value}
+                </span>
+              )}
               {validCreatedAt && (
                 <span>
-                  Added <DateDisplay timestamp={createdAt} />
+                  {when ? "· added " : "Added "}
+                  <DateDisplay timestamp={createdAt} />
                 </span>
               )}
             </div>

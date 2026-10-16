@@ -77,7 +77,11 @@ export default defineEntity({
     },
     icons: { phosphor: "Envelope", sfSymbol: "envelope", emoji: "✉️" },
     detail: {
-      hero: { chip: "classification", stats: [] },
+      hero: {
+        chip: "classification",
+        stats: [],
+        when: { field: "receivedAt" },
+      },
       additionalSections: [
         { kind: "slot", id: "review", title: "Review and import" },
       ],

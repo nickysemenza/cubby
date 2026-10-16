@@ -75,7 +75,10 @@ export default defineEntity({
         "financial-transactions":
           "The financial-settlement slot renders the allocations with their amounts.",
       },
-      hero: { stats: ["statedTotal", "expenseTotal"] },
+      hero: {
+        stats: ["statedTotal", "expenseTotal"],
+        when: { field: "date", label: "Ordered" },
+      },
       additionalSections: [
         {
           kind: "relation",

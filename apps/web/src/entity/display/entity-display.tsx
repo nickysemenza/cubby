@@ -999,6 +999,28 @@ export function entityPreviewFacts<TRecord extends object>(
   return facts;
 }
 
+/**
+ * The declared `hero.when` — when the thing happened — rendered by the field's
+ * own renderer; null when undeclared or empty, so the header falls back to
+ * the ingest `createdAt`.
+ */
+export function entityHeroWhen<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+): { label: string; value: ReactNode } | null {
+  const when: { field: string; label?: string } | null =
+    entitySummary[entity].detail.hero.when;
+  if (when === null) return null;
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === when.field,
+  );
+  if (!field || copyScalarField(entity, record, field) === null) return null;
+  return {
+    label: when.label ?? field.label,
+    value: renderDetailFieldValue(entity, record, field),
+  };
+}
+
 /** The field keys of one declared `fields` detail section. */
 export const entitySectionFields = (
   entity: Entity,
