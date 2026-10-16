@@ -81,6 +81,9 @@ contracts in `apps/web/tooling/entity-generator.unit.test.ts` as well as the
 consumer regression. Successful generation does not check existing exact-shape
 expectations.
 
+Testing Library role queries match string names exactly by default; `exact` is
+a Playwright locator option.
+
 In browser tests, use `chooseOption` for enum Pickers rendered as button
 comboboxes. `selectComboboxItem` fills a searchable entity Picker input; it
 cannot select an enum button. Match the rendered control before choosing a helper.

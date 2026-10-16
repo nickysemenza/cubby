@@ -230,7 +230,5 @@ it("keeps a pending form action named by its text alone", () => {
     );
   }
   render(<Example />);
-  expect(
-    screen.getByRole("button", { name: "Save part…", exact: true }),
-  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save part…" })).toBeDisabled();
 });

@@ -164,10 +164,6 @@ it("keeps bulk action names while execution and select-all are pending", () => {
       }}
     />,
   );
-  expect(
-    screen.getByRole("button", { name: "Move", exact: true }),
-  ).toBeDisabled();
-  expect(
-    screen.getByRole("button", { name: "Select all 12", exact: true }),
-  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Move" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Select all 12" })).toBeDisabled();
 });
