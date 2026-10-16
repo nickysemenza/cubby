@@ -87,7 +87,7 @@ rather than adding duplicate PR cards.
 Before implementation, briefly search open GitHub issues using the requested
 outcome, affected feature, component, or error. Read plausible matches and their
 acceptance criteria, including Project fields and native relationships below.
-For a crash, runtime error, regression, or supplied Sentry reference, also check
+For a crash, runtime error, runtime regression, or supplied Sentry reference, also check
 the relevant [Sentry issues](../runbooks/sentry-triage.md) and their native GitHub
 links. Keep discovery focused on the task; routine documentation and feature
 work does not require a Sentry search. A related issue does not expand the
