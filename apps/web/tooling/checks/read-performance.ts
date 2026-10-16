@@ -62,6 +62,7 @@ const patchSchema = z.object({
   groups: z.array(z.object({ state: z.enum(["ready", "error"]) })),
 });
 const requests: {
+  operation: string;
   version: string | null;
   requestId: string | null;
   firstResponseMs: number;
@@ -73,7 +74,12 @@ const requests: {
   queryActiveWallMs: number | null;
   clientQueueActiveWallMs: number | null;
 }[] = [];
-async function request(path: string, body?: ReadInput, method = "POST") {
+async function request(
+  operation: string,
+  path: string,
+  body?: ReadInput,
+  method = "POST",
+) {
   const started = performance.now();
   const headers = new Headers(authHeaders);
   if (body !== undefined) headers.set("content-type", "application/json");
@@ -97,6 +103,7 @@ async function request(path: string, body?: ReadInput, method = "POST") {
       ? null
       : JSON.parse(new TextDecoder().decode(responseBody));
   const measurement = {
+    operation,
     version: response.headers.get("x-cubby-worker-version"),
     requestId: response.headers.get("x-request-id"),
     firstResponseMs,
@@ -119,7 +126,11 @@ async function list(entity: string, sample: number) {
   const started = performance.now();
   const measurements: typeof requests = [];
   const read = async (path: string, body?: ReadInput, method = "POST") => {
-    const value = await request(path, body, method);
+    const operation =
+      mode === "complete"
+        ? "resource.list"
+        : (path.split("/").at(-1) ?? "unknown");
+    const value = await request(operation, path, body, method);
     measurements.push(value.measurement);
     return value.result;
   };
@@ -190,6 +201,7 @@ if (values.caldav)
     for (const method of ["OPTIONS", "PROPFIND"]) {
       const started = performance.now();
       const { measurement } = await request(
+        `caldav.${method.toLowerCase()}`,
         "/api/caldav/calendars/me/completed-tasks/",
         undefined,
         method,
@@ -211,30 +223,42 @@ const summary = [...new Set(observations.map((row) => row.entity))].map(
     const rows = observations.filter((row) => row.entity === entity);
     const measuredRequests = rows.flatMap((row) => row.requests);
     const databaseMetric = (
+      operation: string,
       field:
         | "sqlCount"
         | "acquisitionMs"
         | "queryActiveWallMs"
         | "clientQueueActiveWallMs",
     ) => {
-      const available = measuredRequests.flatMap((request) =>
+      const operationRequests = measuredRequests.filter(
+        (request) => request.operation === operation,
+      );
+      const available = operationRequests.flatMap((request) =>
         request[field] === null ? [] : [request[field]],
       );
       return {
         observedRequests: available.length,
-        totalRequests: measuredRequests.length,
+        totalRequests: operationRequests.length,
         median: available.length ? percentile(available, 0.5) : null,
       };
     };
     return {
       entity,
       samples: rows.length,
-      databasePerRequest: {
-        sqlCount: databaseMetric("sqlCount"),
-        acquisitionMs: databaseMetric("acquisitionMs"),
-        queryActiveWallMs: databaseMetric("queryActiveWallMs"),
-        clientQueueActiveWallMs: databaseMetric("clientQueueActiveWallMs"),
-      },
+      databasePerRequest: [
+        ...new Set(measuredRequests.map((request) => request.operation)),
+      ]
+        .sort()
+        .map((operation) => ({
+          operation,
+          sqlCount: databaseMetric(operation, "sqlCount"),
+          acquisitionMs: databaseMetric(operation, "acquisitionMs"),
+          queryActiveWallMs: databaseMetric(operation, "queryActiveWallMs"),
+          clientQueueActiveWallMs: databaseMetric(
+            operation,
+            "clientQueueActiveWallMs",
+          ),
+        })),
       usableMedianMs: percentile(
         rows.map((row) => row.usableMs),
         0.5,

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readDatabaseTiming } from "./read-performance-metrics";
 
 describe("read evidence database timing", () => {
-  it("reads the request collector without inventing CPU or adding overlapping query durations", () => {
+  it("reads the request collector's active-wall metrics rather than summed query durations", () => {
     expect(
       readDatabaseTiming(
         new Headers({

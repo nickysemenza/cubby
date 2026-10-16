@@ -1168,8 +1168,10 @@ Resource GET pagination uses `page=1` while progressive structured input uses
 `pageIndex=0`; keep compared populations equivalent. The harness does not infer
 platform cold starts from elapsed time. SQL count and database acquisition,
 query and client-queue active-wall times come from the existing `Server-Timing`
-request collector. The aggregate report includes per-request medians and
-observed/total request counts; private raw output preserves individual samples.
+request collector (rounded to milliseconds). The aggregate report separates
+base, enrichment and summary operations, with per-request medians and
+observed/total request counts for each. Private raw output labels individual
+samples by operation without recording resource paths.
 Absent, malformed, duplicate and streamed-response metrics stay null: stream
 headers can precede the remaining work. Worker CPU still requires matching
 sampled trace evidence; wall times do not establish CPU time. A decoded-row

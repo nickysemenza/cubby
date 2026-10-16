@@ -220,7 +220,8 @@ they do not introduce universal timing, query-count, or plan-shape CI gates.
 Retain correctness regressions and the final-content CI merge gate above.
 
 Performance changes provide a standard, non-blocking before/after evidence
-report: requested fields and dependencies versus loaded work, SQL calls and
+report using the [existing read harness](../entities.md#progressive-lists):
+requested fields and dependencies versus loaded work, SQL calls and
 plan work at representative synthetic scale, response bytes, decoded operation
 failures, and time until useful data is available. Label the revision,
 environment, workload, cache state, and unavailable measurements. A query timing
