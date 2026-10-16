@@ -617,6 +617,24 @@ describe("stored suggestions in generic list cells", () => {
     harness.dispose();
   });
 
+  it("bounds grouped-list suggestion requests before schema validation", async () => {
+    const recordIds = Array.from({ length: 501 }, (_, index) =>
+      testShortcode("product", `grouped-${index}`),
+    );
+    const read = vi.fn(
+      async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
+        suggestionReviewListInput.parse(input);
+        return input.recordIds.map((recordId) => suggestion({ recordId }));
+      },
+    );
+    const rows = await everyPendingSuggestion(read)({
+      entity: "product",
+      recordIds,
+      fields: ["categoryId"],
+    });
+    expect(rows.map((row) => row.recordId)).toEqual(recordIds);
+  });
+
   // Seven suggestible Expense fields on a 250-row page exceed one read's
   // limit; a truncated read used to pass for the whole page.
   it("splits a list page's read by record until no read is truncated", async () => {

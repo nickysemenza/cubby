@@ -121,6 +121,8 @@ at most 1000 source IDs per request and send none when no relation is visible;
 loading and raw read errors belong to the affected batch's cells.
 Live suggestions wait for their target projection; an absent deferred field is
 not an empty saved value. Explicit nulls and resolved references remain eligible.
+Stored suggestion reads split grouped-list rosters into at most 250 record IDs
+before validation, and split full result pages further to avoid truncation.
 
 Lists, filtering, sorting, totals, and pagination belong on the server. A saved
 view is visible manifest-backed URL state; `scopeFilters` is only a visible
