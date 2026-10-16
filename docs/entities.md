@@ -156,8 +156,11 @@ declaration (`detail.additionalSections`, `list.views`, `list.totals`,
 `route.list`, `route.detail`) takes a plain name. The generator compiles each
 override without it and refuses one that changes nothing, so the Schema tab's
 override table lists only live deviations. `detail.hero` names the chip (an
-enum/boolean field), stat fields, and a breadcrumb reference field; hero images
-follow the gallery capability. Actions derive from capabilities: the hero gets
+enum/boolean field), stat fields, a breadcrumb reference field, and `when` (a
+date or timestamp field, optional `label`) for when the thing happened, shown
+through the field's own renderer ahead of the ingest `createdAt`, which it
+replaces as the leading time and falls back to when empty; hero images follow
+the gallery capability. Actions derive from capabilities: the hero gets
 `edit` with an update contract, and a list gets `bulkEdit` (bulk update),
 `merge` (kernel merge), and `delete` (kernel delete). `hero.extraActions` and
 `list.extraActions` add workflow verbs ahead of those.

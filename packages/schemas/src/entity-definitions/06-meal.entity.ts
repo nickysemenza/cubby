@@ -53,7 +53,7 @@ export default defineEntity({
         recipes:
           "The composition slot renders served recipes with their portions.",
       },
-      hero: {},
+      hero: { when: { field: "date", label: "Eaten" } },
       additionalSections: [
         {
           kind: "slot",

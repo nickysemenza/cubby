@@ -104,6 +104,13 @@ const checkHero = (
         `${lookup.context}.detail.hero.breadcrumb ${hero.breadcrumb} must be a reference field.`,
       );
   }
+  if (hero.when !== null) {
+    const field = lookup.read(hero.when.field, "detail.hero.when");
+    if (field.kind !== "date" && field.kind !== "timestamp")
+      throw new EntityDeclarationError(
+        `${lookup.context}.detail.hero.when ${hero.when.field} must be a date or timestamp field.`,
+      );
+  }
 };
 
 /** Returns whether a timeline section is declared. */

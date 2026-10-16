@@ -1095,15 +1095,27 @@ const buildMetadataSchemas = () => {
               stats: z.array(fieldKey).optional().default([]),
               /** A reference field rendered as the ancestry breadcrumb. */
               breadcrumb: fieldKey.nullable().optional().default(null),
+              /**
+               * A date or timestamp field recording when the thing happened,
+               * shown before the ingest `createdAt`. `label` defaults to the
+               * field's label.
+               */
+              when: z
+                .object({ field: fieldKey, label: z.string().optional() })
+                .strict()
+                .nullable()
+                .optional()
+                .default(null),
               /** Workflow verbs after the derived `edit` (present with an update contract). */
               extraActions: z.array(actionKey).optional().default([]),
             })
             .strict()
             .prefault({})
-            .transform(({ chip, stats, breadcrumb, extraActions }) => ({
+            .transform(({ chip, stats, breadcrumb, when, extraActions }) => ({
               chip,
               stats,
               breadcrumb,
+              when,
               actions: extraActions,
             })),
           /** Null includes every declared section in Overview. A whitelist keeps

@@ -49,3 +49,36 @@ for (const width of [402, 900, 1280]) {
     expect(screen.getByText("$48.00")).toBeVisible();
   });
 }
+
+it.each([
+  {
+    name: "a declared timestamp leads and the ingest time follows",
+    entity: "email" as const,
+    rawData: { receivedAt: "2026-08-13T17:41:19Z" },
+    expected: /^Received Aug 13, 2026.*· added Oct 14, 2026/,
+  },
+  {
+    name: "a declared date stays on its calendar day",
+    entity: "purchase" as const,
+    rawData: { date: "2026-08-13" },
+    expected: /^Ordered Aug 13, 2026.*· added Oct 14, 2026/,
+  },
+  {
+    name: "an empty declared time falls back to the ingest time",
+    entity: "email" as const,
+    rawData: { receivedAt: null },
+    expected: /^Added Oct 14, 2026/,
+  },
+])("hero time: $name", ({ entity, rawData, expected }) => {
+  render(
+    <PageHeader
+      variant="detail"
+      entity={entity}
+      title="Example record"
+      rawData={{ createdAt: "2026-10-15T02:26:59Z", ...rawData }}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  const meta = screen.getByRole("heading").nextElementSibling;
+  expect(meta?.textContent?.trim()).toMatch(expected);
+});

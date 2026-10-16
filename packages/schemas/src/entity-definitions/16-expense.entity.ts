@@ -66,6 +66,7 @@ export default defineEntity({
       emoji: "💸",
     },
     detail: {
+      hero: { when: { field: "date", label: "Paid" } },
       omitRelations: {
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
