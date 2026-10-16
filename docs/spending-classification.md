@@ -18,6 +18,10 @@ Bulk allocations resolve their selected principal lines together, sharing one
 ancestry catalog and joining category policy once across the batch, including
 draft changes. The resolver uses the same depth and cycle guards and choice
 policy as scalar resolution; project-only reads omit category resolution.
+Scalar Project inheritance skips Project reads when an Expense has no explicit
+project or its Purchase has no default. Live explicit assignments still precede
+live Purchase defaults, then the household food fallback; deleted assignments do
+not block later choices.
 
 Purchase categories are fallbacks, not summaries. Purchases and Financial
 Transactions expose derived single, mixed, partial, unclassified, or
