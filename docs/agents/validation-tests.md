@@ -80,6 +80,9 @@ Browser dispatch can batch concurrent queries. A mock that parses a single
 operation envelope uses `unbatchFor` before its per-operation handler. Keep
 lazy-fetch assertions sensitive to every envelope; after refusing a batch,
 count individual operation attempts separately from transport fallback.
+Browser diagnostics inspect each decoded operation's `ok` flag, not only HTTP
+status: dispatch can return HTTP 200 for an operation failure. Decode each
+streamed NDJSON item's `r` SuperJSON payload before checking success.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
