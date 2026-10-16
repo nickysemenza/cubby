@@ -37,6 +37,8 @@
 [GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the canonical
 backlog. Follow the [issue workflow](docs/agents/issues.md) when selecting,
 creating, updating, or completing work; read Project fields and the issue body.
+Before implementation, check for existing issues covering the requested outcome;
+follow that workflow for discovery and PR attribution.
 
 ## Breaking changes
 
