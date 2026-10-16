@@ -406,6 +406,10 @@ inputs of the tasks each lane runs (`LANES`), resolving named inputs,
 `dependentTasksOutputFiles` producers, each task's own configuration, and the
 runtime inputs classified by exact command; an unclassified runtime input
 fails generation, and `cubby-checks:ci-lanes` fails when the file is stale.
+After changing any Nx task inputs, regenerate with `node scripts/ci-lanes.ts`
+and commit the resulting `.github/ci-lanes.yml` in the same change. Verify with
+`node scripts/ci-lanes.ts --check` and `node --test scripts/ci-lanes.test.ts`;
+adding a file to an existing input glob can change routing too.
 `scripts/ci-lanes.test.ts` asserts that every file Nx's hash plan reads for a
 lane's tasks selects that lane, and that every Nx task a lane's `ci.yaml`
 commands run is one that lane routes. Any deleted or renamed file also

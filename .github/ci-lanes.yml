@@ -194,7 +194,7 @@ apple.2:
   - "packages/shared/golden-vectors/**"
   - "recipebridge/**"
   - "rust-toolchain.toml"
-  - "scripts/{apple/apple-check.sh,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}"
+  - "scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}"
   - "!apps/apple/CubbyKit/Sources/CubbyAPI/README.md"
 apple.3:
   - ".cargo/**"
@@ -207,7 +207,7 @@ apple.3:
   - "packages/shared/golden-vectors/**"
   - "recipebridge/**"
   - "rust-toolchain.toml"
-  - "scripts/{apple/apple-check.sh,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}"
+  - "scripts/{apple/apple-check.sh,apple/apple.ts,apple/apple-inputs.ts,ci-environment.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts,lib/run.ts}"
   - "!apps/apple/CubbyKit/Sources/CubbyAPI/README.md"
   - "!apps/apple/CubbyKit/Tests/**"
   - "!apps/apple/{AGENTS,DESIGN,ITERATION,README}.md"
