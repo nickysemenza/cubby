@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { listEntities } from "~/entity/generated/entity-lists.gen";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import {
@@ -11,8 +12,14 @@ import {
   summarizeOperationReads,
 } from "./read-performance-operations";
 
+import {
+  requestedReadMetadata,
+  workloadContextSchema,
+} from "./read-performance-shape";
+
 const { values } = parseArgs({
   options: {
+    context: { type: "string" },
     origin: { type: "string" },
     output: { type: "string" },
     "raw-output": { type: "string" },
@@ -27,6 +34,9 @@ const { values } = parseArgs({
 });
 if (!values.origin || !values.output)
   throw new Error("Provide --origin and --output");
+const workloadContext = workloadContextSchema.parse(
+  values.context ? JSON.parse(await readFile(values.context, "utf8")) : {},
+);
 const origin = new URL(values.origin);
 if (
   origin.protocol !== "https:" &&
@@ -83,7 +93,12 @@ if (operationInput) {
 const operationReport =
   mode === "operations" ? summarizeOperationReads(operationSamples) : null;
 const entities =
-  mode === "operations" ? [] : values.entities.split(",").filter(Boolean);
+  mode === "operations"
+    ? []
+    : values.entities
+        .split(",")
+        .filter(Boolean)
+        .map((entity) => z.enum(listEntities).parse(entity));
 const rowSchema = z.object({ id: z.string() }).passthrough();
 const baseSchema = z.object({
   data: z.array(rowSchema),
@@ -186,7 +201,7 @@ async function list(entity: string, sample: number) {
     return;
   }
   const base = baseSchema.parse(
-    await read("/api/v1/entity/listBase", { entity, ...readInput }),
+    await read("/api/v1/entity/listBase", { ...readInput, entity }),
   );
   const usableMs = performance.now() - started;
   const enrichment =
@@ -206,7 +221,7 @@ async function list(entity: string, sample: number) {
       : Promise.resolve();
   await Promise.all([
     enrichment,
-    read("/api/v1/entity/listSummary", { entity, ...readInput }),
+    read("/api/v1/entity/listSummary", { ...readInput, entity }),
   ]);
   observations.push({
     entity,
@@ -317,7 +332,17 @@ const summary =
     };
   });
 const artifact = {
-  schema: 4,
+  schema: 5,
+  workloadContext,
+  requestedReads:
+    operationReport?.requestedReads ??
+    entities.map((entity) => ({
+      entity: z.enum(listEntities).parse(entity),
+      shape:
+        mode === "complete"
+          ? null
+          : requestedReadMetadata("entity.list", { ...readInput, entity }),
+    })),
   recordedAt: new Date().toISOString(),
   authenticationMode: apiKey
     ? "api-key"
@@ -339,7 +364,6 @@ const artifact = {
     })
     .optional()
     .parse(readInput.pagination),
-  filterFields: Object.keys(readInputSchema.parse(readInput.filters ?? {})),
   versions: operationReport?.versions ?? [
     ...new Set(
       observations.flatMap((row) =>
@@ -357,6 +381,7 @@ const artifact = {
       }
     : {}),
   limits: [
+    "Requested read metadata describes declarations, not observed SQL or loaded dependencies. Unsupported shapes and summary fields remain null. Workload context is operator asserted; revision identifies the measured deployment, not this CLI. Fingerprints are equality keys, not anonymization.",
     "SQL count and database active-wall times come from completed non-streaming response Server-Timing headers; absent, malformed or streamed metrics remain null. CPU requires matching trace evidence and is never inferred from wall time.",
     mode === "operations"
       ? "Per-operation settlement time is measured when its decoded result arrives, independently of HTTP body completion. Failures have no successful latency sample. No browser retries or fallback are applied; this is one transport attempt."

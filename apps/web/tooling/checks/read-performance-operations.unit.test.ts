@@ -52,6 +52,37 @@ async function serve<T>(
 }
 
 describe("operation performance evidence", () => {
+  it("carries only requested declaration metadata across measurement and aggregation", async () => {
+    const samples = await serve(
+      (response) => {
+        response.end(JSON.stringify(superjson.serialize(success)));
+      },
+      async (origin) => [
+        await measureOperationRead(
+          {
+            operation,
+            input: {
+              slots: ["project.budget"],
+              id: "synthetic-private-id",
+              extra: "synthetic-private-input",
+            },
+          },
+          origin,
+          new Headers(),
+        ),
+      ],
+    );
+    expect(samples[0]).toMatchObject({
+      requestedReads: [
+        { operation, shape: { kind: "report", slots: ["project.budget"] } },
+      ],
+    });
+    expect(summarizeOperationReads(samples)).toMatchObject({
+      requestedReads: [{ operation, shape: { slots: ["project.budget"] } }],
+    });
+    expect(JSON.stringify(samples)).not.toContain("synthetic-private");
+  });
+
   it("keeps database medians from successful requests separate from failed attempts", async () => {
     let request = 0;
     const samples = await serve(
@@ -235,4 +266,89 @@ describe("operation performance evidence", () => {
     expect(sample.failure).toBe("http");
     expect(sample.success).toBe(false);
   });
+});
+
+it("writes public and private CLI artifacts without raw input even on RPC failure", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { mkdir, mkdtemp, writeFile, readFile, rm } =
+    await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const root = resolve("../../artifacts/boat-performance");
+  await mkdir(root, { recursive: true });
+  const directory = await mkdtemp(`${root}/cli-`);
+  try {
+    await writeFile(
+      `${directory}/input.json`,
+      JSON.stringify({
+        operation,
+        input: {
+          slots: ["project.budget"],
+          id: "synthetic-private-id",
+          filters: { "synthetic-private-key": "synthetic-private-value" },
+        },
+      }),
+    );
+    await writeFile(
+      `${directory}/context.json`,
+      JSON.stringify({
+        environment: "local",
+        population: "synthetic",
+        scale: 1000,
+        revision: "a".repeat(40),
+      }),
+    );
+    const code = await serve(
+      (response) => response.end(JSON.stringify(superjson.serialize(failure))),
+      async (origin) => {
+        try {
+          await promisify(execFile)(
+            process.execPath,
+            [
+              "--import",
+              "tsx",
+              "tooling/checks/read-performance.ts",
+              "--origin",
+              origin.href,
+              "--mode",
+              "operations",
+              "--samples",
+              "1",
+              "--first-invocation",
+              "--input",
+              `${directory}/input.json`,
+              "--context",
+              `${directory}/context.json`,
+              "--output",
+              `${directory}/public.json`,
+              "--raw-output",
+              `${directory}/private.json`,
+            ],
+            {
+              env: {
+                ...process.env,
+                CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
+              },
+            },
+          );
+          return 0;
+        } catch (error) {
+          return (error as { code: number }).code;
+        }
+      },
+    );
+    expect(code).toBe(1);
+    for (const name of ["public", "private"]) {
+      const text = await readFile(`${directory}/${name}.json`, "utf8");
+      expect(text).not.toContain("synthetic-private");
+      expect(JSON.parse(text)).toMatchObject({
+        schema: 5,
+        workloadContext: { scale: 1000 },
+        requestedReads: [{ operation, shape: { slots: ["project.budget"] } }],
+        operationRequests: { rpcFailures: 1 },
+      });
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
