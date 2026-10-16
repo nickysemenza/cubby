@@ -88,14 +88,17 @@ const countConditions = (
     const variable = resolveVariable(sourceCode, node);
     const array = variable ? declaredArray(variable) : null;
     if (variable && array && !seen.has(variable)) {
+      // `seen` guards only the current expansion, so a list spread twice
+      // counts twice.
       seen.add(variable);
-      return (
+      const total =
         count(array) +
         pushedArguments(variable).reduce(
-          (total, argument) => total + count(argument),
+          (sum, argument) => sum + count(argument),
           0,
-        )
-      );
+        );
+      seen.delete(variable);
+      return total;
     }
   }
   return 1;
