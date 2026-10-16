@@ -1,0 +1,19 @@
+apps/web/src/server/generic/list/repo/list.ts
+  s_a97c767a553ada::t_7c772ca670da0d 124-126,261,263-264,325-330,332-333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5b3f996e666776b8288d22fd4626d5904b065a68",
+  "prompts": {},
+  "sessions": {
+    "s_a97c767a553ada": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f7c1ce8-2935-4968-857e-0c2859a2bb21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
