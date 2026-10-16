@@ -11,9 +11,9 @@ import {
  * The one local PostgreSQL server. Every checkout's `cubby_dev_<id>` database
  * and every test run's IntegreSQL templates live here: Virtualization.framework
  * guests never return freed pages to macOS, so a second server's footprint only
- * grew (a 4 GB test guest held ~9 GB on the host). It has no volume: all of
- * its data is synthetic, and `pnpm dev` re-creates, migrates and seeds a
- * missing checkout database.
+ * grew (a 4 GB test guest held ~9 GB on the host). Its data does not outlive
+ * the container: all of it is synthetic, and `pnpm dev` re-creates, migrates
+ * and seeds a missing checkout database.
  */
 export const SHARED_POSTGRES = "cubby-dev-pg";
 const SHARED_POSTGRES_HOST = "localhost";
@@ -25,6 +25,10 @@ const DEFAULT_DATABASE = "cubby_dev";
 const IMAGE = "docker.io/pgvector/pgvector:pg17";
 
 const resources = ["--cpus", "4", "--memory", "1536M"];
+// Checkouts before the shared server refuse a container without this mount,
+// so it stays attached while PostgreSQL keeps its data (PGDATA's default) in
+// the container. Remove once no active checkout predates this file.
+const legacyIdentity = ["--volume", "cubby-dev-pg-data:/cubby-devdata"];
 const settings = [
   "shared_preload_libraries=pg_stat_statements",
   // Test speed over durability; nothing here outlives the container.
@@ -43,7 +47,7 @@ const settings = [
 ];
 // A running container with other settings is recreated, empty.
 const configuration = createHash("sha256")
-  .update(JSON.stringify([IMAGE, resources, settings]))
+  .update(JSON.stringify([IMAGE, resources, legacyIdentity, settings]))
   .digest("hex")
   .slice(0, 8);
 const CONFIGURATION_ENV = `CUBBY_POSTGRES_CONFIG=${configuration}`;
@@ -111,6 +115,7 @@ export async function ensureSharedPostgres(): Promise<void> {
         "--publish",
         `127.0.0.1:${SHARED_POSTGRES_PORT}:5432`,
         ...resources,
+        ...legacyIdentity,
         "--env",
         `POSTGRES_USER=${SHARED_POSTGRES_USER}`,
         "--env",
