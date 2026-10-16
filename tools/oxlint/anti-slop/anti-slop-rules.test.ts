@@ -378,28 +378,14 @@ test("ordinary dialogs cannot bypass Overlay but triggers and confirmations rema
   );
 });
 
-// A nearby import has no ui/primitives segment in its source spelling.
-test("relative dialog imports resolve against the caller and specialized exceptions stay exact", () => {
-  const directory = mkdtempSync(
-    join(repoRoot, "apps/web/src/ui/.lint-fixture-"),
+// Reuse the scoped harness so parallel Knip scans exclude the temporary file.
+test("relative dialog imports resolve against the caller", () => {
+  const diagnostics = lintScopedFixture(
+    "no-ordinary-dialog-bypass",
+    "no-ordinary-dialog-relative.txt",
   );
-  const fixturePath = join(directory, "ordinary.ts");
-  writeFileSync(
-    fixturePath,
-    readFileSync(
-      join(fixtureDirectory, "no-ordinary-dialog-relative.txt"),
-      "utf8",
-    ),
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3],
   );
-  try {
-    const diagnostics = runOxlint(fixturePath).filter(
-      (diagnostic) => diagnostic.code === "cubby(no-ordinary-dialog-bypass)",
-    );
-    assert.deepEqual(
-      diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-      [1, 2, 3],
-    );
-  } finally {
-    rmSync(directory, { recursive: true });
-  }
 });
