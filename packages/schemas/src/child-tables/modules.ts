@@ -270,6 +270,17 @@ export const modulesChildren = [
         },
       },
       {
+        key: "hasRetainedText",
+        kind: "boolean",
+        notNull: true,
+        // Lists need presence, without decompressing each retained original.
+        generated: `COALESCE(
+          NULLIF(BTRIM({content}->>'snippet'), ''),
+          NULLIF(BTRIM({content}->>'bodyText'), ''),
+          NULLIF(BTRIM({content}->>'bodyHtml'), '')
+        ) IS NOT NULL`,
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         notNull: true,

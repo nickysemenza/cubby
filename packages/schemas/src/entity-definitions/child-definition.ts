@@ -61,6 +61,7 @@ export const childTableMetadataSchema = z
                   .transform(() => ({ kind: "now" as const })),
               ])
               .optional(),
+            generated: sql.optional(),
             onUpdateNow: z.literal(true).optional(),
             reference: reference.optional(),
           })
