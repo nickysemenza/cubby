@@ -299,7 +299,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
   await expect(
     page
       .getByRole("navigation", { name: "Section index" })
-      .getByRole("link", { name: /Applied/ }),
+      .locator('[aria-label="Applied"]'),
   ).toHaveCount(2);
   await expect(
     page
@@ -474,7 +474,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page
       .getByRole("navigation", { name: "Section index" })
-      .getByRole("link", { name: /Applied/ }),
+      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
@@ -490,7 +490,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page
       .getByRole("navigation", { name: "Section index" })
-      .getByRole("link", { name: /Applied/ }),
+      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
   ).toBeVisible();
   await expect(
     page.getByText("Every proposed group has been approved or discarded.", {
@@ -801,7 +801,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   await expect(
     page
       .getByRole("navigation", { name: "Section index" })
-      .getByRole("link", { name: /Applied/ }),
+      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
   ).toBeVisible();
   const review = await page.request.get(
     `/api/v1/photoImport/review?runId=${seed.runId}`,
@@ -1054,6 +1054,7 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
           unresolvedReason: "Check the sleeve label",
           stockIntent: "evidence",
         },
+        inventory: undefined,
       },
       seed.groups[1]!,
     ],
@@ -1182,7 +1183,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   );
   const attach = page.locator("#photo-group-g1");
   const create = page.locator("#photo-group-g2");
-  await expect(attach.getByText("↪ Attach", { exact: true })).toBeVisible();
+  await expect(
+    attach
+      .locator('[data-slot="card-header"]')
+      .getByText("↪ Attach", { exact: true }),
+  ).toBeVisible();
   await expect(attach.getByText(/On hand:/)).toBeVisible();
   // The evidence slot must show readable photos, not two squeezed thumbnails.
   const photo = await attach
@@ -1361,6 +1366,10 @@ test("keeps a weak closest match quiet", async ({ page, e2eRuntime }) => {
       {
         ...seed.groups[0]!,
         product: { kind: "create", create: { name: "Synthetic studio stool" } },
+        review: {
+          ...seed.groups[0]!.review!,
+          observedName: "Synthetic studio stool",
+        },
       },
       seed.groups[1]!,
     ],
