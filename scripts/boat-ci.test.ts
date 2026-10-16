@@ -248,6 +248,32 @@ test("provider process boundary preserves failures, collects evidence and delete
   }
 });
 
+test("a second run cannot reuse diagnostics left by an earlier transfer", async () => {
+  const fixture = fakeBoatFixture();
+  try {
+    const invoke = promisify(execFile);
+    await invoke(
+      process.execPath,
+      ["--input-type=module", "-e", fixture.script],
+      { env: fixture.env },
+    );
+    await invoke(
+      process.execPath,
+      ["--input-type=module", "-e", fixture.script],
+      { env: { ...fixture.env, FAKE_SKIP_COLLECTION: "1" } },
+    );
+    assert.equal(
+      readFileSync(path.join(fixture.root, "output"), "utf8")
+        .trim()
+        .split("\n")
+        .at(-1),
+      "outcome=fallback",
+    );
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("capacity exhaustion and executor-off perform no remote allocations", async () => {
   for (const flags of [
     { FAKE_NO_CAPACITY: "1" },

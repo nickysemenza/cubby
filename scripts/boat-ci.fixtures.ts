@@ -45,6 +45,7 @@ else if (args[0] === 'exec') {
   }
   if (process.env.FAKE_WAIT === '1') { console.log('FAKE_RUNNING'); setTimeout(() => {}, 30000); }
 } else if (args[0] === 'scp' && args[1] === '-r') {
+  if (process.env.FAKE_SKIP_COLLECTION === '1') process.exit(0);
   if (process.env.FAKE_COLLECTION_FAILURE === '1') process.exit(2);
   const manifest = JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8'));
   let reports = manifest.jobs.map((job, index) => ({id:job.id, command:job.run, revision:manifest.revision, tree:manifest.tree, exitCode:process.env.FAKE_FAILURE==='1' && index===0 ? 1 : 0, durationMs:10, sourceClean:true, evidenceComplete:true}));

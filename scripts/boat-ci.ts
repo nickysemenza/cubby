@@ -189,6 +189,7 @@ export async function coordinatePilot(root: string) {
     process.env.BOAT_AI_SMOKE === "true",
   );
   const output = path.join(root, "artifacts/boat-ci");
+  rmSync(output, { recursive: true, force: true });
   mkdirSync(output, { recursive: true });
   const snapshot = process.env.BOAT_CI_SNAPSHOT || "";
   if (snapshot && !/^[a-zA-Z0-9_-]{1,128}$/u.test(snapshot))
