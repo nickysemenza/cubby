@@ -502,9 +502,10 @@ The `integration` Vitest project runs once through the `postgres` target
 with four fork workers; local explicit partitions remain supported and separately keyed. The
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
-Workers and runtime tests`. A workerd consumer missing from that list runs in
-an ordinary integration shard and fails there, because in CI the harness
-refuses to rebuild a missing or stale Worker. Jobs that need the databases
+Workers and runtime tests`. Keep every Worker-consuming integration test in
+that project explicitly. An ordinary PostgreSQL step can inherit a valid
+browser-built Worker when paired; the harness's refusal to rebuild missing or
+stale Workers in CI does not enforce project membership. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port

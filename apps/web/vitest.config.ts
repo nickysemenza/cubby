@@ -111,9 +111,9 @@ const mcpContractTests = [
 const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 // PostgreSQL files that start the built Worker (`tooling/workerd-harness.ts`,
 // directly or through `workerd-runtime.ts`). CI runs them in the Worker build
-// job against its fresh bundle. A consumer missing from this list runs in the
-// ordinary integration job and fails there: in CI `ensureWorkerBuilds`
-// refuses to rebuild a missing or stale bundle.
+// step against its verified bundle. Keep consumers in this list explicitly:
+// an ordinary integration step can inherit a browser-built bundle when paired,
+// so CI's refusal to rebuild a missing/stale bundle does not enforce membership.
 const workerdIntegrationTests = [
   "src/server/domains/run/service/ai-work-workflow.integration.test.ts",
   "tooling/database-socket-lifecycle.integration.test.ts",
