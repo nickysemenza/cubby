@@ -239,6 +239,13 @@ Unclassified receipt roles keep one unresolved allocation with the original
 signed amount; they never enter adjustment weighting. Role completeness is
 reported separately from amount completeness.
 
+Broad Work queue Product filters explicitly request statement-local on-hand
+stock evidence through the shared read context. One grouped inventory/location
+relation preserves the canonical absent, mixed-unit and installed-stock rules;
+record-scoped queue and ordinary Product reads retain indexed scalar lookups.
+Unsupported evidence fields fall back to their canonical reads, and unused
+relations are omitted.
+
 Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
 Each batch memoizes dependency promises by declaration identity, preserving
 slot order, duplicates, cursors and status. Distinct slots share compatible

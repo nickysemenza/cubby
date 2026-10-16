@@ -937,15 +937,15 @@ export const buildProductWhere = async (
   const inventoryConditions = () => [
     filters.kitAccounting === "double_counted"
       ? and(
-          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
           sql`${partsAccountedKitsSql(product.id)} > 0`,
-          sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
         )
       : undefined,
     filters.ownershipReconciliation === "disposed_still_on_hand"
       ? and(
           inArray(product.id, productIdsWithRecordedDisposal),
-          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
           sql`${expectedQuantityFilterSql(product.id)} <= 0`,
           sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
         )
@@ -1008,8 +1008,8 @@ export const buildProductWhere = async (
           inArray(product.id, productIdsWithExpenses),
           comparableQuantityHistoryFilterSql(product.id),
           filters.quantityVarianceFilter === "mismatched"
-            ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
-            : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
+            ? sql`${onHandUnitsFilterSql(product.id, readContext)} <> ${expectedQuantityFilterSql(product.id)}`
+            : sql`${onHandUnitsFilterSql(product.id, readContext)} = ${expectedQuantityFilterSql(product.id)}`,
         )
       : undefined,
   ];

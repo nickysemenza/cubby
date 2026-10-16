@@ -23,6 +23,7 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
@@ -105,13 +106,18 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
     SELECT ${PROJECTED_EXPECTED}
     ${QUANTITY_PROJECTION_FROM})`;
 
+const onHandUnitsProjection = (
+  inventoryCount = "ohu_inv.n",
+  locationCount = "ohu_loc.n",
+) => `CASE
+             WHEN ${inventoryCount} = 0 AND ${locationCount} = 0 THEN NULL
+             WHEN ohu_inv.noncount THEN NULL
+             ELSE COALESCE(ohu_inv.qty, 0) + ${locationCount}
+           END::double precision`;
+
 /** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
 export const onHandUnitsSql = (productAlias = '"product"') =>
-  `(SELECT CASE
-             WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
-             WHEN ohu_inv.noncount THEN NULL
-             ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
-           END::double precision
+  `(SELECT ${onHandUnitsProjection()}
       FROM (SELECT count(*) AS n,
                    bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                    sum(ohu_i."amountValue"::numeric) AS qty
@@ -124,6 +130,22 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
               FROM "Location" ohu_ol
              WHERE ohu_ol."productId" = ${productAlias}."id"
                AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
+
+/** Broad callers opt into one stock relation; missing rows retain unavailable stock. */
+export const onHandUnitsReadSql = () => sql`
+  SELECT COALESCE(ohu_inv."productId", ohu_loc."productId") AS "productId",
+    ${sql.raw(onHandUnitsProjection("COALESCE(ohu_inv.n, 0)", "COALESCE(ohu_loc.n, 0)"))} AS "onHandUnits"
+  FROM (
+    SELECT ohu_i."productId", count(*) AS n,
+      bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
+      sum(ohu_i."amountValue"::numeric) AS qty
+    FROM "InventoryEntry" ohu_i JOIN "Location" ohu_l
+      ON ohu_l.id = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
+    WHERE ohu_i."deletedAt" IS NULL GROUP BY ohu_i."productId"
+  ) ohu_inv FULL JOIN (
+    SELECT "productId", count(*) AS n FROM "Location"
+    WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL GROUP BY "productId"
+  ) ohu_loc ON ohu_inv."productId" = ohu_loc."productId"`;
 
 /**
  * Shelf minus ledger. Zero means the two agree; a product with no inventory and
@@ -144,12 +166,12 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
       SELECT ${sql.raw(PROJECTED_EXPECTED)}
       ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
-export const onHandUnitsFilterSql = (productId: AnyColumn) =>
-  sql`(SELECT CASE
-                WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
-                WHEN ohu_inv.noncount THEN NULL
-                ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
-              END::double precision
+export const onHandUnitsFilterSql = (
+  productId: AnyColumn,
+  context?: QualityReadContext,
+) =>
+  context?.derivedValue?.("onHandUnits", productId) ??
+  sql`(SELECT ${sql.raw(onHandUnitsProjection())}
          FROM (SELECT count(*) AS n,
                       bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                       sum(ohu_i."amountValue"::numeric) AS qty
