@@ -255,6 +255,20 @@ const subtreeToggle = (
     : optionalBoolean.parse(values[toggle]) !== false;
 };
 
+/** A range descriptor's lower and upper bound request keys. */
+const rangeKeys = (descriptor: StoredDescriptorView): [string, string] => {
+  const key = descriptor.field ?? descriptor.columnId;
+  return descriptor.range?.kind === "date"
+    ? [`${key}From`, `${key}To`]
+    : [`${key}Min`, `${key}Max`];
+};
+
+/** The request keys a descriptor's predicate reads: a range reads its bounds. */
+const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] =>
+  descriptor.kind === "range"
+    ? rangeKeys(descriptor)
+    : [descriptor.field ?? descriptor.columnId];
+
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
 interface DerivedFilterInput {
   readonly derived: AnyDerivedSql;
@@ -313,16 +327,13 @@ const derivedFilterPredicates = (
         return flag === undefined ? [] : [sql`${expression()} = ${flag}`];
       }
       case "range": {
-        const [low, high] =
-          descriptor.range?.kind === "date"
-            ? [
-                optionalDate.parse(values[`${key}From`]),
-                optionalDate.parse(values[`${key}To`]),
-              ]
-            : [
-                optionalNumber.parse(values[`${key}Min`]),
-                optionalNumber.parse(values[`${key}Max`]),
-              ];
+        const [lowKey, highKey] = rangeKeys(descriptor);
+        const bound =
+          descriptor.range?.kind === "date" ? optionalDate : optionalNumber;
+        const [low, high] = [
+          bound.parse(values[lowKey]),
+          bound.parse(values[highKey]),
+        ];
         return [
           low === undefined ? undefined : sql`${expression()} >= ${low}`,
           high === undefined ? undefined : sql`${expression()} <= ${high}`,
@@ -802,7 +813,9 @@ export function listScaffold<
           .filter(
             (descriptor) =>
               descriptor.derived &&
-              values[descriptor.field ?? descriptor.columnId] !== undefined,
+              descriptorValueKeys(descriptor).some(
+                (key) => values[key] !== undefined,
+              ),
           )
           .map(({ columnId }) => columnId),
       );
