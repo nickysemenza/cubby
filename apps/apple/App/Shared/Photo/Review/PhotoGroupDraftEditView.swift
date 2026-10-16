@@ -63,7 +63,7 @@ struct PhotoGroupDraftEditView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save and confirm identity") { Task { await save() } }
+                Button("Save proposal") { Task { await save() } }
                     .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

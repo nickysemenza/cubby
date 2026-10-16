@@ -32,15 +32,38 @@ public enum PhotoGroupingReadiness: Equatable, Sendable {
 }
 
 public enum PhotoReviewPolicy {
+    /// Model judgments never establish deterministic correctness.
+    public static func crossCheckMark(_ check: PhotoFieldCrossCheck) -> String {
+        if check.mark.rawValue == "agree", check.source.rawValue == "deterministic" { return "✓" }
+        return check.mark.rawValue == "disagree-or-missing" ? "!" : "?"
+    }
+
+    public static func isCreate(group: PhotoGroupProposal) -> Bool {
+        if case .create = group.product { return true }
+        return false
+    }
+
+    public static func primaryVerb(group: PhotoGroupProposal) -> String {
+        if group.images.isEmpty, !group.skip.isEmpty { return "Skip \(group.skip.count) photos" }
+        return switch group.product {
+        case .create: "Create product"
+        case .existing: "Attach \(group.images.count) \(group.images.count == 1 ? "photo" : "photos")"
+        }
+    }
+
     public static func effects(group: PhotoGroupProposal) -> String {
+        if group.images.isEmpty, !group.skip.isEmpty {
+            return "Skip \(group.skip.count) photos. No Product or stock change."
+        }
         let productEffect: String
         switch group.product {
         case .create(let product):
             productEffect = "Create \(product.create.name) and attach \(group.images.count) photos."
         case .existing(let product):
             productEffect =
-                "Attach \(group.images.count) photos to \(product.existing?.name ?? "the selected Product"). Keep Product fields, gallery order and cover."
+                "Attach \(group.images.count) photos to \(product.existing?.name ?? "the selected Product"). Keep gallery order and cover."
         }
+        let changesEffect = group.review?.productChanges == nil ? "" : " Apply the reviewed Product edits."
         let stockEffect: String
         if let inventory = group.inventory {
             stockEffect =
@@ -48,16 +71,14 @@ public enum PhotoReviewPolicy {
         } else {
             stockEffect = "No stock change. Historical photos do not record a sale."
         }
-        return "\(productEffect) \(stockEffect) \(group.skip.count) photos skipped."
+        return "\(productEffect)\(changesEffect) \(stockEffect) \(group.skip.count) photos skipped."
     }
 
     public static func approvableSelection(
-        selected: Set<String>, groups: [PhotoGroupProposal], images: [PhotoRunImage],
-        runStatus: RunStatus?
+        selected: Set<String>, groups: [PhotoGroupProposal]
     ) -> [String] {
         groups.filter {
-            selected.contains($0.groupKey) && $0.state == .proposed
-                && approvalBlocker(group: $0, images: images, runStatus: runStatus) == nil
+            selected.contains($0.groupKey) && $0.state == .proposed && $0.blockedReason == nil
         }.map(\.groupKey)
     }
 
@@ -76,37 +97,4 @@ public enum PhotoReviewPolicy {
         return runStatus == .running ? .readyToStart : .working
     }
 
-    public static func approvalBlocker(
-        group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: RunStatus?
-    ) -> String? {
-        guard let review = group.review else {
-            return "Confirm identity by choosing a Product or saving the proposed Product draft."
-        }
-        if let reason = review.unresolvedReason { return reason }
-        if review.productChanges != nil {
-            return "Review selected Product field changes on the web before applying this group."
-        }
-        if review.stockIntent == .receive && group.inventory?.locationId == nil {
-            return "Choose a location before receiving stock."
-        }
-        if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
-        let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
-        if (group.images.map(\.id) + group.skip.map(\.id)).contains(where: {
-            guard let state = byID[$0]?.targetState else { return false }
-            return state != .pending && !(runStatus == .needsReview && state == .unresolved)
-        }) {
-            return "A photo has already been settled outside this group."
-        }
-        if group.images.contains(where: {
-            guard let state = byID[$0.id]?.describe else { return false }
-            return state == .pending || state == .waitingForDevice || state == .leased || state == .failed
-        }) {
-            return
-                "Approval waits for AI descriptions. Device analysis and cutouts may continue in the background."
-        }
-        if case .existing(let product) = group.product, product.existing == nil {
-            return "Select an existing product before approval."
-        }
-        return nil
-    }
 }

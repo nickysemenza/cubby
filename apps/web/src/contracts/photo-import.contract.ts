@@ -459,6 +459,8 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
+    native:
+      "Save photo group review edits (ownership, inventory) in Apple apps",
     input: saveGroupsAction
       .omit({ action: true })
       .extend({ runId: runShortcode }),

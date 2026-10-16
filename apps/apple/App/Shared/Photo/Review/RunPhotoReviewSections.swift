@@ -52,9 +52,9 @@ struct RunPhotoReviewSections: View {
                     HStack {
                         if !workspace.selectedGroupKeys.isEmpty {
                             Button {
-                                workspace.freezeApproval(
-                                    workspace.approvableSelectedKeys(session), session: session, runID: runID)
-                                workspace.confirmingSelected = true
+                                workspace.approve(
+                                    workspace.approvableSelectedKeys(session), session: session,
+                                    runID: runID, client: appModel.client)
                             } label: {
                                 Text("Approve selected · \(workspace.approvableSelectedKeys(session).count)")
                                     .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
@@ -63,24 +63,24 @@ struct RunPhotoReviewSections: View {
                             .disabled(session.busy || workspace.approvableSelectedKeys(session).isEmpty)
                         }
                         Button {
-                            workspace.freezeApproval(
-                                proposed.map(\.groupKey), session: session, runID: runID)
-                            workspace.confirmingAll = true
+                            workspace.approve(
+                                proposed.filter { $0.blockedReason == nil }.map(\.groupKey),
+                                session: session, runID: runID, client: appModel.client)
                         } label: {
-                            Text("Approve all")
+                            Text("Apply ready groups")
                                 .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
                                 .contentShape(Rectangle())
                         }
                         .disabled(
-                            session.busy
-                                || proposed.contains {
-                                    approvalBlocker($0, images: review.images) != nil
-                                })
+                            session.busy || !proposed.contains { $0.blockedReason == nil })
                     }
                     .buttonStyle(.borderless)
                     .detailContentsHeader().detailContentsAnchor(
                         RunConsoleView.InitialSection.photoReview.rawValue)
                     reviewWorkspace(review)
+                        .task(id: runID) {
+                            await session.loadCandidates(runID: runID, client: appModel.client)
+                        }
                 } header: {
                     Text("Proposed items · \(proposed.count)")
                 } footer: {
@@ -191,11 +191,9 @@ struct RunPhotoReviewSections: View {
                         groupRegion
                             .frame(width: 190, alignment: .topLeading)
                         decisionRegion(review.images)
-                            .frame(width: 340, alignment: .topLeading)
-                        evidenceRegion(review.images)
-                            .frame(width: 260, alignment: .topLeading)
+                            .frame(minWidth: 500, maxWidth: .infinity, alignment: .topLeading)
                     }
-                    .frame(minWidth: 822, alignment: .leading)
+                    .frame(minWidth: 720, alignment: .leading)
 
                     stackedReviewWorkspace(review.images)
                 }
@@ -209,7 +207,6 @@ struct RunPhotoReviewSections: View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
             groupRegion
             decisionRegion(images)
-            evidenceRegion(images)
         }
     }
 
@@ -225,6 +222,16 @@ struct RunPhotoReviewSections: View {
                     workspace.selectedGroupKey = group.groupKey
                 } label: {
                     HStack {
+                        Image(
+                            systemName: PhotoReviewPolicy.isCreate(group: group)
+                                ? "plus" : "arrow.turn.down.right"
+                        )
+                        .foregroundStyle(
+                            PhotoReviewPolicy.isCreate(group: group) ? Color("ActionCreate") : Color("Slate"))
+                        Circle().fill(
+                            group.blockedReason == nil ? FieldGuideTokens.positive : FieldGuideTokens.signal
+                        )
+                        .frame(width: 6, height: 6).accessibilityHidden(true)
                         Text(groupName(group)).lineLimit(2)
                         Spacer(minLength: 4)
                         if selectedProposal?.groupKey == group.groupKey {
@@ -238,6 +245,7 @@ struct RunPhotoReviewSections: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedProposal?.groupKey == group.groupKey ? .isSelected : [])
+                .accessibilityValue(group.blockedReason ?? "Ready")
             }
         }
         .accessibilityIdentifier("review.groups")
@@ -335,62 +343,28 @@ struct RunPhotoReviewSections: View {
                     )
                     .touchTargetLabel()
                 }
-                .disabled(session.busy || approvalBlocker(group, images: images) != nil)
+                .disabled(session.busy || group.blockedReason != nil)
+                .accessibilityHint(group.blockedReason ?? "Include this ready group in batch approval")
             }
-            ScrollView(.horizontal) {
-                HStack(spacing: FieldGuideTokens.Space.sm) {
-                    ForEach(group.images, id: \.id) { item in
-                        if let image = images.first(where: { $0.id == item.id }) {
-                            VStack(spacing: 2) {
-                                Thumb(url: URL(string: image.originalUrl), size: 72)
-                                Text(item.purpose.rawValue.capitalized).font(.caption2)
-                            }
-                        }
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
-            if let evidence = group.evidence, !evidence.isEmpty {
-                Text(evidence).font(.subheadline).foregroundStyle(.secondary).lineLimit(4)
-            }
-            if group.missingImageCount > 0 {
-                Label(
-                    "\(group.missingImageCount) photos are missing", systemImage: "exclamationmark.triangle"
-                )
-                .foregroundStyle(FieldGuideTokens.warning)
-            }
-            if let blocker = approvalBlocker(group, images: images) {
+            PhotoGroupDecisionView(runID: runID, group: group, images: images, session: session)
+                .id(group.groupKey)
+            if let blocker = group.blockedReason {
                 Text(blocker).font(.caption).foregroundStyle(FieldGuideTokens.warning)
             }
             if let error = group.lastError {
                 Text(error).foregroundStyle(FieldGuideTokens.destructive)
             }
-            NavigationLink {
-                PhotoCandidateSelectionView(runID: runID, group: group, images: images) {
-                    Task { await refresh() }
-                }
-            } label: {
-                Label("Compare possible matches", systemImage: "square.stack.3d.up")
-                    .touchTargetLabel()
-            }
-            if case .create = group.product {
-                NavigationLink {
-                    PhotoGroupDraftEditView(runID: runID, group: group) {
-                        Task { await refresh() }
-                    }
-                } label: {
-                    Label("Edit proposed product", systemImage: "pencil")
-                        .touchTargetLabel()
-                }
-            }
             Text(PhotoReviewPolicy.effects(group: group)).font(.caption).foregroundStyle(.secondary)
             HStack {
-                Button("Apply photos and stock decision") {
-                    workspace.freezeApproval([group.groupKey], session: session, runID: runID)
-                    workspace.confirmingGroup = group.groupKey
+                Button {
+                    workspace.approve(
+                        [group.groupKey], session: session, runID: runID,
+                        client: appModel.client)
+                } label: {
+                    Text(PhotoReviewPolicy.primaryVerb(group: group)).touchTargetLabel()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(session.busy || approvalBlocker(group, images: images) != nil)
+                .disabled(session.busy || group.blockedReason != nil)
                 Button(role: .destructive) {
                     workspace.discardingGroup = group.groupKey
                 } label: {
@@ -411,11 +385,6 @@ struct RunPhotoReviewSections: View {
         case .create(let product): product.create.name
         case .existing(let product): product.existing?.name ?? "Existing product"
         }
-    }
-
-    private func approvalBlocker(_ group: PhotoGroupProposal, images: [PhotoRunImage]) -> String? {
-        PhotoReviewPolicy.approvalBlocker(
-            group: group, images: images, runStatus: session.review?.review.runStatus)
     }
 
     private func processingLabel(_ name: String, state: ImageProcessingJobState?, reason: String?)

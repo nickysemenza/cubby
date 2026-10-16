@@ -1,21 +1,14 @@
 import CubbyKit
 import SwiftUI
 
-/// The photo-review state of one photo-inventory Run: which group is open, which groups are
-/// selected, and the approval frozen for confirmation. The approval keys and the reviewed
-/// document are captured together when a confirmation opens, so a refresh that lands while the
-/// dialog is up never changes what is approved.
+/// Selection and discard confirmation for one photo-inventory Run. Approval captures the
+/// current reviewed revisions at the moment the member presses Create or Attach.
 @MainActor @Observable
 final class PhotoReviewWorkspace {
-    var confirmingGroup: String?
-    var confirmingAll = false
-    var confirmingSelected = false
     var discardingGroup: String?
     var selectedGroupKeys: Set<String> = []
     var selectedGroupKey: String?
-    private(set) var approvalKeys: [String] = []
     private(set) var autoStartAttempted = false
-    private(set) var approvalReview: RunReviewDocument?
 
     func proposed(_ session: RunReviewSession) -> [PhotoGroupProposal] {
         session.review?.review.proposals.filter { $0.state == .proposed } ?? []
@@ -23,8 +16,7 @@ final class PhotoReviewWorkspace {
 
     func approvableSelectedKeys(_ session: RunReviewSession) -> [String] {
         PhotoReviewPolicy.approvableSelection(
-            selected: selectedGroupKeys, groups: proposed(session),
-            images: session.review?.images ?? [], runStatus: session.snapshot?.status)
+            selected: selectedGroupKeys, groups: proposed(session))
     }
 
     func stage(_ session: RunReviewSession) -> String {
@@ -41,16 +33,9 @@ final class PhotoReviewWorkspace {
         return "Agent is preparing item groups"
     }
 
-    func freezeApproval(_ keys: [String], session: RunReviewSession, runID: String) {
-        approvalKeys = keys
-        approvalReview = session.document(runID: runID)
-    }
-
-    func approve(session: RunReviewSession, runID: String, client: CubbyClient) {
-        guard let reviewed = approvalReview, !approvalKeys.isEmpty else { return }
-        let keys = approvalKeys
-        approvalReview = nil
-        approvalKeys = []
+    func approve(_ keys: [String], session: RunReviewSession, runID: String, client: CubbyClient) {
+        guard !keys.isEmpty else { return }
+        let reviewed = session.document(runID: runID)
         Task {
             let approved = await session.execute(
                 .approvePhotoGroups(reviewed: reviewed, groupKeys: keys),
@@ -78,8 +63,7 @@ final class PhotoReviewWorkspace {
 }
 
 extension View {
-    /// The approve and discard confirmations of a photo review. They attach to the screen's
-    /// list rather than to a row, so each presents once for the whole review.
+    /// The discard confirmation attaches to the screen so it presents once for the workspace.
     func photoReviewConfirmations(
         _ workspace: PhotoReviewWorkspace, session: RunReviewSession, runID: String
     ) -> some View {
@@ -94,78 +78,22 @@ private struct PhotoReviewConfirmations: ViewModifier {
 
     @Environment(AppModel.self) private var appModel
 
-    private enum Confirmation {
-        case group, all, selected, discard
-
-        var title: String {
-            switch self {
-            case .group: "Approve this item?"
-            case .all: "Approve all proposed items?"
-            case .selected: "Approve selected items?"
-            case .discard: "Discard this item?"
-            }
-        }
-    }
-
-    private var confirmation: Confirmation? {
-        if workspace.confirmingGroup != nil { return .group }
-        if workspace.confirmingAll { return .all }
-        if workspace.confirmingSelected { return .selected }
-        if workspace.discardingGroup != nil { return .discard }
-        return nil
-    }
-
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            confirmation?.title ?? "Review item",
+            "Discard this item?",
             isPresented: Binding(
-                get: { confirmation != nil },
-                set: { presented in
-                    if !presented {
-                        workspace.confirmingGroup = nil
-                        workspace.confirmingAll = false
-                        workspace.confirmingSelected = false
-                        workspace.discardingGroup = nil
-                    }
-                })
+                get: { workspace.discardingGroup != nil },
+                set: { if !$0 { workspace.discardingGroup = nil } })
         ) {
-            switch confirmation {
-            case .group:
-                Button("Apply reviewed decision") { approve() }
-            case .all, .selected:
-                Button("Approve \(workspace.approvalKeys.count) items") { approve() }
-            case .discard:
-                if let group = workspace.discardingGroup {
-                    Button("Discard proposal", role: .destructive) {
-                        Task {
-                            await session.execute(
-                                .discardPhotoGroup(groupKey: group), runID: runID,
-                                client: appModel.client)
-                        }
+            if let group = workspace.discardingGroup {
+                Button("Discard proposal", role: .destructive) {
+                    Task {
+                        await session.execute(
+                            .discardPhotoGroup(groupKey: group), runID: runID,
+                            client: appModel.client)
                     }
                 }
-            case nil:
-                EmptyView()
-            }
-        } message: {
-            switch confirmation {
-            case .group:
-                if let group = workspace.approvalReview?.review?.review.proposals.first(where: {
-                    workspace.approvalKeys.contains($0.groupKey)
-                }) {
-                    Text(PhotoReviewPolicy.effects(group: group))
-                }
-            case .selected:
-                Text("Apply the Product and stock decisions shown for these selected items.")
-            case .all:
-                Text("Apply every resolved Product and stock decision shown in this review.")
-            case .discard, nil:
-                EmptyView()
             }
         }
-    }
-
-    private func approve() {
-        workspace.approve(session: session, runID: runID, client: appModel.client)
     }
 }

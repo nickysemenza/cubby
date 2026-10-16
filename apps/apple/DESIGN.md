@@ -30,6 +30,12 @@ The Mac root browser owns split selection even while its detail pane has related
 
 Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
 
+## Photo group decisions
+
+Native photo review renders the server's `DecisionStep[]` and `blockedReason`; it does not infer approval readiness. `DecisionSteps` uses a positive dot for done, a faint point for blocked, a hollow ring for not needed and a citron mark for needs input. One step expands at a time; answered rows show the summary and Change. The `apply` key is omitted because Create/Attach lives in the footer and atomically confirms and applies the reviewed revisions. Ready batch selections exclude blocked groups.
+
+Photo and label text lead on narrow layouts and sit beside the steps when space permits. Existing Product evidence loads with selection, independently of candidate ranking. Deterministic agreement alone draws a checkmark; missing or model evidence draws a question or warning mark. Ownership and inventory answers save natively through `saveGroups`, preserving the proposal's photo roster, Product edits and explicit ownership. Agent concerns are read-only and use the explicit Resolved operation with an optional reply.
+
 ## Run evidence pilot
 
 Every entity retains its native detail renderer. A Run’s native console and detail offer one hosted destination for transcript, logs, and AI usage. Native overview, actions, photo review, editors, routing, and coverage remain in place. The evidence sheet has native Done and hands record links back to the native navigator; it does not own record history.
