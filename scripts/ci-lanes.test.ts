@@ -201,9 +201,9 @@ test("each lane's ci.yaml commands run only tasks routed to that lane", async ()
   const elsewhere = new Set(["cubby-checks:format"]);
   const commands: [string, string][] = [];
   for (const entry of laneMatrix(Object.keys(LANES))) {
-    const lanes = entry.lane!.split("+");
-    commands.push([lanes[0]!, entry.run]);
-    if (entry.nextRun) commands.push([lanes[1]!, entry.nextRun]);
+    commands.push([entry.lane!, entry.run]);
+    for (const check of entry.checks ?? [])
+      commands.push([check.lane, check.run]);
   }
   const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
   for (const job of workflow.split(/^ {2}(?=[\w-]+:$)/mu)) {

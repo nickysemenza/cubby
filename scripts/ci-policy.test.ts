@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { planLanes, selectJourneys } from "./ci-policy.ts";
+import { laneMatrix, planLanes, selectJourneys } from "./ci-policy.ts";
 
 test("a missing baseline runs every required lane without enabling paid evaluations", () => {
   const plan = planLanes({ event: "pull_request" });
@@ -82,7 +82,61 @@ test("unknown routing groups fail instead of silently omitting checks", () => {
   );
 });
 
-test("combined routing groups preserve all selected tasks and allow their independent steps", () => {
+// Pairing must never drop or duplicate a selected check, including partial
+// routing without browsers; CI still needs every command after an earlier failure.
+test("every routing subset retains each selected command exactly once in at most two jobs", () => {
+  const lanes = ["aux", "build-worker", "postgres", "e2e"];
+  const commands = Object.fromEntries(
+    lanes.map((lane) => [
+      lane,
+      laneMatrix([lane]).flatMap((entry) => [
+        entry.run,
+        ...(entry.checks ?? []).map((check) => check.run),
+      ]),
+    ]),
+  );
+  for (let mask = 0; mask < 1 << lanes.length; mask++) {
+    const selected = lanes.filter((_, index) => mask & (1 << index));
+    const matrix = laneMatrix(selected);
+    assert.ok(matrix.length <= 2, selected.join(","));
+    assert.deepEqual(
+      matrix
+        .flatMap((entry) => [
+          entry.lane,
+          ...(entry.checks ?? []).map((check) => check.lane),
+        ])
+        .sort(),
+      selected
+        .flatMap((lane) => (lane === "e2e" ? [lane, lane] : [lane]))
+        .sort(),
+      selected.join(","),
+    );
+    assert.deepEqual(
+      matrix
+        .flatMap((entry) => [
+          entry.run,
+          ...(entry.checks ?? []).map((check) => check.run),
+        ])
+        .sort(),
+      selected.flatMap((lane) => commands[lane]!).sort(),
+      selected.join(","),
+    );
+    for (const entry of matrix) {
+      assert.ok((entry.checks?.length ?? 0) <= 2);
+      if (
+        entry.browser ||
+        entry.lane === "postgres" ||
+        entry.lane === "build-worker" ||
+        entry.checks?.some(
+          (check) => check.lane === "build-worker" || check.lane === "postgres",
+        )
+      )
+        assert.equal(entry.db, true);
+    }
+  }
+});
+
+test("combined routing groups keep browser shards and companion checks independently addressable", () => {
   const plan = planLanes({
     event: "pull_request",
     baseline: true,
@@ -92,8 +146,9 @@ test("combined routing groups preserve all selected tasks and allow their indepe
   assert.ok(
     plan.matrix.some(
       (entry) =>
-        entry.run.includes("run-many -t test") &&
-        entry.nextRun?.includes("workerd-tests"),
+        entry.browser === "desktop-1" &&
+        entry.checks?.[0]?.run.includes("run-many -t test") &&
+        entry.checks?.[1]?.run.includes("workerd-tests"),
     ),
   );
 });

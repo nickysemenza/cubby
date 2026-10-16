@@ -63,8 +63,9 @@ export interface MatrixEntry {
   db?: boolean;
   browser?: string;
   step?: string;
-  nextRun?: string;
-  nextStep?: string;
+  timeout?: number;
+  // At most two companion checks, each a separate workflow step after `run`.
+  checks?: { lane: string; name: string; run: string }[];
 }
 
 export function laneMatrix(lanes: readonly string[]): MatrixEntry[] {
@@ -94,19 +95,40 @@ export function laneMatrix(lanes: readonly string[]): MatrixEntry[] {
       run: `CUBBY_E2E_SHARD=${shard}/2 pnpm exec nx run @cubby/web:e2e --outputStyle=stream`,
     })),
   ].filter((entry) => lanes.includes(entry.lane!));
+  const browsers = entries.filter((entry) => entry.browser);
+  const companion = (entry: MatrixEntry) => ({
+    lane: entry.lane!,
+    name: entry.name,
+    run: entry.run,
+  });
+  if (browsers.length) {
+    // Keep the former two-slot pairings while paying setup only once per pair.
+    // Heavy checks stay sequential inside each runner.
+    return browsers.map((browser, index) => {
+      const checks = entries.filter(
+        (entry) =>
+          !entry.browser &&
+          (index === 0 ? entry.lane !== "postgres" : entry.lane === "postgres"),
+      );
+      return {
+        ...browser,
+        name: [browser.name, ...checks.map((entry) => entry.name)].join(" + "),
+        ...(checks.length ? { timeout: 40 } : {}),
+        checks: checks.map(companion),
+      };
+    });
+  }
   const aux = entries.find((entry) => entry.lane === "aux");
   const worker = entries.find((entry) => entry.lane === "build-worker");
   if (!aux || !worker) return entries;
   return [
     ...entries.filter((entry) => entry !== aux && entry !== worker),
     {
-      lane: "aux+build-worker",
+      ...aux,
       name: "Auxiliary, Worker, and runtime tests",
       db: true,
       step: aux.name,
-      run: aux.run,
-      nextStep: worker.name,
-      nextRun: worker.run,
+      checks: [companion(worker)],
     },
   ];
 }
