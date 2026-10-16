@@ -1134,10 +1134,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   e2eRuntime,
 }) => {
   test.setTimeout(90_000);
+  const productName = "Synthetic shell jacket blue XL";
   const existing = await seedProductPrerequisite(page, {
-    name: "Synthetic shell jacket blue XL",
+    name: productName,
     manufacturer: "Synthetic Outfitters",
-    model: "J100",
   });
   const seed = await seedPhotoGroupReviewRun(
     page,
@@ -1240,14 +1240,14 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     .getByRole("button", { name: "Not this one…", exact: true })
     .click();
   await expect(
-    attach.getByText(`${existing.name} · Rejected`, { exact: true }).first(),
+    attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
   ).toBeVisible();
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toHaveCount(0);
   await page.reload();
   await expect(
-    attach.getByText(`${existing.name} · Rejected`, { exact: true }).first(),
+    attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
   ).toBeVisible();
   const regrouped = await startOperation(
     page.request,
@@ -1272,7 +1272,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     page
       .locator("#photo-group-regrouped")
-      .getByText(`${existing.name} · Rejected`, { exact: true })
+      .getByText(`${productName} · Rejected`, { exact: true })
       .first(),
   ).toBeVisible();
 });

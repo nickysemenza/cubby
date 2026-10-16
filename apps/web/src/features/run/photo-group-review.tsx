@@ -722,7 +722,7 @@ function IdentityDecision({
       setReply("");
       await invalidateOperationTags(queryClient, ripple.runOnly);
     },
-    onError: showErrorToast,
+    onError: (error) => showErrorToast(error),
   });
   const concern = proposal.review?.unresolvedReason;
   if (
@@ -1170,7 +1170,7 @@ function ProductPanel({
       });
       await invalidateOperationTags(queryClient, ripple.runOnly);
     },
-    onError: showErrorToast,
+    onError: (error) => showErrorToast(error),
   });
   if (step === "product")
     return (
