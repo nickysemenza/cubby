@@ -779,12 +779,14 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
+  // Selected Products show inline evidence; the create group owns alternative comparisons.
+  await page.locator("#photo-group-g2").scrollIntoViewIfNeeded();
   await page
-    .locator("#photo-group-g1")
+    .locator("#photo-group-g2")
     .getByRole("button", { name: "Compare", exact: true })
     .click();
   const comparison = page
-    .locator("#photo-group-g1")
+    .locator("#photo-group-g2")
     .locator("[data-record-list]");
   await expect(comparison.getByText(existingName).first()).toBeVisible();
   await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
@@ -1256,11 +1258,6 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     0,
   );
   await expect(
-    create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
     attach.getByText("Closest existing:", { exact: false }),
   ).toHaveCount(0);
   await expect(
@@ -1354,6 +1351,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
+  await expect(
+    create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(create.getByText("＋ New", { exact: true })).toBeVisible();
   await expect(
     create.getByRole("button", { name: "Add ‘xl’ to name", exact: true }),
