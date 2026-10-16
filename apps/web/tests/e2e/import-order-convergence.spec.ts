@@ -7,7 +7,7 @@ import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { sha256Hex } from "../../tooling/convergence-harness";
-import { uniqueName } from "./support/e2e-helpers";
+import { escapeRegExp, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 for (const order of BROWSER_SOURCE_ORDERS) {
@@ -85,7 +85,9 @@ for (const order of BROWSER_SOURCE_ORDERS) {
       .locator("#emails")
       .getByRole("row")
       .filter({ has: page.getByText("Linked", { exact: true }) })
-      .getByRole("link", { name: result.purchaseCode, exact: true });
+      .getByRole("link", {
+        name: new RegExp(`^${escapeRegExp(harness.orderId)}(?:$|\\s)`),
+      });
     await expect(purchaseLink).toHaveAttribute(
       "href",
       `/purchases/${result.purchaseCode}`,
