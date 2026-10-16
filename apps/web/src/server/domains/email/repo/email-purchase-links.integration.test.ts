@@ -428,6 +428,100 @@ describe("Email Purchase links", () => {
     expect(acceptedRows).toBeLessThan(10);
   });
 
+  // Canonical-family equality must use the root/alias indexes rather than
+  // scanning every unrelated claim owned by the same household member.
+  it("bounds accepted-family lookup with unrelated mailbox history", async () => {
+    const f = await retainedReviewFixture();
+    const [root] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.party.id,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    if (!root) throw new Error("Missing synthetic family root");
+    const [alias] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.party.id,
+        kind: "mail_message",
+        externalKey: "synthetic:historical-family-alias",
+        canonicalClaimId: root.id,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    if (!alias) throw new Error("Missing synthetic family alias");
+    const unrelated = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values(
+        Array.from({ length: 1000 }, (_, index) => ({
+          ledgerPartyId: f.party.id,
+          kind: "mail_message" as const,
+          externalKey: `synthetic:unrelated-family-${index}`,
+          checksum: f.checksum,
+          firstRunId: f.runId,
+          lastRunId: f.runId,
+        })),
+      )
+      .returning({ id: importSourceClaim.id });
+    await getDb(ctx.db)
+      .insert(importSourceOrder)
+      .values(
+        unrelated.map((claim, index) => ({
+          sourceClaimId: claim.id,
+          orderKey: `synthetic-unrelated-order-${index}`,
+          purchaseId: f.purchase.id,
+          checksum: f.checksum,
+          outputFingerprint: `synthetic-unrelated-fingerprint-${index}`,
+        })),
+      );
+    await getDb(ctx.db).insert(importSourceOrder).values({
+      sourceClaimId: alias.id,
+      orderKey: "synthetic-family-order",
+      purchaseId: f.purchase.id,
+      checksum: f.checksum,
+      outputFingerprint: "synthetic-family-fingerprint",
+    });
+    await getDb(ctx.db).execute(sql`ANALYZE "ImportSourceClaim"`);
+    const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email" WHERE "Email".shortcode = ${f.email}`;
+    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
+      { linked: true },
+    ]);
+    const result = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const nodeSchema = z.object({
+      Alias: z.string().optional(),
+      "Actual Rows": z.number().default(0),
+      "Rows Removed by Filter": z.number().default(0),
+      "Actual Loops": z.number().default(0),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    let visited = 0;
+    const visit = (value: unknown) => {
+      const node = nodeSchema.parse(value);
+      if (node.Alias === "family")
+        visited +=
+          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
+          node["Actual Loops"];
+      node.Plans?.forEach(visit);
+    };
+    const plans = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
+      )
+      .parse(result.rows);
+    for (const row of plans)
+      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+    expect(visited).toBeLessThan(20);
+  });
+
   it("retries an identical current Email decision without duplicating its immutable history", async () => {
     const f = await retainedReviewFixture();
     const input = {

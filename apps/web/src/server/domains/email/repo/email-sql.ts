@@ -99,7 +99,8 @@ export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
     AND root."ledgerPartyId" = identity."ledgerPartyId"
     AND root."kind" = identity."kind"
   INNER JOIN "ImportSourceClaim" family
-    ON coalesce(family."canonicalClaimId", family."id") = root."id"
+    -- A root has no parent: its own id and its aliases use separate indexes.
+    ON (family."id" = root."id" OR family."canonicalClaimId" = root."id")
     AND family."ledgerPartyId" = root."ledgerPartyId"
     AND family."kind" = root."kind"
   INNER JOIN "ImportSourceOrder" accepted ON accepted."sourceClaimId" = family."id"
