@@ -9,13 +9,13 @@ editable backlog in Markdown.
 
 ## Fields and selection
 
-| Field     | Values and meaning                                       |
-| --------- | -------------------------------------------------------- |
-| Horizon   | Now; Next; Later; unset for work outside the roadmap      |
-| Readiness | Ready; Needs schema plan; Needs decision; Waiting         |
-| Work type | Bug; Feature; Maintenance; Investigation                 |
-| Priority  | High; Medium; Low                                        |
-| Status    | Inbox; Todo; In progress; Verify; Done                   |
+| Field     | Values and meaning                                   |
+| --------- | ---------------------------------------------------- |
+| Horizon   | Now; Next; Later; unset for work outside the roadmap |
+| Readiness | Ready; Needs schema plan; Needs decision; Waiting    |
+| Work type | Bug; Feature; Maintenance; Investigation             |
+| Priority  | High; Medium; Low                                    |
+| Status    | Inbox; Todo; In progress; Verify; Done               |
 
 Readiness names the next blocker, independently of horizon, priority, and delivery status.
 Ready means the outcome is decided and needs no schema planning. An unresolved
@@ -41,6 +41,33 @@ do not infer a dependency just because two issues mention the same domain.
 Use native Relates to for associated work whose containment, dependency, or
 common cause is unproven. Similar symptoms alone do not establish a duplicate
 or blocker.
+
+## Triage checklist
+
+Apply this when creating, importing, or reviewing an issue in Intake. Search
+for the same outcome first and update the existing issue when it matches.
+
+1. Read the body, parent, and native blockers. Establish the outcome,
+   acceptance criteria, and any unresolved decision or waiting trigger before
+   choosing metadata. Investigate missing evidence rather than guessing Ready.
+2. Add existing `area:*` labels for each affected domain/platform. Add
+   `operational` for a household data pass. Discover names with `gh label list
+   --repo nickysemenza/cubby`; use `gh issue edit <number> --repo
+   nickysemenza/cubby --add-label <label>` to add them. Preserve relevant
+   existing labels; use Work type and Priority for their structured meanings.
+3. Explicitly add the issue to the Project and set Readiness, Work type, and
+   Priority using the definitions above. Auto-add is asynchronous and does not
+   backfill existing issues. Update native parents/dependencies when the
+   relationship is established, preserving the trigger or decision in the body.
+4. Keep Status Inbox while triage is incomplete; use Todo for accepted backlog
+   work and In progress only when implementation starts. Select Horizon only
+   for a roadmap outcome or explicit deferral, following the roadmap policy
+   below. An unset Horizon is valid and does not mean Later; subissues normally
+   use their parent's roadmap context.
+5. Read back the issue labels and Project fields. Triage is complete when the
+   three required metadata fields are set, Status reflects the work, and the
+   body supports the chosen readiness and relationships. Horizon and dates are
+   optional; selecting metadata does not resolve the issue's blocker.
 
 ## Roadmap
 
