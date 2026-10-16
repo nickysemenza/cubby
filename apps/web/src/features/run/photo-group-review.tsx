@@ -378,7 +378,7 @@ function GroupPhotos({
   return (
     <div className="min-w-0 space-y-2">
       <PhotoGrid
-        className="grid-cols-2 sm:grid-cols-2 md:grid-cols-2"
+        className="grid-cols-1 sm:grid-cols-1 md:grid-cols-1"
         images={[...entries.keys()].flatMap((id) =>
           photoTile(imagesById.get(id)),
         )}

@@ -1184,6 +1184,12 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   const create = page.locator("#photo-group-g2");
   await expect(attach.getByText("↪ Attach", { exact: true })).toBeVisible();
   await expect(attach.getByText(/On hand:/)).toBeVisible();
+  // The evidence slot must show readable photos, not two squeezed thumbnails.
+  const photo = await attach
+    .locator(".decision-steps-media img")
+    .first()
+    .boundingBox();
+  expect(photo?.width).toBeGreaterThanOrEqual(108);
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
