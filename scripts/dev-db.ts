@@ -3,29 +3,20 @@ import { fileURLToPath } from "node:url";
 import { resolveDevProfile } from "./lib/dev-profile.ts";
 import { spawnToExit } from "./lib/run.ts";
 
-import { tcpReady, waitFor } from "./apple/lib/apple-container.ts";
 import {
-  devContainerCli as containerCli,
-  findDevContainer as findContainer,
-  stopDevContainer as stopAndRemove,
-  devContainerBackend,
-} from "./lib/dev-container.ts";
+  ensureSharedPostgres,
+  psql,
+  sharedPostgresRunning,
+  stopSharedPostgres,
+} from "./lib/shared-postgres.ts";
+import { devContainerBackend } from "./lib/dev-container.ts";
 
 /**
- * A persistent local PostgreSQL for `pnpm dev` iteration — separate
- * from the ephemeral/warm containers scripts/test-services.ts manages for
- * test runs. Fixed name, fixed published port, named volume: `up` is
- * idempotent and data survives across runs until `down` (which stops the
- * container but keeps the volume) or a manual `container volume rm`.
+ * `pnpm dev` iteration on the shared local PostgreSQL
+ * (scripts/lib/shared-postgres.ts), one `cubby_dev_<id>` database per
+ * checkout. `up` is idempotent; a recreated container starts empty and `ready`
+rebuilds the database.
  */
-const DEV_DB_CONTAINER = "cubby-dev-pg";
-const DEV_DB_VOLUME = "cubby-dev-pg-data";
-const DEV_DB_HOST = "localhost";
-const DEV_DB_PORT = 55432;
-const DEV_DB_NAME = "cubby_dev";
-const DEV_DB_USER = "postgres";
-// Synthetic, local-only credential — never used outside this dev container.
-const DEV_DB_PASSWORD = "password";
 const profile = resolveDevProfile(
   path.resolve(import.meta.dirname, ".."),
   process.env,
@@ -33,114 +24,19 @@ const profile = resolveDevProfile(
 const devDatabaseName = profile.name;
 const DEV_DATABASE_URL = profile.databaseUrl;
 
-const postgresImage = "docker.io/pgvector/pgvector:pg17";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "../apps/web");
-async function assertOwnedContainer(): Promise<boolean> {
-  if (!(await findContainer(DEV_DB_CONTAINER))) return false;
-  const [info] = JSON.parse(await containerCli(["inspect", DEV_DB_CONTAINER]));
-  const config = info?.configuration;
-  const environments: string[] = config?.initProcess?.environment ?? [];
-  const volume = config?.mounts?.some(
-    (mount: { destination?: string; type?: { volume?: { name?: string } } }) =>
-      mount.destination === "/cubby-devdata" &&
-      mount.type?.volume?.name === DEV_DB_VOLUME,
-  );
-  const port = config?.publishedPorts?.some(
-    (mapping: {
-      hostAddress?: string;
-      hostPort?: number;
-      containerPort?: number;
-    }) =>
-      mapping.hostAddress === "127.0.0.1" &&
-      mapping.hostPort === DEV_DB_PORT &&
-      mapping.containerPort === 5432,
-  );
-  if (
-    config?.image?.reference !== postgresImage ||
-    !volume ||
-    !port ||
-    !environments.includes(`POSTGRES_USER=${DEV_DB_USER}`) ||
-    !environments.includes(`POSTGRES_PASSWORD=${DEV_DB_PASSWORD}`) ||
-    !environments.includes(`POSTGRES_DB=${DEV_DB_NAME}`)
-  ) {
-    throw new Error(
-      `Refusing to operate on ${DEV_DB_CONTAINER}: container identity differs from Cubby's local development PostgreSQL`,
-    );
-  }
-  return true;
-}
 
 async function up(): Promise<void> {
-  const existing = await findContainer(DEV_DB_CONTAINER);
-  if (existing) await assertOwnedContainer();
-  if (existing?.status.state === "running") {
-    console.log(`[dev-db] ${DEV_DB_CONTAINER} is already running`);
-  } else {
-    if (existing) await stopAndRemove(DEV_DB_CONTAINER);
-    console.log(`[dev-db] Starting ${DEV_DB_CONTAINER}`);
-    await containerCli(
-      [
-        "run",
-        "--detach",
-        "--platform",
-        "linux/arm64",
-        "--name",
-        DEV_DB_CONTAINER,
-        "--publish",
-        `127.0.0.1:${DEV_DB_PORT}:5432`,
-        // A subdirectory under the mount, not the mount point itself: a fresh
-        // named volume's mount point contains `lost+found`, which fails
-        // `initdb`'s "directory exists but is not empty" check.
-        "--volume",
-        `${DEV_DB_VOLUME}:/cubby-devdata`,
-        "--cpus",
-        "2",
-        "--memory",
-        "1G",
-        "--env",
-        `POSTGRES_USER=${DEV_DB_USER}`,
-        "--env",
-        `POSTGRES_PASSWORD=${DEV_DB_PASSWORD}`,
-        "--env",
-        `POSTGRES_DB=${DEV_DB_NAME}`,
-        "--env",
-        "PGDATA=/cubby-devdata/pgdata",
-        postgresImage,
-        "postgres",
-        "-c",
-        "shared_preload_libraries=pg_stat_statements",
-      ],
-      180_000,
-    );
-  }
-  await waitFor("cubby-dev-pg", () => tcpReady(DEV_DB_HOST, DEV_DB_PORT));
+  await ensureSharedPostgres();
   console.log(`[dev-db] Ready: ${DEV_DATABASE_URL}`);
 }
 
-async function down(): Promise<void> {
-  const existing = await findContainer(DEV_DB_CONTAINER);
-  if (!existing) {
-    console.log(`[dev-db] ${DEV_DB_CONTAINER} is not running`);
-    return;
-  }
-  await assertOwnedContainer();
-  await stopAndRemove(DEV_DB_CONTAINER);
-  console.log(
-    `[dev-db] Stopped ${DEV_DB_CONTAINER} (volume ${DEV_DB_VOLUME} kept; ` +
-      `\`${devContainerBackend() === "docker" ? "docker" : "container"} volume rm ${DEV_DB_VOLUME}\` to wipe data)`,
-  );
-}
-
 async function assertRunningOwnedContainer(): Promise<void> {
-  if (
-    !(await assertOwnedContainer()) ||
-    (await findContainer(DEV_DB_CONTAINER))?.status.state !== "running"
-  ) {
+  if (!(await sharedPostgresRunning()))
     throw new Error(
-      `Start the owned ${DEV_DB_CONTAINER} container with \`pnpm db:dev:up\` first`,
+      "Start the shared PostgreSQL container with `pnpm db:dev:up` first",
     );
-  }
 }
 
 /** Migrations need apps/web's own database dependencies. */
@@ -159,31 +55,8 @@ function runInWebWorkspace(
   );
 }
 
-function psql(sql: string, database = "postgres"): Promise<string> {
-  return containerCli([
-    "exec",
-    DEV_DB_CONTAINER,
-    "psql",
-    "-U",
-    DEV_DB_USER,
-    "-d",
-    database,
-    "-tAc",
-    sql,
-  ]);
-}
-
 /** Each checkout's selected database is created on first use. */
 async function ensureDatabase(): Promise<void> {
-  await waitFor("PostgreSQL query readiness", () => psql("SELECT 1"));
-  const preloaded = await psql("SHOW shared_preload_libraries");
-  if (
-    !preloaded.split(",").some((name) => name.trim() === "pg_stat_statements")
-  ) {
-    throw new Error(
-      "Local query history requires pg_stat_statements. Run `pnpm db:dev:down`, then `pnpm dev` to recreate the container with its existing volume; database data is preserved.",
-    );
-  }
   const exists = await psql(
     `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
   );
@@ -191,10 +64,6 @@ async function ensureDatabase(): Promise<void> {
     await psql(`CREATE DATABASE "${devDatabaseName}"`);
     console.log(`[dev-db] Created ${devDatabaseName}`);
   }
-  // Neon has no JIT provider, while this image ships LLVM. Complex quality
-  // reads otherwise spend tens of seconds compiling instead of querying.
-  // Apply to existing owned databases too, without resetting their fixtures.
-  await psql(`ALTER DATABASE "${devDatabaseName}" SET jit = off`);
   await psql(
     "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
     devDatabaseName,
@@ -230,7 +99,7 @@ async function main(): Promise<number> {
       await up();
       return 0;
     case "down":
-      await down();
+      await stopSharedPostgres();
       return 0;
     case "migrate":
       await assertRunningOwnedContainer();
