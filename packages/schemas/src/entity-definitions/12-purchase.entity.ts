@@ -1310,6 +1310,14 @@ export default defineEntity({
     },
     descriptors: [
       {
+        columnId: "purchaserOverrideId",
+        placeholder: "Filter by purchaser override...",
+        kind: "idMulti",
+        brandRef: { entity: "ledgerParty" },
+        deriveSchema: true,
+        stored: true,
+      },
+      {
         columnId: "financialReconciliation",
         kind: "select",
         placeholder: "Filter financial reconciliation...",
@@ -1563,6 +1571,23 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "purchaser-override",
+      label: "Purchaser override",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.purchaserOverrideId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Purchase.purchaserOverrideId", direction: "incoming" },
+        ],
+      },
+    },
     {
       key: "emails",
       label: "Emails",

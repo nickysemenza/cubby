@@ -237,7 +237,9 @@ describe("declared structured editors", () => {
     // Only fields with a read-to-input vector; both clients draw exactly these.
     expect(structured.sort()).toEqual([
       "expense.sourceClaims",
+      "financialAccount.authorizedUsers",
       "financialAccount.cardNumbers",
+      "financialAccount.fundingPeriods",
       "financialAccount.identity",
       "financialAccount.sourceAliases",
       "financialTransaction.sourceRefs",

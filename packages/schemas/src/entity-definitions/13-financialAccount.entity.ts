@@ -206,7 +206,7 @@ export default defineEntity({
         description:
           "Members authorized to use this credit card, with inclusive membership dates.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        display: { detail: true, detailLabelPath: "authorizedUsersLabel" },
         validation: {
           read: financialAccountAuthorizedUsers,
           create: financialAccountAuthorizedUsers.default([]),
@@ -219,7 +219,7 @@ export default defineEntity({
         description:
           "Dated funding parties. Empty uses the account Ledger Party; gaps in a nonempty history are unknown. Does not change inventory ownership.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        display: { detail: true, detailLabelPath: "fundingPeriodsLabel" },
         validation: {
           read: financialAccountFundingPeriods,
           create: financialAccountFundingPeriods.default([]),
@@ -346,6 +346,8 @@ export default defineEntity({
       // Server-composed text for the structured detail fields above (`display.detailLabelPath`).
       labelField("sourceAliasesLabel", "Source aliases"),
       labelField("cardNumbersLabel", "Card numbers"),
+      labelField("authorizedUsersLabel", "Authorized users"),
+      labelField("fundingPeriodsLabel", "Funding periods"),
     ],
     storage: [
       {
@@ -472,6 +474,8 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "authorizedUsersLabel",
+      "fundingPeriodsLabel",
       "primaryCardholderId",
       "authorizedUsers",
       "fundingPeriods",
@@ -545,6 +549,14 @@ export default defineEntity({
       export: "financialAccountFilterFields",
     },
     descriptors: [
+      {
+        columnId: "primaryCardholderId",
+        placeholder: "Filter by primary cardholder...",
+        kind: "idMulti",
+        brandRef: { entity: "ledgerParty" },
+        deriveSchema: true,
+        stored: true,
+      },
       {
         columnId: "providerVendorId",
         kind: "idMulti",
@@ -688,6 +700,29 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "primary-cardholder",
+      label: "Primary cardholder",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "FinancialAccount.primaryCardholderId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialAccount.primaryCardholderId",
+            direction: "incoming",
+          },
+        ],
+      },
+    },
     {
       key: "provider-vendor",
       label: "Stored-value provider",

@@ -65,6 +65,8 @@ import { completeListReader } from "~/server/generic/list/repo/list-read-adapter
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { accountPartyPeriodsLabelSql } from "./repo/funding-sql";
+
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   "EmailFinancialAssociation.reviewedAccountId": {
     code: "preserve-reviewed-email-association",
@@ -95,6 +97,12 @@ export const financialAccountTransactionCount = sql<number>`(
 )`;
 
 const columns = {
+  authorizedUsersLabel: accountPartyPeriodsLabelSql(
+    sql`"FinancialAccount"."authorizedUsers"`,
+  ),
+  fundingPeriodsLabel: accountPartyPeriodsLabelSql(
+    sql`"FinancialAccount"."fundingPeriods"`,
+  ),
   authorizedUsers: financialAccount.authorizedUsers,
   fundingPeriods: financialAccount.fundingPeriods,
   primaryCardholderShortcode: sql<
@@ -152,6 +160,8 @@ const toOut = (
   return financialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
+    authorizedUsersLabel: row.authorizedUsersLabel,
+    fundingPeriodsLabel: row.fundingPeriodsLabel,
     authorizedUsers: row.authorizedUsers,
     fundingPeriods: row.fundingPeriods,
     primaryCardholderId: row.primaryCardholderShortcode,

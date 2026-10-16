@@ -18,7 +18,7 @@ import {
 } from "~/server/db/schema";
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
-import { accountFundingPartySql } from "~/server/domains/financial-account/funding-sql";
+import { accountFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder

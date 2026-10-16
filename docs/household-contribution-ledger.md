@@ -64,7 +64,8 @@ attribution journey.
 A credit card's `primaryCardholderId` identifies its primary member independently
 of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
-open endpoint). A primary cardholder cannot also be an authorized user. Outside
+open endpoint). History details show party names and date bounds on both web and
+Apple clients. A primary cardholder cannot also be an authorized user. Outside
 those memberships, the household's sole-use rule identifies the primary member
 as purchaser. Multiple paying accounts must all agree on that sole user.
 

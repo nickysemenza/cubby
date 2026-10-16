@@ -10,3 +10,17 @@ export const accountFundingPartySql = (account: SQL, date: SQL) => sql`(
       AND (period->>'validTo' IS NULL OR ${date} <= (period->>'validTo')::date)
   ) END
 )`;
+
+/** One server-owned detail line per dated party, preserving membership order. */
+export const accountPartyPeriodsLabelSql = (periods: SQL) => sql<
+  string | null
+>`(
+  SELECT string_agg(
+    coalesce(party.name, period->>'ledgerPartyId') || CASE
+      WHEN period->>'validFrom' IS NULL AND period->>'validTo' IS NULL THEN ''
+      ELSE ' · ' || coalesce(period->>'validFrom', '…') || ' → ' || coalesce(period->>'validTo', '…')
+    END, E'\n' ORDER BY ordinal
+  )
+  FROM jsonb_array_elements(${periods}) WITH ORDINALITY history(period, ordinal)
+  LEFT JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
+)`;
