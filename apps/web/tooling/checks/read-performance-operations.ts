@@ -11,7 +11,6 @@ import {
 } from "~/server/operation-runtime/start-operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
-
 import { requestedReadMetadata } from "./read-performance-shape";
 
 const querySchema = z
@@ -223,17 +222,7 @@ export function summarizeOperationReads(
     };
   };
   return {
-    requestedReads: samples.length
-      ? [
-          ...new Map(
-            samples.flatMap((sample) =>
-              sample.requestedReads.map(
-                (read) => [JSON.stringify(read), read] as const,
-              ),
-            ),
-          ).values(),
-        ]
-      : null,
+    requestedReads: samples[0]?.requestedReads ?? null,
     versions: [
       ...new Set(
         samples.flatMap((sample) => (sample.version ? [sample.version] : [])),

@@ -84,7 +84,12 @@ export function requestedReadMetadata(
               ? ["core" as const]
               : projection === "summary"
                 ? []
-                : ["core" as const, ...listEnrichmentGroups],
+                : [
+                    "core" as const,
+                    ...listEnrichmentGroups.filter(
+                      (group) => declared[group].length > 0,
+                    ),
+                  ],
         };
   if (!groups.success) return null;
   const filters = record.safeParse(input.filters ?? {});
@@ -105,7 +110,13 @@ export function requestedReadMetadata(
     requestedSort: null,
     requestedGrouping: null,
     declaredGroupDependencies:
-      projection === "summary" ? null : declared.dependencies,
+      projection === "summary" || projection === "base"
+        ? null
+        : Object.fromEntries(
+            Object.entries(declared.dependencies).filter(([group]) =>
+              groups.data.some((requested) => requested === group),
+            ),
+          ),
     filterFields: filters.success
       ? allowed.filter((key) => Object.hasOwn(filters.data, key))
       : null,

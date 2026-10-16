@@ -1,4 +1,8 @@
-import { createServer, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { once } from "node:events";
 import type { BatchResult } from "@cubby/schemas/batch";
 import superjson from "superjson";
@@ -32,10 +36,12 @@ const line = (
 ) => JSON.stringify({ i, r: superjson.serialize(value) }) + "\n";
 
 async function serve<T>(
-  respond: (response: ServerResponse) => void,
+  respond: (response: ServerResponse, request: IncomingMessage) => void,
   run: (origin: URL) => Promise<T>,
 ) {
-  const server = createServer((_request, response) => respond(response));
+  const server = createServer((request, response) =>
+    respond(response, request),
+  );
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
@@ -52,6 +58,32 @@ async function serve<T>(
 }
 
 describe("operation performance evidence", () => {
+  it("retains duplicate query positions without repeating sample metadata", async () => {
+    const request = {
+      operation,
+      input: { slots: ["project.budget"], id: "synthetic-private-id" },
+    };
+    const sample = await serve(
+      (response) => {
+        response.setHeader("content-type", "application/x-ndjson");
+        response.end(
+          line(0, { ok: true, value: success }) +
+            line(1, { ok: true, value: success }),
+        );
+      },
+      (origin) =>
+        measureOperationRead(
+          { batch: [request, request] },
+          origin,
+          new Headers(),
+        ),
+    );
+    const report = summarizeOperationReads([sample, sample]);
+    expect(report.requestedReads).toHaveLength(2);
+    expect(report.requestedReads?.map((read) => read.shape)).toEqual(
+      sample.requestedReads.map((read) => read.shape),
+    );
+  });
   it("carries only requested declaration metadata across measurement and aggregation", async () => {
     const samples = await serve(
       (response) => {
@@ -274,7 +306,7 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
   const { mkdir, mkdtemp, writeFile, readFile, rm } =
     await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const root = resolve("../../artifacts/boat-performance");
+  const root = resolve("../../artifacts/read-performance");
   await mkdir(root, { recursive: true });
   const directory = await mkdtemp(`${root}/cli-`);
   try {
@@ -352,3 +384,108 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+// Empty pages must not claim enrichment; populated pages request only server-selected groups.
+it.each([false, true])(
+  "reports actual progressive phases when rows exist: %s",
+  async (hasRows) => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { mkdtemp, writeFile, readFile, rm } =
+      await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const directory = await mkdtemp(join(tmpdir(), "read-performance-"));
+    try {
+      await writeFile(
+        join(directory, "input.json"),
+        JSON.stringify({ filters: {} }),
+      );
+      await serve(
+        (response, request) => {
+          const body = request.url?.endsWith("listBase")
+            ? {
+                data: hasRows ? [{ id: "synthetic-private-id" }] : [],
+                groups: [{ id: "derived" }],
+              }
+            : request.url?.endsWith("listEnrichment")
+              ? { groups: [{ state: "ready" }] }
+              : {};
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify(body));
+        },
+        async (origin) => {
+          await promisify(execFile)(
+            process.execPath,
+            [
+              "--import",
+              "tsx",
+              "tooling/checks/read-performance.ts",
+              "--origin",
+              origin.href,
+              "--mode",
+              "progressive",
+              "--entities",
+              "product",
+              "--samples",
+              "1",
+              "--first-invocation",
+              "--input",
+              join(directory, "input.json"),
+              "--output",
+              join(directory, "public.json"),
+            ],
+            {
+              env: {
+                ...process.env,
+                CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
+              },
+            },
+          );
+        },
+      );
+      const text = await readFile(join(directory, "public.json"), "utf8");
+      const artifact = JSON.parse(text);
+      expect(text).not.toContain("synthetic-private");
+      expect(
+        artifact.requestedReads.map(
+          (read: {
+            entity: string;
+            operation: string;
+            shape: { projection: string; groups: string[] };
+          }) => ({
+            entity: read.entity,
+            operation: read.operation,
+            projection: read.shape.projection,
+            groups: read.shape.groups,
+          }),
+        ),
+      ).toEqual([
+        {
+          entity: "product",
+          operation: "listBase",
+          projection: "base",
+          groups: ["core"],
+        },
+        ...(hasRows
+          ? [
+              {
+                entity: "product",
+                operation: "listEnrichment",
+                projection: "enrichment",
+                groups: ["derived"],
+              },
+            ]
+          : []),
+        {
+          entity: "product",
+          operation: "listSummary",
+          projection: "summary",
+          groups: [],
+        },
+      ]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

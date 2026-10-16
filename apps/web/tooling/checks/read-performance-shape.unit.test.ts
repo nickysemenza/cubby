@@ -72,3 +72,18 @@ it("bounds operator context without free text or raw workload records", () => {
       .success,
   ).toBe(false);
 });
+
+it("publishes only schema-admitted list filter names", () => {
+  const metadata = requestedReadMetadata("entity.listBase", {
+    entity: "product",
+    filters: {
+      searchQuery: "synthetic-private-value",
+      "synthetic-secret-key": "synthetic-private-value",
+    },
+  });
+  expect(metadata).toMatchObject({
+    filterFields: ["searchQuery"],
+    declaredGroupDependencies: null,
+  });
+  expect(JSON.stringify(metadata)).not.toContain("synthetic-");
+});

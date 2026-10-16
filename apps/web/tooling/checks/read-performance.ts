@@ -11,7 +11,6 @@ import {
   readOperationInputSchema,
   summarizeOperationReads,
 } from "./read-performance-operations";
-
 import {
   requestedReadMetadata,
   workloadContextSchema,
@@ -160,6 +159,11 @@ async function request(
   };
   return { result, measurement };
 }
+const requestedReads: {
+  entity: string;
+  operation: string;
+  shape: ReturnType<typeof requestedReadMetadata>;
+}[] = [];
 const observations: {
   entity: string;
   sample: number;
@@ -176,6 +180,12 @@ async function list(entity: string, sample: number) {
       mode === "complete"
         ? "resource.list"
         : (path.split("/").at(-1) ?? "unknown");
+    if (sample >= 0)
+      requestedReads.push({
+        entity,
+        operation,
+        shape: body ? requestedReadMetadata(`entity.${operation}`, body) : null,
+      });
     const value = await request(operation, path, body, method);
     measurements.push(value.measurement);
     return value.result;
@@ -334,15 +344,11 @@ const summary =
 const artifact = {
   schema: 5,
   workloadContext,
-  requestedReads:
-    operationReport?.requestedReads ??
-    entities.map((entity) => ({
-      entity: z.enum(listEntities).parse(entity),
-      shape:
-        mode === "complete"
-          ? null
-          : requestedReadMetadata("entity.list", { ...readInput, entity }),
-    })),
+  requestedReads: operationReport?.requestedReads ?? [
+    ...new Map(
+      requestedReads.map((read) => [JSON.stringify(read), read] as const),
+    ).values(),
+  ],
   recordedAt: new Date().toISOString(),
   authenticationMode: apiKey
     ? "api-key"

@@ -1213,8 +1213,13 @@ registered entity, projection, groups, declared field ownership and group-loader
 dependencies. These are requested/declared contracts, **not observed loaded work**
 or inferred SQL/report dependencies. Summary output fields, arbitrary sort/group
 expressions, complete resource reads and unsupported operations remain null.
-Progressive mode describes its logical full-row request; base/enrichment/summary
-work remains separated in the existing measured operation metrics. Filter field
+Progressive mode records the base/enrichment/summary requests actually sent
+during measured samples, keyed to their operation metrics. Empty pages request
+no enrichment; populated pages record only server-selected enrichment groups.
+Repeated phase shapes across samples are coalesced; an operation batch retains
+each query position and duplicate, independently of its sample count. Full list
+metadata omits empty ownership groups. Dependency metadata lists only direct
+declared edges of requested groups; core-only reads report none. Filter field
 names now live inside each list shape and are admitted only from that entity's
 generated filter schema, never arbitrary input keys. Values, IDs, search text,
 paths and diagnostics are excluded from both public and private samples.
