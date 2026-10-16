@@ -222,13 +222,13 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     now = Date.now(),
   ) {
     const sql = this.ctx.storage.sql;
-    const rows = sql
+    const permit = sql
       .exec<{ bucket: string }>(
         "SELECT bucket FROM permits WHERE token = ?",
         token,
       )
-      .toArray();
-    if (!rows.length) return;
+      .toArray()[0];
+    if (!permit) return;
     sql.exec("DELETE FROM permits WHERE token = ?", token);
     if (status === 429) {
       const seconds = retryAfter === null ? NaN : Number(retryAfter);
@@ -239,9 +239,10 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         now + 1_000,
         Number.isFinite(parsed) ? parsed : now + 1_000,
       );
-      // A response need not identify which upstream enforced the limit; share unknown-scope cooldowns.
+      // Unified responses have unknown limit scope; credit refusals must leave paid fallback available.
       sql.exec(
-        "INSERT INTO cooldowns VALUES ('all', ?) ON CONFLICT(bucket) DO UPDATE SET until_ms = max(until_ms, excluded.until_ms)",
+        "INSERT INTO cooldowns VALUES (?, ?) ON CONFLICT(bucket) DO UPDATE SET until_ms = max(until_ms, excluded.until_ms)",
+        permit.bucket === "unified" ? "all" : permit.bucket,
         until,
       );
     }

@@ -133,6 +133,10 @@ describe("inference funding", () => {
     [400, "tool_choice is invalid"],
     [401, "invalid x-api-key"],
     [429, "AI Gateway admission is waiting for shared capacity"],
+    [
+      429,
+      '{"error":{"type":"rate_limit_error","message":"Requests per minute limit exceeded"}}',
+    ],
     [500, "Your credit balance is too low"],
   ])("preserves non-funding failure %s", (status, body) => {
     expect(isInferenceFundingRefusal(status, body, "subscriber_credit")).toBe(

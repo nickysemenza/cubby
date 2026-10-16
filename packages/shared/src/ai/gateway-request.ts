@@ -475,7 +475,7 @@ export function isInferenceFundingRefusal(
         body,
       )
     );
-  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|"type"\s*:\s*"rate_limit_error"/iu.test(
+  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached/iu.test(
     body,
   );
 }

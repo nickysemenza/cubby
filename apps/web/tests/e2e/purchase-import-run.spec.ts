@@ -240,7 +240,7 @@ test("imports saved order mail from its Email page and follows the live Run to t
   const [claimed] = await claimOrder(seed);
   if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
-    expectedInference: { model: "gpt-6-luna", effort: "medium" },
+    expectedInference: { model: "claude-opus-5-5", effort: "medium" },
     steps: [
       ...importOrder("mail", seed, claimed, { gate: "original-read" }),
       ...finished("mail"),

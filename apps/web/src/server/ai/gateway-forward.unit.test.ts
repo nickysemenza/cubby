@@ -1,9 +1,10 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import type { AiUsageTelemetry } from "@cubby/schemas/telemetry";
 import type { GatewayProvider } from "@cubby/shared/ai/models";
 import { describe, expect, it } from "vitest";
 
 import type { GatewayCallOptions } from "~/server/ai/gateway";
-import { type AiUsagePort, recordAiUsage } from "~/server/ai/usage";
+import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 
 import {
@@ -52,7 +53,7 @@ function fakePort(
     url: string;
     init: RequestInit;
   }[] = [];
-  const recorded: Parameters<AiUsagePort["emit"]>[1][] = [];
+  const recorded: AiUsageTelemetry[] = [];
   const port: GatewayForwardPort = {
     transport: (provider, opts) => (input, init) => {
       opts.onTransport?.(
@@ -78,6 +79,8 @@ function fakePort(
       recordAiUsage(database, input, {
         snapshot: async () => ({ amount: null, evidence: null }),
         emit: (_db, event) => {
+          if (event.type !== "ai_usage")
+            throw new Error(`Unexpected telemetry event: ${event.type}`);
           recorded.push(event);
           return Promise.resolve();
         },

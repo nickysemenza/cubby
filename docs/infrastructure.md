@@ -434,9 +434,11 @@ All environments use `cubby`; `environment` metadata separates their logs and sp
 The shared gateway also shares Cloudflare's Unified Billing allowance of
 200 requests per 60 seconds and its gateway-wide rate limit; this is an
 accepted capacity tradeoff. A spend limit can filter by `environment` to budget
-CI independently, but cannot separate that request allowance. Gateways are not
-a security boundary: AI Gateway tokens are account-scoped, so any `Run` token
-reaches every gateway and its stored BYOK keys
+CI independently, but cannot separate that request allowance. Egress cooldowns
+from subscriber-credit 429s apply only to their credit bucket, leaving Unified
+Billing fallback available; unified 429s retain a shared cooldown across all
+buckets. Gateways are not a security boundary: AI Gateway tokens are
+account-scoped, so any `Run` token reaches every gateway and its stored BYOK keys
 ([authenticated gateway](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)).
 Dynamic routes accept only the OpenAI chat-completions shape, so Anthropic
 Messages calls cannot use them

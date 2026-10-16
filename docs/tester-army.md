@@ -139,7 +139,7 @@ The subscription adapter owns its existing token store and refresh flow;
 `e2e login openai` provisions it locally. CI can provision the existing `E2E_OAUTH_CREDENTIALS` store. After a supported
 `e2e login openai`, copy the OAuth credential-store JSON into an Actions secret
 named `E2E_OAUTH_CREDENTIALS`, then bind that secret to the same environment
-variable on Tester Army inference steps. The store lives at
+variable on Tester Army jobs. The store lives at
 `$XDG_CONFIG_HOME/e2e/oauth.json` or `~/.config/e2e/oauth.json`; do not print
 it or include it in run artifacts. Tester Army CI jobs forward this secret when configured.
 The environment store cannot persist refreshed tokens, so replace the secret
