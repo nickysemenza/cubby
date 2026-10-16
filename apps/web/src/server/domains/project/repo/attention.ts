@@ -48,11 +48,10 @@ import {
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { expense, project, task } from "~/server/db/schema";
+import { expense, task } from "~/server/db/schema";
 import {
   expenseDerivedCostRead,
   expenseDerivedMembershipSql,
-  expenseDerivedReadSql,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import {
   effectiveExpenseProjectSql,
@@ -166,8 +165,7 @@ export async function computeAttentionItems(
   );
   const [
     overdueTaskRows,
-    inProgressProjectRows,
-    { allRows: allProjectRows, subtreeRollups, dateWindows },
+    { allRows: allProjectRows, subtreeRollups, dateWindows, ownContentDates },
     pastDueExpenseRows,
     unclassifiedExpenseRows,
     actionable,
@@ -190,25 +188,6 @@ export async function computeAttentionItems(
           scopedOrInbox(effectiveTaskProjectSql()),
         ),
       ),
-    scopedProjectIds?.length === 0
-      ? Promise.resolve([])
-      : getDb(db)
-          .select({
-            id: project.id,
-            shortcode: project.shortcode,
-            name: project.name,
-            updatedAt: project.updatedAt,
-          })
-          .from(project)
-          .where(
-            and(
-              notDeleted(project),
-              eq(project.status, "in_progress"),
-              scopedProjectIds
-                ? inArray(project.id, scopedProjectIds)
-                : undefined,
-            ),
-          ),
     options?.preloaded ?? loadProjectSubtreeRollups(db),
     overdueExpenseRead
       .select({
@@ -254,6 +233,9 @@ export async function computeAttentionItems(
       ),
     readTaskActionability(db),
   ]);
+  const inProgressProjectRows = allProjectRows.filter(
+    (row) => row.status === "in_progress" && projectInScope(row.id),
+  );
 
   // 1. overdue_task — one item per open top-level task past its effective
   // due date (`dueEndDate ?? dueDate`), matching needs-attention.tsx's
@@ -282,70 +264,15 @@ export async function computeAttentionItems(
   };
   appendOverdueTasks();
 
-  // 2. stalled_project — in_progress project with no project/task/expense
-  // activity in the last 30 days. (Note/image activity isn't included — no
-  // cheap existing "last activity" timestamp for those; see module doc.)
-  //
-  // Task activity is `max(dueEndDate ?? dueDate)`, NOT `max(updatedAt)`. In
-  // production almost all done tasks were bulk-imported in one window, so
-  // `updatedAt` clusters tightly around the import while `dueDate` spans the
-  // real work timeline, and the two rarely land on the same day.
-  // `max(updatedAt)` therefore dates every project to the import, not the
-  // work, and can't tell a live project from a dormant one.
-  // `dueDate` also does double duty as a *forward* signal: a task due next
-  // month means the project has scheduled live work, so it correctly reads as
-  // "not stalled" even before that task is touched again.
-  //
-  // `dueDate` is nullable (1,116 done tasks have 1 without one; 100% of
-  // `later`/`blocked` tasks lack one). SQL `max()` already ignores NULLs, so a
-  // project whose tasks are all undated simply gets no task-activity signal —
-  // it neither widens (falsely "recent") nor collapses (falsely "ancient")
-  // the window; `project.updatedAt` and expense activity still apply.
-  const appendStalledProjects = async () => {
-    const inProgressIds = inProgressProjectRows.map((row) => row.id);
-    if (inProgressIds.length === 0) return;
-    const [taskActivityRows, expenseActivityRows] = await Promise.all([
-      getDb(db)
-        .select({
-          projectId: effectiveTaskProjectSql(),
-          lastActivity: sql<
-            string | null
-          >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
-        })
-        .from(task)
-        .where(
-          and(
-            inArray(effectiveTaskProjectSql(), inProgressIds),
-            notDeleted(task),
-          ),
-        )
-        .groupBy(effectiveTaskProjectSql()),
-      getDb(db)
-        .execute<{ projectId: ProjectId; lastActivity: string | null }>(sql`
-        SELECT allocation."projectId", max(e."date") AS "lastActivity"
-        FROM (${expenseDerivedReadSql("projects")}) allocation
-        JOIN "Expense" e ON e."id" = allocation."expenseId"
-        WHERE ${inArray(sql`allocation."projectId"`, inProgressIds)}
-        GROUP BY allocation."projectId"
-      `)
-        .then((result) => result.rows),
-    ]);
-    const taskActivityByProject = new Map<ProjectId, string>();
-    for (const row of taskActivityRows) {
-      if (row.projectId && row.lastActivity) {
-        taskActivityByProject.set(row.projectId, row.lastActivity);
-      }
-    }
-    const expenseActivityByProject = new Map<ProjectId, string>();
-    for (const row of expenseActivityRows) {
-      if (row.projectId && row.lastActivity)
-        expenseActivityByProject.set(row.projectId, row.lastActivity);
-    }
+  // Activity uses the same own live Task end dates and Expense dates as the
+  // rollup's content bounds. Keep descendant activity and manual overrides out:
+  // a scheduled child or an override must not refresh a quiet parent.
+  // Undated tasks contribute no date; refunds and future dated work do.
+  const appendStalledProjects = () => {
     for (const row of inProgressProjectRows) {
       const candidates = [
         householdLocalDate(row.updatedAt),
-        taskActivityByProject.get(row.id),
-        expenseActivityByProject.get(row.id),
+        ownContentDates.get(row.id)?.contentEnd,
       ].filter((date): date is string => date != null);
       const lastActivityDate = candidates.reduce((latest, date) =>
         date > latest ? date : latest,
@@ -370,7 +297,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  await appendStalledProjects();
+  appendStalledProjects();
 
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
   // costEstimate still null. Reuses the same batched rollup/aggregation the
