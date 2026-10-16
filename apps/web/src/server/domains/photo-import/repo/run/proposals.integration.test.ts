@@ -272,7 +272,16 @@ describe("photo group proposals", () => {
     );
     const replay = await approvePhotoGroupProposals(
       ctx.db,
-      { runId: run.shortcode, groupKeys: [draft.groupKey] },
+      {
+        runId: run.shortcode,
+        groupKeys: [draft.groupKey],
+        expectedRevisions: [
+          {
+            groupKey: draft.groupKey,
+            updatedAt: resolved!.updatedAt.toISOString(),
+          },
+        ],
+      },
       ctx.actor,
     );
     expect(replay.results[0]?.outcome).toBe("replayed");

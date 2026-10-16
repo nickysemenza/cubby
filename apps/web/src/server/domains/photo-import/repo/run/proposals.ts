@@ -348,6 +348,32 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   };
 }
 
+function proposedIdentityFields(
+  row: ProposalRow,
+  selected:
+    | Pick<
+        Awaited<ReturnType<typeof productSummaries>>[number],
+        "name" | "manufacturer" | "model"
+      >
+    | undefined,
+  identifiers: string[],
+) {
+  const draft = row.productKind === "create" ? row.productCreate : null;
+  const changes = row.review?.productChanges;
+  return {
+    name: draft?.name ?? changes?.name ?? selected?.name ?? "",
+    manufacturer: draft
+      ? draft.manufacturer
+      : (changes?.manufacturer ?? selected?.manufacturer),
+    model: draft
+      ? draft.model
+      : changes && "model" in changes
+        ? changes.model
+        : selected?.model,
+    identifiers,
+  };
+}
+
 async function toViews(
   db: Database,
   rows: ProposalRow[],
@@ -428,29 +454,13 @@ async function toViews(
     return {
       groupKey: row.groupKey,
       crossCheck: photoFieldCrossCheck(
-        {
-          name:
-            row.productKind === "create"
-              ? (row.productCreate?.name ?? "")
-              : (row.review?.productChanges?.name ??
-                productSummary?.name ??
-                ""),
-          manufacturer:
-            row.productKind === "create"
-              ? row.productCreate?.manufacturer
-              : row.productId
-                ? summaryById.get(row.productId)?.manufacturer
-                : null,
-          model:
-            row.productKind === "create"
-              ? row.productCreate?.model
-              : row.productId
-                ? summaryById.get(row.productId)?.model
-                : null,
-          identifiers: identifiers
+        proposedIdentityFields(
+          row,
+          row.productId ? summaryById.get(row.productId) : undefined,
+          identifiers
             .filter((entry) => entry.id === row.productId)
             .map((entry) => entry.value),
-        },
+        ),
         processing
           .filter((photo) => roster.imageCodes.includes(photo.id))
           .flatMap((photo) =>
@@ -1294,7 +1304,6 @@ async function approveRow(
       error: `Group ${row.groupKey} was discarded`,
     };
   const roster = liveRoster(row, imagesById);
-  let domainCommitted = false;
   try {
     if (await reconcileCommittedProposal(db, run, row, imagesById))
       return { groupKey: row.groupKey, outcome: "replayed" };
@@ -1389,13 +1398,10 @@ async function approveRow(
         );
       return { groupKey: row.groupKey, outcome: "conflict" };
     }
-    domainCommitted = true;
 
     return { groupKey: row.groupKey, outcome: result.outcome };
   } catch (error) {
-    const message = domainCommitted
-      ? `Group ${row.groupKey} committed, but saving its review result failed: ${getErrorMessage(error)}`
-      : getErrorMessage(error);
+    const message = getErrorMessage(error);
     // A frozen row never takes an error: a concurrent approval may have
     // committed it while this attempt failed.
     await getDb(db)
@@ -1454,7 +1460,12 @@ export async function approvePhotoGroupProposals(
       expected.size !== keys.length ||
       keys.some((key) => {
         const row = byKey.get(key);
-        return !row || row.updatedAt.toISOString() !== expected.get(key);
+        return (
+          !row ||
+          !expected.has(key) ||
+          (row.state !== "committed" &&
+            row.updatedAt.toISOString() !== expected.get(key))
+        );
       })
     )
       throw new Error(

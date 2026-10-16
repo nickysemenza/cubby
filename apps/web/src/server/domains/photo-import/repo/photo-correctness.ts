@@ -22,12 +22,19 @@ export function photoFieldCrossCheck(
   variant?: ProductVariantComparison,
 ): PhotoFieldCrossCheck[] {
   const observed = new Set(correctnessTokens(printedEvidence.join("\n")));
+  const namedElsewhere = new Set(
+    correctnessTokens(
+      [product.manufacturer, product.model, ...product.identifiers]
+        .filter(Boolean)
+        .join(" "),
+    ),
+  );
   const fields = ["name", "manufacturer", "model", "identifiers"] as const;
   const deterministic = fields.map((field): PhotoFieldCrossCheck => {
     const value =
       field === "identifiers" ? product.identifiers.join(" ") : product[field];
     const wanted = correctnessTokens(value ?? "");
-    const tokens = wanted.map((text) => ({
+    const tokens: PhotoFieldCrossCheck["tokens"] = wanted.map((text) => ({
       text,
       mark: !observed.size
         ? ("unknown" as const)
@@ -35,6 +42,12 @@ export function photoFieldCrossCheck(
           ? ("agree" as const)
           : ("disagree-or-missing" as const),
     }));
+    if (field === "name") {
+      const catalog = new Set(wanted);
+      for (const text of observed)
+        if (!catalog.has(text) && !namedElsewhere.has(text))
+          tokens.push({ text, mark: "disagree-or-missing" });
+    }
     return {
       field,
       source: "deterministic",

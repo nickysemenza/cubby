@@ -91,6 +91,8 @@ Review groups in one continuous scroll. The item index jumps to a group;
 The server records the confirming member and time with the Product, photos,
 inventory, and settled proposal; failed groups roll back independently. Blocked groups stay in review with the server's `blockedReason`. Server-projected
 `steps` order Product, Right one?/Details, Own it now?, and Apply for both clients.
+The identity step stays open until apply; pending input alone does not block a
+ready group. Only `blockedReason` gates batch eligibility.
 Applying a ready group needs no separate identity confirmation. A real agent
 concern blocks apply; Product/draft edits preserve it. Explicit resolution keeps
 the original concern, optional reply, resolving member, and time in history.

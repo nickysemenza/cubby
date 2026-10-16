@@ -49,3 +49,24 @@ it("keeps short, numeric, decimal and fractional identity tokens", () => {
     ).every((field) => field.mark === "unknown"),
   ).toBe(true);
 });
+
+// A shorter catalog name must not hide printed size and width tokens.
+it("marks label size and width missing from the Product name", () => {
+  const marks = photoFieldCrossCheck(
+    {
+      name: "Synthetic boot",
+      manufacturer: "Forge",
+      model: null,
+      identifiers: [],
+    },
+    ["Forge Synthetic boot US 10 D"],
+  );
+  const name = marks.find((field) => field.field === "name");
+  expect(name?.mark).toBe("disagree-or-missing");
+  expect(name?.tokens).toEqual(
+    expect.arrayContaining([
+      { text: "10", mark: "disagree-or-missing" },
+      { text: "d", mark: "disagree-or-missing" },
+    ]),
+  );
+});

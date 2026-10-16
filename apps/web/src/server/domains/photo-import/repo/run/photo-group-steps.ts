@@ -55,7 +55,7 @@ export function photoGroupSteps(input: {
     {
       key: "identity",
       label: input.kind === "existing" ? "Right one?" : "Details",
-      status: productBlock ? "blocked" : identityBlock ? "needs_input" : "done",
+      status: productBlock ? "blocked" : "needs_input",
       summary: identityBlock,
       action: input.kind === "create" ? "create" : "change",
       blockedReason: productBlock,

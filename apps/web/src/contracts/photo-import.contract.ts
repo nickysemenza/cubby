@@ -315,6 +315,16 @@ export const photoImportContract = defineContract("photoImport", {
       groupKey: z.string().min(1).max(200),
     }),
     output: photoProductCandidatesResponse,
+    cache: {
+      tags: [
+        ["run"],
+        ["product"],
+        ["inventory"],
+        ["expense"],
+        ["purchase"],
+        ["image"],
+      ],
+    },
   }),
   candidatesBatch: query({
     mcp: {
@@ -325,12 +335,25 @@ export const photoImportContract = defineContract("photoImport", {
       "Check all candidates for every group with independent failure results",
     input: z.object({ runId: runShortcode }),
     output: photoRunCandidatesResponse,
+    cache: {
+      tags: [
+        ["run"],
+        ["product"],
+        ["inventory"],
+        ["expense"],
+        ["purchase"],
+        ["image"],
+      ],
+    },
   }),
   productEvidence: query({
     mcp: { omit: "client_view" },
     native: "Read selected Product history independently of candidate ranking",
     input: z.object({ runId: runShortcode, productId: productShortcode }),
     output: photoProductEvidence,
+    cache: {
+      tags: [["product"], ["inventory"], ["expense"], ["purchase"], ["image"]],
+    },
   }),
   rejectCandidate: mutation({
     native: "Record Not this one for the photos in a group",
