@@ -76,6 +76,8 @@ missing records and failed reads remain explicit, with raw error diagnostics.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
 The picker's frame owns its focus ring. Its nested search input suppresses
 the standalone input shadow and border so focus never stacks two outlines.
+On phones, inline suggestion marks reserve their 44px target in layout.
+Invisible hit-area expansion must not cover adjacent edit or relation controls.
 
 Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
 with conditional children for loading and errors. A plain empty-state element

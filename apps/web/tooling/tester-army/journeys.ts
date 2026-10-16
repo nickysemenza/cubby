@@ -297,7 +297,17 @@ export const journeys: Journey[] = [
         check: { visibleOptions: () => [JOURNEY_NAMES.pickerProject] },
       },
       {
-        goal: `Search for and select ${JOURNEY_NAMES.pickerReplacement} as the Default project. Finish the inline edit.`,
+        goal: `Type "${JOURNEY_NAMES.pickerReplacement}" into the open Project search input. Leave the matching dropdown open without selecting anything.`,
+        check: { visibleOptions: () => [JOURNEY_NAMES.pickerReplacement] },
+      },
+      {
+        tapControl: {
+          web: {
+            role: "option",
+            name: JOURNEY_NAMES.pickerReplacement,
+            exact: false,
+          },
+        },
         check: { visible: () => [JOURNEY_NAMES.pickerReplacement] },
       },
     ],
