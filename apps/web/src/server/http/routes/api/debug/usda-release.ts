@@ -2,7 +2,7 @@ import { userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 
 import { auth } from "~/lib/auth";
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";

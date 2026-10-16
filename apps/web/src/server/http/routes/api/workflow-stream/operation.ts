@@ -1,4 +1,4 @@
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 /**
  * The single route for every workflow stream. Replaces the 13 hand-written
  * `api/*-stream/*.ts` files, each of which paired a hardcoded operation id with

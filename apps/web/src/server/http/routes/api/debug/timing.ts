@@ -1,7 +1,7 @@
 import { getErrorMessage } from "@cubby/shared";
 
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
-import type { TimingResult } from "~/lib/timing.contract";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
+import type { TimingResult } from "~/lib/perf/timing.contract";
 import { db } from "~/server/db";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import {

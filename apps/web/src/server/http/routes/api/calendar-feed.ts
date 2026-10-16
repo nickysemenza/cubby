@@ -1,4 +1,4 @@
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { externalCalendarFeedStateFor } from "~/server/domains/calendar/repo/client";
 import { createCalendarFeedHandler } from "~/server/domains/calendar/service/feed";
 

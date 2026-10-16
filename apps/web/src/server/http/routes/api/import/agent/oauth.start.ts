@@ -1,6 +1,6 @@
 import { env } from "~/env";
 import { APP_ORIGIN } from "~/lib/auth-constants";
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import {
   createPkcePair,
   createPurchaseAgentOAuthState,

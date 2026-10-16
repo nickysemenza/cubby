@@ -1,4 +1,4 @@
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import {
   preflightHandler,
   protectedResourceHandler,

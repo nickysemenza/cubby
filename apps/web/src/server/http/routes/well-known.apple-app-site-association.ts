@@ -1,4 +1,4 @@
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { GET } from "~/server/http/apple-app-site-association";
 
 // Apple universal links: iOS/macOS fetch this unauthenticated, unversioned

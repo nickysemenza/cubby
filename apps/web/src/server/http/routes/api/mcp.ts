@@ -1,4 +1,4 @@
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 async function handler({ request }: { request: Request }) {
   // Dynamic import: static MCP SDK imports crash the Vite HMR server.
   const { handleMcpHttpRequest } = await import("~/server/mcp/http-handler");

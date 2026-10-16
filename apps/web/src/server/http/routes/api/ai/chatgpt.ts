@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { auth } from "~/lib/auth";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import type { HttpRouteHandlers } from "~/lib/http-route-handler";
+import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
 import { verifyHttpApiKeyActor } from "~/server/http/http-api-handler";
 import { authenticateHttpSession } from "~/server/http/http-session-cache";

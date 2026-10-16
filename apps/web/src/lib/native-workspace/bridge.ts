@@ -1,7 +1,4 @@
-import {
-  nativeBridgeSchema,
-  type NativeWorkspaceMessage,
-} from "./native-workspace.contract";
+import { nativeBridgeSchema, type NativeWorkspaceMessage } from "./contract";
 
 export function postNativeWorkspaceMessage(message: NativeWorkspaceMessage) {
   if (import.meta.env.SSR) return;

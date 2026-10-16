@@ -3,8 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { createContext, useContext, useEffect } from "react";
 
-import { postNativeWorkspaceMessage } from "./native-workspace-bridge";
-export type { NativeWorkspaceMessage } from "./native-workspace.contract";
+import { postNativeWorkspaceMessage } from "./native-workspace/bridge";
+export type { NativeWorkspaceMessage } from "./native-workspace/contract";
 
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
