@@ -1,0 +1,201 @@
+apps/web/generator/agent-prompts.ts
+  s_2a22d2c73c07e5::t_2c1fcd6aa931af 29
+apps/web/src/server/ai/classify.ts
+  s_2a22d2c73c07e5::t_84647c4f1de778 11-12
+apps/web/src/server/ai/decision-catalog.ts
+  s_2a22d2c73c07e5::t_edeb962ffa741c 3-5,11,13,15-17,30,32-36,273
+apps/web/src/server/ai/decision-model.ts
+  s_2a22d2c73c07e5::t_267a9848602e7b 23-31
+apps/web/src/server/ai/decision-model.unit.test.ts
+  s_2a22d2c73c07e5::t_e8a6cb2ed17a52 9-12
+apps/web/src/server/ai/enrichment/ingredient-merge.ts
+  s_2a22d2c73c07e5::t_46ed4ed5ff741e 18
+apps/web/src/server/ai/enrichment/location-vision.ts
+  s_2a22d2c73c07e5::t_8db5514d9939e5 41
+apps/web/src/server/ai/enrichment/merge-shortlist.ts
+  s_2a22d2c73c07e5::t_ab344bcda3822f 13
+apps/web/src/server/ai/enrichment/usda-match.ts
+  s_2a22d2c73c07e5::t_33ae76fad6fb9d 13
+apps/web/src/server/ai/enrichment/usda-shortlist.ts
+  s_2a22d2c73c07e5::t_40273e141f2547 16
+apps/web/src/server/ai/evaluation-inputs.ts
+  s_2a22d2c73c07e5::t_0fc16499177403 6
+apps/web/src/server/ai/external-id-kind.ts
+  s_2a22d2c73c07e5::t_dcc7f899f11f27 24
+apps/web/src/server/ai/feature-routing-eval.fixtures.ts
+  s_2a22d2c73c07e5::t_642e1dc5a508b3 11
+apps/web/src/server/ai/feature-routing-eval.live-eval.ts
+  s_2a22d2c73c07e5::t_c0c452b243e28c 38,76-77,81
+apps/web/src/server/ai/field-suggest/registry.ts
+  s_2a22d2c73c07e5::t_34816dc9ef1327 5-6,9,34-48,72-75,77,83,97,110,343-350,354-355,357-364,366,376,386,396,425,443,451,459,467,475,482,495,507-508,511-521,532-533
+apps/web/src/server/ai/field-suggest/suggest-fields.ts
+  s_2a22d2c73c07e5::t_3f84d2bf3e7abd 48-49,51-55
+apps/web/src/server/ai/field-suggest/suggest-fields.unit.test.ts
+  s_2a22d2c73c07e5::t_43462c7184d488 17
+apps/web/src/server/ai/mail-prompt.live-eval.ts
+  s_2a22d2c73c07e5::t_b626299cc7cfe4 38,43-44
+apps/web/src/server/ai/policy/decision-choice.ts
+  s_2a22d2c73c07e5::t_14c34176008f42 1-168
+apps/web/src/server/ai/policy/features.ts
+  s_2a22d2c73c07e5::t_0b1ee30b52ad10 48-58,106
+apps/web/src/server/ai/policy/field-decisions.ts
+  s_2a22d2c73c07e5::t_25f46505de5e62 1-155
+apps/web/src/server/ai/policy/field-suggest.ts
+  s_2a22d2c73c07e5::t_3fc036e074f18c 1-385
+apps/web/src/server/ai/policy/prompts/image-identification.ts
+  s_2a22d2c73c07e5::t_519173ecdb8d5e 6
+apps/web/src/server/ai/policy/prompts/ingredient-selection.ts
+  s_2a22d2c73c07e5::t_b883112d3f1162 3
+apps/web/src/server/ai/policy/prompts/location-suggest.ts
+  s_2a22d2c73c07e5::t_df980bdef4275b 1-2
+apps/web/src/server/ai/policy/prompts/purchase-lines.ts
+  s_2a22d2c73c07e5::t_3890100bcf0f75 7
+apps/web/src/server/ai/policy/prompts/semantic-decisions.ts
+  s_2a22d2c73c07e5::t_0d34f4b1538644 1
+apps/web/src/server/ai/policy/refresh-manifest.ts
+  s_2a22d2c73c07e5::t_49c82924c45b89 15-16,75,122
+apps/web/src/server/ai/product-identity-grounding.ts
+  s_2a22d2c73c07e5::t_f3d8a155cf3359 13,90-91
+apps/web/src/server/ai/product-identity.ts
+  s_2a22d2c73c07e5::t_3bb4207460e825 19-20
+apps/web/src/server/ai/repo/ai-analysis.ts
+  s_2a22d2c73c07e5::t_e0f34c9e38c850 6
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_2a22d2c73c07e5::t_1e15f3829c5aac 9
+apps/web/src/server/ai/repo/ai-refresh-observation.integration.test.ts
+  s_2a22d2c73c07e5::t_20a6086c4256c0 10
+apps/web/src/server/ai/repo/ai-refresh.ts
+  s_2a22d2c73c07e5::t_ef7bcc64e505cf 9
+apps/web/src/server/ai/run-feature.ts
+  s_2a22d2c73c07e5::t_7770ef5ef8bf0b 61-62,67
+apps/web/src/server/ai/run-feature.unit.test.ts
+  s_2a22d2c73c07e5::t_575c5dde9c23d7 25
+apps/web/src/server/ai/selection.ts
+  s_2a22d2c73c07e5::t_ddc6be9683294a 28-31
+apps/web/src/server/ai/selection.unit.test.ts
+  s_2a22d2c73c07e5::t_edac105508009e 5-9,13-16
+apps/web/src/server/ai/semantic-decisions.ts
+  s_2a22d2c73c07e5::t_c52c4ac1bf7b96 14,19,29
+apps/web/src/server/ai/settlement-candidate-rank.ts
+  s_2a22d2c73c07e5::t_787974bbb90ef3 18-20
+apps/web/src/server/ai/smoke-catalog.ts
+  s_2a22d2c73c07e5::t_a03e62c2e0f37f 5,37
+apps/web/src/server/ai/smoke-catalog.unit.test.ts
+  s_2a22d2c73c07e5::t_40626e5673d993 4
+apps/web/src/server/ai/usage-accounting.integration.test.ts
+  s_2a22d2c73c07e5::t_887672bc176d0b 25
+apps/web/src/server/clients/ai.ts
+  s_2a22d2c73c07e5::t_3dac04e0a189d3 13
+apps/web/src/server/domains/expense/service/expense-line-role.ts
+  s_2a22d2c73c07e5::t_e045275f89760e 11-12
+apps/web/src/server/domains/image-processing/repo/description-policy.ts
+  s_2a22d2c73c07e5::t_b69d5b27225190 8
+apps/web/src/server/domains/image-processing/repo/image-processing.integration.test.ts
+  s_2a22d2c73c07e5::t_56afb91b4248f5 13
+apps/web/src/server/domains/image-processing/service/cloud-description.ts
+  s_2a22d2c73c07e5::t_e240b4f8ee91f8 8
+apps/web/src/server/domains/image-processing/service/dispatch.ts
+  s_2a22d2c73c07e5::t_049e9ebfa173c6 10
+apps/web/src/server/domains/image/service/image-description.service.ts
+  s_2a22d2c73c07e5::t_fb0b48ca8e91ca 20
+apps/web/src/server/domains/image/service/image-identification-ranking.ts
+  s_2a22d2c73c07e5::t_f507db5b90af64 3,7
+apps/web/src/server/domains/image/service/image-identification.service.ts
+  s_2a22d2c73c07e5::t_4eea738757d047 15-16,19-20,24
+apps/web/src/server/domains/location/repo/location-shape.integration.test.ts
+  s_2a22d2c73c07e5::t_fc26820af6d7a7 8
+apps/web/src/server/domains/product/repo/match/product-identity-snapshot.ts
+  s_2a22d2c73c07e5::t_3e9817359255aa 10
+apps/web/src/server/domains/product/repo/match/product-match-candidate.ts
+  s_2a22d2c73c07e5::t_eeb6fdbdbe4ec3 26
+apps/web/src/server/domains/product/repo/product-variant-evidence.ts
+  s_2a22d2c73c07e5::t_b3e8dd1ff06a5e 9,269
+apps/web/src/server/domains/purchase-import/operations/agents/extract.ts
+  s_2a22d2c73c07e5::t_b0ec5c06b37967 26,32,36
+apps/web/src/server/domains/purchase-import/operations/gmail/classification-stage.integration.test.ts
+  s_2a22d2c73c07e5::t_4241addae9a7fb 6
+apps/web/src/server/domains/purchase-import/operations/mail-attachment-purpose.ts
+  s_2a22d2c73c07e5::t_941fe0108d2106 10
+apps/web/src/server/domains/purchase-import/repo/audit-batch.ts
+  s_2a22d2c73c07e5::t_f497afcee17221 4
+apps/web/src/server/domains/purchase-import/repo/gmail/decision-telemetry.integration.test.ts
+  s_2a22d2c73c07e5::t_a747657c2e8070 13
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_2a22d2c73c07e5::t_a43f6349c16e51 13
+apps/web/src/server/domains/purchase-import/service/gmail/candidate-extraction-runtime.ts
+  s_2a22d2c73c07e5::t_a305af6249e01b 11
+apps/web/src/server/domains/purchase-import/service/gmail/ingest.ts
+  s_2a22d2c73c07e5::t_2be31cdb789aca 263-264
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.ts
+  s_2a22d2c73c07e5::t_1c8c4d2e397b73 5
+apps/web/src/server/domains/purchase-import/service/gmail/relevance.ts
+  s_2a22d2c73c07e5::t_19b7ac266b1e56 15
+apps/web/src/server/domains/purchase-import/service/gmail/triage-model.ts
+  s_2a22d2c73c07e5::t_8bf4faa48ca588 16-17
+apps/web/src/server/domains/purchase-import/service/gmail/triage.ts
+  s_2a22d2c73c07e5::t_6ded3aee418b45 10
+apps/web/src/server/domains/purchase-import/service/gmail/triage.unit.test.ts
+  s_2a22d2c73c07e5::t_29aa177190d5ed 8
+apps/web/src/server/domains/purchase-import/service/line-stage.ts
+  s_2a22d2c73c07e5::t_69edfba41ea044 6
+apps/web/src/server/domains/purchase/repo/purchase-finance-actions.integration.test.ts
+  s_2a22d2c73c07e5::t_09312f8b4a20fd 7
+apps/web/src/server/domains/recipe/repo/recipe-flow-state.ts
+  s_2a22d2c73c07e5::t_017d11357961c2 10
+apps/web/src/server/domains/recipe/service/recipe-flow/recipe-flow.service.ts
+  s_2a22d2c73c07e5::t_d4f7016d726c8f 13
+apps/web/src/server/domains/recipe/service/recipe-flow/recipe-flow.service.unit.test.ts
+  s_2a22d2c73c07e5::t_7963039bc76d9c 19
+apps/web/src/server/domains/run/operations/ai.server.ts
+  s_2a22d2c73c07e5::t_d76dbe70a02f5d 40-43
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_2a22d2c73c07e5::t_4950aee707103a 15
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_2a22d2c73c07e5::t_6749b4f8e7f1bb 33-39
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_2a22d2c73c07e5::t_3f575edc05a38f 28-31
+apps/web/src/server/generic/assessment/repo/assessment-product.integration.test.ts
+  s_2a22d2c73c07e5::t_3766c19ef807ec 11-12
+apps/web/src/server/generic/embedding/service/semantic/embeddings.ts
+  s_2a22d2c73c07e5::t_3969075bc9936f 12
+apps/web/src/server/generic/entity-report/repo/recipe.integration.test.ts
+  s_2a22d2c73c07e5::t_ddb7867f6848b5 7
+apps/web/src/server/workflows/ai-smoke-run.integration.test.ts
+  s_2a22d2c73c07e5::t_f6e57c5a7a371e 23
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_2a22d2c73c07e5::t_fb3d9806934a0b 25-26,39-40,382,643,716
+apps/web/src/server/workflows/background-tasks/embedding.ts
+  s_2a22d2c73c07e5::t_274f8708641d00 9
+apps/web/tests/e2e/recipe-flow.spec.ts
+  s_2a22d2c73c07e5::t_0a56423fa7b567 5
+apps/web/tooling/convergence-harness.ts
+  s_2a22d2c73c07e5::t_610e3bf4e4d8ce 22
+docs/adr/0019-domain-first-server-layout.md
+  s_2a22d2c73c07e5::t_761301bdb359d1 45-50
+docs/agents/generic-paths.md
+  s_2a22d2c73c07e5::t_576122fca72c7c 150-152
+docs/entities.md
+  s_2a22d2c73c07e5::t_7101ec793a09d7 642-645
+docs/infrastructure.md
+  s_2a22d2c73c07e5::t_a400d36a385d76 453,479
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_2a22d2c73c07e5::t_af7b5afa21b73d 14-19,44-46,48,65-66,85,105-106,140-141
+tools/oxlint/cubby/domain-layers.test.ts
+  s_2a22d2c73c07e5::t_d0f1459352ebf2 115-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a04050ff39d91515338794260c848b58e9e911bf",
+  "prompts": {},
+  "sessions": {
+    "s_2a22d2c73c07e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40a3118-2c9c-4752-ae71-ce66551adfa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
