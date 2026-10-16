@@ -87,7 +87,8 @@ export type CommitPhotoGroupProductCreate = z.infer<
 /** Observed identity stays independent of the selected catalog destination. */
 export const photoGroupReview = z.object({
   observedName: z.string().trim().min(1).max(500),
-  unresolvedReason: z.string().trim().min(1).max(500).nullable(),
+  /** Regrouping combines predecessor concerns without truncating their evidence. */
+  unresolvedReason: z.string().trim().min(1).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
   productChanges: commitPhotoGroupProductCreate.partial().optional(),
   /** Written by the server only after the Product transaction succeeds. */

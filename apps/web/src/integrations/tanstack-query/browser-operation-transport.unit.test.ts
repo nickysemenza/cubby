@@ -75,6 +75,28 @@ const poolFailure = (
 });
 
 describe("browser operation transport", () => {
+  // Work partitioned for an invocation budget must not be coalesced again by transport.
+  it("keeps opted-out reads in separate requests while default reads coalesce", async () => {
+    const { sent } = stubDispatch();
+    await Promise.all([
+      dispatchBrowserOperation(
+        "dashboard.counts",
+        {},
+        { ...transport(), batch: false },
+      ),
+      dispatchBrowserOperation(
+        "dashboard.counts",
+        {},
+        { ...transport(), batch: false },
+      ),
+      dispatchBrowserOperation("dashboard.counts", {}, transport()),
+      dispatchBrowserOperation("dashboard.counts", {}, transport()),
+    ]);
+    expect(sent.filter((body) => body.operation)).toHaveLength(2);
+    expect(sent.filter((body) => body.batch)).toHaveLength(1);
+    expect(sent.find((body) => body.batch)?.batch).toHaveLength(2);
+  });
+
   // The HTTP seam observes actual admission, including separate header groups,
   // singleton reads, and the fallback burst after a failed batch.
   it("bounds singleton and fallback reads across header groups and cancels queued reads", async () => {

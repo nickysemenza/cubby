@@ -20,6 +20,7 @@ request scopes; cancellation stops queued requests and retry waits. Successful
 batch siblings are not replayed. Mutations are outside this read recovery
 policy, and exhausted retries retain the last raw diagnostics. Keep passive
 mount/focus/reconnect defaults separate from recovery of an active read.
+Pass the optional per-call `{ batch: false }` for reads partitioned to fit a Worker invocation budget; all other calls keep batching, and opted-out reads retain shared admission, cancellation and retry.
 
 This bounds HTTP requests, not origin database connections: each server batch
 can run several operations using its request-scoped pool. It does not reserve

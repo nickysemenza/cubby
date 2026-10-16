@@ -1164,9 +1164,10 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     manufacturer: "Synthetic Outfitters",
     model: "SJ-104",
   });
+  const runName = `Synthetic evidence ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
     page,
-    `Synthetic evidence ${Date.now()}`,
+    runName,
     e2eRuntime.objectStorageUrl,
   );
   await seedPhotoReviewLabelText(
@@ -1216,6 +1217,12 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     },
     {
       ...seed.groups[1]!,
+      inventory: undefined,
+      review: {
+        observedName: "Synthetic shell jacket",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+      },
       product: {
         kind: "create" as const,
         create: {
@@ -1242,7 +1249,17 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       .locator('[data-slot="card-header"]')
       .getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
-  await expect(attach.getByText(/On hand:/)).toBeVisible();
+  await expect(attach.getByText(/On hand:/)).toHaveText(
+    `On hand: 1 ea · ${runName} location`,
+  );
+  await expect(attach.getByText("Not counted", { exact: false })).toHaveCount(
+    0,
+  );
+  await expect(
+    create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(
     attach.getByText("Closest existing:", { exact: false }),
   ).toHaveCount(0);
@@ -1409,6 +1426,33 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review-polish/phone-attach-label.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  // An inferred comparison of saved catalog fields cannot bless a pending model edit.
+  const changed = await startOperation(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: [
+      {
+        ...groups[0]!,
+        review: { ...groups[0]!.review, productChanges: { model: "SJ-999" } },
+      },
+    ],
+  });
+  expect(changed.ok(), await changed.text()).toBeTruthy();
+  const inferred = page.waitForResponse(
+    (response) =>
+      response.request().postData()?.includes("photoImport.candidatesBatch") ===
+      true,
+  );
+  await page.reload();
+  await (await inferred).finished();
+  await expect(
+    attach.getByText("Checking existing Products…", { exact: true }),
+  ).toHaveCount(0);
+  const modelRow = attach
+    .locator('[aria-label="Field cross-checks"] tbody tr')
+    .filter({ hasText: "Model" });
+  await expect(modelRow.getByRole("cell").last()).toHaveText("!");
+  await expect(modelRow).toContainText("SJ-999");
+
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })
     .click();

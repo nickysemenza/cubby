@@ -3,6 +3,8 @@ import { DurableObject } from "cloudflare:workers";
 
 import { withInvocationTrace } from "~/server/observability/tracing";
 
+import { AI_RESPONSE_CACHE_BATCH_SIZE } from "./response-cache";
+
 const LEASE_MS = 90_000;
 const DAY_MS = 86_400_000;
 
@@ -53,6 +55,15 @@ export class AiResponseCacheDurableObject extends DurableObject<Env> {
       now + LEASE_MS,
     );
     return { kind: "claimed", token };
+  }
+
+  /** Additive RPC: existing entries, claims and single-key callers share the same store. */
+  readOrClaimMany(requests: readonly { key: string; force: boolean }[]) {
+    if (requests.length > AI_RESPONSE_CACHE_BATCH_SIZE)
+      throw new Error(
+        `AI response cache batch supports at most ${AI_RESPONSE_CACHE_BATCH_SIZE} keys, got ${requests.length}`,
+      );
+    return requests.map(({ key, force }) => this.readOrClaim(key, force));
   }
 
   renew(key: string, token: string): boolean {

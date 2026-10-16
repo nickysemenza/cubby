@@ -49,6 +49,45 @@ describe("AI response cache Durable Object", () => {
     }
   });
 
+  // Batch reads retain the single-key hit/busy/miss and lease behavior.
+  it("reads and claims multiple keys with a bounded additive RPC", async () => {
+    const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
+    const hit = await stub.readOrClaim("hit", false);
+    if (hit.kind !== "claimed") throw new Error("claim missing");
+    await stub.publish("hit", hit.token, "cached", 60_000);
+    await stub.readOrClaim("busy", false);
+    const requests = ["hit", "busy", "missing"].map((key) => ({
+      key,
+      force: false,
+    }));
+    const results = await stub.readOrClaimMany(requests);
+    expect(results.slice(0, 2)).toEqual(
+      await Promise.all(
+        ["hit", "busy"].map((key) => stub.readOrClaim(key, false)),
+      ),
+    );
+    expect(results[2]?.kind).toBe("claimed");
+    const miss = results[2];
+    if (miss?.kind !== "claimed") throw new Error("batch miss claim missing");
+    expect(await stub.publish("missing", miss.token, "new", 60_000)).toBe(true);
+    expect(await stub.readOrClaim("missing", false)).toEqual({
+      kind: "hit",
+      value: "new",
+    });
+    expect(await stub.readOrClaimMany([])).toEqual([]);
+    await runInDurableObject(stub, (instance) => {
+      expect(() =>
+        instance.readOrClaimMany(
+          Array.from({ length: 129 }, (_, index) => ({
+            key: `overflow-${index}`,
+            force: false,
+          })),
+        ),
+      ).toThrow("at most 128");
+    });
+    expect((await stub.readOrClaim("overflow-0", false)).kind).toBe("claimed");
+  });
+
   it("coordinates claims across stubs and retains completed values after eviction", async () => {
     const name = crypto.randomUUID();
     const first = env.AI_RESPONSE_CACHE.getByName(name);

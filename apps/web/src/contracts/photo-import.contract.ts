@@ -333,7 +333,11 @@ export const photoImportContract = defineContract("photoImport", {
     },
     native:
       "Check all candidates for every group with independent failure results",
-    input: z.object({ runId: runShortcode }),
+    input: z.object({
+      runId: runShortcode,
+      /** Partition large Runs across Worker invocations; omitted reads every group. */
+      groupKeys: z.array(z.string().min(1).max(200)).max(6).optional(),
+    }),
     output: photoRunCandidatesResponse,
     cache: {
       tags: [

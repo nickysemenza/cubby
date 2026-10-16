@@ -108,6 +108,7 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
+import { loadPhotoRunCandidateChunks } from "./photo-run-candidates";
 
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")
@@ -115,6 +116,28 @@ function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "approve")
     return photoImport.approveGroups.call({ ...action, runId });
   return photoImport.discardGroup.call({ ...action, runId });
+}
+
+function usePhotoRunCandidates(runId: string, enabled = false) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    ...photoImport.candidatesBatch.queryOptions({ runId }),
+    queryFn: async ({ signal }) => {
+      const review = await queryClient.ensureQueryData(
+        photoImport.review.queryOptions({ runId }),
+      );
+      return loadPhotoRunCandidateChunks(
+        review.review.proposals.map((proposal) => proposal.groupKey),
+        (groupKeys) =>
+          photoImport.candidatesBatch.call(
+            { runId, groupKeys },
+            { signal, batch: false },
+          ),
+      );
+    },
+    enabled,
+    staleTime: Infinity,
+  });
 }
 
 /**
@@ -954,13 +977,17 @@ function SelectedProductEvidence({
       {(product.purchaseLineCount ?? 0) > 3 ? (
         <p>+{(product.purchaseLineCount ?? 0) - 3} more purchase lines</p>
       ) : null}
-      <p>On hand: {product.quantity?.onHandUnits ?? "Not counted"}</p>
-      {product.inventoryEntries?.map((entry) => (
-        <p key={entry.id}>
-          {entry.amount.value} {entry.amount.unit} ·{" "}
-          {entry.location?.name ?? "Location unknown"}
-        </p>
-      ))}
+      <p>
+        On hand:{" "}
+        {product.inventoryEntries?.length
+          ? product.inventoryEntries
+              .map(
+                (entry) =>
+                  `${entry.amount.value} ${entry.amount.unit} · ${entry.location?.name ?? "Location unknown"}`,
+              )
+              .join("; ")
+          : (product.quantity?.onHandUnits ?? "Not counted")}
+      </p>
       {product.ownPhotos?.length ? (
         <Row gap="sm" wrap>
           <span className="text-muted-foreground">Your photos</span>
@@ -1242,20 +1269,24 @@ function ProductPanel({
     ...productOperations.manufacturerOptions.queryOptions(),
     enabled: product.kind === "create",
   });
-  const batch = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: false,
-  });
+  const batch = usePhotoRunCandidates(runId);
   const candidates = batch.data?.groups.find(
     (group) => group.groupKey === proposal.groupKey,
   );
-  const checks =
+  const inferred =
     product.kind === "existing" &&
     candidates?.selectedComparison?.id === product.existing?.id
-      ? (candidates?.selectedComparison?.crossCheck ??
-        proposal.crossCheck ??
-        [])
-      : (proposal.crossCheck ?? []);
+      ? (candidates?.selectedComparison?.crossCheck ?? [])
+      : [];
+  const checks = (proposal.crossCheck ?? []).map((check) =>
+    check.source === "model" &&
+    (check.field === "color" || check.field === "size")
+      ? (inferred.find(
+          (candidate) =>
+            candidate.source === "model" && candidate.field === check.field,
+        ) ?? check)
+      : check,
+  );
   const selectedEvidence = useQuery({
     ...photoImport.productEvidence.queryOptions({
       runId,
@@ -1497,9 +1528,18 @@ function ProductPanel({
         <>
           <FieldCrossChecks
             checks={checks}
-            name={proposalName(proposal)}
+            name={
+              proposal.review?.productChanges?.name ?? proposalName(proposal)
+            }
             labelText={labelText}
-            product={selectedEvidence.data}
+            product={
+              selectedEvidence.data
+                ? {
+                    ...selectedEvidence.data,
+                    ...proposal.review?.productChanges,
+                  }
+                : undefined
+            }
           />
           {product.existing ? (
             <SelectedProductEvidence
@@ -1579,10 +1619,7 @@ function PhotoProductSuggestions({
   settled?: boolean;
   expanded?: boolean;
 }) {
-  const suggestions = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: false,
-  });
+  const suggestions = usePhotoRunCandidates(runId);
   const group = suggestions.data?.groups.find(
     (item) => item.groupKey === proposal.groupKey,
   );
@@ -2275,13 +2312,12 @@ function ProposalCard({
         ) : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <p className="max-w-2xl text-xs text-muted-foreground">
-            {proposal.product.kind === "create" ? "Create" : "Attach"}{" "}
-            {countLabel(proposal.images.length, "photo")}{" "}
-            {proposal.product.kind === "create" ? "as" : "to"}{" "}
-            {proposalName(proposal)}
+            {proposal.product.kind === "create"
+              ? `Creates ${proposalName(proposal)} and attaches ${countLabel(proposal.images.length, "photo")}`
+              : `Attaches ${countLabel(proposal.images.length, "photo")} to ${proposalName(proposal)}`}
             {proposal.inventory?.locationId
-              ? ` and add ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
-              : " as reference photos"}
+              ? ` and adds ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
+              : ""}
             .
           </p>
           <Button
@@ -2842,11 +2878,10 @@ export function PhotoGroupReview({
   const [pendingEdits, setPendingEdits] = useState(0);
   const queryClient = useQueryClient();
   const query = usePhotoRunReview(runId, runStatus, hasAgent);
-  const { refetch: refetchCandidates } = useQuery({
-    ...photoImport.candidatesBatch.queryOptions({ runId }),
-    enabled: Boolean(query.data?.review.proposals.length),
-    staleTime: Infinity,
-  });
+  const { refetch: refetchCandidates } = usePhotoRunCandidates(
+    runId,
+    Boolean(query.data?.review.proposals.length),
+  );
   const candidateRevision = (query.data?.review.proposals ?? [])
     .map((proposal) => proposal.updatedAt)
     .join("|");
