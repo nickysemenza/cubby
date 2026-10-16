@@ -223,6 +223,7 @@ import {
 import {
   enrichProductRowsWithQuantityLedger,
   expectedQuantityFilterSql,
+  expectedQuantityReadSql,
   expectedQuantitySql,
   hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
@@ -985,11 +986,14 @@ export const buildProductWhere = async (
       filters,
       "expenseTotal",
     ),
-    ...rangeConditions(
-      expectedQuantityFilterSql(product.id),
-      filters,
-      "expectedQuantity",
-    ),
+    filters.expectedQuantityMin !== undefined ||
+    filters.expectedQuantityMax !== undefined
+      ? inArray(
+          product.id,
+          sql`(SELECT quantity_range."productId" FROM (${expectedQuantityReadSql()}) quantity_range
+          WHERE ${and(...rangeConditions(sql`quantity_range."expectedQuantity"`, filters, "expectedQuantity"))})`,
+        )
+      : undefined,
     // Variance only means reconciliation when both physical stock and ledger
     // evidence exist. Locations count as on-hand here because the compared SQL
     // projection counts them too.

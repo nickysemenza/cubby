@@ -1169,6 +1169,11 @@ comparisons show gains without regressions or recurring cost.
 
 ## Filters and search
 
+Product expected-quantity range filters share a catalog kit walk and grouped
+Expense ledger before applying their bounds. They use the same signed unit
+contributions, live-ancestor rules, weights, and depth cap as the scalar and
+page-sized quantity reads; missing history still yields a known balance of zero.
+
 A filter declaration compiles its Zod-field binding and canonical URL keys used
 by shared route search-parameter assembly, inspector metadata, and generated
 contract cases. Static and deferred controls still live in the explicit filter

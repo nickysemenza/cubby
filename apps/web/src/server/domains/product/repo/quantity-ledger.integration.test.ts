@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
@@ -16,6 +17,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { buildProductWhere } from "./crud";
 import { attachProductComponents } from "./product-components";
 import {
   hasUnknownQuantityLinesSql,
@@ -44,6 +46,103 @@ describe("loadProductQuantityLedgers", () => {
 
   const ledgerFor = async (productId: ProductId) =>
     (await loadProductQuantityLedgers(ctx.db, [productId])).get(productId);
+
+  // A catalog filter must not restart the same kit graph scan for each Product.
+  // The grouped path must still agree with signed, weighted ledger quantities.
+  it("filters catalog quantity ranges with one shared kit walk", async () => {
+    const unrelatedIds: ProductId[] = [];
+    for (let index = 0; index < 64; index++)
+      unrelatedIds.push(
+        (
+          await createProduct(
+            ctx.db,
+            makeProductInput({ name: `Synthetic unrelated ${index}` }),
+            ctx.actor,
+          )
+        ).entityId,
+      );
+    const kit = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic disposed kit" }),
+      ctx.actor,
+    );
+    const part = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic kit part" }),
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: part.entityId, quantity: 4 }],
+      ctx.actor,
+    );
+    await seed({
+      name: "Synthetic exit",
+      productId: kit.id,
+      cost: -10,
+      productQuantity: -2,
+    });
+    await seed({
+      name: "Synthetic future acquisition",
+      productId: kit.id,
+      cost: 10,
+      productQuantity: 100,
+      future: true,
+    });
+    const where = await buildProductWhere(ctx.db, {
+      expectedQuantityMin: -8,
+      expectedQuantityMax: -2,
+    });
+    const result = await getDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(where);
+    expect(result.map((row) => row.id).sort()).toEqual(
+      [kit.entityId, part.entityId].sort(),
+    );
+    expect(await ledgerFor(kit.entityId)).toMatchObject({
+      expectedQuantity: -2,
+    });
+    expect(await ledgerFor(part.entityId)).toMatchObject({
+      expectedQuantity: -8,
+    });
+    const zeroWhere = await buildProductWhere(ctx.db, {
+      expectedQuantityMin: 0,
+      expectedQuantityMax: 0,
+    });
+    const zeroIds = (
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(zeroWhere)
+    ).map((row) => row.id);
+    expect(zeroIds).toEqual(expect.arrayContaining(unrelatedIds));
+    expect(zeroIds).not.toContain(kit.entityId);
+    expect(zeroIds).not.toContain(part.entityId);
+    const planNode = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Loops": z.number().optional(),
+      get Plans() {
+        return z.array(planNode).optional();
+      },
+    });
+    const explained = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) SELECT ${product.id} FROM ${product} WHERE ${where}`,
+    );
+    const plan = z
+      .array(z.object({ Plan: planNode }))
+      .parse(explained.rows[0]?.["QUERY PLAN"])[0];
+    let edgeScans = 0;
+    const visit = (node: z.infer<typeof planNode>) => {
+      if (node["Relation Name"] === "EntityLink")
+        edgeScans += node["Actual Loops"] ?? 0;
+      node.Plans?.forEach(visit);
+    };
+    if (!plan) throw new Error("Missing query plan");
+    visit(plan.Plan);
+    expect(edgeScans).toBeLessThanOrEqual(12);
+  });
 
   // A discard/sale whose earlier acquisition was never recorded drives the
   // expected quantity negative. Recording the historical acquisition (known

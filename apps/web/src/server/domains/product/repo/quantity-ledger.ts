@@ -56,21 +56,35 @@ const expenseSignedUnitsSql = (alias: string) =>
    END`;
 
 /** Own ledger contributions use signed known quantities only; kit projection is intentionally excluded. */
-const QUANTITY_OWN_AGGREGATE = `SELECT COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "acquiredUnits",
+const QUANTITY_OWN_MEASURES = `COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "acquiredUnits",
          COALESCE(sum(-LEAST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "exitedUnits",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
-         count(*) AS "ledgerLines"
+         count(*) AS "ledgerLines"`;
+const QUANTITY_OWN_PREDICATES = `kqe."deletedAt" IS NULL AND kqe."future" = false`;
+const QUANTITY_OWN_AGGREGATE = `SELECT ${QUANTITY_OWN_MEASURES}
     FROM "Expense" kqe
-   WHERE kqe."productId" = ka."productId"
-     AND kqe."deletedAt" IS NULL
-     AND kqe."future" = false`;
+   WHERE kqe."productId" = ka."productId" AND ${QUANTITY_OWN_PREDICATES}`;
 
 const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 
 const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
+
+/** Catalog range filters share the kit walk and own ledger aggregation before testing balances. */
+export const expectedQuantityReadSql = () => sql`${kitAncestorCteSql(
+  kitSeedForProductIds([], true),
+  { groupedSiblingQuantities: true },
+)}, kit_own AS MATERIALIZED (
+  SELECT kqe."productId", ${sql.raw(QUANTITY_OWN_MEASURES)}
+  FROM "Expense" kqe
+  WHERE ${sql.raw(QUANTITY_OWN_PREDICATES)}
+  GROUP BY kqe."productId"
+)
+SELECT ka.target AS "productId", ${sql.raw(PROJECTED_EXPECTED)} AS "expectedQuantity"
+FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
+GROUP BY ka.target`;
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
 const comparableQuantityHistorySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
