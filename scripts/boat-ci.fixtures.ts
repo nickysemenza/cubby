@@ -54,7 +54,7 @@ else if (args[0] === 'exec') {
     mkdirSync(path.join(web, 'blob-report'), {recursive:true});
     writeFileSync(path.join(web, 'playwright-report/run-manifest.json'), JSON.stringify({status:'passed',source:{commit:manifest.revision,dirty:false},cases:[{status:'passed'}]}));
     writeFileSync(path.join(web, 'blob-report/report.zip'), 'synthetic blob');
-    writeFileSync(path.join(web, '.vitest-results.json'), JSON.stringify({success:true,numTotalTests:1,numFailedTests:0}));
+    writeFileSync(path.join(web, '.vitest-results.json'), JSON.stringify({success:process.env.FAKE_REPORT_FAILURE!=='1',numTotalTests:1,numFailedTests:process.env.FAKE_REPORT_FAILURE==='1'?1:0}));
   }
   if (process.env.FAKE_MISSING === '1') reports = reports.slice(0, 1);
   writeFileSync(path.join(args[3], 'results.json'), JSON.stringify(reports));

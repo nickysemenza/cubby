@@ -19,7 +19,7 @@ import {
   pilotManifestSchema,
 } from "./boat-ci.ts";
 import { spawnToExit } from "./lib/run.ts";
-import { hasPilotEvidence } from "./boat-ci-evidence.ts";
+import { pilotEvidenceStatus } from "./boat-ci-evidence.ts";
 
 const base = path.resolve(import.meta.dirname, "..");
 const local = process.argv[2] === "--local";
@@ -56,6 +56,7 @@ const results: {
   durationMs: number;
   sourceClean: boolean;
   evidenceComplete: boolean;
+  evidenceFailed: boolean;
 }[] = [];
 const save = () => {
   writeFileSync(
@@ -256,6 +257,7 @@ for (const job of manifest.jobs) {
     execFileSync("git", ["-C", worktree, "rev-parse", "HEAD^{tree}"], {
       encoding: "utf8",
     }).trim() === manifest.tree;
+  const evidenceStatus = pilotEvidenceStatus(worktree, job, manifest.revision);
   results.push({
     id: job.id,
     revision: manifest.revision,
@@ -264,7 +266,8 @@ for (const job of manifest.jobs) {
     exitCode: code,
     durationMs: Math.round(performance.now() - started),
     sourceClean,
-    evidenceComplete: hasPilotEvidence(worktree, job, manifest.revision),
+    evidenceComplete: evidenceStatus === "passed",
+    evidenceFailed: evidenceStatus === "failed",
   });
   save();
   console.log(`CUBBY_BOAT_RESULT ${JSON.stringify(results.at(-1))}`);
@@ -293,7 +296,7 @@ for (const job of manifest.jobs) {
         encoding: "utf8",
       })) {
         if (
-          !/(?:^|\/)(?:run-manifest\.json|run-results\.json|report\.json|junit\.xml|trace\.md|screen-at-failure\.txt|agent-summary\.json)$|\/screenshots\/[^/]+\.png$|\/video\/[^/]+\.(?:mp4|webm)$/u.test(
+          !/(?:^|\/)(?:SHA256SUMS|gateway-usage\.json|run-manifest\.json|run-results\.json|report\.json|junit\.xml|trace\.md|screen-at-failure\.txt|agent-summary\.json)$|\/screenshots\/[^/]+\.png$|\/video\/[^/]+\.(?:mp4|webm)$/u.test(
             entry,
           )
         )
@@ -309,7 +312,10 @@ if (
   local &&
   results.some(
     (result) =>
-      result.exitCode !== 0 || !result.sourceClean || !result.evidenceComplete,
+      result.exitCode !== 0 ||
+      !result.sourceClean ||
+      !result.evidenceComplete ||
+      result.evidenceFailed,
   )
 )
   process.exitCode = 1;

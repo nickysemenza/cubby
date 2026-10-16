@@ -17,7 +17,7 @@ import {
   selectPilotExecutor,
 } from "./boat-ci.ts";
 import { fakeBoatFixture } from "./boat-ci.fixtures.ts";
-import { hasPilotEvidence } from "./boat-ci-evidence.ts";
+import { pilotEvidenceStatus } from "./boat-ci-evidence.ts";
 
 const revision = "a".repeat(40);
 const tree = "b".repeat(40);
@@ -72,6 +72,15 @@ test("source changes during execution fail rather than certify the original revi
   assert.equal(assessBoatResults(jobs, evidence, revision, tree), "failed");
 });
 
+test("explicit report failure is sticky even when the command returned zero", () => {
+  const evidence = reports();
+  Object.assign(evidence[0]!, {
+    evidenceComplete: false,
+    evidenceFailed: true,
+  });
+  assert.equal(assessBoatResults(jobs, evidence, revision, tree), "failed");
+});
+
 test("missing task diagnostics cannot certify a successful command", () => {
   const evidence = reports();
   evidence[0]!.evidenceComplete = false;
@@ -114,7 +123,10 @@ test("collected browser and database diagnostics must be present, passing and cu
     const web = path.join(fixture.root, "apps/web");
     mkdirSync(path.join(web, "playwright-report"), { recursive: true });
     mkdirSync(path.join(web, "blob-report"), { recursive: true });
-    assert.equal(hasPilotEvidence(fixture.root, browser, revision), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, browser, revision),
+      "missing",
+    );
     const manifest = {
       status: "passed",
       source: { commit: revision, dirty: false },
@@ -122,29 +134,58 @@ test("collected browser and database diagnostics must be present, passing and cu
     };
     const file = path.join(web, "playwright-report/run-manifest.json");
     writeFileSync(file, JSON.stringify(manifest));
-    assert.equal(hasPilotEvidence(fixture.root, browser, revision), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, browser, revision),
+      "missing",
+    );
     writeFileSync(path.join(web, "blob-report/report.zip"), "synthetic report");
-    assert.equal(hasPilotEvidence(fixture.root, browser, revision), true);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, browser, revision),
+      "passed",
+    );
     writeFileSync(
       file,
       JSON.stringify({ ...manifest, cases: [{ status: "failed" }] }),
     );
-    assert.equal(hasPilotEvidence(fixture.root, browser, revision), true);
-    assert.equal(hasPilotEvidence(fixture.root, browser, tree), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, browser, revision),
+      "passed",
+    );
+    assert.equal(pilotEvidenceStatus(fixture.root, browser, tree), "missing");
     writeFileSync(file, JSON.stringify({ ...manifest, status: "failed" }));
-    assert.equal(hasPilotEvidence(fixture.root, browser, revision), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, browser, revision),
+      "failed",
+    );
     const json = path.join(web, ".vitest-results.json");
-    assert.equal(hasPilotEvidence(fixture.root, postgres, revision), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, postgres, revision),
+      "missing",
+    );
     writeFileSync(
       json,
       JSON.stringify({ success: true, numTotalTests: 3, numFailedTests: 0 }),
     );
-    assert.equal(hasPilotEvidence(fixture.root, postgres, revision), true);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, postgres, revision),
+      "passed",
+    );
     writeFileSync(
       json,
       JSON.stringify({ success: true, numTotalTests: 0, numFailedTests: 0 }),
     );
-    assert.equal(hasPilotEvidence(fixture.root, postgres, revision), false);
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, postgres, revision),
+      "missing",
+    );
+    writeFileSync(
+      json,
+      JSON.stringify({ success: false, numTotalTests: 3, numFailedTests: 1 }),
+    );
+    assert.equal(
+      pilotEvidenceStatus(fixture.root, postgres, revision),
+      "failed",
+    );
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -170,6 +211,7 @@ test("shard counts preserve every lane and cannot create empty coverage", () => 
 test("provider process boundary preserves failures, collects evidence and deletes machines", async () => {
   for (const scenario of [
     { flags: {}, outcome: "passed", exitCode: 0 },
+    { flags: { FAKE_REPORT_FAILURE: "1" }, outcome: "failed", exitCode: 1 },
     { flags: { FAKE_MISSING: "1" }, outcome: "fallback", exitCode: 0 },
     {
       flags: { FAKE_MISSING: "1", FAKE_FAILURE: "1" },

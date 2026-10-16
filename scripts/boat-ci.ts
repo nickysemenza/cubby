@@ -16,7 +16,7 @@ import { z } from "zod";
 
 import { laneMatrix, type MatrixEntry } from "./ci-policy.ts";
 import { spawnToExit } from "./lib/run.ts";
-import { hasPilotEvidence } from "./boat-ci-evidence.ts";
+import { pilotEvidenceStatus } from "./boat-ci-evidence.ts";
 
 export const pilotJobSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/u),
@@ -48,6 +48,7 @@ const evidenceSchema = z.object({
   durationMs: z.number().finite().nonnegative(),
   sourceClean: z.boolean(),
   evidenceComplete: z.boolean().optional(),
+  evidenceFailed: z.boolean().optional(),
 });
 
 export function selectPilotExecutor(
@@ -129,7 +130,12 @@ export function assessBoatResults(
   });
   // A failure already observed on the requested source is sticky, even when
   // another machine's output is missing after a provider failure.
-  if (valid.some((report) => report.exitCode !== 0 || !report.sourceClean))
+  if (
+    valid.some(
+      (report) =>
+        report.exitCode !== 0 || !report.sourceClean || report.evidenceFailed,
+    )
+  )
     return "failed";
   const ids = new Set(valid.map((report) => report.id));
   return valid.length === reports.length &&
@@ -357,15 +363,18 @@ export async function coordinatePilot(root: string) {
                   reports.push(
                     ...evidence.map((record) => {
                       const job = group.find((task) => task.id === record.id);
-                      return {
-                        ...record,
-                        evidenceComplete:
-                          !!job &&
-                          hasPilotEvidence(
+                      const status = job
+                        ? pilotEvidenceStatus(
                             path.join(destination, record.id),
                             job,
                             revision,
-                          ),
+                          )
+                        : "missing";
+                      return {
+                        ...record,
+                        evidenceFailed:
+                          record.evidenceFailed || status === "failed",
+                        evidenceComplete: status === "passed",
                       };
                     }),
                   );
