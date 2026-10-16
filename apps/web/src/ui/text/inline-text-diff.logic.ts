@@ -5,14 +5,21 @@ type DiffSeg = { type: "common" | "add" | "remove"; text: string };
 const tokenize = (s: string): string[] => s.match(/\w+|\W+/g) ?? [];
 
 /**
- * Word-level LCS diff. Short inputs (ingredient modifiers), so the O(n·m) table is fine.
+ * Word-level LCS diff, bounded for long notes and applied activity history.
  * Returns ordered segments: shared text plus the runs added/removed to get from a→b.
  */
 export const diffWords = (before: string, after: string): DiffSeg[] => {
+  if (before === after) return before ? [{ type: "common", text: before }] : [];
   const a = tokenize(before);
   const b = tokenize(after);
   const n = a.length;
   const m = b.length;
+  // A large replacement remains inspectable without allocating a quadratic table.
+  if (n * m > 250_000)
+    return [
+      ...(before ? [{ type: "remove" as const, text: before }] : []),
+      ...(after ? [{ type: "add" as const, text: after }] : []),
+    ];
   // LCS length table.
   const lcs: number[][] = Array.from({ length: n + 1 }, () =>
     Array.from<number>({ length: m + 1 }).fill(0),

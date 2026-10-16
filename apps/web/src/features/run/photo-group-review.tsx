@@ -40,6 +40,7 @@ import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ProductExternalIds } from "~/entity/components/product-external-ids";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { PhotoGrid } from "~/entity/entity-media/photo-grid";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
@@ -95,6 +96,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 
 import {
   LIVE_RUN_STATUSES,
@@ -451,6 +453,30 @@ function GroupPhotos({
           );
         }}
       />
+      {!proposal.images.some((entry) => entry.purpose === "label") ? (
+        <div
+          aria-label="Label photo missing"
+          className="flex aspect-square flex-col items-center justify-center gap-1 rounded border border-dashed border-border text-xs text-muted-foreground"
+        >
+          <span className="font-medium text-foreground">Label</span>
+          <span>Missing</span>
+        </div>
+      ) : !proposal.images.some(
+          (entry) =>
+            entry.purpose === "label" &&
+            imagesById.get(entry.id)?.recognizedText?.trim(),
+        ) ? (
+        <p className="text-xs text-muted-foreground">
+          Label photo ·{" "}
+          {proposal.images.some(
+            (entry) =>
+              entry.purpose === "label" &&
+              imagesById.get(entry.id)?.describe !== "ready",
+          )
+            ? "Text analysis incomplete"
+            : "Unreadable"}
+        </p>
+      ) : null}
       {proposal.skip.length > 0 ? (
         <p
           className="text-xs text-muted-foreground"
@@ -718,7 +744,8 @@ function CommitInput({
             if (event.key === "Enter") event.currentTarget.blur();
           }}
         />
-        {crossCheck ? (
+        {crossCheck &&
+        (crossCheck.labelValue || crossCheck.mark !== "unknown") ? (
           <div className="min-w-0 space-y-1">
             <p className="text-muted-foreground">
               <FieldMark check={crossCheck} />{" "}
@@ -727,7 +754,7 @@ function CommitInput({
                 : crossCheck.labelValue
                   ? `Label: ${crossCheck.labelValue}`
                   : crossCheck.mark === "unknown"
-                    ? "Label is silent"
+                    ? "Not shown on label"
                     : "Label differs"}
             </p>
             {actions ? (
@@ -855,16 +882,6 @@ const crossCheckMeaning = {
   unknown: "Label doesn't confirm this",
 } as const;
 
-function suggestionText(
-  suggestion: NonNullable<PhotoFieldCrossCheck["suggestion"]>,
-) {
-  return suggestion.kind === "add_to_name"
-    ? `Add ‘${suggestion.value}’ to name`
-    : suggestion.kind === "set_model"
-      ? `Set model to ${suggestion.value}`
-      : `Add identifier ${suggestion.value}`;
-}
-
 function FieldMark({ check }: { check: PhotoFieldCrossCheck }) {
   return (
     <span
@@ -890,36 +907,52 @@ function FieldCrossChecks({
   checks,
   name,
   product,
+  identifiers,
+  changedFields,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
   name?: string;
   product?: Pick<
     PhotoProductEvidence,
-    "manufacturer" | "model" | "identifiers"
+    "name" | "manufacturer" | "model" | "identifiers"
   >;
+  identifiers?: ReactNode;
+  changedFields?: PhotoGroupDecision["productChanges"];
 }) {
-  // Rows need label evidence; a field the label is silent about folds into one line.
+  // Keep missing evidence quiet unless the field has a pending edit to review.
   const evidenced = checks.filter(
     (check) =>
-      Boolean(check.labelValue) || check.mark === "disagree-or-missing",
+      Boolean(check.labelValue) ||
+      check.mark === "disagree-or-missing" ||
+      Boolean(changedFields && Object.hasOwn(changedFields, check.field)),
   );
-  const absent = checks.filter((check) => !evidenced.includes(check));
   if (!evidenced.length) return null;
-  const stored = (check: PhotoFieldCrossCheck) =>
-    check.productValue ??
-    (check.field === "identifiers"
-      ? product?.identifiers?.join(" · ")
-      : check.field === "manufacturer" || check.field === "model"
-        ? product?.[check.field]
-        : check.field === "name"
-          ? name
-          : null);
+  const pending = (check: PhotoFieldCrossCheck) =>
+    Boolean(
+      changedFields &&
+      Object.hasOwn(
+        changedFields,
+        check.field === "size" || check.field === "color"
+          ? "name"
+          : check.field,
+      ),
+    );
+  const stored = (check: PhotoFieldCrossCheck) => {
+    if (check.field === "identifiers")
+      return (
+        identifiers ?? product?.identifiers?.join(" · ") ?? check.productValue
+      );
+    if (check.field === "manufacturer" || check.field === "model")
+      return product ? product[check.field] : check.productValue;
+    if (check.field === "name") return product?.name ?? name;
+    return pending(check) ? "See current product name" : check.productValue;
+  };
   return (
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
       <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1fr)_1rem] gap-x-3 gap-y-1">
         <span />
         <span className="text-muted-foreground">Photo label</span>
-        <span className="text-muted-foreground">In Cubby</span>
+        <span className="text-muted-foreground">Current product</span>
         <span />
         {evidenced.map((check) => (
           <div
@@ -930,27 +963,41 @@ function FieldCrossChecks({
             <span className="text-muted-foreground">
               {fieldLabel(check.field)}
             </span>
-            <span className="break-words">{check.labelValue ?? "—"}</span>
+            <span className="break-words">
+              {check.labelValue ?? "Not shown on label"}
+              {check.field === "identifiers" &&
+              check.labelValue &&
+              check.mark !== "agree" ? (
+                <span className="block text-muted-foreground">
+                  Printed code · type unverified
+                </span>
+              ) : null}
+            </span>
             <span className="break-words">
               {stored(check) || (
                 <span className="text-muted-foreground">Not recorded</span>
               )}
-              {check.mark === "disagree-or-missing" && check.suggestion ? (
-                <span className="block text-warning">
-                  {suggestionText(check.suggestion)}
+              {check.field === "size" || check.field === "color" ? (
+                <span className="block text-muted-foreground">
+                  From product name
+                </span>
+              ) : null}
+              {pending(check) ? (
+                <span className="block text-muted-foreground">
+                  Proposed change below
                 </span>
               ) : null}
             </span>
-            <FieldMark check={check} />
+            {pending(check) ? (
+              <span title="Comparison includes a proposed change; review it below">
+                ?
+              </span>
+            ) : (
+              <FieldMark check={check} />
+            )}
           </div>
         ))}
       </div>
-      {absent.length ? (
-        <p className="text-muted-foreground">
-          Label is silent on{" "}
-          {absent.map((check) => fieldLabel(check.field)).join(", ")}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -1076,10 +1123,12 @@ function SelectedProductEvidence({
   runId,
   productId,
   showCover = false,
+  identifiers,
 }: {
   runId: string;
   productId: ProductShortcode;
   showCover?: boolean;
+  identifiers?: ReactNode;
 }) {
   const evidence = useQuery(
     photoImport.productEvidence.queryOptions({ runId, productId }),
@@ -1118,6 +1167,12 @@ function SelectedProductEvidence({
             {product.manufacturer ? <p>{product.manufacturer}</p> : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
+        </Row>
+      ) : null}
+      {identifiers ? (
+        <Row gap="sm" align="start">
+          <span className="text-muted-foreground">Identifiers</span>
+          {identifiers}
         </Row>
       ) : null}
       <PurchaseLines
@@ -1196,7 +1251,10 @@ function ExistingProductChanges({
     proposal.product.kind === "existing"
       ? proposal.product.existing?.id
       : undefined;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(
+    Boolean(Object.keys(proposal.review?.productChanges ?? {}).length),
+  );
+  const [showUnchanged, setShowUnchanged] = useState(false);
   const current = useQuery(
     entityDetailFor("product").queryOptions(id ?? "", {
       enabled: open && Boolean(id),
@@ -1207,22 +1265,25 @@ function ExistingProductChanges({
   return (
     <details
       className="border-t border-border pt-2 text-xs"
+      open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="cursor-pointer">
-        Optional Product changes · {Object.keys(changes).length} selected
+        Product changes ·{" "}
+        {countLabel(Object.keys(changes).length, "selected field")}
       </summary>
       <p className="my-2 text-muted-foreground">
-        Photos append to the gallery. Existing photos, cover, and unselected
-        fields stay as they are.
+        Only selected fields change when you attach the photos. Added text is
+        green; removed text is red and struck through.
       </p>
       {current.isError ? (
         <StatusText tone="destructive">{current.error.message}</StatusText>
       ) : null}
       {current.data ? (
         <Stack gap="sm">
-          {(["name", "manufacturer", "model", "notes", "tags"] as const).map(
-            (field) => {
+          {(["name", "manufacturer", "model", "notes", "tags"] as const)
+            .filter((field) => showUnchanged || Object.hasOwn(changes, field))
+            .map((field) => {
               const before =
                 field === "tags"
                   ? (current.data?.tags.join(", ") ?? "")
@@ -1254,9 +1315,23 @@ function ExistingProductChanges({
                   </FieldChangeToggle>
                   {Object.hasOwn(changes, field) ? (
                     <>
-                      <p className="break-words text-muted-foreground">
-                        Before: {before || "Empty"}
-                      </p>
+                      <div aria-label={`Proposed ${field} change`}>
+                        <p className="text-muted-foreground">
+                          {after
+                            ? before
+                              ? `Replace ${field}`
+                              : `Set ${field}`
+                            : `Clear ${field}`}{" "}
+                          · Current → Proposed
+                        </p>
+                        <InlineTextDiff
+                          before={before}
+                          after={after}
+                          beforeLabel="Current"
+                          afterLabel="Proposed"
+                          wrap
+                        />
+                      </div>
                       <CommitInput
                         label={`New ${field}`}
                         value={after}
@@ -1288,26 +1363,27 @@ function ExistingProductChanges({
                   ) : null}
                 </Stack>
               );
-            },
-          )}
-          <FieldChangeToggle
-            checked={Object.hasOwn(changes, "categoryId")}
-            disabled={busy}
-            onChange={(checked) =>
-              save(() => {
-                const next = { ...changes };
-                if (checked)
-                  next.categoryId = current.data?.category?.id ?? null;
-                else delete next.categoryId;
-                return {
-                  ...toGroupInput(proposal),
-                  review: { ...review, productChanges: next },
-                };
-              })
-            }
-          >
-            Change category
-          </FieldChangeToggle>
+            })}
+          {showUnchanged || Object.hasOwn(changes, "categoryId") ? (
+            <FieldChangeToggle
+              checked={Object.hasOwn(changes, "categoryId")}
+              disabled={busy}
+              onChange={(checked) =>
+                save(() => {
+                  const next = { ...changes };
+                  if (checked)
+                    next.categoryId = current.data?.category?.id ?? null;
+                  else delete next.categoryId;
+                  return {
+                    ...toGroupInput(proposal),
+                    review: { ...review, productChanges: next },
+                  };
+                })
+              }
+            >
+              Change category
+            </FieldChangeToggle>
+          ) : null}
           {Object.hasOwn(changes, "categoryId") ? (
             <>
               <p>Before: {current.data.category?.name ?? "None"}</p>
@@ -1343,6 +1419,13 @@ function ExistingProductChanges({
               </WithProductCategorySearch>
             </>
           ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowUnchanged((shown) => !shown)}
+          >
+            {showUnchanged ? "Hide unchanged fields" : "Show unchanged fields"}
+          </Button>
         </Stack>
       ) : open && !current.isError ? (
         <p>Loading current Product…</p>
@@ -1438,6 +1521,17 @@ function ProductPanel({
       product.kind === "existing" &&
       Boolean(product.existing),
   });
+  const currentProduct = useQuery(
+    entityDetailFor("product").queryOptions(
+      product.kind === "existing" ? (product.existing?.id ?? "") : "",
+      {
+        enabled:
+          step === "identity" &&
+          product.kind === "existing" &&
+          Boolean(product.existing),
+      },
+    ),
+  );
   const [showCandidates, setShowCandidates] = useState(false);
   const [identityAccepted, setIdentityAccepted] = useState(false);
   const queryClient = useQueryClient();
@@ -1614,8 +1708,7 @@ function ProductPanel({
                 crossCheck={checks.find((check) => check.field === "model")}
                 actions={checks.flatMap((check) =>
                   check.mark === "disagree-or-missing" &&
-                  (check.suggestion?.kind === "set_model" ||
-                    check.suggestion?.kind === "add_identifier") &&
+                  check.suggestion?.kind === "set_model" &&
                   check.suggestion.value !== product.create.model
                     ? [
                         <Button
@@ -1688,23 +1781,43 @@ function ProductPanel({
         <>
           <FieldCrossChecks
             checks={checks}
-            name={
-              proposal.review?.productChanges?.name ?? proposalName(proposal)
-            }
-            product={
-              selectedEvidence.data
-                ? {
-                    ...selectedEvidence.data,
-                    ...proposal.review?.productChanges,
-                  }
-                : undefined
+            name={product.existing?.name}
+            product={selectedEvidence.data}
+            changedFields={proposal.review?.productChanges}
+            identifiers={
+              currentProduct.data ? (
+                currentProduct.data.externalIds.length ? (
+                  <ProductExternalIds
+                    identifiers={currentProduct.data.externalIds}
+                  />
+                ) : (
+                  "Not recorded"
+                )
+              ) : (
+                "Loading identifier types…"
+              )
             }
           />
+          {currentProduct.isError ? (
+            <StatusText tone="destructive">
+              {currentProduct.error.message}
+            </StatusText>
+          ) : null}
           {product.existing ? (
             <SelectedProductEvidence
               runId={runId}
               productId={product.existing.id}
               showCover={!labelText.trim()}
+              identifiers={
+                currentProduct.data?.externalIds.length &&
+                !checks.some(
+                  (check) => check.field === "identifiers" && check.labelValue,
+                ) ? (
+                  <ProductExternalIds
+                    identifiers={currentProduct.data.externalIds}
+                  />
+                ) : null
+              }
             />
           ) : (
             <StatusText tone="warning">Choose a live Product.</StatusText>
@@ -2495,6 +2608,16 @@ function ProposalCard({
               ? ` and adds ${countLabel(proposal.inventory.quantity, "unit")} at ${proposal.inventory.locationName}`
               : ""}
             .
+            {proposal.product.kind === "existing" ? (
+              <span className="block font-medium text-foreground">
+                {Object.keys(proposal.review?.productChanges ?? {}).length ? (
+                  `${countLabel(Object.keys(proposal.review?.productChanges ?? {}).length, "product change")} selected`
+                ) : (
+                  <span>No product details changed</span>
+                )}{" "}
+                · Add photos to gallery
+              </span>
+            ) : null}
           </p>
           <Button
             onMouseDown={(event) => event.preventDefault()}

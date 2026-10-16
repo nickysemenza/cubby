@@ -178,7 +178,10 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Open Right one?", exact: true })
     .click();
-  await group.getByText(/Optional Product changes/).click();
+  await group.getByText(/Product changes ·/).click();
+  await group
+    .getByRole("button", { name: "Show unchanged fields", exact: true })
+    .click();
   await group
     .getByRole("checkbox", { name: "Change name", exact: true })
     .check();
@@ -1168,6 +1171,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     name: productName,
     manufacturer: "Synthetic Outfitters",
     model: "SJ-104",
+    externalIds: [{ source: "amazon", kind: "asin", externalId: "B0SYNTH123" }],
   });
   const runName = `Synthetic evidence ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
@@ -1249,6 +1253,14 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   );
   const attach = page.locator("#photo-group-g1");
   const create = page.locator("#photo-group-g2");
+  // Missing evidence is a photo-slot state, not a repeated field warning.
+  await expect(attach.getByLabel("Label photo missing")).toBeVisible();
+  await expect(
+    attach.getByText("amazon · ASIN: B0SYNTH123", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    attach.getByText("No product details changed", { exact: true }),
+  ).toBeVisible();
   await expect(
     attach
       .locator('[data-slot="card-header"]')
@@ -1355,6 +1367,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
+  await expect(create.getByLabel("Label photo missing")).toBeVisible();
   await expect(
     create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
       exact: true,
@@ -1430,7 +1443,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     path: "../../artifacts/photo-review-polish/phone-attach-label.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  // An inferred comparison of saved catalog fields cannot bless a pending model edit.
+  // Evidence keeps the saved value; pending edits appear separately as a diff.
   const changed = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: [
@@ -1452,8 +1465,14 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     attach.getByText("Checking existing Products…", { exact: true }),
   ).toHaveCount(0);
   const modelRow = attach.locator('[data-cross-check="model"]');
-  await expect(modelRow).toContainText("Label differs or adds a term");
-  await expect(modelRow).toContainText("SJ-999");
+  await expect(modelRow).toContainText("SJ-104");
+  await expect(modelRow).not.toContainText("SJ-999");
+  await expect(attach.getByLabel("Proposed model change")).toContainText(
+    "SJ-999",
+  );
+  await expect(
+    attach.getByLabel("Proposed model change").locator("del"),
+  ).toHaveText("104");
 
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })
