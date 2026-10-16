@@ -1,15 +1,8 @@
 import type { ReactNode } from "react";
 
-import { Button } from "~/ui/primitives/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Stack } from "~/ui/layout";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 interface WorkflowDialogAction {
   label: string;
@@ -22,9 +15,9 @@ interface WorkflowDialogAction {
 
 /**
  * The shared shell for hand-built multi-step workflow dialogs (split, link,
- * receive, enrich, connect): title/description header, the body, an optional
- * error line, then a Cancel + primary footer with an optional left-aligned
- * `summary` (e.g. "3 selected"). The body and its state stay with the caller.
+ * receive, enrich, connect): responsive title/header, caller-owned body, optional summary/error, and
+ * Cancel + primary actions. The shared shell promotes actions into the phone
+ * header; summary and diagnostics stay in the scrollable body.
  * Omit `primary` for a dialog that has no footer action.
  */
 export function WorkflowDialog({
@@ -56,37 +49,42 @@ export function WorkflowDialog({
   children?: ReactNode;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {trigger}
-      <DialogContent size={size}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        {children}
-        {error ? <StatusText tone="destructive">{error}</StatusText> : null}
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size={size}
+      title={title}
+      description={description}
+      trigger={trigger}
+      footer={
+        primary ? (
+          <DialogFormActions
+            onCancel={onCancel ?? (() => onOpenChange(false))}
+            submitLabel={primary.label}
+            pendingLabel={primary.pendingLabel ?? primary.label}
+            pending={primary.pending}
+            submitDisabled={primary.disabled}
+            onSubmit={primary.onClick}
+          />
+        ) : undefined
+      }
+    >
+      <Stack gap="md">
         {primary ? (
-          <DialogFooter>
-            {summary}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel ?? (() => onOpenChange(false))}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={primary.disabled || primary.pending}
-              onClick={primary.onClick}
-            >
-              {primary.pending && primary.pendingLabel
-                ? primary.pendingLabel
-                : primary.label}
-            </Button>
-          </DialogFooter>
+          <p className="text-sm text-muted-foreground md:hidden">
+            {description}
+          </p>
         ) : null}
-      </DialogContent>
-    </Dialog>
+        {children}
+        {summary ? (
+          <div className="text-xs text-muted-foreground">{summary}</div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </Stack>
+    </ResponsiveDialog>
   );
 }

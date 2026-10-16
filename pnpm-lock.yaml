@@ -516,9 +516,6 @@ importers:
       jose:
         specifier: 6.2.12
         version: 6.2.12
-      json-edit-react:
-        specifier: ^2.0.4
-        version: 2.0.4(react@19.3.1)
       just-bash:
         specifier: ^3.6.0
         version: 3.6.0(supports-color@8.1.1)
@@ -8071,11 +8068,6 @@ packages:
 
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
-
-  json-edit-react@2.0.4:
-    resolution: {integrity: sha512-RqppTbjeV9+0o4UegI5mGTHhoC7P5KQJhDR2+8Dfg8IjK1AtLZhw4iTRaDM4RRZuL+/uIaeWFT3n1mf2ZiIXiQ==}
-    peerDependencies:
-      react: '>=18.0.0'
 
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
@@ -17469,10 +17461,6 @@ snapshots:
   json-bigint@1.0.0:
     dependencies:
       bignumber.js: 9.3.1
-
-  json-edit-react@2.0.4(react@19.3.1):
-    dependencies:
-      react: 19.3.1
 
   json-parse-even-better-errors@2.3.1: {}
 

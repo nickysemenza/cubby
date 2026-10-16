@@ -104,7 +104,6 @@
     "ical.js": "^2.2.1",
     "image-dimensions": "^2.6.0",
     "jose": "6.2.12",
-    "json-edit-react": "^2.0.4",
     "just-bash": "^3.6.0",
     "loading-dev": "0.3.5",
     "lru-cache": "^11.5.3",

@@ -1,4 +1,4 @@
-import { type ReportBlock, reportBlock } from "@cubby/schemas/entity-report";
+import { type ReportBlock } from "@cubby/schemas/entity-report";
 import { useState } from "react";
 
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
@@ -18,7 +18,6 @@ import {
 import { Stack } from "~/ui/layout";
 
 import { Demo, DemoGrid } from "../components/design-section";
-import { EditableComponentDemo } from "../components/editable-component-demo";
 import {
   demoFilmstripBlock,
   demoLedgerBlock,
@@ -132,30 +131,24 @@ export function RecordsSection() {
   return (
     <Stack gap="md">
       <div className="grid gap-4 xl:grid-cols-2">
-        <EditableComponentDemo
-          title='RecordsBlockView · kind: "records"'
-          description="Every report records block draws as one ledger: thumbnail, title, toned badges, result and evidence lines, figure and time."
-          schema={reportBlock}
-          defaultData={demoLedgerBlock}
+        <Demo
+          name='RecordsBlockView · kind: "records"'
+          note="Every report records block draws as one ledger: thumbnail, title, toned badges, result and evidence lines, figure and time."
         >
-          {renderBlock}
-        </EditableComponentDemo>
-        <EditableComponentDemo
-          title='RecordsBlockView · presentation: "timeline"'
-          description="Ordered stages draw a rail from the first mark to the last, one distinct mark per state."
-          schema={reportBlock}
-          defaultData={demoTimelineBlock}
+          {renderBlock(demoLedgerBlock)}
+        </Demo>
+        <Demo
+          name='RecordsBlockView · presentation: "timeline"'
+          note="Ordered stages draw a rail from the first mark to the last, one distinct mark per state."
         >
-          {renderBlock}
-        </EditableComponentDemo>
-        <EditableComponentDemo
-          title='RecordsBlockView · presentation: "filmstrip"'
-          description="Photo captures page through large thumbnails."
-          schema={reportBlock}
-          defaultData={demoFilmstripBlock}
+          {renderBlock(demoTimelineBlock)}
+        </Demo>
+        <Demo
+          name='RecordsBlockView · presentation: "filmstrip"'
+          note="Photo captures page through large thumbnails."
         >
-          {renderBlock}
-        </EditableComponentDemo>
+          {renderBlock(demoFilmstripBlock)}
+        </Demo>
       </div>
       <DemoGrid>
         <Demo

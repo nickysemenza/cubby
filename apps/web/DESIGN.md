@@ -74,7 +74,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   retain their distinct structures; [table contracts](docs/web-ui-reference.md#tables)
   own the choice of shared renderer.
 - Dialog and Sheet share Base UI Dialog; responsive wrappers own placement,
-  scroll regions and form actions. AlertDialog retains confirmation semantics.
+  scroll regions and form actions. WorkflowDialog composes that responsive shell
+  and shared actions; its phone description, summary and raw errors stay in the body so promoted
+  phone actions cannot hide them. AlertDialog retains confirmation semantics.
 - Chart, relationship-map and specialized layout engines follow the
   [visualization contracts](#data-visualization); a common frame does not require
   one renderer.
@@ -100,6 +102,15 @@ These are Cubby's own components, designed and built here rather than adopted fr
 - **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
 - **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; record details and `/design` both render through it (`/design#indexed-sections`).
 - **`LocationTree`**, `DateDisplay`, `EnumPill`, `GapChipCluster`, `FilterBar` and `ScopeChip` (`/design#location-tree`, `/design#values`).
+
+The showcase is a curated reference using fixed synthetic fixtures and real
+module interactions, without fixture editors. Working compositions cover
+command actions and responsive workflow retry (`/design#action-workflows`),
+inline/cell suggestion review (`/design#suggestion-review`), owner-held form
+state and dashboard disclosure (`/design#section-compositions`), and quality
+states with signed/empty chart data (`/design#quality-charts`). Source labels
+name current modules rather than historical locations. Debug JSON remains
+read-only and expandable through `ui/text/json-renderer.tsx`.
 
 ### Shared headings and actions
 

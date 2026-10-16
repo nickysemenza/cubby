@@ -78,6 +78,7 @@ export function ResponsiveDialog({
   description,
   size = "sm",
   footer,
+  trigger,
   bodyMode = "scroll",
   children,
 }: {
@@ -91,6 +92,8 @@ export function ResponsiveDialog({
   children: ReactNode;
   /** Optional actions kept outside the scroll region. */
   footer?: ReactNode;
+  /** A Base UI DialogTrigger, shared by the dialog and sheet engines. */
+  trigger?: ReactNode;
   /** Let a child form own the scroll region and fixed action footer. */
   bodyMode?: "scroll" | "form";
 }) {
@@ -107,6 +110,7 @@ export function ResponsiveDialog({
     const compactHeader = headerActions != null;
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
+        {trigger}
         <DialogHeaderActionsContext.Provider value={setHeaderActions}>
           <SheetContent
             side="bottom"
@@ -118,16 +122,16 @@ export function ResponsiveDialog({
             )}
           >
             {compactHeader && headerActions ? (
-              <div className="flex h-[52px] shrink-0 items-center justify-between border-b px-3">
+              <div className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b px-3">
                 <button
                   type="button"
                   onClick={headerActions.cancel.onClick}
                   disabled={headerActions.cancel.disabled}
-                  className="text-sm text-primary disabled:pointer-events-none disabled:opacity-50"
+                  className="min-h-11 shrink-0 text-sm text-primary disabled:pointer-events-none disabled:opacity-50"
                 >
                   {headerActions.cancel.label}
                 </button>
-                <SheetTitle className="text-base font-bold tracking-[-0.01em]">
+                <SheetTitle className="min-w-0 flex-1 truncate text-center text-base font-bold tracking-[-0.01em]">
                   {title}
                 </SheetTitle>
                 <button
@@ -135,7 +139,7 @@ export function ResponsiveDialog({
                   form={headerActions.submit.form}
                   onClick={headerActions.submit.onClick}
                   disabled={headerActions.submit.disabled}
-                  className="text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-50"
+                  className="min-h-11 shrink-0 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-50"
                 >
                   {headerActions.submit.label}
                 </button>
@@ -188,6 +192,7 @@ export function ResponsiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {trigger}
       <DialogHeaderActionsContext.Provider value={setHeaderActions}>
         <DialogContent
           size={size}
