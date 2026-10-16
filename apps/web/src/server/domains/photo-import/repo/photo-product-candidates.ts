@@ -356,7 +356,7 @@ export async function photoProductCandidates(
   );
 }
 
-export function photoCandidateIdentifiers(
+function photoCandidateIdentifiers(
   evidenceTexts: readonly { source: string; text: string }[],
 ) {
   return [
