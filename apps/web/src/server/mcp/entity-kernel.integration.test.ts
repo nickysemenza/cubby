@@ -16,7 +16,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { createHttpApiHandler } from "~/server/http/http-api-handler";
+import { requireActor } from "~/server/http/request-context";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
+import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
 import {
   createProductFixture,
   ingredientRef,
@@ -198,7 +201,8 @@ describe("MCP entity kernel boundary", () => {
       }),
     );
     // `valuationStatus` is a filter-only predicate; a to-many `via` path
-    // derives its own reason the same way. HTTP shares this kernel parse.
+    // derives its reason into the same generated field, which HTTP and MCP
+    // read through one kernel parse.
     const reason =
       'Cannot sort inventory by "valuationStatus": Filter only: Missing includes priceable entries, so the statuses overlap and are not one row value.';
     const command = {
@@ -217,6 +221,46 @@ describe("MCP entity kernel boundary", () => {
     expect(JSON.stringify(viaMcp.content)).toContain(
       "Filter only: Missing includes priceable entries",
     );
+    const http = createHttpApiHandler(
+      fromPartial<Parameters<typeof createHttpApiHandler>[0]>({
+        auth: {
+          getSession: async () => ({
+            response: {
+              user: { id: testUserId("test-user-id") },
+              session: { id: "session-fixture", token: "token" },
+            },
+            headers: new Headers(),
+          }),
+        },
+        context: async () =>
+          requireActor(
+            createTestRequestContext(ctx.db, {
+              auth: { userId: testUserId("test-user-id") },
+            }),
+          ),
+        dispatch: dispatchStartOperation,
+      }),
+    );
+    const viaHttp = await http(
+      new Request("https://cubby.example/api/v1/entity/list", {
+        method: "POST",
+        body: JSON.stringify({
+          entity: command.entity,
+          filters: {},
+          sort: command.sort,
+        }),
+        headers: {
+          "content-type": "application/json",
+          origin: "https://cubby.example",
+        },
+      }),
+    );
+    expect(viaHttp.status).toBe(400);
+    expect(await viaHttp.json()).toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "LIST_SORT_FIELD_UNSUPPORTED",
+      message: reason,
+    });
   });
 
   it("runs a real protocol-to-kernel shortcode round trip", async () => {

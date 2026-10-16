@@ -20,6 +20,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -233,6 +234,64 @@ describe("compiled list fields", () => {
       "Compiler line compiler-order-a",
       "Compiler line compiler-order-b",
     ]);
+  });
+
+  it("orders products by quantity variance, incomparable last", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Compiler variance shelf" }),
+      ctx.actor,
+    );
+    // Bought `bought` units, counted `counted` on the shelf.
+    const stocked = async (name: string, bought: number, counted: number) => {
+      const created = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name }),
+        ctx.actor,
+      );
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: `${name} purchase`,
+          cost: 10,
+          productId: created.id,
+          productQuantity: bought,
+        }),
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: created.entityId,
+          locationId: shelf.entityId,
+          amount: { value: counted, unit: "each" },
+        },
+        ctx.actor,
+      );
+      return created.id;
+    };
+    const short = await stocked("Compiler variance short", 3, 1);
+    const matched = await stocked("Compiler variance matched", 2, 2);
+    const surplus = await stocked("Compiler variance surplus", 1, 3);
+    const uncounted = (
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Compiler variance uncounted" }),
+        ctx.actor,
+      )
+    ).id;
+    const ids = [matched, uncounted, surplus, short];
+    const order = async (direction: "asc" | "desc") =>
+      (
+        await productList(
+          ctx.db,
+          { ids },
+          [{ orderBy: "quantityVariance", direction }],
+          page,
+        )
+      ).data.map((row) => row.id);
+    expect(await order("asc")).toEqual([short, matched, surplus, uncounted]);
+    expect(await order("desc")).toEqual([surplus, matched, short, uncounted]);
   });
 
   it("orders tasks by an inherited project through the declared path", async () => {
