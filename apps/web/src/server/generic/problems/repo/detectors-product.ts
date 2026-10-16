@@ -190,12 +190,17 @@ export const loadSoldButStockedPresenterTotals = async (
 
 export const findToolsUsedOutsideOwnership = async (
   db: Database,
-  options: { today?: string } = {},
+  options: {
+    today?: string;
+    projectDateWindows?:
+      | Awaited<ReturnType<typeof loadProjectDateWindows>>
+      | ReturnType<typeof loadProjectDateWindows>;
+  } = {},
 ): Promise<ProblemItem<"toolsUsedOutsideOwnership">[]> => {
   const dbClient = getDb(db);
   const today = options.today ?? householdLocalDate();
 
-  const edges = await dbClient
+  const edgesPromise = dbClient
     .select({
       projectId: entityLink.fromEntityId,
       projectShortcode: project.shortcode,
@@ -222,16 +227,21 @@ export const findToolsUsedOutsideOwnership = async (
         productId: parseEntityId("product", row.productId),
       })),
     );
-  if (edges.length === 0) return [];
-
-  const [loadedWindows, ownership] = await Promise.all([
-    loadProjectDateWindows(db),
-    loadProductOwnershipTimelines(
-      dbClient,
-      uniq(edges.map((edge) => edge.productId)),
-      { today },
+  const [edges, loadedWindows, ownership] = await Promise.all([
+    edgesPromise,
+    options.projectDateWindows ??
+      edgesPromise.then((edges) =>
+        edges.length > 0 ? loadProjectDateWindows(db) : null,
+      ),
+    edgesPromise.then((edges) =>
+      loadProductOwnershipTimelines(
+        dbClient,
+        uniq(edges.map((edge) => edge.productId)),
+        { today },
+      ),
     ),
   ]);
+  if (!loadedWindows) return [];
   const gates = buildTimelineGates(
     loadedWindows,
     uniq(edges.map((edge) => edge.projectId)),

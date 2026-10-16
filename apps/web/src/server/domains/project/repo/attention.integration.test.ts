@@ -2,13 +2,95 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
+import { getDb } from "~/server/db/helpers";
+import { entityLink } from "~/server/db/schema";
+import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
+import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import { computeAttentionItems } from "./attention";
 import { loadProjectSubtreeRollups } from "./subtree";
 
 describe("project attention activity", () => {
   const ctx = withTestDb();
+
+  // Reusing attention's complete tree must preserve ownership conflicts and
+  // explicit date boundaries; standalone diagnostics retain the same result.
+  it("reuses complete Project windows in tool ownership diagnostics", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic completed work",
+      status: "done",
+      startDate: "2024-01-01",
+      endDate: "2024-01-02",
+    });
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic later tool" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values(linkValues("projectTool", project.id, product.entityId));
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic later acquisition",
+      productId: product.entityId,
+      cost: 20,
+      date: "2024-02-01",
+      future: false,
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+    });
+    const loaded = await loadProjectSubtreeRollups(ctx.db);
+    const standalone = await runDiagnostic(
+      ctx.db,
+      "tools-used-outside-ownership",
+      {},
+      { kind: "sample", limit: 100 },
+    );
+    expect(standalone.count).toBe(1);
+    const shared = await runDiagnostic(
+      ctx.db,
+      "tools-used-outside-ownership",
+      {
+        projectDateWindows: Promise.resolve({
+          tree: loaded,
+          dateWindows: loaded.dateWindows,
+        }),
+      },
+      { kind: "sample", limit: 100 },
+    );
+    expect(shared).toEqual(standalone);
+    expect(shared.items).toMatchObject([
+      {
+        projectId: project.shortcode,
+        id: product.id,
+        conflict: "acquired_after_end",
+        projectBoundary: "2024-01-02",
+      },
+    ]);
+  });
+
+  // A failed shared dependency must reject even when there are no tool edges,
+  // rather than escaping as an unhandled promise or a healthy empty result.
+  it("propagates a failed shared Project snapshot without tool edges", async () => {
+    await expect(
+      runDiagnostic(
+        ctx.db,
+        "tools-used-outside-ownership",
+        {
+          projectDateWindows: Promise.reject(
+            new Error("Synthetic Project snapshot failed"),
+          ),
+        },
+        { kind: "count" },
+      ),
+    ).rejects.toThrow("Synthetic Project snapshot failed");
+  });
 
   // Activity must use own live content, including refunds and future task
   // ends. Descendants and manual window overrides must not refresh a parent.
@@ -72,7 +154,7 @@ describe("project attention activity", () => {
     });
     const preloaded = await loadProjectSubtreeRollups(ctx.db);
     const measured = await countTestDbQueries(() =>
-      computeAttentionItems(ctx.db, { preloaded }),
+      computeAttentionItems(ctx.db, { preloaded: Promise.resolve(preloaded) }),
     );
     expect(
       measured.result

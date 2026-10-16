@@ -42,6 +42,7 @@ import { buildMealWhere } from "~/server/domains/meal/repo/crud";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
+import { loadProjectSubtreeRollups } from "~/server/domains/project/repo/subtree";
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
@@ -285,6 +286,13 @@ export async function additionalWorkProblemSelections(
     includeUnrecorded && includesWorkSource(scope, "account", "review");
   if (scope.check || (!includeProblems && !includeAccounts)) return selections;
   let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
+  let projectLoadPromise:
+    | ReturnType<typeof loadProjectSubtreeRollups>
+    | undefined;
+  // Attention and tool ownership need the same complete dates. Share this
+  // request's load without serializing attention's other independent reads.
+  const projectLoad = () =>
+    (projectLoadPromise ??= loadProjectSubtreeRollups(db));
   // A Project record read evaluates the shared attention rules for that
   // project only; non-project record reads never reach the project branch.
   const scopedProjects = async () => {
@@ -294,7 +302,7 @@ export async function additionalWorkProblemSelections(
   };
   const attentionItems = () =>
     (attentionPromise ??= scopedProjects().then((projectIds) =>
-      computeAttentionItems(db, projectIds ? { projectIds } : undefined),
+      computeAttentionItems(db, { projectIds, preloaded: projectLoad() }),
     ));
   for (const definition of problemQueryDeclarations()) {
     if (!includeProblems) break;
@@ -376,7 +384,14 @@ export async function additionalWorkProblemSelections(
           source.diagnostic,
           source.diagnostic === "project-date-window-drift"
             ? { attentionItems: await attentionItems() }
-            : {},
+            : source.diagnostic === "tools-used-outside-ownership"
+              ? {
+                  projectDateWindows: projectLoad().then((loaded) => ({
+                    tree: loaded,
+                    dateWindows: loaded.dateWindows,
+                  })),
+                }
+              : {},
           { kind: "count" },
         );
         return result.count
