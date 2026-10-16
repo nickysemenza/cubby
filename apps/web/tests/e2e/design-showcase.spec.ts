@@ -23,7 +23,7 @@ test("design showcase renders every section and its live demos", async ({
     "Recipe text and unit conversion",
     "Action search and workflows",
     "Suggestion review",
-    "Sections, dashboard and forms",
+    "Sections and forms",
     "Record quality and charts",
     "Controls",
     "Feedback, dialogs and tabs",
