@@ -1321,6 +1321,12 @@ requests it; standalone filters retain their closed predicates. Numeric
 fingerprints keep the canonical scalar or joined value, so sharing presence
 does not change exception identity.
 
+Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
+the total, line count and unpriced count. The reconciliation module owns their
+common live vendor-line scope and numeric sum. Exception fingerprints retain
+the same scalar evidence and rounding, so the optimized verdict does not
+reopen an accepted mismatch.
+
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
 score sorting, and bounded hydration join a shared, deduplicated Email quality

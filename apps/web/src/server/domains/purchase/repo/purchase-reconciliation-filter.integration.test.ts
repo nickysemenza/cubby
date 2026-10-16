@@ -9,6 +9,8 @@ import { purchaseList } from "./purchase";
 // The `purchasesNotReconciling` Problem filters `reconciliation=mismatch`. That
 // worklist must be the `paperwork_mismatch` gap (declared binding), so a
 // recorded `expected_mismatch` exception removes a purchase from it.
+// Shared aggregates must retain zero and signed totals, cent tolerance, vendor
+// line liveness and null-cost counts without changing exception fingerprints.
 describe("purchase reconciliation=mismatch filter", () => {
   const ctx = withTestDb();
 
@@ -53,12 +55,19 @@ describe("purchase reconciliation=mismatch filter", () => {
     const match = await makePurchase("match", 100, 100);
     const noStated = await makePurchase("no-stated", null, 30);
     const lineless = await makePurchase("lineless", 100, null);
+    const zero = await makePurchase("zero", 0, 0);
+    const tolerance = await makePurchase("cent-tolerance", 100, 99.99);
+    const signed = await makePurchase("signed-mismatch", -100, -50);
 
     const before = await mismatchIds();
     expect(before).toEqual(
-      expect.arrayContaining([mismatch.shortcode, excepted.shortcode]),
+      expect.arrayContaining([
+        mismatch.shortcode,
+        excepted.shortcode,
+        signed.shortcode,
+      ]),
     );
-    for (const other of [match, noStated, lineless])
+    for (const other of [match, noStated, lineless, zero, tolerance])
       expect(before).not.toContain(other.shortcode);
 
     await setDataException(
