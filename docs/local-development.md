@@ -55,6 +55,16 @@ that checkout's database, including existing databases without resetting data.
 Neon's PostgreSQL has no JIT provider; the local image's LLVM compiler otherwise
 adds substantial compilation time to complex quality queries. Restart a running
 dev session after applying this setting so its existing connections pick it up.
+The container preloads `pg_stat_statements`; database preparation enables it for
+the selected checkout, providing normalized query counts, execution times and
+buffer statistics for local performance investigations. If an older container
+lacks that preload, preparation refuses readiness and names the upgrade:
+`pnpm db:dev:down`, then `pnpm dev`. This recreates the shared container while
+keeping its volume and all checkout databases; active local clients briefly
+disconnect. It does not reset fixtures. Postgres version and query semantics
+should track production; connection and cache limits remain sized for the local
+container rather than copying Neon's autoscaled values. Keep the core corpus
+small and opt into the performance pack below for scale-sensitive work.
 Runtime settings are meant for people:
 `PORT` (default 3000), `CUBBY_DEV_PROFILE` (`offline`, or `integrations` with
 `CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
