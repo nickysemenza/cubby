@@ -1,0 +1,1 @@
+ALTER TABLE "VendorAccount" ALTER COLUMN "label" DROP NOT NULL;

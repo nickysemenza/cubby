@@ -132,8 +132,8 @@ storage-less read-only `displayName` field — `validation: { read: z.string(),
 create: null, update: null }`, absent from both `storage` and every
 `intents.fields` roster — computed in the repo mapper from other columns, and
 points `titleField` at that field. `planting`, `gardenEntry`, `meal`,
-`financialTransaction`, `purchase`, and `inventory` all use this pattern
-today. `domain` (a `WAYFINDING_DOMAINS` line or
+`financialTransaction`, `purchase`, `inventory`, and `vendorAccount` all use
+this pattern today. `domain` (a `WAYFINDING_DOMAINS` line or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
@@ -933,7 +933,8 @@ command schemas, repository/relation-adapter assembly, and contract cases.
 The server's generated shortcode table bindings also carry physical title
 columns, derived through `presentation.titleField`, the field's `readKey`, and
 its storage mapping. Computed titles remain null and use the shortcode
-resolver's explicit label overrides. Resolving identities and labels therefore
+resolver's explicit label overrides: a stored column, or a relational SQL
+expression over the unaliased table. Resolving identities and labels therefore
 does not load the complete entity field model.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity with a contract: its index — generated, or hand-written like Image's —
@@ -1294,6 +1295,12 @@ before joining current-checksum predictions to their owner. Only valid member
 labels count; the latest valid label wins, and a correct verdict without a
 correction uses the Assessment judgment. Review metadata never supplies a second
 observation identity.
+
+A Vendor Account has no stored or editable name. Its title is always
+`<Vendor> · <member>` from the current parent names (`vendorAccountLabelSql`
+in `server/db/computed/`), shared by account reads, list search and sort,
+reference lookups, Run labels, filter options and the entity graph, so a
+parent rename never leaves a stale label.
 
 Every Purchase expects a Vendor Account; a missing account is an identity gap
 on the Purchase and appears in its Research queue until assigned. Missing

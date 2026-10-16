@@ -59,7 +59,6 @@ describe("purchase import identifier collisions", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Collision fixture account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

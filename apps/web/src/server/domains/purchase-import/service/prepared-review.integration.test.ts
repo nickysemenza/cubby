@@ -33,7 +33,6 @@ describe("immutable prepared purchase review", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Prepared review account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -145,7 +144,6 @@ describe("immutable prepared purchase review", () => {
       name: "Target name vendor",
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Target name account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

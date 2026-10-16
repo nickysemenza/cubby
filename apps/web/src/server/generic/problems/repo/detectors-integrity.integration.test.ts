@@ -248,7 +248,6 @@ const mkUser = (db: Database) =>
 const mkVendorAccount = async (db: Database) => {
   const [vendor, party] = await Promise.all([mkVendor(db), mkLedgerParty(db)]);
   return insertWithShortcode(db, "vendorAccount", {
-    label: uniq("Vendor account"),
     vendorId: vendor.id,
     ledgerPartyId: party.id,
   });
@@ -658,7 +657,6 @@ const SOURCE_FACTORIES = {
   "VendorAccount.ledgerPartyId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "vendorAccount", {
-      label: uniq("Vendor account"),
       vendorId: vendor.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     });
@@ -719,7 +717,6 @@ const SOURCE_FACTORIES = {
   "VendorAccount.vendorId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertWithShortcode(db, "vendorAccount", {
-      label: uniq("Vendor account"),
       vendorId: parseEntityId("vendor", targetId),
       ledgerPartyId: party.id,
     });

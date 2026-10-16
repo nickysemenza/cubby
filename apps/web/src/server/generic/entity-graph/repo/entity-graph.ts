@@ -17,11 +17,13 @@ import {
   entityManifest,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { sql } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
+import { PgColumn } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { vendorAccountLabelFor } from "~/server/db/computed/vendor-account-label";
 import { unwrapDb } from "~/server/db/helpers";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
@@ -321,13 +323,19 @@ export const labelSql = (entity: Entity, alias: string) => {
           || ' · ' || (SELECT l."name" FROM "Location" l WHERE l."id" = ${column("locationId")}),
         ${column("shortcode")}
       )`;
+    case "vendorAccount":
+      return sql`COALESCE(${vendorAccountLabelFor({
+        vendorId: column("vendorId"),
+        ledgerPartyId: column("ledgerPartyId"),
+      })}, ${column("shortcode")})`;
     default: {
       const title = entitySummary[entity].titleField;
       const stored = entityFieldModels[entity].storage.find(
         (field) => field.key === title,
       );
+      const override = labelOverrides.get(entity)?.column;
       const nameColumn =
-        labelOverrides.get(entity)?.column?.name ?? stored?.column;
+        (is(override, PgColumn) ? override.name : undefined) ?? stored?.column;
       return nameColumn
         ? sql`COALESCE(${column(nameColumn)}::text, ${column("shortcode")})`
         : column("shortcode");

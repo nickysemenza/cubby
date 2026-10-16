@@ -519,6 +519,20 @@
       "when": 1792120576425,
       "tag": "0073_photo_group_review_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792129808281,
+      "tag": "0074_vendor_account_label_optional",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792129825603,
+      "tag": "0075_drop_vendor_account_label",
+      "breakpoints": true
     }
   ]
 }

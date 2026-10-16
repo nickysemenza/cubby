@@ -14,11 +14,27 @@ import type {
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
-import { and, count, eq, inArray, max, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  max,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import {
+  formatSearchTerm,
+  notDeleted,
+  unwrapDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
@@ -64,7 +80,18 @@ const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
 
-type VendorAccountRow = typeof vendorAccount.$inferSelect;
+type VendorAccountRow = typeof vendorAccount.$inferSelect & {
+  displayName: string;
+};
+
+/** Every account read carries its derived `<vendor> · <member>` title. */
+const selectVendorAccounts = (db: Database | DrizzleTransaction) =>
+  unwrapDb(db)
+    .select({
+      ...getTableColumns(vendorAccount),
+      displayName: vendorAccountLabelSql,
+    })
+    .from(vendorAccount);
 
 /**
  * When each account last ran and last finished a run, read from Run (served by
@@ -192,7 +219,9 @@ type VendorAccountReferencePatch = {
 };
 
 export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
-  scaffold.where(filters);
+  scaffold.where(filters, [
+    formatSearchTerm(vendorAccountLabelSql, filters.search),
+  ]);
 
 export const listVendorAccountsRead = (
   db: Database,
@@ -205,14 +234,26 @@ export const listVendorAccountsRead = (
     db,
     { filters, sorts, pagination, projection },
     {
+      where: buildVendorAccountWhere(filters),
+      select: (page) =>
+        selectVendorAccounts(db)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
       hydrate: (rows, selected) => hydrateRead(db, rows, selected),
-      // `lastRunAt` is computed from Run, not a column.
-      resolveSort: (sort) =>
-        sort.orderBy === "lastRunAt"
+      // `lastRunAt` and `displayName` are computed, not columns.
+      resolveSort: (sort) => {
+        if (sort.orderBy === "displayName")
+          return [
+            (sort.direction === "asc" ? asc : desc)(vendorAccountLabelSql),
+          ];
+        return sort.orderBy === "lastRunAt"
           ? [
               sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id}) ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
             ]
-          : null,
+          : null;
+      },
     },
   );
 
@@ -229,9 +270,7 @@ const reader = createEntityReader<
 >({
   entity: "vendorAccount",
   fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select()
-      .from(vendorAccount)
+    const [row] = await selectVendorAccounts(db)
       .where(and(eq(vendorAccount.id, id), notDeleted(vendorAccount)))
       .limit(1);
     return row;
@@ -275,7 +314,6 @@ export async function createVendorAccount(
   const id = await withTransaction(db, async (tx) => {
     const refs = await resolveReferences(tx, data);
     const row = await insertWithShortcode(tx, "vendorAccount", {
-      label: data.label.trim(),
       ...refs,
       status: data.status,
       inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
@@ -305,7 +343,6 @@ async function updateVendorAccount(
     refs.ledgerPartyId = await resolveMemberParty(db, data.ledgerPartyId);
   }
   const patch = {
-    label: data.label?.trim(),
     status: data.status,
     inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     ...refs,

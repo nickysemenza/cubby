@@ -87,6 +87,7 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import {
   databaseForTransaction,
   getDb,
@@ -229,7 +230,7 @@ async function selectNonPhotoTargets(
         .select({
           id: vendorAccount.id,
           shortcode: vendorAccount.shortcode,
-          label: vendorAccount.label,
+          label: vendorAccountLabelSql,
         })
         .from(vendorAccount)
         .where(inArray(vendorAccount.id, accountIds))
@@ -587,7 +588,7 @@ export async function loadRunScope(db: Database, runId: string) {
       status: runTable.status,
       vendorAccountId: runTable.vendorAccountId,
       vendorId: sql<VendorId | null>`coalesce(${runTable.vendorId}, ${vendor.id})`,
-      vendorLabel: vendorAccount.label,
+      vendorLabel: sql<string | null>`${vendorAccountLabelSql}`,
       allowedHosts: vendor.browserDomains,
       navigationHints: vendor.agentHints,
       website: vendor.website,

@@ -141,7 +141,6 @@ export async function createConvergenceFixtures(
     orderEvidence: "online_account",
   });
   const account = await create("vendorAccount", {
-    label: `${name} retailer`,
     vendorId: vendor.id,
     ledgerPartyId: memberShortcode,
   });

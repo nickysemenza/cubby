@@ -95,7 +95,6 @@ describe("manufacturer_part identity", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Manufacturer part fixture account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -215,7 +214,6 @@ describe("manufacturer_part identity", () => {
       },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic tools account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });

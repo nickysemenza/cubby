@@ -53,7 +53,6 @@ test("related Runs show account labels and shared quality", async ({
   const account = await insertWithShortcode(db, "vendorAccount", {
     vendorId: vendor.id,
     ledgerPartyId: party.id,
-    label: "Synthetic store login",
   });
   await insertWithShortcode(db, "run", {
     actorUserId: userId,
@@ -74,11 +73,14 @@ test("related Runs show account labels and shared quality", async ({
   const row = page
     .getByRole("table", { name: "Runs", exact: true })
     .getByRole("row")
-    .filter({ hasText: "Synthetic store login" });
+    .filter({ hasText: "Synthetic reference vendor · Fixture agent" });
   await expect(row).toHaveCount(1);
   await expect(row).not.toContainText(account.shortcode);
   await expect(
-    row.getByRole("link", { name: account.label, exact: true }),
+    row.getByRole("link", {
+      name: "Synthetic reference vendor · Fixture agent",
+      exact: true,
+    }),
   ).toHaveAttribute("href", `/vendor-accounts/${account.shortcode}`);
   await expect(row.getByText("100", { exact: true })).toBeVisible();
   await row.hover();

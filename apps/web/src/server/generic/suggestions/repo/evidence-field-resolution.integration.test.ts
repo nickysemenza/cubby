@@ -212,7 +212,6 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
   });
   const account = await insertWithShortcode(ctx.db, "vendorAccount", {
     vendorId: vendor.id,
-    label: "Synthetic account",
     ledgerPartyId: person.id,
     inventoryOwnerDefaultEnabled: true,
   });
@@ -528,7 +527,6 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
   });
   const vendorAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
     vendorId: vendor.id,
-    label: "Synthetic vendor policy",
     ledgerPartyId: person.id,
     inventoryOwnerDefaultEnabled: false,
   });

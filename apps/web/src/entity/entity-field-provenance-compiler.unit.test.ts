@@ -69,13 +69,15 @@ describe("entity field provenance", () => {
       model: {
         ...vendorAccountDeclaration.model,
         storage: vendorAccountDeclaration.model.storage.filter(
-          (field) => field !== "label",
+          (field) =>
+            typeof field === "string" ||
+            field.key !== "inventoryOwnerDefaultEnabled",
         ),
       },
     };
 
     expect(() => compileEntity(declaration, 0)).toThrow(
-      /model\.label is exposed without storage, a reference, or declared provenance/u,
+      /model\.inventoryOwnerDefaultEnabled is exposed without storage, a reference, or declared provenance/u,
     );
   });
 

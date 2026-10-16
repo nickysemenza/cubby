@@ -32,7 +32,7 @@ export default defineEntity({
         media: ["displayImages"],
       },
     },
-    titleField: "label",
+    titleField: "displayName",
     domain: "finance",
     description: "A member's purchasing relationship with a vendor.",
     emptyState: {
@@ -60,15 +60,19 @@ export default defineEntity({
   model: {
     fields: [
       {
-        key: "label",
+        // Read-only: always the current Vendor and member names, so a parent
+        // rename can never leave a stale account title behind.
+        key: "displayName",
         kind: "text",
-        control: { kind: "text", placeholder: "Member's vendor relationship" },
-        display: { list: true, detail: true },
-        validation: {
-          read: z.string().min(1),
-          create: z.string().min(1),
-          update: z.string().min(1).optional(),
+        provenance: {
+          kind: "derived",
+          sources: [
+            { entity: "vendor", relation: "vendor" },
+            { entity: "ledgerParty", relation: "ledger-party" },
+          ],
         },
+        display: { list: true, detail: true },
+        validation: { read: z.string(), create: null, update: null },
       },
       {
         key: "vendorId",
@@ -241,7 +245,6 @@ export default defineEntity({
         specialized: "primary-key:VendorAccountId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      "label",
       { key: "vendorId", reference: "vendor" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
@@ -264,14 +267,12 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "label",
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "status",
     ],
     update: [
-      "label",
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
@@ -279,33 +280,32 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
-      "label",
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "status",
     ],
     sort: {
-      fields: ["label", "status", "lastRunAt", "updatedAt"],
+      fields: ["displayName", "status", "lastRunAt", "updatedAt"],
+      computed: ["displayName"],
     },
     intents: {
       fields: {
-        capture: ["label", "vendorId", "ledgerPartyId"],
+        capture: ["vendorId", "ledgerPartyId"],
         full: [
-          "label",
           "vendorId",
           "ledgerPartyId",
           "inventoryOwnerDefaultEnabled",
           "status",
         ],
-        identity: ["label", "vendorId", "ledgerPartyId"],
+        identity: ["vendorId", "ledgerPartyId"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
       "id",
-      "label",
+      "displayName",
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
@@ -376,13 +376,13 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "label",
+        columnId: "displayName",
         field: "search",
         urlKey: "q",
         kind: "text",
         placeholder: "Search vendor accounts...",
         deriveSchema: true,
-        stored: { columns: ["label"] },
+        schemaFromRead: true,
       },
       {
         columnId: "vendorId",

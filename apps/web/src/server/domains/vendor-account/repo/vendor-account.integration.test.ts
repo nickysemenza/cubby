@@ -11,7 +11,17 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { getVendorAccountByShortcode } from "~/server/domains/vendor-account/repo/vendor-account";
+import { getRunByID } from "~/server/domains/run/repo/run";
+import {
+  getVendorAccountByShortcode,
+  listVendorAccountsRead,
+} from "~/server/domains/vendor-account/repo/vendor-account";
+import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
+import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
+import {
+  lookupEntityLabels,
+  lookupEntityReferences,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -37,7 +47,6 @@ describe("vendor account run activity", () => {
       browserDomains: ["shop.example.test"],
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Activity account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -112,7 +121,6 @@ describe("vendor account creation persistence", () => {
       action: "create",
       entity: "vendorAccount",
       data: {
-        label: "Import owner account",
         vendorId: parseShortcodeFor("vendor", vendor.shortcode),
         ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
         status: "active",
@@ -136,6 +144,9 @@ describe("vendor account creation persistence", () => {
       })
       .from(vendorAccount)
       .where(eq(vendorAccount.id, createdRow.id));
+    expect(created.item.displayName).toBe(
+      "Import owner vendor · Import owner member",
+    );
     expect(persistedAccount).toEqual({
       vendorId: vendor.id,
       ledgerPartyId: party.id,
@@ -164,5 +175,111 @@ describe("vendor account creation persistence", () => {
       .from(vendorTable)
       .where(eq(vendorTable.id, vendor.id));
     expect(persistedVendor?.orderEvidence).toBeNull();
+  });
+});
+
+/**
+ * Failure modes: an account title is a stored copy that goes stale when its
+ * Vendor or member is renamed; list search, sort, reference lookups, Run
+ * labels, the entity graph or filter-option rosters read a different label
+ * than the account.
+ */
+describe("derived vendor account label", () => {
+  const ctx = withTestDb();
+
+  it("reads the current vendor and member names everywhere the account is named", async () => {
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Morgan",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const store = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Example Store",
+    });
+    const other = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Zephyr Supply",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: store.id,
+      ledgerPartyId: member.id,
+    });
+    const second = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: other.id,
+      ledgerPartyId: member.id,
+    });
+    const accountRun = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: member.id,
+      vendorAccountId: account.id,
+    });
+
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ name: "Renamed Store" })
+      .where(eq(vendorTable.id, store.id));
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ name: "Avery" })
+      .where(eq(ledgerParty.id, member.id));
+    const expected = "Renamed Store · Avery";
+
+    expect(
+      (await getVendorAccountByShortcode(ctx.db, account.shortcode))
+        ?.displayName,
+    ).toBe(expected);
+    const page = { pageIndex: 0, pageSize: 10 };
+    const sorted = await listVendorAccountsRead(
+      ctx.db,
+      {},
+      [{ orderBy: "displayName", direction: "desc" }],
+      page,
+    );
+    expect(sorted.data.map((row) => row.displayName)).toEqual([
+      "Zephyr Supply · Avery",
+      expected,
+    ]);
+    const found = await listVendorAccountsRead(
+      ctx.db,
+      { search: "renamed store · av" },
+      [],
+      page,
+    );
+    expect(found.data.map((row) => row.id)).toEqual([account.shortcode]);
+    const stale = await listVendorAccountsRead(
+      ctx.db,
+      { search: "Example Store" },
+      [],
+      page,
+    );
+    expect(stale.count).toBe(0);
+
+    expect(
+      (await lookupEntityReferences(ctx.db, "vendorAccount", [account.id])).get(
+        account.id,
+      )?.name,
+    ).toBe(expected);
+    expect([
+      ...(
+        await lookupEntityLabels(ctx.db, [
+          { entity: "vendorAccount", id: second.id },
+        ])
+      ).values(),
+    ]).toEqual(["Zephyr Supply · Avery"]);
+    expect((await getRunByID(ctx.db, accountRun.id)).vendorAccountLabel).toBe(
+      expected,
+    );
+    const graph = await getEntityGraph(ctx.db, {
+      roots: [{ entityKind: "vendorAccount", entityId: account.shortcode }],
+      relationshipKeys: [],
+    });
+    expect(graph.nodes.map((node) => node.label)).toEqual([expected]);
+    const options = await getFilterOptions(ctx.db, {
+      source: "entity",
+      entity: "vendorAccount",
+      search: "renamed",
+      selectedIds: [],
+      limit: 25,
+      include: [],
+    });
+    expect(options.items).toEqual([{ id: account.shortcode, label: expected }]);
   });
 });

@@ -18,6 +18,7 @@ import {
 
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import {
   getDb,
   notDeleted,
@@ -69,7 +70,7 @@ function runSummaryQuery(
     .select({
       id: runTable.id,
       publicId: runTable.shortcode,
-      vendorAccountLabel: vendorAccount.label,
+      vendorAccountLabel: sql<string | null>`${vendorAccountLabelSql}`,
       vendorName: vendor.name,
       trigger: runTable.trigger,
       purpose: runTable.purpose,
@@ -97,7 +98,7 @@ function runSummaryQuery(
     )
     .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
     .where(and(eq(runTable.ledgerPartyId, ledgerPartyId), where))
-    .groupBy(runTable.id, vendorAccount.label, vendor.name)
+    .groupBy(runTable.id, vendorAccount.id, vendor.name)
     .orderBy(desc(runTable.startedAt));
 
   return where ? query : query.limit(20);

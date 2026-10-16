@@ -122,7 +122,6 @@ describe("Email Purchase links", () => {
         name: "Synthetic accepted evidence merchant",
       });
       const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-        label: "Synthetic accepted evidence account",
         vendorId: vendor.id,
         ledgerPartyId: party.id,
       });

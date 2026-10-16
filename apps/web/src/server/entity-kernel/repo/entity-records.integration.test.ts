@@ -200,7 +200,6 @@ describe("combined entity records", () => {
       name: "Roster vendor",
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Roster account",
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
