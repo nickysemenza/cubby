@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createContextRecorder } from "./context-breakdown";
 import {
+  cubbyAgentModel,
   createCubbyGatewayFetch,
   cubbyAgentProviders,
   withSequentialToolCalls,
@@ -30,6 +31,115 @@ const completedResponse = (headers: Record<string, string> = {}) =>
   );
 
 describe("createCubbyGatewayFetch", () => {
+  // Fixed evals must select Responses before pi serializes an Opus-pinned
+  // coordinator, and must not retry the candidate through credit funding.
+  it.each([
+    { outcome: "success", response: completedResponse, stopReason: "stop" },
+    {
+      outcome: "quota refusal",
+      response: () =>
+        Response.json(
+          { error: { message: "Your credit balance is too low" } },
+          { status: 400 },
+        ),
+      stopReason: "error",
+    },
+  ])(
+    "keeps fixed evals on Responses with $outcome even when production pins Opus",
+    async ({ response, stopReason }) => {
+      const requests: Array<{
+        path: string;
+        body: unknown;
+        credit: string | null;
+      }> = [];
+      const models = createModels();
+      for (const provider of cubbyAgentProviders({
+        fundingFallback: true,
+        fixedModel: "openai-responses",
+        gateway: () =>
+          gateway(async () => {
+            throw new Error("Unexpected production gateway");
+          }),
+        recorder: createContextRecorder(),
+        testModel: {
+          fetch: async (request) => {
+            requests.push({
+              path: new URL(request.url).pathname,
+              body: await request.json(),
+              credit: request.headers.get("cf-aig-byok-alias"),
+            });
+            return response();
+          },
+        },
+      }))
+        models.setProvider(provider);
+      const selected = cubbyAgentModel("claude-opus-5-5", "openai-responses");
+      const model = models.getModel(selected.provider, selected.modelId);
+      if (!model) throw new Error("Missing test model");
+      const result = await models.complete(
+        model,
+        { messages: [] },
+        { maxRetries: 0 },
+      );
+      expect(result.stopReason).toBe(stopReason);
+      expect(requests).toEqual([
+        {
+          path: "/openai/responses",
+          body: expect.objectContaining({ model: "gpt-6-sol", input: [] }),
+          credit: null,
+        },
+      ]);
+    },
+  );
+
+  // Merely having a live/scripted peer must not disable production funding.
+  it("retains credit-first fallback for an ordinary coupled peer", async () => {
+    const requests: Array<{ path: string; credit: string | null }> = [];
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      fundingFallback: true,
+      gateway: () =>
+        gateway(async () => {
+          throw new Error("Unexpected production gateway");
+        }),
+      recorder: createContextRecorder(),
+      testModel: {
+        fetch: async (request) => {
+          const path = new URL(request.url).pathname;
+          requests.push({
+            path,
+            credit: request.headers.get("cf-aig-byok-alias"),
+          });
+          return path.startsWith("/anthropic/")
+            ? Response.json(
+                {
+                  error: {
+                    type: "invalid_request_error",
+                    message: "Your credit balance is too low",
+                  },
+                },
+                { status: 400 },
+              )
+            : completedResponse();
+        },
+      },
+    }))
+      models.setProvider(provider);
+    const selected = cubbyAgentModel("claude-opus-5-5");
+    const model = models.getModel(selected.provider, selected.modelId);
+    if (!model) throw new Error("Missing test model");
+    const result = await models.completeSimple(
+      model,
+      { messages: [] },
+      { maxRetries: 0 },
+    );
+    expect(result.stopReason).not.toBe("error");
+    expect(requests).toEqual([
+      { path: "/anthropic/v1/messages", credit: "subscriber-credit" },
+      { path: "/openai/responses", credit: null },
+    ]);
+  });
+
   it("preserves named credit controls through the live model peer", async () => {
     let headers = new Headers();
     const send = createCubbyGatewayFetch("anthropic", {

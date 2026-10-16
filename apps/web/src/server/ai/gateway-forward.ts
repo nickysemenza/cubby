@@ -203,7 +203,7 @@ function subscriptionCapacityRefusal(body: string): boolean {
   return isInferenceFundingRefusal(400, body, "subscription");
 }
 
-/** The completed response is the exact JSON root the Rust extractor consumes. */
+/** Terminal Responses roots preserve truncation output/usage for Rust recovery. */
 async function foldResponsesStream(response: Response): Promise<Response> {
   if (
     !response.ok ||
@@ -216,7 +216,11 @@ async function foldResponsesStream(response: Response): Promise<Response> {
     onEvent: (event) => {
       if (event.data === "[DONE]") return;
       const parsed = responsesEvent.parse(JSON.parse(event.data));
-      if (parsed.type === "response.completed") completed = parsed.response;
+      if (
+        parsed.type === "response.completed" ||
+        parsed.type === "response.incomplete"
+      )
+        completed = parsed.response;
       if (parsed.type === "response.failed")
         failure = parsed.response?.error ?? parsed;
       if (parsed.type === "error") failure = parsed.error ?? parsed;
@@ -246,7 +250,9 @@ async function foldResponsesStream(response: Response): Promise<Response> {
     });
   }
   if (!completed)
-    throw new Error("Responses stream ended without response.completed");
+    throw new Error(
+      "Responses stream ended without a completed or incomplete response",
+    );
   return new Response(JSON.stringify(completed), {
     status: response.status,
     headers,

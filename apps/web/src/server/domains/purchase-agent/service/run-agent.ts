@@ -18,7 +18,6 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
-import { getChatModelConfig } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
 import type { Context } from "@earendil-works/chord";
@@ -47,7 +46,11 @@ import { z } from "zod";
 
 import { createContextRecorder } from "./context-breakdown";
 import { projectConversation } from "./conversation";
-import { CONTEXT_SCOPE, cubbyAgentProviders } from "./cubby-ai-provider";
+import {
+  CONTEXT_SCOPE,
+  cubbyAgentModel,
+  cubbyAgentProviders,
+} from "./cubby-ai-provider";
 import { cubbyMcpExtension } from "./cubby-mcp";
 import type {
   DispatchInput,
@@ -248,6 +251,7 @@ export class PurchaseImportRunAgent
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
+      fixedModel: this.agentEnv.fixedModel,
       onFundingRefusal: (message) => this.afterResponse(message),
       gateway: () => this.agentEnv.gateway(),
       recorder: this.recorder,
@@ -466,10 +470,7 @@ export class PurchaseImportRunAgent
     const root = await (await this.harness.pi()).root(context);
     await root.configure(
       {
-        model: {
-          provider: getChatModelConfig(manifest.model).gatewayProvider,
-          modelId: manifest.model,
-        },
+        model: cubbyAgentModel(manifest.model, this.agentEnv.fixedModel),
         thinkingLevel: manifest.effort,
         instructions: workflowForRun(identity.purpose, identity.runId)
           .instructions,

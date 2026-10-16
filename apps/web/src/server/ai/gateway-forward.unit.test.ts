@@ -118,43 +118,47 @@ describe("forwardGatewayRequest", () => {
 
   // Chunk boundaries may split SSE fields, JSON, and UTF-8 output; only exact
   // capacity codes may buy a second attempt, which needs its own ledger row.
-  it("folds arbitrarily chunked Responses completion without losing output or usage", async () => {
-    const completed = {
-      model: "gpt-6-luna",
-      output: [{ content: [{ text: "café" }] }],
-      usage: { input_tokens: 10, output_tokens: 5 },
-    };
-    const bytes = new TextEncoder().encode(
-      `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: completed })}\n\n`,
-    );
-    const { port, sent, recorded } = fakePort(
-      () =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              for (const byte of bytes)
-                controller.enqueue(new Uint8Array([byte]));
-              controller.close();
-            },
-          }),
-          { headers: { "content-type": "text/event-stream" } },
-        ),
-      "chatgpt",
-    );
-    const out = await forwardGatewayRequest(
-      { ...request, path: "/openai/responses" },
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
-    expect(JSON.parse(out.body)).toEqual(completed);
-    expect(out.headers).toContainEqual(["content-type", "application/json"]);
-    expect(sent.map((call) => call.opts.funding)).toEqual(["subscription"]);
-    expect(recorded[0]).toMatchObject({
-      inputTokens: 10,
-      outputTokens: 5,
-      transport: "chatgpt",
-    });
-  });
+  it.each(["completed", "incomplete"])(
+    "folds arbitrarily chunked Responses %s without losing output or usage",
+    async (status) => {
+      const completed = {
+        status,
+        model: "gpt-6-luna",
+        output: [{ content: [{ text: "café" }] }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      };
+      const bytes = new TextEncoder().encode(
+        `event: response.${status}\ndata: ${JSON.stringify({ type: `response.${status}`, response: completed })}\n\n`,
+      );
+      const { port, sent, recorded } = fakePort(
+        () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                for (const byte of bytes)
+                  controller.enqueue(new Uint8Array([byte]));
+                controller.close();
+              },
+            }),
+            { headers: { "content-type": "text/event-stream" } },
+          ),
+        "chatgpt",
+      );
+      const out = await forwardGatewayRequest(
+        { ...request, path: "/openai/responses" },
+        { db, runId, feature: "cookbook-epub-parsing" },
+        port,
+      );
+      expect(JSON.parse(out.body)).toEqual(completed);
+      expect(out.headers).toContainEqual(["content-type", "application/json"]);
+      expect(sent.map((call) => call.opts.funding)).toEqual(["subscription"]);
+      expect(recorded[0]).toMatchObject({
+        inputTokens: 10,
+        outputTokens: 5,
+        transport: "chatgpt",
+      });
+    },
+  );
 
   it.each([
     "usage_limit_reached",

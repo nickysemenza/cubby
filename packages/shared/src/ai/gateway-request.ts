@@ -1005,7 +1005,14 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {
-      if (routes.funding !== "subscriber_credit")
+      // Harness peers can be deterministic or live. The live peer must refuse
+      // unavailable subscription capacity instead of purchasing this attempt.
+      if (routes.funding)
+        request.headers.set("x-cubby-inference-funding", routes.funding);
+      if (
+        routes.funding !== "subscriber_credit" &&
+        routes.funding !== "subscription"
+      )
         await routes.beforePaidRequest?.(request);
       routes.onTransport?.("gateway");
       return observe(await testPeer(request));

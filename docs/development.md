@@ -57,8 +57,8 @@ JSONL routes    →  cancellable workflow streams
   require the gateway's `subscriber-credit` BYOK alias without wholesale
   fallback; non-2xx responses reach the crate's existing retry/model ladder.
   Luna tries ChatGPT subscription funding before paid gateway funding. The
-  forwarder folds Responses SSE into the completed response JSON expected by
-  the extractor, preserving output and usage. Only explicit subscription quota
+  forwarder folds completed or incomplete Responses SSE into the response JSON
+  expected by the extractor, preserving truncation output and usage. Only explicit subscription quota
   or unavailable codes permit a paid rerun; other errors and cancellation stop
   the call. Failed subscription attempts are recorded separately.
 - USDA data comes from one `USDA_RELEASE` SQLite Durable Object per USDA

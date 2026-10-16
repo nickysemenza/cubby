@@ -130,6 +130,8 @@ export interface PurchaseAgentEnvironment {
   mcpTools(purpose: AgentImportRunPurpose): Promise<McpToolDefinition[]>;
   /** Workerd harness only: the scripted model peer replacing the Gateway. */
   testModel?: { fetch(request: Request): Promise<Response> };
+  /** Harness only: select Responses before serialization; never switch funding models. */
+  fixedModel?: "openai-responses";
   /**
    * Workerd harness only: a shorter settlement poll, so a scripted Run settles
    * without waiting out production's interval.

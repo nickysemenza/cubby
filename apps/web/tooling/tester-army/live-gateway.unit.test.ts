@@ -26,6 +26,28 @@ const responsesBody = {
 };
 
 const upstream = vi.fn<typeof fetch>();
+
+// The live peer has no connected ChatGPT session; a subscription-only attempt
+// must refuse explicitly rather than silently purchase OpenAI inference.
+it("refuses unavailable subscription attempts without a paid transmission", async () => {
+  vi.stubGlobal("fetch", upstream);
+  const response = await liveGateway.fetch(
+    new Request("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      headers: {
+        "x-cubby-inference-funding": "subscription",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(responsesBody),
+    }),
+    env,
+  );
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({
+    error: { code: "subscription_unavailable" },
+  });
+  expect(upstream).not.toHaveBeenCalled();
+});
 afterEach(() => {
   upstream.mockReset();
   vi.unstubAllGlobals();

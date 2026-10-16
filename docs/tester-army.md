@@ -167,6 +167,9 @@ Billed-provider traffic uses gateway `cubby`, cache bypass, `feature=tester-army
 `operation=driver`, and `environment=ci` or `development`. Revisions stay in the
 sanitized run bundle. No TypeSafe API key is needed. ChatGPT OAuth is optional
 and used only for subscription fallback.
+The coupled live gateway peer has no ChatGPT connection; it explicitly reports
+subscription unavailability, allowing the coordinator to enter its paid stage
+instead of billing a subscription-labelled attempt.
 
 Preflight checks a real Jev choice and the text tier's image/function-call
 capability before builds or test services. Missing credentials fail early.
@@ -404,12 +407,20 @@ The coordinator runs on the model production sends unless
 `high`) is set locally or as an Actions repository variable; then the agent's
 peer swaps that model into its `/openai/responses` calls
 (`tooling/responses-model-swap.ts`, shared with the live coordinator eval).
+Both explicit overrides and the live coordinator eval mark the agent peer
+`fixedModel: true`. The harness passes `CUBBY_PURCHASE_AGENT_FIXED_MODEL` as
+`openai-responses` to the host, which honors it only with the test-model binding.
+Before SDK serialization, the coordinator selects the declared OpenAI quality
+model as its Responses baseline and disables credit/model funding fallback;
+the peer then substitutes the candidate and effort. A quota refusal remains
+on that candidate. Unswapped coupled runs keep the production model, effort,
+and credit-first fallback. The marker is absent from deployed configuration.
 The web peer's calls are forwarded unchanged. The run manifest records
 `agentModel` and `agentEffort` (`production` when unswapped), and the bundle adds
 `gateway-usage.json`: request counts, wire models, and failed statuses per
 gateway route for each peer, never content. Those two files are the record of
 the swap: the run page's generation telemetry and AI spend still name and
-price the agent's pinned model. Deterministic coverage of the same
+price the agent's Responses baseline model. Deterministic coverage of the same
 orchestration stays in `purchase-agent-scenarios.integration.test.ts`; these
 journeys check that real models complete it.
 

@@ -10,6 +10,37 @@ import {
 // A missing credit key must not silently spend Unified Billing. Only capacity
 // refusal advances funding; malformed requests, bad keys and outages stay errors.
 describe("inference funding", () => {
+  it("labels a subscription-only peer attempt without paid admission", async () => {
+    const calls: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      funding: "subscription",
+      beforePaidRequest: async () => {
+        calls.push("paid admission");
+      },
+      testPeer: () => async (request) => {
+        calls.push(
+          request.headers.get("x-cubby-inference-funding") ?? "missing funding",
+        );
+        return Response.json(
+          { error: { code: "subscription_unavailable" } },
+          { status: 429 },
+        );
+      },
+      gateway: async () => {
+        throw new Error("must not purchase inference");
+      },
+    });
+    expect(
+      (
+        await send("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: "{}",
+        })
+      ).status,
+    ).toBe(429);
+    expect(calls).toEqual(["subscription"]);
+  });
   it("sends named BYOK controls on the native provider request, not a Universal payload", async () => {
     let sent: Request | undefined;
     await runNativeGateway({
