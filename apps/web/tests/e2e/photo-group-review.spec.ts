@@ -32,6 +32,8 @@ import {
   seedPhotoGroupReviewRun,
   seedPhotoReviewProcessingFailure,
   seedPhotoReviewLabelText,
+  seedImagePrerequisite,
+  attachProductImagePrerequisite,
 } from "./fixtures/photos";
 import {
   openDetailActions,
@@ -1102,16 +1104,20 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     name: "New product name",
     exact: true,
   });
-  await page.screenshot({
-    path: "../../artifacts/photo-review/desktop-concern.png",
-    fullPage: true,
-  });
+  await group
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/desktop-concern.png",
+    });
   await page.setViewportSize({ width: 390, height: 844 });
   await group.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: "../../artifacts/photo-review/phone-concern.png",
-    fullPage: true,
-  });
+  await group
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/phone-concern.png",
+    });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await name.fill("Synthetic jacket blue XL");
   await name.blur();
@@ -1147,6 +1153,8 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
   ).toBeVisible();
 });
 
+// Empty evidence must not create comparison rows; create hints must stay beside
+// their inputs, and the selected match must not repeat as a duplicate suggestion.
 // Wrong selections must stop being suggested, including after a new group key
 // inherits those photos. The create draft still exposes literal label gaps.
 test("distinguishes attach and create, exposes evidence, and suppresses rejected candidates after regroup", async ({
@@ -1168,6 +1176,23 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     seed.soloImage.shortcode,
     "Synthetic shell jacket blue XL",
   );
+  const cover = await seedImagePrerequisite(
+    "Synthetic jacket cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  await attachProductImagePrerequisite(page, cover.id, existing.id, "item");
+  await createEntityFixture(page, "expense", {
+    name: "Synthetic jacket purchase",
+    cost: 49,
+    date: "2026-03-04",
+    productId: existing.id,
+    productQuantity: 1,
+  });
+  await createEntityFixture(page, "inventory", {
+    productId: existing.id,
+    locationId: seed.location.id,
+    amount: { value: 1, unit: "ea" },
+  });
   const groups = [
     {
       ...seed.groups[0]!,
@@ -1208,6 +1233,23 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       .getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
   await expect(attach.getByText(/On hand:/)).toBeVisible();
+  await expect(
+    attach.getByText("Closest existing:", { exact: false }),
+  ).toHaveCount(0);
+  await expect(
+    attach
+      .locator(".decision-steps-media")
+      .getByText("No description analysis retained."),
+  ).toHaveCount(1);
+  await expect(
+    attach.getByText("No label text — compare the photo with the product"),
+  ).toBeVisible();
+  await expect(
+    attach.getByRole("img", { name: "In Cubby cover" }),
+  ).toBeVisible();
+  await expect(attach.locator('[aria-label="Field cross-checks"]')).toHaveCount(
+    0,
+  );
   // The evidence slot must show readable photos, not two squeezed thumbnails.
   const photo = await attach
     .locator(".decision-steps-media img")
@@ -1217,10 +1259,17 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
-  await page.screenshot({
-    path: "../../artifacts/photo-review/desktop-attach-nav.png",
-    fullPage: true,
-  });
+  await attach
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
+    });
+  await page
+    .getByRole("navigation", { name: "Section index" })
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/desktop-nav.png",
+    });
   await page.setViewportSize({ width: 390, height: 844 });
   await attach.scrollIntoViewIfNeeded();
   expect(
@@ -1228,19 +1277,21 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: "../../artifacts/photo-review/phone-attach-nav.png",
-    fullPage: true,
-  });
+  await attach
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
+    });
   await page.getByRole("button", { name: /Jump to:/ }).click();
   await expect(
     page
       .getByRole("menuitem", { name: productName, exact: true })
       .locator('[aria-label="Ready"]'),
   ).toBeVisible();
-  await page.screenshot({
-    path: "../../artifacts/photo-review/phone-nav.png",
-  });
+  await page
+    .getByRole("menu")
+    .screenshot({ path: "../../artifacts/photo-review-polish/phone-nav.png" });
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
@@ -1248,16 +1299,46 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     create.getByRole("button", { name: "Add ‘xl’ to name", exact: true }),
   ).toBeVisible();
+  await expect(create.locator('[aria-label="Field cross-checks"]')).toHaveCount(
+    0,
+  );
+  await expect(create.getByText("Token check:", { exact: false })).toHaveCount(
+    0,
+  );
+  await expect(create.locator(".decision-step-action")).toHaveCount(0);
+  const nameField = create
+    .locator("[data-photo-field]")
+    .filter({
+      has: create.getByRole("textbox", {
+        name: "New product name",
+        exact: true,
+      }),
+    });
+  await expect(
+    nameField.getByRole("button", { name: "Add ‘blue’ to name", exact: true }),
+  ).toBeVisible();
+  await expect(nameField.getByText(/label adds/)).toBeVisible();
+  await create
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
+    });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await create
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/phone-create-mark.png",
+    });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await create
     .getByRole("button", { name: "Add ‘xl’ to name", exact: true })
     .click();
   await expect(
     create.getByRole("textbox", { name: "New product name", exact: true }),
   ).toHaveValue("Synthetic shell jacket xl");
-  await page.screenshot({
-    path: "../../artifacts/photo-review/desktop-create-mark.png",
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await create.scrollIntoViewIfNeeded();
   expect(
@@ -1265,10 +1346,41 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: "../../artifacts/photo-review/phone-create.png",
-    fullPage: true,
-  });
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seedPhotoReviewLabelText(
+    seed.itemImage.shortcode,
+    "Synthetic shell jacket blue XL",
+  );
+  await page.reload();
+  await expect(
+    attach.locator('[aria-label="Field cross-checks"]'),
+  ).toBeVisible();
+  await expect(
+    attach.getByRole("columnheader", { name: "Photo label", exact: true }),
+  ).toBeVisible();
+  await expect(
+    attach.getByText(
+      "No label evidence for manufacturer, model, identifiers, colour, size",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    attach.locator('[aria-label="Field cross-checks"] tbody tr'),
+  ).toHaveCount(1);
+  await attach
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
+    });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await attach
+    .locator('[data-slot="card"]')
+    .first()
+    .screenshot({
+      path: "../../artifacts/photo-review-polish/phone-attach-label.png",
+    });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })

@@ -4,17 +4,18 @@
 .decision-steps[data-with-media] {
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr);
-  gap: var(--brand-space-5);
+  gap: var(--brand-space-3);
 }
 .decision-steps-media {
-  width: 7rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  min-width: 0;
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
-.decision-steps-media img,
-.decision-steps-media svg {
-  width: 100%;
-  height: auto;
+.decision-steps-media img {
+  max-width: 100%;
 }
 .decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {
   column-gap: var(--brand-space-2);
@@ -54,7 +55,21 @@
   display: none;
 }
 [data-decision-body]:not([hidden]) {
-  padding-block: var(--brand-space-3);
+  padding: var(--brand-space-3);
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+.decision-steps-ledger > .ledger-row {
+  padding-block: 0;
+}
+.decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {
+  min-height: 1.75rem;
+}
+.decision-steps-ledger > .ledger-row > [data-ledger-slot="leading"] {
+  padding-top: 0.1875rem; /* tight: retain the shared timeline mark centre */
+}
+.decision-step-summary[data-create] {
+  color: var(--action-create);
 }
 .decision-step-trigger {
   min-height: 1.75rem;
@@ -71,25 +86,23 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.decision-step-action {
-  font-size: 0.6875rem;
-  white-space: nowrap;
-  color: var(--action-link);
-}
-.decision-step-action[data-action="create"] {
-  color: var(--action-create);
-  background: var(--action-create-surface);
-}
-.decision-step-action[data-action="change"] {
-  color: var(--action-change);
-  background: var(--action-change-surface);
-}
-.decision-step-action[data-action="remove"] {
-  color: var(--action-remove);
-}
 @media (max-width: 767px) {
   .decision-steps[data-with-media] {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .decision-steps-ledger {
+    --record-mark-center: 1.3125rem;
+  }
+  .decision-steps-media {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: var(--brand-space-3);
+  }
+  .decision-steps-ledger > .ledger-row > [data-ledger-slot="primary"] {
+    min-height: 2.75rem;
+  }
+  .decision-steps-ledger > .ledger-row > [data-ledger-slot="leading"] {
+    padding-top: 0.6875rem; /* tight: centre the mark in the phone summary */
   }
   .decision-step-trigger {
     min-width: 2.75rem;
