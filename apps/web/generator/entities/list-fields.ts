@@ -1,12 +1,22 @@
-import {
-  type RelationshipPathStep,
-  relationshipProvenanceSchema,
-} from "../../../../packages/schemas/src/entity-integrity.ts";
+import { z } from "zod";
+
 import {
   type CompiledEntity,
   EntityDeclarationError,
   type FilterDescriptor,
 } from "./declarations.ts";
+
+// A local view, like `derive.ts`: the runtime provenance schema imports
+// generated modules, which do not exist yet when the generator runs.
+const relationshipPathStep = z.object({
+  edge: z.string(),
+  direction: z.enum(["incoming", "outgoing"]),
+});
+type RelationshipPathStep = z.infer<typeof relationshipPathStep>;
+const relationshipProvenanceSchema = z.object({
+  kind: z.string(),
+  steps: z.array(relationshipPathStep).optional(),
+});
 
 type Terminal =
   | Readonly<{ kind: "record"; titleColumn: string | null }>
@@ -100,7 +110,7 @@ const compileVia = (
       break;
     }
     const provenance = relationshipProvenanceSchema.parse(relation.provenance);
-    if (provenance.kind !== "local-path")
+    if (provenance.kind !== "local-path" || !provenance.steps?.length)
       throw new EntityDeclarationError(
         `${context} via ${path}: ${current.key}.${segment} is ${provenance.kind}, not a stored path.`,
       );
