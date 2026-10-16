@@ -12,6 +12,8 @@ any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+For conditional expected output, construct expected data and assert once; keep
+`expect` calls and asymmetric matchers outside branches.
 Create searchable picker fixtures through `createEntityFixture` so the entity
 kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,

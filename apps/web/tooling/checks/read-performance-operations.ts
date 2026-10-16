@@ -11,6 +11,7 @@ import {
 } from "~/server/operation-runtime/start-operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
+import { requestedReadMetadata } from "./read-performance-shape";
 
 const querySchema = z
   .object({
@@ -189,6 +190,10 @@ export async function measureOperationRead(
     bodyComplete,
     ...readDatabaseTiming(response?.headers ?? new Headers()),
     cpuMs: null,
+    requestedReads: items.map((item) => ({
+      operation: item.operation,
+      shape: requestedReadMetadata(item.operation, item.input),
+    })),
     results,
   };
 }
@@ -217,6 +222,7 @@ export function summarizeOperationReads(
     };
   };
   return {
+    requestedReads: samples[0]?.requestedReads ?? null,
     versions: [
       ...new Set(
         samples.flatMap((sample) => (sample.version ? [sample.version] : [])),

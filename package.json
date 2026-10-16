@@ -49,18 +49,18 @@
     "db:dev:down": "node scripts/dev-db.ts down"
   },
   "dependencies": {
-    "@neon/config": "^1.9.1",
-    "@neon/env": "^1.6.2"
+    "@neon/config": "^1.9.2",
+    "@neon/env": "^1.6.3"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.88.0",
-    "@redocly/cli": "^2.63.0",
+    "@redocly/cli": "^2.64.0",
     "@tanstack/router-generator": "1.167.44",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.5",
     "@types/picomatch": "^4.0.3",
     "@types/proper-lockfile": "^4.1.4",
-    "agent-device": "0.21.27",
+    "agent-device": "0.21.28",
     "concurrently": "^10.0.6",
     "husky": "^9.1.7",
     "knip": "^6.41.0",

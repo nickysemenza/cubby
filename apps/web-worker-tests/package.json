@@ -6,8 +6,8 @@
     "test:workers": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.4.2",
-    "vitest": "5.0.4"
+    "@cloudflare/vitest-plugin": "^1.4.3",
+    "vitest": "5.0.5"
   },
   "packageManager": "pnpm@12.11.2"
 }

@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-// Failure modes: Docker's inspect shape bypasses the identity guard; down
-// removes the volume; an unrelated container sharing the fixed name is stopped.
-test("Docker dev down preserves the owned volume and refuses a foreign database", async () => {
+// Failure modes: Docker's inspect shape bypasses the identity guard; an
+// unrelated container sharing the fixed name is stopped.
+test("Docker dev down stops the owned server and refuses a foreign one", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "cubby-docker-db-"));
   const log = path.join(directory, "calls.jsonl");
   try {
@@ -22,20 +22,14 @@ test("Docker dev down preserves the owned volume and refuses a foreign database"
           "POSTGRES_DB=cubby_dev",
         ],
       },
-      Mounts: [
-        {
-          Type: "volume",
-          Name: "cubby-dev-pg-data",
-          Destination: "/cubby-devdata",
-        },
-      ],
+      Mounts: [],
       NetworkSettings: {
         Ports: { "5432/tcp": [{ HostIp: "127.0.0.1", HostPort: "55432" }] },
       },
     };
     await writeFile(
       path.join(directory, "docker"),
-      `#!${process.execPath}\nimport fs from 'node:fs';\nconst args = process.argv.slice(2);\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n');\nif(args[0]==='ps') console.log('synthetic-container');\nif(args[0]==='inspect') { const entry=${JSON.stringify(config)}; if(process.env.FOREIGN_DB) entry.Mounts[0].Name='foreign-data'; console.log(JSON.stringify([entry])); }\n`,
+      `#!${process.execPath}\nimport fs from 'node:fs';\nconst args = process.argv.slice(2);\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n');\nif(args[0]==='ps') console.log('synthetic-container');\nif(args[0]==='inspect') { const entry=${JSON.stringify(config)}; if(process.env.FOREIGN_DB) entry.Config.Image='docker.io/library/postgres:17'; console.log(JSON.stringify([entry])); }\n`,
       { mode: 0o755 },
     );
     const run = (foreign: boolean) =>
@@ -66,14 +60,6 @@ test("Docker dev down preserves the owned volume and refuses a foreign database"
     );
     assert.ok(
       calls.some((args) => args[0] === "rm" && args.at(-1) === "cubby-dev-pg"),
-    );
-    assert.ok(
-      calls.every(
-        (args) =>
-          !args.includes("--volumes") &&
-          !args.includes("-v") &&
-          args[0] !== "volume",
-      ),
     );
     await writeFile(log, "");
     const foreign = run(true);

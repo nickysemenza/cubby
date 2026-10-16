@@ -19,53 +19,20 @@ import {
   listContainers,
   runDetached,
   stopAndRemove,
-  tcpReady,
   waitFor,
 } from "./apple/lib/apple-container.ts";
+import { devContainerBackend } from "./lib/dev-container.ts";
 import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
 import { spawnToExit } from "./lib/run.ts";
+import {
+  SHARED_POSTGRES,
+  ensureSharedPostgres,
+  psql,
+} from "./lib/shared-postgres.ts";
 
-const postgresImage = "docker.io/pgvector/pgvector:pg17";
 // Keep this aligned with the Linux CI service image.
 const integresqlImage =
   "ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a";
-
-const postgresArgs = [
-  // Every worktree's runs share this one server.
-  "--cpus",
-  "6",
-  "--memory",
-  "4G",
-  "--env",
-  "POSTGRES_USER=postgres",
-  "--env",
-  "POSTGRES_PASSWORD=password",
-  "--env",
-  "POSTGRES_DB=cubby",
-  "--env",
-  "PGDATA=/cubby-testdata",
-  postgresImage,
-  "postgres",
-  "-c",
-  "fsync=off",
-  "-c",
-  "synchronous_commit=off",
-  "-c",
-  "full_page_writes=off",
-  "-c",
-  "shared_buffers=512MB",
-  "-c",
-  "max_connections=400",
-  // Production (Neon) has no JIT provider (`pg_jit_available()` is false),
-  // but this image ships LLVM. The data-quality status/coverage SQL costs
-  // far above `jit_above_cost`, so JIT compiled thousands of expressions:
-  // one `dataStatus: "complete"` FinancialTransaction list took ~25 s and
-  // >1.5 GB here, OOM-killing PostgreSQL and stalling other files' hooks.
-  "-c",
-  "jit=off",
-  "-c",
-  "log_destination=stderr",
-];
 
 const integresqlArgs = (postgresHost: string) => [
   "--cpus",
@@ -79,26 +46,28 @@ const integresqlArgs = (postgresHost: string) => [
   "--env",
   "PGPASSWORD=password",
   "--env",
-  "INTEGRESQL_TEST_INITIAL_POOL_SIZE=8",
+  "INTEGRESQL_TEST_INITIAL_POOL_SIZE=2",
   "--env",
-  "INTEGRESQL_TEST_MAX_POOL_SIZE=16",
+  // At least VITEST_MAX_WORKERS (6); every pooled copy is a whole database.
+  "INTEGRESQL_TEST_MAX_POOL_SIZE=8",
   "--env",
   "INTEGRESQL_POOL_MAX_PARALLEL_TASKS=4",
   integresqlImage,
 ];
 
 /**
- * The shared pair is named for its configuration, so a checkout on another
- * revision of this file starts its own pair instead of reusing or recreating
- * one that live runs depend on.
+ * IntegreSQL is named for its configuration, so a checkout on another
+ * revision of this file starts its own instead of reusing or recreating one
+ * that live runs depend on. Its databases live on the shared PostgreSQL
+ * (scripts/lib/shared-postgres.ts); `-postgres` names are the per-pair servers
+ * of earlier revisions, removed once no live run uses them.
  */
 const configuration = createHash("sha256")
-  .update(JSON.stringify([postgresArgs, integresqlArgs("")]))
+  .update(JSON.stringify(integresqlArgs("")))
   .digest("hex")
   .slice(0, 8);
 const pairName = (config: string, service: "postgres" | "integresql") =>
   `cubby-test-${config}-${service}`;
-const POSTGRES = pairName(configuration, "postgres");
 const INTEGRESQL = pairName(configuration, "integresql");
 const PAIR_NAME = /^cubby-test-([0-9a-f]{8})-(?:postgres|integresql)$/;
 
@@ -113,10 +82,10 @@ const STATE_LOCK = { path: STATE, label: "test services", staleMs: 30_000 };
 
 /**
  * Templates and their pools accumulate per worktree and schema revision
- * (about 14 MB each); an idle pair holding more databases than this is
- * recreated empty.
+ * (about 14 MB each); idle IntegreSQL holding more databases than this is
+ * recreated with its databases dropped.
  */
-const RECYCLE_DATABASE_COUNT = 250;
+const RECYCLE_DATABASE_COUNT = 100;
 
 const runRecord = z.object({
   pid: z.number(),
@@ -193,69 +162,55 @@ function logPhase(label: string, startedAt: number): void {
   console.log(`[test-services] ${label} in ${Date.now() - startedAt}ms`);
 }
 
-/** The shared pair's PostgreSQL address when both services answer. */
-async function healthyPair(): Promise<string | undefined> {
-  const [postgres, integresql] = await Promise.all([
-    findContainer(POSTGRES),
-    findContainer(INTEGRESQL),
-  ]);
-  if (
-    postgres?.status.state !== "running" ||
-    integresql?.status.state !== "running"
-  )
-    return undefined;
+const INTEGRESQL_DATABASES =
+  "SELECT datname FROM pg_database WHERE datname LIKE 'integresql\\_%'";
+
+/** Whether IntegreSQL answers and targets the shared server's current address. */
+async function healthyIntegresql(postgresHost: string): Promise<boolean> {
+  const integresql = await findContainer(INTEGRESQL);
+  if (integresql?.status.state !== "running") return false;
+  const [info] = JSON.parse(await containerCli(["inspect", INTEGRESQL]));
+  const environment: string[] =
+    info?.configuration?.initProcess?.environment ?? [];
+  if (!environment.includes(`PGHOST=${postgresHost}`)) return false;
   try {
-    const postgresHost = await containerAddress(POSTGRES);
     const integresqlHost = await containerAddress(INTEGRESQL);
-    // Generous: another worktree's suite may be loading the pair.
-    await waitFor("PostgreSQL", () => tcpReady(postgresHost, 5432), {
-      timeoutMs: 15_000,
-    });
+    // Generous: another worktree's suite may be loading it.
     await waitFor(
       "IntegreSQL",
       () => httpReady(`http://${integresqlHost}:5000`),
-      {
-        timeoutMs: 15_000,
-      },
+      { timeoutMs: 15_000 },
     );
-    return postgresHost;
+    return true;
   } catch {
-    console.log("[test-services] Shared services are unhealthy");
-    return undefined;
+    console.log("[test-services] IntegreSQL is unhealthy");
+    return false;
   }
 }
 
-async function databaseCount(): Promise<number> {
-  return Number(
-    await containerCli([
-      "exec",
-      POSTGRES,
-      "psql",
-      "-U",
-      "postgres",
-      "-tAc",
-      "SELECT count(*) FROM pg_database",
-    ]),
-  );
+async function integresqlDatabases(): Promise<string[]> {
+  return (await psql(INTEGRESQL_DATABASES)).split("\n").filter(Boolean);
 }
 
-async function createPair(): Promise<string> {
+/** Recreate IntegreSQL empty; only when no live run uses it. */
+async function createIntegresql(postgresHost: string): Promise<void> {
   await stopAndRemove(INTEGRESQL);
-  await stopAndRemove(POSTGRES);
+  const stale = await integresqlDatabases();
+  if (stale.length > 0) {
+    await psql(
+      stale.flatMap((name) => [
+        `ALTER DATABASE "${name}" WITH IS_TEMPLATE false`,
+        `DROP DATABASE "${name}" WITH (FORCE)`,
+      ]),
+    );
+    console.log(`[test-services] Dropped ${stale.length} IntegreSQL databases`);
+  }
   const startedAt = Date.now();
-  console.log(`[test-services] Starting ${POSTGRES}`);
-  await runDetached(POSTGRES, postgresArgs);
-  const postgresHost = await containerAddress(POSTGRES);
-  // IntegreSQL needs only PostgreSQL's address to start; its connections
-  // retry until PostgreSQL accepts them.
   console.log(`[test-services] Starting ${INTEGRESQL}`);
   await runDetached(INTEGRESQL, integresqlArgs(postgresHost));
-  await waitFor("PostgreSQL", () => tcpReady(postgresHost, 5432));
-  logPhase("PostgreSQL ready", startedAt);
   const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
   await waitFor("IntegreSQL", () => httpReady(integresqlUrl));
   logPhase("IntegreSQL ready", startedAt);
-  return postgresHost;
 }
 
 /**
@@ -290,27 +245,29 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       await stopAndRemove(name);
       console.log(`[test-services] Removed idle ${name}`);
     }
-    let postgresHost = await healthyPair();
+    await ensureSharedPostgres();
+    const postgresHost = await containerAddress(SHARED_POSTGRES);
+    let healthy = await healthyIntegresql(postgresHost);
     const sharing = others.filter((run) => run.configuration === configuration);
-    // Recreating the pair would destroy databases a live run is using; a
-    // transient outage is the newcomer's failure, not a reason to reset.
-    if (!postgresHost && sharing.length > 0)
+    // Recreating IntegreSQL drops databases a live run is using; a transient
+    // outage is the newcomer's failure, not a reason to reset.
+    if (!healthy && sharing.length > 0)
       throw new Error(
         `Shared test services are unhealthy while live runs use them (${sharing
           .map((run) => `pid ${run.pid} in ${run.root}`)
           .join(", ")}); retry after they finish`,
       );
     if (
-      postgresHost &&
+      healthy &&
       sharing.length === 0 &&
-      (await databaseCount()) > RECYCLE_DATABASE_COUNT
+      (await integresqlDatabases()).length > RECYCLE_DATABASE_COUNT
     ) {
       console.log(
-        `[test-services] Recycling idle ${POSTGRES} past ${RECYCLE_DATABASE_COUNT} databases`,
+        `[test-services] Recycling idle ${INTEGRESQL} past ${RECYCLE_DATABASE_COUNT} databases`,
       );
-      postgresHost = undefined;
+      healthy = false;
     }
-    postgresHost ??= await createPair();
+    if (!healthy) await createIntegresql(postgresHost);
     const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
     console.log(
       `[test-services] Ready: PostgreSQL ${postgresHost}:5432, IntegreSQL ${integresqlUrl}`,
@@ -348,7 +305,7 @@ async function stopIdleServices(): Promise<void> {
     }
     for (const run of live)
       console.log(
-        `[test-services] Kept ${pairName(run.configuration, "postgres")} for live run ${run.pid} in ${run.root}`,
+        `[test-services] Kept ${pairName(run.configuration, "integresql")} for live run ${run.pid} in ${run.root}`,
       );
   } finally {
     await release();
@@ -406,6 +363,10 @@ export async function runWithTestServices(
   try {
     let childEnv = env;
     if (managed) {
+      if (devContainerBackend(env, platform) !== "apple")
+        throw new Error(
+          "Managed test services share the Apple container PostgreSQL; unset CUBBY_DEV_SERVICES or use CUBBY_TEST_SERVICES=external",
+        );
       // Startup is not interrupted mid-create: the pair is shared, and a
       // finished create leaves it usable for the next run.
       const joined = await joinSharedServices(env);
