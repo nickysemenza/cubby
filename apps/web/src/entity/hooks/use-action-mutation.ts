@@ -44,7 +44,8 @@ function isActionErrorFactory<TError extends Error>(
 interface ActionPresentation<TData, TError extends Error> {
   success?: ActionSuccess<TData>;
   successToastId?: string;
-  onSuccess?: (data: TData) => void;
+  /** Completion work is part of the mutation lifetime (for example suggestion receipts). */
+  onSuccess?: (data: TData) => void | Promise<void>;
   /** See `ActionError` — a static string is a prefix, not the full title. */
   error?: ActionError<TError>;
 }
@@ -52,7 +53,7 @@ interface ActionPresentation<TData, TError extends Error> {
 function showSuccess<TData>(
   success: ActionSuccess<TData> | undefined,
   successToastId: string | undefined,
-  onSuccess: ((data: TData) => void) | undefined,
+  onSuccess: ((data: TData) => void | Promise<void>) | undefined,
   data: TData,
 ) {
   if (success !== undefined) {
@@ -61,7 +62,7 @@ function showSuccess<TData>(
       successToastId === undefined ? undefined : { id: successToastId },
     );
   }
-  onSuccess?.(data);
+  return onSuccess?.(data);
 }
 
 function showError<TError extends Error>(

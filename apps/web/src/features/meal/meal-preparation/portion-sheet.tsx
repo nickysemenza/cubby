@@ -197,7 +197,7 @@ export function PortionSheet({
         : [setCommand(row)];
     });
 
-    void onSave({
+    return onSave({
       mealRecipeId: source.mealRecipeId,
       estimatedYieldGrams: expectedYield === "" ? null : expectedNumber,
       actualYieldGrams: actualYield === "" ? null : yieldNumber,

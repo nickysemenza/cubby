@@ -82,7 +82,7 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   validation, custom commits, suggestion receipts and completion callbacks.
   Cancel, close, Escape and backdrop dismissal are blocked throughout a primary
   write; controlled success closure still restores focus. Independent row actions
-  remain dismissible. Command search, the full photo viewer and modeless/graph
+  remain dismissible. Command search, the full photo viewer, desktop calendar popover and modeless/graph
   inspectors retain their specialized presentations; AlertDialog retains explicit
   confirmation semantics. Dialog and Sheet remain low-level Base UI surfaces.
 - Chart, relationship-map and specialized layout engines follow the

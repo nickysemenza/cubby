@@ -83,8 +83,7 @@ export function LocationMoveDialog({
     destinationId: LocationShortcode,
   ) => Promise<string | null> | string | null;
   /** A one-click destination (e.g. Home) rendered above the picker. It lives
-   *  in the body, not the footer: the phone sheet promotes the footer's
-   *  Cancel/Move into its header and hides the footer. */
+   *  in the body; the primary Move action belongs to the shared phone header. */
   shortcut?: { label: string; locationId: LocationShortcode | undefined };
 }) {
   const [destination, setDestination] =
@@ -120,7 +119,9 @@ export function LocationMoveDialog({
         label: submitLabel,
         pending,
         disabled: destination === null,
-        onClick: () => destination && submit(destination.id),
+        onClick: async () => {
+          if (destination) await submit(destination.id);
+        },
       }}
     >
       <Stack gap="md">

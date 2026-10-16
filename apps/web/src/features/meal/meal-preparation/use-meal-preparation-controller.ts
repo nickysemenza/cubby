@@ -196,8 +196,9 @@ export function useMealPreparationController({
       setOpenMealRecipeId(null);
       setSourceSelectionId(null);
     },
-    save: (request: PreparationSaveRequest) =>
-      savePreparationMutation.mutate(request),
+    save: async (request: PreparationSaveRequest) => {
+      await savePreparationMutation.mutateAsync(request);
+    },
     refetchPreparations: () => preparationQuery.refetch(),
   } satisfies {
     view: MealPreparationsView | undefined;

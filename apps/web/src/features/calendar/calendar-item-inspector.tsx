@@ -1,7 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
@@ -78,18 +78,17 @@ function CalendarInspectorOverlay({
 
   if (isMobile) {
     return (
-      <Overlay
-        placement="panel"
-        open={open}
-        onOpenChange={(open) => {
-          if (!open) handle.close();
+      <CalendarInspectorBody
+        item={item}
+        onCancel={() => handle.close()}
+        onSaved={() => handle.close()}
+        overlay={{
+          open,
+          onOpenChange: (next) => {
+            if (!next) handle.close();
+          },
         }}
-        title={item.title}
-        description={`${item.kind === "expense" && item.future ? "Planned expense" : item.kind} on the household calendar`}
-        className="sm:max-w-md"
-      >
-        {content}
-      </Overlay>
+      />
     );
   }
 
@@ -121,15 +120,24 @@ function CalendarInspectorBody({
   onCancel,
   onSaved,
   operations,
+  overlay,
 }: {
   item: CalendarItem;
   onCancel: () => void;
   onSaved?: () => void;
   operations?: CalendarItemInspectorOperations;
+  overlay?: { open: boolean; onOpenChange: (open: boolean) => void };
 }) {
   const edit = calendarItemEditDescriptor(item);
   if (edit.mode === "read-only") {
-    return <ReadOnlyCalendarItem item={item} reason={edit.reason} />;
+    const content = <ReadOnlyCalendarItem item={item} reason={edit.reason} />;
+    return overlay ? (
+      <Overlay {...overlay} title={item.title} description={itemMetadata(item)}>
+        {content}
+      </Overlay>
+    ) : (
+      content
+    );
   }
   return (
     <EditableCalendarItem
@@ -138,6 +146,7 @@ function CalendarInspectorBody({
       onCancel={onCancel}
       onSaved={onSaved}
       operations={operations}
+      overlay={overlay}
     />
   );
 }
@@ -148,6 +157,7 @@ function EditableCalendarItem({
   onCancel,
   onSaved,
   operations,
+  overlay,
 }: {
   item: CalendarItem;
   edit: Extract<
@@ -157,6 +167,7 @@ function EditableCalendarItem({
   onCancel: () => void;
   onSaved?: () => void;
   operations?: CalendarItemInspectorOperations;
+  overlay?: { open: boolean; onOpenChange: (open: boolean) => void };
 }) {
   const session = useEntityEditSession(
     {
@@ -171,13 +182,20 @@ function EditableCalendarItem({
   const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
     null,
   );
+  const formId = useId();
+  const [submitting, setSubmitting] = useState(false);
+  const busy = submitting || session.isPending;
   const error = session.issues.find((issue) => !issue.field)?.message;
 
-  return (
+  const content = (
     <FormWrapper
       form={session.form}
-      onSubmit={() => {
-        void session.submit().then(async (result) => {
+      id={formId}
+      hideActions={overlay != null}
+      footerMode={overlay ? "dialog" : "inline"}
+      onSubmittingChange={setSubmitting}
+      onSubmit={async () => {
+        await session.submit().then(async (result) => {
           if (!result.ok) return;
           if (item.kind === "meal") {
             try {
@@ -186,11 +204,11 @@ function EditableCalendarItem({
               showErrorToast(error, "Saved, but suggestion receipt failed");
             }
           }
-          onSaved?.();
+          await onSaved?.();
         });
       }}
       error={error}
-      isPending={session.isPending}
+      isPending={busy}
       onCancel={onCancel}
       submitButtonText="Save"
     >
@@ -269,6 +287,21 @@ function EditableCalendarItem({
       )}
       <OpenFullRecord item={item} />
     </FormWrapper>
+  );
+  return overlay ? (
+    <Overlay
+      {...overlay}
+      title={item.title}
+      description={itemMetadata(item)}
+      bodyMode="form"
+      pending={busy}
+      primary={{ label: "Save", pendingLabel: "Saving…", form: formId }}
+      onCancel={onCancel}
+    >
+      {content}
+    </Overlay>
+  ) : (
+    content
   );
 }
 

@@ -91,7 +91,7 @@ function LinkFoodToIngredientButton({
         onOpenChange={handleOpenChange}
         size="xl"
         title={`Link ${foodName} to an ingredient`}
-        description="Choose the ingredient this food should back \u2014 a new product carrying the USDA link is created for it."
+        description="Choose the ingredient this food should back — a new product carrying the USDA link is created for it."
         onCancel={() => handleOpenChange(false)}
       >
         <div className="mt-4">

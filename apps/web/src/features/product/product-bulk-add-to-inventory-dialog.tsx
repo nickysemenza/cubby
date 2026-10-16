@@ -245,12 +245,7 @@ export const ProductBulkAddToInventoryDialog: FC<
         onClick: onSubmit,
       }}
     >
-      {/* `min-w-0` here and on every wrapper below is load-bearing, not tidying.
-          Overlay body is a `grid` whose items default to `min-width: auto`, so
-          one long product name sets a min-content width that spills past the
-          dialog's `max-w` — and the popup only scrolls on Y, so the overflow is
-          simply unreachable. Break the chain anywhere and `truncate` stops
-          working. */}
+      {/* Long product names must not push editable amounts past the viewport. */}
       <Stack gap="md" className="min-w-0">
         {overAccounted && (
           <Alert variant="destructive">

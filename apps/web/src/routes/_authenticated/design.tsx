@@ -312,7 +312,7 @@ const GROUPS: IndexedSectionGroup[] = [
         description: (
           <ComponentsLine
             components={["Alert", "Skeleton", "Empty", "Overlay", "Tabs"]}
-            source={["ui/primitives/"]}
+            source={["ui/primitives/", "ui/overlays/overlay.tsx"]}
           />
         ),
         content: <FeedbackSection />,

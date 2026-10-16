@@ -217,8 +217,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
     }
   }, [serverDefaultQuantity, quantityDirty, form]);
 
-  const submit = form.handleSubmit((values) => {
-    discard.mutate({
+  const submit = form.handleSubmit(async (values) => {
+    await discard.mutateAsync({
       productId: product.id,
       quantity: values.quantity,
       date: values.date,
@@ -243,7 +243,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
         label: "Discard",
         pending: discard.isPending,
         disabled: needsEntryChoice,
-        onClick: () => void submit(),
+        onClick: () => submit(),
       }}
     >
       <Stack gap="md">

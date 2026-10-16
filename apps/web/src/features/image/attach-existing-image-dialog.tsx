@@ -82,12 +82,13 @@ export function AttachExistingImageDialog({
         label: "Attach",
         pending: attach.isPending,
         disabled: !target,
-        onClick: () =>
-          attach.mutateAsync({
+        onClick: async () => {
+          await attach.mutateAsync({
             imageId: image.id,
             targetId,
             purpose: isProduct ? purpose : undefined,
-          }),
+          });
+        },
       }}
     >
       <div className="space-y-2">

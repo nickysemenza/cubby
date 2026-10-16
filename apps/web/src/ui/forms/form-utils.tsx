@@ -216,12 +216,16 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   // Compile-time opt-in via the `formDevtools` flag. The panel only mounts
   // when the devtools are bundled (dev) AND the flag is on (see flags.ts).
   const formDevtoolsEnabled = FLAGS.formDevtools;
-  useSubmitSuccessToast(isPending, error, successMessage);
 
   const localFormId = useId();
   const formId = id ?? localFormId;
   const submitting = useRef(false);
   const [submitError, setSubmitError] = useState<string>();
+  const effectiveError = [
+    ...(typeof error === "string" ? [error] : (error ?? [])),
+    ...(submitError ? [submitError] : []),
+  ];
+  useSubmitSuccessToast(isPending, effectiveError, successMessage);
   const submitText = isPending
     ? getPendingButtonText(submitButtonText)
     : submitButtonText;
@@ -278,12 +282,12 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             )}
           >
             {children}
-            <FormStatusBanner error={error ?? submitError} />
+            <FormStatusBanner error={effectiveError} />
           </div>
         ) : (
           <>
             {children}
-            <FormStatusBanner error={error ?? submitError} />
+            <FormStatusBanner error={effectiveError} />
           </>
         )}
 

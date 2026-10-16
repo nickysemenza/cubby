@@ -108,6 +108,46 @@ for (const mobile of [false, true]) {
   });
 }
 
+it("shows a rejected resolver even when the caller supplies an empty error list", async () => {
+  function Example() {
+    const [pending, setPending] = useState(false);
+    const form = useForm({
+      defaultValues: { name: "Part" },
+      resolver: async () => {
+        throw new Error("SQLSTATE 22000: synthetic resolver failure");
+      },
+    });
+    return (
+      <Overlay
+        open
+        onOpenChange={() => undefined}
+        title="Review part"
+        pending={pending}
+        primary={{ label: "Apply", form: "failed-form" }}
+      >
+        <FormWrapper
+          form={form}
+          id="failed-form"
+          hideActions
+          error={[]}
+          isPending={pending}
+          onSubmittingChange={setPending}
+          onSubmit={vi.fn()}
+          submitButtonText="Apply"
+        >
+          Fields
+        </FormWrapper>
+      </Overlay>
+    );
+  }
+  render(<Example />);
+  fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "SQLSTATE 22000: synthetic resolver failure",
+  );
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+});
+
 describe("ordinary overlay actions", () => {
   it("blocks dismissal for a returned promise and exposes failure for retry", async () => {
     const write = deferred();

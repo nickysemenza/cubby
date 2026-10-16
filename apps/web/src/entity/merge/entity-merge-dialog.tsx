@@ -65,7 +65,7 @@ export function EntityMergeDialog<T extends MergeRow>({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Fires once, with the chosen keeper and the alias ids being merged into it. */
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   /** Ranked mode: the full set under consideration (>= 2). Ignored in fixed mode. */
   rows?: T[];
@@ -266,7 +266,7 @@ function RankedMergeDialog<T extends MergeRow>({
   rows: T[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   impactPreviewOperations?: ImpactPreviewOperations;
 }) {
@@ -308,7 +308,7 @@ function RankedMergeDialog<T extends MergeRow>({
         pendingLabel: "Merging…",
         label: "Merge",
         onClick: () => {
-          if (effectiveKeepId) onConfirm(effectiveKeepId, aliasIds);
+          if (effectiveKeepId) return onConfirm(effectiveKeepId, aliasIds);
         },
       }}
       className={productPreviewEnabled ? "sm:max-w-5xl" : undefined}
@@ -391,7 +391,7 @@ function FixedMergeDialog<T extends MergeRow>({
   initialAliasIds?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (keepId: string, aliasIds: string[]) => void;
+  onConfirm: (keepId: string, aliasIds: string[]) => void | Promise<void>;
   isPending: boolean;
   impactPreviewOperations?: ImpactPreviewOperations;
 }) {

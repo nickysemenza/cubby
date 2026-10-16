@@ -162,7 +162,7 @@ export function Overlay({
             </button>
           </div>
         ) : (
-          <header className="shrink-0 space-y-1 border-b bg-muted/40 py-3 pr-12 pl-4">
+          <header className="shrink-0 space-y-1 border-b bg-muted/40 py-3 pr-16 pl-4">
             <DialogTitle>{title}</DialogTitle>
             {description && (
               <DialogDescription>{description}</DialogDescription>
