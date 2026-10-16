@@ -3,7 +3,7 @@ import { searchHitSchema } from "@cubby/schemas/search";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db/database";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import type { RelatednessDependencies } from "./relatedness.service";
 import {
@@ -17,7 +17,7 @@ const hiddenId = testShortcode("product", "hidden");
 const oneId = testShortcode("product", "one");
 const twoId = testShortcode("product", "two");
 const threeId = testShortcode("product", "three");
-const dependencyOnlyDatabase = new Database(() => {
+const dependencyOnlyDatabase = createDatabase(() => {
   throw new Error("Relatedness unit dependencies must not resolve a database");
 });
 

@@ -3,11 +3,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
+import { Database } from "./db/database";
 import {
-  Database,
+  createDatabase,
+  resolveDatabaseRuntime,
   type DatabaseClient,
   type DatabaseRuntime,
-} from "./db/database";
+} from "./db/database-runtime";
 import { createDatabaseClientConstructor } from "./db/db-pg-client";
 import {
   acquireTracedConnection,
@@ -147,12 +149,12 @@ const runtimeResolver = new DatabaseRuntimeResolver({
   createRuntime: createPoolRuntime,
 });
 
-const strongDatabase = new Database(() => runtimeResolver.resolve("strong"));
+const strongDatabase = createDatabase(() => runtimeResolver.resolve("strong"));
 export const db = strongDatabase;
 
 /** Explicitly approved briefly stale reads use the request's stale binding. */
 export const boundedStaleDb = isCFWorkers
-  ? new Database(() => runtimeResolver.resolve("bounded-stale"))
+  ? createDatabase(() => runtimeResolver.resolve("bounded-stale"))
   : strongDatabase;
 
 /**
@@ -163,23 +165,23 @@ export const boundedStaleDb = isCFWorkers
  */
 export const drizzle = {
   get select() {
-    const client = strongDatabase.clientForRepository();
+    const client = resolveDatabaseRuntime(strongDatabase).client;
     return client.select.bind(client);
   },
   get insert() {
-    const client = strongDatabase.clientForRepository();
+    const client = resolveDatabaseRuntime(strongDatabase).client;
     return client.insert.bind(client);
   },
   get update() {
-    const client = strongDatabase.clientForRepository();
+    const client = resolveDatabaseRuntime(strongDatabase).client;
     return client.update.bind(client);
   },
   get delete() {
-    const client = strongDatabase.clientForRepository();
+    const client = resolveDatabaseRuntime(strongDatabase).client;
     return client.delete.bind(client);
   },
   get transaction() {
-    const client = strongDatabase.clientForRepository();
+    const client = resolveDatabaseRuntime(strongDatabase).client;
     return client.transaction.bind(client);
   },
 };
@@ -192,9 +194,9 @@ export const withConnection = async <T>(
   database: Database,
   fn: (scoped: Database) => Promise<T>,
 ): Promise<T> =>
-  database.withClientConnection(async (client) => {
+  resolveDatabaseRuntime(database).withConnection(async (client) => {
     const runtime = runtimeForClient(client);
-    return await fn(new Database(() => runtime));
+    return await fn(createDatabase(() => runtime));
   });
 
 export type DrizzleClient = DatabaseClient;

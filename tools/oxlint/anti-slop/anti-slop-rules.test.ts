@@ -335,6 +335,17 @@ test("Drizzle exists() over a soft-deletable table with no guard is rejected", (
   );
 });
 
+test("moved table definitions retain soft-delete enforcement through shared factories", () => {
+  const diagnostics = lintScopedFixture(
+    "require-soft-delete-filter",
+    "require-soft-delete-filter-external-identifier.txt",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [9],
+  );
+});
+
 test("a raw sql EXISTS over a soft-deletable table with no guard is rejected", () => {
   const diagnostics = lintScopedFixture(
     "require-soft-delete-filter",

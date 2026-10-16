@@ -26,10 +26,13 @@ import {
   attachInventoryValuations,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
+import {
+  loadPrimaryGtins,
+  productHasGtin,
+} from "~/server/domains/product/repo/gtin";
 import { attachDataQuality } from "~/server/generic/data-quality/repo/hydrate";
 
 import { getProductCoverImageUrlsByProductIds } from "./crud";
-import { loadPrimaryGtins, productHasGtin } from "./gtin";
 import { foodLookupParamFromProduct } from "./helpers";
 import {
   dbProductToTopLevelAPI,

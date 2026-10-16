@@ -4,8 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
-
-import { loadAllGtins } from "./gtin";
+import { loadAllGtins } from "~/server/domains/product/repo/gtin";
 
 /**
  * What identifies a Product to USDA: its name, manufacturer, current food

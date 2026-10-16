@@ -1,3 +1,4 @@
+import { createDatabase } from "~/server/db/database-runtime";
 import type { UserId } from "@cubby/schemas/identifiers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
@@ -32,7 +33,7 @@ const createdEntitySchema = z.object({ id: z.string().min(1) });
 export function buildScenarioDatabase(pool: Pool): Database {
   // The production wrapper: one statement at a time per connection.
   const client = drizzle(tracePool(pool, "strong"), { schema });
-  return new Database(() => ({
+  return createDatabase(() => ({
     client,
     withConnection: (run) => run(client),
   }));

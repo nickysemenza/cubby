@@ -1,7 +1,7 @@
 import { testUserId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -10,7 +10,7 @@ import { dispatchStartOperation } from "./start-operation-dispatch.server";
 const request = {
   verifiedContext: requireActor(
     createTestRequestContext(
-      new Database(() => {
+      createDatabase(() => {
         throw new Error("No DB access expected");
       }),
       { auth: { userId: testUserId("dispatch-user") } },

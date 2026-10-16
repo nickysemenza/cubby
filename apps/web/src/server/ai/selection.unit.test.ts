@@ -11,11 +11,11 @@ import {
   type AiSelectionUsage,
   runAiSelection,
 } from "~/server/ai/selection";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("Selection unit ports do not resolve a database runtime");
 });
 

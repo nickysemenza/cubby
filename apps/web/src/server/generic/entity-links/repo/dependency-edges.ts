@@ -18,7 +18,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb } from "~/server/db/helpers/core";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { entityLink } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {

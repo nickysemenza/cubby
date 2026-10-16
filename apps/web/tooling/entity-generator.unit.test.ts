@@ -1,6 +1,14 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import {
@@ -21,7 +29,11 @@ import { loadEntityDeclarations } from "../generator/entities/declarations";
 import { hasGenericListOperation } from "../generator/entities/list-capabilities";
 import { deriveImageDisplaySources } from "../generator/entities/derive";
 import { renderImagePolicyArtifacts } from "../generator/entities/render/image-policy";
-import { renderEntityTablesArtifact } from "../generator/entities/render/tables";
+import {
+  renderEntityTablesArtifact,
+  renderIdentityStorageTablesArtifact,
+  tableDependencyClosure,
+} from "../generator/entities/render/tables";
 import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
@@ -2045,6 +2057,97 @@ describe("entity table storage", () => {
     compileEntityDeclarations([alpha(storage), beta])[0]?.table;
   const indexNames = (storage: TableStorage) =>
     table(storage)?.indexes.map(({ name }) => name);
+
+  it("closes storage groups over real foreign keys and keeps cycles in one owner", () => {
+    const entities = compileEntityDeclarations([
+      alpha({}),
+      {
+        ...beta,
+        storage: {
+          columns: [{ key: "alphaId", kind: "identifier", reference: "alpha" }],
+        },
+      },
+      { ...base, key: "gamma", table: "Gamma", model },
+    ]);
+    expect(
+      tableDependencyClosure(entities, ["alpha"]).map((entity) => entity.key),
+    ).toEqual(["alpha", "beta"]);
+  });
+
+  it("compiles declared custom column types in a generated storage group", async () => {
+    const root = await mkdtemp(join(tmpdir(), "cubby-table-types-"));
+    temporaryRoots.push(root);
+    const app = resolve(import.meta.dirname, "..");
+    await symlink(join(app, "node_modules"), join(root, "node_modules"), "dir");
+    const entities = compileEntityDeclarations([
+      {
+        ...base,
+        key: "product",
+        table: "Product",
+        model,
+        storage: {
+          columns: [
+            {
+              key: "payload",
+              kind: "json",
+              notNull: true,
+              type: { module: "./payload", export: "Payload" },
+            },
+            {
+              key: "nutrition",
+              kind: "json",
+              type: {
+                module: "@cubby/schemas/nutrition",
+                export: "ProductLabelNutrition",
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    await writeFile(
+      join(root, "tables.ts"),
+      renderIdentityStorageTablesArtifact(entities),
+    );
+    await writeFile(
+      join(root, "payload.ts"),
+      "export interface Payload { code: string }\n",
+    );
+    await writeFile(
+      join(root, "consumer.ts"),
+      'import { product } from "./tables"; const row: Pick<typeof product.$inferSelect, "payload"> = { payload: { code: "synthetic" } }; const code: string = row.payload.code;\n',
+    );
+    await writeFile(
+      join(root, "tsconfig.json"),
+      JSON.stringify({
+        extends: join(app, "tsconfig.json"),
+        include: [],
+        files: ["consumer.ts"],
+        compilerOptions: {
+          incremental: false,
+          noEmit: true,
+          types: [],
+          noUnusedLocals: false,
+        },
+      }),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(app, "node_modules/typescript/bin/tsc"),
+        "-p",
+        join(root, "tsconfig.json"),
+        "--checkers",
+        "1",
+      ],
+      { encoding: "utf8" },
+    );
+    if (result.error) throw result.error;
+    expect({
+      status: result.status,
+      diagnostics: result.stdout + result.stderr,
+    }).toEqual({ status: 0, diagnostics: "" });
+  });
 
   // A reference column with no full index makes every FK check and join on
   // it a sequential scan; a partial index cannot serve rows it excludes.

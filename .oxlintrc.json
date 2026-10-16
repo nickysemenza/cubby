@@ -264,11 +264,12 @@
                 "group": [
                   "../src/server/**",
                   "!../src/server/db/database",
+                  "!../src/server/db/database-runtime",
                   "!../src/server/db/schema",
                   "!../src/server/db/db-pg-tracing"
                 ],
                 "allowTypeImports": true,
-                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/schema, and db/db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
+                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/database-runtime, db/schema, and db/db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
               },
               {
                 "group": ["../src/env", "~/env", "~/server/**"],

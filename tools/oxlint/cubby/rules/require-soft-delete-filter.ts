@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,8 +12,8 @@ import { softDeleteTableCatalog } from "../shared/schema-storage.ts";
  * over a whole file in the original script (not AST walks), so this rule keeps that
  * exact text engine and runs it once per file over `context.sourceCode.text`,
  * reporting each match at its source offset. The soft-deletable table catalog is
- * parsed once, at plugin load, straight from `schema.ts` + the generated entity
- * tables file — the same parser the deleted `schema-storage.ts` used — so this never
+ * parsed once, at plugin load, from `schema.ts`, its column/table fragments
+ * and every generated table-definition file — the same parser the deleted `schema-storage.ts` used — so this never
  * trusts the `application-schema.json` snapshot's `lowerFirst(sqlName)` convention,
  * which does not hold for the `oauth_*` auth tables (correction 9).
  */
@@ -23,15 +23,18 @@ const repoRoot = resolve(
   "../../../..",
 );
 const schemaPath = resolve(repoRoot, "apps/web/src/server/db/schema.ts");
-const entityTablesPath = resolve(
-  repoRoot,
-  "apps/web/src/server/db/generated/entity-tables.gen.ts",
-);
+const schemaFragments = [
+  "apps/web/src/server/db/schema-primitives.ts",
+  "apps/web/src/server/db/external-identifier-tables.ts",
+  ...globSync("apps/web/src/server/db/generated/*tables.gen.ts", {
+    cwd: repoRoot,
+  }),
+];
 const OPT_OUT = "includes-deleted";
 
 const { varNames, sqlNameToVar, varToSqlName } = softDeleteTableCatalog(
   readFileSync(schemaPath, "utf8"),
-  [readFileSync(entityTablesPath, "utf8")],
+  schemaFragments.map((file) => readFileSync(resolve(repoRoot, file), "utf8")),
 );
 
 const tablePattern = new RegExp(

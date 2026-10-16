@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
+
+import { createDatabase } from "~/server/db/database-runtime";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -13,7 +15,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { z } from "zod";
 
-import { Database } from "~/server/db/database";
 import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
@@ -139,7 +140,7 @@ describe("listAiUsageForRun", () => {
         logQuery: (text, params) => statements.push({ text, params }),
       },
     });
-    const db = new Database(() => ({
+    const db = createDatabase(() => ({
       client,
       withConnection: (fn) => fn(client),
     }));

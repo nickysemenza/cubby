@@ -2,12 +2,13 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { getTableColumns, getTableName } from "drizzle-orm";
 
+import { entityIdentityTriggerSql } from "~/server/db/entity-identity-schema";
+
 import { SHORTCODE_TABLE } from "../generated/shortcode-tables.gen";
 import {
   assessmentHistoryDdl,
   productIdentityInvalidationDdl,
 } from "./assessment-ddl";
-import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;

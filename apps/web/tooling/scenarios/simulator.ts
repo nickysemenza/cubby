@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
@@ -44,7 +45,7 @@ export async function seedSimulatorScenario(
   price: number | null = null,
 ): Promise<string> {
   const db = buildScenarioDatabase(pool);
-  await seedBaseWorld(db.clientForRepository());
+  await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const context = buildKernelContext(db, testUserId(userId));
   const product = await createEntity(context, "product", {
     name,

@@ -1,9 +1,13 @@
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { entityExternalId, product } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/external-identifier-tables";
+import { product } from "~/server/db/generated/identity-storage-tables.gen";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 
 export type ExternalIdPair = Pick<ExternalIdInput, "source" | "externalId"> &
   Partial<Pick<ExternalIdInput, "kind">>;
@@ -23,12 +27,12 @@ export const externalIdKey = ({ source, externalId, kind }: ExternalIdPair) =>
  * may point to different Products; callers must review that ambiguity.
  */
 export const findProductsByExternalIds = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   pairs: readonly ExternalIdPair[],
 ): Promise<Map<string, ProductHit[]>> => {
   const byPair = new Map<string, ProductHit[]>();
   if (pairs.length === 0) return byPair;
-  const rows = await unwrapDb(db)
+  const rows = await repositoryQueries(db)
     .select({
       source: entityExternalId.source,
       externalId: entityExternalId.externalId,

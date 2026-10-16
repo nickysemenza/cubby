@@ -41,10 +41,10 @@ import type {
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 import { parseWithContext } from "~/server/lib/zod-utils";
 
-import type { MappableProductExternalId } from "./external-id-types";
 import {
   type ProductPricing,
   resolveProductPricing,

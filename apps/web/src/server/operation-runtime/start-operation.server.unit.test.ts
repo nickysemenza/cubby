@@ -3,7 +3,7 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { createAppError } from "~/server/errors/app-error";
 import { requireActor } from "~/server/http/request-context";
 import type { ObservedResult } from "~/server/observability/observed-request";
@@ -16,7 +16,7 @@ import {
   type StartOperationRuntime,
 } from "./start-operation.server";
 
-const database = new Database(() => {
+const database = createDatabase(() => {
   throw new Error("The Start operation unit test must not resolve a database");
 });
 const context = {

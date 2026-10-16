@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 import { eq } from "drizzle-orm";
@@ -27,7 +28,7 @@ export async function seedJourneyWorld(
   userId: string,
 ): Promise<JourneySeed> {
   const db = buildScenarioDatabase(pool);
-  await seedBaseWorld(db.clientForRepository());
+  await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const c = buildKernelContext(db, testUserId(userId));
   const category = taxonomyShortcode("household");
   const vendor = await createEntity(c, "vendor", {
@@ -86,9 +87,8 @@ export async function seedJourneyWorld(
     };
   }
 
-  const [emailOwner] = await db
-    .clientForRepository()
-    .select({ id: ledgerParty.id })
+  const [emailOwner] = await resolveDatabaseRuntime(db)
+    .client.select({ id: ledgerParty.id })
     .from(ledgerParty)
     .where(eq(ledgerParty.userId, testUserId(userId)))
     .limit(1);

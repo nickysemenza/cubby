@@ -32,6 +32,7 @@ import {
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   cookbook,
   entityAttachment,
@@ -48,8 +49,6 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-
-import { notDeleted } from "./query";
 
 /**
  * How many distinct components this product contains — non-zero makes it a kit.

@@ -12,9 +12,11 @@ import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
+import {
+  loadPrimaryGtins,
+  productHasAnyGtin,
+} from "~/server/domains/product/repo/gtin";
 import { activeExceptionSql } from "~/server/generic/data-quality/repo/sql";
-
-import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
 
 export const findDuplicateUniqueProducts = async (
   db: Database,

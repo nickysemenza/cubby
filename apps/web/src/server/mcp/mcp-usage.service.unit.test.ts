@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   getMcpUsageDashboard,
   type McpUsageDashboardPort,
 } from "./mcp-usage.service";
 
-const unusedDatabase = new Database(() => {
+const unusedDatabase = createDatabase(() => {
   throw new Error("The injected MCP usage port must not access the database");
 });
 

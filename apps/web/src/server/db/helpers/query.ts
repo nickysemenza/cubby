@@ -37,6 +37,7 @@ import {
   shiftPlainDate,
 } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
 import { createAppError } from "~/server/errors/app-error";
 import {
   traceListPage,
@@ -155,17 +156,6 @@ export function rangeConditions<P extends string>(
   ];
 }
 
-/** `term` as a LIKE pattern that matches it literally, for case-insensitive equality. */
-export const escapeLike = (term: string): string =>
-  term.replace(/[\\%_]/g, "\\$&");
-
-/**
- * The ILIKE pattern for "contains `term` literally": backslash, `%`, and `_` in the
- * term are escaped so a search for `50%` or `a_b` cannot widen into a
- * wildcard match. Every hand-written substring ILIKE goes through this.
- */
-export const ilikeContains = (term: string): string => `%${escapeLike(term)}%`;
-
 export const formatSearchTerm = (
   column: AnyColumn | SQL,
   term?: string,
@@ -214,9 +204,6 @@ export const arrayOverlapOrPresence = (
         : sql`(cardinality(${column}) = 0)`,
     ),
   );
-
-export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
-  isNull(table.deletedAt);
 
 /**
  * Row-level twin of {@link notDeleted}: a predicate over an already-fetched

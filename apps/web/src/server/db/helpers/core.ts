@@ -1,11 +1,10 @@
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
-  Database,
-  type DrizzleClient,
-  type DrizzleTransaction,
-} from "~/server/db";
-import type { DatabaseClient } from "~/server/db/database";
+  createDatabase,
+  resolveDatabaseRuntime,
+} from "~/server/db/database-runtime";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 /** Work that must not happen unless the enclosing transaction commits. */
@@ -81,18 +80,18 @@ const flushAfterCommit = async (
  * Services and routers should never call this - they just pass Database around.
  */
 export const getDb = (db: Database): DrizzleClient => {
-  return db.clientForRepository();
+  return resolveDatabaseRuntime(db).client;
 };
 
 /**
  * Is this handle an already-open transaction rather than the pooled Database?
  *
- * The `"rollback"` sniff lives here and nowhere else: repository code receives
+ * The `"rollback"` discriminator is shared with the schema-free repository boundary: repository code receives
  * either the request-scoped Database handle or a DrizzleTransaction, and the
  * transaction carries `rollback`, so presence of that key is the structural
  * signal separating them.
- * Centralized so the two consumers ({@link unwrapDb},
- * {@link withTransactionOn}) can't drift on it.
+ * Keep {@link unwrapDb}, {@link withTransactionOn}, and the schema-free
+ * repository boundary aligned; constructor identity does not survive module reloads.
  */
 export const isTransaction = (
   db: Database | DrizzleClient | DrizzleTransaction,
@@ -175,10 +174,8 @@ export const withTransactionOn = async <T>(
  * together without every repository learning a second parameter type.
  */
 export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
-  // SAFETY: the repository-only Database facade exposes the same schema-bound
-  // Drizzle methods as DatabaseClient; nested transactions become savepoints.
-  const client = tx as DatabaseClient;
-  const database = new Database(() => ({
+  const client = tx;
+  const database = createDatabase(() => ({
     client,
     withConnection: (fn) => fn(client),
   }));

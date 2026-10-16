@@ -23,7 +23,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, withTransaction } from "~/server/db/helpers/core";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { device } from "~/server/db/schema";
 
 /** How many fresh shortcodes to try before giving up — mirrors

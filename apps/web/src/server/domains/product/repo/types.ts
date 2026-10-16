@@ -15,8 +15,8 @@ import type {
   productUnitMappings,
 } from "~/server/db/schema";
 import type { LocationIdentityProductRow } from "~/server/domains/location/repo/internal-types";
+import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 
-import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 

@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
@@ -26,7 +27,7 @@ export async function seedNativeQa(
   userId: string,
 ): Promise<Record<string, string>> {
   const db = buildScenarioDatabase(pool);
-  await seedBaseWorld(db.clientForRepository());
+  await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const context = buildKernelContext(db, testUserId(userId));
 
   const kitchen = await createEntity(context, "location", {

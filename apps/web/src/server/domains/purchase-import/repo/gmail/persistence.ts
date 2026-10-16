@@ -28,13 +28,12 @@ import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
-  getDb,
   databaseForTransaction,
   notDeleted,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { runAfterCommit } from "~/server/db/helpers/core";
+import { getDb, runAfterCommit } from "~/server/db/helpers/core";
 import {
   mailboxCursor,
   email as emailTable,
@@ -982,8 +981,7 @@ export const createBetterAuthGmailAccountStore = (
   mailboxId?: string,
 ): GmailAccountTokenStore => ({
   async findGoogleAccount(userId): Promise<GmailAccountTokenRecord | null> {
-    const row = await db
-      .clientForRepository()
+    const row = await getDb(db)
       .select({
         userId: account.userId,
         providerId: account.providerId,
@@ -1004,7 +1002,7 @@ export const createBetterAuthGmailAccountStore = (
     return row[0] ?? null;
   },
   async updateGoogleAccount(userId, patch: GmailAccountTokenPatch) {
-    const database = db.clientForRepository();
+    const database = getDb(db);
     const where = and(
       eq(account.userId, userId),
       eq(account.providerId, "google"),

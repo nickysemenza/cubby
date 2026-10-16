@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  globSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -65,7 +66,12 @@ function fixture(t: TestContext) {
     ".oxlintrc.json",
     ".oxfmtrc.json",
     "apps/web/src/server/db/schema.ts",
-    "apps/web/src/server/db/generated/entity-tables.gen.ts",
+    // The lint plugin reads canonical fragments and all generated table groups.
+    "apps/web/src/server/db/schema-primitives.ts",
+    "apps/web/src/server/db/external-identifier-tables.ts",
+    ...globSync("apps/web/src/server/db/generated/*tables.gen.ts", {
+      cwd: source,
+    }),
     "scripts/check-outward-text.ts",
     "packages/shared/src/shortcode-alphabet.ts",
   ]) {

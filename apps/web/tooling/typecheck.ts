@@ -15,6 +15,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { checkTypecheckBoundaries } from "./checks/typecheck-boundaries.ts";
+import { storagePrograms } from "./typecheck-storage.ts";
 
 const app = resolve(import.meta.dirname, "..");
 const compiler = join(
@@ -33,6 +34,7 @@ function compile(args: string[]) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+storagePrograms.configure();
 rmSync(pending, { recursive: true, force: true });
 compile(["-p", "tsconfig.contracts.json"]);
 const emitted = new Set(globSync("**/*.d.ts", { cwd: pending }));
@@ -50,8 +52,10 @@ rmSync(pending, { recursive: true, force: true });
 
 const [mode = "app", ...args] = process.argv.slice(2);
 if (mode === "app") {
-  for (const config of ["tsconfig.server.json", "tsconfig.client.json"])
+  storagePrograms.build(compiler, compile, args);
+  for (const config of [storagePrograms.serverConfig, "tsconfig.client.json"])
     compile(["--build", config, "--checkers", "1", ...args]);
 } else if (mode === "guard") await checkTypecheckBoundaries(app, compiler);
+else if (mode === "storage") storagePrograms.build(compiler, compile, args);
 else if (mode !== "contracts")
   throw new Error(`Unknown typecheck mode: ${mode}`);

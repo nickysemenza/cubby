@@ -21,7 +21,7 @@ import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
 import { readDatabaseFreshness } from "~/server/db/freshness/client";
 import { getDb } from "~/server/db/helpers/core";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   decideReadConsistency,
   type ReadConsistencyDecision,

@@ -1,3 +1,4 @@
+import { createDatabase } from "~/server/db/database-runtime";
 import { createPostgresPool } from "../../../tooling/postgres-pool";
 import "../support/build-constants";
 import { buildActorContext } from "@cubby/schemas/context";
@@ -51,7 +52,7 @@ export function getFixtureDb(): Database {
     allowExitOnIdle: true,
   });
   const client = drizzle(pool, { schema });
-  fixtureDb = new Database(() => ({
+  fixtureDb = createDatabase(() => ({
     client,
     withConnection: (run) => run(client),
   }));

@@ -6,7 +6,7 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import type { DecisionPort } from "./decision-model";
 import {
@@ -16,7 +16,7 @@ import {
 
 // A Database that throws on any use: the op is read-only apart from usage
 // accounting, which the injected decision port bypasses entirely.
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("Settlement rank unit ports do not touch a database");
 });
 const usage = {

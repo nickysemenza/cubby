@@ -1,4 +1,4 @@
-import type { DatabaseRuntime } from "./database";
+import type { DatabaseRuntime } from "./database-runtime";
 import type { RequestDbRole } from "./db-pg-tracing";
 
 export interface RequestDbConnections {

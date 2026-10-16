@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   enqueueBackgroundTask,
@@ -21,7 +21,7 @@ const recipeTask = (seed: string): BackgroundTaskInput => ({
   recipeIds: [testEntityId("recipe", seed)],
 });
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("publishing never touches the database");
 });
 

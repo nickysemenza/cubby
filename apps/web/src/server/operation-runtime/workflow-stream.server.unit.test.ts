@@ -3,7 +3,7 @@ import superjson from "superjson";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
@@ -16,7 +16,7 @@ import {
   workflowStreamResponse,
 } from "./workflow-stream.server";
 
-const database = new Database(() => {
+const database = createDatabase(() => {
   throw new Error("The workflow stream unit test must not resolve a database");
 });
 const context = requireActor(

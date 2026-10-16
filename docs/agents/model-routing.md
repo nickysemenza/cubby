@@ -75,7 +75,9 @@ Load this file before spawning. Assign the lane's explicit model and supported
 effort; do not inherit a model by default. A plan with no subagents says "main
 agent" once. A plan that delegates names each lane's owner, host assignments,
 owned files, dependencies, and validation owner. Lanes use disjoint edits or an
-explicit shared-file handoff. Keep architecture, migrations, final integration,
+explicit shared-file handoff. Mechanical edit scripts check an explicit allowed-path
+set immediately before each write, including reserved-file exclusions; audit the
+resulting diff against that same scope. Keep architecture, migrations, final integration,
 and the one root final check with the main agent. A verification lane re-reads
 only what the main agent has not already read; an independent reviewer reads
 whatever it needs, but reuses the implementer's validation results instead of

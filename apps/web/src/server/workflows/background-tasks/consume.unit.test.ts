@@ -4,7 +4,7 @@ import type { BackgroundTaskMessageInput } from "@cubby/schemas/queue-messages";
 import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import type { BackgroundQueueDeliveredMessage } from "../background-queue-types";
 import { handleBackgroundQueueBatch } from "./consume";
@@ -23,7 +23,7 @@ interface LegacyWakeup {
   kind: string;
 }
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("the fake handler never touches the database");
 });
 

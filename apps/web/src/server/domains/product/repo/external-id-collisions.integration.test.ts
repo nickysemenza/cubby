@@ -5,13 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { entityExternalId, product } from "~/server/db/schema";
+import { findProductExternalIdCollisions } from "~/server/domains/product/repo/external-id-collisions";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-
-import { findProductExternalIdCollisions } from "./external-id-collisions";
 
 describe("product external-id ownership", () => {
   const ctx = withTestDb();

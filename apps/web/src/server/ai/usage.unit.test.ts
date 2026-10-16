@@ -1,7 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import type { snapshotAiUsagePrice } from "./pricing";
 import {
@@ -14,7 +14,7 @@ beforeEach(() => snapshot.mockResolvedValue({ amount: null, evidence: null }));
 
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("The injected telemetry port must not access the database");
 });
 

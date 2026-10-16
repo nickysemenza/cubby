@@ -1,3 +1,4 @@
+import { createDatabase } from "~/server/db/database-runtime";
 import { createPostgresPool } from "./postgres-pool";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -151,7 +152,7 @@ async function main() {
         `Historical transform requires bookkeeping exactly through ${CUTOVER_TAG}; deploy the matching server and drain old in-flight work before promotion.`,
       );
     const client = drizzle(pool, { schema });
-    const database = new Database(() => ({
+    const database = createDatabase(() => ({
       client,
       withConnection: (fn) => fn(client),
     }));

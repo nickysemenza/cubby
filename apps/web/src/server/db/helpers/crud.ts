@@ -23,12 +23,12 @@ import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type JSONType, z } from "zod";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { entityAttachment, image } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { unwrapDb, withTransactionOn } from "./core";
-import { notDeleted } from "./query";
 
 /**
  * `findOrCreate` inserted nothing and then couldn't re-find a winner.

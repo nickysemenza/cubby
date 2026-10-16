@@ -140,36 +140,45 @@ restarts; interpret them after representative traffic. See the
 
 ## Typechecking
 
-Use `pnpm typecheck:web` during app development. It generates compact server
-boundary declarations, then checks the server and client as separate incremental
-programs. Each checker runs in a separate process, sequentially, so their live
-heaps do not overlap. A server implementation edit leaves the client program
-up to date when its public signature is unchanged; shared contract edits check
-both. A cold run may take longer than a single combined program because shared
-types are checked twice. Peak edit memory and parallel worktrees take priority.
+Use `pnpm typecheck:web` during app development. It emits compact annotated
+server boundary declarations, checks and emits the identifier-storage producer,
+then checks the remaining server and client. Each checker runs sequentially in
+its own process so their live heaps do not overlap. Implementation edits whose
+published signatures stay unchanged skip consumers. Shared contract edits check
+the affected programs. Cold checking can take longer because shared types are
+checked more than once; peak edit memory and parallel worktrees take priority.
 
-The runtime still imports real source through the normal Vite aliases. Only
-`tsconfig.client.json` redirects the explicit HTTP handler, SSR dispatch,
-server-function and middleware boundaries to generated declarations under
-`apps/web/artifacts/server-contracts`. `isolatedDeclarations` requires annotated
-exports; `noResolve` prevents emission from loading implementations. Emission
-uses `noCheck` only for syntax-based declaration production. The strict server
-program checks the actual implementations against those same annotations.
-Do not add implementation-derived `typeof` or `ReturnType` exports that reconnect
-the client graph. Generated declarations retain shared contract imports.
+Runtime Vite imports continue to load real source. Compiler paths alone redirect
+HTTP handlers, SSR dispatch, server functions and middleware to the annotated
+boundary declarations. The identifier-storage producer uses a schema-free native
+Drizzle method projection behind an annotated repository-access boundary; the
+remaining server checks that resolver's implementation. One source-only nominal
+`Database` identity is shared across all programs. Canonical table definitions
+stay single-owned, with foreign-key-closed storage groups and global relational
+assembly referring to the same table instances.
+Each group retains its declarations' custom column-type imports, deduplicated
+against the built-in column vocabulary.
 
-The runner emits to a temporary directory and publishes only successful output,
-preserves unchanged files' timestamps, and removes retired declarations. Both
-incremental caches and declarations belong to their worktree. Global ambient
-modules import isolated contracts rather than runtime implementations; generated
-entity port-export checks are split by client/server ownership.
+The HTTP/reverse-boundary emitter uses `isolatedDeclarations`, `noResolve` and
+`noCheck` for syntax-based production of annotated exports; the strict server
+checks their bodies. Storage instead uses ordinary strict declaration emission,
+including inferred table types, with `noEmitOnError`. Its persistent private emit
+cache stays paired with incremental build-info; its output inventory records the
+compiler revision so retries repair an interrupted emit. Successful builds publish a
+complete declaration set, retaining unchanged bytes and timestamps; missing
+cached output forces regeneration. The disposable annotated emitter keeps its
+separate staging lifecycle. All caches and declarations belong to the worktree.
 
-`pnpm typecheck` also checks the complete web program, including tests, tooling
-and generator sources, and verifies both resolved graphs: client imports may
-reach only the explicitly listed shared server contracts, the server must not
-reach browser routes/components, and every production source must be covered.
-The graph guard also rejects unresolved imports inside emitted declarations.
-This CLI split does not change which project an editor's language server opens.
+`tooling/typecheck-storage.ts` owns the storage source roster and derives producer
+roots, consumer exclusions and exact contract mappings from it. Boundary exports
+must remain independent of implementation-derived registry types. The resolved
+graph guard rejects storage source in its consumers, server composition in
+storage, browser routes/components in the server, unresolved generated-contract
+imports, mixed nominal-handle copies and production source without a strict owner.
+
+`pnpm typecheck` also retains the complete web check, including tests, tooling
+and generator sources. This CLI split does not change which projects an editor's
+language server opens; an editor-memory improvement requires separate evidence.
 
 ## Worktrees and test services
 

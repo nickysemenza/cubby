@@ -6,7 +6,7 @@ import { type SQL, and, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   run as runTable,
   plant,
