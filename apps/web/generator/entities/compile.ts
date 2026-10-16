@@ -1265,7 +1265,7 @@ const filterDescriptor = (
   validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);
-  if (stored !== null && value.derived === true)
+  if (stored !== null && value.derived !== undefined)
     throw new EntityDeclarationError(
       `${context} is either stored or derived, not both.`,
     );
@@ -1287,7 +1287,12 @@ const filterDescriptor = (
     expandRef: value.expandRef ?? null,
     schemaRef: value.schemaRef ?? null,
     stored,
-    derived: value.derived === true,
+    derived:
+      value.derived === undefined
+        ? null
+        : value.derived === true
+          ? value.columnId
+          : value.derived,
     range,
     urlOnly: value.urlOnly ?? false,
     nullable: storedPresence(
@@ -1972,7 +1977,7 @@ const suggestionFilterDescriptors = (
       expandRef: null,
       schemaRef: null,
       stored: null,
-      derived: false,
+      derived: null,
       range: null,
       urlOnly: false,
       nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
@@ -2113,7 +2118,7 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
-          derived: false,
+          derived: null,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",
@@ -2149,7 +2154,7 @@ export const compileEntity = (
           brandRef: null,
           schemaRef: null,
           stored: null,
-          derived: false,
+          derived: null,
           range: null,
           expandRef: {
             module: "~/entity/filter-behavior",

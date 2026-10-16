@@ -14,13 +14,14 @@ import {
   generatedEntityListFields,
 } from "@cubby/schemas/entity-list-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import type { SortParams } from "@cubby/schemas/pagination";
+import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import { type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
   compileTraversal,
@@ -36,12 +37,34 @@ type DerivedField = GeneratedListField;
 type ViaField = Extract<DerivedField, { shape: "via" }>;
 type PredicateKind = Extract<DerivedField, { shape: "predicate" }>["predicate"];
 
+/**
+ * An any-of filter's picked values and its Any value / No value key (a
+ * hand-written `nullable`), ORed by the predicate.
+ */
+export interface AnyOfValue {
+  readonly values: readonly string[];
+  readonly presence: PresenceFilter;
+}
+
+/**
+ * A range filter's bounds and declared presence key, or the one request
+ * parameter a range whose presets expand to a named state binds (`param`).
+ */
+export interface RangeValue {
+  readonly from: string | number | undefined;
+  readonly to: string | number | undefined;
+  readonly presence: PresenceFilter;
+  readonly param: string | undefined;
+}
+
 /** The parsed filter value a declared predicate receives, by its kind. */
 interface PredicateValues {
   text: string;
-  select: readonly string[];
-  multiselect: readonly string[];
+  multiselect: AnyOfValue;
+  idMulti: AnyOfValue;
   boolean: boolean;
+  presence: "has" | "none";
+  range: RangeValue;
 }
 
 /**
@@ -95,6 +118,19 @@ interface PreparedPredicate<V> {
   readonly render: (context: ListContext, value: V) => SQL | undefined;
 }
 
+/**
+ * A derived value whose SQL reads the caller's quality read context (a
+ * Problem or work-queue read that already materialized on-hand units).
+ * Absent, it renders the canonical scalar.
+ */
+interface ReadValue {
+  readonly read: (read: QualityReadContext | undefined) => DerivedValue;
+}
+
+export const listReadValue = (
+  read: (read: QualityReadContext | undefined) => DerivedValue,
+): ReadValue => ({ read });
+
 export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   const handle: ListPrepare<P> = {
     load,
@@ -110,13 +146,21 @@ export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   return handle;
 };
 
-/** The prepared data of one list request, loaded by `scaffold.context`. */
+/**
+ * The prepared data of one list request, loaded by `scaffold.context`, and
+ * the quality read context its caller passed to `where`.
+ */
 export class ListContext {
   constructor(
     private readonly prepared: ReadonlyMap<ListPrepare<unknown>, unknown>,
+    readonly read?: QualityReadContext,
   ) {}
 
   static readonly empty = new ListContext(new Map());
+
+  withRead(read: QualityReadContext | undefined): ListContext {
+    return read === this.read ? this : new ListContext(this.prepared, read);
+  }
 
   has(prepare: ListPrepare<unknown>): boolean {
     return this.prepared.has(prepare);
@@ -132,9 +176,9 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = DerivedValue | PreparedValue;
+type DerivedValueSql = DerivedValue | PreparedValue | ReadValue;
 type DerivedPredicateSql<V> =
-  | ((value: V) => SQL | undefined)
+  | ((value: V, read: QualityReadContext | undefined) => SQL | undefined)
   | PreparedPredicate<V>;
 
 type PredicateValueOf<E extends Entity, K extends string> =
@@ -171,6 +215,9 @@ const isPrepared = (
   entry: DerivedValueSql | DerivedPredicateSql<never>,
 ): entry is PreparedValue | PreparedPredicate<never> =>
   typeof entry === "object" && "prepare" in entry;
+const isReadValue = (
+  entry: DerivedValueSql | DerivedPredicateSql<never>,
+): entry is ReadValue => typeof entry === "object" && "read" in entry;
 
 /** The prepare a derived field's SQL needs, if any. */
 export const derivedPrepare = (
@@ -196,11 +243,14 @@ const derivedValueParts = (
   const entry = derived[key];
   if (entry === undefined || typeof entry === "function")
     throw missingSql(entity, key);
-  // SAFETY: `DerivedSqlArg` gives a value key only a value or a prepared
-  // value, never a predicate's function or prepared predicate.
+  // SAFETY: `DerivedSqlArg` gives a value key only a value, a prepared
+  // value, or a read value, never a predicate's function or prepared
+  // predicate.
   const value = isPrepared(entry)
     ? (entry as PreparedValue).render(context)
-    : (entry as DerivedValue);
+    : isReadValue(entry)
+      ? entry.read(context.read)
+      : (entry as DerivedValue);
   return isCompound(value) ? value : [value];
 };
 
@@ -237,7 +287,12 @@ export const derivedPredicateSql = <V>(
   if (typeof entry === "function")
     // SAFETY: `DerivedSqlArg` types each predicate by its declared kind, and
     // the caller parsed `value` by that same kind.
-    return (entry as (value: V) => SQL | undefined)(value);
+    return (
+      entry as (
+        value: V,
+        read: QualityReadContext | undefined,
+      ) => SQL | undefined
+    )(value, context.read);
   if (isPrepared(entry))
     // SAFETY: as above; a predicate key's prepared entry renders that kind.
     return (entry as PreparedPredicate<V>).render(context, value);

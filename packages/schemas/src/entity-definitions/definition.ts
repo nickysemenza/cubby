@@ -855,7 +855,14 @@ const buildMetadataSchemas = () => {
       .strict(),
     z
       .object({
-        predicate: z.enum(["text", "multiselect", "boolean"]),
+        predicate: z.enum([
+          "text",
+          "multiselect",
+          "idMulti",
+          "boolean",
+          "presence",
+          "range",
+        ]),
         options: z.array(nonEmptyString()).min(1).optional(),
         reason: nonEmptyString(),
       })
@@ -2149,10 +2156,20 @@ const buildMetadataSchemas = () => {
         ])
         .optional(),
       /**
-       * The filter compiles through the `model.derived` entry its `columnId`
-       * names (a related path, a repository value, or a declared predicate).
+       * The filter compiles through a `model.derived` entry (a related path, a
+       * repository value, or a declared predicate): `true` names the entry
+       * keyed by `columnId`, a string names another entry when the column's
+       * own key already orders by a different value or is a stored field.
        */
-      derived: z.literal(true).optional(),
+      derived: z
+        .union([
+          z.literal(true),
+          nonEmptyString().regex(
+            /^[A-Za-z_][A-Za-z0-9_]*$/,
+            "must be an identifier",
+          ),
+        ])
+        .optional(),
       /** Range bounds; `kind` is inferred from the model field when omitted. */
       range: z
         .object({

@@ -494,6 +494,7 @@ export default defineEntity({
       product: { via: "product" },
       location: { via: "location" },
       category: { via: "product.category" },
+      manufacturer: { via: "product.manufacturer" },
       valuation: { type: "number" },
       // The unit, then the size within it.
       amount: { type: "number" },
@@ -501,6 +502,17 @@ export default defineEntity({
         predicate: "multiselect",
         reason:
           "Missing includes priceable entries, so the statuses overlap and are not one row value",
+      },
+      categoryFeature: {
+        predicate: "multiselect",
+        reason: "Inherited through category ancestors; not a row value",
+      },
+      // Stock parked in the household-wide Unknown location.
+      locationRole: { type: "boolean" },
+      effectiveOwner: {
+        predicate: "idMulti",
+        reason:
+          "The effective owner is resolved from acquisition evidence outside SQL",
       },
     },
     sort: {
@@ -636,7 +648,12 @@ export default defineEntity({
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+        schemaDescription: "Filter by exact product IDs",
       },
+      // Includes stock in sub-locations unless `includeSubLocations` is false
+      // (the Location detail page lists only what is stocked directly there).
       {
         columnId: "locationId",
         field: "locationIdFilter",
@@ -644,38 +661,45 @@ export default defineEntity({
         placeholder: "Filter by location id...",
         brandRef: { entity: "location" },
         urlOnly: true,
-      },
-      {
-        columnId: "locationSubtree",
-        field: "locationSubtreeFilter",
-        kind: "idMulti",
-        placeholder: "Filter by location, including contents...",
-        brandRef: { entity: "location" },
-        urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+        schemaDescription:
+          "Filter to stock in the selected Locations and, unless includeSubLocations is false, their descendants",
       },
       {
         columnId: "product",
         field: "productNameFilter",
         kind: "text",
         placeholder: "Filter by product...",
+        derived: true,
+        deriveSchema: true,
+        schemaDescription: "Filter by product name (substring)",
       },
       {
         columnId: "location",
         field: "locationNameFilter",
         kind: "text",
         placeholder: "Filter by location...",
+        derived: true,
+        deriveSchema: true,
+        schemaDescription: "Filter by location name (substring)",
       },
       {
         columnId: "manufacturer",
         field: "manufacturerFilter",
         kind: "text",
         placeholder: "Filter by manufacturer...",
+        derived: true,
+        deriveSchema: true,
+        schemaDescription: "Filter by product manufacturer (substring)",
       },
       {
         columnId: "category",
         field: "categoryFilter",
         kind: "idMulti",
         derived: true,
+        deriveSchema: true,
+        schemaDescription: "Filter by product category",
         placeholder: "Filter classification...",
         brandRef: { entity: "productCategory" },
         optionsKey: "productCategories",
@@ -687,6 +711,14 @@ export default defineEntity({
         label: "Category family",
         placeholder: "Filter category family...",
         optionsKey: "productCategoryFamilies",
+        derived: true,
+        deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/product-category-fields",
+          export: "productCategoryFeature",
+        },
+        schemaDescription:
+          "Filter by product category family, inherited from the nearest classified ancestor",
       },
       // Matches the EFFECTIVE owner (explicit, else inherited from acquisition
       // evidence), not the stored column: inherited stock is someone's stuff.
@@ -699,6 +731,7 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
+        derived: "effectiveOwner",
         sentinels: [
           { value: OWNER_FILTER_HOUSEHOLD, label: "Household" },
           { value: OWNER_FILTER_UNKNOWN, label: "Unknown" },
@@ -720,7 +753,10 @@ export default defineEntity({
       },
       {
         columnId: "verifiedAt",
+        field: "verified",
         kind: "range",
+        deriveSchema: true,
+        stored: true,
         wire: {
           kind: "range",
           from: "verifiedFrom",
@@ -746,6 +782,10 @@ export default defineEntity({
         field: "placementFilter",
         kind: "multiselect",
         placeholder: "Filter placement...",
+        deriveSchema: true,
+        stored: true,
+        schemaDescription:
+          "Filter by placement: 'stock' (movable stock) and/or 'installed' (fixtures). Omitted returns both.",
         options: [
           { value: "stock", label: "Stock" },
           { value: "installed", label: "Installed" },
@@ -756,6 +796,10 @@ export default defineEntity({
         field: "locationRole",
         kind: "boolean",
         placeholder: "Filter location role...",
+        derived: true,
+        deriveSchema: true,
+        schemaDescription:
+          "true: stock parked in the household-wide Unknown location; false: stock with a real location.",
         options: [{ value: "true", label: "Global Unknown" }],
       },
       {
@@ -772,6 +816,7 @@ export default defineEntity({
           },
         ],
         derived: true,
+        deriveSchema: true,
       },
       {
         columnId: "related:inventory.ingredient",

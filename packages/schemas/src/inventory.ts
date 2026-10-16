@@ -1,6 +1,4 @@
 import { tradeSchema } from "./task-fields";
-import { productCategoryShortcode } from "./identifier-fields";
-import { productCategoryFeature } from "./product-category-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
@@ -8,7 +6,6 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { inventoryRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
-  dateRangeFields,
   plainDate,
   timestampedFields,
 } from "./base-entity";
@@ -30,8 +27,6 @@ import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
-  entityFilterList,
-  oneOrMany,
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
@@ -79,59 +74,6 @@ export const inventoryFilterFields = {
   ...auditDateFilterFields,
   ...inventoryRelatedFilterFields,
   ...generatedInventoryItemFilterFields,
-  productNameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by product name (substring)"),
-  locationNameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by location name (substring)"),
-  locationIdFilter: entityFilterList(locationShortcode)
-    .optional()
-    .describe(
-      "Filter by exact location IDs (direct stock only; use locationSubtreeFilter to include descendants)",
-    ),
-  locationSubtreeFilter: entityFilterList(locationShortcode)
-    .optional()
-    .describe(
-      "Filter to stock in the selected locations or any of their descendants",
-    ),
-  productIdFilter: entityFilterList(productShortcode)
-    .optional()
-    .describe("Filter by exact product IDs"),
-  manufacturerFilter: z
-    .string()
-    .optional()
-    .describe("Filter by product manufacturer (substring)"),
-  categoryFeatureFilter: oneOrMany(productCategoryFeature)
-    .optional()
-    .describe(
-      "Filter by product category family, inherited from the nearest classified ancestor",
-    ),
-  categoryFilter: oneOrMany(productCategoryShortcode)
-    .optional()
-    .describe("Filter by product category"),
-  placementFilter: oneOrMany(inventoryPlacement)
-    .optional()
-    .describe(
-      "Filter by placement: 'stock' (movable stock) and/or 'installed' (fixtures). Omitted returns both.",
-    ),
-  locationRole: z
-    .boolean()
-    .optional()
-    .describe(
-      "true: stock parked in the household-wide Unknown location; false: stock with a real location.",
-    ),
-  verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
-  /**
-   * Derived valuation integrity. `missing_with_priced_product` is the precise
-   * "the Product has a price, but this stored unit cannot reach it" state.
-   */
-  valuationStatus: oneOrMany(
-    z.enum(["valued", "missing", "missing_with_priced_product"]),
-  ).optional(),
-  ...dateRangeFields("verified"),
 };
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);

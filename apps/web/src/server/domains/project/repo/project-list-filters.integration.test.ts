@@ -10,7 +10,8 @@ import { projectList } from "./lookup";
  * effective (inherited) assignee or locations fall back to the stored column,
  * search stops reaching inherited locations, the parent filter's generated
  * sub-project toggle reads the wrong default or includes the selected parent
- * itself, or the date window stops matching a project's own dates.
+ * itself, a picked parent stops ORing with No value, or the date window stops
+ * matching a project's own dates.
  */
 describe("project list declared filters", () => {
   const ctx = withTestDb();
@@ -65,12 +66,14 @@ describe("project list declared filters", () => {
       [{ location: ["Backyard"] }, [w.shed, w.roof, w.shingles]],
       [{ assigneeId: [w.member.id] }, [w.shed, w.roof, w.shingles]],
       [{ assigneePresenceFilter: "none" }, [w.desk]],
-      [{ parentProjectPresenceFilter: "none" }, [w.shed, w.desk]],
-      [{ topLevelOnly: true }, [w.shed, w.desk]],
-      [{ parentProjectId: [w.shed.id] }, [w.roof]],
+      [{ parentPresenceFilter: "none" }, [w.shed, w.desk]],
+      // The generated toggle is on by default: every descendant, never the
+      // selected parent itself; off is direct children only.
+      [{ parentProjectId: [w.shed.id] }, [w.roof, w.shingles]],
+      [{ parentProjectId: [w.shed.id], includeSubProjects: false }, [w.roof]],
       [
-        { parentProjectId: [w.shed.id], includeSubProjects: true },
-        [w.roof, w.shingles],
+        { parentProjectId: [w.roof.id], parentPresenceFilter: "none" },
+        [w.shingles, w.shed, w.desk],
       ],
       [{ dateFrom: "2026-02-10", dateTo: "2026-02-12" }, [w.desk]],
     ];

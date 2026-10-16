@@ -811,6 +811,38 @@ Rules:
       // The effective start: the stored date, else the earliest task or
       // expense date in the subtree below an unset start.
       startDate: { type: "date" },
+      // A displayable image (PDF attachments don't count).
+      image: { type: "boolean" },
+      search: {
+        predicate: "text",
+        reason:
+          "Matches name, notes, or any effective location, which a project may inherit as a list",
+      },
+      effectiveLocations: {
+        predicate: "multiselect",
+        reason:
+          "Effective locations are a list inherited from the nearest ancestor that sets its own",
+      },
+      effectiveAssignee: {
+        predicate: "idMulti",
+        reason:
+          "The inherited assignee filters by its record while its sort value is the name",
+      },
+      attention: {
+        predicate: "multiselect",
+        reason:
+          "Tracker membership comes from the attention rules over tasks and budgets",
+      },
+      dateRange: {
+        predicate: "range",
+        reason:
+          "A project matches by its own dates or by any dated task or expense under it",
+      },
+      completionYear: {
+        predicate: "multiselect",
+        reason:
+          "The completion year folds the subtree's effective dates outside SQL",
+      },
     },
     sort: {
       fields: [
@@ -933,6 +965,7 @@ Rules:
     descriptors: [
       {
         columnId: "assigneeId",
+        derived: "effectiveAssignee",
         urlKey: "assignee",
         field: "assigneeId",
         kind: "idMulti",
@@ -945,6 +978,10 @@ Rules:
 
       {
         columnId: "image",
+        derived: true,
+        deriveSchema: true,
+        schemaDescription:
+          "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
         field: "imagePresenceFilter",
         kind: "presence",
         placeholder: "Filter images...",
@@ -959,7 +996,7 @@ Rules:
         kind: "text",
         placeholder: "Filter by project name...",
         deriveSchema: true,
-        stored: { columns: ["name", "notes"] },
+        derived: "search",
       },
       {
         columnId: "status",
@@ -1009,6 +1046,8 @@ Rules:
       },
       {
         columnId: "attention",
+        derived: true,
+        deriveSchema: true,
         kind: "multiselect",
         placeholder: "Filter tracker attention...",
         options: [
@@ -1027,11 +1066,14 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by location...",
         deriveSchema: true,
-        schemaDescription: "Any exact match against locations[]",
+        schemaDescription:
+          "Any exact match against the effective (possibly inherited) locations",
+        derived: "effectiveLocations",
         optionsKey: "projectLocations",
       },
       {
         columnId: "dateRange",
+        derived: true,
         urlKey: "date",
         kind: "range",
         wire: { kind: "range", from: "dateFrom", to: "dateTo" },
@@ -1050,6 +1092,7 @@ Rules:
       },
       {
         columnId: "completionYear",
+        derived: true,
         urlKey: "completed",
         kind: "multiselect",
         placeholder: "Filter by completion year...",
@@ -1063,10 +1106,9 @@ Rules:
         placeholder: "Filter by parent project...",
         optionsKey: "project",
         brandRef: { entity: "project" },
-        nullable: {
-          field: "parentProjectPresenceFilter",
-          label: "parent project",
-        },
+        label: "Parent project",
+        deriveSchema: true,
+        stored: { columns: ["parentProjectId"] },
       },
       {
         columnId: "related:project.blockedBy",
