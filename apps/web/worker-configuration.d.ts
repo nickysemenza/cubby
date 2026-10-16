@@ -29,21 +29,21 @@ interface __BaseEnv_Env {
 	UPC_UPSTREAM_DISABLED: string;
 	NOTION_API_KEY: string;
 	AI_GATEWAY_API_KEY: string;
-	AI_GATEWAY_EGRESS: DurableObjectNamespace<import("./src/cf-server").AiGatewayEgressDurableObject>;
-	DB_FRESHNESS: DurableObjectNamespace<import("./src/cf-server").DatabaseFreshnessDurableObject>;
-	CALENDAR_FEED: DurableObjectNamespace<import("./src/cf-server").CalendarFeedDurableObject>;
-	IMAGE_PROCESSING: DurableObjectNamespace<import("./src/cf-server").ImageProcessingDurableObject>;
-	AI_RESPONSE_CACHE: DurableObjectNamespace<import("./src/cf-server").AiResponseCacheDurableObject>;
-	CHATGPT_PLAN: DurableObjectNamespace<import("./src/cf-server").ChatGptPlanDurableObject>;
-	PURCHASE_IMPORT_RUN: DurableObjectNamespace<import("./src/cf-server").PurchaseImportRunAgent>;
-	USDA_RELEASE: DurableObjectNamespace<import("./src/cf-server").UsdaReleaseDurableObject>;
-	AI_REFRESH: Workflow<Parameters<import("./src/cf-server").AiRefreshWorkflow['run']>[0]['payload']>;
-	SEARCH_INDEX_REPAIR: Workflow<Parameters<import("./src/cf-server").SearchIndexRepairWorkflow['run']>[0]['payload']>;
-	MAIL_DISCOVERY: Workflow<Parameters<import("./src/cf-server").MailDiscoveryWorkflow['run']>[0]['payload']>;
+	AI_GATEWAY_EGRESS: DurableObjectNamespace<import("./src/server/worker-bindings").AiGatewayEgressDurableObject>;
+	DB_FRESHNESS: DurableObjectNamespace<import("./src/server/worker-bindings").DatabaseFreshnessDurableObject>;
+	CALENDAR_FEED: DurableObjectNamespace<import("./src/server/worker-bindings").CalendarFeedDurableObject>;
+	IMAGE_PROCESSING: DurableObjectNamespace<import("./src/server/worker-bindings").ImageProcessingDurableObject>;
+	AI_RESPONSE_CACHE: DurableObjectNamespace<import("./src/server/worker-bindings").AiResponseCacheDurableObject>;
+	CHATGPT_PLAN: DurableObjectNamespace<import("./src/server/worker-bindings").ChatGptPlanDurableObject>;
+	PURCHASE_IMPORT_RUN: DurableObjectNamespace<import("./src/server/worker-bindings").PurchaseImportRunAgent>;
+	USDA_RELEASE: DurableObjectNamespace<import("./src/server/worker-bindings").UsdaReleaseDurableObject>;
+	AI_REFRESH: Workflow<Parameters<import("./src/server/worker-bindings").AiRefreshWorkflow['run']>[0]['payload']>;
+	SEARCH_INDEX_REPAIR: Workflow<Parameters<import("./src/server/worker-bindings").SearchIndexRepairWorkflow['run']>[0]['payload']>;
+	MAIL_DISCOVERY: Workflow<Parameters<import("./src/server/worker-bindings").MailDiscoveryWorkflow['run']>[0]['payload']>;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
-		mainModule: typeof import("./src/cf-server");
+		mainModule: typeof import("./src/server/worker-bindings");
 		durableNamespaces: "AiGatewayEgressDurableObject" | "UsdaReleaseDurableObject" | "DatabaseFreshnessDurableObject" | "CalendarFeedDurableObject" | "ImageProcessingDurableObject" | "AiResponseCacheDurableObject" | "ChatGptPlanDurableObject" | "PurchaseImportRunAgent";
 	}
 	interface Env extends __BaseEnv_Env {}
