@@ -37,7 +37,9 @@ const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
 /**
  * The project an Expense belongs to after applying the ledger inheritance
  * contract. Non-principal purchase adjustments are allocated separately and
- * therefore never expose a scalar project.
+ * therefore never expose a scalar project. Missing explicit/default project
+ * references short-circuit before reading Project; a small household Project
+ * table can otherwise be scanned once per principal Expense.
  */
 export const effectiveExpenseProjectSql = (
   alias = '"Expense"',
@@ -54,15 +56,19 @@ export const effectiveExpenseProjectSql = (
   return sql<ProjectId | null>`CASE
     WHEN ${lineKind} <> 'principal' THEN NULL
     ELSE COALESCE(
-      (SELECT explicit_project."id"
-       FROM "Project" explicit_project
-       WHERE explicit_project."id" = ${storedProjectId}
-         AND explicit_project."deletedAt" IS NULL),
-      (SELECT purchase_project."id"
+      CASE WHEN ${storedProjectId} IS NOT NULL THEN (
+        SELECT explicit_project."id"
+        FROM "Project" explicit_project
+        WHERE explicit_project."id" = ${storedProjectId}
+          AND explicit_project."deletedAt" IS NULL
+      ) END,
+      (SELECT CASE WHEN inherited_purchase."defaultProjectId" IS NOT NULL THEN (
+         SELECT purchase_project."id"
+         FROM "Project" purchase_project
+         WHERE purchase_project."id" = inherited_purchase."defaultProjectId"
+           AND purchase_project."deletedAt" IS NULL
+       ) END
        FROM "Purchase" inherited_purchase
-       JOIN "Project" purchase_project
-         ON purchase_project."id" = inherited_purchase."defaultProjectId"
-        AND purchase_project."deletedAt" IS NULL
        WHERE inherited_purchase."id" = ${purchaseId}
          AND inherited_purchase."deletedAt" IS NULL),
       CASE WHEN ${householdTarget} AND EXISTS (

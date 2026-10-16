@@ -14,6 +14,7 @@ import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-v
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
+import { effectiveExpenseProjectSql } from "./expense-inheritance";
 import { loadExpenseProjectAllocations } from "./expense-project-allocation";
 
 const allocationPlanNode = z.object({
@@ -28,6 +29,60 @@ const allocationPlan = z.array(z.object({ Plan: allocationPlanNode }));
 
 describe("expense project allocation", () => {
   const ctx = withTestDb("mcp");
+
+  // Missing project references must skip Project reads, including a Purchase
+  // whose defaultProjectId is null. Small household tables otherwise get
+  // scanned once per Expense by correlated scalar lookup plans.
+  it("skips project lookups for absent explicit and purchase defaults", async () => {
+    for (let index = 0; index < 8; index++)
+      await insertWithShortcode(ctx.db, "project", {
+        name: `Synthetic unrelated project ${index}`,
+      });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic no-project supplier",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+    });
+    for (let index = 0; index < 16; index++)
+      await insertWithShortcode(ctx.db, "expense", {
+        name: `Synthetic unassigned line ${index}`,
+        costType: "materials",
+        lineKind: "principal",
+        purchaseId: index % 2 === 0 ? purchase.id : null,
+      });
+    await unwrapDb(ctx.db).execute(
+      sql`ANALYZE "Project", "Purchase", "Expense"`,
+    );
+    const statement = sql`SELECT ${effectiveExpenseProjectSql()} AS "projectId" FROM "Expense"`;
+    expect((await unwrapDb(ctx.db).execute(statement)).rows).toEqual(
+      Array.from({ length: 16 }, () => ({ projectId: null })),
+    );
+    const result = await unwrapDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const nodeSchema = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Loops": z.number().default(0),
+      get Plans() {
+        return z.array(nodeSchema).optional();
+      },
+    });
+    const plans = z
+      .array(
+        z.object({ "QUERY PLAN": z.array(z.object({ Plan: nodeSchema })) }),
+      )
+      .parse(result.rows);
+    let projectLookups = 0;
+    const visit = (node: z.infer<typeof nodeSchema>) => {
+      if (node["Relation Name"] === "Project")
+        projectLookups += node["Actual Loops"];
+      node.Plans?.forEach(visit);
+    };
+    for (const row of plans)
+      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
+    expect(projectLookups).toBe(0);
+  });
 
   it("keeps unclassified money once and marks sibling allocation denominators incomplete", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
