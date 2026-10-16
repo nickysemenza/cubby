@@ -220,7 +220,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 - Entity data: `buildEntity` / `createEntity` and the repo writer variant
   (`apps/web/tooling/factories/`), seeded Faker for filler, `seedBaseWorld`.
-  Never hand-parse a `*CreateInput` in a test.
+  Never hand-parse a `*CreateInput` in a test. Volume-only performance
+  fixtures may batch typed stored rows with constraints enabled, canonical bulk
+  audit/search writers and real-query read-back. Keep interactive behavior
+  scenarios on the kernel; do not use bulk fixture setup as write-path coverage.
 - Shared builders: `packages/schemas/src/test-support`; deferreds via
   `Promise.withResolvers()`.
 - Import convergence: `apps/web/tooling/convergence-harness.ts`.

@@ -14,7 +14,7 @@ import { taxonomyRootFixtures } from "../product-category-fixtures";
  * address them by code (`taxonomyShortcode("food")`, `LOC-HM3E`), and a
  * kernel `create` would mint a random code. That is why this is a direct
  * insert rather than a kernel command: the exception is the fixed identity,
- * not the data. Everything else goes through `createEntity`.
+ * not the data. Other base-world entities go through `createEntity`.
  */
 
 export const BASE_HOME_ID = testEntityId(

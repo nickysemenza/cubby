@@ -1,10 +1,11 @@
+import { auditLogEntryOut } from "@cubby/schemas/audit";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { sql } from "drizzle-orm";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
-import { withTestDb } from "../test-setup";
+import { countTestDbQueries, withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
 import { run } from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
@@ -15,6 +16,8 @@ import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service
 // Receipt counts alone miss unmatched work keys: the actual Run projection must
 // use the receipt's completion time instead of falling back to Email.updatedAt.
 // A small copy of the same graph verifies semantics without a timing threshold.
+// Volume setup must batch stored rows and canonical projections instead of
+// paying interactive reads and side effects once per record.
 const ctx = withTestDb();
 it("seeds connected performance history readable by the real Work queue", async () => {
   await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -22,7 +25,9 @@ it("seeds connected performance history readable by the real Work queue", async 
     name: "Synthetic performance member",
     userId: ctx.actor.userId,
   });
-  await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 });
+  const seeded = await countTestDbQueries(() =>
+    seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 }),
+  );
   const result = await getDb(ctx.db).execute(sql`SELECT
     (SELECT count(*)::int FROM "Product") AS products,
     (SELECT count(*)::int FROM "Expense") AS expenses,
@@ -32,7 +37,10 @@ it("seeds connected performance history readable by the real Work queue", async 
     (SELECT count(*)::int FROM "Expense" WHERE future) AS future_expenses,
     (SELECT count(*)::int FROM "Email" e JOIN "OrderMail" m ON e."orderMailId" = m.id WHERE m.content IS NOT NULL) AS retained_emails,
     (SELECT count(*)::int FROM "RunOperation" WHERE kind = 'target_outcome') AS outcomes,
-    (SELECT count(*)::int FROM "ImageProcessingAttempt") AS dispatched_images`);
+    (SELECT count(*)::int FROM "ImageProcessingAttempt") AS dispatched_images,
+    (SELECT count(*)::int FROM "SearchDocument") AS searchable,
+    (SELECT count(*)::int FROM "AuditLog" WHERE action = ${auditLogEntryOut.shape.action.enum.create}) AS created_audits,
+    (SELECT sum(cost)::int FROM "Expense") AS cost`);
   expect(result.rows[0]).toMatchObject({
     products: 12,
     expenses: 24,
@@ -43,6 +51,9 @@ it("seeds connected performance history readable by the real Work queue", async 
     retained_emails: 16,
     outcomes: 10,
     dispatched_images: 0,
+    searchable: 44,
+    created_audits: 44,
+    cost: 200,
   });
   const roster = await getDb(ctx.db).execute(sql`SELECT count(*)::int AS count
     FROM "Run" r JOIN "Email" e ON e."runId" = r.id
@@ -67,4 +78,5 @@ it("seeds connected performance history readable by the real Work queue", async 
     false,
   );
   expect(queue.items.length).toBeGreaterThan(0);
+  expect(seeded.queryCount).toBeLessThan(100);
 }, 120_000);
