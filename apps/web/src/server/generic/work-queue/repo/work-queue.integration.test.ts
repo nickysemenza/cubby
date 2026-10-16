@@ -37,6 +37,8 @@ import {
 // or findings, inflate counts, or hide incurred work in a mixed purchase.
 // Overlapping diagnostic reads must retain complete diagnostic rows, source
 // filters and member routing; one failed diagnostic must fail the whole read.
+// Shared price evidence must preserve explicit/zero prices, inherited kit
+// prices and exception fingerprints; unrelated check reads must not require it.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 

@@ -37,7 +37,7 @@ export const emailChecks = defineEntityChecks({
         sql`${t.classification} <> ${unrelated} AND ${t.classificationStage} IN ${automatedStagesSql}`,
       missing: (_t: Email, context) =>
         sql`(${
-          context
+          context?.derivedAlias
             ? sql`${sql.identifier(context.derivedAlias)}."memberClassification"`
             : emailMemberClassificationSql()
         }) IS NULL`,
@@ -47,7 +47,7 @@ export const emailChecks = defineEntityChecks({
         sql`${t.classification} IN (${related}, ${uncertain})`,
       missing: (_t: Email, context) =>
         sql`NOT ${
-          context
+          context?.derivedAlias
             ? sql`${sql.identifier(context.derivedAlias)}."retainedContent"`
             : emailRetainedContentSql()
         }`,
@@ -65,7 +65,7 @@ export const emailChecks = defineEntityChecks({
       expected: (t: Email) => sql`${t.classification} = ${related}`,
       missing: (_t: Email, context) =>
         sql`NOT ${emailLinkedSql()} AND NOT ${
-          context
+          context?.derivedAlias
             ? sql`${sql.identifier(context.derivedAlias)}."completedImport"`
             : emailHasCompletedImportSql()
         }`,

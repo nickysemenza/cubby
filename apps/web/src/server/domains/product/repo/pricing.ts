@@ -29,6 +29,7 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 
 export type ProductPricing = ProductTopLevelOut["pricing"];
 
@@ -393,7 +394,13 @@ export const productPriceEvidenceSql = (ids?: SQL): SQL => {
 /** A closed membership predicate: callers need no derived-table alias in their FROM. */
 export const hasDerivedProductPriceSql = (
   productId: AnyColumn,
-): SQL => sql`${productId} IN (
+  context?: QualityReadContext,
+): SQL =>
+  context?.hasDerivedValue
+    ? context.hasDerivedValue("derivedPrice", productId)
+    : context?.derivedAlias
+      ? sql`${sql.identifier(context.derivedAlias)}."derivedPrice" IS NOT NULL`
+      : sql`${productId} IN (
   SELECT price_evidence."entityId" FROM (${productPriceEvidenceSql()}) price_evidence
   WHERE price_evidence."derivedPrice" IS NOT NULL
 )`;

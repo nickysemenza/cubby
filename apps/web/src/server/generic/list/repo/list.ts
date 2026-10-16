@@ -59,6 +59,7 @@ import {
   unwrapDb,
 } from "~/server/db/helpers";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   dataQualityFilterPredicates,
   qualityFilterContext,
@@ -503,6 +504,7 @@ export function listScaffold<
     where<Filters extends object>(
       filters: Filters,
       computed: Array<SQL | undefined> = [],
+      readContext: QualityReadContext | undefined = qualityContext,
     ): SQL | undefined {
       return buildSearchConditions(
         table,
@@ -510,12 +512,7 @@ export function listScaffold<
         [
           ...declaredFilterPredicates(entity, table, filters),
           ...(scored
-            ? dataQualityFilterPredicates(
-                scored,
-                table,
-                filters,
-                qualityContext,
-              )
+            ? dataQualityFilterPredicates(scored, table, filters, readContext)
             : []),
           ...auditDateWhereConditions(table, filters),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,

@@ -61,6 +61,7 @@ import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -72,6 +73,7 @@ import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
   qualityFilterSource,
@@ -136,12 +138,14 @@ const gapViewFilters = (
 export type WorkProblemSelections = (
   db: Database,
   scope: WorkQueueScope,
+  readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ) => Promise<SQL[]>;
 
 async function workQueueProjection(
   db: Database,
   scope: WorkQueueScope,
   problemSelections: WorkProblemSelections,
+  readContexts: Partial<Record<Entity, QualityReadContext>>,
 ): Promise<SQL> {
   const selections: SQL[] = [];
   // Skips building a branch the scope would drop anyway.
@@ -166,6 +170,7 @@ async function workQueueProjection(
         where: await buildProductWhere(
           db,
           productFiltersSchema.parse(productGaps),
+          readContexts.product,
         ),
         details: research,
         key: "research:product",
@@ -472,7 +477,7 @@ async function workQueueProjection(
       key: "account:run",
     }),
   );
-  selections.push(...(await problemSelections(db, scope)));
+  selections.push(...(await problemSelections(db, scope, readContexts)));
   // A scope that admits no branch still yields a typed, empty relation.
   if (selections.length === 0)
     return sql`SELECT NULL::text AS entity, NULL::text AS id, NULL::text AS name,
@@ -572,6 +577,16 @@ async function queryWorkQueue(
   const candidateConditions: SQL[] = [];
   if (input.source) candidateConditions.push(sql`source = ${input.source}`);
   if (input.kind) candidateConditions.push(sql`kind = ${input.kind}`);
+  let needsPriceEvidence = false;
+  const productReadContext: QualityReadContext = {
+    hasDerivedValue: (field, entityId) => {
+      needsPriceEvidence = true;
+      return sql`${entityId} IN (
+        SELECT "entityId" FROM work_product_price
+        WHERE ${sql.identifier(field)} IS NOT NULL
+      )`;
+    },
+  };
   const projection = await workQueueProjection(
     db,
     {
@@ -582,6 +597,7 @@ async function queryWorkQueue(
       facts,
     },
     problemSelections,
+    { product: productReadContext },
   );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
@@ -651,7 +667,7 @@ async function queryWorkQueue(
   // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
-    WITH members AS (
+    WITH ${needsPriceEvidence ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql()}),` : sql``} members AS (
       SELECT id, shortcode, name FROM "LedgerParty" WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
     ), candidates AS (${projection}), routed AS MATERIALIZED (
       SELECT candidates.*, CASE
