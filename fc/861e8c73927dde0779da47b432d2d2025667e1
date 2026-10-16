@@ -1,0 +1,19 @@
+docs/adr/0019-domain-first-server-layout.md
+  s_aa587199497aff::t_36db505eb5a670 54-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fc861e8c73927dde0779da47b432d2d2025667e1",
+  "prompts": {},
+  "sessions": {
+    "s_aa587199497aff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d18f7e4-786d-4c24-a4d7-fb2b8ed8bc02",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
