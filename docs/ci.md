@@ -580,9 +580,11 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 `.github/workflows/deploy.yaml` deploys the web Worker on every `main` push,
 without waiting for post-merge CI. Required PR checks gate merging. It uses
 `.github/actions/deploy-worker` to check current main before building and again
-before the release command. The build runs once; `scripts/deploy-web.sh` applies
-committed production migrations with the existing runner, checks current main
-again after migration, then deploys `dist/server/wrangler.json` directly.
+before the release command. The build runs once; the workflow's inline release
+command applies committed production migrations with the existing runner, checks
+current main again after migration, then deploys `dist/server/wrangler.json` directly.
+Keep this short release sequence in the existing workflow/action rather than
+adding a standalone script and a test suite for its wrapper.
 Migration failure blocks deployment. The migration and deploy share the existing
 non-cancelling production concurrency group. The database credential is scoped
 to the release step, alongside the Cloudflare deploy credential.

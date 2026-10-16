@@ -36,7 +36,22 @@ jobs:
           wasm: "restore"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          deploy-command: "bash scripts/deploy-web.sh"
+          deploy-command: |
+            : "${PRODUCTION_DIRECT_DATABASE_URL:?Production deployment needs PRODUCTION_DIRECT_DATABASE_URL}"
+            args=(--target=production)
+            if [[ -n "${PRODUCTION_MIGRATION_THROUGH:-}" ]]; then
+              args+=("--through=$PRODUCTION_MIGRATION_THROUGH")
+            fi
+            pnpm --filter @cubby/web db:migrate "${args[@]}"
+
+            # A migration can outlive a newer main push, just as the build can.
+            current="$(git ls-remote origin refs/heads/main | cut -f1)"
+            [[ -n "$current" ]] || { echo "::error::Could not resolve refs/heads/main"; exit 1; }
+            if [[ "$current" != "$GITHUB_SHA" ]]; then
+              echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current"
+              exit 0
+            fi
+            pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json
           production-direct-database-url: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
           production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
