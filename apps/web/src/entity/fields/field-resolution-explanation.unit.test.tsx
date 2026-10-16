@@ -114,7 +114,7 @@ describe("ResolutionExplanation", () => {
             sourceEntity: {
               entityKind: "purchase",
               entityId: purchaseId,
-              name: null,
+              name: "Synthetic purchase",
             },
             matchesFallback: false,
             canReset: false,
@@ -122,10 +122,9 @@ describe("ResolutionExplanation", () => {
         />,
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByRole("link", { name: purchaseId })).toHaveAttribute(
-        "href",
-        `/purchases/${purchaseId}`,
-      );
+      expect(
+        screen.getByRole("link", { name: "Synthetic purchase" }),
+      ).toHaveAttribute("href", `/purchases/${purchaseId}`);
       expect(screen.getByText("Building & Framing")).toBeInTheDocument();
       expect(screen.getByText("Inherited")).toBeInTheDocument();
       expect(screen.getByText(/Purchase default/)).toBeInTheDocument();
