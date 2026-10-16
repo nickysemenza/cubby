@@ -2633,20 +2633,37 @@ type LabelFieldSchemas<D extends ReadableDeclaration> = {
       : never
   ]: F extends { validation: { read: infer S extends z.ZodType } } ? S : never;
 };
-type DeclarationLabelPaths<D> = D extends ReadableDeclaration
-  ? LabelValuePaths<{
-      [K in keyof LabelFieldSchemas<D>]: z.output<LabelFieldSchemas<D>[K]>;
-    }>
-  : string;
-type InvalidFieldLabelPaths<F, D> = F extends { display: infer Display }
+// Every valid path starts with its root field key. Filter those roots before
+// recursive expansion, preserving LabelValuePaths' array/null/union semantics.
+type RequestedLabelPaths<
+  D extends ReadableDeclaration,
+  Path extends string,
+> = LabelValuePaths<{
+  [
+    K in keyof LabelFieldSchemas<D> as Path extends `${K & string}${string}`
+      ? K
+      : never
+  ]: z.output<LabelFieldSchemas<D>[K]>;
+}>;
+
+type FieldLabelPaths<F> = F extends { display: infer Display }
   ? {
       [K in "labelPath" | "detailLabelPath"]: K extends keyof Display
-        ? Exclude<Display[K], DeclarationLabelPaths<D> | null | undefined>
+        ? Display[K]
         : never;
     }["labelPath" | "detailLabelPath"]
   : never;
+
+type InvalidRequestedPath<D extends ReadableDeclaration, Path> = Path extends
+  | null
+  | undefined
+  ? never
+  : Path extends string
+    ? Exclude<Path, RequestedLabelPaths<D, Path>>
+    : Path;
+
 type InvalidLabelPaths<D> = D extends ReadableDeclaration
-  ? InvalidFieldLabelPaths<D["model"]["fields"][number], D>
+  ? InvalidRequestedPath<D, FieldLabelPaths<D["model"]["fields"][number]>>
   : never;
 
 type MutableDeclaration = {

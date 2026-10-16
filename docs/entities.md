@@ -751,7 +751,10 @@ joined with `\n`, built in `server/entity-kernel/repo/detail-display-labels.ts` 
 as a `labelField`), `display.itemsPath` for a list of worded rows that each
 open their record (`displayItemsField`), and `display.readPath` plus `format`
 or `valueOptions` for a nested value. Clients print what the record carries;
-none restates the structure. A legacy field override and
+none restates the structure. Label paths are checked against parsed Zod output,
+including nullable strings, branded strings and array projections; numeric
+outputs are not labels. The type validator narrows candidate root fields before
+expanding their nested paths. A legacy field override and
 a manifest renderer may not claim the same surface; the compiler or registry
 test fails instead of choosing one silently. `control.renderer` follows the
 same contract for form controls. `display.columnId` preserves an existing computed column identity when
