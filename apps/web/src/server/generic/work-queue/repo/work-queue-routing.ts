@@ -11,15 +11,18 @@ export const workRunOwners = (id: SQL): SQL => sql`ARRAY(
   WHERE work_source_run.id = ${id} AND work_source_run."deletedAt" IS NULL
 )`;
 
-/** Retained Run transcripts and controls also require their live member/login fence. */
+/** Retained Run controls require the live member/login and current source account
+ * to agree. A live Run has exactly one source owner; compare that scalar here
+ * rather than rereading the Run through source-owner arrays for each candidate. */
 export const workRunReviewOwners = (id: SQL): SQL => sql`ARRAY(
-  SELECT CASE WHEN member."userId" = r."actorUserId" AND cardinality(source.owners) > 0
-    AND NOT EXISTS (SELECT 1 FROM unnest(source.owners) owner WHERE owner IS NULL OR owner <> r."ledgerPartyId")
+  SELECT CASE WHEN member."userId" = r."actorUserId"
+    AND (CASE WHEN r."vendorAccountId" IS NOT NULL THEN account."ledgerPartyId"
+      ELSE r."ledgerPartyId" END) = r."ledgerPartyId"
     THEN r."ledgerPartyId" ELSE NULL::uuid END
   FROM "Run" r
   LEFT JOIN "LedgerParty" member ON member.id = r."ledgerPartyId"
     AND member.kind = ${ledgerPartyKind.enum.member} AND member."deletedAt" IS NULL
-  CROSS JOIN LATERAL (SELECT ${workRunOwners(sql`r.id`)} AS owners) source
+  LEFT JOIN "VendorAccount" account ON account.id = r."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE r.id = ${id} AND r."deletedAt" IS NULL
 )`;
 
