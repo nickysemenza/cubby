@@ -549,6 +549,38 @@ describe("statement row ledger", () => {
       sql`SELECT count(*)::int AS count FROM "FinancialTransaction"`,
     );
     expect(financial.rows).toEqual([{ count: 0 }]);
+
+    // Retired source evidence remains membership proof, but no longer counts
+    // toward either export's live coverage.
+    await deleteStatementRows(
+      ctx.db,
+      { source: "monarch", externalIds: [original!.externalId] },
+      ctx.actor,
+    );
+    expect((await listStatementImports(ctx.db)).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fingerprint: importInput().fingerprint,
+          rowCountStored: 0,
+        }),
+        expect.objectContaining({
+          fingerprint: overlapping.fingerprint,
+          rowCountStored: 1,
+        }),
+      ]),
+    );
+    expect(await findIncompleteStatementImports(ctx.db)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fingerprint: importInput().fingerprint,
+          rowCountStored: 0,
+        }),
+        expect.objectContaining({
+          fingerprint: overlapping.fingerprint,
+          rowCountStored: 1,
+        }),
+      ]),
+    );
   });
 
   it("retains first-owner coverage when an old writer omits membership", async () => {

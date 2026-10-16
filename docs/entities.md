@@ -1636,6 +1636,12 @@ A missing or deleted source account remains unresolved; it never falls back to
 the actor or becomes shared work. These unique-key joins preserve one candidate
 per Run, and the candidate predicate still owns Run liveness and attention.
 
+Statement-import coverage and drift share canonical export membership: each row
+belongs to its first-ingesting import and any explicitly recorded later exports.
+Unique import/row links exclude the first-owner pair before combining those sets,
+so reads avoid global deduplication without losing legacy-writer coverage.
+Retired rows retain membership proof; live-coverage readers exclude them.
+
 Independent entity-predicate, diagnostic-backed and statement-import account
 branches share the existing bounded Problems scheduler with four concurrent
 tasks. Entity branches precede diagnostics in declaration order, followed by
