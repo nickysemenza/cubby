@@ -44,7 +44,7 @@ import {
   recipeId,
   locationId,
   purchaseId,
-  purchaseRecord,
+  purchaseFinance,
   reportMember,
 } from "./record-dependencies";
 import {
@@ -209,18 +209,20 @@ const REPORTS = {
     locationAiDescriptionReport,
   ),
   "purchase.reconciliation": reportDependency(async (execution) => ({
-    blocks: purchaseReconciliationReport(await execution.read(purchaseRecord)),
+    blocks: purchaseReconciliationReport(
+      (await execution.read(purchaseFinance)).reconciliation!,
+    ),
   })),
   "purchase.project-allocation": reportDependency(async (execution) => ({
     blocks: await purchaseProjectAllocationReport(
       execution.request.db,
-      await execution.read(purchaseRecord),
+      (await execution.read(purchaseFinance)).allocation!,
     ),
   })),
   "purchase.financial-settlement": reportDependency(async (execution) => ({
     blocks: await purchaseFinancialSettlementReport(
       execution.request.db,
-      await execution.read(purchaseRecord),
+      (await execution.read(purchaseFinance)).settlement!,
     ),
   })),
   "expense.settlement": reportBuilder(expenseSettlementReport),

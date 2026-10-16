@@ -1,12 +1,15 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { purchase as purchaseTable } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { buildEntityReport } from ".";
+import { buildEntityReport, buildEntityReports } from ".";
 
 const records = (blocks: ReportBlock[]) =>
   blocks.find(
@@ -131,6 +134,136 @@ describe("finance entity reports", () => {
       "linkExpenses",
       "linkProducts",
     ]);
+  });
+
+  // Vendor reconciliation, displayed spend and incurred settlement deliberately
+  // use different ledgers. A narrow reader must not substitute one for another.
+  it("keeps refund verdicts and signed spend fresh across duplicate finance slots", async () => {
+    const purchase = await makePurchase("signed refunds", 100);
+    await addLine(purchase.id, "Vendor net", 80);
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      name: "Household contribution",
+      cost: -100,
+      economicRole: "reimbursement",
+      date: "2026-09-01",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      name: "Future unpriced contribution",
+      cost: null,
+      economicRole: "reimbursement",
+      date: "2026-09-01",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: true,
+    });
+    const account = await createRepoEntity(ctx, "financialAccount");
+    const transaction = async (status: "pending" | "posted") =>
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "refund",
+        status,
+        postedDate: status === "posted" ? "2026-09-02" : null,
+        transactionDate: "2026-09-01",
+        amount: -20,
+        allocations: [{ purchaseId: purchase.shortcode, amount: -20 }],
+      });
+    await transaction("pending");
+    expect(
+      stats(await report("purchase.reconciliation", purchase.shortcode))
+        ?.figures[2]?.text,
+    ).toBe("Needs review -$120.00");
+    // Posted evidence, not merely a pending refund, explains the vendor gap.
+    await transaction("posted");
+    const slots = [
+      "purchase.financial-settlement",
+      "purchase.reconciliation",
+      "purchase.project-allocation",
+    ] as const;
+    const batch = (
+      requested: Parameters<typeof buildEntityReports>[1]["slots"],
+    ) =>
+      countTestDbQueries(() =>
+        buildEntityReports(
+          ctx.db,
+          { id: purchase.shortcode, slots: requested },
+          async () => null,
+          ctx.actor,
+        ),
+      );
+    const single = await batch([...slots]);
+    const repeated = await batch([...slots, ...slots].reverse());
+    expect(repeated.queryCount).toBe(single.queryCount);
+    expect(repeated.result.reports.map(({ slot }) => slot)).toEqual(
+      [...slots, ...slots].reverse(),
+    );
+    for (const { slot, report: result } of repeated.result.reports)
+      expect(result.blocks).toEqual(await report(slot, purchase.shortcode));
+    expect(
+      stats(await report("purchase.reconciliation", purchase.shortcode))
+        ?.figures,
+    ).toMatchObject([
+      { value: 100 },
+      { value: -20 },
+      { text: "Refund-adjusted -$120.00" },
+    ]);
+    expect(
+      stats(await report("purchase.project-allocation", purchase.shortcode))
+        ?.figures[0]?.value,
+    ).toBe(-20);
+    expect(
+      stats(await report("purchase.financial-settlement", purchase.shortcode))
+        ?.figures,
+    ).toMatchObject([
+      { label: "Status", text: "Mismatch · 2" },
+      { value: -20 },
+      { value: -40 },
+      { value: -20 },
+    ]);
+    await addLine(purchase.id, "New vendor expense", 20);
+    expect(
+      stats(await report("purchase.reconciliation", purchase.shortcode))
+        ?.figures[2]?.text,
+    ).toBe("Reconciles");
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      name: "Incurred unpriced",
+      cost: null,
+      date: "2026-09-01",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+    });
+    expect(
+      stats(
+        await report("purchase.financial-settlement", purchase.shortcode),
+      )?.figures.some(({ label }) => label === "Delta"),
+    ).toBe(false);
+  });
+
+  it("rejects missing and deleted purchase identities for every finance slot", async () => {
+    const purchase = await makePurchase("deleted identity", null);
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchaseTable.id, purchase.id));
+    for (const slot of [
+      "purchase.reconciliation",
+      "purchase.project-allocation",
+      "purchase.financial-settlement",
+    ] as const) {
+      await expect(report(slot, purchase.shortcode)).rejects.toThrow(
+        /not found/i,
+      );
+      await expect(report(slot, "PUR-0000")).rejects.toThrow(/not found/i);
+    }
   });
 
   it("shows each purchase only its slice of a charge that settled two orders", async () => {

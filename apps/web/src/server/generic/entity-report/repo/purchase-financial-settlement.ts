@@ -107,7 +107,7 @@ export const composeFinancialSettlementSection = (
 
 export const purchaseFinancialSettlementReport = async (
   db: Database,
-  purchase: PurchaseOut,
+  purchase: Pick<PurchaseOut, "id" | "financialReconciliation">,
 ) => {
   const purchaseId = purchase.id;
   const linked = await listAll((pagination) =>
