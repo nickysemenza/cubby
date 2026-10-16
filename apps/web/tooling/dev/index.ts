@@ -5,6 +5,7 @@ import {
 } from "./state";
 import { localSimulatorServer } from "../../../../scripts/apple/lib/simulator-server.ts";
 import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
+import { sharedPostgresAddress } from "../../../../scripts/lib/shared-postgres.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -21,6 +22,7 @@ import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
 
 import { z } from "zod";
+import { devFixturePackSchema } from "./fixtures.ts";
 import {
   devProcessEnvironment,
   resolveDevProfile,
@@ -139,6 +141,21 @@ function installEnvironment(profile: DevProfile): void {
     if (!(key in safe)) delete process.env[key];
   Object.assign(process.env, safe);
 }
+/** The core corpus seeds inside the dev Worker (tooling/dev/seed-core.ts). */
+async function seedCore(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/__dev/seed`, {
+    method: "POST",
+    signal: AbortSignal.timeout(180_000),
+  });
+  if (!response.ok)
+    throw new Error(
+      `Core fixture seeding failed (${response.status}): ${await response.text()}`,
+    );
+  console.log(
+    `[dev-db] Core fixtures seeded in ${z.object({ ms: z.number() }).parse(await response.json()).ms} ms`,
+  );
+}
+
 async function readiness(session: Session) {
   const response = await fetch(`${session.origin}/__dev/ready`, {
     signal: AbortSignal.timeout(3_000),
@@ -272,6 +289,16 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     await phase("database", () =>
       run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
     );
+    const address = await sharedPostgresAddress();
+    if (address) {
+      // Every later child inherits this, so Vite, local Hyperdrive and the
+      // Worker connect past the container's published-port proxy.
+      process.env.CUBBY_DEV_DB_ADDRESS = address;
+      profile = resolveDevProfile(root, {
+        ...selectedEnvironment,
+        CUBBY_DEV_DB_ADDRESS: address,
+      });
+    }
     await phase("wasm", () =>
       run(profile, process.execPath, ["scripts/ensure.ts", "wasm"]),
     );
@@ -389,15 +416,7 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           `Local application initialization failed (${response.status}): ${await response.text()}`,
         );
     });
-    await phase("fixtures", async () => {
-      const { seedDevDatabase } = await import("./fixtures.ts");
-      installEnvironment(profile);
-      await seedDevDatabase({
-        databaseUrl: profile.databaseUrl,
-        baseURL: profile.origin,
-        pack: "core",
-      });
-    });
+    await phase("fixtures", () => seedCore(profile.origin));
     await phase("readiness", async () => {
       for (let attempt = 0; ; attempt++) {
         try {
@@ -560,6 +579,8 @@ async function main(): Promise<void> {
     return launchLocalDevSimulator(session.origin, args.slice(1));
   }
   if (command === "seed") {
+    const pack = devFixturePackSchema.parse(args[1] ?? "core");
+    if (pack === "core") return seedCore(session.origin);
     installEnvironment({
       ...profile,
       origin: session.origin,
@@ -571,12 +592,11 @@ async function main(): Promise<void> {
         R2_PUBLIC_URL: session.origin,
       },
     });
-    const { seedDevDatabase, devFixturePackSchema } =
-      await import("./fixtures.ts");
+    const { seedDevDatabase } = await import("./fixtures.ts");
     return seedDevDatabase({
       databaseUrl: profile.databaseUrl,
       baseURL: session.origin,
-      pack: devFixturePackSchema.parse(args[1] ?? "core"),
+      pack,
     });
   }
   throw new Error(`Unknown dev command: ${command}`);

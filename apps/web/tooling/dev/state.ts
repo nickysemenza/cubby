@@ -6,7 +6,10 @@ export const DEV_USER_NAME = "Cubby Dev";
 export const LOCAL_FIXTURE_VERSION = 4;
 
 // This guard also runs in workerd; keep it free of Node-only profile tooling.
-const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1"]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
+// The shared Apple container, reached directly rather than through its
+// published loopback port.
+const CONTAINER_HOST = /^192\.168\.\d{1,3}\.\d{1,3}$/u;
 // `cubby_dev`, or a branch's own `cubby_dev_<name>` (CUBBY_DEV_DB_NAME) in the
 // same container, so a branch with newer migrations never migrates the
 // database other worktrees share.
@@ -35,8 +38,10 @@ export function assertDevDatabaseUrl(databaseUrl: string | undefined): URL {
   const database = url.pathname.replace(/^\//, "");
   if (
     url.protocol !== "postgresql:" ||
-    !ALLOWED_HOSTS.has(url.hostname) ||
-    url.port !== DEV_DB_PORT ||
+    !(
+      (LOOPBACK_HOSTS.has(url.hostname) && url.port === DEV_DB_PORT) ||
+      (CONTAINER_HOST.test(url.hostname) && url.port === "5432")
+    ) ||
     url.username !== "postgres" ||
     url.password !== "password" ||
     !DEV_DB_NAME.test(database) ||
@@ -45,7 +50,7 @@ export function assertDevDatabaseUrl(databaseUrl: string | undefined): URL {
   ) {
     throw new Error(
       "Refusing DATABASE_URL: expected the exact local dev PostgreSQL " +
-        `connection (postgres@localhost/127.0.0.1:${DEV_DB_PORT}/cubby_dev[_<name>]).`,
+        `connection (postgres@localhost/127.0.0.1:${DEV_DB_PORT} or the container's 192.168.x.x:5432, database cubby_dev[_<name>]).`,
     );
   }
   return url;

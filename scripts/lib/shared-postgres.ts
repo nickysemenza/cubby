@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { tcpReady, waitFor } from "../apple/lib/apple-container.ts";
 import {
+  containerAddress,
+  tcpReady,
+  waitFor,
+} from "../apple/lib/apple-container.ts";
+import {
+  devContainerBackend,
   devContainerCli as containerCli,
   findDevContainer as findContainer,
   stopDevContainer as stopAndRemove,
@@ -135,6 +140,16 @@ export async function ensureSharedPostgres(): Promise<void> {
     tcpReady(SHARED_POSTGRES_HOST, SHARED_POSTGRES_PORT),
   );
   await waitFor("PostgreSQL query readiness", () => psql("SELECT 1"));
+}
+
+/**
+ * The Apple container's own address. Its published-port proxy cost about
+ * 5 ms at p90 per query (mean 1.5 ms) against 0.3 ms direct, and a seeded
+ * write issues ~45 queries. Docker keeps the published loopback port.
+ */
+export async function sharedPostgresAddress(): Promise<string | undefined> {
+  if (devContainerBackend() !== "apple") return undefined;
+  return `${await containerAddress(SHARED_POSTGRES)}:5432`;
 }
 
 export async function stopSharedPostgres(): Promise<void> {

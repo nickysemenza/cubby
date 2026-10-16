@@ -43,6 +43,14 @@ describe("assertDevDatabaseUrl", () => {
       "a branch suffix that needs quoting",
       "postgresql://postgres:password@localhost:55432/cubby_dev_a-b",
     ],
+    [
+      "the container address on its published port",
+      "postgresql://postgres:password@192.168.64.5:55432/cubby_dev",
+    ],
+    [
+      "a non-container private address",
+      "postgresql://postgres:password@10.0.0.5:5432/cubby_dev",
+    ],
   ];
 
   it.each(cases)("refuses %s", (_name, url) => {
@@ -54,6 +62,13 @@ describe("assertDevDatabaseUrl", () => {
       "postgresql://postgres:password@localhost:55432/cubby_dev",
     );
     expect(url.hostname).toBe("localhost");
+  });
+
+  it("accepts the shared container's direct address", () => {
+    const url = assertDevDatabaseUrl(
+      "postgresql://postgres:password@192.168.64.5:5432/cubby_dev_0123456789",
+    );
+    expect(url.port).toBe("5432");
   });
 
   it("accepts a branch-named dev database (CUBBY_DEV_DB_NAME)", () => {

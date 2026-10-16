@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySchema } from "@cubby/schemas/entity-core";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -66,6 +65,23 @@ const storageOptions = z.object({
   referenceDate: plainDate.optional(),
 });
 export type HouseholdStorage = z.infer<typeof storageOptions>;
+
+export type FixtureImageLabel = "shirt" | "boots" | "label";
+/**
+ * Synthetic wardrobe PNG bytes. Node callers read the checkout's e2e fixtures;
+ * the dev Worker passes bundled bytes because workerd has no checkout files.
+ */
+export type FixtureImageReader = (label: FixtureImageLabel) => Promise<Buffer>;
+
+const readFixtureImageFromDisk: FixtureImageReader = async (label) => {
+  const { readFile } = await import("node:fs/promises");
+  return readFile(
+    new URL(
+      `../../tests/e2e/fixtures/synthetic-wardrobe-${label}.png`,
+      import.meta.url,
+    ),
+  );
+};
 
 /** Only the guarded dev/native targets or an IntegreSQL test lease may seed. */
 function assertHouseholdDatabase(pool: Pool) {
@@ -143,6 +159,7 @@ export async function seedCorpus(
   pool: Pool,
   userId: string,
   storage: HouseholdStorage,
+  readImage: FixtureImageReader = readFixtureImageFromDisk,
 ): Promise<void> {
   assertHouseholdDatabase(pool);
   const options = storageOptions.parse(storage);
@@ -171,7 +188,7 @@ export async function seedCorpus(
     [HOUSEHOLD_VERSION],
   );
   try {
-    await seedConnectedHousehold(pool, userId, options);
+    await seedConnectedHousehold(pool, userId, options, readImage);
     const coverage = await readHouseholdCoverage(pool);
     console.log(
       `[household] ${coverage.map((row) => `${row.entity}:${row.status === "external" ? row.reason : row.count}`).join(", ")}`,
@@ -202,6 +219,7 @@ async function seedConnectedHousehold(
   pool: Pool,
   userId: string,
   storage: HouseholdStorage,
+  readImage: FixtureImageReader,
 ) {
   const faker = fakerFromSeed(DEV_FAKER_SEED);
   const referenceDate = storage.referenceDate ?? householdLocalDate();
@@ -782,7 +800,7 @@ async function seedConnectedHousehold(
     status: "blocked",
   });
 
-  await seedHouseholdPhotos(db, context, userId, storage, clothing);
+  await seedHouseholdPhotos(db, context, userId, storage, clothing, readImage);
 }
 
 async function seedHouseholdPhotos(
@@ -791,6 +809,7 @@ async function seedHouseholdPhotos(
   userId: string,
   storage: HouseholdStorage,
   clothing: readonly CreatedEntity[],
+  readImage: FixtureImageReader,
 ) {
   const run = await startPhotoInventoryRun(db, {
     actorUserId: testUserId(userId),
@@ -809,12 +828,7 @@ async function seedHouseholdPhotos(
   for (const [index, label] of (
     ["shirt", "boots", "label"] as const
   ).entries()) {
-    const bytes = await readFile(
-      new URL(
-        `../../tests/e2e/fixtures/synthetic-wardrobe-${label}.png`,
-        import.meta.url,
-      ),
-    );
+    const bytes = await readImage(label);
     const key = `${storage.keyPrefix}/household/${label}.png`;
     const upload = await fetch(
       `${storage.storageOrigin}/${encodeURIComponent(storage.bucket)}/${key}`,

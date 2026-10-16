@@ -178,7 +178,13 @@ export function resolveDevProfile(
     throw new Error(
       "CUBBY_DEV_DB_NAME must be cubby_dev or cubby_dev_<a-z0-9_>",
     );
-  const databaseUrl = `postgresql://postgres:password@localhost:55432/${name}`;
+  // The supervisor sets the shared container's direct address once it runs.
+  const address = inherited.CUBBY_DEV_DB_ADDRESS ?? "localhost:55432";
+  if (!/^(?:localhost:55432|192\.168\.\d{1,3}\.\d{1,3}:5432)$/u.test(address))
+    throw new Error(
+      "CUBBY_DEV_DB_ADDRESS must be the shared container's 192.168.x.x:5432",
+    );
+  const databaseUrl = `postgresql://postgres:password@${address}/${name}`;
   assertDatabaseOverrides(inherited, databaseUrl);
   const port = Number(inherited.PORT ?? 3000);
   const inspectorPort = Number(inherited.CUBBY_DEV_INSPECTOR_PORT ?? 9229);

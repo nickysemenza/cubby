@@ -226,6 +226,46 @@ export default {
         headers.append("Set-Cookie", cookie);
       return new Response(null, { status: 303, headers });
     }
+    if (url.pathname === "/__dev/seed") {
+      if (request.method !== "POST")
+        return new Response(null, { status: 405, headers: { Allow: "POST" } });
+      const started = performance.now();
+      try {
+        const { seedCoreFixtures } = await import("./seed-core");
+        await seedCoreFixtures({
+          databaseUrl: env.DATABASE_URL,
+          origin: url.origin,
+          bucket: env.R2_BUCKET_NAME,
+          keyPrefix: env.R2_KEY_PREFIX,
+          // The first auth request also binds the Worker env, which gives the
+          // corpus's writes the local background queue.
+          post: (path, body) =>
+            worker.fetch(
+              new Request(new URL(path, url.origin), {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Origin: url.origin,
+                },
+                body: JSON.stringify(body),
+              }),
+              env,
+              ctx,
+            ),
+        });
+      } catch (error) {
+        return new Response(
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error),
+          { status: 500, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      return Response.json(
+        { pack: "core", ms: Math.round(performance.now() - started) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     if (url.pathname === "/__dev/preview") {
       if (request.method !== "GET")
         return new Response(null, { status: 405, headers: { Allow: "GET" } });
