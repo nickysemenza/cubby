@@ -375,9 +375,8 @@ fails generation, and `cubby-checks:ci-lanes` fails when the file is stale.
 `scripts/ci-lanes.test.ts` asserts that every file Nx's hash plan reads for a
 lane's tasks selects that lane, and that every Nx task a lane's `ci.yaml`
 commands run is one that lane routes. Any deleted or renamed file also
-selects the docs lane, because it may be a relative link's target. `Plan`
-runs the outward-text check on the slim image's own Node 24, without
-`setup-node`; a missing or older Node fails `Plan` closed. Any tree compared with a green tree is
+selects the docs lane, because it may be a relative link's target. The dependency-free Plan policy and final outward-text check use the slim
+image's own Node 24 without `setup-node`; a missing or older Node fails closed. Any tree compared with a green tree is
 correct, ancestor or not: a lane whose inputs match would replay that tree's
 pass. Nightly and full manual runs, and a repository with no green main run, start
 every lane. Lanes with identical groups share one filter entry, named
@@ -612,6 +611,6 @@ Choose workflow/routing checks under the
 use `actionlint`, and `pnpm check:plan` explains selected lanes without asking
 for a broad local suite.
 
-After a material workflow change, compare at least ten representative runs for
-PR p50/p95 wall time, merge-to-deploy time, total job-minutes, cancellations,
-and cache behavior.
+Use naturally occurring runs to compare PR wall time, queueing, job-minutes,
+and cache behavior. Ship verified improvements without a sampling quota;
+measure before claiming a particular speedup.

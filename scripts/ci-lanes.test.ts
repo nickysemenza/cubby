@@ -230,3 +230,22 @@ test("each lane's ci.yaml commands run only tasks routed to that lane", async ()
   }
   assert.ok(checked > 20, `parsed ${checked} tasks from ci.yaml`);
 });
+
+test("import browser routing covers dedicated protocol and harness changes", () => {
+  const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
+  const filter = workflow
+    .split("      - name: Identify relevant purchase-import changes")[1]!
+    .split("      # A journey-only run")[0]!;
+  const patterns = [...filter.matchAll(/- '([^']+)'/gu)].map(
+    (match) => match[1]!,
+  );
+  const matches = picomatch(patterns);
+  for (const file of [
+    "apps/web/tooling/purchase-agent-script.ts",
+    "apps/web/tooling/purchase-agent-workerd-harness.ts",
+    "apps/web/tests/e2e/harness-services/purchase-browser.ts",
+    "apps/web/src/server/mcp/purchase-agent-protocol.ts",
+  ])
+    assert.ok(matches(file), file);
+  assert.equal(matches("apps/web/src/features/calendar/calendar.tsx"), false);
+});

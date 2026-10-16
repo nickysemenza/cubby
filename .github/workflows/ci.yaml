@@ -8,9 +8,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Nightly backstop: every lane runs uncached, so a pass reused from another
-    # platform, toolchain, or skipped lane is rechecked on CI's. A manual
-    # dispatch runs the same full pass (and seeds main's native caches).
+    # Nightly selects every lane and reuses passes valid for the observed
+    # environment. Fresh diagnostics are an explicit manual option.
     - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
@@ -217,6 +216,9 @@ jobs:
               - 'apps/web/src/features/purchase/**'
               - 'apps/web/tests/e2e/purchase-import*'
               - 'apps/web/tests/e2e/fixtures/purchases*'
+              - 'apps/web/tooling/purchase-agent-*.ts'
+              - 'apps/web/tests/e2e/harness-services/purchase-*.ts'
+              - 'apps/web/src/server/mcp/purchase-agent-protocol.ts'
               - '.claude/skills/purchase-import/**'
               - 'packages/schemas/src/purchase*'
       # A journey-only run selects no lane.
@@ -491,8 +493,8 @@ jobs:
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
 
   # Each Apple lane queues macOS only when Linux did not verify its cached
-  # pass; a failed probe falls through to macOS. The nightly backstop skips
-  # the probe and rebuilds.
+  # pass; a failed probe falls through to macOS. Queued jobs probe again
+  # before preparing native dependencies.
   apple-host:
     name: Apple host tests
     needs: [plan, apple-probe]
@@ -571,6 +573,7 @@ jobs:
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
@@ -578,6 +581,7 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.cache-hit }}
           matched-key: ${{ steps.apple.outputs.save-matched-key }}
       - name: Save SPM clone cache
+        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages

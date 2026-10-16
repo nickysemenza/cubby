@@ -44,9 +44,20 @@ export function layerProblems(layer: {
     problems.push("mergeability is blocked or not yet known");
   if (layer.event !== "pull_request")
     problems.push("no normal PR CI run on the current head");
-  if (layer.status !== "completed" || layer.gate !== "success")
+  if (layer.gate !== "success")
     problems.push("current required CI has not passed");
   return problems;
+}
+
+// Runs arrive newest first. Only an explicitly identified journey is skipped;
+// an ordinary run whose jobs have not appeared yet must block older evidence.
+export function selectOrdinaryRun<T>(
+  runs: T[],
+  jobNames: (run: T) => string[],
+) {
+  return runs.find(
+    (run) => !jobNames(run).includes("Journey run (not the merge gate)"),
+  );
 }
 
 const api = (path: string) =>
@@ -81,20 +92,29 @@ function preflight(repository: string, stack: string) {
           `${root}/actions/workflows/ci.yaml/runs?event=pull_request&head_sha=${head}&per_page=20`,
         ),
       ).workflow_runs;
-    const run = runs.find(
+    const candidates = runs.filter(
       (candidate) =>
         candidate.head_sha === head &&
         candidate.pull_requests.some((pr) => pr.number === pull.number),
     );
-    const jobs = run
-      ? z
-          .object({
-            jobs: z.array(
-              z.object({ name: z.string(), conclusion: z.string().nullable() }),
-            ),
-          })
-          .parse(api(`${root}/actions/runs/${run.id}/jobs?per_page=100`)).jobs
-      : [];
+    const jobsByRun = new Map<
+      number,
+      { name: string; conclusion: string | null }[]
+    >();
+    const run = selectOrdinaryRun(candidates, (candidate) => {
+      const jobs = z
+        .object({
+          jobs: z.array(
+            z.object({ name: z.string(), conclusion: z.string().nullable() }),
+          ),
+        })
+        .parse(
+          api(`${root}/actions/runs/${candidate.id}/jobs?per_page=100`),
+        ).jobs;
+      jobsByRun.set(candidate.id, jobs);
+      return jobs.map((job) => job.name);
+    });
+    const jobs = run ? jobsByRun.get(run.id)! : [];
     const errors = layerProblems({
       ...pull,
       ancestor: ["ahead", "identical"].includes(comparison.status),

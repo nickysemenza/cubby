@@ -53,22 +53,6 @@ runs:
       with:
         wasm: ${{ inputs.wasm }}
 
-    # A miss fails before building and never caches; the caller's own build
-    # step compiles it.
-    - name: Probe the cached ${{ inputs.probe }} pass
-      id: probe
-      if: inputs.probe != ''
-      shell: bash
-      env:
-        CUBBY_NX_CACHE_PROBE: "1"
-        TARGET: ${{ inputs.probe }}
-      run: |
-        if pnpm exec nx run "$TARGET" --outputStyle=stream; then
-          echo "hit=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "::notice::No cached $TARGET pass; restoring the compilation caches"
-        fi
-
     - name: Configure Apple Rust build
       shell: bash
       env:
@@ -96,13 +80,31 @@ runs:
           echo "CUBBY_FFI_TARGETS=$TARGETS"
         } >> "$GITHUB_ENV"
 
-    - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
+    # A miss fails before building and never caches; the caller's own build
+    # step compiles it.
+    - name: Probe the cached ${{ inputs.probe }} pass
+      id: probe
+      if: inputs.probe != ''
+      shell: bash
+      env:
+        CUBBY_NX_CACHE_PROBE: "1"
+        TARGET: ${{ inputs.probe }}
+      run: |
+        if pnpm exec nx run "$TARGET" --outputStyle=stream; then
+          echo "hit=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::No cached $TARGET pass; restoring the compilation caches"
+        fi
+
+    - if: steps.probe.outputs.hit != 'true'
+      uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       with:
         cache: true
         cache-workspaces: . -> target-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
         cache-key: apple-ffi-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
 
     - name: Install requested Apple Rust targets
+      if: steps.probe.outputs.hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -114,6 +116,7 @@ runs:
         esac
 
     - name: Compute Apple FFI cache key
+      if: steps.probe.outputs.hit != 'true'
       id: fingerprint
       shell: bash
       run: |
@@ -123,6 +126,7 @@ runs:
         echo "CUBBY_FFI_SETUP_FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
 
     - name: Restore target-specific Apple FFI output
+      if: steps.probe.outputs.hit != 'true'
       id: ffi-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
@@ -137,7 +141,7 @@ runs:
     # CI and journeys install Nx; archive jobs build before installing JS
     # deps. Reuse the shared artifact cache whenever the workspace is available.
     - name: Build target-specific Apple FFI
-      if: steps.ffi-cache.outputs.cache-hit != 'true'
+      if: steps.probe.outputs.hit != 'true' && steps.ffi-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         if node --input-type=module -e 'import.meta.resolve("nx/bin/nx.js")' >/dev/null 2>&1; then
@@ -147,11 +151,12 @@ runs:
         fi
 
     - name: Check committed UniFFI bindings
+      if: steps.probe.outputs.hit != 'true'
       shell: bash
       run: git diff --exit-code -- apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
 
     - name: Save target-specific Apple FFI output
-      if: success() && steps.ffi-cache.outputs.cache-hit != 'true'
+      if: success() && steps.probe.outputs.hit != 'true' && steps.ffi-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: |
@@ -162,7 +167,7 @@ runs:
 
     # The host package build doesn't need XcodeGen.
     - name: Install XcodeGen
-      if: inputs.xcodegen == 'true'
+      if: inputs.xcodegen == 'true' && steps.probe.outputs.hit != 'true'
       shell: bash
       run: brew install xcodegen
 
