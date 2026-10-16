@@ -11,13 +11,16 @@ import {
 } from "~/contracts/mcp-projections";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { product, ingredient as ingredientTable } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
+import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import {
   generatedMcpEntityMutationCreateResultSchema,
   generatedMcpEntityMutationUpdateResultSchema,
 } from "~/server/generated/entity-bindings.gen";
+import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   callMcpTool,
@@ -43,6 +46,111 @@ const requireMutationSuccess = (
 describe("mutation response demand", () => {
   const ctx = withTestDb("mcp");
   afterEach(() => setCfEnv(undefined));
+
+  // Full and projected operations retain distinct output and input contracts.
+  it("keeps full operations full and requires read demand before writing", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const result = await ENTITY_KERNEL_OPERATIONS.product.create(context, {
+      data: makeProductInput({ name: "Synthetic full operation demand" }),
+    });
+    expect(entityBrowserMutationResultSchema.parse(result).action).toBe(
+      "create",
+    );
+    const name = "Synthetic absent read demand";
+    await expect(
+      ENTITY_KERNEL_OPERATIONS.product.createRead(
+        context,
+        fromPartial<
+          Parameters<typeof ENTITY_KERNEL_OPERATIONS.product.createRead>[1]
+        >({ data: makeProductInput({ name }) }),
+      ),
+    ).rejects.toThrow("expected array");
+    expect(
+      await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.name, name),
+        columns: { id: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  // Invalid demand must fail before a write, without claiming a committed Product.
+  it("rejects unknown mutation fields before creating a Product", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const name = "Synthetic invalid mutation demand";
+    await expect(
+      executeEntityMutationRead(
+        context,
+        {
+          action: "create",
+          entity: "product",
+          data: makeProductInput({ name }),
+        },
+        ["syntheticUnknownField"],
+      ),
+    ).rejects.toThrow("Unknown mutation response field");
+    expect(
+      await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.name, name),
+        columns: { id: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  // Old stored links to deleted ingredients follow the canonical full reader.
+  it("updates summary Products with historical deleted ingredient links", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const ingredient = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic historical ingredient",
+    );
+    if (!ingredient) throw new Error("Synthetic ingredient missing");
+    const created = await callMcpTool(
+      createMcpServer(),
+      "entity",
+      {
+        action: "create",
+        entity: "product",
+        resultDetail: "summary",
+        data: makeProductInput({
+          name: "Synthetic historical ingredient product",
+          ingredientId: ingredientShortcode.parse(ingredient.shortcode),
+        }),
+      },
+      kernelRequestContext(context),
+      { entityKernel: context },
+    );
+    requireMutationSuccess(created);
+    const id = entitySummaryResultSchema.parse(created.structuredContent).item
+      ?.id;
+    if (!id) throw new Error("Synthetic Product identity missing");
+    await getDb(ctx.db)
+      .update(ingredientTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(ingredientTable.id, ingredient.id));
+    const updated = await callMcpTool(
+      createMcpServer(),
+      "entity",
+      {
+        action: "update",
+        entity: "product",
+        id,
+        resultDetail: "summary",
+        data: { name: "Synthetic renamed historical ingredient product" },
+      },
+      kernelRequestContext(context),
+      { entityKernel: context },
+    );
+    requireMutationSuccess(updated);
+    expect(
+      entitySummaryResultSchema.parse(updated.structuredContent).item?.name,
+    ).toBe("Synthetic renamed historical ingredient product");
+  });
 
   // Ingredient identity is needed by a side effect even when the response omits it.
   it("publishes recipe recomputation after summary and full Product writes commit", async () => {

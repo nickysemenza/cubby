@@ -85,7 +85,7 @@ export const readProductMutationFields = async (
   const current = await getDb(db).query.product.findFirst({
     where: and(eq(productTable.id, id), notDeleted(productTable)),
     columns: { id: true },
-    with: { ingredient: { columns: { shortcode: true } } },
+    with: { ingredient: { columns: { shortcode: true, deletedAt: true } } },
   });
   if (!current)
     throw createAppError(
@@ -95,9 +95,10 @@ export const readProductMutationFields = async (
   return {
     ...selectListReadFields(product, fields),
     id: product.id,
-    ingredient: current.ingredient
-      ? { id: ingredientShortcode.parse(current.ingredient.shortcode) }
-      : null,
+    ingredient:
+      current.ingredient && !current.ingredient.deletedAt
+        ? { id: ingredientShortcode.parse(current.ingredient.shortcode) }
+        : null,
   };
 };
 

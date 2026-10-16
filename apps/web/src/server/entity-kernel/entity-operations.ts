@@ -22,6 +22,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
+import { listReadFields } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
@@ -255,11 +256,27 @@ const recordWriteSources = async <
 
 const writtenCode = z.object({ id: z.string() });
 
+type MutationReadDemand<Read extends boolean> = Read extends true
+  ? { fields: readonly string[] }
+  : { fields?: never };
+
+const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
+  const requested = z.array(z.string()).parse(fields);
+  const allowed = Object.values(listReadFields(entity)).flat();
+  for (const field of requested) {
+    if (!allowed.includes(field))
+      throw new Error(`Unknown mutation response field: ${field}`);
+  }
+  return requested;
+};
+
 const buildEntityOperations = <
   const E extends EntityKernelEntity,
   const S extends EntityBindingSchemas,
+  const Read extends boolean,
 >(
   binding: EntityKernelCoreBinding<E, S>,
+  readMode: Read,
 ) => ({
   get: bindWorkflow(
     workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
@@ -424,13 +441,14 @@ const buildEntityOperations = <
       {
         data: unknown;
         sources?: EntitySourceInput[];
-        fields?: readonly string[];
-      }
+      } & MutationReadDemand<Read>
     >(`${binding.entity}.create`)
       .call("validated", async (_, { input }) => {
         const schema = binding.schemas.createInput;
         const read = binding.repository.createRead;
-        const fields = input.fields;
+        const fields = readMode
+          ? mutationReadFields(binding.entity, input.fields)
+          : undefined;
         const run = binding.repository.create;
         if (!schema || !run)
           throw createAppError(
@@ -439,6 +457,7 @@ const buildEntityOperations = <
           );
         assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
+          projected: fields !== undefined && read !== undefined,
           run:
             fields && read
               ? (
@@ -505,14 +524,13 @@ const buildEntityOperations = <
           created.projectedRefs,
         ),
       )
-      .output(({ input, created }) => {
-        const item =
-          input.fields && binding.repository.createRead
-            ? listReadRowSchema.parse(created.output)
-            : parseSchema<S["output"], typeof created.output>(
-                binding.schemas.output,
-                created.output,
-              );
+      .output(({ validated, created }) => {
+        const item = validated.projected
+          ? listReadRowSchema.parse(created.output)
+          : parseSchema<S["output"], typeof created.output>(
+              binding.schemas.output,
+              created.output,
+            );
         const result = {
           action: "create" as const,
           entity: binding.entity,
@@ -529,13 +547,14 @@ const buildEntityOperations = <
         id: string;
         data: unknown;
         sources?: EntitySourceInput[];
-        fields?: readonly string[];
-      }
+      } & MutationReadDemand<Read>
     >(`${binding.entity}.update`)
       .call("validated", async ({ context }, { input }) => {
         const schema = binding.schemas.updateInput;
         const read = binding.repository.updateRead;
-        const fields = input.fields;
+        const fields = readMode
+          ? mutationReadFields(binding.entity, input.fields)
+          : undefined;
         const run = binding.repository.update;
         if (!schema || !run)
           throw createAppError(
@@ -544,6 +563,7 @@ const buildEntityOperations = <
           );
         assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
+          projected: fields !== undefined && read !== undefined,
           run:
             fields && read
               ? (
@@ -693,14 +713,13 @@ const buildEntityOperations = <
           updated.projectedRefs,
         ),
       )
-      .output(({ input, updated }) => {
-        const item =
-          input.fields && binding.repository.updateRead
-            ? listReadRowSchema.parse(updated.output)
-            : parseSchema<S["output"], typeof updated.output>(
-                binding.schemas.output,
-                updated.output,
-              );
+      .output(({ validated, updated }) => {
+        const item = validated.projected
+          ? listReadRowSchema.parse(updated.output)
+          : parseSchema<S["output"], typeof updated.output>(
+              binding.schemas.output,
+              updated.output,
+            );
         const result = {
           action: "update" as const,
           entity: binding.entity,
@@ -796,7 +815,8 @@ export const defineEntityOperations = <
 >(
   binding: EntityKernelCoreBinding<E, S>,
 ) => {
-  const operations = buildEntityOperations(binding);
+  const operations = buildEntityOperations(binding, false);
+  const reads = buildEntityOperations(binding, true);
   return {
     ...operations,
     create: bindWorkflow({
@@ -812,14 +832,14 @@ export const defineEntityOperations = <
       ),
     }),
     createRead: bindWorkflow({
-      ...operations.create.definition,
-      output: mapWorkflowValue(operations.create.definition.output, (result) =>
+      ...reads.create.definition,
+      output: mapWorkflowValue(reads.create.definition.output, (result) =>
         entityMutationReadResultSchema.parse(result),
       ),
     }),
     updateRead: bindWorkflow({
-      ...operations.update.definition,
-      output: mapWorkflowValue(operations.update.definition.output, (result) =>
+      ...reads.update.definition,
+      output: mapWorkflowValue(reads.update.definition.output, (result) =>
         entityMutationReadResultSchema.parse(result),
       ),
     }),

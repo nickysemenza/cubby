@@ -1261,6 +1261,10 @@ repository writes fall back to their full reader until they support requested
 fields. Full responses and direct domain helpers retain their existing output
 and commit/error contracts, including Product's explicit committed-write receipt
 when a post-commit food read-back fails.
+Full operations cannot select a partial output; read operations require fields
+and reject undeclared fields before writing. Summary responses do not load
+output-only USDA food details, so failures of that unrequested read do not fail
+a summary write. Required write validation and side effects still run.
 
 Timing evidence comes from
 `pnpm --dir apps/web exec tsx tooling/checks/read-performance.ts --origin <origin> --output <artifact.json>`
