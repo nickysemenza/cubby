@@ -10,12 +10,7 @@ model_reasoning_effort = "low"
 
 # Filter before returning output; retain full logs in ignored artifacts/ for
 # targeted read-back. This history cap is a fallback, not a diagnostic summary.
-tool_output_token_limit = 4000
-
-# Bound catalog overhead without deleting installed skills. Hosts that inject
-# their own catalog must manage that budget separately.
-[skills]
-max_context_tokens = 4000
+tool_output_token_limit = 24000
 
 # Subagents are for parallel, read-heavy work; see docs/agents/model-routing.md.
 [agents]

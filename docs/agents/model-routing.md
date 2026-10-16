@@ -98,9 +98,10 @@ diagnosed gaps with the evidence needed to resolve them.
 For verbose commands, save full output under ignored `artifacts/` and return
 status plus relevant excerpts. Select fields and page records before returning
 MCP results. Budget the combined output of batched calls; truncation requires
-targeted read-back before drawing a conclusion. Runtime tool-output and skill
-catalog budgets live in `.codex/config.toml`; they do not reduce host-injected
-instructions or configure Claude. Keep concise progress and completion reports.
+targeted read-back before drawing a conclusion. The runtime tool-output limit
+lives in `.codex/config.toml`; it does not reduce host-injected instructions or
+configure Claude. Keep the skill catalog uncapped so token savings do not limit
+discovery. Keep concise progress and completion reports.
 
 Use host completion notifications for CI/jobs where available, otherwise one
 bounded wait; unchanged polling adds no evidence. Validation ownership and
