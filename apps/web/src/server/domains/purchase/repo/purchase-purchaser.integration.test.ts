@@ -70,10 +70,31 @@ describe("dated card attribution", () => {
         ],
       },
     );
-    expect(account.authorizedUsersLabel).toBe("Morgan · 2026-06-01 → …");
-    expect(account.fundingPeriodsLabel).toBe(
-      "Alex · … → 2026-04-30\nShared funds · 2026-05-01 → …",
-    );
+    expect(account.authorizedUserItems).toEqual([
+      {
+        entity: "ledgerParty",
+        id: morgan.id,
+        title: "Morgan",
+        subtitle: "2026-06-01 → …",
+        trailing: null,
+      },
+    ]);
+    expect(account.fundingPeriodItems).toEqual([
+      {
+        entity: "ledgerParty",
+        id: alex.id,
+        title: "Alex",
+        subtitle: "… → 2026-04-30",
+        trailing: null,
+      },
+      {
+        entity: "ledgerParty",
+        id: household.id,
+        title: "Shared funds",
+        subtitle: "2026-05-01 → …",
+        trailing: null,
+      },
+    ]);
     const { output: vendorAccount } = await createRepoEntity(
       ctx,
       "vendorAccount",

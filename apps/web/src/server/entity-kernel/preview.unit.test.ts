@@ -34,6 +34,48 @@ describe("previewEntity field suggestions", () => {
     mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
+  // Creating from a preview must not bypass a field's mandatory member review.
+  it("keeps high-confidence account suggestions out of the proposed create body", async () => {
+    const choice = (value: string) => ({
+      value,
+      label: value,
+      detail: null,
+      confidence: "high" as const,
+      probability: 0.99,
+      reasoning: "Explicit synthetic evidence",
+      alternatives: [],
+      operation: "set" as const,
+      removals: [],
+    });
+    mocks.suggestFields.mockResolvedValue({
+      suggestions: {
+        issuer: choice("Example Bank"),
+        network: choice("visa"),
+        primaryCardholderId: choice("LPY-4K7M"),
+      },
+    });
+    const result = await previewEntity(
+      kernelContext,
+      {
+        entity: "financialAccount",
+        data: {
+          name: "Example Rewards",
+          identity: { kind: "credit_card", issuer: null, network: null },
+        },
+        context: { targets: ["issuer", "network", "primaryCardholderId"] },
+      },
+      ports,
+    );
+    expect(result.suggestions).toMatchObject({
+      issuer: { applied: false },
+      network: { applied: false },
+      primaryCardholderId: { applied: false },
+    });
+    expect(result.proposed.issuer).not.toBe("Example Bank");
+    expect(result.proposed.network).not.toBe("visa");
+    expect(result.proposed.primaryCardholderId).not.toBe("LPY-4K7M");
+  });
+
   it("keeps an unresolved receipt role pending before project suggestions", async () => {
     mocks.resolveExpense.mockResolvedValue({});
     mocks.suggestFields.mockResolvedValue({ suggestions: {} });

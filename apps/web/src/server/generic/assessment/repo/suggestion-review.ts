@@ -10,6 +10,7 @@ import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
@@ -322,6 +323,10 @@ export async function acceptSuggestion(
       .for("update");
     if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
     const parsed = suggestionRowSchema.parse(row);
+    if (automatic && requiresSuggestionReview(parsed.entity, parsed.field))
+      throw new Error(
+        `Field ${parsed.entity}.${parsed.field} requires member review`,
+      );
     // The shared write path excludes this row by status while superseding its
     // pending siblings. A failed application rolls the status transition back.
     await getDb(transactionDb)

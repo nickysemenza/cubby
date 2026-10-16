@@ -4,6 +4,10 @@ import {
 } from "@cubby/schemas/ai";
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
+import {
+  basisValueOf,
+  requiresSuggestionReview,
+} from "@cubby/schemas/field-suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   suggestionSweepRunInput,
@@ -157,6 +161,8 @@ async function suggestTarget(
     return { primary: null, entries, financeReviewFingerprint: null };
   }
   const primary = makeSweepSuggestion({
+    entity: input.entity,
+    field: input.field,
     currentValue: target.currentValue,
     decision: {
       value: jsonValue(decision.value),
@@ -205,6 +211,8 @@ async function suggestTarget(
       const pairedRow =
         alt &&
         makeSweepSuggestion({
+          entity: input.entity,
+          field: input.field,
           currentValue: target.currentValue,
           decision: {
             value: jsonValue(alt.value),
@@ -261,10 +269,7 @@ export async function prepareSuggestionSweep(
       const recordId = await resolveLiveShortcode(db, row.id, input.entity);
       if (!recordId) continue;
       const basis = Object.fromEntries(
-        Object.entries(row).flatMap(([key, value]) => {
-          const parsed = z.string().nullable().safeParse(value);
-          return parsed.success ? [[key, parsed.data]] : [];
-        }),
+        Object.entries(row).map(([key, value]) => [key, basisValueOf(value)]),
       );
       for (const field of input.fields) {
         const currentValue = suggestionValueSchema.parse(row[field] ?? null);
@@ -611,6 +616,8 @@ const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
 
 /** Converts a decision into its durable sweep row; only the pinned model may apply an Addition. */
 export function makeSweepSuggestion(args: {
+  entity: SweepEntity;
+  field: string;
   currentValue: SuggestionValue;
   decision: SweepDecision;
   model: SupportedDecisionModel;
@@ -623,6 +630,7 @@ export function makeSweepSuggestion(args: {
     kind,
     status:
       kind === "addition" &&
+      !requiresSuggestionReview(args.entity, args.field) &&
       args.decision.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
       args.model === args.pinnedModel
         ? "applied"

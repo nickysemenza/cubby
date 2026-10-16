@@ -6,16 +6,6 @@ import type { EntitySchemaBindingMap } from "~/server/generated/entity-bindings.
 
 import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
 
-type FinancialAccountEditorFields = {
-  kind: "credit_card" | "bank_account" | "stored_value" | "cash" | "other";
-  issuer: string;
-  network: "" | "visa" | "mastercard" | "amex" | "discover" | "other";
-  institution: string;
-  accountType: "checking" | "savings" | "money_market" | "other";
-  provider: string;
-  last4: string;
-};
-
 type GeneratedIntents = typeof generatedEntityEditIntents;
 /** Intent names per operation, from the entity declarations. */
 type EntityEditIntentCatalog = {
@@ -49,7 +39,6 @@ type EntityEditUpdateInputMap = {
 /** Editor-only draft fields with no counterpart in the entity's schemas. */
 type EntityEditDraftExtras = {
   expense: { lineKind?: ExpenseCreateInput["lineKind"] | "auto" };
-  financialAccount: Partial<FinancialAccountEditorFields>;
 };
 
 /** Draft keys and values exposed to RHF callers. Intents select subsets at

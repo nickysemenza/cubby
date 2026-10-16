@@ -1,6 +1,10 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
+import {
+  basisValueOf,
+  requiresSuggestionReview,
+} from "@cubby/schemas/field-suggestion";
 import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
@@ -152,12 +156,7 @@ async function applyPreviewSuggestions(args: {
     .filter((field) => dependencyKeys.has(field.key))
     .reduce<Record<string, string | null>>((result, field) => {
       const raw = args.merged[field.key];
-      // A text-array basis value (a prune target's own self-basis, or a
-      // sibling array field) JSON-encodes the same way the client's
-      // `basisValueOf` does — the field-suggest registry parses it back.
-      result[field.key] = Array.isArray(raw)
-        ? JSON.stringify(raw)
-        : z.string().nullable().catch(null).parse(raw);
+      result[field.key] = basisValueOf(raw);
       return result;
     }, {});
   basis.__resolutionContext = JSON.stringify(args.fieldResolutions);
@@ -198,6 +197,7 @@ async function applyPreviewSuggestions(args: {
       }
       const applied =
         basisMode === "suggested" &&
+        !requiresSuggestionReview(args.entity, field) &&
         args.explicit[field] === undefined &&
         suggestion.confidence === "high" &&
         // A `remove` proposal is always a review-and-approve action, never a

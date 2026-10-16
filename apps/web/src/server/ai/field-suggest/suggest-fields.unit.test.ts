@@ -219,6 +219,38 @@ interface TableCase {
 }
 
 describe("suggestFields", () => {
+  it("lets the model decline a network with no explicit evidence while retaining the full enum", async () => {
+    const decisionPort = decisionPortNone({
+      none: 0.9,
+      c0: 0.02,
+      c1: 0.02,
+      c2: 0.02,
+      c3: 0.02,
+      c4: 0.02,
+    });
+    const out = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        entity: "financialAccount",
+        targets: ["network"],
+        basisMode: "provided",
+        basis: {
+          name: "Synthetic Platinum",
+          identity: '{"kind":"credit_card","issuer":null,"network":null}',
+        },
+      },
+      { decisionPort },
+    );
+    expect(decisionPort).toHaveBeenCalledOnce();
+    const request = vi.mocked(decisionPort).mock.calls[0]![0];
+    expect(Object.keys(request.questions.selection.criteria)).toHaveLength(6);
+    expect(out.suggestions.network).toBeNull();
+    expect(out.outcomes?.network).toMatchObject({
+      kind: "evaluated",
+      answer: "none",
+    });
+  });
   it("lets an ambiguous Location decline without suggesting a replacement type", async () => {
     const decisionPort = decisionPortPicking("No listed choice");
     const out = await suggestFields(

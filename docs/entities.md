@@ -398,7 +398,9 @@ a create-only field such as a meal's `recipes` draws on create alone;
 `generated/structured-value-schemas.gen.ts` (web imports it only from the editor): nullable text,
 number, boolean, enum, shortcode reference (a pattern that names an entity prefix), amount
 (`{value, unit}`), constants, objects, arrays, maps over an enum of keys, and variants over a
-literal key; `.meta({ opaque: true })` marks a key carried untouched and never shown. A variant
+literal key; `.meta({ opaque: true })` marks a key carried untouched and never shown,
+including nullable enum/text siblings edited through declared scalar projections.
+A variant
 starts with no case chosen, so a new account must pick its identity kind. Validation stays
 server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on native and at the
 nested form path on web. A new structured field needs only its Zod input schema, a renderer in that
@@ -801,7 +803,9 @@ carries its text instead of a renderer: `display.labelPath` for a list cell,
 joined with `\n`, built in `server/entity-kernel/repo/detail-display-labels.ts` and carried
 as a `labelField`), `display.itemsPath` for a list of worded rows that each
 open their record (`displayItemsField`), and `display.readPath` plus `format`
-or `valueOptions` for a nested value. Clients print what the record carries;
+or `valueOptions` for a nested value. Structured histories naming other entities
+use `itemsPath` so each party remains navigable beside its server-worded dates;
+do not flatten references into `detailLabelPath` text. Clients print what the record carries;
 none restates the structure. A legacy field override and
 a manifest renderer may not claim the same surface; the compiler or registry
 test fails instead of choosing one silently. `control.renderer` follows the

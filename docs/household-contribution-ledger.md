@@ -64,8 +64,23 @@ attribution journey.
 A credit card's `primaryCardholderId` identifies its primary member independently
 of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
-open endpoint). History details show party names and date bounds on both web and
-Apple clients. A primary cardholder cannot also be an authorized user. Outside
+open endpoint). History details link each Ledger Party beside its date bounds on both web and
+Apple clients. Issuer, network, and primary cardholder use reviewed Jev/Clef field
+suggestions. Account identity and notes supply the evidence; a saved issuer or
+member roster supplies choices, not proof. All live members and the full network
+enum reach the model; missing, ambiguous or conflicting holder/network evidence
+requires none. Saved issuer vocabulary and literal `Issuer:` lines supply issuer
+choices; the model decides whether the account evidence supports a match.
+Shared funding and purchase frequency do not establish card access. Issuer and
+network are editable scalar projections of the existing identity object;
+acceptance preserves its sibling fields and the account's explicit histories.
+
+The generic suggestion framework chooses among scalar enum, reference or text
+candidates. It cannot generate structured facts or dated history rows.
+Authorized-user memberships, funding periods, card-number history and every
+`validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor
+fills them. Provisional is cleared only through member confirmation.
+A primary cardholder cannot also be an authorized user. Outside
 those memberships, the household's sole-use rule identifies the primary member
 as purchaser. Multiple paying accounts must all agree on that sole user.
 

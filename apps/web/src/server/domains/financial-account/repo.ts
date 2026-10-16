@@ -9,6 +9,7 @@ import {
   type FinancialAccountUpdateData,
   financialAccountCardNumbers,
   financialAccountIdentity,
+  financialAccountIdentityKind,
   financialAccountOut,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
@@ -65,7 +66,7 @@ import { completeListReader } from "~/server/generic/list/repo/list-read-adapter
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { accountPartyPeriodsLabelSql } from "./repo/funding-sql";
+import { accountPartyPeriodItemsSql } from "./repo/funding-sql";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   "EmailFinancialAssociation.reviewedAccountId": {
@@ -97,10 +98,10 @@ export const financialAccountTransactionCount = sql<number>`(
 )`;
 
 const columns = {
-  authorizedUsersLabel: accountPartyPeriodsLabelSql(
+  authorizedUserItems: accountPartyPeriodItemsSql(
     sql`"FinancialAccount"."authorizedUsers"`,
   ),
-  fundingPeriodsLabel: accountPartyPeriodsLabelSql(
+  fundingPeriodItems: accountPartyPeriodItemsSql(
     sql`"FinancialAccount"."fundingPeriods"`,
   ),
   authorizedUsers: financialAccount.authorizedUsers,
@@ -111,6 +112,12 @@ const columns = {
   id: financialAccount.id,
   shortcode: financialAccount.shortcode,
   name: financialAccount.name,
+  issuer: sql<
+    string | null
+  >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'issuer' END`,
+  network: sql<
+    string | null
+  >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'network' END`,
   identity: financialAccount.identity,
   provisional: financialAccount.provisional,
   sourceAliases: financialAccount.sourceAliases,
@@ -160,11 +167,13 @@ const toOut = (
   return financialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
-    authorizedUsersLabel: row.authorizedUsersLabel,
-    fundingPeriodsLabel: row.fundingPeriodsLabel,
+    authorizedUserItems: row.authorizedUserItems,
+    fundingPeriodItems: row.fundingPeriodItems,
     authorizedUsers: row.authorizedUsers,
     fundingPeriods: row.fundingPeriods,
     primaryCardholderId: row.primaryCardholderShortcode,
+    issuer: row.issuer,
+    network: row.network,
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases,
@@ -246,7 +255,7 @@ const aliasCondition = (
     SELECT 1 FROM jsonb_array_elements(CASE
       WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
       THEN "FinancialAccount"."sourceAliases" ELSE '[]'::jsonb END) alias
-    WHERE ${matchesStringValues(sql`alias->>'source'`, sources)}
+    WHERE ${matchesStringValues(sql`alias->>${"source"}`, sources)}
       AND ${matchesStringValues(sql`alias->>'externalAccountId'`, externalAccountIds)}
   )`;
 };
@@ -267,7 +276,7 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
     // postgres rejects.
     filters.identityKind
       ? matchesStringValues(
-          sql`"FinancialAccount"."identity"->>'kind'`,
+          sql`"FinancialAccount"."identity"->>${"kind"}`,
           [filters.identityKind].flat(),
         )
       : undefined,
@@ -364,7 +373,7 @@ async function assertAliasesAvailable(
       FROM "FinancialAccount" fa
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(fa."sourceAliases") = 'array' THEN fa."sourceAliases" ELSE '[]'::jsonb END) a
       WHERE fa."deletedAt" IS NULL
-        AND a->>'source' = ${alias.source}
+        AND a->>${"source"} = ${alias.source}
         AND a->>'externalAccountId' = ${alias.externalAccountId}
         ${exceptId ? sql`AND fa.id <> ${exceptId}` : sql``}
       LIMIT 1
@@ -471,11 +480,35 @@ function assertProviderMatchesKind(
     );
 }
 
+/** Scalar edits merge into the backing object; they never replace its sibling values. */
+function withCardIdentityFields(
+  identity: FinancialAccountCreateInput["identity"],
+  fields: Pick<FinancialAccountUpdateData, "issuer" | "network">,
+): FinancialAccountCreateInput["identity"] {
+  if (identity.kind !== "credit_card") {
+    if (fields.issuer != null || fields.network != null)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Issuer and network only apply to credit-card accounts.",
+      );
+    return identity;
+  }
+  return {
+    ...identity,
+    ...(fields.issuer !== undefined ? { issuer: fields.issuer } : {}),
+    ...(fields.network !== undefined ? { network: fields.network } : {}),
+  };
+}
+
 export async function createFinancialAccount(
   db: Database,
   data: FinancialAccountCreateInput,
   actor: ActorContext,
 ) {
+  const identity =
+    data.identity.kind === "credit_card"
+      ? withCardIdentityFields(data.identity, data)
+      : data.identity;
   const id = await withTransaction(db, async (tx) => {
     await lockFinancialEvidenceKeys(
       tx,
@@ -487,9 +520,15 @@ export async function createFinancialAccount(
       ),
     );
     await assertAliasesAvailable(tx, data.sourceAliases);
-    await validateAccountHistory(tx, data);
-    const { ledgerPartyId, providerVendorId, primaryCardholderId, ...columns } =
-      data;
+    await validateAccountHistory(tx, { ...data, identity });
+    const {
+      ledgerPartyId,
+      providerVendorId,
+      primaryCardholderId,
+      issuer: _issuer,
+      network: _network,
+      ...columns
+    } = data;
     const resolvedCardholderId = await resolveMemberAssignee(
       tx,
       primaryCardholderId,
@@ -502,7 +541,7 @@ export async function createFinancialAccount(
       tx,
       providerVendorId,
     );
-    assertProviderMatchesKind(data.identity, resolvedProviderVendorId);
+    assertProviderMatchesKind(identity, resolvedProviderVendorId);
     if (data.inventoryOwnerDefaultEnabled) {
       if (!resolvedLedgerPartyId) {
         throw createAppError(
@@ -523,6 +562,7 @@ export async function createFinancialAccount(
     }
     const created = await insertWithShortcode(tx, "financialAccount", {
       ...columns,
+      identity,
       primaryCardholderId: resolvedCardholderId,
       ledgerPartyId: resolvedLedgerPartyId,
       providerVendorId: resolvedProviderVendorId,
@@ -610,8 +650,12 @@ export async function updateFinancialAccount(
         "CONSTRAINT_VIOLATION",
         `An account's identity kind is fixed at creation (this account is ${beforeIdentity.kind}); create a new account for a ${data.identity.kind}.`,
       );
-    assertProviderMatchesKind(
+    const identity = withCardIdentityFields(
       data.identity ?? beforeIdentity,
+      data,
+    );
+    assertProviderMatchesKind(
+      identity,
       providerVendorId === undefined
         ? before.providerVendorId
         : providerVendorId,
@@ -659,10 +703,17 @@ export async function updateFinancialAccount(
       ledgerPartyId: _ledgerPartyId,
       providerVendorId: _providerVendorId,
       primaryCardholderId: _primaryCardholderId,
+      issuer: _issuer,
+      network: _network,
       ...accountData
     } = data;
     const updateData: Partial<typeof financialAccount.$inferInsert> = {
       ...accountData,
+      ...(data.identity !== undefined ||
+      data.issuer !== undefined ||
+      data.network !== undefined
+        ? { identity }
+        : {}),
     };
     if (primaryCardholderId !== undefined)
       updateData.primaryCardholderId = primaryCardholderId;

@@ -7,7 +7,10 @@ subprocess workspaces declare their module type explicitly, matching the consume
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
-focus and history; empty sections retain headings, index entries and actions. After changing
+focus and history; empty sections retain headings, index entries and actions.
+When adding editable fields, complete editor-test record baselines, including
+nullable output projections, and run the untouched-submit regression: an absent
+baseline can make an untouched form appear changed. After changing
 any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's

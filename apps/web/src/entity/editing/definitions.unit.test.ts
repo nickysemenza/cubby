@@ -1,4 +1,5 @@
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
+import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -28,6 +29,37 @@ const explicitNoneResolution = () => ({
 });
 
 describe("entity edit definitions", () => {
+  it("edits a card scalar without resending its identity siblings", () => {
+    const record = mock(financialAccountOut, {
+      overrides: {
+        identity: {
+          kind: "credit_card",
+          issuer: "Synthetic Bank",
+          network: "visa",
+        },
+        issuer: "Synthetic Bank",
+        network: "visa",
+      },
+    });
+    const request = {
+      entity: "financialAccount",
+      operation: "update",
+      intent: "full",
+      surface: "dialog",
+      record,
+    } as const;
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved))
+      throw new Error("Account editor must resolve");
+    const values = initialEntityEditValues(resolved, request);
+    const result = buildEntityEdit(resolved, request, {
+      ...values,
+      issuer: "Synthetic Credit Union",
+    });
+    if (!result.ok || !result.changed || result.command.operation !== "update")
+      throw new Error("Card scalar edit must build an update");
+    expect(result.command.data).toEqual({ issuer: "Synthetic Credit Union" });
+  });
   it.each(["task", "expense"] as const)(
     "leaves %s capture trade unresolved until chosen or inherited",
     (entity) => {

@@ -5,6 +5,7 @@ import {
   type EntityRef,
   entitySchema,
 } from "@cubby/schemas/entity";
+import { displayItems } from "@cubby/schemas/entity-definitions/label-field";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -43,6 +44,7 @@ import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
@@ -646,6 +648,30 @@ export function renderDetailFieldValue<TRecord extends object>(
 ): ReactNode {
   const emptyLabel = resolutionEmptyLabel(entity, record, field);
   if (emptyLabel) return emptyLabel;
+  if (field.display.itemsPath) {
+    const parsed = displayItems.safeParse(
+      readPathValue(record, field.display.itemsPath),
+    );
+    const items = parsed.success ? (parsed.data ?? []) : [];
+    if (items.length === 0) return <NoneValue />;
+    return (
+      <RecordList>
+        {items.map((item) => (
+          <RecordRow
+            key={JSON.stringify(item)}
+            primary={
+              item.entity && item.id
+                ? referenceLink(item.entity, { id: item.id, name: item.title })
+                : item.title
+            }
+            secondary={item.subtitle}
+            trailing={item.trailing}
+            clip={false}
+          />
+        ))}
+      </RecordList>
+    );
+  }
   if (field.display.detailLabelPath) {
     const label = readLabel(record, field.display.detailLabelPath);
     return label === null ? (

@@ -191,6 +191,7 @@ describe("manifest registries", () => {
             field.reference === null &&
             field.display.format === null &&
             !("detailLabelPath" in field.display) &&
+            !("itemsPath" in field.display) &&
             detailFieldRenderersFor(entity)?.[field.key] === undefined,
         )
         .map((field) => `${entity}.${field.key}`);
