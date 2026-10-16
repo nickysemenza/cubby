@@ -1,0 +1,21 @@
+apps/web/src/server/domains/product/repo/crud.ts
+  s_f9d414ac9cc014::t_68980d5903ec47 345,349-350,370,385-387,565,569
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_f9d414ac9cc014::t_623660f545e404 189-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1318b2eed1c57b326cdb369f499e2db22825e6cb",
+  "prompts": {},
+  "sessions": {
+    "s_f9d414ac9cc014": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd04ade3-971f-4681-b1f2-fa2d03203a89",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
