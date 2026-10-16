@@ -1,7 +1,12 @@
 import { startOperation } from "./support/start-operation";
 import superjson from "superjson";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { dispatchOperations, unbatchFor } from "./support/dispatch-wire";
+import {
+  dispatchOperations,
+  operationResult,
+  unbatchFor,
+} from "./support/dispatch-wire";
+import { reviewPhotoGroupsOutput } from "@cubby/schemas/photo-import-run";
 import { z } from "zod";
 import type { Fixture as TestGatewayFixture } from "./harness-services/purchase-import-test-gateway";
 import {
@@ -289,7 +294,21 @@ test("approves two selected photo groups with one reviewed batch action", async 
   await expect(
     page.getByRole("checkbox", { name: /Select .* solo find/ }),
   ).toBeChecked();
+  const approval = page.waitForResponse((response) =>
+    dispatchOperations(response.request()).some(
+      (operation) => operation.operation === "photoImport.approveGroups",
+    ),
+  );
   await page.getByRole("button", { name: "Apply 2 selected items" }).click();
+  const outcome = await operationResult(
+    await approval,
+    "photoImport.approveGroups",
+    reviewPhotoGroupsOutput,
+  );
+  expect(outcome.results.map((result) => result.outcome)).toEqual([
+    "committed",
+    "committed",
+  ]);
 
   await expect(
     page.getByText("0 to review · 2 settled · 0 photos not in a group", {

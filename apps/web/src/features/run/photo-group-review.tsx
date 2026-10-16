@@ -2688,6 +2688,18 @@ const AppliedNewPhotoGlyph = () => (
 const AppliedPhotoGlyph = () => (
   <PhotoNavGlyph mode="existing" state="applied" />
 );
+const photoNavGlyphs = {
+  create: {
+    needs: NewNeedsInputGlyph,
+    ready: NewReadyGlyph,
+    applied: AppliedNewPhotoGlyph,
+  },
+  existing: {
+    needs: AttachNeedsInputGlyph,
+    ready: AttachReadyGlyph,
+    applied: AppliedPhotoGlyph,
+  },
+};
 
 export function PhotoGroupReview({
   runId,
@@ -2722,17 +2734,13 @@ export function PhotoGroupReview({
     () =>
       (query.data?.review.proposals ?? []).map((proposal) => {
         const Icon =
-          proposal.state !== "proposed"
-            ? proposal.product.kind === "create"
-              ? AppliedNewPhotoGlyph
-              : AppliedPhotoGlyph
-            : proposal.product.kind === "create"
-              ? proposal.blockedReason
-                ? NewNeedsInputGlyph
-                : NewReadyGlyph
+          photoNavGlyphs[proposal.product.kind][
+            proposal.state !== "proposed"
+              ? "applied"
               : proposal.blockedReason
-                ? AttachNeedsInputGlyph
-                : AttachReadyGlyph;
+                ? "needs"
+                : "ready"
+          ];
         return {
           id: `photo-group-${proposal.groupKey}`,
           title: proposalName(proposal),
@@ -2942,12 +2950,15 @@ export function PhotoGroupReview({
   const busy =
     (action.isPending && action.variables?.action !== "save") ||
     pendingEdits > 0;
+  // Result links must wait for approval's passive detail-cache eviction.
+  const approving = action.isPending && action.variables?.action === "approve";
 
   return (
     <Stack gap="lg">
       {results.length > 0 ? (
         <Section
           title="Import results"
+          inert={approving}
           description={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
         >
           <RecordList aria-label="Products from this import">
@@ -3129,6 +3140,7 @@ export function PhotoGroupReview({
                 className="scroll-mt-20"
                 data-detail-section
                 tabIndex={-1}
+                inert={selected.state !== "proposed" && approving}
               >
                 {selected.state === "proposed" ? (
                   <label className="flex min-h-11 items-center gap-2 border-t border-border px-2 text-xs">
