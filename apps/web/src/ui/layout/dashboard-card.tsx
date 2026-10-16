@@ -2,7 +2,6 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
 
 import { cn } from "~/lib/utils";
-import { Card, CardContent } from "~/ui/primitives/card";
 
 import { SectionHeading } from "./section";
 
@@ -53,7 +52,7 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="gap-2 rounded-none border-0 bg-transparent p-0 shadow-none">
+    <div className="flex flex-col gap-2 overflow-hidden text-xs/relaxed text-card-foreground">
       <SectionHeading
         as={titleAs}
         title={
@@ -65,7 +64,7 @@ export function DashboardCard({
         description={description}
         actions={action}
       />
-      <CardContent className="flex-1 px-2">{children}</CardContent>
-    </Card>
+      <div className="flex-1 px-2">{children}</div>
+    </div>
   );
 }

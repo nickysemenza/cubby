@@ -67,7 +67,7 @@ export function useFilterBarDraft({
     // otherwise it would immediately undo the external change.
     if (debouncedDraftKey !== draftKey) return;
 
-    // ReUI creates text filters with an empty value so their focused input can
+    // The filter bar creates text filters with an empty value so their focused input can
     // exist before the user types. That placeholder is real draft UI state but
     // intentionally normalizes to no filter. Compare the normalized state to
     // the owner's so an empty input stays mounted instead of being written as

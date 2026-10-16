@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 // Layout guard for the domain-first tree (docs/adr/0019-domain-first-server-layout.md).
 // Baselines are shrink-only: a listed folder may not grow, and one that drops
-// to the limit must leave the list.
+// to the limit must leave the list. Update counts in the same change that
+// deletes or moves a tracked source file, then run this layout guard.
 
 const repoRoot = join(import.meta.dirname, "../../..");
 const tracked = execFileSync(
@@ -62,7 +63,7 @@ const CROWDED_FOLDERS = {
   "apps/web/src/lib": 89,
   "apps/web/src/server/domains/product/repo": 43,
   "apps/web/src/ui/data-table": 52,
-  "apps/web/src/ui/primitives": 54,
+  "apps/web/src/ui/primitives": 53,
 } satisfies Record<string, number>;
 
 describe("repository layout", () => {

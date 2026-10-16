@@ -31,7 +31,7 @@ export type Filter = {
 /**
  * The table-agnostic half of the manifest filter bar.
  *
- * Two surfaces render the same reui `<Filters>` chip bar over the same filter
+ * Tables and the calendar render the shared `FilterBar` over the same filter
  * manifest: the ledger tables, whose state lives in TanStack's
  * `columnFilters`, and the calendar, whose state lives in the URL. Only the
  * field derivation and the read/write ends differ — the adapters and the
@@ -122,7 +122,7 @@ export function normalizeBarFilters(
 }
 
 /**
- * One reui field from a resolved {@link FilterConfig}. The label is passed in
+ * One filter-bar field from a resolved {@link FilterConfig}. The label is passed in
  * rather than read off the source: a table takes it from the column header, a
  * manifest-only bar from the spec's `label`, and neither can see the other's.
  */
