@@ -88,6 +88,17 @@ Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev seed`
 reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.
 
+A session nobody uses ends on its own, so a settled agent thread cannot leave
+gigabytes behind. After 30 minutes without an HTTP request or a watched file
+change, the runtime stops the supervisor (`CUBBY_DEV_IDLE_MINUTES`, `0` keeps
+it). An open HMR socket is not activity: forgotten preview panes and test
+browsers hold one indefinitely. A runtime whose supervisor was killed closes
+itself within 15 seconds. The supervisor restarts the runtime, keeping the
+session and database, when its process group's physical footprint (compressed
+pages included) exceeds 1536 MB (`CUBBY_DEV_MEMORY_LIMIT_MB`, `0` disables).
+Built preview (`wrangler dev`) gets the memory restart but not the idle or
+orphan exit.
+
 ## Tooling layout
 
 Local runtime tooling lives in `apps/web/tooling/dev/`. `index.ts` owns the
