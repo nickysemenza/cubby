@@ -4,6 +4,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 
+import { readDatabaseTiming } from "./read-performance-metrics";
+
 const { values } = parseArgs({
   options: {
     origin: { type: "string" },
@@ -60,6 +62,7 @@ const patchSchema = z.object({
   groups: z.array(z.object({ state: z.enum(["ready", "error"]) })),
 });
 const requests: {
+  operation: string;
   version: string | null;
   requestId: string | null;
   firstResponseMs: number;
@@ -68,8 +71,15 @@ const requests: {
   sqlCount: number | null;
   acquisitionMs: number | null;
   cpuMs: number | null;
+  queryActiveWallMs: number | null;
+  clientQueueActiveWallMs: number | null;
 }[] = [];
-async function request(path: string, body?: ReadInput, method = "POST") {
+async function request(
+  operation: string,
+  path: string,
+  body?: ReadInput,
+  method = "POST",
+) {
   const started = performance.now();
   const headers = new Headers(authHeaders);
   if (body !== undefined) headers.set("content-type", "application/json");
@@ -93,13 +103,13 @@ async function request(path: string, body?: ReadInput, method = "POST") {
       ? null
       : JSON.parse(new TextDecoder().decode(responseBody));
   const measurement = {
+    operation,
     version: response.headers.get("x-cubby-worker-version"),
     requestId: response.headers.get("x-request-id"),
     firstResponseMs,
     elapsedMs: performance.now() - started,
     responseBodyBytes: responseBody.byteLength,
-    sqlCount: null,
-    acquisitionMs: null,
+    ...readDatabaseTiming(response.headers),
     cpuMs: null,
   };
   return { result, measurement };
@@ -116,7 +126,11 @@ async function list(entity: string, sample: number) {
   const started = performance.now();
   const measurements: typeof requests = [];
   const read = async (path: string, body?: ReadInput, method = "POST") => {
-    const value = await request(path, body, method);
+    const operation =
+      mode === "complete"
+        ? "resource.list"
+        : (path.split("/").at(-1) ?? "unknown");
+    const value = await request(operation, path, body, method);
     measurements.push(value.measurement);
     return value.result;
   };
@@ -187,6 +201,7 @@ if (values.caldav)
     for (const method of ["OPTIONS", "PROPFIND"]) {
       const started = performance.now();
       const { measurement } = await request(
+        `caldav.${method.toLowerCase()}`,
         "/api/caldav/calendars/me/completed-tasks/",
         undefined,
         method,
@@ -206,9 +221,44 @@ const percentile = (numbers: number[], quantile: number) =>
 const summary = [...new Set(observations.map((row) => row.entity))].map(
   (entity) => {
     const rows = observations.filter((row) => row.entity === entity);
+    const measuredRequests = rows.flatMap((row) => row.requests);
+    const databaseMetric = (
+      operation: string,
+      field:
+        | "sqlCount"
+        | "acquisitionMs"
+        | "queryActiveWallMs"
+        | "clientQueueActiveWallMs",
+    ) => {
+      const operationRequests = measuredRequests.filter(
+        (request) => request.operation === operation,
+      );
+      const available = operationRequests.flatMap((request) =>
+        request[field] === null ? [] : [request[field]],
+      );
+      return {
+        observedRequests: available.length,
+        totalRequests: operationRequests.length,
+        median: available.length ? percentile(available, 0.5) : null,
+      };
+    };
     return {
       entity,
       samples: rows.length,
+      databasePerRequest: [
+        ...new Set(measuredRequests.map((request) => request.operation)),
+      ]
+        .sort()
+        .map((operation) => ({
+          operation,
+          sqlCount: databaseMetric(operation, "sqlCount"),
+          acquisitionMs: databaseMetric(operation, "acquisitionMs"),
+          queryActiveWallMs: databaseMetric(operation, "queryActiveWallMs"),
+          clientQueueActiveWallMs: databaseMetric(
+            operation,
+            "clientQueueActiveWallMs",
+          ),
+        })),
       usableMedianMs: percentile(
         rows.map((row) => row.usableMs),
         0.5,
@@ -238,7 +288,7 @@ const summary = [...new Set(observations.map((row) => row.entity))].map(
   },
 );
 const artifact = {
-  schema: 2,
+  schema: 3,
   recordedAt: new Date().toISOString(),
   authenticationMode: apiKey
     ? "api-key"
@@ -270,7 +320,7 @@ const artifact = {
   ],
   summary,
   limits: [
-    "SQL, acquisition and CPU require matching sampled trace evidence; null means unavailable.",
+    "SQL count and database active-wall times come from completed non-streaming response Server-Timing headers; absent, malformed or streamed metrics remain null. CPU requires matching trace evidence and is never inferred from wall time.",
     mode === "complete"
       ? "Usable and complete time both measure decoded complete resource rows; no early core-row response exists in this mode."
       : "Usable time measures decoded core rows; browser paint is measured by browser journeys.",
