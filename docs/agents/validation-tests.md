@@ -23,6 +23,9 @@ the section; shortcode metadata can be mounted but hidden.
 When removing shared UI bindings, render every affected header branch or run
 the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
+Direct component tests of feature-backed pickers call `installFeatures()` from
+`~/features/registry` themselves; the browser harness supplies context, not the
+route's registry installation.
 
 Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
