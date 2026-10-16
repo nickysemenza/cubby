@@ -13,11 +13,11 @@ import {
   runDecisionChoice,
   type DecisionPort,
 } from "~/server/ai/decision-model";
-import { groundProductIdentityVariants } from "~/server/ai/product-identity-grounding";
 import {
   PRODUCT_IDENTITY_FEATURE,
   PRODUCT_IDENTITY_RULE_REVISION,
-} from "~/server/ai/repo/feature-identity";
+} from "~/server/ai/policy/feature-identity";
+import { groundProductIdentityVariants } from "~/server/ai/product-identity-grounding";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { product, entityExternalId } from "~/server/db/schema";

@@ -58,13 +58,13 @@ import {
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
+import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import type {
   AiChatFeature,
   AiFeature,
   AiStructuredFeature,
-} from "~/server/ai/features";
-import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
-import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+} from "~/server/ai/policy/features";
 import {
   type AiResponseCacheKeyInput,
   type ApplicationCacheStatus,

@@ -8,8 +8,8 @@ import {
   decisionChoiceFitsContext,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
-import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/features";
-import { expenseLineRoleRules } from "~/server/ai/prompts/purchase-lines";
+import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/policy/features";
+import { expenseLineRoleRules } from "~/server/ai/policy/prompts/purchase-lines";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import type {

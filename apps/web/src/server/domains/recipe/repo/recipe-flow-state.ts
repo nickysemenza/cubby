@@ -7,11 +7,11 @@ import {
 } from "@cubby/schemas/recipe-flow";
 import { sha256Hex } from "@cubby/shared/sha256";
 
+import { RECIPE_FLOW_IDENTITY } from "~/server/ai/policy/feature-identity";
 import {
   listAiAnalysesForEntityFeature,
   type StoredAiAnalysis,
 } from "~/server/ai/repo/ai-analysis";
-import { RECIPE_FLOW_IDENTITY } from "~/server/ai/repo/feature-identity";
 import type { Database } from "~/server/db";
 import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
 import { createAppError } from "~/server/errors/app-error";

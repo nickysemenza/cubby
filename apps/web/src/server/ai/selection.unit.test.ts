@@ -1,16 +1,19 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
-
-import { DECISION_MAX_CANDIDATES, type DecisionPort } from "./decision-model";
-import { FIELD_SUGGESTION_FEATURE } from "./features";
 import {
-  type AiSelectionSpec,
+  DECISION_MAX_CANDIDATES,
+  type DecisionPort,
+} from "~/server/ai/decision-model";
+import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
+import {
   type AiSelectionPort,
   type AiSelectionUsage,
   runAiSelection,
-} from "./selection";
+} from "~/server/ai/selection";
+import { Database } from "~/server/db";
+
+import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
 const db = new Database(() => {
   throw new Error("Selection unit ports do not resolve a database runtime");

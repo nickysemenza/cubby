@@ -5,7 +5,7 @@ import {
 import { providerFor } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
-import { IMAGE_DESCRIPTION_IDENTITY } from "~/server/ai/repo/feature-identity";
+import { IMAGE_DESCRIPTION_IDENTITY } from "~/server/ai/policy/feature-identity";
 
 /** Changing this requires a fresh cloud-description job and analysis cache key. */
 export const IMAGE_ANALYSIS_NORMALIZATION_REVISION = 1;

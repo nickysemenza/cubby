@@ -42,8 +42,12 @@ domains between `src/app/` and `src/features/` under different names.
   same or a lower role — `operations` → `service` → `repo` → `db` — in any
   domain. The entry points `http/`, `mcp/`, and `workflows/` import like
   `operations` but are imported as platform infrastructure
-  (`workflows/runtime`, `http/request-context`). `repo` never imports `ai/`
-  except `ai/repo/`. A service value-imports nothing from `db/` but
+  (`workflows/runtime`, `http/request-context`). `ai/repo/` ranks as `repo`.
+  `repo` never imports `ai/` except `ai/repo/` and `ai/policy/`: the model-free
+  declarations (feature identities, prompt builders, field-suggest rules,
+  catalog field rows and the AI refresh manifest) that repos read to stamp
+  and check decision provenance. `ai/policy/` value-imports only itself and
+  packages, so no repo reaches model code. A service value-imports nothing from `db/` but
   `db/freshness/`, and never imports `db/helpers` or a `db/*schema*` file,
   even for types; it reaches tables through a repo, and computed SQL lives
   in `db/computed/`. Other platform code and `generic/*` never import a

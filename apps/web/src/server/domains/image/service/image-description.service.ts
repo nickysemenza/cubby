@@ -17,7 +17,7 @@ import {
 import { TIER1_NUTRIENTS } from "@cubby/usda";
 
 import { transformedImageUrl } from "~/lib/image-url";
-import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
+import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { imageAnalysisKey, uploadToS3 } from "~/server/clients/s3";

@@ -16,7 +16,7 @@ import {
 } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
 import { Database } from "~/server/db";
 import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 

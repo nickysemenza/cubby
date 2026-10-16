@@ -21,14 +21,14 @@ import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import {
   dependencyStamps,
   fieldDependencyKeys,
   fieldPolicyKey,
-} from "~/server/ai/repo/refresh-policy";
+} from "~/server/ai/policy/refresh-manifest";
+import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { executeEntity } from "~/server/entity-kernel";

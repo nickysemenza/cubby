@@ -1,4 +1,4 @@
-import type { DecisionChoicePrompt } from "~/server/ai/decision-model";
+import type { DecisionChoicePrompt } from "~/server/ai/policy/decision-choice";
 
 export const UPC_OFFER_COMPARABILITY_CHOICES = [
   "comparable",

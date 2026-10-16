@@ -12,14 +12,16 @@ import { transformedImageUrl } from "~/lib/image-url";
 import {
   runDecisionChoice,
   runDecisionChoices,
+} from "~/server/ai/decision-model";
+import {
   type DecisionChoicePrompt,
   type DecisionImage,
-} from "~/server/ai/decision-model";
-import { IMAGE_IDENTIFICATION_FEATURE } from "~/server/ai/features";
+} from "~/server/ai/policy/decision-choice";
+import { IMAGE_IDENTIFICATION_FEATURE } from "~/server/ai/policy/features";
 import {
   imageIdentificationCompositionPrompt,
   imageIdentificationScopePrompt,
-} from "~/server/ai/prompts/image-identification";
+} from "~/server/ai/policy/prompts/image-identification";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { imageAnalysisKey, uploadToS3 } from "~/server/clients/s3";

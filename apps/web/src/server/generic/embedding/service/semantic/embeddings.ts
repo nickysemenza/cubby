@@ -4,12 +4,12 @@ import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
-import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
 import {
   gatewayConfigured,
   gatewayFetch,
   type GatewayMetadata,
 } from "~/server/ai/gateway";
+import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/policy/features";
 import {
   type EmbeddingObservers,
   runEmbeddingFeature,

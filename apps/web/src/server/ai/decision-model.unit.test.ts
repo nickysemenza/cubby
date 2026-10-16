@@ -4,11 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DECISION_MAX_CANDIDATES,
   type DecisionChoiceResponse,
-  type DecisionImage,
   type DecisionPort,
   runDecisionChoice,
-} from "./decision-model";
-import { FIELD_SUGGESTION_FEATURE } from "./features";
+} from "~/server/ai/decision-model";
+import { type DecisionImage } from "~/server/ai/policy/decision-choice";
+
+import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
 const base = {
   feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },

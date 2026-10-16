@@ -22,7 +22,7 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
-} from "./features";
+} from "./policy/features";
 import {
   RESPOND_TOOL_NAME,
   type AiChatRequest,

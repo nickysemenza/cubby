@@ -2,6 +2,7 @@ import type { AiSmokeScenario } from "@cubby/schemas/ai-smoke";
 import { aiSmokeInputs } from "@cubby/schemas/ai-smoke";
 import { z } from "zod";
 
+import { PRODUCT_IDENTITY_FEATURE } from "./policy/feature-identity";
 import {
   type AiFeature,
   ENTITY_EMBEDDING_FEATURE,
@@ -33,8 +34,7 @@ import {
   SELECTION_OVERFLOW_FEATURE,
   SEMANTIC_QUERY_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
-} from "./features";
-import { PRODUCT_IDENTITY_FEATURE } from "./repo/feature-identity";
+} from "./policy/features";
 
 type SmokeCase = {
   feature: AiFeature;

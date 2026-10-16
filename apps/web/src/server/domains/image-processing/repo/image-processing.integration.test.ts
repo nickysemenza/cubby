@@ -10,7 +10,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
+import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
 import {
   aiAnalysis,

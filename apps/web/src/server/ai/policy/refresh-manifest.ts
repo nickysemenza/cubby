@@ -7,13 +7,13 @@ import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import { decisionCatalogRows } from "../decision-catalog";
 import {
   AI_FEATURES,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   SELECTION_OVERFLOW_FEATURE,
-} from "../features";
+} from "./features";
+import { fieldDecisionRows } from "./field-decisions";
 
 const automaticFeatures = new Set([
   "field-suggestion",
@@ -72,7 +72,7 @@ export async function compiledRefreshManifest(): Promise<AiRefreshManifest> {
       ),
     };
   }
-  for (const row of decisionCatalogRows()) {
+  for (const row of fieldDecisionRows()) {
     if (!row.field || !row.entity) continue;
     entries[fieldPolicyKey(row.entity, row.field)] = {
       promptVersion: row.promptVersion,
@@ -119,7 +119,7 @@ export function dependenciesCurrent(
 }
 
 export function fieldDependencyKeys(entity: string, field: string) {
-  const policy = decisionCatalogRows().find(
+  const policy = fieldDecisionRows().find(
     (row) => row.entity === entity && row.field === field,
   );
   return [

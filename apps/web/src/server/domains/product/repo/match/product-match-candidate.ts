@@ -23,7 +23,7 @@ import { z } from "zod";
 import {
   PRODUCT_IDENTITY_FEATURE,
   PRODUCT_IDENTITY_RULE_REVISION,
-} from "~/server/ai/repo/feature-identity";
+} from "~/server/ai/policy/feature-identity";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,

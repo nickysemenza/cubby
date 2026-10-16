@@ -1,7 +1,7 @@
 import { aiSmokeInputs } from "@cubby/schemas/ai-smoke";
 import { describe, expect, it } from "vitest";
 
-import { AI_FEATURES } from "./features";
+import { AI_FEATURES } from "./policy/features";
 import { AI_SMOKE_CASES, smokeCatalog } from "./smoke-catalog";
 
 describe("AI smoke catalog", () => {

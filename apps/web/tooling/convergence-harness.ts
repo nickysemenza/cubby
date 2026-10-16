@@ -19,7 +19,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
+import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";

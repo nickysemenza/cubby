@@ -2,8 +2,8 @@ import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
+import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
-import { dependenciesCurrent } from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
 
 import { gmailProviderForUser } from "../../repo/gmail/provider";

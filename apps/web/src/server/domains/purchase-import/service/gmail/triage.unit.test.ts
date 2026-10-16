@@ -5,7 +5,7 @@ import * as recipebridge from "@cubby/recipebridge";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
-import { mailTriagePrompt } from "~/server/ai/prompts/mail";
+import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
 
 import { normalizeMessage } from "../../repo/gmail/normalize";
 import type { GmailMessage, GmailMessagePart } from "../../repo/gmail/types";

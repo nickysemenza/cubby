@@ -1,27 +1,20 @@
 /**
  * `ai.decisionCatalog`: every decision Cubby asks Jev/Clef, with the prompt
- * the live call would send. Each prompt is rendered by the live code path
- * (registry subject renderers, `classificationPrompt`, `selectionPrompt`,
- * `prunePrompt`, `buildChoiceInput`) over a synthetic subject, never a copied
- * template. A reference or text target's choices are household records, so
- * its rendered input carries no roster; Try runs a real record.
+ * the live call would send, rendered by the live code path over a synthetic
+ * subject. Field rows come from `ai/policy/field-decisions.ts`; Try runs a
+ * real record.
  */
 import type { DecisionCatalogRow, SuggestionCountRow } from "@cubby/schemas/ai";
-import {
-  entityFieldByKey,
-  suggestFieldKeys,
-} from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { externalIdKind } from "@cubby/schemas/external-id";
 import { extractedPurchaseLine } from "@cubby/schemas/purchase-import";
-import { z } from "zod";
 
-import { classificationPrompt } from "~/server/ai/classify";
-import {
-  buildChoiceInput,
-  type DecisionChoicePrompt,
-} from "~/server/ai/decision-model";
 import { externalIdKindSubject } from "~/server/ai/external-id-kind";
+import {
+  classificationPrompt,
+  type DecisionChoicePrompt,
+  selectionPrompt,
+} from "~/server/ai/policy/decision-choice";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import {
   PURCHASE_LINE_DECISIONS,
   type AiDecisionFeature,
@@ -34,15 +27,13 @@ import {
   PRODUCT_VARIANT_RELATION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import {
-  fieldSuggestSpecFor,
-  type FieldSuggestSpec,
-  type ResolvedBasis,
-} from "~/server/ai/field-suggest/registry";
-import { prunePrompt } from "~/server/ai/field-suggest/suggest-fields";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
-import { selectionPrompt } from "~/server/ai/selection";
+  type CatalogRow,
+  featureFacts,
+  fieldDecisionRows,
+  rendered,
+} from "~/server/ai/policy/field-decisions";
 import {
   renderSettlementSubject,
   settlementSelectionSpec,
@@ -56,124 +47,7 @@ import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-re
 
 import { productIdentityPrompt } from "./product-identity";
 
-type CatalogRow = Omit<DecisionCatalogRow, "counts">;
 type Option = DecisionCatalogRow["options"][number];
-
-const suggestControlSchema = z
-  .object({
-    basis: z.array(z.string()),
-    mode: z.enum(["fill", "prune"]),
-    reviewRequired: z.boolean().default(false),
-  })
-  .passthrough();
-
-const SYNTHETIC_TAG = "example tag";
-
-function featureFacts(feature: AiDecisionFeature) {
-  return {
-    feature: feature.feature,
-    model: feature.model,
-    promptVersion: feature.promptVersion,
-  };
-}
-
-function rendered(prompt: DecisionChoicePrompt): DecisionCatalogRow["prompt"] {
-  return {
-    subject: prompt.subject,
-    input: z.json().parse(buildChoiceInput(prompt)),
-  };
-}
-
-/** A synthetic basis the subject renderer formats like a real record's:
- * each basis field holds a plain example and the prune target's own array. */
-function syntheticBasis(
-  basis: readonly { key: string; label: string }[],
-  pruneKey: string | null,
-): ResolvedBasis {
-  return Object.fromEntries(
-    basis.map(({ key, label }) => [
-      key,
-      key === pruneKey
-        ? JSON.stringify([SYNTHETIC_TAG])
-        : `Example ${label.toLowerCase()}`,
-    ]),
-  );
-}
-
-function fieldPrompt(
-  spec: FieldSuggestSpec,
-  basis: ResolvedBasis,
-): DecisionChoicePrompt {
-  switch (spec.kind) {
-    case "enum":
-      return classificationPrompt({
-        subject: spec.subject(basis),
-        rules: spec.rules,
-        values: spec.values,
-        allowNone: spec.allowNone,
-        describe: (value) => spec.describe(value),
-      });
-    case "prune":
-      return prunePrompt(spec, basis, SYNTHETIC_TAG);
-    case "reference":
-    case "text":
-      return selectionPrompt(
-        { rules: spec.rules, renderLine: String },
-        spec.subject(basis),
-        [],
-      );
-  }
-}
-
-function fieldOptions(spec: FieldSuggestSpec): Option[] {
-  if (spec.kind !== "enum") return [];
-  return spec.values.map((value) => ({
-    value,
-    label: spec.labelOf?.(value) ?? value,
-    description: spec.describe(value),
-  }));
-}
-
-function fieldRow(key: (typeof suggestFieldKeys)[number]): CatalogRow {
-  const [rawEntity = "", field = ""] = key.split(".");
-  const entity = z.enum(shortcodeEntities).parse(rawEntity);
-  const fieldModel = entityFieldByKey(entity, field);
-  const suggest = suggestControlSchema
-    .nullable()
-    .parse(fieldModel?.control?.suggest ?? null);
-  const spec = fieldSuggestSpecFor(entity, field);
-  if (!fieldModel || !suggest || !spec)
-    throw new Error(`Suggest field ${key} has no manifest or registry entry`);
-  const basis = suggest.basis.map((basisKey) => ({
-    key: basisKey,
-    label: entityFieldByKey(entity, basisKey)?.label ?? basisKey,
-  }));
-  const prompt = fieldPrompt(
-    spec,
-    syntheticBasis(basis, spec.kind === "prune" ? spec.arrayKey : null),
-  );
-  return {
-    key,
-    entity,
-    field,
-    label: fieldModel.label,
-    description: fieldModel.description,
-    ...featureFacts(FIELD_SUGGESTION_FEATURE),
-    mode: suggest.mode,
-    choiceKind: spec.kind,
-    basis,
-    options: fieldOptions(spec),
-    roster:
-      spec.kind === "reference"
-        ? { entity: spec.entity, maxCandidates: spec.maxCandidates }
-        : spec.kind === "text"
-          ? { entity: null, maxCandidates: spec.maxCandidates }
-          : null,
-    rules: prompt.rules,
-    reviewRequired: suggest.reviewRequired,
-    prompt: rendered(prompt),
-  };
-}
 
 const plainOptions = (values: readonly string[]): Option[] =>
   values.map((value) => ({ value, label: value, description: null }));
@@ -396,7 +270,7 @@ function featureRows(): CatalogRow[] {
 
 /** The catalog without counts: pure, so its coverage is unit-tested. */
 export function decisionCatalogRows(): CatalogRow[] {
-  return [...suggestFieldKeys.map(fieldRow), ...featureRows()];
+  return [...fieldDecisionRows(), ...featureRows()];
 }
 
 export async function decisionCatalog(

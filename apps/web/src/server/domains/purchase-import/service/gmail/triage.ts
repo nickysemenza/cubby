@@ -7,7 +7,7 @@ import type {
 
 import { wasm } from "~/lib/wasm";
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
-import { MAILBOX_TRIAGE_FEATURE } from "~/server/ai/features";
+import { MAILBOX_TRIAGE_FEATURE } from "~/server/ai/policy/features";
 
 import { droppedBodyParts } from "../../repo/gmail/normalize";
 import type {

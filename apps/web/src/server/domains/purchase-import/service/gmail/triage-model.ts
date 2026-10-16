@@ -13,8 +13,8 @@ import {
 import {
   MAILBOX_RELEVANCE_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
-} from "~/server/ai/features";
-import { mailTriageChoices } from "~/server/ai/prompts/mail";
+} from "~/server/ai/policy/features";
+import { mailTriageChoices } from "~/server/ai/policy/prompts/mail";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/domains/run/service/execution-transport";

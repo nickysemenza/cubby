@@ -6,7 +6,7 @@ import {
 import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { dependenciesCurrent } from "~/server/ai/repo/refresh-policy";
+import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";

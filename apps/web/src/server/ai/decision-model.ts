@@ -18,9 +18,17 @@ import { retryWithBackoff } from "@cubby/shared/retry";
 import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
-import type { AiDecisionFeature } from "~/server/ai/features";
 import { type GatewayMetadata, gatewayFetch } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import {
+  buildChoiceInput,
+  type DecisionChoiceInput,
+  type DecisionChoicePrompt,
+  type DecisionImage,
+  MIB,
+  NONE_KEY,
+} from "~/server/ai/policy/decision-choice";
+import type { AiDecisionFeature } from "~/server/ai/policy/features";
 import {
   type ApplicationCacheStatus,
   withAiResponseCache,
@@ -44,7 +52,6 @@ import { isGatewayAdmissionWait } from "./gateway-egress-client";
 const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
 export const DECISION_MAX_CANDIDATES = DECISION_MAX_CHOICES - 1;
-const NONE_KEY = "none";
 const DECISION_MAX_ATTEMPTS = 3;
 /** The decision model's whole budget for one choice, retries included; MCP model reads outlast it. */
 export const DECISION_DEADLINE_MS = 30_000;
@@ -70,85 +77,6 @@ function retryDelay(
   );
   return elapsedMs + delayMs < DECISION_DEADLINE_MS ? delayMs : null;
 }
-
-/** Embedded-only Clef media. Dimensions, when known, are validated but not sent. */
-const decisionImageSchema = z.union([
-  z.string(),
-  z.object({
-    content_type: z.enum(["image/png", "image/jpeg", "image/webp"]),
-    base64: z.string(),
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
-  }),
-]);
-export type DecisionImage = z.infer<typeof decisionImageSchema>;
-const MIB = 1024 * 1024;
-
-function embeddedImages(images: readonly DecisionImage[]) {
-  if (images.length > 4) throw new Error("Clef supports at most 4 images.");
-  let totalBytes = 0;
-  return images.map((value) => {
-    const image = decisionImageSchema.parse(value);
-    let base64: string;
-    if (typeof image === "string") {
-      const match = /^data:image\/(?:png|jpeg|webp);base64,(.*)$/i.exec(image);
-      if (!match)
-        throw new Error(
-          "Clef images require embedded PNG, JPEG, or WebP data URLs.",
-        );
-      base64 = match[1]!;
-    } else {
-      base64 = image.base64;
-      if ((image.width === undefined) !== (image.height === undefined)) {
-        throw new Error("Clef image dimensions require both width and height.");
-      }
-      if (
-        image.width !== undefined &&
-        image.height !== undefined &&
-        image.width * image.height > 16_000_000
-      ) {
-        throw new Error("Clef image exceeds 16 megapixels.");
-      }
-    }
-    if (
-      base64.length === 0 ||
-      base64.length % 4 !== 0 ||
-      !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)
-    ) {
-      throw new Error("Clef image contains invalid base64.");
-    }
-    const bytes =
-      (base64.length / 4) * 3 -
-      (base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0);
-    if (bytes > 4 * MIB) throw new Error("Clef image exceeds 4 MiB.");
-    totalBytes += bytes;
-    if (totalBytes > 8 * MIB)
-      throw new Error("Clef images exceed 8 MiB total decoded bytes.");
-    return typeof image === "string"
-      ? image
-      : { content_type: image.content_type, base64 };
-  });
-}
-
-const decisionChoiceInputSchema = z.object({
-  state: z.string(),
-  images: z
-    .array(
-      z.union([
-        z.string(),
-        z.object({ content_type: z.string(), base64: z.string() }),
-      ]),
-    )
-    .optional(),
-  questions: z.object({
-    selection: z.object({
-      type: z.literal("choice"),
-      instructions: z.string(),
-      criteria: z.record(z.string(), z.string()),
-    }),
-  }),
-});
-type DecisionChoiceInput = z.infer<typeof decisionChoiceInputSchema>;
 
 const decisionChoiceResponseSchema = z.object({
   answers: z.object({
@@ -370,38 +298,6 @@ function validateProbabilities(
       "The decision model returned probabilities that do not normalize.",
     );
   }
-}
-
-export interface DecisionChoicePrompt {
-  subject: string;
-  rules: string;
-  choices: readonly string[];
-  allowNone?: boolean;
-  images?: readonly DecisionImage[];
-}
-
-/** The exact request body a choice sends; the Decisions catalog renders it. */
-export function buildChoiceInput(
-  args: DecisionChoicePrompt,
-): DecisionChoiceInput {
-  const allowNone = args.allowNone ?? true;
-  const criteria = Object.fromEntries(
-    args.choices.map((label, index) => [`c${index}`, label]),
-  );
-  if (allowNone) criteria[NONE_KEY] = "No listed choice is a suitable match.";
-  return {
-    state: args.subject,
-    ...(args.images?.length ? { images: embeddedImages(args.images) } : {}),
-    questions: {
-      selection: {
-        type: "choice",
-        instructions: allowNone
-          ? `${args.rules}\nChoose exactly one option. Use none when no option fits.`
-          : `${args.rules}\nChoose exactly one option.`,
-        criteria,
-      },
-    },
-  };
 }
 
 /** Decide overflow before requesting the decision model, using the same envelope as the transport. */

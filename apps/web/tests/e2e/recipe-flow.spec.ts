@@ -2,7 +2,7 @@ import { createPostgresPool } from "../../tooling/postgres-pool";
 import { createHash } from "node:crypto";
 
 import "./support/build-constants";
-import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/policy/features";
 import {
   openDetailActions,
   gotoAuthenticatedPage,

@@ -3,7 +3,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { type ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
 
 import { runDecisionChoice } from "~/server/ai/decision-model";
-import { PURCHASE_LINE_DECISIONS } from "~/server/ai/features";
+import { PURCHASE_LINE_DECISIONS } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 
 export async function chooseLineStage(

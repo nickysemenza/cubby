@@ -12,6 +12,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   claimAiEvaluation,
   guardAiEvaluation,
@@ -21,7 +22,6 @@ import {
   saveAiDiscoveryCursor,
   readAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
-import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
 import {

@@ -23,17 +23,17 @@ import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import { cachedCall } from "~/server/ai/adapters";
+import { gatewayFetch } from "~/server/ai/gateway";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
-} from "~/server/ai/features";
-import { gatewayFetch } from "~/server/ai/gateway";
+} from "~/server/ai/policy/features";
 import {
   SUM_MISMATCH_ISSUE,
   type PurchaseAuditRenderedBatch,
-} from "~/server/ai/prompts/purchase-import";
+} from "~/server/ai/policy/prompts/purchase-import";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import { recordAiUsage } from "~/server/ai/usage";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";

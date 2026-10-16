@@ -10,7 +10,7 @@ import {
   LOCATION_INVENTORY_DETECTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import {
   type AiRunContext,
   runStructuredFeature,

@@ -10,7 +10,7 @@ import * as choices from "~/server/ai/decision-model";
 import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import * as structured from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
 import {

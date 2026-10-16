@@ -3,7 +3,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
-import type { AiAnalysisFeature } from "~/server/ai/features";
+import type { AiAnalysisFeature } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import {
   getDb,

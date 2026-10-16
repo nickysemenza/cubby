@@ -1,16 +1,16 @@
-import { emojiCandidates } from "@cubby/schemas/emoji";
 /**
  * One entry per `GeneratedSuggestFieldKey` (`packages/schemas`'s
  * `control.suggest`-declared fields): what kind of decision call the field runs
  * as, its vocabulary/roster, and how to render the subject the model sees.
+ * The declarative half lives in `ai/policy/field-suggest.ts`; each entry here
+ * spreads it and adds the database-backed roster or candidates.
  * `suggest-fields.ts` is the only reader; it resolves basis values and walks
  * this table, so adding a field is one manifest line (step 1) plus one entry
- * here — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
+ * in each file — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
  * below makes a missing entry a typecheck failure in both directions.
  */
 import {
   entityFieldModels,
-  type EntityFieldModel,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
@@ -31,7 +31,21 @@ import {
 } from "@cubby/shared/redundant-tokens";
 import { z } from "zod";
 
-import { locationSuggestionSpec } from "~/server/ai/enrichment/location-suggest";
+import {
+  type ArrayPruneSuggestDecision,
+  emojiDecision,
+  type EnumSuggestDecision,
+  type EnumSuggestKey,
+  FIELD_SUGGEST_DECISIONS,
+  INGREDIENT_ROSTER_CAP,
+  type RawBasis,
+  REFERENCE_ROSTER_CAP,
+  type ReferenceSuggestDecision,
+  type ResolvedBasis,
+  type TextRosterSuggestDecision,
+  VENDOR_ROSTER_CAP,
+} from "~/server/ai/policy/field-suggest";
+import { locationSuggestionSpec } from "~/server/ai/policy/prompts/location-suggest";
 import type { Database } from "~/server/db";
 import { expenseTradeAffinity } from "~/server/domains/expense/repo/analytics";
 import {
@@ -54,39 +68,19 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 
 import { rankCategoryCandidates } from "./category-ranking";
 
-/** Reference keys are already replaced by the record's display name. */
-export type ResolvedBasis = Readonly<Record<string, string | null>>;
-/** The client-supplied basis: reference keys are still shortcodes. */
-export type RawBasis = Readonly<Record<string, string | null>>;
-
 /**
- * `V`/`C`-typed members are declared with method shorthand rather than as
- * arrow-typed properties on purpose: TypeScript checks a method signature's
- * parameter bivariantly, so `EnumSuggestSpec<ProductCategory>` (this file's
- * concrete entries) stays assignable to `FieldSuggestSpec`'s fixed
- * `EnumSuggestSpec<string>` / `ReferenceSuggestSpec<unknown>` members — an
- * arrow-typed `describe: (v: V) => string` is checked contravariantly and
- * would reject every concrete entry below.
+ * `V`/`C`-typed members use method shorthand on purpose: TypeScript checks a
+ * method signature's parameter bivariantly, so this file's concrete entries
+ * stay assignable to `FieldSuggestSpec`'s fixed `EnumSuggestSpec<string>` /
+ * `ReferenceSuggestSpec<unknown>` members.
  */
-interface EnumSuggestSpec<V extends string> {
-  kind: "enum";
-  allowNone?: boolean;
-  values: readonly V[];
+interface EnumSuggestSpec<V extends string> extends EnumSuggestDecision<V> {
   /** Narrows `values` for this record; an empty result skips the target
    * without asking the decision model (nothing admissible to suggest). */
   candidates?(db: Database, raw: RawBasis): Promise<readonly V[]>;
-  describe(v: V): string;
-  labelOf?(v: V): string;
-  rules: string;
-  subject(basis: ResolvedBasis): string;
 }
 
-export interface ReferenceSuggestSpec<C> {
-  kind: "reference";
-  /** The shortcode entity this reference field points to. */
-  entity: string;
-  rules: string;
-  maxCandidates: number;
+export interface ReferenceSuggestSpec<C> extends ReferenceSuggestDecision {
   roster(
     db: Database,
     basis: ResolvedBasis,
@@ -96,17 +90,12 @@ export interface ReferenceSuggestSpec<C> {
   labelOf(c: C): string;
   detailOf?(c: C): string | null;
   renderLine(c: C): string;
-  subject(basis: ResolvedBasis): string;
   /** A tree roster's parent link, used to suppress ancestor corrections. */
   parentIdOf?(c: C): string | null;
 }
 
-interface TextRosterSuggestSpec {
-  kind: "text";
-  rules: string;
-  maxCandidates: number;
+interface TextRosterSuggestSpec extends TextRosterSuggestDecision {
   roster(db: Database, basis: ResolvedBasis): Promise<readonly string[]>;
-  subject(basis: ResolvedBasis): string;
 }
 
 /**
@@ -118,14 +107,7 @@ interface TextRosterSuggestSpec {
  * probability 1, then spends at most `maxDecisionCandidates` per-tag decision binary
  * calls (`rules` + `subject`) on the rest.
  */
-export interface ArrayPruneSuggestSpec {
-  kind: "prune";
-  rules: string;
-  /** The target field's own manifest key (e.g. `"tags"`) — where the
-   * self-basis JSON array lives in `raw`. */
-  arrayKey: string;
-  /** Caps the per-survivor decision calls a large ad-hoc tag list could incur. */
-  maxDecisionCandidates: number;
+export interface ArrayPruneSuggestSpec extends ArrayPruneSuggestDecision {
   /** Every current entry eligible for pruning: the self-basis array minus
    * `collection:*` (Collections' own namespace, never a prune candidate). */
   candidates(basis: ResolvedBasis, raw: RawBasis): readonly string[];
@@ -135,8 +117,6 @@ export interface ArrayPruneSuggestSpec {
     raw: RawBasis,
     db: Database,
   ): Promise<readonly RedundantTokenMatch[]>;
-  /** One survivor tag's decision subject line. */
-  subject(basis: ResolvedBasis, value: string): string;
 }
 
 export type FieldSuggestSpec =
@@ -144,37 +124,6 @@ export type FieldSuggestSpec =
   | ReferenceSuggestSpec<unknown>
   | TextRosterSuggestSpec
   | ArrayPruneSuggestSpec;
-
-type AnyEntityFieldModel =
-  (typeof entityFieldModels)[keyof typeof entityFieldModels];
-
-/**
- * `Label: "value"` per non-null basis entry, in manifest field order — the
- * model prompt's subject block. Uses the field's manifest `label`, matching
- * what an operator sees on the form.
- */
-function renderSubject(entity: string, basis: ResolvedBasis): string {
-  // SAFETY: every `entity` passed below is a literal key this registry
-  // declares an entry for, and every such entity is a real
-  // `entityFieldModels` key — a typo would fail every unit test that calls
-  // through `suggestFields` for that field.
-  const model = (entityFieldModels as Record<string, AnyEntityFieldModel>)[
-    entity
-  ];
-  // Widen the field list to plain `string` keys: the const-inferred manifest
-  // types every entity's field keys as a giant cross-entity literal union,
-  // which `Map<string, number>.get(basisKey: string)` can't be indexed by.
-  const fields: readonly { key: string; label: string }[] = model?.fields ?? [];
-  const order = new Map(fields.map((f, i) => [f.key, i]));
-  return Object.entries(basis)
-    .filter((entry): entry is [string, string] => entry[1] !== null)
-    .sort(([a], [b]) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
-    .map(([key, value]) => {
-      const label = fields.find((f) => f.key === key)?.label ?? key;
-      return `${label}: "${value}"`;
-    })
-    .join("\n");
-}
 
 /** `Garage > Shelving Unit > Shelf 3`, or null at top level. Independent of
  * `location-suggest.ts`'s own private `candidatePath` (not exported). */
@@ -243,14 +192,6 @@ const projectOptionDetail = (candidate: ProjectOptionsOut): string | null =>
     ? `${candidate.effectiveStart} – ${candidate.effectiveEnd ?? "ongoing"}`
     : null;
 
-/** Rosters bounded well under `DECISION_MAX_CANDIDATES` (254): the decision tier
- * is the common case, and only a very large household ever overflows to the
- * fast-tier selection feature. */
-const REFERENCE_ROSTER_CAP = 200;
-/** Vendor names: small enough the decision model sees the whole household roster. */
-const VENDOR_ROSTER_CAP = 200;
-/** Semantic neighbours of a product name; the right ingredient is near the top. */
-const INGREDIENT_ROSTER_CAP = 25;
 /** A text basis shorter than this is too little signal to search on. */
 const MIN_SEARCH_TEXT_LENGTH = 3;
 
@@ -367,12 +308,6 @@ function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
   );
 }
 
-/** `product.tags`'s subject line: the shared product subject plus the one
- * candidate tag under review — `ArrayPruneSuggestSpec.subject` is called once
- * per survivor, not once per request. */
-const productTagPruneSubject = (basis: ResolvedBasis, value: string): string =>
-  `${renderSubject("product", basis)}\nCandidate tag: "${value}"`;
-
 type SpendingCategoryCandidate = SpendingCategoryOut & { path: string };
 
 async function spendingCategoryRoster(
@@ -405,69 +340,40 @@ async function spendingCategoryRoster(
   });
 }
 
-function spendingCategorySpec(
-  entity: "purchase" | "expense" | "vendor",
-): ReferenceSuggestSpec<SpendingCategoryCandidate> {
-  return {
-    kind: "reference",
-    entity: "spendingCategory",
-    maxCandidates: Number.MAX_SAFE_INTEGER,
-    rules:
-      (entity === "purchase"
-        ? "This proposal changes an explicit fallback only; it never classifies all linked Expense lines or replaces mixed line classifications. "
-        : "Classify this Expense line only, using its own purpose and Product evidence. Preserve adjustment and reimbursement roles; a transaction link alone supplies no item-dollar attribution. ") +
-      "Choose the most specific existing spending category supported by the transaction or purchase evidence. Saved linked evidence preserves signed amounts, principal versus adjustment lines, reimbursement roles and split settlements. When saved purpose or linked spending clearly identifies what a reimbursement repays, choose that original spending category (for example restaurant dinner), without treating the reimbursement as new purchased goods. A payment provider name, credit/debit direction, or income/refund kind alone cannot establish that purpose. Do not count tax, shipping, refunds or reimbursements as separate purchased goods; mixed goods or split allocations can support different categories, so choose none when no single category represents the reviewed subject. Truncated evidence is incomplete. Compare the full tree and parent names. The imported bank/CSV Source Category is a clue, not an authoritative household category. Never create or invent categories. Choose none when the roster or evidence does not support a choice. Return a reviewed proposal only; preserve any explicit category until the user applies a change.",
-    roster: spendingCategoryRoster,
-    idOf: (c) => c.id,
-    labelOf: (c) => c.name,
-    detailOf: (c) => c.path,
-    renderLine: (c) => `${c.id} | ${c.path}`,
-    parentIdOf: (c) => c.parentId,
-    subject: (basis) => renderSubject(entity, basis),
-  };
-}
+const spendingCategoryRuntime = {
+  roster: spendingCategoryRoster,
+  idOf: (c: SpendingCategoryCandidate) => c.id,
+  labelOf: (c: SpendingCategoryCandidate) => c.name,
+  detailOf: (c: SpendingCategoryCandidate) => c.path,
+  renderLine: (c: SpendingCategoryCandidate) => `${c.id} | ${c.path}`,
+  parentIdOf: (c: SpendingCategoryCandidate) => c.parentId,
+};
 
 const FIELD_SUGGEST_OVERRIDES = {
   "vendor.defaultSpendingCategoryId": {
-    ...spendingCategorySpec("vendor"),
-    rules:
-      "Suggest an existing spending category suitable as this vendor's fallback from saved principal purchase lines, purchased Products and their category mappings, and independent explicit classifications. Compare the full spending-category tree. Never use the vendor's existing default or classifications inherited from it as evidence. A mixed retailer or sparse, ambiguous history can support no single default: choose none. Preserve explicit decisions until reviewed and applied. Refunds and reimbursements are not additional goods; truncated evidence cannot justify a recommendation.",
+    ...FIELD_SUGGEST_DECISIONS["vendor.defaultSpendingCategoryId"],
+    ...spendingCategoryRuntime,
   },
-
-  "purchase.spendingCategoryId": spendingCategorySpec("purchase"),
-  "expense.spendingCategoryId": spendingCategorySpec("expense"),
-
+  "purchase.spendingCategoryId": {
+    ...FIELD_SUGGEST_DECISIONS["purchase.spendingCategoryId"],
+    ...spendingCategoryRuntime,
+  } satisfies ReferenceSuggestSpec<SpendingCategoryCandidate>,
+  "expense.spendingCategoryId": {
+    ...FIELD_SUGGEST_DECISIONS["expense.spendingCategoryId"],
+    ...spendingCategoryRuntime,
+  } satisfies ReferenceSuggestSpec<SpendingCategoryCandidate>,
   "product.categoryId": {
-    kind: "reference",
-    entity: "productCategory",
-    rules:
-      "You are a household-product classifier. Choose the ONE most specific existing classification supported by the product evidence. Compare the complete hierarchy, names, aliases, and descriptions. Choose none when the evidence does not support a classification; never invent a category.",
-    // Categories are a taxonomy rather than a household-sized roster. Show
-    // every live node; `runAiSelection` uses its overflow path above the decision model's
-    // choice limit instead of silently dropping broad roots or their leaves.
-    //
-    // The picker's pinned "Suggested" section (`use-auto-field-suggestion.ts`
-    // `seedItems`) reads the decision model's `alternatives`, which only the decision-tier
-    // path produces — the overflow chat-tier pick (`selection.ts`) always
-    // returns `alternatives: []`. Past `DECISION_MAX_CANDIDATES` (254) live nodes
-    // this roster crosses into overflow and "Suggested" quietly degrades to
-    // the single winner. 29 nodes today; revisit if the taxonomy grows.
-    maxCandidates: Number.MAX_SAFE_INTEGER,
+    ...FIELD_SUGGEST_DECISIONS["product.categoryId"],
     roster: async (db, basis) =>
       rankCategoryCandidates(await listProductCategoryTreeOptions(db), basis),
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     detailOf: (c) => productCategoryPath(c),
     renderLine: renderProductCategoryOption,
-    subject: (basis) => renderSubject("product", basis),
     parentIdOf: (c) => c.ancestorIds.at(-1) ?? null,
   } satisfies ReferenceSuggestSpec<ProductCategorySuggestionOption>,
   "product.ingredientId": {
-    kind: "reference",
-    entity: "ingredient",
-    rules:
-      "You link a stocked product to the generic cooking ingredient it is a package of (for example a branded 2 lb bag of jasmine rice → jasmine rice). Choose the ONE listed ingredient a recipe line would name for this product. Choose none for non-food products (tools, supplies, clothing, household goods) and when no listed ingredient is the same food; never pick a merely related food or invent one.",
-    maxCandidates: INGREDIENT_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["product.ingredientId"],
     roster: (db, basis) =>
       linkedCandidatesForProduct(db, basis.name ?? null, "ingredient"),
     idOf: (c) => c.id,
@@ -475,14 +381,9 @@ const FIELD_SUGGEST_OVERRIDES = {
     detailOf: (c) => c.subtitle,
     renderLine: (c) =>
       `${c.id} | ${c.title}${c.subtitle ? ` — ${c.subtitle}` : ""}`,
-    subject: (basis) => renderSubject("product", basis),
   } satisfies ReferenceSuggestSpec<LinkedEntityCandidate>,
   "product.growsPlantId": {
-    kind: "reference",
-    entity: "plant",
-    rules:
-      "You link a seed packet, plant start, bulb, tuber, or cutting to the ONE listed Plant it grows. A Plant is a cultivar, or a species when it names no cultivar. Choose the same cultivar when the product names one; choose a species-level Plant only when the product names no cultivar. Choose none for anything that is not grown (tools, soil, food, supplies), when the listed Plant is a different cultivar, or when no listed Plant is the same crop; never pick a merely related plant.",
-    maxCandidates: INGREDIENT_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["product.growsPlantId"],
     roster: (db, basis) =>
       linkedCandidatesForProduct(db, basis.name ?? null, "plant"),
     idOf: (c) => c.id,
@@ -490,16 +391,9 @@ const FIELD_SUGGEST_OVERRIDES = {
     detailOf: (c) => c.subtitle,
     renderLine: (c) =>
       `${c.id} | ${c.title}${c.subtitle ? ` — ${c.subtitle}` : ""}`,
-    subject: (basis) => renderSubject("product", basis),
   } satisfies ReferenceSuggestSpec<LinkedEntityCandidate>,
   "product.tags": {
-    kind: "prune",
-    rules:
-      entityFieldModels.product.fields
-        .find((field) => field.key === "tags")
-        ?.control?.suggest?.rules?.join("\n") ?? "",
-    arrayKey: "tags",
-    maxDecisionCandidates: 8,
+    ...FIELD_SUGGEST_DECISIONS["product.tags"],
     candidates: (_basis, raw) => pruneCandidates(raw, "tags"),
     // `raw.categoryId` is the still-unresolved shortcode (`RawBasis`, unlike
     // `basis.categoryId`'s display label) — the same raw-shortcode-lookup
@@ -526,13 +420,9 @@ const FIELD_SUGGEST_OVERRIDES = {
         },
       });
     },
-    subject: productTagPruneSubject,
   } satisfies ArrayPruneSuggestSpec,
   "inventory.locationId": {
-    kind: "reference",
-    entity: "location",
-    rules: locationSuggestionSpec.rules,
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["inventory.locationId"],
     roster: async (db, _basis, raw) => {
       const productShortcode = raw.productId;
       if (!productShortcode) return [];
@@ -548,80 +438,48 @@ const FIELD_SUGGEST_OVERRIDES = {
     labelOf: (c) => c.name,
     detailOf: locationAncestorPath,
     renderLine: locationSuggestionSpec.renderLine,
-    subject: (basis) => renderSubject("inventory", basis),
   } satisfies ReferenceSuggestSpec<LocationPutAwayCandidate>,
   "task.projectId": {
-    kind: "reference",
-    entity: "project",
-    rules:
-      "You are a project-linking assistant. Given a task and the household's projects, choose the ONE project it belongs to, or none if it stands alone.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["task.projectId"],
     roster: (db) => projectNameOptions(db),
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     detailOf: projectOptionDetail,
     renderLine: renderProjectOption,
-    subject: (basis) => renderSubject("task", basis),
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
   "task.subjectProductId": {
-    kind: "reference",
-    entity: "product",
-    rules:
-      "You are a product-linking assistant. Given a task's name, choose the ONE product it is about, or none if it isn't about a specific product.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["task.subjectProductId"],
     roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),
     idOf: (c) => c.id,
     labelOf: (c) => c.title,
     detailOf: (c) => c.subtitle,
     renderLine: renderProductCandidate,
-    subject: (basis) => renderSubject("task", basis),
   } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
-  // No `trade` in this basis: `expense.trade`'s own basis includes
-  // `projectId`, so the reverse edge would make the pair cyclic — rejected
-  // by the manifest compiler (step 1).
   "expense.projectId": {
-    kind: "reference",
-    entity: "project",
-    rules:
-      "You are a project-linking assistant. Given an expense and the household's projects, choose the ONE project it belongs to, or none if it isn't tied to a project.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["expense.projectId"],
     roster: expenseProjectRoster,
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     detailOf: projectOptionDetail,
     renderLine: renderExpenseProjectOption,
-    subject: (basis) => renderSubject("expense", basis),
   } satisfies ReferenceSuggestSpec<ExpenseProjectOption>,
   "expense.productId": {
-    kind: "reference",
-    entity: "product",
-    rules:
-      "You are a product-linking assistant. Given an expense's name, choose the ONE product it is for, or none if it isn't about a specific product.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["expense.productId"],
     roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),
     idOf: (c) => c.id,
     labelOf: (c) => c.title,
     detailOf: (c) => c.subtitle,
     renderLine: renderProductCandidate,
-    subject: (basis) => renderSubject("expense", basis),
   } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
   "expense.vendor": {
-    kind: "text",
-    rules:
-      "You are a vendor-matching assistant. Given an expense's name, notes, and order id, choose the ONE existing vendor it was bought from, or none if no listed vendor fits.",
-    maxCandidates: VENDOR_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["expense.vendor"],
     roster: async (db) => {
       const vendors = await vendorOptions(db);
       return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => v.name);
     },
-    subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestSpec,
   "purchase.vendorId": {
-    kind: "reference",
-    entity: "vendor",
-    rules:
-      "You are a vendor-matching assistant. Given a purchase's display label, order id, and notes, choose the ONE existing vendor it was bought from, or none if no listed vendor fits.",
-    maxCandidates: VENDOR_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["purchase.vendorId"],
     roster: async (db) => {
       const vendors = await vendorOptions(db);
       return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => ({
@@ -632,104 +490,35 @@ const FIELD_SUGGEST_OVERRIDES = {
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     renderLine: (c) => `${c.id} | ${c.name}`,
-    subject: (basis) => renderSubject("purchase", basis),
   } satisfies ReferenceSuggestSpec<{ id: string; name: string }>,
   "purchase.defaultProjectId": {
-    kind: "reference",
-    entity: "project",
-    rules:
-      "You are a project-linking assistant. Given a purchase's display label, vendor, and notes, choose the ONE project it belongs to, or none if it isn't tied to a project.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
+    ...FIELD_SUGGEST_DECISIONS["purchase.defaultProjectId"],
     roster: (db) => projectNameOptions(db),
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     detailOf: projectOptionDetail,
     renderLine: renderProjectOption,
-    subject: (basis) => renderSubject("purchase", basis),
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
 } satisfies Record<
   Exclude<GeneratedSuggestFieldKey, EnumSuggestKey | `${string}.emoji`>,
   FieldSuggestSpec
 >;
 
-type EnumSuggestKey =
-  | "vendor.spendingProfile"
-  | "planting.status"
-  | "gardenEntry.kind"
-  | "location.type"
-  | "project.kind"
-  | "project.defaultTrade"
-  | "meal.mealType"
-  | "meal.mealKind"
-  | "task.trade"
-  | "expense.costType"
-  | "expense.lineKind"
-  | "expense.trade"
-  | "purchase.defaultTrade"
-  | "productCategory.feature"
-  | "vendor.itemizationExpectation"
-  | "purchase.itemizationExpectation"
-  | "financialTransaction.itemizationExpectation"
-  | "spendingCategory.itemizationExpectation"
-  | "spendingCategory.productExpectation";
-
-// oxlint-disable anti-slop/no-known-value-widening -- The closed generated key union is validated by the final registry satisfies check; this builder must return that map after enumerating model fields.
-function manifestEnumSpecs(): Record<EnumSuggestKey, FieldSuggestSpec> {
-  const specs: Partial<Record<EnumSuggestKey, FieldSuggestSpec>> = {};
-  // SAFETY: Object.entries erases generated entity and field unions; each
-  // value still comes from the generated field model declared below.
-  const models = Object.entries(entityFieldModels) as [
-    string,
-    Pick<EntityFieldModel, "fields">,
-  ][];
-  for (const [entity, model] of models)
-    for (const field of model.fields) {
-      const options = field.control?.options;
-      const suggest = field.control?.suggest;
-      if (!options?.length || !suggest || suggest.mode !== "fill") continue;
-      // SAFETY: this union enumerates all generated enum suggestion fields.
-      const key = `${entity}.${field.key}` as EnumSuggestKey;
-      const byValue = new Map<
-        string,
-        { value: string; label: string; description?: string }
-      >(options.map((option) => [option.value, option]));
-      const spec: EnumSuggestSpec<string> = {
-        kind: "enum",
-        allowNone: suggest.allowNone,
-        values: options
-          .filter(
-            ({ value }) => !(key === "location.type" && value === "furniture"),
-          )
-          .map(({ value }) => value),
-        describe(value) {
-          return byValue.get(value)?.description ?? value;
-        },
-        labelOf(value) {
-          return byValue.get(value)?.label ?? value;
-        },
-        rules: suggest.rules?.join("\n") ?? "",
-        subject: (basis) => renderSubject(entity, basis),
-      };
-      if (key === "productCategory.feature")
-        spec.candidates = async (db, raw) => {
-          if (raw.parentId) return [];
-          const bound: Set<string> = new Set(
-            await listBoundCategoryFeatures(db),
-          );
-          return options
-            .map(({ value }) => value)
-            .filter((value) => !bound.has(value));
-        };
-      specs[key] = spec;
-    }
-  // SAFETY: every declared EnumSuggestKey was visited above; missing keys fail the merged registry completeness check.
-  // oxlint-disable-next-line anti-slop/no-known-value-widening -- Runtime enumeration fills precisely the enum keys in this closed generated union.
-  const completeSpecs = specs as Record<EnumSuggestKey, FieldSuggestSpec>;
-  return completeSpecs;
-}
+const PRODUCT_CATEGORY_FEATURE =
+  FIELD_SUGGEST_DECISIONS["productCategory.feature"];
 
 export const FIELD_SUGGEST_REGISTRY = {
-  ...manifestEnumSpecs(),
+  ...FIELD_SUGGEST_DECISIONS,
+  "productCategory.feature": {
+    ...PRODUCT_CATEGORY_FEATURE,
+    candidates: async (db, raw) => {
+      if (raw.parentId) return [];
+      const bound: Set<string> = new Set(await listBoundCategoryFeatures(db));
+      return PRODUCT_CATEGORY_FEATURE.values.filter(
+        (value) => !bound.has(value),
+      );
+    },
+  } satisfies EnumSuggestSpec<string>,
   ...FIELD_SUGGEST_OVERRIDES,
 } satisfies Record<
   Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>,
@@ -740,19 +529,8 @@ export function fieldSuggestSpecFor(
   entity: string,
   field: string,
 ): FieldSuggestSpec | undefined {
-  if (field === "emoji" && Object.hasOwn(entityFieldModels, entity)) {
-    return {
-      kind: "enum",
-      values: emojiCandidates,
-      describe(value) {
-        return `A single emoji symbol to help recognize the ${entity} record: ${value}`;
-      },
-      labelOf: (value) => value,
-      rules:
-        "Choose one emoji that makes this record easy to recognize from its saved identity and category context. Use none when there is insufficient evidence. This is a reviewed proposal; never change a saved value automatically.",
-      subject: (basis) => renderSubject(entity, basis),
-    };
-  }
+  if (field === "emoji" && Object.hasOwn(entityFieldModels, entity))
+    return emojiDecision(entity);
   const key = `${entity}.${field}`;
   // SAFETY: `Object.hasOwn` just proved `key` names one of
   // `FIELD_SUGGEST_REGISTRY`'s own declared keys, not an arbitrary string.

@@ -147,8 +147,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   or exact protocol match needs no model judgment.
 
 - Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
-  definitions in `server/ai/prompts/`. `decisionCatalogRows` in the existing
-  `decision-catalog.ts` owns decision discovery; `AI_FEATURES` owns chat requests. Purchase-import Markdown remains
+  definitions in `server/ai/policy/prompts/`. `decisionCatalogRows` in
+  `decision-catalog.ts` owns decision discovery, over the field rows in
+  `server/ai/policy/field-decisions.ts`; `AI_FEATURES` owns chat requests. Purchase-import Markdown remains
   authoritative where the request mounts a shared skill; catalog rendering does
   not create another prose prompt.
 

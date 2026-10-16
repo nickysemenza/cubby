@@ -7,7 +7,7 @@ import {
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
 
-import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
+import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import {
   generatePresignedDownloadUrl,
