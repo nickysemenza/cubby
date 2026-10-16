@@ -100,6 +100,9 @@ const env = {
   NX_CACHE_DIRECTORY: local
     ? process.env.NX_CACHE_DIRECTORY
     : "/home/user/.local/share/cubby-nx",
+  CARGO_TARGET_DIR: local
+    ? process.env.CARGO_TARGET_DIR
+    : "/home/user/.local/share/cubby-cargo-target",
   BETTER_AUTH_SECRET: "boat-ci-synthetic-secret-not-for-production",
 };
 const credentials = manifest.jobs.some((job) => job.id === "ai-smoke")

@@ -6,6 +6,7 @@ set -euo pipefail
 repo=/home/user/cubby-ci
 export PLAYWRIGHT_BROWSERS_PATH=/home/user/.local/share/ms-playwright
 export NX_CACHE_DIRECTORY=/home/user/.local/share/cubby-nx
+export CARGO_TARGET_DIR=/home/user/.local/share/cubby-cargo-target
 export NX_SKIP_REMOTE_CACHE=true
 export NX_DAEMON=false
 export CARGO_BUILD_WARNINGS=deny
