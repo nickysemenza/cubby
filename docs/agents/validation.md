@@ -213,6 +213,25 @@ commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a
 migration follows the [production change rules](domain-rules.md#production-changes).
 
+## Performance review
+
+AI review owns performance judgment. Performance measurements feed that review;
+they do not introduce universal timing, query-count, or plan-shape CI gates.
+Retain correctness regressions and the final-content CI merge gate above.
+
+Performance changes provide a standard, non-blocking before/after evidence
+report: requested fields and dependencies versus loaded work, SQL calls and
+plan work at representative synthetic scale, response bytes, decoded operation
+failures, and time until useful data is available. Label the revision,
+environment, workload, cache state, and unavailable measurements. A query timing
+does not establish page latency, and HTTP success does not establish RPC success.
+
+Review the shared cause before approving a local optimization: read projections,
+dependency reuse, per-row SQL work, polling and concurrency ownership, browser
+import dependencies, and predicate/index alignment. Extend existing projection,
+report-dependency, transport, and measurement tools. Keep workload-specific
+query decisions with their owning domain; share evidence collection and parsing.
+
 ## Explicit local diagnostics
 
 `pnpm check` remains available for repository-wide static validation.

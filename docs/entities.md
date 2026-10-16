@@ -1166,9 +1166,14 @@ concurrency, `--input` populations, `--mode complete`, `--first-invocation`, and
 `--caldav`. Credentials and response bodies are never written to artifacts.
 Resource GET pagination uses `page=1` while progressive structured input uses
 `pageIndex=0`; keep compared populations equivalent. The harness does not infer
-platform cold starts from elapsed time. SQL count, database acquisition, and
-Worker CPU require matching sampled trace evidence (unavailable values stay
-null), and a decoded-row measurement does not prove browser paint time. The
+platform cold starts from elapsed time. SQL count and database acquisition,
+query and client-queue active-wall times come from the existing `Server-Timing`
+request collector. The aggregate report includes per-request medians and
+observed/total request counts; private raw output preserves individual samples.
+Absent, malformed, duplicate and streamed-response metrics stay null: stream
+headers can precede the remaining work. Worker CPU still requires matching
+sampled trace evidence; wall times do not establish CPU time. A decoded-row
+measurement does not prove browser paint time. The
 target is warm usable lists below 500 ms (300 ms stretch), with full enrichment
 compared separately. No historical SQL-plan baseline exists for regional or
 Hyperdrive placement; placement stays unchanged unless isolated repeated
