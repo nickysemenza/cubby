@@ -1186,7 +1186,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     vendorId: vendor.id,
     orderId: "Synthetic jacket order",
     date: "2026-03-04",
-    trade: "other",
+    defaultTrade: "other",
   });
   await createEntityFixture(page, "expense", {
     name: "Synthetic jacket purchase",
