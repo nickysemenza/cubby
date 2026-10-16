@@ -123,6 +123,52 @@ describe("structured field read-to-input vectors", () => {
         recipes: [{ recipeId, scale: 2, sortOrder: 1 }],
       });
     },
+    "financialAccount.authorizedUsers": async () => {
+      const primary = await create("ledgerParty", {
+        name: "Vector primary",
+        kind: "member",
+      });
+      const member = await create("ledgerParty", {
+        name: "Vector member",
+        kind: "member",
+      });
+      return create("financialAccount", {
+        ...buildEntity("financialAccount", {
+          identity: {
+            kind: "credit_card",
+            issuer: "Example Bank",
+            network: "visa",
+          },
+        }),
+        primaryCardholderId: primary,
+        authorizedUsers: [
+          { ledgerPartyId: member, validFrom: "2026-06-01", validTo: null },
+        ],
+      });
+    },
+    "financialAccount.fundingPeriods": async () => {
+      const primary = await create("ledgerParty", {
+        name: "Vector primary",
+        kind: "member",
+      });
+      const member = await create("ledgerParty", {
+        name: "Vector member",
+        kind: "member",
+      });
+      return create("financialAccount", {
+        ...buildEntity("financialAccount", {
+          identity: {
+            kind: "credit_card",
+            issuer: "Example Bank",
+            network: "visa",
+          },
+        }),
+        primaryCardholderId: primary,
+        fundingPeriods: [
+          { ledgerPartyId: member, validFrom: "2026-06-01", validTo: null },
+        ],
+      });
+    },
     "financialAccount.identity": () =>
       create("financialAccount", {
         name: "Vector card",

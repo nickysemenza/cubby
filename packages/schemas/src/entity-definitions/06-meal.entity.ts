@@ -5,6 +5,7 @@ import { imageShortcode, mealShortcode } from "../identifier-fields.js";
 import {
   mealKindSchema,
   mealTypeSchema,
+  mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import {
   mealRecipeInput,
@@ -507,6 +508,8 @@ Rules:
     ],
     bulk: [],
     audit: [],
+    // Slot order (`mealTypeValues` is clock order), not slug order.
+    derived: { mealType: { type: "enum", options: [...mealTypeValues] } },
     sort: {
       fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
     },

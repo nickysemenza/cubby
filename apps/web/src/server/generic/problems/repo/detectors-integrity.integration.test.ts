@@ -857,6 +857,21 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "FinancialAccount.primaryCardholderId": (db, targetId) =>
+    insertWithShortcode(db, "financialAccount", {
+      name: uniq("Primary credit card"),
+      identity: {
+        kind: "credit_card",
+        issuer: "Example Bank",
+        network: "visa",
+      },
+      primaryCardholderId: parseEntityId("ledgerParty", targetId),
+    }),
+  "Purchase.purchaserOverrideId": async (db, targetId) =>
+    insertWithShortcode(db, "purchase", {
+      vendorId: (await mkVendor(db)).id,
+      purchaserOverrideId: parseEntityId("ledgerParty", targetId),
+    }),
   "FinancialAccount.ledgerPartyId": (db, targetId) =>
     insertWithShortcode(db, "financialAccount", {
       name: uniq("Financial account"),

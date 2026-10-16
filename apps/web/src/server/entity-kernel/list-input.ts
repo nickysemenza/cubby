@@ -1,3 +1,4 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type ListNesting,
@@ -35,7 +36,20 @@ export const parseSorts = <
       { orderBy: binding.sort.default, direction: binding.sort.direction },
     ],
   );
+  const derived: Readonly<Record<string, { sort: string | null }>> =
+    generatedEntityListFields[binding.entity].derived;
   for (const sort of normalized) {
+    // A declared field the compiler cannot order (a to-many path, a
+    // filter-only predicate) is rejected with the reason its declaration
+    // derives, the same text every surface shows.
+    const rejected = Object.hasOwn(derived, sort.orderBy)
+      ? derived[sort.orderBy]?.sort
+      : null;
+    if (rejected)
+      throw createAppError(
+        "LIST_SORT_FIELD_UNSUPPORTED",
+        `Cannot sort ${binding.entity} by "${sort.orderBy}": ${rejected}`,
+      );
     const result = field.safeParse(sort.orderBy);
     if (!result.success)
       throw createAppError(

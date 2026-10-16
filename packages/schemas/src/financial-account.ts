@@ -1,3 +1,4 @@
+export type { FinancialAccountPartyPeriod } from "./financial-account-party-fields";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {

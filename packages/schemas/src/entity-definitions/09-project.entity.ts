@@ -805,6 +805,13 @@ Rules:
       "googleDriveFolderUrl",
       "notionPageUrl",
     ],
+    derived: {
+      // The effective assignee's name, inherited from a parent project.
+      assigneeId: { type: "text" },
+      // The effective start: the stored date, else the earliest task or
+      // expense date in the subtree below an unset start.
+      startDate: { type: "date" },
+    },
     sort: {
       fields: [
         "assigneeId",

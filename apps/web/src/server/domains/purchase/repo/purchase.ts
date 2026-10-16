@@ -41,7 +41,6 @@ import { parseShortcode, cents } from "@cubby/shared";
 import {
   and,
   asc,
-  desc,
   eq,
   inArray,
   isNull,
@@ -119,6 +118,7 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
+import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import {
@@ -179,6 +179,7 @@ import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
 } from "./purchase-evidence-policy";
+import { purchasePurchaserSql } from "./purchase-purchaser";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "SourceOrderObservation.purchaseId": {
@@ -364,6 +365,10 @@ const purchaseVendorLogoKey = sql<string | null>`(
 )`;
 
 const purchaseColumns = {
+  purchaserId: purchasePurchaserSql,
+  purchaserOverrideId: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId")`,
   coverage: purchaseCoverageSql("Purchase"),
   fieldResolutions: purchaseEvidenceFieldResolutionsSql("Purchase"),
   defaultProjectShortcode: purchaseDefaultProjectShortcode,
@@ -413,6 +418,8 @@ type PurchaseRow = Pick<
   | "createdAt"
   | "updatedAt"
 > & {
+  purchaserId: PurchaseOut["purchaserId"];
+  purchaserOverrideId: string | null;
   coverage: PurchaseOut["coverage"];
   fieldResolutions: PurchaseOut["fieldResolutions"];
   spendingCategoryOrigin: string;
@@ -444,6 +451,10 @@ const dbPurchaseToAPI = (
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
   spendingCategorySummary: SpendingCategorySummary = emptySpendingCategorySummary(),
 ): PurchaseOut => ({
+  purchaserId: row.purchaserId,
+  purchaserOverrideId: row.purchaserOverrideId
+    ? parseShortcodeFor("ledgerParty", row.purchaserOverrideId)
+    : null,
   id: parseShortcodeFor("purchase", row.shortcode),
   vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
   vendorAccountId: row.vendorAccountShortcode
@@ -629,6 +640,11 @@ const documentPresenceCondition = (
 const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
+    // A purchase with no live vendor leads a descending list.
+    vendorId: { sql: purchaseVendorName, nulls: "high" },
+    expenseCount: purchaseExpenseCount,
+    expenseTotal: purchaseExpenseTotal,
+    documentCount: purchaseDocumentCount,
   },
 });
 
@@ -686,15 +702,6 @@ export const buildPurchaseWhereClause = async (
   ]);
 };
 
-const resolvePurchaseSort = (sort: SortParams) => {
-  const dir = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "vendorId") return [dir(purchaseVendorName)];
-  if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
-  if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
-  if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
-  return null;
-};
-
 export const purchaseListRead = async (
   db: Database,
   filters: PurchaseFilters,
@@ -728,7 +735,6 @@ export const purchaseListRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildPurchaseWhereClause(db, filters),
-      resolveSort: resolvePurchaseSort,
       select: (page) =>
         getDb(db)
           .select({
@@ -791,6 +797,9 @@ export const purchaseListRead = async (
             });
             return {
               ...row,
+              purchaserOverrideId: row.purchaserOverrideId
+                ? parseShortcodeFor("ledgerParty", row.purchaserOverrideId)
+                : null,
               id: parseShortcodeFor("purchase", row.shortcode),
               displayName: purchaseLabel({
                 orderId: row.orderId,
@@ -1204,6 +1213,10 @@ export const createPurchase = async (
       defaultTrade: data.defaultTrade,
       vendorId,
       vendorAccountId,
+      purchaserOverrideId: await resolveMemberAssignee(
+        tx,
+        data.purchaserOverrideId,
+      ),
       orderId: data.orderId?.trim() || null,
       displayLabel: data.displayLabel?.trim() || null,
       date: data.date,
@@ -1332,6 +1345,10 @@ export const updatePurchase = async (
       buildPartialUpdateValues({
         vendorId: resolvedVendorId,
         vendorAccountId: resolvedVendorAccountId,
+        purchaserOverrideId: await resolveMemberAssignee(
+          tx,
+          data.purchaserOverrideId,
+        ),
         defaultProjectId: await resolvePurchaseDefaultProjectUpdate(
           tx,
           data.defaultProjectId,
@@ -2050,6 +2067,7 @@ const carryChargeMetadata = async (
   survivorId: PurchaseId,
 ) => {
   const selection = {
+    purchaserOverrideId: purchase.purchaserOverrideId,
     spendingCategoryId: purchase.spendingCategoryId,
     spendingCategoryOrigin: purchase.spendingCategoryOrigin,
     itemizationExpectation: purchase.itemizationExpectation,
@@ -2089,7 +2107,20 @@ const carryChargeMetadata = async (
       "CONSTRAINT_VIOLATION",
       "These Purchases have conflicting spending categories. Preserve item overrides and review their defaults before merging.",
     );
+  if (
+    survivor.purchaserOverrideId !== null &&
+    dead.purchaserOverrideId !== null &&
+    survivor.purchaserOverrideId !== dead.purchaserOverrideId
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "These Purchases have conflicting purchaser overrides. Reconcile them before merging.",
+    );
   const carried = buildPartialUpdateValues({
+    purchaserOverrideId: carryMissing(
+      survivor.purchaserOverrideId,
+      dead.purchaserOverrideId,
+    ),
     spendingCategoryId: carryMissing(
       survivor.spendingCategoryId,
       dead.spendingCategoryId,

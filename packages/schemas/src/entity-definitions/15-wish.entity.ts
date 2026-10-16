@@ -274,6 +274,8 @@ export default defineEntity({
     update: ["name", "notes", "candidateProductIds", "acquired"],
     bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
+    // The midpoint of the candidates' price range.
+    derived: { priceRange: { type: "number" } },
     sort: {
       fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
     },

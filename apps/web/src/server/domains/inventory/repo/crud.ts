@@ -259,19 +259,6 @@ type InventoryFilters = Pick<
   dataGap?: string | string[];
 };
 
-// Amount is stored as a unit + value pair: group by unit, then by size. The
-// related and valuation sorts compile from `model.derived`.
-const resolveInventorySort = (sort: SortParams) => {
-  const direction = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "amount") {
-    return [
-      direction(inventoryEntry.amountUnit),
-      direction(inventoryEntry.amountValue),
-    ];
-  }
-  return null;
-};
-
 // One valuation map serves the rows, their sort and filter, and the footer.
 const inventoryValuations = listPrepare((db) =>
   loadLiveInventoryValuations(db),
@@ -282,6 +269,11 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
     valuation: inventoryValuations.value((valuations) =>
       inventoryValuationSql(valuations, inventoryEntry.id),
     ),
+    // Amount is stored as a unit + value pair: group by unit, then by size.
+    amount: [
+      sql`${inventoryEntry.amountUnit}`,
+      sql`${inventoryEntry.amountValue}`,
+    ],
     valuationStatus: inventoryValuations.predicate(
       (valuations, statuses: readonly string[]) => {
         const valuation = inventoryValuationSql(valuations, inventoryEntry.id);
@@ -324,7 +316,6 @@ const inventoryListOrderBy = (
     {
       resolve: (sort) =>
         inventoryScoreSort(sort) ??
-        resolveInventorySort(sort) ??
         inventoryScaffold.derivedSort(sort, context),
       tieBreaker: desc(inventoryEntry.createdAt),
     },

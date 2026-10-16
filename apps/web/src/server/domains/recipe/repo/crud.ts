@@ -20,7 +20,6 @@ import type {
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import {
-  type AnyColumn,
   and,
   asc,
   eq,
@@ -410,7 +409,22 @@ const recordNotionRecipePage = async (
 
 /** A nullable tag array is empty when null or zero-length. */
 
-const recipeScaffold = listScaffold("recipe", recipe);
+/** A computed total, absent until the recipe's totals are computed. */
+const recipeTotalSql = (path: string) =>
+  sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> ${sql.raw(`'${path}'`)})::numeric END`;
+
+const recipeScaffold = listScaffold("recipe", recipe, {
+  derived: {
+    costTotal: recipeTotalSql("{cost,lower}"),
+    caloriesTotal: recipeTotalSql("{nutrition,kcal,lower}"),
+    source: [
+      sql`${recipe.sourceType}`,
+      sql`${recipe.sourceUrl}`,
+      sql`${recipe.sourceLabel}`,
+    ],
+    tags: sql`${recipe.tags}[1]`,
+  },
+});
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildRecipeWhere = async (
@@ -522,13 +536,9 @@ export const buildRecipeWhere = async (
       eqAnyRequested(recipe.sourceType, sourceTypes),
       presenceCondition(recipe.sourceType, filters.sourceTypePresenceFilter),
     ),
+    ...rangeConditions(recipeTotalSql("{cost,lower}"), filters, "costTotal"),
     ...rangeConditions(
-      sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{cost,lower}')::numeric END`,
-      filters,
-      "costTotal",
-    ),
-    ...rangeConditions(
-      sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric END`,
+      recipeTotalSql("{nutrition,kcal,lower}"),
       filters,
       "caloriesTotal",
     ),
@@ -543,43 +553,11 @@ export const recipeListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  const resolveRecipeSort = (s: SortParams): SQL[] | null => {
-    const isAsc = s.direction === "asc";
-    const dir = (col: AnyColumn): SQL =>
-      isAsc ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
-    const totalsSortValue =
-      s.orderBy === "costTotal"
-        ? sql`(${recipe.totals} #>> '{cost,lower}')::numeric`
-        : s.orderBy === "caloriesTotal"
-          ? sql`(${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric`
-          : null;
-    if (s.orderBy === "source")
-      return [
-        dir(recipe.sourceType),
-        dir(recipe.sourceUrl),
-        dir(recipe.sourceLabel),
-      ];
-    if (s.orderBy === "servings") return [dir(recipe.servings)];
-    if (s.orderBy === "tags")
-      return [
-        isAsc
-          ? sql`${recipe.tags}[1] asc nulls last`
-          : sql`${recipe.tags}[1] desc nulls last`,
-      ];
-    if (totalsSortValue)
-      return [
-        isAsc
-          ? sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN ${totalsSortValue} END asc nulls last`
-          : sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN ${totalsSortValue} END desc nulls last`,
-      ];
-    return null;
-  };
   return recipeScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildRecipeWhere(db, filters),
-      resolveSort: resolveRecipeSort,
       tieBreaker: sql`${recipe.name} asc`,
       // List reads fetch flat rows and scalar counts; never full graphs. The
       // thumbnail comes from the display-image resolver, not an images join.

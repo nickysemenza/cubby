@@ -312,9 +312,17 @@ table-derived insert schemas omit virtual inputs and declaration-level defaults;
 `drizzle-seed` generates foreign keys and writes directly to tables. Those are
 storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
 
-Migration regressions rehearse the committed journal from the actual deployed
-prefix through the canonical migration using a leased local database and
-`migrateDatabase`. Delete a migration's rehearsal once production has applied
+### Migration rehearsals
+
+Use `withMigrationDatabase` (`apps/web/tooling/test-database-lease.ts`) for
+migration regressions. It owns an empty IntegreSQL lease, connection setup, and
+cleanup on success or failure; the current-schema Vitest template cannot test a
+predecessor. Use `migrationTags` and `migrateDatabase` from `tooling/db-migrate.ts`
+to select and apply the committed boundaries. Keep predecessor-schema fixtures
+and preservation assertions in the test; bootstrap credentials, database names,
+and CREATE/DROP lifecycle belong to the shared lease infrastructure.
+
+Rehearse from the actual deployed prefix through the canonical migration. Delete a migration's rehearsal once production has applied
 it and its schema readback is verified; the invariants it guarded are then
 held by domain write/readback tests (for example, source-claim-family tests own
 invalid alias-family refusal, and fact-evidence-subject tests own canonical

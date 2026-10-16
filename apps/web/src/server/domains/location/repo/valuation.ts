@@ -85,14 +85,20 @@ const directValuationsByLocation = (
  * `inventoryValuationSql` for why. `location.id` is the primary table's own
  * typed column, which survives the relational-query layer's alias rewriting.
  */
-export const loadDirectValuationSql = async (
-  db: Database | DrizzleTransaction,
-  entryValuations?: InventoryValuations,
-): Promise<SQL<number>> => {
-  const { entries } = await loadLocationValuationInputs(db, entryValuations);
+export const directValuationSql = (
+  entries: readonly ValuationInventoryRow[],
+): SQL<number> => {
   const direct = Object.fromEntries(directValuationsByLocation(entries));
   return sql<number>`COALESCE((${JSON.stringify(direct)}::jsonb ->> ${location.id}::text)::double precision, 0)`;
 };
+
+export const loadDirectValuationSql = async (
+  db: Database | DrizzleTransaction,
+  entryValuations?: InventoryValuations,
+): Promise<SQL<number>> =>
+  directValuationSql(
+    (await loadLocationValuationInputs(db, entryValuations)).entries,
+  );
 
 /** Top locations by direct value, for Home; computed, no tree or relation hydration. */
 export const getLocationValuationSummary = async (

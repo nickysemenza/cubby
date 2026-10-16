@@ -490,7 +490,14 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
   };
 };
 
-const vendorScaffold = listScaffold("vendor", vendor);
+const vendorScaffold = listScaffold("vendor", vendor, {
+  derived: {
+    spend: vendorSpend,
+    purchaseCount: vendorPurchaseCount,
+    // A vendor with no purchases leads a newest-first list.
+    latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
+  },
+});
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildVendorWhereClause = (filters: VendorFilters) =>
@@ -518,15 +525,6 @@ export const buildVendorWhereClause = (filters: VendorFilters) =>
         : undefined,
   ]);
 
-const resolveVendorSort = (sort: SortParams) => {
-  const dir = sort.direction === "asc" ? asc : desc;
-  if (sort.orderBy === "purchaseCount") return [dir(vendorPurchaseCount)];
-  if (sort.orderBy === "spend") return [dir(vendorSpend)];
-  if (sort.orderBy === "latestPurchaseDate")
-    return [dir(vendorLatestPurchaseDate)];
-  return null;
-};
-
 export const vendorListRead = async (
   db: Database,
   filters: VendorFilters,
@@ -542,7 +540,6 @@ export const vendorListRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: buildVendorWhereClause(filters),
-      resolveSort: resolveVendorSort,
       select: async (page) => {
         const query = getDb(db)
           .select({

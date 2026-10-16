@@ -255,7 +255,19 @@ const loadExpenseFilterReferences = async (
   return { vendorIds, purchaseIds, productIds };
 };
 
-const expenseScaffold = listScaffold("expense", expense);
+// Allocation-backed sorts use one grouped lookup and retain the plain root
+// FROM; the product and purchase sorts compile from their declared paths.
+const expenseScaffold = listScaffold("expense", expense, {
+  derived: {
+    spendingCategoryId: expenseDerivedValueSql(
+      "spendingCategoryNames",
+      sql`${expense.id}`,
+    ),
+    projectId: sql`(SELECT p."name" FROM "Project" p
+      WHERE p."id" = ${effectiveExpenseProjectSql('"Expense"')}
+        AND p."deletedAt" IS NULL)`,
+  },
+});
 
 // Shared by list and analytics so identical filter sets produce identical totals.
 export const buildExpenseWhereClause = async (
@@ -411,58 +423,6 @@ export const buildExpenseWhereClause = async (
   ]);
 };
 
-// Allocation-backed sorts use one grouped lookup and retain the plain root FROM.
-const resolveExpenseSort = (sort: SortParams) => {
-  const dirSql =
-    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
-
-  if (sort.orderBy === "spendingCategoryId")
-    return [
-      sql`${expenseDerivedValueSql("spendingCategoryNames", sql`${expense.id}`)} ${sql.raw(dirSql)}`,
-    ];
-  if (sort.orderBy === "projectId") {
-    const direction =
-      sort.direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
-    return [
-      sql`(SELECT p."name" FROM "Project" p
-          WHERE p."id" = ${effectiveExpenseProjectSql('"Expense"')}
-            AND p."deletedAt" IS NULL) ${direction}`,
-    ];
-  }
-
-  if (sort.orderBy === "productId") {
-    return [
-      sql.raw(
-        `(SELECT pr."name" FROM "Product" pr ` +
-          `WHERE pr."id" = "Expense"."productId" AND pr."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  // Both hop expense → Purchase → Vendor. The `deletedAt IS NULL` guards on each
-  // hop are what keep a soft-deleted charge from sorting under its old vendor.
-  if (sort.orderBy === "purchaseId") {
-    return [
-      sql.raw(
-        `(SELECT v."name" FROM "Purchase" pu ` +
-          `JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL ` +
-          `WHERE pu."id" = "Expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "orderId") {
-    return [
-      sql.raw(
-        `(SELECT pu."orderId" FROM "Purchase" pu ` +
-          `WHERE pu."id" = "Expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  return null;
-};
-
 export const expenseListRead = async (
   db: Database,
   filters: ExpenseFilters,
@@ -477,7 +437,6 @@ export const expenseListRead = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where,
-      resolveSort: resolveExpenseSort,
       load: (where) => loadExpensePage(db, where, projection),
       hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
     },

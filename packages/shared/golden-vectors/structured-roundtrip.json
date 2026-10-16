@@ -554,6 +554,42 @@
           }
         }
       ]
+    },
+    {
+      "entity": "financialAccount",
+      "field": "authorizedUsers",
+      "read": [
+        {
+          "ledgerPartyId": "LPY-2222",
+          "validFrom": "2026-06-01",
+          "validTo": null
+        }
+      ],
+      "input": [
+        {
+          "ledgerPartyId": "LPY-2222",
+          "validFrom": "2026-06-01",
+          "validTo": null
+        }
+      ]
+    },
+    {
+      "entity": "financialAccount",
+      "field": "fundingPeriods",
+      "read": [
+        {
+          "ledgerPartyId": "LPY-2222",
+          "validFrom": "2026-06-01",
+          "validTo": null
+        }
+      ],
+      "input": [
+        {
+          "ledgerPartyId": "LPY-2222",
+          "validFrom": "2026-06-01",
+          "validTo": null
+        }
+      ]
     }
   ]
 }

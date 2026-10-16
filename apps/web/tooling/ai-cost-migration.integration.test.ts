@@ -1,41 +1,21 @@
+import { withMigrationDatabase } from "./test-database-lease";
 import { projectAiModelPricing } from "@cubby/shared/ai/pricing";
 import { reconstructHistoricalAiCosts } from "./ai-cost-backfill";
-import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import { Pool } from "pg";
 import { expect, it, vi } from "vitest";
-import { z } from "zod";
 
-import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
+import { migrationTags, migrateDatabase } from "./db-migrate";
 
 it("preserves legacy charges and late writers across the AI cost expand/contract migration", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_ai_cost_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    await client.connect();
-    const journal = z
-      .object({ entries: z.array(z.object({ tag: z.string() })) })
-      .parse(
-        JSON.parse(
-          readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-        ),
-      );
-    const index = journal.entries.findIndex((entry) =>
-      entry.tag.endsWith("_ai_cost_accounting_expand"),
+  return withMigrationDatabase(async (client, databaseUrl) => {
+    const tags = migrationTags();
+    const index = tags.findIndex((tag) =>
+      tag.endsWith("_ai_cost_accounting_expand"),
     );
     if (index < 1) throw new Error("AI cost expansion has no predecessor");
     await migrateDatabase(drizzle(client), {
-      through: journal.entries[index - 1]!.tag,
+      through: tags[index - 1]!,
     });
     await client.query(
       `INSERT INTO "user" (id, name, email) VALUES ('synthetic-cost-member', 'Synthetic member', 'cost@example.invalid')`,
@@ -67,7 +47,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       )
     ).rows;
     await migrateDatabase(drizzle(client), {
-      through: journal.entries[index]!.tag,
+      through: tags[index]!,
     });
     const expanded = (
       await client.query(
@@ -138,7 +118,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
         },
       },
     });
-    const pool = new Pool({ connectionString: url.href });
+    const pool = new Pool({ connectionString: databaseUrl });
     const connection = await pool.connect();
     try {
       expect(
@@ -217,9 +197,5 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       connection.release();
       await pool.end();
     }
-  } finally {
-    await client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 }, 60_000);

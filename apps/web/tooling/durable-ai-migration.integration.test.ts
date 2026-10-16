@@ -1,24 +1,12 @@
-import { randomBytes } from "node:crypto";
+import { withMigrationDatabase } from "./test-database-lease";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
 import { expect, it } from "vitest";
 
 import { migrateDatabase } from "./db-migrate";
-import { testServiceConfig } from "./test-service-config";
 
 // Expansion must retain complete and ambiguous old receipts, member pauses, and household spending.
 it("preserves manual Run history and household accounting through durable work expansion", async () => {
-  const service = testServiceConfig();
-  const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
-  const name = `cubby_durable_ai_${randomBytes(4).toString("hex")}`;
-  const admin = new Client({ connectionString: adminUrl });
-  await admin.connect();
-  const url = new URL(adminUrl);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.href });
-  try {
-    await admin.query(`CREATE DATABASE "${name}"`);
-    await client.connect();
+  return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), {
       through: "0056_retire_label_review_metadata",
     });
@@ -82,9 +70,5 @@ it("preserves manual Run history and household accounting through durable work e
         )
       ).rows[0]?.count,
     ).toBe(0);
-  } finally {
-    await client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
-  }
+  });
 });

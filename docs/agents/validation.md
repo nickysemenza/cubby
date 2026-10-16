@@ -49,7 +49,8 @@ Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.
 
-Scripted block edits use bounded, unique markers. Inspect the affected diff
+Scripted block edits match a unique, line-anchored block or AST node; assert a
+single match before replacing nested declarations. Inspect the affected diff
 and parse the edited source before reporting it ready.
 
 For persistent HMR, fixture packs, or runtime discovery, load
@@ -194,6 +195,9 @@ commit, push, or rebase continuation in the same call.
 Commits run only `pnpm check:staged`: Oxlint checks staged files and Oxfmt
 formats them in place, with the existing rules and ignore patterns. Partial
 staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
+Before committing in a fresh worktree, install dependencies with `pnpm install`
+and verify `.husky/_/pre-commit` exists. Git silently skips a missing hook;
+a successful commit alone does not establish that staged checks ran.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 

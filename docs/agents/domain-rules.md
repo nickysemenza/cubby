@@ -100,6 +100,13 @@ Traps, all seen for real:
 
 ## Data, layers, and deletion
 
+Use relational rows and foreign keys for relationships to canonical entities,
+including dated memberships and funding relationships. Reserve JSONB for owned
+value objects whose elements do not need independent references or lifecycle
+behavior. Before choosing JSONB for entity references, establish why ordinary
+relations cannot fit and account for validation, deletion, merging, and querying;
+a small list or an existing JSONB field alone does not justify the choice.
+
 Server code is domain-first ([ADR 0019](../adr/0019-domain-first-server-layout.md)):
 `server/domains/<entity>/` (the kebab manifest name) or a cross-entity feature
 folder beside it, `server/generic/<capability>/` for entity-agnostic

@@ -333,6 +333,8 @@ export const nativeCoverage = {
     ...implemented([
       "expense.sourceClaims",
       "financialAccount.cardNumbers",
+      "financialAccount.authorizedUsers",
+      "financialAccount.fundingPeriods",
       "financialAccount.identity",
       "ledgerTransfer.sourceClaims",
       "meal.recipes",

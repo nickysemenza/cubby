@@ -285,6 +285,10 @@ export default defineEntity({
       "inventoryOwnerDefaultEnabled",
       "status",
     ],
+    derived: {
+      displayName: { type: "text" },
+      lastRunAt: { type: "date" },
+    },
     sort: {
       fields: ["displayName", "status", "lastRunAt", "updatedAt"],
     },

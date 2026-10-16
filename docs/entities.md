@@ -42,6 +42,20 @@ per-entity code as possible.
   remainder in a shrink-only baseline and a GitHub issue. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
+## Field resolution and overrides
+
+Before adding an inherited value or override, trace an existing field through its
+stored intent, effective read, `fieldResolutions` provenance, and declared
+`resolution` actions. Reuse that contract for edits, Use inherited, and explicit
+None where supported. Domain rules supply the fallback; the generic framework
+owns its presentation and assignment intent. Generic form controls alone do not
+establish reuse of the resolution framework.
+
+A new field is complete when its normal reads and supported filters/sorts agree
+on the effective value, reset restores inheritance, and source changes update
+inherited values while preserving explicit choices. Extend the shared contract
+when a required state is missing rather than adding a parallel override path.
+
 ## Declaration contracts
 
 Compiled default fact sections reuse the declaration's edit groups, with
@@ -904,9 +918,10 @@ sortable-column list) and an optional `groupable` subset.
 `defaultOverride` replaces `createdAt` (or the first sort field), and
 `directionOverride` replaces the field-kind-based direction.
 Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
-`related:<view>` count; a `model.fields` key with no stored column (a vendor's
-live purchase count, a product's expected-quantity variance) still resolves
-in the repository's sort resolver. The generator
+`related:<view>` count. A sort whose value is not its stored column (a
+vendor's live purchase count, a product's expected-quantity variance, a
+reference ordered by its effective record's name) is a `model.derived` key,
+so no repository resolves a sort by hand. The generator
 emits the roster as `generatedEntitySort` in
 `packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
 derives the kernel's `EntitySortContract` from that map, so no repository
@@ -1301,26 +1316,44 @@ inclusive bounds. The compiler rejects every other shape. Predicates that
 join, OR across filters, or resolve ids stay hand-written next to the spread,
 with a comment saying why.
 
-`model.derived` declares a list field that is not a stored column, so its
+`model.derived` declares a list field that is not a stored column, or the
+value a stored field orders and groups by when its column is not that value
+(`tags` by its first tag, a reference by its effective record's name). Its
 filter, sort, and group share one expression
-(`server/generic/list/repo/field-compiler.ts`). Each key takes one shape:
+(`server/generic/list/repo/field-compiler.ts`); a stored field's filters stay
+on its column, so only a `type` or `via` entry may name one. Each key takes
+one shape:
 
 - `{ via: "relation.relation[.field]" }` walks declared `local-path`
   relations to a record (its stored title) or a field of the last one. The
   scaffold compiles a filter to `EXISTS` over the path and a sort or group to
-  a correlated scalar subquery. Only a to-one path (every relation `one` and
-  every step outgoing) can sort or group; the compiler rejects any other in
-  `sort.fields`/`groupable` with the reason it derives (`Goes through a list
-  of Purchases. Only paths that lead to a single record can sort.`).
+  a correlated scalar subquery that starts at the outer row's reference. Only
+  a to-one path (every relation `one` and every step outgoing) can sort or
+  group; the compiler rejects any other in `sort.fields`/`groupable` with the
+  reason it derives (`Goes through a list of Purchases. Only paths that lead
+  to a single record can sort.`), and a list request sorting by it (or by a
+  `predicate`) fails with that reason over HTTP and MCP.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
-  generated, so a declared key without SQL fails typecheck.
+  generated, so a declared key without SQL fails typecheck. A compound value
+  (an array of SQL, inventory `amount` as unit then size) orders part by part
+  and cannot filter.
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
   way; `reason` says why it is not one row value (inventory's
   `valuationStatus` statuses overlap).
 
+Every compiled sort part orders NULLS LAST in both directions, as stored
+columns do, unless the part declares `{ sql, nulls: "high" }` (empties first
+when descending: a vendor's latest purchase, a purchase's vendor name) or a
+fixed `direction` (an Email's received time stays newest first within one
+link state). A `related:<view>` roster entry orders by the view's first chip
+(`relatedSortExpression`) for any entity. USDA food lists read the external
+release rather than a table, a declared exception whose service orders by its
+declared values.
+
 A filter descriptor reads a derived field with `derived: true`. SQL that needs
-request data (inventory valuations) wraps a `listPrepare(load)` handle with
+request data (inventory valuations, an Email list's scope) wraps a
+`listPrepare(load)` handle, whose `load` receives the request's filters, with
 `.value`/`.predicate`; fields share a prepare by sharing the handle.
 `scaffold.context(db, request)` loads each needed prepare at most once, and
 only when the request filters, sorts, groups, or projects on a field that

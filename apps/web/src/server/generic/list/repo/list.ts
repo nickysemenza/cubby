@@ -87,6 +87,8 @@ import {
   derivedPrepare,
   derivedValueSql,
   type AnyDerivedSql,
+  listFilterValues,
+  type ListFilterValues,
   ListContext,
   type ListPrepare,
   relatedExistsSql,
@@ -95,8 +97,6 @@ import {
 import { type HierarchyEntity, hierarchyDescendantsSql } from "./hierarchy";
 import { type ListProjection, wantsListGroup } from "./list-projection";
 
-const filterValues = z.record(z.string(), z.unknown());
-type FilterValues = z.output<typeof filterValues>;
 const suggestionFilterValue = z
   .enum(["any", "addition", "correction"])
   .optional();
@@ -248,7 +248,7 @@ const referencePredicate = (
 const subtreeToggle = (
   entity: Entity,
   key: string,
-  values: FilterValues,
+  values: ListFilterValues,
 ): boolean => {
   const toggle = Object.entries(generatedEntityListFields[entity].subtree).find(
     ([filter]) => filter === key,
@@ -279,7 +279,7 @@ const derivedFilterPredicates = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
   descriptor: StoredDescriptorView,
-  values: FilterValues,
+  values: ListFilterValues,
   input: DerivedFilterInput | undefined,
 ): Array<SQL | undefined> => {
   const key = descriptor.field ?? descriptor.columnId;
@@ -458,7 +458,7 @@ export function declaredFilterPredicates<Filters extends object>(
   filters: Filters,
   derivedInput?: DerivedFilterInput,
 ): Array<SQL | undefined> {
-  const values = filterValues.parse(filters);
+  const values = listFilterValues.parse(filters);
   const suggestionKind = suggestionFilterValue.parse(
     values.suggestionPresenceFilter,
   );
@@ -575,7 +575,15 @@ export function declaredFilterPredicates<Filters extends object>(
 /** Entities with a declared sort roster — the only ones `orderBy` can serve. */
 type SortableEntity = keyof typeof generatedEntitySort;
 
-type OrderByOpts = Parameters<typeof buildOrderBy>[3];
+/**
+ * A list's ORDER BY options. Field order compiles from the declaration (stored
+ * columns, `model.derived`, `related:<view>`, the quality score), so a
+ * repository supplies only a group and its domain tie-breaker.
+ */
+interface ListOrderByOpts {
+  groupBy?: string;
+  tieBreaker?: SQL;
+}
 
 /** The already-built clauses a list's row query applies. */
 export interface ListPage {
@@ -615,7 +623,6 @@ interface ListHydration<Row, Out> {
   /** A context the repository already built for its own where-builder. */
   context?: ListContext;
   where?: SQL | undefined;
-  resolveSort?: NonNullable<OrderByOpts>["resolve"];
   tieBreaker?: SQL;
   orderBy?: SQL[];
   /** Joined lists can share a count/footer aggregate over their own FROM. */
@@ -805,7 +812,7 @@ export function listScaffold<
       db: Database | DrizzleTransaction,
       request: ListContextRequest<Filters>,
     ): Promise<ListContext> {
-      const values = filterValues.parse(request.filters);
+      const values = listFilterValues.parse(request.filters);
       const filtered = new Set(
         descriptorsFor(entity)
           .filter(
@@ -836,7 +843,7 @@ export function listScaffold<
         [...prepares].map(
           async (prepare): Promise<[ListPrepare<unknown>, unknown]> => [
             prepare,
-            await prepare.load(db),
+            await prepare.load(db, values),
           ],
         ),
       );
@@ -903,12 +910,12 @@ export function listScaffold<
       sort: SortParams,
       context: ListContext = ListContext.empty,
     ): SQL[] | null {
-      return derivedOrderBy(entity, derivedSql, sort, table.id, context);
+      return derivedOrderBy(entity, derivedSql, sort, table, context);
     },
 
     orderBy<Filters extends object>(
       sorts: SortParams[],
-      opts?: OrderByOpts,
+      opts?: ListOrderByOpts,
       filters?: Filters,
       context: ListContext = ListContext.empty,
     ): SQL[] {
@@ -927,9 +934,7 @@ export function listScaffold<
                 ]
               : undefined,
           resolve: (sort) =>
-            scoreSort?.(sort) ??
-            opts?.resolve?.(sort) ??
-            scaffold.derivedSort(sort, context),
+            scoreSort?.(sort) ?? scaffold.derivedSort(sort, context),
           // Offset pagination must be deterministic. Repositories may keep a
           // domain-specific tie-breaker, but every explicit list sort then
           // lands on the public shortcode before the private primary key.
@@ -984,7 +989,7 @@ export function listScaffold<
             : (spec.orderBy ??
               scaffold.orderBy(
                 request.sorts,
-                { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
+                { tieBreaker: spec.tieBreaker },
                 request.filters,
                 context,
               )),

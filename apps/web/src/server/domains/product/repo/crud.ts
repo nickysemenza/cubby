@@ -43,7 +43,6 @@ import {
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { formatCategoryLabel, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -159,7 +158,6 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
@@ -254,85 +252,6 @@ import {
   syncProductUnitMappings,
 } from "./update-helpers";
 
-// Special-case sorts the generic column path can't produce (correlated
-// subqueries / CASE). Clauses only DEFINE the field's order — the old
-// trailing `"product"."name" asc` moved to the single tieBreaker below so a
-// stacked secondary sort isn't swallowed mid-stack.
-const resolveProductSort = (sort: SortParams) => {
-  const dirSql =
-    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
-
-  if (sort.orderBy === "expenseTotal") {
-    return [
-      sql`${productExpenseTotalFilterSql(product.id)} ${sql.raw(dirSql)}`,
-    ];
-  }
-
-  if (sort.orderBy === "price") {
-    return [sql.raw(`${effectiveProductPriceSql('"Product"')} ${dirSql}`)];
-  }
-
-  // `expenses` is the COLUMN id; `expenseCount` is the row field. See the note
-  // on the column in app/products/productlist.tsx for why the id is the half
-  // that cannot move.
-  if (sort.orderBy === "expenseCount") {
-    return [
-      sql`${productExpenseCountFilterSql(product.id)} ${sql.raw(dirSql)}`,
-    ];
-  }
-
-  if (sort.orderBy === "ledgerExpectedQuantity") {
-    return [sql.raw(`${expectedQuantitySql('"Product"')} ${dirSql}`)];
-  }
-
-  if (sort.orderBy === "quantityVariance") {
-    return [sql.raw(`${quantityVarianceSql('"Product"')} ${dirSql}`)];
-  }
-
-  if (sort.orderBy === "purchaseDate") {
-    // Same fragment the cell renders (relations.ts) and both filters below use.
-    return [
-      sql`${productAcquisitionDateFilterSql(product.id)} ${sql.raw(dirSql)}`,
-    ];
-  }
-
-  // Every `related:` sort is the related-view registry's own joins, sort
-  // expression, and `where` — never a hand copy. See `relatedSortExpression`.
-  if (sort.orderBy.startsWith("related:")) {
-    const relationKey = sort.orderBy.slice("related:".length);
-    const parsedRelationKey = relatedViewKeySchema.safeParse(relationKey);
-    if (!parsedRelationKey.success) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `Unknown related-view sort ${relationKey}`,
-      );
-    }
-    return [
-      sql`${relatedSortExpression(
-        parsedRelationKey.data,
-        '"Product"."id"',
-      )} ${sql.raw(dirSql)}`,
-    ];
-  }
-
-  if (sort.orderBy === "primaryGtin") {
-    return [
-      sql.raw(
-        `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
-          `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
-          `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "categoryId")
-    return [
-      sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path' ${sql.raw(dirSql)}`,
-    ];
-
-  return null;
-};
-
 const productScaffold = listScaffold("product", product, {
   derived: {
     location: sql.raw(
@@ -340,6 +259,22 @@ const productScaffold = listScaffold("product", product, {
         `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
         `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
     ),
+    categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
+    price: sql.raw(effectiveProductPriceSql('"Product"')),
+    primaryGtin: sql.raw(
+      `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
+        `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
+        `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1)`,
+    ),
+    expenseTotal: productExpenseTotalFilterSql(product.id),
+    // `expenses` is the COLUMN id; `expenseCount` is the row field. See the
+    // note on the column in app/products/productlist.tsx for why the id is
+    // the half that cannot move.
+    expenseCount: productExpenseCountFilterSql(product.id),
+    ledgerExpectedQuantity: sql.raw(expectedQuantitySql('"Product"')),
+    quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    // Same fragment the cell renders (relations.ts) and both filters use.
+    purchaseDate: productAcquisitionDateFilterSql(product.id),
   },
 });
 
@@ -357,7 +292,6 @@ const productListOrderBy = (
     sorts,
     {
       groupBy,
-      resolve: resolveProductSort,
       tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
     },
     filters,

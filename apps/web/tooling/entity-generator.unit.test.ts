@@ -914,6 +914,20 @@ describe("typed entity compiler", () => {
       ).toThrow(message);
     });
 
+    it("lets a value or path declare a stored field's order, never a predicate", () => {
+      expect(
+        compile({ derived: { parentId: { via: "parent" } } }).listFields.derived
+          .parentId,
+      ).toMatchObject({ shape: "via", sort: null });
+      expect(() =>
+        compile({
+          derived: {
+            name: { predicate: "boolean", reason: "Spans two tables" },
+          },
+        }),
+      ).toThrow("a filter-only predicate needs its own key");
+    });
+
     it("generates an on-by-default subtree toggle for a stored filter over a hierarchy", () => {
       const entity = compile(
         { hierarchy: { parentField: "parentId", maxDepth: 4 } },

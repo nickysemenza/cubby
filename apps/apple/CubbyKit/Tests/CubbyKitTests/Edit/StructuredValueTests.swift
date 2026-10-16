@@ -69,7 +69,7 @@ struct StructuredValueTests {
                 }
             }
         }
-        #expect(drawn == 14)
+        #expect(drawn == 16)
     }
 
     @Test func aRecipeSectionLineReadsItsTargetsIdFromTheNestedRecord() throws {

@@ -735,7 +735,16 @@ export default defineEntity({
     ],
     bulk: [],
     audit: ["name", "forkedFromRecipeId"],
-    derived: { cookbook: { via: "cookbook" } },
+    derived: {
+      cookbook: { via: "cookbook" },
+      // Totals order only once computed; until then they read as absent.
+      costTotal: { type: "number" },
+      caloriesTotal: { type: "number" },
+      // Source kind, then its URL, then its label.
+      source: { type: "text" },
+      // The first tag.
+      tags: { type: "text" },
+    },
     sort: {
       fields: [
         "createdAt",

@@ -482,6 +482,8 @@ export default defineEntity({
       location: { via: "location" },
       category: { via: "product.category" },
       valuation: { type: "number" },
+      // The unit, then the size within it.
+      amount: { type: "number" },
       valuationStatus: {
         predicate: "select",
         reason:

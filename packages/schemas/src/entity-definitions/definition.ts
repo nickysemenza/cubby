@@ -841,11 +841,11 @@ const buildMetadataSchemas = () => {
     "must be an identifier",
   );
   /**
-   * A list field that is not a table column. `via` is a related path of
-   * relation keys, optionally ending in a field of the last entity; the list
-   * compiler builds it. `type` is a value whose SQL the repository passes to
-   * `listScaffold`. `predicate` is a filter-only declared exception and
-   * carries its reason.
+   * A list field that is not a table column, or the value a stored field
+   * orders and groups by. `via` is a related path of relation keys,
+   * optionally ending in a field of the last entity; the list compiler builds
+   * it. `type` is a value whose SQL the repository passes to `listScaffold`.
+   * `predicate` is a filter-only declared exception and carries its reason.
    */
   const entityDerivedFieldMetadataSchema = z.union([
     z.object({ via: nonEmptyString() }).strict(),
