@@ -12,7 +12,7 @@ const ctx = withTestDb();
 
 // History must not displace the newest live local row, including malformed
 // newest results. Missing keys default to empty arrays, explicit null is
-// invalid, and equal timestamps use the retained history's descending ID tie.
+// invalid, and exact timestamp ties use descending IDs.
 it("selects newest local summary evidence without changing null or missing semantics", async () => {
   const images: Awaited<ReturnType<typeof createUploadedImageRecord>>[] = [];
   for (let index = 0; index < 7; index++)
