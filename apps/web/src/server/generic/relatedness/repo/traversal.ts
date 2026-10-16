@@ -144,10 +144,12 @@ function edgeCondition(
   productScopedExpense: boolean,
 ): SQL {
   const target = sql.raw(`${targetAlias}."id"`);
+  // The task helpers quote their alias; a correlated root arrives quoted.
+  const taskAlias = sourceAlias.replace(/^"(.*)"$/, "$1");
   if (edge.edgeKey === "Task.projectId")
-    return sql`${effectiveTaskProjectSql(sourceAlias)} = ${target}`;
+    return sql`${effectiveTaskProjectSql(taskAlias)} = ${target}`;
   if (edge.edgeKey === "Task.subjectProductId")
-    return sql`${effectiveTaskSubjectProductSql(sourceAlias)} = ${target}`;
+    return sql`${effectiveTaskSubjectProductSql(taskAlias)} = ${target}`;
   // The database requires a product-linked Expense to be principal. For a
   // product-scoped path, allocation is therefore the scalar effective project.
   if (edge.edgeKey === "Expense.projectId" && productScopedExpense)
@@ -305,7 +307,7 @@ export const compileTraversal = (
 };
 
 /** Each join is structurally parenthesized, so callers never inherit precedence. */
-const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
+export const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
   sql.join(
     traversal.hops.map(
       (hop) =>

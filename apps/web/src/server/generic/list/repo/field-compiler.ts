@@ -15,11 +15,21 @@ import {
 } from "@cubby/schemas/entity-list-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { SortParams } from "@cubby/schemas/pagination";
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import { type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
+import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
+import {
+  compileTraversal,
+  renderJoins,
+} from "~/server/generic/relatedness/repo/traversal";
+
+/** A list request's raw filter values, by URL key. */
+export const listFilterValues = z.record(z.string(), z.unknown());
+export type ListFilterValues = z.output<typeof listFilterValues>;
 
 type ListFields = typeof generatedEntityListFields;
 type DerivedField = GeneratedListField;
@@ -35,13 +45,26 @@ interface PredicateValues {
 }
 
 /**
- * Request data a derived field's SQL reads (inventory valuations run WASM
- * over every row). Created once per repository; several fields share one by
- * passing the same handle, and `hydrate` reads its result from the context.
+ * A derived value's SQL: one expression, or a compound key whose parts order
+ * in turn (inventory `amount` is a unit, then a size). A compound value sorts
+ * and groups but cannot filter.
  */
+type DerivedValue = SQL | readonly [SQL, ...SQL[]];
+
+/**
+ * Request data a derived field's SQL reads (inventory valuations run WASM
+ * over every row; an Email list's link state is relative to its scope
+ * filter). Created once per repository; several fields share one by passing
+ * the same handle, and `hydrate` reads its result from the context.
+ */
+type PrepareLoad<P> = (
+  db: Database | DrizzleTransaction,
+  filters: ListFilterValues,
+) => Promise<P>;
+
 export interface ListPrepare<P> {
-  readonly load: (db: Database | DrizzleTransaction) => Promise<P>;
-  value(render: (prepared: P) => SQL): PreparedValue;
+  readonly load: PrepareLoad<P>;
+  value(render: (prepared: P) => DerivedValue): PreparedValue;
   predicate<V>(
     render: (prepared: P, value: V) => SQL | undefined,
   ): PreparedPredicate<V>;
@@ -49,7 +72,7 @@ export interface ListPrepare<P> {
 
 interface PreparedValue {
   readonly prepare: ListPrepare<unknown>;
-  readonly render: (context: ListContext) => SQL;
+  readonly render: (context: ListContext) => DerivedValue;
 }
 
 interface PreparedPredicate<V> {
@@ -57,9 +80,7 @@ interface PreparedPredicate<V> {
   readonly render: (context: ListContext, value: V) => SQL | undefined;
 }
 
-export const listPrepare = <P>(
-  load: (db: Database | DrizzleTransaction) => Promise<P>,
-): ListPrepare<P> => {
+export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   const handle: ListPrepare<P> = {
     load,
     value: (render) => ({
@@ -96,7 +117,7 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = SQL | PreparedValue;
+type DerivedValueSql = DerivedValue | PreparedValue;
 type DerivedPredicateSql<V> =
   | ((value: V) => SQL | undefined)
   | PreparedPredicate<V>;
@@ -150,21 +171,37 @@ const missingSql = (entity: Entity, key: string) =>
     `${entity}.model.derived.${key} has no SQL; pass it in listScaffold's derived argument`,
   );
 
-/** A derived value field's SQL in `context`. */
+/** A derived value field's SQL in `context`, one part per compound key part. */
+const derivedValueParts = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+): readonly SQL[] => {
+  const entry = derived[key];
+  if (entry === undefined || typeof entry === "function")
+    throw missingSql(entity, key);
+  // SAFETY: `DerivedSqlArg` gives a value key only a value or a prepared
+  // value, never a predicate's function or prepared predicate.
+  const value = isPrepared(entry)
+    ? (entry as PreparedValue).render(context)
+    : (entry as DerivedValue);
+  return value instanceof SQL ? [value] : value;
+};
+
+/** A derived value field's single SQL expression in `context`. */
 export const derivedValueSql = (
   entity: Entity,
   derived: AnyDerivedSql,
   key: string,
   context: ListContext,
 ): SQL => {
-  const entry = derived[key];
-  if (entry === undefined || typeof entry === "function")
-    throw missingSql(entity, key);
-  // SAFETY: `DerivedSqlArg` gives a value key only `SQL` or a prepared value,
-  // never a predicate's function or prepared predicate.
-  return isPrepared(entry)
-    ? (entry as PreparedValue).render(context)
-    : (entry as SQL);
+  const [value, ...rest] = derivedValueParts(entity, derived, key, context);
+  if (value === undefined || rest.length > 0)
+    throw new Error(
+      `${entity}.model.derived.${key} is a compound sort key and cannot filter`,
+    );
+  return value;
 };
 
 /** A declared predicate's condition for a parsed filter value. */
@@ -200,15 +237,25 @@ const viaParts = (entity: Entity, field: ViaField) => {
   };
 };
 
-/** The scalar a to-one `via` path reads: the terminal field or record title. */
+/**
+ * The scalar a to-one `via` path reads: the terminal field or record title.
+ * The path starts at the outer row itself, so the subquery probes only the
+ * related tables rather than re-reading the root by id.
+ */
 const relatedScalarSql = (
   entity: Entity,
   field: ViaField,
-  outerId: AnyColumn,
+  table: PgTable,
 ): SQL => {
   if (field.sort !== null)
     throw createAppError("CONSTRAINT_VIOLATION", field.sort);
-  const { from, root, leaf } = viaParts(entity, field);
+  const traversal = compileTraversal(entity, field.steps, "lf", {
+    to: field.target,
+    root: `"${getTableName(table)}"`,
+  });
+  const [first, ...rest] = traversal.hops;
+  if (first === undefined)
+    throw new Error(`${entity}.${field.path} has no relation step`);
   const column =
     field.terminal.kind === "field"
       ? field.terminal.column
@@ -218,7 +265,10 @@ const relatedScalarSql = (
       "CONSTRAINT_VIOLATION",
       `${entity}.${field.path} has no stored title`,
     );
-  return sql`(SELECT ${leaf}.${sql.identifier(column)} FROM ${from} WHERE ${root}."id" = ${outerId})`;
+  const firstAlias = sql.raw(first.alias);
+  return sql`(SELECT ${sql.raw(traversal.leafAlias)}.${sql.identifier(column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
+    first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
+  })`;
 };
 
 /** `EXISTS` over a `via` path (any cardinality) whose terminal row matches. */
@@ -252,28 +302,38 @@ export const shortcodeIdsSql = (
 };
 
 /**
- * The ORDER BY expression of a declared derived field, or null for a field
- * this compiler does not own. A rejected field (a to-many path, a filter-only
- * predicate) fails with the reason the declaration derives.
+ * The ORDER BY of a declared derived field or a `related:<view>` roster
+ * column, or null for a field this compiler does not own. A rejected field (a
+ * to-many path, a filter-only predicate) fails with the reason the
+ * declaration derives. Every part orders NULLS LAST in both directions, the
+ * convention `buildOrderBy` applies to stored columns.
  */
 export const derivedOrderBy = (
   entity: Entity,
   derived: AnyDerivedSql,
   sort: SortParams,
-  outerId: AnyColumn,
+  table: PgTable,
   context: ListContext,
 ): SQL[] | null => {
+  const direction = sql.raw(sort.direction === "asc" ? "asc" : "desc");
+  const order = (parts: readonly SQL[]) =>
+    parts.map((part) => sql`${part} ${direction} nulls last`);
+  if (sort.orderBy.startsWith("related:"))
+    return order([
+      relatedSortExpression(
+        entity,
+        sort.orderBy.slice("related:".length),
+        `"${getTableName(table)}"."id"`,
+      ),
+    ]);
   const field = derivedFieldsOf(entity)[sort.orderBy];
   if (field === undefined) return null;
-  const value =
-    field.shape === "via"
-      ? relatedScalarSql(entity, field, outerId)
-      : field.shape === "value"
-        ? derivedValueSql(entity, derived, sort.orderBy, context)
-        : null;
-  if (value === null)
-    throw createAppError("CONSTRAINT_VIOLATION", field.sort ?? sort.orderBy);
-  return [
-    sql`${value} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
-  ];
+  switch (field.shape) {
+    case "via":
+      return order([relatedScalarSql(entity, field, table)]);
+    case "value":
+      return order(derivedValueParts(entity, derived, sort.orderBy, context));
+    case "predicate":
+      throw createAppError("CONSTRAINT_VIOLATION", field.sort);
+  }
 };

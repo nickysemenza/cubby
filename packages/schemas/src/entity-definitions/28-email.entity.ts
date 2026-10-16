@@ -460,6 +460,10 @@ export default defineEntity({
     update: [],
     bulk: [],
     audit: [],
+    derived: {
+      // Linked, then suggested, then unlinked; by received date within one.
+      linkState: { type: "enum", options: [...emailLinkState.options] },
+    },
     sort: {
       fields: [
         "receivedAt",

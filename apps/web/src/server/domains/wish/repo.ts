@@ -265,22 +265,11 @@ const wishPriceHigh = candidatePriceAggregate("max");
 /** Midpoint of the range — the repo's deterministic sort key for ranged values. */
 const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 
-/**
- * Sorts the generic column path can't produce — a price range is an aggregate
- * over candidates, not a column on `Wish`. NULLS LAST in both directions is the
- * house convention (see `buildOrderBy`); here nulls are real, since a wish
- * whose alternatives are all unpriced has no range at all.
- */
-const resolveWishSort = (sort: SortParams) => {
-  if (sort.orderBy !== "priceRange") return null;
-  return [
-    sort.direction === "asc"
-      ? sql`${wishPriceMid} asc nulls last`
-      : sql`${wishPriceMid} desc nulls last`,
-  ];
-};
-
-const wishScaffold = listScaffold("wish", wish);
+// A price range is an aggregate over candidates, not a column on `Wish`; a
+// wish whose alternatives are all unpriced has no range at all.
+const wishScaffold = listScaffold("wish", wish, {
+  derived: { priceRange: wishPriceMid },
+});
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildWishWhere = async (
@@ -366,7 +355,6 @@ export const wishListRead = async (
     { filters, sorts, pagination, projection },
     {
       where,
-      resolveSort: resolveWishSort,
       hydrate: (rows) => hydrateWishesRead(db, rows, projection),
     },
   );

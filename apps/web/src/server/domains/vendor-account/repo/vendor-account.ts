@@ -16,9 +16,7 @@ import type {
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import {
   and,
-  asc,
   count,
-  desc,
   eq,
   getTableColumns,
   inArray,
@@ -211,7 +209,13 @@ const hydrate = async (
     vendorAccountOut.parse(row),
   );
 
-const scaffold = listScaffold("vendorAccount", vendorAccount);
+// `lastRunAt` and `displayName` are computed, not columns.
+const scaffold = listScaffold("vendorAccount", vendorAccount, {
+  derived: {
+    displayName: vendorAccountLabelSql,
+    lastRunAt: sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id})`,
+  },
+});
 
 type VendorAccountReferencePatch = {
   vendorId?: ReturnType<typeof parseEntityId<"vendor">>;
@@ -242,18 +246,6 @@ export const listVendorAccountsRead = (
           .limit(page.limit)
           .offset(page.offset),
       hydrate: (rows, selected) => hydrateRead(db, rows, selected),
-      // `lastRunAt` and `displayName` are computed, not columns.
-      resolveSort: (sort) => {
-        if (sort.orderBy === "displayName")
-          return [
-            (sort.direction === "asc" ? asc : desc)(vendorAccountLabelSql),
-          ];
-        return sort.orderBy === "lastRunAt"
-          ? [
-              sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id}) ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
-            ]
-          : null;
-      },
     },
   );
 

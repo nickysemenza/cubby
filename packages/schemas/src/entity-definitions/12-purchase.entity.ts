@@ -1130,7 +1130,13 @@ export default defineEntity({
       "notes",
       "spendingCategoryOrigin",
     ],
-    derived: { reconciliationGap: { type: "number" } },
+    derived: {
+      reconciliationGap: { type: "number" },
+      vendorId: { via: "vendor" },
+      expenseCount: { type: "number" },
+      expenseTotal: { type: "number" },
+      documentCount: { type: "number" },
+    },
     sort: {
       fields: [
         "date",

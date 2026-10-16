@@ -253,16 +253,15 @@ export default defineEntity({
     update: [],
     bulk: [],
     audit: [],
-    // `fdc_id`/`description` are plain top-level fields with a scalar read,
-    // so they sort directly. `data_type` lives inside the `foodInfo` JSON
-    // blob rather than as its own field, `relevance` is a search-only
-    // synthetic score with no field at all, and `linkedProducts` — though a
-    // declared field — is an array with no orderable scalar projection
-    // (usda.service.ts sorts it by a correlated count). All three are
-    // `computed`, same as a product's `expenseTotal`/`quantityVariance`.
+    // Declared exception: a USDA list reads the external USDA release, not a
+    // table, so the list field compiler builds no ORDER BY for it;
+    // `usda.service.ts` orders by these values. `data_type` lives inside the
+    // `foodInfo` blob, `relevance` is a search-only score, and
+    // `linkedProducts` orders by its count.
     derived: {
       data_type: { type: "text" },
       relevance: { type: "number" },
+      linkedProducts: { type: "number" },
     },
     sort: {
       fields: [

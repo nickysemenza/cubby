@@ -366,6 +366,7 @@ export default defineEntity({
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
     ],
+    derived: { transactionCount: { type: "number" } },
     sort: {
       fields: [
         "name",

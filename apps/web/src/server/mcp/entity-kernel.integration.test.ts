@@ -191,6 +191,34 @@ describe("MCP entity kernel boundary", () => {
     });
   });
 
+  it("refuses a declared field the compiler cannot order with its declared reason, unmasked", async () => {
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    // `valuationStatus` is a filter-only predicate; a to-many `via` path
+    // derives its own reason the same way. HTTP shares this kernel parse.
+    const reason =
+      'Cannot sort inventory by "valuationStatus": Filter only: Missing includes priceable entries, so the statuses overlap and are not one row value.';
+    const command = {
+      action: "list" as const,
+      entity: "inventory" as const,
+      filters: {},
+      sort: [{ orderBy: "valuationStatus", direction: "asc" as const }],
+    };
+    await expect(executeEntity(entityKernel, command)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "LIST_SORT_FIELD_UNSUPPORTED",
+      message: reason,
+    });
+    const viaMcp = await callKernel(command, entityKernel);
+    expect(viaMcp.isError).toBe(true);
+    expect(JSON.stringify(viaMcp.content)).toContain(
+      "Filter only: Missing includes priceable entries",
+    );
+  });
+
   it("runs a real protocol-to-kernel shortcode round trip", async () => {
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {

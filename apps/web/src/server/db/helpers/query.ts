@@ -252,11 +252,11 @@ export const countWhere = (
  * sort on that column (ASC NULLS LAST) so group members are contiguous; the
  * user's sorts order rows within each group.
  *
- * `opts.resolve` hosts a repo's special-case sorts (jsonb extractions,
- * correlated subqueries): it returns the clauses that DEFINE that field's
- * order, or null to fall through to the generic column path. Cosmetic
- * tie-breakers must NOT live in a resolver — mid-stack they would swallow any
- * subsequent user sort; pass them once via `opts.tieBreaker` instead. The
+ * `opts.resolve` is the list scaffold's compiled field order (`model.derived`,
+ * `related:<view>`, the quality score): it returns the clauses that DEFINE
+ * that field's order, or null to fall through to the generic column path.
+ * Cosmetic tie-breakers must NOT live in a resolver — mid-stack they would
+ * swallow any subsequent user sort; pass them once via `opts.tieBreaker`. The
  * table's unique primary key is always appended last so offset pages cannot
  * overlap merely because the visible sort values are tied.
  */

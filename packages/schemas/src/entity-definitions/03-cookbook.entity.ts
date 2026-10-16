@@ -270,6 +270,7 @@ export default defineEntity({
     update: ["name", "author", "subjects"],
     bulk: [],
     audit: ["name", "author", "subjects"],
+    derived: { recipeCount: { type: "number" } },
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
     },

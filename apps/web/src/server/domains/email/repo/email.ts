@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  emailFilters,
   emailOut,
   type EmailFilters,
   type EmailOut,
@@ -59,6 +60,7 @@ import {
   createEntityReader,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   hydrateListRead,
@@ -213,7 +215,25 @@ export async function hasAcceptedEmailAssociation(
   return record?.linked ?? false;
 }
 
-const scaffold = listScaffold("email", emailTable);
+// Link order is relative to the list's scope filter, so it reads the scope
+// the request resolves.
+const emailScope = listPrepare((db, filters) =>
+  resolveEmailScope(db, emailScopeFilters.parse(filters)),
+);
+const emailScopeFilters = emailFilters.pick({
+  purchaseId: true,
+  vendorId: true,
+  vendorAccountId: true,
+});
+
+const scaffold = listScaffold("email", emailTable, {
+  derived: {
+    linkState: emailScope.value((scope) => [
+      emailLinkRankSql(scope),
+      sql`${emailTable.receivedAt}`,
+    ]),
+  },
+});
 
 /**
  * The record an Emails section is scoped to, resolved from the list's
@@ -478,24 +498,17 @@ const emailListRead =
     pagination: PaginationParams,
     projection: ListProjection = { kind: "full" },
   ) => {
-    const scope = await resolveEmailScope(db, filters);
-    return scaffold.list(
-      db,
-      { filters, sorts, pagination, projection },
-      {
-        where: buildEmailWhere(filters, scope),
-        // Link order is scope-relative; ties read newest first.
-        resolveSort: (sort) =>
-          sort.orderBy === "linkState"
-            ? [
-                sql`${emailLinkRankSql(scope)} ${sql.raw(sort.direction)}`,
-                sql`${emailTable.receivedAt} desc nulls last`,
-              ]
-            : null,
-        hydrate: (rows, selected) =>
-          hydrateRead(db, rows, selected, viewer, scope),
-      },
-    );
+    const request = { filters, sorts, pagination, projection };
+    const context = await scaffold.context(db, request);
+    const scope = context.has(emailScope)
+      ? context.get(emailScope)
+      : await resolveEmailScope(db, filters);
+    return scaffold.list(db, request, {
+      context,
+      where: buildEmailWhere(filters, scope),
+      hydrate: (rows, selected) =>
+        hydrateRead(db, rows, selected, viewer, scope),
+    });
   };
 
 /** Viewer-free reads (work queues, counts): `ownedByViewer` reads false. */

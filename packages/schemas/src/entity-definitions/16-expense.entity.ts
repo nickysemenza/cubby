@@ -1134,6 +1134,15 @@ Rules:
       "productQuantity",
       "purchaseId",
     ],
+    derived: {
+      // The allocated spending categories' names.
+      spendingCategoryId: { type: "text" },
+      // The effective project's name.
+      projectId: { type: "text" },
+      productId: { via: "product" },
+      purchaseId: { via: "purchase.vendor" },
+      orderId: { via: "purchase.orderId" },
+    },
     sort: {
       fields: [
         "date",

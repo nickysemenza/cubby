@@ -1,4 +1,4 @@
-import { isNotNull } from "drizzle-orm";
+import { isNotNull, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { task } from "~/server/db/schema";
@@ -7,7 +7,9 @@ import { renderWhereSql } from "~/server/testing/mock-db";
 import { listScaffold } from "./list";
 
 describe("listScaffold", () => {
-  const scaffold = listScaffold("task", task);
+  const scaffold = listScaffold("task", task, {
+    derived: { assigneeId: sql`NULL` },
+  });
 
   describe("where", () => {
     it("applies a declared stored predicate (task.status)", () => {

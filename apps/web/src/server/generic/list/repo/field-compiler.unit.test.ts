@@ -25,6 +25,7 @@ describe("list field compiler", () => {
     const scaffold = listScaffold("inventory", inventoryEntry, {
       derived: {
         valuation: valuations.value(() => sql`0`),
+        amount: [sql`unit`, sql`size`],
         valuationStatus: valuations.predicate(() => sql`true`),
       },
     });
@@ -53,19 +54,44 @@ describe("list field compiler", () => {
     const scaffold = listScaffold("inventory", inventoryEntry, {
       derived: {
         valuation: valuations.value(() => sql`0`),
+        amount: [sql`unit`, sql`size`],
         valuationStatus: valuations.predicate(() => sql`true`),
       },
     });
     const [clause] =
       scaffold.derivedSort({ orderBy: "category", direction: "asc" }) ?? [];
+    // The path starts at the outer row's own reference, not a second read
+    // of the root by id.
     expect(renderWhereSql(clause)).toMatch(
-      /^\(SELECT lf2\."name" FROM "InventoryEntry" lf0 .*WHERE lf0\."id" = "InventoryEntry"\."id"\) asc nulls last$/,
+      /^\(SELECT lf2\."name" FROM "Product" lf1 JOIN "ProductCategory" lf2 .*WHERE \("InventoryEntry"\."productId" = lf1\."id"\) AND lf1\."deletedAt" IS NULL\) asc nulls last$/,
     );
+    expect(renderWhereSql(clause)).not.toContain('"InventoryEntry" lf0');
+  });
+
+  it("orders a compound derived value part by part", () => {
+    const valuations = listPrepare(async () => new Map<string, number>());
+    const scaffold = listScaffold("inventory", inventoryEntry, {
+      derived: {
+        valuation: valuations.value(() => sql`0`),
+        amount: [sql`unit`, sql`size`],
+        valuationStatus: valuations.predicate(() => sql`true`),
+      },
+    });
+    expect(
+      scaffold
+        .derivedSort({ orderBy: "amount", direction: "desc" })
+        ?.map((clause) => renderWhereSql(clause)),
+    ).toEqual(["unit desc nulls last", "size desc nulls last"]);
   });
 
   it("orders a derived value by the SQL its repository passes", () => {
     const scaffold = listScaffold("purchase", purchase, {
-      derived: { reconciliationGap: sql`declared_gap` },
+      derived: {
+        reconciliationGap: sql`declared_gap`,
+        expenseCount: sql`0`,
+        expenseTotal: sql`0`,
+        documentCount: sql`0`,
+      },
     });
     const clauses = scaffold.orderBy([
       { orderBy: "reconciliationGap", direction: "desc" },
@@ -87,7 +113,10 @@ describe("list field compiler", () => {
     expect(
       whereSql(
         listScaffold("location", location, {
-          derived: { inventoryEntries: sql`0` },
+          derived: {
+            inventoryEntries: sql`0`,
+            valuation: listPrepare(async () => null).value(() => sql`0`),
+          },
         }).where({}),
       ),
     ).not.toContain("WITH RECURSIVE");
@@ -102,6 +131,7 @@ describe("list field compiler", () => {
     const scaffold = listScaffold("inventory", inventoryEntry, {
       derived: {
         valuation: valuations.value(() => sql`prepared_valuation`),
+        amount: [sql`unit`, sql`size`],
         valuationStatus: valuations.predicate(
           (_prepared, statuses) => sql`prepared_status = ${statuses[0]}`,
         ),
