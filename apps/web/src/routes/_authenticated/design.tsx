@@ -189,7 +189,10 @@ const GROUPS: IndexedSectionGroup[] = [
         description: (
           <ComponentsLine
             components={["SectionHeading", "Section", "SectionActionLink"]}
-            source={["ui/layout/section.tsx"]}
+            source={[
+              "ui/layout/section.tsx",
+              "ui/layout/section-action-link.tsx",
+            ]}
           />
         ),
         content: <SectionCompositionsSection />,
@@ -200,10 +203,15 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: TableIcon,
         description: (
           <ComponentsLine
-            components={["QualityResult", "RankedBarBreakdown"]}
+            components={[
+              "QualityResult",
+              "RankedBarBreakdown",
+              "Visualization",
+            ]}
             source={[
               "entity/entity-detail/record-quality.tsx",
               "ui/charts/kit.tsx",
+              "ui/visualizations/visualization.tsx",
             ]}
           />
         ),
