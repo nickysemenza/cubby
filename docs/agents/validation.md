@@ -195,6 +195,9 @@ commit, push, or rebase continuation in the same call.
 Commits run only `pnpm check:staged`: Oxlint checks staged files and Oxfmt
 formats them in place, with the existing rules and ignore patterns. Partial
 staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
+Before committing in a fresh worktree, install dependencies with `pnpm install`
+and verify `.husky/_/pre-commit` exists. Git silently skips a missing hook;
+a successful commit alone does not establish that staged checks ran.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
