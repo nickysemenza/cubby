@@ -206,7 +206,6 @@ describe("effective Product stock tracking", () => {
         { ids: [id] },
         [],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
         "page",
         undefined,
         { kind: "enrichment", groups: ["derived"] },

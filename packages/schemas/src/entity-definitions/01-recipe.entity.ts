@@ -758,8 +758,8 @@ export default defineEntity({
         "tags",
         "totalMinutes",
       ],
-      groupable: ["name"],
     },
+    grouping: ["cookbook", "tags"],
     intents: {
       fields: {
         capture: ["name"],

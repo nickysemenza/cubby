@@ -1,8 +1,14 @@
-import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
+import {
+  defaultRangeExtractor,
+  useVirtualizer,
+  type Range,
+  type VirtualItem,
+} from "@tanstack/react-virtual";
 import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -18,10 +24,10 @@ const SECTION_HEADER_HEIGHT = 28;
 export type GroupedItem =
   | {
       kind: "header";
-      key?: string;
+      key: string;
       title: string;
       count: number;
-      color: string;
+      onFilter?: () => void;
     }
   | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
@@ -38,10 +44,10 @@ export type GroupedItem =
 type ResolvedVirtualIndex =
   | {
       kind: "header";
-      key?: string;
+      key: string;
       title: string;
       count: number;
-      color: string;
+      onFilter?: () => void;
     }
   /** groupRowIndex present only in grouped mode (position within the group). */
   | { kind: "row"; rowIndex: number; groupRowIndex?: number }
@@ -93,6 +99,19 @@ export function flatRowToVirtualIndex(
  */
 export function tableOverscan(paneHeight: number, rowHeight: number): number {
   return Math.min(16, Math.max(6, Math.ceil(paneHeight / rowHeight / 3)));
+}
+
+/** The last section header at or above the first visible index. */
+export function stickyHeaderIndex(
+  headerIndexes: readonly number[],
+  startIndex: number,
+): number | null {
+  let sticky: number | null = null;
+  for (const index of headerIndexes) {
+    if (index > startIndex) break;
+    sticky = index;
+  }
+  return sticky;
 }
 
 /** Stable virtualizer key for a row, group header, or infinite sentinel. */
@@ -156,6 +175,11 @@ interface UseTableVirtualizerResult {
   resolveIndex: (index: number) => ResolvedVirtualIndex;
   /** Map a flat row index into the virtualizer index space (-1 if absent). */
   flatRowToVirtualIndex: (rowIndex: number) => number;
+  /**
+   * The section header pinned above the visible rows, or null. It stays in
+   * `virtualRows` after scrolling out of range so it can stick.
+   */
+  stickyIndex: number | null;
   /** Scroll a virtualizer index into view. */
   scrollToIndex: (index: number, options?: { align?: "auto" }) => void;
 }
@@ -235,6 +259,25 @@ export function useTableVirtualizer({
       tableVirtualItemKey(index, rowKeys, groupedItems, trailingSentinel),
     [groupedItems, rowKeys, trailingSentinel],
   );
+  const headerIndexes = useMemo(
+    () =>
+      groupedItems
+        ? groupedItems.flatMap((item, index) =>
+            item.kind === "header" ? [index] : [],
+          )
+        : [],
+    [groupedItems],
+  );
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const sticky = stickyHeaderIndex(headerIndexes, range.startIndex);
+      const indexes = defaultRangeExtractor(range);
+      return sticky === null || indexes.includes(sticky)
+        ? indexes
+        : [sticky, ...indexes];
+    },
+    [headerIndexes],
+  );
   const rowVirtualizer = useVirtualizer({
     getScrollElement: () => tableContainerRef.current,
     // The router restores a tracked element's scrollTop on `onRendered`, which
@@ -254,6 +297,7 @@ export function useTableVirtualizer({
       return rowHeight;
     },
     overscan,
+    rangeExtractor,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -298,6 +342,9 @@ export function useTableVirtualizer({
       resolveVirtualIndex(index, groupedItems, trailingSentinel, rowCount),
     flatRowToVirtualIndex: (rowIndex) =>
       flatRowToVirtualIndex(rowIndex, groupedItems),
+    stickyIndex: rowVirtualizer.range
+      ? stickyHeaderIndex(headerIndexes, rowVirtualizer.range.startIndex)
+      : null,
     scrollToIndex: (index, options) =>
       rowVirtualizer.scrollToIndex(index, options),
   };

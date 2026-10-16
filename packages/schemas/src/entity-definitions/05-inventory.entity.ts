@@ -73,6 +73,7 @@ export default defineEntity({
             { id: "product", desc: false },
           ],
           view: "shelf",
+          groupBy: "category",
           pin: { surface: "home", order: 0 },
         },
         {
@@ -528,6 +529,7 @@ export default defineEntity({
         "category",
       ],
     },
+    grouping: ["category", "location", "placement"],
     intents: {
       fields: {
         capture: [
@@ -700,6 +702,7 @@ export default defineEntity({
         derived: true,
         deriveSchema: true,
         schemaDescription: "Filter by product category",
+        label: "Category",
         placeholder: "Filter classification...",
         brandRef: { entity: "productCategory" },
         optionsKey: "productCategories",

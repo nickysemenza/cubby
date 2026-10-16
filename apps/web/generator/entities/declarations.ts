@@ -283,16 +283,9 @@ export type EntityStorageField = Readonly<{
   reference: string | null;
   specialized: string | null;
 }>;
-type EntityFieldModelGrouping = Readonly<{
-  field: string;
-  nullGroupKey: string;
-  labelField: string | null;
-}>;
 type EntityFieldModelSort = Readonly<{
   fields: readonly [string, ...string[]];
   default: string;
-  groupable: readonly string[];
-  grouping: EntityFieldModelGrouping | null;
   direction: "asc" | "desc";
 }>;
 type EntityEditIntents = Readonly<{
@@ -317,6 +310,8 @@ export type EntityFieldModel = Readonly<{
     Record<string, EntityFieldModelMetadata["derived"][string]>
   >;
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
+  /** `model.grouping`: the Group by choices, compiled in `list-fields.ts`. */
+  grouping: readonly string[];
   intents: EntityEditIntents | null;
 }>;
 /** An operational column the table stores with no model field. */

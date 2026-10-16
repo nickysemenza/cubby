@@ -4,8 +4,9 @@ import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
+import type { VirtualItem } from "@tanstack/react-virtual";
 import type { ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
@@ -184,13 +185,9 @@ export interface RTableProps<TItem extends RowData> {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
-  /** Group configuration for section headers (mobile + desktop) */
-  groupConfig?: GroupConfig<TItem>;
-  /** Whether grouping is currently active */
-  grouped?: boolean;
-  /** Toggle grouping on/off */
-  onGroupedChange?: (value: boolean) => void;
-  /** A server tree's nested/flat switch, beside the grouping switch. */
+  /** The active Group by choice and its server sections (mobile + desktop). */
+  groupConfig?: GroupConfig;
+  /** A server tree's nested/flat switch. */
   nestToggle?: NestToggle;
   /**
    * Extra per-row classes (desktop). Must be a pure function of `row.original`
@@ -285,9 +282,6 @@ function DesktopTableToolbar<TItem extends RowData>({
   filterOptionHints,
   inspectorToggle,
   additionalToolbarContent,
-  groupConfig,
-  grouped,
-  onGroupedChange,
   nestToggle,
   actions,
   bulkActionBar,
@@ -303,9 +297,6 @@ function DesktopTableToolbar<TItem extends RowData>({
   | "filterOptionHints"
   | "inspectorToggle"
   | "additionalToolbarContent"
-  | "groupConfig"
-  | "grouped"
-  | "onGroupedChange"
   | "nestToggle"
   | "actions"
   | "bulkActionBar"
@@ -319,14 +310,9 @@ function DesktopTableToolbar<TItem extends RowData>({
   // `additionalToolbarContent` is a live status readout (a ledger's running
   // total, cell-selection stats) — it stays visible inline in the query tier
   // at both densities, never folded into a menu a caller would have to open
-  // to read it. Only the interactive `inspectorToggle`/grouped-list toggle
+  // to read it. Only the interactive `inspectorToggle`/nested-list toggle
   // move into the page-mode `Actions ▾` menu; embedded keeps them inline too.
-  const switches = presentationSwitches({
-    groupConfig,
-    grouped,
-    onGroupedChange,
-    nestToggle,
-  });
+  const switches = presentationSwitches(nestToggle);
   const groupToggle = embedded
     ? switches.map((toggle) => (
         <PresentationToggle key={toggle.id} toggle={toggle} />
@@ -388,9 +374,9 @@ export interface NestToggle {
   onNestedChange: (nested: boolean) => void;
 }
 
-/** A list presentation that is either on (grouped, nested) or flat. */
+/** A list presentation that is either on (nested) or flat. */
 interface PresentationSwitch {
-  id: "grouped" | "nested";
+  id: "nested";
   /** The Actions-menu label. */
   label: string;
   /** The inline button's label while flat. */
@@ -399,39 +385,20 @@ interface PresentationSwitch {
   onChange: (active: boolean) => void;
 }
 
-function presentationSwitches<TItem extends RowData>({
-  groupConfig,
-  grouped,
-  onGroupedChange,
-  nestToggle,
-}: Pick<
-  RTableProps<TItem>,
-  "groupConfig" | "grouped" | "onGroupedChange" | "nestToggle"
->): PresentationSwitch[] {
-  return [
-    ...(groupConfig && onGroupedChange
-      ? [
-          {
-            id: "grouped" as const,
-            label: "Grouped",
-            showLabel: "Show grouped list",
-            active: Boolean(grouped),
-            onChange: onGroupedChange,
-          },
-        ]
-      : []),
-    ...(nestToggle
-      ? [
-          {
-            id: "nested" as const,
-            label: "Nested",
-            showLabel: "Show nested list",
-            active: nestToggle.nested,
-            onChange: nestToggle.onNestedChange,
-          },
-        ]
-      : []),
-  ];
+function presentationSwitches(
+  nestToggle: NestToggle | undefined,
+): PresentationSwitch[] {
+  return nestToggle
+    ? [
+        {
+          id: "nested",
+          label: "Nested",
+          showLabel: "Show nested list",
+          active: nestToggle.nested,
+          onChange: nestToggle.onNestedChange,
+        },
+      ]
+    : [];
 }
 
 function PresentationToggle({ toggle }: { toggle: PresentationSwitch }) {
@@ -933,7 +900,6 @@ function tableChrome<TItem extends RowData>({
   actions,
   bulkActionBar,
   additionalToolbarContent,
-  groupConfig,
   inspectorToggle,
   toolbarMode,
   hasPageIdentity,
@@ -946,7 +912,6 @@ function tableChrome<TItem extends RowData>({
   | "actions"
   | "bulkActionBar"
   | "additionalToolbarContent"
-  | "groupConfig"
   | "inspectorToggle"
   | "toolbarMode"
 > & {
@@ -957,11 +922,7 @@ function tableChrome<TItem extends RowData>({
     .getAllLeafColumns()
     .some((column) => column.columnDef.meta?.filterConfig);
   const hasToolbarContent = Boolean(
-    actions ??
-    bulkActionBar ??
-    additionalToolbarContent ??
-    groupConfig ??
-    hasFilterConfig,
+    actions ?? bulkActionBar ?? additionalToolbarContent ?? hasFilterConfig,
   );
   return {
     showToolbar:
@@ -1011,8 +972,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     infiniteScroll,
     refreshControls,
     groupConfig,
-    grouped = false,
-    onGroupedChange,
     nestToggle,
     getRowClassName,
     verticalAlign = "middle",
@@ -1028,7 +987,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     table,
     infiniteScroll,
     groupConfig,
-    grouped,
     verticalAlign,
     onRowClick,
   });
@@ -1047,10 +1005,16 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     resolveIndex,
     rows,
     rowContentVersion,
+    stickyIndex,
     styles,
+    tableContainerRef,
     totalSize,
     virtualRows,
   } = controller;
+  const columnHeadHeight = useColumnHeadHeight(
+    tableContainerRef,
+    groupConfig !== undefined && !isMobile,
+  );
 
   // Desktop tables get spreadsheet-style cell selection; mobile does not.
   //
@@ -1092,7 +1056,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     actions,
     bulkActionBar: bulkActionsWithSuggestions,
     additionalToolbarContent,
-    groupConfig,
     inspectorToggle,
     toolbarMode,
     hasPageIdentity: pageIdentity !== null,
@@ -1127,9 +1090,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       filterOptionHints={filterOptionHints}
       inspectorToggle={topLevelInspectorToggle}
       additionalToolbarContent={additionalToolbarContent}
-      groupConfig={groupConfig}
-      grouped={grouped}
-      onGroupedChange={onGroupedChange}
       nestToggle={nestToggle}
       actions={actions}
       bulkActionBar={bulkActionsWithSuggestions}
@@ -1147,8 +1107,20 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     // Keep loaded rows usable after a failed refresh; status lives below the table.
     if (!hydrated || (isLoading && rows.length === 0)) return null;
 
-    // Always use virtualized rendering for consistent behavior
-    const topSpacerHeight = virtualRows.length > 0 ? virtualRows[0]!.start : 0;
+    // Always use virtualized rendering for consistent behavior. A pinned
+    // section header scrolled out of range renders ahead of the top spacer,
+    // which gives up the header's height so the layout keeps its total size.
+    const [first, second] = virtualRows;
+    const detachedSticky =
+      first !== undefined &&
+      first.index === stickyIndex &&
+      second !== undefined &&
+      second.start > first.end;
+    const topSpacerHeight = detachedSticky
+      ? second.start - first.size
+      : (first?.start ?? 0);
+    const leadingRows = detachedSticky ? [first] : [];
+    const rangeRows = detachedSticky ? virtualRows.slice(1) : virtualRows;
     const bottomSpacerHeight =
       virtualRows.length > 0
         ? Math.max(
@@ -1160,8 +1132,93 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       ? undefined
       : ghostRowsStyle(dConfig.rowHeight);
 
+    const renderVirtualRow = (virtualRow: VirtualItem) => {
+      const item = resolveIndex(virtualRow.index);
+      if (item.kind === "sentinel") {
+        return (
+          <TableRow
+            key="infinite-sentinel"
+            className="border-b border-border bg-background"
+            style={{ height: `${virtualRow.size}px` }}
+          >
+            <TableCell
+              colSpan={colSpan}
+              className="text-center text-xs text-muted-foreground"
+            >
+              {isFetchingNextPage ? "Loading more..." : null}
+            </TableCell>
+          </TableRow>
+        );
+      }
+      if (item.kind === "header") {
+        return (
+          <TableRow
+            key={`group-${item.key}`}
+            className="border-b-0 hover:bg-transparent"
+            style={{ height: `${virtualRow.size}px` }}
+          >
+            <TableCell
+              colSpan={colSpan}
+              className="sticky z-[25] p-0"
+              style={{ top: `${columnHeadHeight}px` }}
+            >
+              <SectionHeader
+                title={item.title}
+                count={item.count}
+                onFilter={item.onFilter}
+              />
+            </TableCell>
+          </TableRow>
+        );
+      }
+      // rowIndex is a valid position into the rows array (flat index when
+      // ungrouped, or the row's flat index when grouped).
+      const row = rows[item.rowIndex]!;
+      const treeStatus = serverTreeStatusOf(row.original);
+      if (treeStatus)
+        return (
+          <TableRow
+            key={row.id}
+            className="border-b border-border"
+            style={{ height: `${virtualRow.size}px` }}
+          >
+            <TableCell
+              colSpan={colSpan}
+              className="py-0"
+              // Indented as a child of its parent, like the name cell.
+              style={{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }}
+            >
+              <TreeStatusRow status={treeStatus} />
+            </TableCell>
+          </TableRow>
+        );
+      return (
+        <VirtualSelectionRow
+          key={row.id}
+          table={table}
+          rows={rows}
+          row={row}
+          rowIndex={item.rowIndex}
+          height={`${virtualRow.size}px`}
+          currentRowId={currentRowId}
+          isDebugEnabled={isDebugEnabled}
+          onRowClick={onRowClick}
+          onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
+          suppressCellRowClick={cellSelectionEnabled}
+          rowClassName={(candidate) =>
+            cn(styles.row, getRowClassName?.(candidate))
+          }
+          cellClassName={styles.cell}
+          columnsKey={columnsKey}
+          rowContentVersion={rowContentVersion}
+        />
+      );
+    };
+
     return (
       <RowActivityStoreContext value={rowActivity}>
+        {leadingRows.map(renderVirtualRow)}
         {/* Top padding row for scroll position. Offsets are relative to the
             table's own scroll pane, so `start` is already the gap. */}
         {topSpacerHeight > 0 && (
@@ -1179,85 +1236,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         )}
 
         {/* Render only visible rows (with optional group headers) */}
-        {virtualRows.map((virtualRow) => {
-          const item = resolveIndex(virtualRow.index);
-          if (item.kind === "sentinel") {
-            return (
-              <TableRow
-                key="infinite-sentinel"
-                className="border-b border-border bg-background"
-                style={{ height: `${virtualRow.size}px` }}
-              >
-                <TableCell
-                  colSpan={colSpan}
-                  className="text-center text-xs text-muted-foreground"
-                >
-                  {isFetchingNextPage ? "Loading more..." : null}
-                </TableCell>
-              </TableRow>
-            );
-          }
-          if (item.kind === "header") {
-            return (
-              <TableRow
-                key={`group-${item.key ?? item.title}`}
-                className="border-b border-border/30"
-                style={{ height: `${virtualRow.size}px` }}
-              >
-                <TableCell colSpan={colSpan} className="p-0">
-                  <SectionHeader
-                    title={item.title}
-                    count={item.count}
-                    color={item.color}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          }
-          // rowIndex is a valid position into the rows array (flat index when
-          // ungrouped, or the row's flat index when grouped).
-          const row = rows[item.rowIndex]!;
-          const treeStatus = serverTreeStatusOf(row.original);
-          if (treeStatus)
-            return (
-              <TableRow
-                key={row.id}
-                className="border-b border-border"
-                style={{ height: `${virtualRow.size}px` }}
-              >
-                <TableCell
-                  colSpan={colSpan}
-                  className="py-0"
-                  // Indented as a child of its parent, like the name cell.
-                  style={{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }}
-                >
-                  <TreeStatusRow status={treeStatus} />
-                </TableCell>
-              </TableRow>
-            );
-          return (
-            <VirtualSelectionRow
-              key={row.id}
-              table={table}
-              rows={rows}
-              row={row}
-              rowIndex={item.rowIndex}
-              height={`${virtualRow.size}px`}
-              currentRowId={currentRowId}
-              isDebugEnabled={isDebugEnabled}
-              onRowClick={onRowClick}
-              onRowHover={onRowHover}
-              onRowHoverEnd={onRowHoverEnd}
-              suppressCellRowClick={cellSelectionEnabled}
-              rowClassName={(candidate) =>
-                cn(styles.row, getRowClassName?.(candidate))
-              }
-              cellClassName={styles.cell}
-              columnsKey={columnsKey}
-              rowContentVersion={rowContentVersion}
-            />
-          );
-        })}
+        {rangeRows.map(renderVirtualRow)}
 
         {/* Bottom padding row for remaining scroll space */}
         {bottomSpacerHeight > 0 && (
@@ -1327,13 +1306,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               infiniteScroll={infiniteScroll}
               refreshControls={refreshControls}
               groupConfig={groupConfig}
-              grouped={grouped}
-              presentationSwitches={presentationSwitches({
-                groupConfig,
-                grouped,
-                onGroupedChange,
-                nestToggle,
-              })}
+              presentationSwitches={presentationSwitches(nestToggle)}
               isTransitioning={isTransitioning}
               rowContentVersion={rowContentVersion}
               portalWorkbenchUtilities={externalToolbar}
@@ -1360,4 +1333,25 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       </EntityDisplayImagesProvider>
     </RecordSuggestionsProvider>
   );
+}
+
+/**
+ * The pinned column header's height, which a sticky section header sits
+ * beneath. Measured because a column header can wrap or carry filters.
+ */
+function useColumnHeadHeight(
+  paneRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const head = enabled ? paneRef.current?.querySelector("thead") : null;
+    if (!head || !globalThis.ResizeObserver) return;
+    const measure = () => setHeight(head.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(head);
+    return () => observer.disconnect();
+  }, [enabled, paneRef]);
+  return height;
 }

@@ -7,10 +7,6 @@ import { z } from "zod";
 /** The one page-size ceiling and default every list boundary shares. */
 export const MAX_PAGE_SIZE = 500;
 export const DEFAULT_PAGE_SIZE = 10;
-export {
-  LOCATION_UNSPECIFIED_GROUP_KEY,
-  PRODUCT_UNCLASSIFIED_GROUP_KEY,
-} from "./group-keys";
 
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),

@@ -1,11 +1,9 @@
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductFilters,
   type ProductListItem,
   type ProductPricingOut,
 } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { formatCategoryLabel } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
@@ -52,7 +50,6 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
-import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -187,26 +184,6 @@ function useProductFilterOptions() {
     externalIdSources: externalIdSourceOptions,
   });
 }
-
-const productGrouping = generatedEntitySort.product.grouping;
-if (!productGrouping)
-  throw new Error("product entity declares no list-grouping contract.");
-
-// UI-only: the local (groups-less) fallback groups by the category's
-// formatted path, and every group gets the same neutral swatch — unlike
-// Location, categories have no inherent color. The server-key match once
-// full-set groups load is generic (`useEntityList.tsx`'s
-// `effectiveGroupConfig`, keyed by the declared `field`/`nullGroupKey`
-// above), so this `keyFn` only has to look right before that data arrives.
-const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
-const groupColorFn = (_key: string) => "var(--chart-neutral)";
-export const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
-  field: productGrouping.field,
-  keyFn: groupKeyFn,
-  // The raw value the server grouped on — the category id, not its label.
-  rawKeyFn: (item) => item.categoryId,
-  colorFn: groupColorFn,
-};
 
 export const productListOverride = defineListOverride<
   ProductTreeRow,
@@ -519,7 +496,6 @@ export const productListOverride = defineListOverride<
         filterOptions,
         nameEditable,
         initialColumnVisibility: productInitialColumnVisibility(),
-        groupConfig: PRODUCT_GROUP_CONFIG,
       }),
       [filterOptions, nameEditable],
     );

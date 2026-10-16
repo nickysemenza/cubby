@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/entity-collection";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdInput,
@@ -48,7 +47,7 @@ import {
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { taskStatusSchema } from "@cubby/schemas/project";
-import { formatCategoryLabel, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
   asc,
@@ -578,94 +577,12 @@ const loadProductDataQualities = (
   ids: ProductId[],
 ) => loadDataQualities(db, "product", ids);
 
-const productListOrderBy = (
-  sorts: SortParams[],
-  groupBy?: string,
-  filters?: ProductFilters,
-) =>
+const productListOrderBy = (sorts: SortParams[], filters?: ProductFilters) =>
   productScaffold.orderBy(
     sorts,
-    {
-      groupBy,
-      tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
-    },
+    { tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC` },
     filters,
   );
-
-// Read from the manifest instead of re-hardcoding: `sort.grouping` on
-// `00-product.entity.ts` is this entity's one declared list-grouping
-// contract, compiler-checked to name a `sort.groupable` field.
-const PRODUCT_GROUPING = generatedEntitySort.product.grouping;
-if (!PRODUCT_GROUPING)
-  throw new Error("product entity declares no list-grouping contract.");
-
-const loadProductCategoryGroups = async (
-  db: Database,
-  whereClause: SQL | undefined,
-  sorts: SortParams[],
-) => {
-  const counts = await getDb(db)
-    .select({
-      categoryId: product.categoryId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(product)
-    .where(whereClause)
-    .groupBy(product.categoryId);
-  const summaries = await loadCategorySummaries(db);
-  const direction =
-    sorts.find((sort) => sort.orderBy === "categoryId")?.direction ?? "asc";
-  const groups: Array<{
-    key: string;
-    label: string;
-    count: number;
-    categoryId: ProductCategoryId | null;
-  }> = [];
-  let unclassifiedCount = 0;
-  for (const { categoryId, count } of counts) {
-    const category = categoryId ? summaries.get(categoryId) : null;
-    if (!category) {
-      unclassifiedCount += count;
-      continue;
-    }
-    groups.push({
-      key: category.id,
-      label: formatCategoryLabel(category),
-      count,
-      categoryId,
-    });
-  }
-  if (unclassifiedCount > 0)
-    groups.push({
-      key: PRODUCT_GROUPING.nullGroupKey,
-      label: "Unclassified",
-      count: unclassifiedCount,
-      categoryId: null,
-    });
-  return groups.sort((a, b) =>
-    a.categoryId === null
-      ? 1
-      : b.categoryId === null
-        ? -1
-        : (a.label.localeCompare(b.label) || a.key.localeCompare(b.key)) *
-          (direction === "desc" ? -1 : 1),
-  );
-};
-
-const productCategoryGroupOrder = (
-  groups: Awaited<ReturnType<typeof loadProductCategoryGroups>>,
-): SQL | null =>
-  groups.some((group) => group.categoryId !== null)
-    ? sql`case ${sql.join(
-        groups
-          .filter((group) => group.categoryId !== null)
-          .map(
-            (group, index) =>
-              sql`when ${product.categoryId} = ${group.categoryId} then ${index}`,
-          ),
-        sql` `,
-      )} else ${groups.length} end asc`
-    : null;
 
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
 
@@ -972,23 +889,9 @@ const readProductListPage = async (
   filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy: string | undefined,
   readIntent: ListReadIntent,
   projection: ListProjection,
 ) => {
-  const groups =
-    groupBy === PRODUCT_GROUPING.field && readIntent === "page"
-      ? await loadProductCategoryGroups(db, whereClause, sorts)
-      : null;
-  const groupOrder = groups ? productCategoryGroupOrder(groups) : null;
-  const orderByArray = [
-    ...(groupOrder ? [groupOrder] : []),
-    ...productListOrderBy(
-      sorts,
-      groupBy === PRODUCT_GROUPING.field ? undefined : groupBy,
-      filters,
-    ),
-  ];
   const relationFields = wantsListGroup(projection, "relations");
   const derivedFields = wantsListGroup(projection, "derived");
   const extras = relations.product.listBase.extras;
@@ -1013,7 +916,7 @@ const readProductListPage = async (
     {
       where: whereClause,
       context,
-      orderBy: orderByArray,
+      orderBy: productListOrderBy(sorts, filters),
       load:
         projection.kind === "base"
           ? undefined
@@ -1033,7 +936,7 @@ const readProductListPage = async (
   // gates select optional extras and joins, which Drizzle loses when `with`
   // is conditional; stored Product columns are always selected.
   const results = page.data as ProductSelectedPageRow[];
-  return { results, totalCount: page.count, groups };
+  return { results, totalCount: page.count, groups: page.groups };
 };
 
 export const productList = async (
@@ -1041,7 +944,6 @@ export const productList = async (
   filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy?: string,
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
 ) => {
@@ -1055,16 +957,9 @@ export const productList = async (
       groups: undefined,
     };
   const [{ results, totalCount, groups }, sums] = await Promise.all([
-    readProductListPage(
-      db,
-      filtered,
-      filters,
-      sorts,
-      pagination,
-      groupBy,
-      readIntent,
-      { kind: "full" },
-    ),
+    readProductListPage(db, filtered, filters, sorts, pagination, readIntent, {
+      kind: "full",
+    }),
     readIntent === "page" ? loadProductListSums(db, whereClause) : undefined,
   ]);
   const ids = results.map((row) => row.id);
@@ -1133,14 +1028,9 @@ export const productList = async (
     })),
     count: totalCount,
     sums,
-    groups: undefined,
+    groups,
   };
-  return groups
-    ? {
-        ...result,
-        groups: groups.map(({ key, label, count }) => ({ key, label, count })),
-      }
-    : result;
+  return result;
 };
 
 type ProductListReadResult = {
@@ -1155,7 +1045,6 @@ export const listProductsRead = async (
   filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy?: string,
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
   projection: ListProjection = { kind: "full" },
@@ -1166,7 +1055,6 @@ export const listProductsRead = async (
       filters,
       sorts,
       pagination,
-      groupBy,
       readIntent,
       usdaClient,
     );
@@ -1181,7 +1069,6 @@ export const listProductsRead = async (
     filters,
     sorts,
     pagination,
-    groupBy,
     readIntent,
     projection,
   );
@@ -1201,12 +1088,7 @@ export const listProductsRead = async (
   const metadata: Pick<ProductListReadResult, "count" | "groups"> = {
     count: totalCount,
   };
-  if (groups)
-    metadata.groups = groups.map(({ key, label, count }) => ({
-      key,
-      label,
-      count,
-    }));
+  if (groups) metadata.groups = groups;
   if (projection.kind === "base" || results.length === 0)
     return { ...metadata, data: projectListRows("product", rows, projection) };
   const ids = results.map((row) => row.id);

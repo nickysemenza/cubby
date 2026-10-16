@@ -240,10 +240,7 @@ export const countWhere = (
 
 /**
  * Build ORDER BY clauses from a normalized sort stack (see `normalizeSorts`).
- *
- * When `opts.groupBy` is provided and is in `allowedFields`, prepends a primary
- * sort on that column (ASC NULLS LAST) so group members are contiguous; the
- * user's sorts order rows within each group.
+ * A grouped list's section order leads these clauses (`listScaffold.list`).
  *
  * `opts.resolve` is the list scaffold's compiled field order (`model.derived`,
  * `related:<view>`, the quality score): it returns the clauses that DEFINE
@@ -258,41 +255,20 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
   sorts: SortParams[],
   allowedFields: string[],
   opts?: {
-    groupBy?: string;
     resolve?: (s: SortParams) => SQL[] | null;
     tieBreaker?: SQL;
     leadingOrderBy?: SQL[];
   },
 ): SQL[] => {
   const clauses: SQL[] = [];
-  const { groupBy, resolve, tieBreaker } = opts ?? {};
+  const { resolve, tieBreaker } = opts ?? {};
   const columnsByName = new Map<string, AnyColumn>(
     Object.entries(getTableColumns(table)),
   );
 
-  // A requested group is the primary order even if its sort appears later in
-  // the stack. Resolve computed group fields through the same SQL path as a
-  // normal sort, then keep every other user sort within the group.
-  if (groupBy && allowedFields.includes(groupBy)) {
-    const groupSort = sorts.find((sort) => sort.orderBy === groupBy) ?? {
-      orderBy: groupBy,
-      direction: "asc" as const,
-    };
-    const special = resolve?.(groupSort);
-    if (special) clauses.push(...special);
-    else {
-      const groupColumn = columnsByName.get(groupBy);
-      if (groupColumn)
-        clauses.push(
-          sql`${groupColumn} ${sql.raw(groupSort.direction)} nulls last`,
-        );
-    }
-  }
-
   clauses.push(...(opts?.leadingOrderBy ?? []));
 
   for (const s of sorts) {
-    if (s.orderBy === groupBy) continue;
     const special = resolve?.(s);
     if (special) {
       clauses.push(...special);

@@ -966,12 +966,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
   );
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
-      // `derived`/`hierarchy` are emitted compiled, in entity-list-fields.gen.ts.
+      // `derived`/`hierarchy`/`grouping` are emitted compiled, in
+      // entity-list-fields.gen.ts.
       const {
         sort: _sort,
         intents: _intents,
         derived: _derived,
         hierarchy: _hierarchy,
+        grouping: _grouping,
         ...rest
       } = fieldModel;
       return [
@@ -1008,8 +1010,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             {
               fields: fieldModel.sort.fields,
               default: fieldModel.sort.default,
-              groupable: fieldModel.sort.groupable,
-              grouping: fieldModel.sort.grouping,
               direction: fieldModel.sort.direction,
             },
           ] as const,
@@ -1345,17 +1345,22 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * repository `value`, or a filter-only `predicate`) with the reason sort\n" +
         " * or group is rejected (null when supported); the hierarchy's parent\n" +
         " * column and depth cap; `subtree` maps a filter key to its generated\n" +
-        ' * "Include sub-…" toggle; `fieldGroup` holds group rejections for\n' +
-        " * multi-valued model fields.\n" +
+        ' * "Include sub-…" toggle; `grouping` is `model.grouping` in menu order,\n' +
+        " * each choice with what its section key reads, its no-value label, the\n" +
+        " * filter its section header applies, and the reason it cannot group\n" +
+        " * (null when it can).\n" +
         " */\n" +
         'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
+        "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
+        "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
+        'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean } | null };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
           satisfies:
-            "Record<Entity, { derived: Record<string, GeneratedListField>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; fieldGroup: Record<string, string> }>",
+            "Record<Entity, { derived: Record<string, GeneratedListField>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[] }>",
           comment: "// Generated list fields stay one entity per line.",
         }) +
         "\n" +
@@ -1378,20 +1383,15 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " * The declared list-sort roster for entities that expose one, keyed from\n" +
         " * `model.sort` in `packages/schemas/src/entity-definitions/*.entity.ts`.\n" +
         " * Entries name model fields, `model.derived` keys (`entity-list-fields.gen.ts`)\n" +
-        " * or `related:<view>` columns; `groupable` is the `groupBy` allowlist,\n" +
-        " * defaulting to every sortable field when empty. `direction` is the list's\n" +
-        ' * opening sort direction, defaulting to "desc". `grouping` is the entity\'s\n' +
-        " * single opt-in list-grouping contract (null when the list has no grouped\n" +
-        " * view): `field` matches a `groupable` entry, `nullGroupKey` is the\n" +
-        " * sentinel key for a row whose field is null, and `labelField` names the\n" +
-        " * row key the group's display label reads from when it differs from\n" +
-        " * `field` (null means the field's own value).\n" +
+        " * or `related:<view>` columns. `direction` is the list's opening sort\n" +
+        ' * direction, defaulting to "desc". Group by choices are\n' +
+        " * `generatedEntityListFields[entity].grouping`.\n" +
         " */\n" +
         renderRecord({
           name: "generatedEntitySort",
           entries: entitySort,
           satisfies:
-            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; groupable: readonly string[]; grouping: { field: string; nullGroupKey: string; labelField: string | null } | null; direction: "asc" | "desc" }>>',
+            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; direction: "asc" | "desc" }>>',
           comment: "// Generated sort rosters stay one entity per line.",
         }) +
         "\n" +

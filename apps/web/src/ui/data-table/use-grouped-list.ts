@@ -1,110 +1,88 @@
+import type { GeneratedGroupChoice } from "@cubby/schemas/entity-list-fields";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { useMemo } from "react";
 
-export interface GroupConfig<TItem> {
-  /** DB column name for server-side group ordering (e.g., "type", "category") */
-  field: string;
-  /** Extract the group key from an item. Null/undefined becomes "(unspecified)".
-   * Used as-is only until full-set server `groups` arrive; see `rawKeyFn`. */
-  keyFn: (item: TItem) => string | null | undefined;
-  /**
-   * Extract the row's raw grouped-field value — the same value the server
-   * grouped on (a category id, a location type), not a rendered label. Once
-   * full-set `groups` load, `useEntityList` matches rows to sections by this
-   * value (falling back to the entity's declared null-group key), because
-   * `keyFn` may render a label instead (see `PRODUCT_GROUP_CONFIG`, whose
-   * `keyFn` renders the category's formatted path for the groups-less local
-   * fallback). Omit it when `keyFn` already returns the raw value (see
-   * `LOCATION_GROUP_CONFIG`).
-   */
-  rawKeyFn?: (item: TItem) => string | null | undefined;
-  colorFn: (key: string) => string;
-  /** Ordered summaries of the entire filtered set, including unloaded pages. */
-  groups?: readonly ListGroupSummary[];
+/**
+ * A list grouped by a declared `model.grouping` choice. `groups` are the
+ * server's sections of the whole filtered set, in page order; `onFilter` sets
+ * a section's value as the field's include filter, present only when the
+ * field has a declared filter.
+ */
+export interface GroupConfig {
+  choice: GeneratedGroupChoice;
+  groups: readonly ListGroupSummary[];
+  onFilter?: (key: string) => void;
 }
 
-type GroupedVirtualItem<TItem> =
-  | {
-      kind: "header";
-      key?: string;
-      title: string;
-      count: number;
-      color: string;
-    }
-  | { kind: "row"; item: TItem };
+export interface GroupSection<T> {
+  key: string;
+  label: string;
+  /** The section's rows in the whole filtered set, loaded or not. */
+  count: number;
+  items: T[];
+  /** Applies "Filter to this"; absent when the section has no filter value. */
+  onFilter?: () => void;
+}
 
-export function orderedGroupSections<T>(
-  groups: ReadonlyMap<string, T[]>,
-  summaries?: readonly ListGroupSummary[],
-) {
-  const seen = new Set(summaries?.map((group) => group.key));
-  return [
-    ...(summaries?.map((group) => ({
+/**
+ * The loaded rows split into the server's sections. The page and summary
+ * queries share one total order, so loaded rows are a prefix of the sections:
+ * each section takes its next `count` rows. A section with no loaded row yet
+ * is omitted. `isNested` rows (a tree's children) follow their parent without
+ * taking a place.
+ */
+export function groupSections<T>(
+  items: readonly T[],
+  config: GroupConfig,
+  isNested: (item: T) => boolean = () => false,
+): GroupSection<T>[] {
+  const sections: GroupSection<T>[] = [];
+  let index = 0;
+  for (const group of config.groups) {
+    if (index >= items.length) break;
+    const section: GroupSection<T> = {
       key: group.key,
-      serverKey: group.key,
       label: group.label,
       count: group.count,
-      items: groups.get(group.key) ?? [],
-    })) ?? []),
-    ...Array.from(groups.entries())
-      .filter(([key]) => !seen.has(key))
-      .map(([key, items]) => ({
-        key,
-        serverKey: undefined,
-        label: key,
-        count: items.length,
-        items,
-      })),
-  ];
+      items: [],
+      onFilter:
+        config.onFilter &&
+        (group.key !== FILTER_NONE || config.choice.filter?.noValue)
+          ? () => config.onFilter?.(group.key)
+          : undefined,
+    };
+    let taken = 0;
+    while (index < items.length) {
+      const item = items[index]!;
+      if (!isNested(item)) {
+        if (taken === group.count) break;
+        taken += 1;
+      }
+      section.items.push(item);
+      index += 1;
+    }
+    sections.push(section);
+  }
+  return sections;
 }
+
+export type GroupedVirtualItem<TItem> =
+  | { kind: "header"; section: GroupSection<TItem> }
+  | { kind: "row"; item: TItem };
 
 export function useGroupedList<TItem>(
   data: TItem[],
-  groupConfig: GroupConfig<TItem> | undefined,
-  enabled: boolean,
+  groupConfig: GroupConfig | undefined,
+  isNested?: (item: TItem) => boolean,
 ): GroupedVirtualItem<TItem>[] | null {
   return useMemo(() => {
-    if (!groupConfig || !enabled) return null;
-
-    const groups = new Map<string, TItem[]>();
-
-    for (const item of data) {
-      const key = groupConfig.keyFn(item) || "(unspecified)";
-      const existing = groups.get(key);
-      if (existing) {
-        existing.push(item);
-      } else {
-        groups.set(key, [item]);
-      }
-    }
-
-    const sortedGroups = groupConfig.groups
-      ? groups
-      : new Map(
-          Array.from(groups.entries()).sort(([a], [b]) => {
-            if (a === "(unspecified)") return 1;
-            if (b === "(unspecified)") return -1;
-            return a.localeCompare(b);
-          }),
-        );
-
-    const result: GroupedVirtualItem<TItem>[] = [];
-    for (const section of orderedGroupSections(
-      sortedGroups,
-      groupConfig.groups,
-    )) {
-      result.push({
-        kind: "header",
-        key: section.serverKey,
-        title: section.label,
-        count: section.count,
-        color: groupConfig.colorFn(section.key),
-      });
-      for (const item of section.items) {
-        result.push({ kind: "row", item });
-      }
-    }
-
-    return result;
-  }, [data, groupConfig, enabled]);
+    if (!groupConfig) return null;
+    return groupSections(data, groupConfig, isNested).flatMap(
+      (section): GroupedVirtualItem<TItem>[] => [
+        { kind: "header", section },
+        ...section.items.map((item) => ({ kind: "row" as const, item })),
+      ],
+    );
+  }, [data, groupConfig, isNested]);
 }

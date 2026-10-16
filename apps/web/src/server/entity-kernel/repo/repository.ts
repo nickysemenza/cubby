@@ -319,9 +319,8 @@ export const onDb =
     fn(ctx.db, ...args);
 
 /**
- * A `(db, filters, sorts, pagination)` list as a kernel `list`. Only those
- * four are forwarded: the kernel's fifth argument is `groupBy`, which a list
- * that takes a `readIntent` fifth must never receive.
+ * A `(db, filters, sorts, pagination)` list as a kernel `list`. A list that
+ * takes a `readIntent` fifth keeps its default; `groupBy` rides in `filters`.
  */
 export const listOn =
   <TFilters, TResult>(
@@ -340,7 +339,7 @@ export const listOn =
   ): TResult =>
     fn(ctx.db, filters, sorts, pagination);
 
-/** Non-grouping staged reads receive projection, never the kernel's trailing groupBy as readIntent. */
+/** A staged read receives projection, never anything as its `readIntent`. */
 export const listReadOn =
   <TFilters, TResult>(
     fn: (
@@ -413,7 +412,6 @@ export interface RepositorySpec<
     filters: ZodOutput<SchemasFor<E>["filters"]>,
     sorts: Parameters<EntityRepositoryListFn<E>>[2],
     pagination: Parameters<EntityRepositoryListFn<E>>[3],
-    groupBy?: string,
   ) => ReturnType<EntityRepositoryListFn<E>>;
   create?: (
     ctx: EntityKernelContext,
@@ -457,7 +455,6 @@ type EntityRepositoryListFn<E extends KernelEntity> = (
   filters: ZodOutput<SchemasFor<E>["filters"]>,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy?: string,
 ) => Promise<ListReadPage<ZodOutput<SchemasFor<E>["repositoryList"]>>>;
 
 const sortFor = (entity: string): EntitySortContract => {
@@ -470,7 +467,6 @@ const sortFor = (entity: string): EntitySortContract => {
         fields: readonly [string, ...string[]];
         default: string;
         direction: "asc" | "desc";
-        groupable: readonly string[];
       }
     >
   )[entity];
@@ -480,13 +476,6 @@ const sortFor = (entity: string): EntitySortContract => {
     fields: declared.fields,
     default: declared.default,
     direction: declared.direction,
-    // An empty `groupable` stays undefined so the kernel falls back to every
-    // sortable field (`binding.sort.groupable ?? binding.sort.fields`).
-    // SAFETY: the length check confirms the non-empty tuple.
-    groupable:
-      declared.groupable.length > 0
-        ? (declared.groupable as readonly [string, ...string[]])
-        : undefined,
   };
 };
 

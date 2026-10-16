@@ -1,9 +1,11 @@
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { ledgerParty, productCategory } from "~/server/db/schema";
@@ -18,7 +20,9 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import {
+  createInventoryFixture,
   createLocationFixture,
   createProductFixture,
   makeLocationInput,
@@ -31,11 +35,22 @@ const groups = (result: {
   count: number;
   groups?: { key: string; label: string; count: number }[];
 }) => result.groups;
+// The kernel carries a validated `groupBy` beside the filters, like `nesting`.
 const groupedProducts = (
   sort: Parameters<typeof productList>[2],
   pageIndex: number,
   pageSize: number,
-) => productList(ctx.db, {}, sort, { pageIndex, pageSize }, "categoryId");
+) =>
+  productList(ctx.db, withListGroupBy({}, "categoryId"), sort, {
+    pageIndex,
+    pageSize,
+  });
+const kernel = () =>
+  entityKernelContextSchema.parse(
+    createTestRequestContext(ctx.db, {
+      auth: { userId: testUserId("test-user-id") },
+    }),
+  );
 async function category(name: string, sortOrder: number) {
   return createProductCategory(
     ctx.db,
@@ -73,7 +88,73 @@ async function location(name: string, type: "room" | "box") {
 }
 
 describe("server list grouping", () => {
-  it("orders Product categories before pagination and reports full paths and counts", async () => {
+  it("keeps related-key sections contiguous across pages, no-value last, with counts that match the rows", async () => {
+    const alpha = await category("Alpha shelf group", 0);
+    const beta = await category("Beta shelf group", 1);
+    const shelf = await location("Grouping shelf", "box");
+    const entries: Awaited<ReturnType<typeof createInventoryFixture>>[] = [];
+    // Created out of section order, so only the group-first ORDER BY puts
+    // the rows together.
+    for (const [name, categoryId] of [
+      ["Beta one", beta.output.id],
+      ["No category one", null],
+      ["Alpha two", alpha.output.id],
+      ["Alpha one", alpha.output.id],
+    ] as const) {
+      const item = await product(name, categoryId);
+      entries.push(
+        await createInventoryFixture(
+          ctx.db,
+          {
+            productId: item.id,
+            locationId: shelf.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        ),
+      );
+    }
+    const read = (pageIndex: number, pageSize: number) =>
+      executeEntity(kernel(), {
+        action: "list",
+        entity: "inventory",
+        filters: { ids: entries.map((entry) => entry.id) },
+        sort: [{ orderBy: "product", direction: "asc" }],
+        groupBy: "category",
+        pagination: { pageIndex, pageSize },
+      });
+    const sections = [
+      { key: alpha.output.id, label: "Alpha shelf group", count: 2 },
+      { key: beta.output.id, label: "Beta shelf group", count: 1 },
+      { key: FILTER_NONE, label: "No category", count: 1 },
+    ];
+    // A page boundary inside the Alpha section, then one before No category.
+    for (const pageSize of [1, 3]) {
+      const pages = await Promise.all(
+        Array.from({ length: Math.ceil(4 / pageSize) }, (_, index) =>
+          read(index, pageSize),
+        ),
+      );
+      for (const page of pages) expect(page.meta.groups).toEqual(sections);
+      const names = pages.flatMap((page) =>
+        page.items.map(
+          (item) =>
+            z.object({ displayName: z.string() }).parse(item).displayName,
+        ),
+      );
+      expect(names.map((name) => name.split(" · ")[0])).toEqual([
+        "Alpha one",
+        "Alpha two",
+        "Beta one",
+        "No category one",
+      ]);
+      expect(sections.reduce((sum, section) => sum + section.count, 0)).toBe(
+        pages[0]!.meta.totalCount,
+      );
+    }
+  });
+
+  it("orders Product categories before pagination and reports their names and counts", async () => {
     const alpha = await category("Alpha group", 0);
     const beta = await category("Beta group", 1);
     const betaProduct = await product("Beta item", beta.output.id);
@@ -91,43 +172,32 @@ describe("server list grouping", () => {
       "Unclassified item",
     ]);
     expect(groups(pages[0]!)).toEqual([
-      expect.objectContaining({
-        key: alpha.output.id,
-        count: 1,
-        label: expect.stringContaining("Alpha group"),
-      }),
-      expect.objectContaining({
-        key: beta.output.id,
-        count: 1,
-        label: expect.stringContaining("Beta group"),
-      }),
-      { key: "__unclassified__", label: "Unclassified", count: 1 },
+      { key: alpha.output.id, count: 1, label: "Alpha group" },
+      { key: beta.output.id, count: 1, label: "Beta group" },
+      { key: FILTER_NONE, label: "No category", count: 1 },
     ]);
 
+    // Sections keep label order whatever the row sort says.
     const result = await groupedProducts(
       [
-        { orderBy: "name", direction: "asc" },
+        { orderBy: "name", direction: "desc" },
         { orderBy: "categoryId", direction: "desc" },
       ],
       0,
       3,
     );
     expect(groups(result)?.map((group) => group.key)).toEqual([
-      beta.output.id,
       alpha.output.id,
-      "__unclassified__",
+      beta.output.id,
+      FILTER_NONE,
     ]);
     expect(result.data.map((row) => row.name)).toEqual([
-      "Beta item",
       "Alpha item",
+      "Beta item",
       "Unclassified item",
     ]);
 
-    const kernelContext = entityKernelContextSchema.parse(
-      createTestRequestContext(ctx.db, {
-        auth: { userId: testUserId("test-user-id") },
-      }),
-    );
+    const kernelContext = kernel();
     const grouped = await executeEntity(kernelContext, {
       action: "list",
       entity: "product",
@@ -144,11 +214,7 @@ describe("server list grouping", () => {
       pagination: { pageIndex: 0, pageSize: 1 },
     });
     expect(restricted.meta.groups).toEqual([
-      expect.objectContaining({
-        key: beta.output.id,
-        count: 1,
-        label: expect.stringContaining("Beta group"),
-      }),
+      { key: beta.output.id, count: 1, label: "Beta group" },
     ]);
     expect(restricted.meta.totalCount).toBe(1);
 
@@ -164,7 +230,7 @@ describe("server list grouping", () => {
     );
   });
 
-  it("collapses Products with a deleted category into the unclassified group", async () => {
+  it("collapses Products with a deleted category into the no-value section", async () => {
     const retired = await category("Retired group", 0);
     await product("Retired item", retired.output.id);
     await product("No category item", null);
@@ -179,7 +245,7 @@ describe("server list grouping", () => {
       10,
     );
     expect(groups(result)).toEqual([
-      { key: "__unclassified__", label: "Unclassified", count: 2 },
+      { key: FILTER_NONE, label: "No category", count: 2 },
     ]);
     expect(result.data.map((row) => row.name)).toEqual([
       "No category item",
@@ -187,7 +253,7 @@ describe("server list grouping", () => {
     ]);
   });
 
-  it("sorts Location groups before pagination and reports all filtered counts", async () => {
+  it("orders enum sections by declared option order before pagination", async () => {
     await location("Room one", "room");
     await location("Room two", "room");
     await location("Box one", "box");
@@ -195,13 +261,12 @@ describe("server list grouping", () => {
     const grouped = (pageIndex: number, readIntent?: "count") =>
       locationList(
         ctx.db,
-        { itemTypeFilter: ["box", "room"] },
+        withListGroupBy({ itemTypeFilter: ["box", "room"] }, "type"),
         [
           { orderBy: "name", direction: "asc" },
           { orderBy: "type", direction: "desc" },
         ],
         { pageIndex, pageSize: 1 },
-        "type",
         readIntent,
       );
     const pages = await Promise.all([0, 1, 2].map((index) => grouped(index)));

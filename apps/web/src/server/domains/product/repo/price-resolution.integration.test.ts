@@ -119,7 +119,6 @@ describe("Product valuation price resolution on canonical reads", () => {
         { ids: [product.id] },
         [],
         { pageIndex: 0, pageSize: 50 },
-        undefined,
         "page",
         undefined,
         { kind: "enrichment", groups: ["derived"] },

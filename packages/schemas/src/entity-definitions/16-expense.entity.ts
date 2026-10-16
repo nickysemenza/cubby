@@ -1160,8 +1160,8 @@ Rules:
         "createdAt",
         "updatedAt",
       ],
-      groupable: ["costType"],
     },
+    grouping: ["costType"],
     intents: {
       fields: {
         capture: [

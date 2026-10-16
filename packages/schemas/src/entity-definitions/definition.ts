@@ -768,28 +768,6 @@ const buildMetadataSchemas = () => {
   ]);
 
   /**
-   * The generic list-grouping contract for an entity whose web list groups
-   * rows into sections (currently product and location). `field` is the
-   * `groupable` entry the row is grouped by; the server's `parseGroupBy`
-   * rejects any other value, and the compiler below rejects a declaration
-   * whose `field` is not in `groupable`. `nullGroupKey` is the sentinel used
-   * when a row's field is null (kept as a literal here, not re-derived,
-   * so the web and repository read the exact same value the manifest
-   * declares — see `PRODUCT_UNCLASSIFIED_GROUP_KEY` /
-   * `LOCATION_UNSPECIFIED_GROUP_KEY` in `../pagination`). `labelField` names
-   * the row key the group's display label is read from when it differs from
-   * `field` itself (product groups by `categoryId` but labels from the
-   * `category` relation); omitted, the label is the field's own value.
-   */
-  const entityFieldModelGroupingMetadataSchema = z
-    .object({
-      field: nonEmptyString(),
-      nullGroupKey: nonEmptyString(),
-      labelField: nonEmptyString().optional(),
-    })
-    .strict();
-
-  /**
    * `fields` names model fields, `model.derived` keys, or `related:<view>`
    * related-view columns.
    */
@@ -798,8 +776,6 @@ const buildMetadataSchemas = () => {
       fields: z.array(nonEmptyString()).min(1),
       /** Defaults to `createdAt` when sortable, otherwise the first field. */
       defaultOverride: nonEmptyString().optional(),
-      groupable: z.array(nonEmptyString()).optional().default([]),
-      grouping: entityFieldModelGroupingMetadataSchema.optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
       directionOverride: z.enum(["asc", "desc"]).optional(),
     })
@@ -901,6 +877,14 @@ const buildMetadataSchemas = () => {
         .optional()
         .default({}),
       hierarchy: entityHierarchyMetadataSchema.optional(),
+      /**
+       * The list's Group by choices, in menu order: model fields or
+       * `model.derived` keys (one to-one related path). The list compiler
+       * derives each section key, label, order and no-value section, and
+       * keeps a field it cannot group by (several values per row, a to-many
+       * path, a filter-only predicate) in the menu, disabled with the reason.
+       */
+      grouping: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .strict();
@@ -1372,6 +1356,8 @@ const buildMetadataSchemas = () => {
                     .default(null),
                   /** The list view (`table`, `shelf`, ...) the view opens in. */
                   view: nonEmptyString().nullable().optional().default(null),
+                  /** The `model.grouping` field the view opens grouped by. */
+                  groupBy: nonEmptyString().nullable().optional().default(null),
                   /**
                    * A shortcut on another surface. `home` lists the view in
                    * the home "Your views" row on web and Apple, by `order`.

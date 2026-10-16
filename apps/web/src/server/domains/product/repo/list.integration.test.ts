@@ -325,16 +325,9 @@ describe("product list staged projections", () => {
     const pagination = { pageIndex: 0, pageSize: 1 };
     const full = await productList(ctx.db, filters, sorts, pagination);
     const { result: base, queryCount } = await countTestDbQueries(() =>
-      listProductsRead(
-        ctx.db,
-        filters,
-        sorts,
-        pagination,
-        undefined,
-        "page",
-        undefined,
-        { kind: "base" },
-      ),
+      listProductsRead(ctx.db, filters, sorts, pagination, "page", undefined, {
+        kind: "base",
+      }),
     );
     expect(base.count).toBe(full.count);
     expect(base.data.map((row) => row.id)).toEqual(
@@ -351,7 +344,6 @@ describe("product list staged projections", () => {
       { ids: [second.id] },
       sorts,
       { pageIndex: 0, pageSize: 50 },
-      undefined,
       "page",
       undefined,
       { kind: "base" },
@@ -415,7 +407,6 @@ describe("product list staged projections", () => {
       filters,
       [],
       pagination,
-      undefined,
       "page",
       undefined,
       { kind: "enrichment", groups: ["derived"] },

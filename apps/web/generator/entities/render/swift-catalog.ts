@@ -572,6 +572,7 @@ const presentationJSON = (
       columnVisibility: { ...view.layout?.columnVisibility },
       problemKey: view.problem?.key ?? null,
       view: view.view,
+      groupBy: view.groupBy,
       pin: view.pin === null ? null : { ...view.pin },
     })),
   };
@@ -613,6 +614,13 @@ const entityJSON = (
     shortcodePrefix: entity.shortcode ?? null,
     titleField: entity.inspector.titleField,
     sortFields: [...(entity.fieldModel.sort?.fields ?? [])],
+    grouping: entity.listFields.grouping.map((choice) => ({
+      id: choice.key,
+      label: choice.label,
+      noValueLabel: choice.noValueLabel,
+      reason: choice.reason,
+      filter: choice.filter === null ? null : { ...choice.filter },
+    })),
     domain: entity.inspector.domain,
     sfSymbol: entity.inspector.icons.sfSymbol,
     emoji: entity.inspector.icons.emoji,

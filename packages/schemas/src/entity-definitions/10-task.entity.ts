@@ -794,8 +794,8 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      groupable: ["status"],
     },
+    grouping: ["status"],
     intents: {
       fields: {
         capture: [

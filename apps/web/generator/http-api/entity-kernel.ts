@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { entityTimelineWindowFor } from "../../../../packages/schemas/src/entity-timeline.ts";
-import { generatedEntitySort } from "../../../../packages/schemas/src/generated/entity-sort.gen.ts";
 import { entityInspectorMetadata } from "../../../../packages/schemas/src/generated/entity-inspector.gen.ts";
 import { entityKeys } from "../../../../packages/schemas/src/generated/entity-summary.gen.ts";
 import { ENTITY_SCHEMA_BINDINGS } from "../../src/server/generated/entity-bindings.gen.ts";
@@ -37,7 +36,6 @@ interface EntityKernelCapabilities {
   imageOrder: boolean;
   /** List and timeline filter names (empty when the entity has no list). */
   parameters: Readonly<Record<string, KernelParameter>>;
-  groupBy: readonly string[];
 }
 
 const schemaNode = z.looseObject({
@@ -123,8 +121,6 @@ const updateInputKeys = (schema: z.ZodType | null): ReadonlySet<string> => {
 type BoundEntity = keyof typeof ENTITY_SCHEMA_BINDINGS;
 const isBound = (entity: string): entity is BoundEntity =>
   Object.hasOwn(ENTITY_SCHEMA_BINDINGS, entity);
-const isSorted = (entity: string): entity is keyof typeof generatedEntitySort =>
-  Object.hasOwn(generatedEntitySort, entity);
 
 /** Native filter names of one entity, keyed by flat name. */
 type KernelParameters = Record<string, KernelParameter>;
@@ -191,11 +187,6 @@ const entityKernelCapabilities = (
       const update = updateInputKeys(
         verbs.includes("update") ? (binding?.updateInput ?? null) : null,
       );
-      const roster:
-        | { fields: readonly string[]; groupable: readonly string[] }
-        | undefined = isSorted(entity)
-        ? generatedEntitySort[entity]
-        : undefined;
       const listed = verbs.includes("list");
       return [
         [
@@ -214,12 +205,6 @@ const entityKernelCapabilities = (
               listed && isBound(entity)
                 ? parametersFor(entity, verbs.includes("timeline"))
                 : {},
-            groupBy:
-              roster === undefined
-                ? []
-                : roster.groupable.length > 0
-                  ? roster.groupable
-                  : roster.fields,
           } satisfies EntityKernelCapabilities,
         ],
       ];

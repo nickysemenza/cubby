@@ -122,7 +122,7 @@ export function EntityShelf<TRow extends { id: string }>({
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
   compact?: boolean;
-  groupConfig?: GroupConfig<TRow>;
+  groupConfig?: GroupConfig;
   onInspect?: (record: TRow) => void;
   onRowHover?: (record: TRow) => void;
   onRowHoverEnd?: (record: TRow) => void;
@@ -137,8 +137,7 @@ export function EntityShelf<TRow extends { id: string }>({
       error={error}
       infiniteScroll={infiniteScroll}
       compact={compact}
-      groups={groupConfig?.groups}
-      getGroupKey={groupConfig?.keyFn}
+      grouping={groupConfig}
       onRetry={onRetry}
       emptyState={emptyState ?? <EntityEmptyState entity={entity} />}
       renderCard={(record) => {

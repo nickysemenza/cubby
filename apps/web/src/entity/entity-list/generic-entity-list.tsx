@@ -379,6 +379,8 @@ function ServerListBody({
     tree: parts.tree as EntityListTreeConfig<BaseListRow, BaseListRow>,
     serverTree: nested,
     nestToggle,
+    // Timeline is already arranged by date, so it reads the list flat.
+    groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
   });
   usePageCount(list.totalCount);
   // The module's hook or a no-op: one call per render either way.
@@ -517,11 +519,7 @@ function ServerListBody({
                     error={list.workbench.error}
                     infiniteScroll={list.workbench.infiniteScroll}
                     compact={density === "compact"}
-                    groupConfig={
-                      list.workbench.grouped
-                        ? list.workbench.groupConfig
-                        : undefined
-                    }
+                    groupConfig={list.workbench.groupConfig}
                     onRetry={() =>
                       void list.workbench.refreshControls.onRefresh()
                     }
@@ -600,6 +598,11 @@ function ServerListBody({
     </>
   );
 }
+
+const groupBySearchSchema = z.object({ groupBy: z.string().optional() });
+/** The URL's Group by choice; the generated search schema validates it. */
+export const listGroupBy = (search: unknown): string | undefined =>
+  groupBySearchSchema.safeParse(search).data?.groupBy;
 
 /** The Timeline view: the entity's timeline over the current filters, window in the search keys. */
 function ListTimeline({

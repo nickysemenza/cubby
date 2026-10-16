@@ -85,6 +85,8 @@ export interface ViewDefinition {
   problem?: ViewProblem;
   /** The list view (`?view=`) the saved view opens in. */
   view?: string;
+  /** The `model.grouping` choice (`?groupBy=`) the saved view opens with. */
+  groupBy?: string;
   /** A shortcut on another surface (the home "Your views" row). */
   pin?: { surface: "home"; order: number };
 }
@@ -123,6 +125,7 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
   if (view.problem)
     definition.problem = { ...view.problem, key: problemKey(view.problem.key) };
   if (view.view) definition.view = view.view;
+  if (view.groupBy) definition.groupBy = view.groupBy;
   if (view.pin) definition.pin = { ...view.pin };
   return definition;
 };

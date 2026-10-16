@@ -10,6 +10,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import {
   type GeneratedDerivedPredicateKey,
   type GeneratedDerivedValueKey,
+  type GeneratedGroupChoice,
   type GeneratedListField,
   generatedEntityListFields,
 } from "@cubby/schemas/entity-list-fields";
@@ -313,10 +314,30 @@ const viaParts = (entity: Entity, field: ViaField) => {
 };
 
 /**
- * The scalar a to-one `via` path reads: the terminal field or record title.
- * The path starts at the outer row itself, so the subquery probes only the
- * related tables rather than re-reading the root by id.
+ * One column of the record a to-one path leads to. The path starts at the
+ * outer row itself, so the subquery probes only the related tables rather
+ * than re-reading the root by id.
  */
+const relatedColumnSql = (
+  entity: Entity,
+  path: Readonly<Pick<ViaField, "steps" | "target">>,
+  table: PgTable,
+  column: string,
+): SQL => {
+  const traversal = compileTraversal(entity, path.steps, "lf", {
+    to: path.target,
+    root: `"${getTableName(table)}"`,
+  });
+  const [first, ...rest] = traversal.hops;
+  if (first === undefined)
+    throw new Error(`${entity} → ${path.target} has no relation step`);
+  const firstAlias = sql.raw(first.alias);
+  return sql`(SELECT ${sql.raw(traversal.leafAlias)}.${sql.identifier(column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
+    first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
+  })`;
+};
+
+/** The scalar a to-one `via` path reads: the terminal field or record title. */
 const relatedScalarSql = (
   entity: Entity,
   field: ViaField,
@@ -324,13 +345,6 @@ const relatedScalarSql = (
 ): SQL => {
   if (field.sort !== null)
     throw createAppError("CONSTRAINT_VIOLATION", field.sort);
-  const traversal = compileTraversal(entity, field.steps, "lf", {
-    to: field.target,
-    root: `"${getTableName(table)}"`,
-  });
-  const [first, ...rest] = traversal.hops;
-  if (first === undefined)
-    throw new Error(`${entity}.${field.path} has no relation step`);
   const column =
     field.terminal.kind === "field"
       ? field.terminal.column
@@ -340,10 +354,7 @@ const relatedScalarSql = (
       "CONSTRAINT_VIOLATION",
       `${entity}.${field.path} has no stored title`,
     );
-  const firstAlias = sql.raw(first.alias);
-  return sql`(SELECT ${sql.raw(traversal.leafAlias)}.${sql.identifier(column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
-    first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
-  })`;
+  return relatedColumnSql(entity, field, table, column);
 };
 
 /** `EXISTS` over a `via` path (any cardinality) whose terminal row matches. */
@@ -419,5 +430,88 @@ export const derivedOrderBy = (
       return order(derivedValueParts(entity, derived, sort.orderBy, context));
     case "predicate":
       throw createAppError("CONSTRAINT_VIOLATION", field.sort);
+  }
+};
+
+/**
+ * A group's SQL: the section key (null for the no-value section), its label
+ * when the key is not already readable (a related record's title), and the
+ * order that ranks sections. Each `order` part ascends with NULLS LAST, so
+ * the no-value section is always last; `"key"`/`"label"` stand for those
+ * expressions, letting the summary query order by its selected columns.
+ */
+export interface ListGroupSql {
+  readonly choice: GeneratedGroupChoice;
+  readonly key: SQL;
+  readonly label: SQL | null;
+  readonly order: readonly (SQL | "key" | "label")[];
+}
+
+const optionOrder = (
+  value: SQL,
+  options: readonly { readonly value: string }[] | null,
+): readonly (SQL | "key")[] =>
+  options === null
+    ? ["key"]
+    : [
+        sql`array_position(ARRAY[${sql.join(
+          options.map((option) => sql`${option.value}`),
+          sql`, `,
+        )}]::text[], ${value})`,
+        "key",
+      ];
+
+/**
+ * Compiles a `model.grouping` choice for `table`. A choice the declaration
+ * cannot group by fails with its derived reason, unmasked.
+ */
+export const groupSql = (
+  entity: Entity,
+  key: string,
+  derived: AnyDerivedSql,
+  table: PgTable,
+  context: ListContext,
+): ListGroupSql => {
+  const choices: readonly GeneratedGroupChoice[] =
+    generatedEntityListFields[entity].grouping;
+  const choice = choices.find((candidate) => candidate.key === key);
+  if (choice === undefined)
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `${entity} declares no Group by choice ${key}`,
+    );
+  if (choice.value === null)
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      choice.reason ?? `Cannot group ${entity} by "${key}"`,
+    );
+  const value = choice.value;
+  switch (value.kind) {
+    case "record": {
+      return {
+        choice,
+        key: relatedColumnSql(entity, value, table, "shortcode"),
+        label: relatedColumnSql(entity, value, table, value.titleColumn),
+        order: ["label", "key"],
+      };
+    }
+    case "column":
+    case "field":
+    case "derived": {
+      const raw =
+        value.kind === "column"
+          ? sql`${sql.identifier(getTableName(table))}.${sql.identifier(value.column)}`
+          : value.kind === "field"
+            ? relatedColumnSql(entity, value, table, value.column)
+            : derivedValueSql(entity, derived, key, context);
+      // Blank text reads as no value, like an absent one.
+      const text = sql`NULLIF(btrim(${raw}::text), '')`;
+      return {
+        choice,
+        key: text,
+        label: null,
+        order: optionOrder(text, value.options),
+      };
+    }
   }
 };

@@ -38,11 +38,9 @@ interface MobileListScreenProps<TItem extends RowData> {
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: MobileRefreshControls;
-  /** Group configuration — the cards section by it while `grouped`. */
-  groupConfig?: GroupConfig<TItem>;
-  /** Whether grouping is currently active (controlled from parent) */
-  grouped?: boolean;
-  /** The list's Grouped/Nested switches, rows of the Filter sheet. */
+  /** The active Group by choice and its server sections. */
+  groupConfig?: GroupConfig;
+  /** The list's Nested switch, a row of the Filter sheet. */
   presentationSwitches?: readonly FilterSheetSwitch[];
   isTransitioning?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
@@ -69,7 +67,6 @@ export function MobileListScreen<TItem extends RowData>({
   infiniteScroll,
   refreshControls,
   groupConfig,
-  grouped = false,
   presentationSwitches,
   isTransitioning = false,
   rowContentVersion,
@@ -140,7 +137,6 @@ export function MobileListScreen<TItem extends RowData>({
               renderRowFooter={renderRowFooter}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
-              grouped={grouped}
               isTransitioning={isTransitioning}
               rowContentVersion={rowContentVersion}
               emptyState={emptyState}

@@ -515,7 +515,6 @@ describe("compiled list fields", () => {
       {},
       [{ orderBy: "valuation", direction: "desc" }],
       page,
-      undefined,
       "count",
     );
     expect(counted.count).toBeGreaterThan(0);

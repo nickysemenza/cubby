@@ -382,6 +382,16 @@ export const inventoryentryListRead = async (
         .limit(clauses.limit)
         .offset(clauses.offset),
     count: () => readAggregate().then((result) => result.count),
+    joins: (query) =>
+      query
+        .innerJoin(
+          product,
+          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+        )
+        .innerJoin(
+          location,
+          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+        ),
     hydrate: (results) =>
       hydrateInventoryListRows(db, results, valuations, projection),
   });

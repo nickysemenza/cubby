@@ -153,7 +153,7 @@ describe("list manifest and deferred rows", () => {
 });
 
 describe("listPage", () => {
-  it("renders the manifest's header links and universal List/Cards/Compact choices", async () => {
+  it("renders the manifest's header links, universal List/Cards/Compact choices, and Group by", async () => {
     await renderListPage("recipe", "/recipes", []);
     for (const link of entitySummary.recipe.list.links) {
       expect(screen.getByRole("button", { name: link.label })).toHaveAttribute(
@@ -167,7 +167,21 @@ describe("listPage", () => {
       within(switcher)
         .getAllByRole("menuitem")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["List view", "Cards view", "Compact view"]);
+    ).toEqual([
+      "List view",
+      "Cards view",
+      "Compact view",
+      "Group by None",
+      "Group by Cookbook",
+      "Group by Tags",
+    ]);
+    const tags = within(switcher).getByRole("menuitem", {
+      name: "Group by Tags",
+    });
+    expect(tags).toHaveAttribute("aria-disabled", "true");
+    expect(tags).toHaveTextContent(
+      "A record can have several Tags, so it would appear in more than one group.",
+    );
   });
 
   it("offers every declared view and marks the `?view=` one selected", async () => {
@@ -177,19 +191,26 @@ describe("listPage", () => {
     const switcher = await screen.findByRole("menu");
     const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
-      entitySummary.task.list.views.flatMap((view) => {
-        const label = isSlotListView(view)
-          ? view.label
-          : view === "table"
-            ? "List"
-            : view === "shelf"
-              ? "Cards"
-              : "Timeline";
-        return view === "shelf"
-          ? [`${label} view`, "Compact view"]
-          : [`${label} view`];
-      }),
+      entitySummary.task.list.views
+        .flatMap((view) => {
+          const label = isSlotListView(view)
+            ? view.label
+            : view === "table"
+              ? "List"
+              : view === "shelf"
+                ? "Cards"
+                : "Timeline";
+          return view === "shelf"
+            ? [`${label} view`, "Compact view"]
+            : [`${label} view`];
+        })
+        .concat(["Group by None", "Group by Status"]),
     );
+    const status = within(switcher).getByRole("menuitem", {
+      name: "Group by Status",
+    });
+    expect(status).toHaveAttribute("aria-disabled", "true");
+    expect(status).toHaveTextContent("Timeline is already arranged by date.");
     expect(
       within(switcher).getByRole("menuitem", { name: "Timeline view" }),
     ).toHaveAttribute("aria-current", "true");

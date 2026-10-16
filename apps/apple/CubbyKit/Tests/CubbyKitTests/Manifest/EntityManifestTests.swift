@@ -20,6 +20,20 @@ struct EntityManifestTests {
                 == "var(--brand-domain-house)")
     }
 
+    // Apple used to read `groupBy` out of the filter dictionary; the wire now carries the saved
+    // view's default and every declared Group by choice with its derived reason.
+    @Test func groupingChoicesAndSavedViewDefaultArriveOnTheWire() throws {
+        let inventory = EntityCatalog[.inventory]
+        let wardrobe = try #require(inventory.presentation.savedViews.first { $0.id == "wardrobe" })
+        #expect(wardrobe.groupBy == "category")
+        let category = try #require(inventory.groupChoice(wardrobe.groupBy))
+        #expect(category.noValueLabel == "No category")
+        #expect(category.filter == GroupChoiceFilter(columnId: "category", noValue: true))
+        let tags = try #require(EntityCatalog[.product].grouping.first { $0.id == "tags" })
+        #expect(tags.reason == "A record can have several Tags, so it would appear in more than one group.")
+        #expect(EntityCatalog[.product].groupChoice("tags") == nil)
+    }
+
     @Test func schemaDerivedReadOnlyPaletteSurvivesTheCatalog() throws {
         let field = try #require(EntityCatalog[.image].fields.first { $0.key == "captureAttribution" })
         let options = try #require(field.valueOptions)
