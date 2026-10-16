@@ -1,0 +1,19 @@
+apps/web/tooling/workerd-harness.ts
+  s_d05e02a262009e::t_afe73661d2a618 475-480
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ae290068d03e4fa945a15dc4478a1db7ceb5c747",
+  "prompts": {},
+  "sessions": {
+    "s_d05e02a262009e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da376004-4a67-44b0-8e6c-dbcedb86640f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
