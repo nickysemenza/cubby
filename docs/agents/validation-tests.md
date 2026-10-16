@@ -23,6 +23,9 @@ the section; shortcode metadata can be mounted but hidden.
 When removing shared UI bindings, render every affected header branch or run
 the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
+Direct component tests of feature-backed pickers call `installFeatures()` from
+`~/features/registry` themselves; the browser harness supplies context, not the
+route's registry installation.
 
 Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
@@ -77,6 +80,11 @@ Browser dispatch can batch concurrent queries. A mock that parses a single
 operation envelope uses `unbatchFor` before its per-operation handler. Keep
 lazy-fetch assertions sensitive to every envelope; after refusing a batch,
 count individual operation attempts separately from transport fallback.
+Browser diagnostics require decoded RPC success, not only HTTP 200. Reuse
+`operationResult` in `apps/web/tests/e2e/support/dispatch-wire.ts`: single
+responses require `ok === true`; streamed NDJSON items require decoding `r`
+with SuperJSON and checking both settlement `ok === true` and operation
+`value.ok === true`. A successful settlement can contain a failed operation.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 

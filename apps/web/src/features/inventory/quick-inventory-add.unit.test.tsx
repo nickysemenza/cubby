@@ -8,12 +8,15 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   type QuickInventoryOperations,
   QuickInventoryAdd,
 } from "./quick-inventory-add";
+
+installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
