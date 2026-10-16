@@ -104,6 +104,9 @@ in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`
 shell; detail bodies use `DetailSections`. Repeated read-only fact and record rows use `ui/common/ledger.tsx`; preserve their native description/list semantics and keep interactions with the caller. Scalar captions wrap within the value slot and actions stay in the trailing rail. An empty portaled table toolbar leaves no border or spacing above the records.
 
+Record lists fill their available width, including inside a flex fact value;
+their size-contained ledger must not rely on intrinsic width from its children.
+
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
 metadata must not remount a focused row or header checkbox.

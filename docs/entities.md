@@ -765,7 +765,10 @@ casually.
 
 The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
-`createEntityDisplayColumns` reads `display.list`. A field's
+`createEntityDisplayColumns` reads `display.list`. List suggestions target visible
+columns, so a suggestible field must declare list membership to be reviewed
+there. Financial accounts expose issuer, network, and primary cardholder on both
+surfaces. A field's
 `display.renderer.list` or `display.renderer.detail` selects a semantic
 renderer while the declaration continues to own membership, labels, ordering,
 and widths. The generator emits narrowed TypeScript renderer IDs and Swift
