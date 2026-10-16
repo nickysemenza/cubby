@@ -22,6 +22,9 @@ operator applies and verifies the contraction after deployment; then delete the
 variable before the next release. A boundary behind the applied database fails
 closed. If no new migration is safe before deploy, use the last already-applied
 tag. Never guess compatibility from a migration's name or SQL keywords.
+From setting the boundary or applying an unmerged expansion until the staged
+PR merges, admit no other `main` merge or Deploy retry: that revision lacks the
+new journal tag and fails closed. Merge the staged PR next.
 
 For a breaking cutover that cannot use this sequence, establish its documented
 writer barrier and apply the authorized migrations manually before merge; the

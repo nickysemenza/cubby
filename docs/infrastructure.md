@@ -648,7 +648,7 @@ or this repository.
 `main` is deployed by `.github/workflows/deploy.yaml`. The `cloudflare` GitHub
 Environment scopes production deployment to `main`; deployment jobs own
 serialization. Store `PRODUCTION_DIRECT_DATABASE_URL` only in this environment,
-not as a repository secret. Other required repository or environment secrets are:
+not as a repository secret. Required repository or environment secrets are:
 
 | Secret                           | Purpose                                                     |
 | -------------------------------- | ----------------------------------------------------------- |
