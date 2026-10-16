@@ -51,8 +51,10 @@ domains between `src/app/` and `src/features/` under different names.
   `db/freshness/`, and never imports `db/helpers` or a `db/*schema*` file,
   even for types; it reaches tables through a repo, and computed SQL lives
   in `db/computed/`. Other platform code and `generic/*` never import a
-  domain's `service` or `operations`; where they must call one, the domain
-  registers a callback at startup. On the client, `ui/` imports neither
+  domain's `service` or `operations`; where they need domain behavior, the
+  caller passes it in as an argument (for example `classifyLineRole`,
+  `resolveReversal`, `compareVariants`), and the server keeps no
+  module-level registries. On the client, `ui/` imports neither
   `entity/` nor `features/`, and `entity/` does not import `features/`. The
   rule has no baseline: the codebase is at zero violations.
 - **Client.** `src/app/` and `src/features/` merged into
