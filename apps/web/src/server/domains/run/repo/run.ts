@@ -156,7 +156,10 @@ export const listRunsRead = (
             const hydrated = await hydrateProjection(db, rows);
             return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
           },
-          mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+          mapRow: (row, { loaded }) => ({
+            id: parseShortcodeFor("run", row.shortcode),
+            ...loaded.get(row.id),
+          }),
         }),
     },
   );

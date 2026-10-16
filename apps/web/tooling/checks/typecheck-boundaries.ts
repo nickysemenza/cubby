@@ -5,7 +5,10 @@ import { globSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { createInterface } from "node:readline";
 import { join, resolve } from "node:path";
-import { storageOwners, storagePrograms } from "../typecheck-storage.ts";
+import {
+  repositoryOwners,
+  repositoryPrograms,
+} from "../typecheck-repositories.ts";
 
 const sharedServerModules = new Set([
   "operation-runtime/start-operation.contract.ts",
@@ -37,7 +40,7 @@ export async function checkTypecheckBoundaries(
   const failures: string[] = [];
   const contracts = [
     join(app, "artifacts/server-contracts/"),
-    storagePrograms.output + "/",
+    repositoryPrograms.output + "/",
   ];
   const graph = async (config: string): Promise<string[]> => {
     const files: string[] = [];
@@ -82,8 +85,8 @@ export async function checkTypecheckBoundaries(
     await completed;
     return files;
   };
-  const storage = await graph(storagePrograms.config);
-  const server = await graph(storagePrograms.serverConfig);
+  const repositories = await graph(repositoryPrograms.config);
+  const server = await graph(repositoryPrograms.serverConfig);
   const client = await graph("tsconfig.client.json");
   const serverRoot = join(app, "src/server/");
   for (const file of client) {
@@ -99,7 +102,7 @@ export async function checkTypecheckBoundaries(
       (file.endsWith(".tsx") || file.includes("/src/routes/")),
   );
   if (ui) failures.push(`Server check reaches the browser route graph: ${ui}`);
-  const owned = new Set(storageOwners.map((file) => resolve(app, file)));
+  const owned = new Set(repositoryOwners.map((file) => resolve(app, file)));
   const shared = new Set(
     [
       "db/database.ts",
@@ -109,26 +112,28 @@ export async function checkTypecheckBoundaries(
     ].map((file) => join(serverRoot, file)),
   );
   for (const leak of server.filter((file) => owned.has(file)))
-    failures.push(`Server check reaches storage implementation: ${leak}`);
-  const backedge = storage.find(
+    failures.push(`Server check reaches repository implementation: ${leak}`);
+  const backedge = repositories.find(
     (file) =>
       file.startsWith(serverRoot) && !owned.has(file) && !shared.has(file),
   );
   if (backedge)
-    failures.push(`Storage check reaches server composition: ${backedge}`);
-  const missingOwner = [...owned].find((file) => !storage.includes(file));
+    failures.push(`Repository check reaches server composition: ${backedge}`);
+  const missingOwner = [...owned].find((file) => !repositories.includes(file));
   if (missingOwner)
-    failures.push(`Storage source missing from its producer: ${missingOwner}`);
-  const duplicateHandle = [...server, ...storage].find(
+    failures.push(
+      `Repository source missing from its producer: ${missingOwner}`,
+    );
+  const duplicateHandle = [...server, ...repositories].find(
     (file) =>
-      file.startsWith(storagePrograms.output) &&
+      file.startsWith(repositoryPrograms.output) &&
       file.endsWith("/db/database.d.ts"),
   );
   if (duplicateHandle)
     failures.push(
       `Database identity resolves to a declaration copy: ${duplicateHandle}`,
     );
-  const checked = new Set([...client, ...server, ...storage]);
+  const checked = new Set([...client, ...server, ...repositories]);
   const missing = globSync(["src/**/*.ts", "src/**/*.tsx"], {
     cwd: app,
   }).filter(

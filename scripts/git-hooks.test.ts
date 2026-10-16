@@ -69,7 +69,7 @@ function fixture(t: TestContext) {
     // The lint plugin reads canonical fragments and all generated table groups.
     "apps/web/src/server/db/schema-primitives.ts",
     ...globSync("apps/web/src/server/db/*tables.ts", { cwd: source }),
-    ...globSync("apps/web/src/server/db/generated/*tables.gen.ts", {
+    ...globSync("apps/web/src/server/db/generated/*table*.gen.ts", {
       cwd: source,
     }),
     "scripts/check-outward-text.ts",

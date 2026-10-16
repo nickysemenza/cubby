@@ -130,8 +130,9 @@ The repository helper is the sanctioned client-resolution boundary. The handle
 itself carries only nominal identity. Runtime registration must survive module
 reloads, and transaction detection uses native `rollback` presence rather than
 constructor identity: `createDatabase` registers a lazy runtime
-callback, and runtime resolution occurs on each use. Query-only storage repos
-use `repositoryQueries`, which projects native Drizzle builders without exposing
+callback, and runtime resolution occurs on each use. Query-only repos
+use `repositoryQueries` and the repository transaction ports, which project
+native Drizzle builders without exposing
 the global relational schema; full relational repos retain `getDb`. Both return
 the actual selected client/transaction, preserving transaction identity. A service earns existence for
 cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain

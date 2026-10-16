@@ -2259,8 +2259,9 @@ const buildMetadataSchemas = () => {
 
   /**
    * Everything about an entity's own table beyond its model columns, so the
-   * generator emits the complete Drizzle `pgTable` and its `relations()`
-   * (`apps/web/src/server/db/generated/entity-tables.gen.ts`). SQL strings
+   * generator emits canonical Drizzle `pgTable` definitions separately from
+   * `relations()` (`generated/entity-table-definitions.gen.ts` and
+   * `generated/entity-tables.gen.ts`). SQL strings
    * name columns as `{columnKey}`; the generator binds each to the table's
    * column (`${table.columnKey}`), so Drizzle renders them exactly as a
    * hand-written `sql` template would.

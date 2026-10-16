@@ -13,7 +13,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
-export const storageOwners = [
+export const repositoryOwners = [
   "src/server/generic/entity-links/repo/entity-external-ids.ts",
   "src/server/domains/product/repo/gtin.ts",
   "src/server/domains/product/repo/find-by-external-ids.ts",
@@ -197,18 +197,18 @@ export const storageOwners = [
   "src/server/generic/work-queue/repo/work-queue-routing.ts",
 ] as const;
 
-export function createStoragePrograms(
+export function createRepositoryPrograms(
   appRoot: string,
   owners: readonly string[],
 ) {
   const app = resolve(appRoot);
   const repository = resolve(app, "../..");
-  const storageState = join(app, "artifacts/storage-typecheck");
-  const storageCache = join(storageState, "emit");
-  const storageOutput = join(app, "artifacts/storage-contracts");
-  const storageConfig = join(storageState, "tsconfig.storage.json");
-  const storageServerConfig = join(storageState, "tsconfig.server.json");
-  const storageBuildInfo = join(storageState, "storage.tsbuildinfo");
+  const repositoryState = join(app, "artifacts/repository-typecheck");
+  const repositoryCache = join(repositoryState, "emit");
+  const repositoryOutput = join(app, "artifacts/repository-contracts");
+  const repositoryConfig = join(repositoryState, "tsconfig.repositories.json");
+  const repositoryServerConfig = join(repositoryState, "tsconfig.server.json");
+  const repositoryBuildInfo = join(repositoryState, "repositories.tsbuildinfo");
 
   function writeConfig(file: string, value: unknown) {
     const content = JSON.stringify(value, null, 2) + "\n";
@@ -218,12 +218,12 @@ export function createStoragePrograms(
   }
 
   /** One ownership roster drives roots, consumer exclusions and exact contract paths. */
-  function configureStoragePrograms(): void {
+  function configureRepositoryPrograms(): void {
     const paths = {
       "~/*": [join(app, "src/*")],
       "tooling/*": [join(app, "tooling/*")],
     };
-    writeConfig(storageConfig, {
+    writeConfig(repositoryConfig, {
       extends: join(app, "tsconfig.json"),
       include: [],
       exclude: [],
@@ -233,8 +233,8 @@ export function createStoragePrograms(
       compilerOptions: {
         types: ["vite/client"],
         rootDir: repository,
-        outDir: storageCache,
-        tsBuildInfoFile: storageBuildInfo,
+        outDir: repositoryCache,
+        tsBuildInfoFile: repositoryBuildInfo,
         incremental: true,
         noEmit: false,
         noCheck: false,
@@ -256,19 +256,19 @@ export function createStoragePrograms(
     const server = JSON.parse(
       readFileSync(join(app, "tsconfig.server.json"), "utf8"),
     );
-    writeConfig(storageServerConfig, {
+    writeConfig(repositoryServerConfig, {
       extends: join(app, "tsconfig.server.json"),
       exclude: [...server.exclude, ...owners].map((file: string) =>
         join(app, file),
       ),
       compilerOptions: {
-        tsBuildInfoFile: join(storageState, "server.tsbuildinfo"),
+        tsBuildInfoFile: join(repositoryState, "server.tsbuildinfo"),
         paths: {
           ...paths,
           ...Object.fromEntries(
             owners.map((file) => [
               `~/${file.slice(4, -3)}`,
-              [join(storageOutput, "apps/web", file.slice(0, -3) + ".d.ts")],
+              [join(repositoryOutput, "apps/web", file.slice(0, -3) + ".d.ts")],
             ]),
           ),
         },
@@ -276,16 +276,16 @@ export function createStoragePrograms(
     });
   }
 
-  const inventoryFile = join(storageState, "outputs.json");
+  const inventoryFile = join(repositoryState, "outputs.json");
   const outputFor = (file: string) =>
     join("apps/web", file.slice(0, -3) + ".d.ts");
   const revision = () =>
-    existsSync(storageBuildInfo)
-      ? statSync(storageBuildInfo, { bigint: true }).mtimeNs.toString()
+    existsSync(repositoryBuildInfo)
+      ? statSync(repositoryBuildInfo, { bigint: true }).mtimeNs.toString()
       : "";
 
   /** The checked emitter's cache and build-info survive no-op and partial emits. */
-  function buildStorage(
+  function buildRepositories(
     compiler: string,
     compile: (args: string[]) => void,
     args: string[],
@@ -297,20 +297,20 @@ export function createStoragePrograms(
     const expected = [...owners.map(outputFor), ...(inventory?.files ?? [])];
     if (
       !inventory?.revision ||
-      expected.some((file) => !existsSync(join(storageCache, file)))
+      expected.some((file) => !existsSync(join(repositoryCache, file)))
     )
-      rmSync(storageBuildInfo, { force: true });
-    compile(["--build", storageConfig, "--checkers", "1", ...args]);
+      rmSync(repositoryBuildInfo, { force: true });
+    compile(["--build", repositoryConfig, "--checkers", "1", ...args]);
     // A stopped process may have committed compiler state before this inventory.
     if (inventory?.revision !== revision()) {
       const graph = new Set(
         execFileSync(
           process.execPath,
-          [compiler, "-p", storageConfig, "--listFilesOnly"],
+          [compiler, "-p", repositoryConfig, "--listFilesOnly"],
           { cwd: app, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
         ).split(/\r?\n/u),
       );
-      const files = globSync("**/*.d.ts", { cwd: storageCache })
+      const files = globSync("**/*.d.ts", { cwd: repositoryCache })
         .filter((file) => {
           const stem = resolve(repository, file.slice(0, -5));
           return graph.has(stem + ".ts") || graph.has(stem + ".tsx");
@@ -318,30 +318,30 @@ export function createStoragePrograms(
         .sort();
       for (const file of owners.map(outputFor))
         if (!files.includes(file))
-          throw new Error(`Missing checked storage declaration: ${file}`);
+          throw new Error(`Missing checked repository declaration: ${file}`);
       const current = new Set(files);
-      for (const file of globSync("**/*.d.ts", { cwd: storageCache }))
-        if (!current.has(file)) rmSync(join(storageCache, file));
+      for (const file of globSync("**/*.d.ts", { cwd: repositoryCache }))
+        if (!current.has(file)) rmSync(join(repositoryCache, file));
       inventory = { revision: revision(), files };
       writeConfig(inventoryFile, inventory);
     }
     if (!inventory)
-      throw new Error("Storage declaration inventory was not produced");
-    validateStorageDeclarations(inventory.files);
-    publishStorage(inventory.files);
+      throw new Error("Repository declaration inventory was not produced");
+    validateRepositoryDeclarations(inventory.files);
+    publishRepositories(inventory.files);
   }
 
   /** Publish a complete checked set; unchanged declarations retain their inodes/mtimes. */
-  function publishStorage(files: readonly string[]): void {
-    const pending = join(storageState, "publish.pending");
-    const backup = join(storageState, "publish.previous");
-    if (!existsSync(storageOutput) && existsSync(backup))
-      renameSync(backup, storageOutput);
-    const previous = globSync("**/*.d.ts", { cwd: storageOutput }).sort();
+  function publishRepositories(files: readonly string[]): void {
+    const pending = join(repositoryState, "publish.pending");
+    const backup = join(repositoryState, "publish.previous");
+    if (!existsSync(repositoryOutput) && existsSync(backup))
+      renameSync(backup, repositoryOutput);
+    const previous = globSync("**/*.d.ts", { cwd: repositoryOutput }).sort();
     const equal = (file: string) =>
-      existsSync(join(storageOutput, file)) &&
-      readFileSync(join(storageCache, file)).equals(
-        readFileSync(join(storageOutput, file)),
+      existsSync(join(repositoryOutput, file)) &&
+      readFileSync(join(repositoryCache, file)).equals(
+        readFileSync(join(repositoryOutput, file)),
       );
     if (
       previous.length === files.length &&
@@ -353,30 +353,32 @@ export function createStoragePrograms(
     for (const file of files) {
       const target = join(pending, file);
       mkdirSync(dirname(target), { recursive: true });
-      if (equal(file)) linkSync(join(storageOutput, file), target);
-      else copyFileSync(join(storageCache, file), target);
+      if (equal(file)) linkSync(join(repositoryOutput, file), target);
+      else copyFileSync(join(repositoryCache, file), target);
     }
     rmSync(backup, { recursive: true, force: true });
-    if (existsSync(storageOutput)) renameSync(storageOutput, backup);
+    if (existsSync(repositoryOutput)) renameSync(repositoryOutput, backup);
     try {
-      renameSync(pending, storageOutput);
+      renameSync(pending, repositoryOutput);
     } catch (error) {
-      if (existsSync(backup)) renameSync(backup, storageOutput);
+      if (existsSync(backup)) renameSync(backup, repositoryOutput);
       throw error;
     }
     rmSync(backup, { recursive: true, force: true });
   }
 
-  function validateStorageDeclarations(files: readonly string[]): void {
-    const complete = new Set(files.map((file) => resolve(storageCache, file)));
+  function validateRepositoryDeclarations(files: readonly string[]): void {
+    const complete = new Set(
+      files.map((file) => resolve(repositoryCache, file)),
+    );
     for (const file of files) {
-      const content = readFileSync(join(storageCache, file), "utf8");
+      const content = readFileSync(join(repositoryCache, file), "utf8");
       for (const match of content.matchAll(
         /\b(?:from\s+|import\s*\(\s*)["']([^"']+)["']/gu,
       )) {
         const specifier = match[1]!;
         if (!specifier.startsWith(".")) continue;
-        const path = resolve(storageCache, dirname(file), specifier).replace(
+        const path = resolve(repositoryCache, dirname(file), specifier).replace(
           /\.(?:[cm]?js|tsx?)$/u,
           "",
         );
@@ -385,24 +387,24 @@ export function createStoragePrograms(
           !complete.has(join(path, "index.d.ts"))
         )
           throw new Error(
-            `Incomplete storage declaration ${file}: ${specifier} (${relative(storageCache, path)})`,
+            `Incomplete repository declaration ${file}: ${specifier} (${relative(repositoryCache, path)})`,
           );
       }
     }
   }
 
   return {
-    configure: configureStoragePrograms,
-    build: buildStorage,
-    config: storageConfig,
-    serverConfig: storageServerConfig,
-    output: storageOutput,
-    cache: storageCache,
-    state: storageState,
+    configure: configureRepositoryPrograms,
+    build: buildRepositories,
+    config: repositoryConfig,
+    serverConfig: repositoryServerConfig,
+    output: repositoryOutput,
+    cache: repositoryCache,
+    state: repositoryState,
   };
 }
 
-export const storagePrograms = createStoragePrograms(
+export const repositoryPrograms = createRepositoryPrograms(
   resolve(import.meta.dirname, ".."),
-  storageOwners,
+  repositoryOwners,
 );

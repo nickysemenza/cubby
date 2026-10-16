@@ -746,9 +746,11 @@ Stored-field order and create/update/output/bulk/audit rosters remain explicit:
 presentation defaults never grant mutation capabilities or introduce columns.
 
 The declaration's top-level `storage` block owns the rest of the entity's table,
-and the generator emits the complete Drizzle `pgTable` plus its `relations()`
-into `apps/web/src/server/db/generated/entity-tables.gen.ts`, re-exported by
-`schema.ts` under the same names. `storage.columns` adds operational columns
+and the generator emits canonical Drizzle `pgTable` definitions separately from
+`relations()`: definitions live in `generated/entity-table-definitions.gen.ts`
+and the FK-closed identity group; `generated/entity-tables.gen.ts` assembles
+relations and reexports definitions. `server/db/schema.ts` exposes both under
+the same names. `storage.columns` adds operational columns
 no model field declares; `indexes`, `checks` (a named SQL check, or a
 value-set check whose values default to the field's read enum), and
 `relations` (the `with: {}` names; a string is a reference column) name
@@ -1402,8 +1404,9 @@ than decompressing original bodies during list and Work queue filtering.
 
 Mail, statement-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned
-by one entity. Both registries generate the same `entity-tables.gen.ts`
-artifact, imported through `server/db/schema.ts`; the existing
+by one entity. Both registries generate canonical definitions in
+`entity-table-definitions.gen.ts` and relations in `entity-tables.gen.ts`,
+exposed through `server/db/schema.ts`; the existing
 `image-processing-schema.ts` import boundary remains a re-export.
 
 Shared infrastructure remains handwritten only where
