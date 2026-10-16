@@ -9,7 +9,7 @@ import { pillVariants } from "~/ui/primitives/pill";
 const badgeVariants = cva(
   cn(
     pillVariants({ mode: "value" }),
-    "gap-1 leading-none transition-colors duration-150 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[2px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive overflow-hidden group/badge",
+    "transition-colors duration-150 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[2px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive overflow-hidden group/badge",
   ),
   {
     variants: {

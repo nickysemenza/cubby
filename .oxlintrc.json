@@ -81,6 +81,7 @@
     "cubby/no-hand-rolled-plural": "error",
     "cubby/domain-layers": "error",
     "cubby/no-domain-barrel": "error",
+    "cubby/no-ordinary-dialog-bypass": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",
     "typescript/no-explicit-any": "error",
@@ -123,6 +124,20 @@
     "vitest/require-to-throw-message": "error"
   },
   "overrides": [
+    {
+      // Exact-path specialized compositions; reasons live in apps/web/DESIGN.md.
+      "files": [
+        "apps/web/src/ui/overlays/overlay.tsx",
+        "apps/web/src/ui/primitives/dialog.tsx",
+        "apps/web/src/ui/primitives/sheet.tsx",
+        "apps/web/src/ui/primitives/command.tsx",
+        "apps/web/src/entity/entity-media/photo-viewer.tsx",
+        "apps/web/src/entity/relationships/graph-explorer.tsx",
+        "apps/web/src/entity/hooks/use-entity-preview.tsx",
+        "apps/web/src/features/developer/mcp-usage-dashboard.tsx"
+      ],
+      "rules": { "cubby/no-ordinary-dialog-bypass": "off" }
+    },
     {
       "files": [
         "**/*.test.ts",

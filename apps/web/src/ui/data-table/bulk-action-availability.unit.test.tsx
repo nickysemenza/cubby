@@ -139,3 +139,35 @@ describe("bulk action selection availability", () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+// Busy glyphs must not change either action's accessible name.
+it("keeps bulk action names while execution and select-all are pending", () => {
+  const action: BulkAction<TestRow> = {
+    id: "move",
+    label: "Move",
+    onExecute: async () => ({ success: true }),
+  };
+  render(
+    <BulkActionBar
+      selectedCount={1}
+      selectedRows={rows("READY")}
+      actions={[action]}
+      onExecute={vi.fn()}
+      onClearSelection={vi.fn()}
+      isExecuting
+      currentAction={action}
+      selectAllMatching={{
+        totalCount: 12,
+        loadedCount: 1,
+        isSelectingAll: true,
+        onSelectAll: vi.fn(),
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole("button", { name: "Move", exact: true }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Select all 12", exact: true }),
+  ).toBeDisabled();
+});

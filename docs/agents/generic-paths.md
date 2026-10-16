@@ -178,7 +178,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `id` (the shortcode, assignment forms), `item` (the whole row, recipe lines),
   `name` (the expense vendor), or `ids` (a multiple picker); one binding owns
   validation, suggestions, and the selected record's name and picture.
-- Tables: `RTable` and the generic relation table; raw `<table>` only for
+- Tables: `RTable` and the generic relation table for interactive lists;
+  `StaticTable` (`ui/primitives/static-table.tsx`) for simple read-only rows;
+  table atoms for bespoke structures. Raw `<table>` only for
   matrices, cross-tabs, and debug views. Column-layout changes go through
   `moveColumn` / `applyColumnLayout` (`ui/data-table/column-layout.ts`), never
   direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls. Cell

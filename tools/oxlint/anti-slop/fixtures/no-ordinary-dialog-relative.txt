@@ -1,0 +1,4 @@
+import { DialogContent } from "../primitives/dialog";
+export { SheetContent } from "../primitives/sheet";
+const loaded = import(`../primitives/dialog`);
+import { DialogTrigger } from "../primitives/dialog";

@@ -19,15 +19,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/ui/primitives/card";
+import { StaticTable } from "~/ui/primitives/static-table";
 import { StatusText } from "~/ui/primitives/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 
 const STATUS_KEY = ["chatgpt", "status"];
 const DISCONNECTED = z.object({ disconnected: z.boolean() });
@@ -236,26 +229,24 @@ function AvailableModels({
       ) : error !== null ? (
         <StatusText tone="destructive">{getErrorMessage(error)}</StatusText>
       ) : models?.length ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Model</TableHead>
-              <TableHead>Model ID</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {models.map((model) => (
-              <TableRow key={model.slug}>
-                <TableCell className="break-words whitespace-normal">
-                  {model.display_name}
-                </TableCell>
-                <TableCell className="font-mono break-all whitespace-normal">
-                  {model.slug}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <StaticTable
+          rows={models}
+          rowKey={(model) => model.slug}
+          columns={[
+            {
+              id: "name",
+              header: "Model",
+              cellClassName: "break-words whitespace-normal",
+              cell: (model) => model.display_name,
+            },
+            {
+              id: "id",
+              header: "Model ID",
+              cellClassName: "font-mono break-all whitespace-normal",
+              cell: (model) => model.slug,
+            },
+          ]}
+        />
       ) : (
         <StatusText>No models are available for this account.</StatusText>
       )}

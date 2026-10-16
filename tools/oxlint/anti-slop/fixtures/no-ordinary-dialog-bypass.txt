@@ -1,0 +1,14 @@
+import { Dialog as Modal } from "~/ui/primitives/dialog";
+import * as Surface from "~/ui/primitives/sheet";
+import { Dialog as Primitive } from "@base-ui/react/dialog";
+import { Dialog } from "@base-ui/react";
+export { DialogContent as Content } from "~/ui/primitives/dialog";
+export * from "~/ui/primitives/sheet";
+const lazy = import("~/ui/primitives/dialog");
+const required = require("@base-ui/react/dialog");
+import { DialogTrigger as Trigger } from "~/ui/primitives/dialog";
+import { AlertDialog } from "~/ui/primitives/alert-dialog";
+import { Button } from "@base-ui/react/button";
+export { DialogTrigger } from "~/ui/primitives/dialog";
+const staticLazy = import(`~/ui/primitives/dialog`);
+const staticRequired = require(`@base-ui/react/dialog`);

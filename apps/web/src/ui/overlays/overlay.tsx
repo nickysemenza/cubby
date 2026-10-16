@@ -142,12 +142,12 @@ export function Overlay({
         )}
       >
         {phoneActions ? (
-          <div className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b px-3">
+          <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-2 border-b px-3 py-1">
             <button
               type="button"
               onClick={cancel}
               disabled={busy}
-              className="min-h-11 shrink-0 text-sm text-primary disabled:opacity-50"
+              className="min-h-11 max-w-[35%] min-w-11 text-sm break-words text-primary disabled:opacity-50"
             >
               {cancelLabel ?? "Cancel"}
             </button>
@@ -156,7 +156,7 @@ export function Overlay({
             </DialogTitle>
             <button
               {...submitProps}
-              className="min-h-11 shrink-0 text-sm font-semibold text-primary disabled:opacity-50"
+              className="min-h-11 max-w-[35%] min-w-11 text-sm font-semibold break-words text-primary disabled:opacity-50"
             >
               {submitLabel}
             </button>
@@ -184,14 +184,17 @@ export function Overlay({
           )}
           {children}
           {summary && (
-            <div className="px-4 py-2 text-xs text-muted-foreground">
+            <div className="shrink-0 px-4 py-2 text-xs text-muted-foreground">
               {summary}
             </div>
           )}
           {diagnostic && (
             <div
               role="alert"
-              className="mx-4 my-2 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-xs break-words text-destructive"
+              // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to focus and scroll the bounded raw diagnostic.
+              tabIndex={0}
+              aria-label="Error details"
+              className="mx-4 my-2 max-h-[30dvh] shrink-0 overflow-y-auto overscroll-contain border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-xs [overflow-wrap:anywhere] text-destructive focus-visible:outline-ring"
             >
               {diagnostic}
             </div>

@@ -12,6 +12,7 @@ import {
   noRawTableRule,
   noUnboundedPageSizeRule,
 } from "./rules/generic-paths.ts";
+import { noOrdinaryDialogBypassRule } from "./rules/no-ordinary-dialog-bypass.ts";
 import { domainLayersRule } from "./rules/domain-layers.ts";
 import { noDomainBarrelRule } from "./rules/no-domain-barrel.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
@@ -26,6 +27,7 @@ import { requireSoftDeleteFilterRule } from "./rules/require-soft-delete-filter.
 const cubbyPlugin = eslintCompatPlugin({
   meta: { name: "cubby" },
   rules: {
+    "no-ordinary-dialog-bypass": noOrdinaryDialogBypassRule,
     "domain-layers": domainLayersRule,
     "no-domain-barrel": noDomainBarrelRule,
     "no-ad-hoc-calendar-day": noAdHocCalendarDayRule,

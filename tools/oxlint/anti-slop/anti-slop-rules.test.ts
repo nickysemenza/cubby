@@ -364,3 +364,42 @@ test("a notDeleted() predicate inside the subquery satisfies the guard", () => {
 
   assert.deepEqual(diagnostics, []);
 });
+
+// Imported names, not local aliases or JSX spelling, define the boundary.
+test("ordinary dialogs cannot bypass Overlay but triggers and confirmations remain available", () => {
+  const diagnostics = lintFixture(
+    "no-ordinary-dialog-bypass",
+    "no-ordinary-dialog-bypass.txt",
+    "cubby",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3, 4, 5, 6, 7, 8, 13, 14],
+  );
+});
+
+// A nearby import has no ui/primitives segment in its source spelling.
+test("relative dialog imports resolve against the caller and specialized exceptions stay exact", () => {
+  const directory = mkdtempSync(
+    join(repoRoot, "apps/web/src/ui/.lint-fixture-"),
+  );
+  const fixturePath = join(directory, "ordinary.ts");
+  writeFileSync(
+    fixturePath,
+    readFileSync(
+      join(fixtureDirectory, "no-ordinary-dialog-relative.txt"),
+      "utf8",
+    ),
+  );
+  try {
+    const diagnostics = runOxlint(fixturePath).filter(
+      (diagnostic) => diagnostic.code === "cubby(no-ordinary-dialog-bypass)",
+    );
+    assert.deepEqual(
+      diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+      [1, 2, 3],
+    );
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
+});

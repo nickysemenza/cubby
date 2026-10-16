@@ -47,7 +47,7 @@ export function EnumPill({
   const pill = (
     <Pill
       className={cn(
-        "max-w-full min-w-0 gap-1.5 overflow-hidden whitespace-nowrap leading-none",
+        "overflow-hidden whitespace-nowrap",
         className,
       )}
       style={style}

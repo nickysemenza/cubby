@@ -103,7 +103,7 @@ export function BulkActionBar<TData extends RowData>({
           disabled={disabled || isExecuting || selectAllMatching.isSelectingAll}
         >
           {selectAllMatching.isSelectingAll && (
-            <Spinner className="mr-1 size-3" />
+            <Spinner className="mr-1 size-3" aria-hidden="true" />
           )}
           Select all {selectAllMatching.totalCount}
         </Button>
@@ -132,7 +132,7 @@ export function BulkActionBar<TData extends RowData>({
               }
             >
               {isExecuting && currentAction?.id === action.id ? (
-                <Spinner className="mr-1 size-3" />
+                <Spinner className="mr-1 size-3" aria-hidden="true" />
               ) : action.icon ? (
                 <span className="mr-1">{action.icon}</span>
               ) : null}

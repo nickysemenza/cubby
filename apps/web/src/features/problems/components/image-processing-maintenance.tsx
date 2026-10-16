@@ -5,14 +5,7 @@ import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 const STATES = [
   ["current", "Current"],
@@ -61,24 +54,23 @@ export function ImageProcessingMaintenance() {
         />
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>State</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Background removal</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {STATES.map(([key, label]) => (
-                <TableRow key={key}>
-                  <TableCell>{label}</TableCell>
-                  <TableCell>{result.data.description[key]}</TableCell>
-                  <TableCell>{result.data.cutout[key]}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <StaticTable
+            rows={STATES}
+            rowKey={([key]) => key}
+            columns={[
+              { id: "state", header: "State", cell: ([, label]) => label },
+              {
+                id: "description",
+                header: "Description",
+                cell: ([key]) => result.data.description[key],
+              },
+              {
+                id: "cutout",
+                header: "Background removal",
+                cell: ([key]) => result.data.cutout[key],
+              },
+            ]}
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
