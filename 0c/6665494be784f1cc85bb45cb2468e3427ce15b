@@ -1,0 +1,45 @@
+apps/web/src/server/domains/email/repo/email-purchase-links.integration.test.ts
+  s_55a6b281e9ae6b::t_f3f4f8380c8c3d 370-404
+apps/web/src/server/domains/email/repo/email.ts
+  s_55a6b281e9ae6b::t_6d2bade2987d27 231,234
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_55a6b281e9ae6b::t_10e90a06b9a0c9 439-444
+apps/web/src/server/domains/location/repo/crud.ts
+  s_55a6b281e9ae6b::t_8b9a6e54f26c7f 875-886
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_55a6b281e9ae6b::t_50fea23a4c668e 631-632
+apps/web/src/server/domains/vendor-account/repo/vendor-account.ts
+  s_55a6b281e9ae6b::t_c9446964711ce0 215
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_55a6b281e9ae6b::t_2a0230ed9464ab 497-498
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_55a6b281e9ae6b::t_d1b40bda346630 48-64,67,195,204,207-211,224,328-330,339-349
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_55a6b281e9ae6b::t_3d56267232fff3 71-97,118
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_55a6b281e9ae6b::t_ebd5103242aeab 1,6-7,13,16,18,36-37,280-338
+docs/entities.md
+  s_55a6b281e9ae6b::t_0cf9ebd7086777 1332-1335
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_55a6b281e9ae6b::t_f505de28571b69 1135-1136
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_55a6b281e9ae6b::t_d53992f2174b5f 955
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_55a6b281e9ae6b::t_857c73fbaebf26 464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0c6665494be784f1cc85bb45cb2468e3427ce15b",
+  "prompts": {},
+  "sessions": {
+    "s_55a6b281e9ae6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cac79df8-e165-41b1-9a13-54712c8bfb22",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
