@@ -168,7 +168,6 @@ export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 export const projectFilterFields = {
   ...projectBaseFilterFields,
   assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
-  assigneePresenceFilter: presenceFilter,
   ...dateRangeFields("date"),
   completionYear: oneOrMany(completionYearValue).optional(),
 };

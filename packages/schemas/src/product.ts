@@ -6,7 +6,6 @@ import {
   productCategoryFeature,
   type ProductCategoryFeature,
 } from "./product-category-fields";
-import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { upc } from "@cubby/shared/upc";
@@ -28,7 +27,6 @@ import {
   expenseShortcode,
   imageShortcode,
   ingredientShortcode,
-  plantShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -45,7 +43,6 @@ import {
 } from "./location";
 import {
   createPaginatedResponseSchema,
-  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -261,8 +258,6 @@ export const productFilterFields = {
   componentId: oneOrMany(productShortcode).optional(),
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
-  externalIdPresenceFilter: presenceFilter,
-  inventoryPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
     .boolean()
     .optional()
@@ -305,26 +300,16 @@ export const productFilterFields = {
    * Whether any Location IS this product — a bin, tote or rack in service,
    * rather than stock held on a shelf.
    *
-   * Separate from `inventoryPresenceFilter` on purpose: the two are different
+   * Separate from `locationPresenceFilter` on purpose: the two are different
    * kinds of presence, and "Not on a shelf" means neither of them.
    */
   servingAsLocationPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't in service as a Location.",
   ),
-  locationIdFilter: entityFilterList(locationShortcode)
-    .optional()
-    .describe(
-      "Filter to products with stock in the selected Locations or any of their descendants.",
-    ),
-  ingredientPresenceFilter: presenceFilter,
-  ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
-  growsPlantIdFilter: entityFilterList(plantShortcode).optional(),
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
   ...dateRangeFields("taskDue"),
-  categoryFilter: oneOrMany(productCategoryShortcode).optional(),
   categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
-  categoryPresenceFilter: presenceFilter,
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
   ),
@@ -348,13 +333,6 @@ export const productFilterFields = {
     .describe(
       "Match a product with any linked Purchase on or before this date",
     ),
-  /**
-   * `product.price` is a nullable column on the root table (not a
-   * cross-entity id-set subquery like `expensePresenceFilter`/
-   * `inventoryPresenceFilter`) — combine with `inventoryPresenceFilter: "has"`
-   * for the valuation-gap worklist: products physically in inventory that
-   * nobody has priced yet.
-   */
   /**
    * A `misc:` bucket — a heterogeneous pile captured in one row, with no
    * meaningful unit price. `"has"` selects them, `"none"` excludes them.

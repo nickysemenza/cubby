@@ -1996,6 +1996,71 @@ Rules:
       ledgerExpectedQuantity: { type: "number" },
       quantityVariance: { type: "number" },
       purchaseDate: { type: "date" },
+      stockLocation: { via: "inventory.location" },
+      growsPlant: { via: "grows-plant" },
+      servingAsLocations: { via: "locations" },
+      components: { via: "components" },
+      containingKits: { via: "containing-kits" },
+      // Filter-only values. The read-context ones (kit accounting, ownership
+      // reconciliation, an effective price) read a Problem read's
+      // materialized on-hand units when it passes them.
+      upcPresence: { type: "boolean" },
+      usdaKey: { type: "boolean" },
+      image: { type: "boolean" },
+      inventoryMultiplicity: { type: "boolean" },
+      kitAccounting: { type: "boolean" },
+      ownershipReconciliation: { type: "boolean" },
+      conversionCoverage: { type: "boolean" },
+      conversionTopology: { type: "boolean" },
+      unitMappingQuality: { type: "boolean" },
+      stockTrackedDecided: { type: "boolean" },
+      miscBucket: { type: "boolean" },
+      unknownQuantityLines: { type: "boolean" },
+      priced: { type: "boolean" },
+      anyGtin: {
+        predicate: "text",
+        reason:
+          "Matches any of the product's barcodes, not only the primary one its column shows",
+      },
+      effectiveOwner: {
+        predicate: "idMulti",
+        reason:
+          "The effective owner is resolved from inventory and acquisition evidence outside SQL",
+      },
+      categoryFeature: {
+        predicate: "multiselect",
+        reason: "Inherited through category ancestors; not a row value",
+      },
+      externalIdSource: {
+        predicate: "multiselect",
+        reason:
+          "External identifiers are rows keyed by source with no declared relation",
+      },
+      expectedQuantityRange: {
+        predicate: "range",
+        reason:
+          "Filters the catalog with one shared kit walk; the row value walks each product's kits again",
+      },
+      quantityVarianceState: {
+        predicate: "range",
+        reason:
+          "Shelf and ledger only compare where stock and comparable ledger history both exist",
+      },
+      taskStatus: {
+        predicate: "multiselect",
+        reason:
+          "A task's product is its own subject or one inherited from its parent task",
+      },
+      taskOpen: {
+        predicate: "boolean",
+        reason:
+          "A task's product is its own subject or one inherited from its parent task",
+      },
+      taskDue: {
+        predicate: "range",
+        reason:
+          "A task's product is its own subject or one inherited from its parent task",
+      },
     },
     sort: {
       fields: [
@@ -2248,6 +2313,7 @@ Rules:
       },
       {
         columnId: "primaryGtin",
+        derived: "anyGtin",
         field: "upcFilter",
         kind: "text",
         placeholder: "Filter by UPC...",
@@ -2279,6 +2345,7 @@ Rules:
       },
       {
         columnId: "upcPresence",
+        derived: true,
         field: "upcPresenceFilter",
         kind: "presence",
         placeholder: "Filter UPC presence...",
@@ -2291,6 +2358,7 @@ Rules:
       // effective owners, or an Unlocated product's inherited owner.
       {
         columnId: "ownerLedgerPartyId",
+        derived: "effectiveOwner",
         urlKey: "owner",
         kind: "idMulti",
         label: "Owner",
@@ -2308,33 +2376,40 @@ Rules:
       },
       {
         columnId: "categoryFeature",
+        derived: true,
         field: "categoryFeatureFilter",
         kind: "multiselect",
         placeholder: "Filter category family...",
         optionsKey: "productCategoryFamilies",
+        // Its own No value, so "food or unclassified" stays one filter.
         nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
         columnId: "categoryId",
+        stored: true,
+        deriveSchema: true,
         urlKey: "category",
         field: "categoryFilter",
         kind: "idMulti",
         placeholder: "Filter classification...",
         brandRef: { entity: "productCategory" },
         optionsKey: "productCategories",
-        nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
         columnId: "location",
+        derived: "stockLocation",
+        deriveSchema: true,
+        schemaDescription:
+          "Filter to products with live stock in the selected Locations",
         field: "locationIdFilter",
         kind: "idMulti",
         placeholder: "Filter locations...",
         optionsKey: "productLocations",
         brandRef: { entity: "location" },
-        nullable: { field: "inventoryPresenceFilter", label: "inventory" },
       },
       {
         columnId: "servingAsLocations",
+        derived: true,
         field: "servingAsLocationPresenceFilter",
         kind: "presence",
         placeholder: "Filter in service...",
@@ -2345,15 +2420,18 @@ Rules:
       },
       {
         columnId: "ingredient",
+        derived: true,
+        deriveSchema: true,
         field: "ingredientIdFilter",
         kind: "idMulti",
         placeholder: "Filter ingredient...",
         optionsKey: "productIngredients",
         brandRef: { entity: "ingredient" },
-        nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
       },
       {
         columnId: "growsPlant",
+        derived: true,
+        deriveSchema: true,
         field: "growsPlantIdFilter",
         kind: "idMulti",
         placeholder: "Filter by plant grown...",
@@ -2361,13 +2439,13 @@ Rules:
       },
       {
         columnId: "expenseCount",
+        derived: true,
         urlKey: "expenses",
         kind: "range",
         wire: {
           kind: "range",
           from: "expenseCountMin",
           to: "expenseCountMax",
-          presence: "expensePresenceFilter",
         },
         placeholder: "Filter expenses...",
         options: [
@@ -2384,6 +2462,7 @@ Rules:
       },
       {
         columnId: "expenseTotal",
+        derived: true,
         kind: "range",
         placeholder: "Filter net basis...",
         options: [
@@ -2416,6 +2495,7 @@ Rules:
       },
       {
         columnId: "ledgerExpectedQuantity",
+        derived: "expectedQuantityRange",
         field: "expectedQuantity",
         urlKey: "expectedQuantity",
         wire: {
@@ -2456,6 +2536,7 @@ Rules:
       },
       {
         columnId: "quantityVariance",
+        derived: "quantityVarianceState",
         kind: "range",
         wire: { kind: "param", name: "quantityVarianceFilter" },
         placeholder: "Filter shelf vs. ledger...",
@@ -2494,6 +2575,7 @@ Rules:
       },
       {
         columnId: "externalIds",
+        derived: "externalIdSource",
         field: "externalIdSource",
         kind: "multiselect",
         placeholder: "Filter by external ID source...",
@@ -2502,6 +2584,13 @@ Rules:
       },
       {
         columnId: "purchaseDate",
+        derived: true,
+        wire: {
+          kind: "range",
+          from: "purchaseDateFrom",
+          to: "purchaseDateTo",
+          presence: "purchaseDatePresenceFilter",
+        },
         kind: "range",
         placeholder: "Filter by purchase date...",
         options: [
@@ -2547,8 +2636,50 @@ Rules:
           },
         ],
       },
+      // The keys the price, expected quantity, and task presets expand to.
+      {
+        columnId: "priced",
+        field: "pricePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter price presence...",
+        urlOnly: true,
+        derived: true,
+      },
+      {
+        columnId: "miscBucket",
+        field: "miscBucketFilter",
+        kind: "presence",
+        placeholder: "Filter misc buckets...",
+        urlOnly: true,
+        derived: true,
+      },
+      {
+        columnId: "unknownQuantityLines",
+        field: "unknownQuantityLinesFilter",
+        kind: "presence",
+        placeholder: "Filter lines with no quantity...",
+        urlOnly: true,
+        derived: true,
+      },
+      {
+        columnId: "taskStatus",
+        field: "taskStatusFilter",
+        kind: "multiselect",
+        placeholder: "Filter task status...",
+        urlOnly: true,
+        derived: true,
+      },
+      {
+        columnId: "taskOpen",
+        field: "taskOpenOnly",
+        kind: "boolean",
+        placeholder: "Filter open tasks...",
+        urlOnly: true,
+        derived: true,
+      },
       {
         columnId: "food",
+        derived: "usdaKey",
         field: "usdaPresenceFilter",
         kind: "presence",
         placeholder: "Filter USDA...",
@@ -2559,6 +2690,7 @@ Rules:
       },
       {
         columnId: "image",
+        derived: true,
         field: "imagePresenceFilter",
         kind: "presence",
         placeholder: "Filter images...",
@@ -2569,6 +2701,7 @@ Rules:
       },
       {
         columnId: "inventoryMultiplicity",
+        derived: true,
         field: "inventoryMultiplicity",
         kind: "boolean",
         placeholder: "Filter inventory multiplicity...",
@@ -2581,6 +2714,7 @@ Rules:
       },
       {
         columnId: "kitAccounting",
+        derived: true,
         field: "kitAccounting",
         kind: "boolean",
         placeholder: "Filter kit accounting...",
@@ -2588,6 +2722,7 @@ Rules:
       },
       {
         columnId: "ownershipReconciliation",
+        derived: true,
         field: "ownershipReconciliation",
         kind: "boolean",
         placeholder: "Filter ownership reconciliation...",
@@ -2600,6 +2735,7 @@ Rules:
       },
       {
         columnId: "conversionCoverage",
+        derived: true,
         field: "conversionCoverage",
         kind: "boolean",
         placeholder: "Filter conversion coverage...",
@@ -2607,6 +2743,7 @@ Rules:
       },
       {
         columnId: "conversionTopology",
+        derived: true,
         field: "conversionTopology",
         kind: "boolean",
         placeholder: "Filter conversion topology...",
@@ -2614,6 +2751,7 @@ Rules:
       },
       {
         columnId: "unitMappingQuality",
+        derived: true,
         field: "unitMappingPresenceFilter",
         kind: "presence",
         placeholder: "Filter mappings...",
@@ -2624,6 +2762,7 @@ Rules:
       },
       {
         columnId: "stockTracked",
+        derived: "stockTrackedDecided",
         field: "stockTrackedPresenceFilter",
         kind: "presence",
         placeholder: "Filter stock tracking...",
@@ -2655,6 +2794,7 @@ Rules:
       },
       {
         columnId: "components",
+        derived: true,
         field: "componentPresenceFilter",
         kind: "presence",
         placeholder: "Filter kits...",
@@ -2703,6 +2843,7 @@ Rules:
       {
         // Components of a kit: products on the kit's `productComponent` links.
         columnId: "kitId",
+        derived: "containingKits",
         kind: "idMulti",
         placeholder: "Filter by kit...",
         brandRef: { entity: "product" },
@@ -2711,6 +2852,7 @@ Rules:
       {
         // Kits containing a component: parents on its `productComponent` links.
         columnId: "componentId",
+        derived: "components",
         kind: "idMulti",
         placeholder: "Filter by component...",
         brandRef: { entity: "product" },
@@ -2801,6 +2943,7 @@ Rules:
       },
       {
         columnId: "related:product.tasks",
+        derived: "taskDue",
         kind: "range",
         wire: {
           kind: "range",

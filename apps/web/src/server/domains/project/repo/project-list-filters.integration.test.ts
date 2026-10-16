@@ -54,11 +54,13 @@ describe("project list declared filters", () => {
     const w = await world();
     const ids = [w.shed, w.roof, w.shingles, w.desk].map(({ id }) => id);
     const listIds = async (filters: ProjectFilters) => {
-      const { data } = await projectList(ctx.db, { ...filters, ids }, [], {
+      const { data } = await projectList(ctx.db, filters, [], {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: 500,
       });
-      return new Set(data.map((row) => row.id));
+      return new Set(
+        data.map((row) => row.id).filter((id) => ids.includes(id)),
+      );
     };
     const cases: Array<[ProjectFilters, Array<{ id: string }>]> = [
       [{ search: "cedar" }, [w.shed]],

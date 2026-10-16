@@ -1,3 +1,4 @@
+import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductFilters } from "@cubby/schemas/product";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -65,7 +66,7 @@ describe("product list declared filters", () => {
     );
     const make = (
       name: string,
-      extra: Parameters<typeof makeProductInput>[0] = {},
+      extra: { categoryId?: ProductCategoryShortcode; price?: number } = {},
     ) =>
       createProductFixture(
         ctx.db,
@@ -140,15 +141,20 @@ describe("product list declared filters", () => {
         [],
         { pageIndex: 0, pageSize: 50 },
       );
-      return new Set(data.map((row) => row.id));
+      return new Set<string>(data.map((row) => row.id));
     };
     const cases: Array<[ProductFilters, Array<{ id: string }>]> = [
       [{ categoryFilter: [taxonomyShortcode("tools")] }, [w.driver]],
       [{ categoryFeatureFilter: ["food"] }, [w.flour]],
-      [{ categoryPresenceFilter: "none" }, [w.misc, w.kit, w.bit, w.tote]],
+      [{ categoryIdPresenceFilter: "none" }, [w.misc, w.kit, w.bit, w.tote]],
+      // The family filter keeps its own No value: "food or unclassified".
+      [
+        { categoryFeatureFilter: ["food"], categoryPresenceFilter: "none" },
+        [w.flour, w.misc, w.kit, w.bit, w.tote],
+      ],
       [{ locationIdFilter: [w.garage.id] }, [w.driver]],
       [
-        { inventoryPresenceFilter: "none" },
+        { locationPresenceFilter: "none" },
         [w.flour, w.misc, w.kit, w.bit, w.tote],
       ],
       [{ servingAsLocationPresenceFilter: "has" }, [w.tote]],
@@ -170,6 +176,32 @@ describe("product list declared filters", () => {
       [{ taskStatusFilter: ["in_progress"] }, [w.flour]],
       [{ taskOpenOnly: true }, [w.flour]],
       [{ stockTrackedPresenceFilter: "has" }, [w.driver]],
+      // The generated sub-category toggle: on by default, off is exact.
+      [
+        {
+          categoryFilter: [taxonomyShortcode("tools")],
+          includeSubProductCategories: false,
+        },
+        [],
+      ],
+      [
+        { locationIdFilter: [w.garage.id], includeSubLocations: false },
+        [w.driver],
+      ],
+      [
+        { locationIdFilter: [w.rack.id], includeSubLocations: false },
+        [w.driver],
+      ],
+      [{ growsPlantPresenceFilter: "has" }, []],
+      [{ upcFilter: "parity-none" }, []],
+      // The kit's acquisition hands its component an expected unit too.
+      [{ expectedQuantityMin: 1 }, [w.kit, w.bit]],
+      [{ unknownQuantityLinesFilter: "has" }, []],
+      [{ purchaseDatePresenceFilter: "has" }, [w.kit]],
+      [
+        { purchaseDatePresenceFilter: "none" },
+        [w.driver, w.flour, w.misc, w.bit, w.tote],
+      ],
     ];
     const failures: string[] = [];
     for (const [filters, expected] of cases) {

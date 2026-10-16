@@ -12,10 +12,11 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
   formatSearchTerm,
+  isTransaction,
   textArrayMatches,
   type ListReadIntent,
   notDeleted,
@@ -78,17 +79,32 @@ const effectiveAssigneeSql = effectiveProjectAssigneeSql(
 );
 const effectiveLocationsSql = effectiveProjectLocationsSql(sql`${project.id}`);
 
+// The tree and attention reads take the request's Database handle; a project
+// list never reads inside a write transaction.
+const projectReadDatabase = (db: Database | DrizzleTransaction): Database => {
+  if (isTransaction(db))
+    throw new Error(
+      "A project list cannot prepare its filters in a transaction.",
+    );
+  return db;
+};
+
 // Exact tracker membership comes from the deep module the dashboard and
 // Problems share, so the list keeps no second copy of the stalled, budget,
 // and blocked-next-action predicates. A caller that already computed the
 // items seeds this prepare (`buildProjectListQuery`).
-const projectAttention = listPrepare((db) => computeAttentionItems(db));
+const projectAttention = listPrepare((db) =>
+  computeAttentionItems(projectReadDatabase(db)),
+);
 
 // Completion years fold each subtree's effective dates in TS; the tree it
 // loads is handed back so the list's rollups never query it twice.
 const projectCompletion = listPrepare(async (db) => {
-  const tree = await loadProjectTree(db);
-  const { dateWindows } = await loadProjectDateWindows(db, tree);
+  const tree = await loadProjectTree(projectReadDatabase(db));
+  const { dateWindows } = await loadProjectDateWindows(
+    projectReadDatabase(db),
+    tree,
+  );
   return { tree, dateWindows };
 });
 

@@ -147,7 +147,7 @@ export const loadSoldButStockedPresenterTotals = async (
           notDeleted(product),
           inArray(product.shortcode, [...shortcodes]),
           eq(expense.future, false),
-          ownershipExitExpensePredicate(dbClient),
+          ownershipExitExpensePredicate(),
         ),
       )
       .groupBy(product.shortcode),

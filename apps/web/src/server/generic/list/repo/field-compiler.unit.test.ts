@@ -17,6 +17,12 @@ import { listScaffold } from "./list";
  */
 describe("list field compiler", () => {
   const db = {} as Database;
+  // Inventory's other filter-only fields, which these cases never read.
+  const filterOnly = {
+    locationRole: sql`false`,
+    effectiveOwner: () => sql`true`,
+    categoryFeature: () => sql`true`,
+  };
   const whereSql = (where: ReturnType<typeof and>) =>
     renderWhereSql(where) ?? "";
 
@@ -26,6 +32,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
+        ...filterOnly,
         valuationStatus: valuations.predicate(() => sql`true`),
       },
     });
@@ -55,6 +62,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
+        ...filterOnly,
         valuationStatus: valuations.predicate(() => sql`true`),
       },
     });
@@ -101,6 +109,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
+        ...filterOnly,
         valuationStatus: valuations.predicate(() => sql`true`),
       },
     });
@@ -160,8 +169,9 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`prepared_valuation`),
         amount: [sql`unit`, sql`size`],
+        ...filterOnly,
         valuationStatus: valuations.predicate(
-          (_prepared, statuses) => sql`prepared_status = ${statuses[0]}`,
+          (_prepared, { values }) => sql`prepared_status = ${values[0]}`,
         ),
       },
     });

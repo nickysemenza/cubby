@@ -1330,8 +1330,8 @@ declared exception with its reason. Email's urlOnly
 `purchaseId`/`vendorId`/`vendorAccountId` declare `singleValue: { reason }`
 (`linkState` is relative to one scope record): their schemas accept one value,
 the native picker chooses one record, and the repository rejects more than one
-across the three. Inventory's `valuationStatus` is a `model.derived`
-predicate.
+across the three. Every other filter that cannot be a stored column or a `via`
+path is a `model.derived` predicate whose `reason` lives in the declaration.
 
 A `stored` descriptor names the standard predicate over stored columns, and
 `declaredFilterPredicates` composes it for the repository: `stored: true`
@@ -1341,9 +1341,11 @@ spans columns (ORed, a `text[]` column matched by element); `stored: { array:
 true }` marks a multiselect over a `text[]` column as an overlap. Enum filters
 OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
-inclusive bounds. The compiler rejects every other shape. Predicates that
-join, OR across filters, or resolve ids stay hand-written next to the spread,
-with a comment saying why, and count against the baseline.
+inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
+for its Any value / No value), and a timestamp column bounds by household
+days. The compiler rejects every other shape. A predicate that joins, ORs
+across filters, or resolves ids is a declared `model.derived` entry, not
+hand-written SQL next to the spread.
 
 `model.derived` declares a list field that is not a stored column, or the
 value a stored field orders and groups by when its column is not that value
@@ -1369,7 +1371,12 @@ one shape:
   and cannot filter.
 - `{ predicate, reason }` is filter-only SQL the repository passes the same
   way; `reason` says why it is not one row value (inventory's
-  `valuationStatus` statuses overlap).
+  `valuationStatus` statuses overlap). `predicate` names the descriptor kind
+  it serves, and the SQL receives that kind's parsed value: a trimmed string
+  (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
+  descriptor's declared `nullable`), a boolean, a presence, or `{ from, to,
+  presence, param }` (`range`; `param` is a range whose presets name one
+  state).
 
 Every compiled sort part orders NULLS LAST in both directions, as stored
 columns do, unless the part declares `{ sql, nulls: "high" }` (empties first
@@ -1380,13 +1387,23 @@ link state). A `related:<view>` roster entry orders by the view's first chip
 release rather than a table, a declared exception whose service orders by its
 declared values.
 
-A filter descriptor reads a derived field with `derived: true`. SQL that needs
-request data (inventory valuations, an Email list's scope) wraps a
+A filter descriptor reads a derived field with `derived: true` (the entry
+named by its `columnId`) or `derived: "<key>"` (another entry, so several
+filters share one value or a column filters by an effective value). A value
+entry filters by its type: `text` as a search term, any-of, or presence;
+`number`/`date` as a range or presence; `boolean` as a flag (UNKNOWN reads as
+not met) or presence (true is a value). Any other value reads NULL as no
+value. A predicate and a value both receive the caller's quality read context
+(`where(filters, [], { readContext })`); a value that reads it is
+`listReadValue(read => sql)` and renders the canonical scalar without one
+(product kit accounting reads a Problem read's materialized on-hand units).
+SQL that needs request data (inventory valuations, an Email list's scope) wraps a
 `listPrepare(load)` handle, whose `load` receives the request's filters, with
 `.value`/`.predicate`; fields share a prepare by sharing the handle.
 `scaffold.context(db, request)` loads each needed prepare at most once, and
 only when the request filters, sorts, groups, or projects on a field that
-reads it. `where`/`orderBy`/`filterPredicates` stay synchronous and take that
+reads it; a caller that already holds a prepare's data passes it as
+`context(db, request, [[handle, data]])` (project attention). `where`/`orderBy`/`filterPredicates` stay synchronous and take that
 context, `list` builds it unless `spec.context` passes one, and `hydrate`
 receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
@@ -1398,9 +1415,11 @@ the selected records and their live descendants through
 recursive-descendant generator repositories also call directly. The compiler
 adds a boolean `includeSub<Plural>` toggle descriptor ("Include sub-…") for
 each such filter; absent reads as on, and `false` limits the filter to the
-selected records. Hand-written paired filters (inventory
-`locationIdFilter`/`locationSubtreeFilter`, project and task
-`includeSubProjects`) call the same generator.
+selected records. It replaced the hand-written pairs: inventory's
+`locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
+project's parent filter is the stored `parentProjectId` with
+`includeSubProjects`. Task's `includeSubProjects` still calls the generator
+by hand.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection
