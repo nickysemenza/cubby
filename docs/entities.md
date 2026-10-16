@@ -542,7 +542,12 @@ Each `entity-field-schemas.<entity>.gen.ts` map is `fieldSchemasOf(definition)`:
 the create/update/read schemas are read off the declaration by roster key at
 load time (never by field index, so a mid-roster insert cannot shift another
 field's schema) and are the declaration's own Zod instances, which is what the
-field-map-drift test checks.
+field-map-drift test checks. Generated map interfaces name the exact Zod schema
+classes at each declaration tuple position; runtime lookup remains keyed. Separate
+`entity-field-schema-contracts.*.typecheck.gen.ts` roots prove both assignment
+directions against `FieldSchemas<typeof definition>`, including input/output
+and schema-method types, without making consumers import those proofs. The
+compiler-synthesized `dataQuality` schema is composed after the declared map.
 Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.

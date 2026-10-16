@@ -1035,6 +1035,36 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       );
     const prefix = `generated${entity.inspector.singular.replaceAll(" ", "")}`;
     const filterFields = renderDerivedFilterFields(entity, fieldModel.fields);
+    // Name each exact Zod instance type instead of exporting a conditional
+    // mapped type over the complete declaration. Runtime lookup stays keyed.
+    const schemaContract = () =>
+      "{\n" +
+      (
+        [
+          ["create", fieldModel.create],
+          ["update", fieldModel.update],
+          ["read", fieldModel.output],
+        ] as const
+      )
+        .map(([mode, keys]) => {
+          // dataQuality is compiler-synthesized and is spliced into the read
+          // map below; it is not part of fieldSchemasOf's declaration roster.
+          const declaredKeys = keys.filter(
+            (key) =>
+              mode !== "read" ||
+              entity.dataQuality === null ||
+              key !== "dataQuality",
+          );
+          const entries = declaredKeys.map((key) => {
+            const field = fieldByKey(entity, key);
+            const outputKey = mode === "read" ? (field.readKey ?? key) : key;
+            const index = fieldModel.fields.indexOf(field);
+            return `${JSON.stringify(outputKey)}: (typeof definition.model.fields)[${index}]["validation"][${JSON.stringify(mode)}];`;
+          });
+          return `${mode}: { ${entries.join("\n")} };`;
+        })
+        .join("\n") +
+      "\n}";
     return [
       {
         relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
@@ -1049,20 +1079,37 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           (declaration.enumExports.length
             ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
             : "") +
+          `interface ${prefix}DeclaredFieldSchemas ${schemaContract()}\n` +
           // Keyed by roster, not field index: `fieldSchemasOf` reads each
           // schema by key at load time, so inserting a field mid-declaration
           // cannot shift another field's schema. The rosters were validated
           // complete above; the runtime lookup throws on a missing schema.
           (entity.dataQuality === null
-            ? `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n`
+            ? `export const ${prefix}FieldSchemas: ${prefix}DeclaredFieldSchemas = fieldSchemasOf(definition);\n`
             : // The compiler synthesizes `dataQuality` without a read schema
               // (it cannot import the registry it generates), so the real one
               // is spliced in here.
-              "const declaredFieldSchemas = fieldSchemasOf(definition);\n" +
+              `const declaredFieldSchemas: ${prefix}DeclaredFieldSchemas = fieldSchemasOf(definition);\n` +
               `export const ${prefix}FieldSchemas = { ...declaredFieldSchemas, read: { ...declaredFieldSchemas.read, dataQuality } } as const;\n`) +
           (filterFields.entries.length
             ? `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`
             : ""),
+      },
+      {
+        relativePath: `packages/schemas/src/generated/entity-field-schema-contracts.${entity.key}.typecheck.gen.ts`,
+        source:
+          generatedHeader +
+          `import type definition from ${JSON.stringify(declaration.path)};\n` +
+          'import type { FieldSchemas } from "../entity-definitions/definition";\n' +
+          `import type { ${prefix}FieldSchemas } from "./entity-field-schemas.${entity.key}.gen";\n` +
+          "type Assert<T extends true> = T;\n" +
+          "type Expected = FieldSchemas<typeof definition>;\n" +
+          `type Actual = typeof ${prefix}FieldSchemas;\n` +
+          'type ExpectedModes = [Expected["create"], Expected["update"], Expected["read"]];\n' +
+          `type ActualModes = [Actual["create"], Actual["update"], ${entity.dataQuality === null ? 'Actual["read"]' : 'Omit<Actual["read"], "dataQuality">'}];\n` +
+          // Separate, compiler-only roots keep the generic proof out of the
+          // consumer import graph. Both directions catch widened tuple reads.
+          "export type FieldSchemaContract = Assert<ActualModes extends ExpectedModes ? ExpectedModes extends ActualModes ? true : false : false>;\n",
       },
     ];
   });
