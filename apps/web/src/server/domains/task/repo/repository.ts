@@ -7,11 +7,13 @@ import {
 
 import {
   createTask,
+  createTaskRead,
   deleteTasks,
   getTaskByShortcode,
   TASK_DELETE_EDGE_POLICY,
   updateTasksInBulk,
   updateTask,
+  updateTaskRead,
 } from "./crud";
 import { taskList, taskListRead } from "./lookup";
 
@@ -23,8 +25,19 @@ export const taskRepository = defineRepository("task", {
   listRead: (ctx, filters, sorts, pagination, projection) =>
     taskListRead(ctx.db, filters, sorts, pagination, projection, "page"),
   create: asActor(createTask),
+  createRead: (ctx, data, fields) =>
+    createTaskRead(ctx.db, data, ctx.actorContext, fields),
   update: (ctx, id, data) =>
     updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),
+  updateRead: (ctx, id, data, fields) =>
+    updateTaskRead(
+      ctx.db,
+      id,
+      data,
+      ctx.actorContext,
+      fields,
+      ctx.caldavHooks?.task,
+    ),
   // Subtasks go with their parent; report every removed task.
   delete: async (ctx, ids) => {
     const result = await deleteTasks(ctx.db, ids, ctx.actorContext);

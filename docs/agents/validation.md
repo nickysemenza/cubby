@@ -74,6 +74,10 @@ relative to `apps/web`. For PostgreSQL contracts use `pnpm test:postgres
 src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
+Local Vitest runs share that report path, including runs from different
+projects. Serialize them until the preceding run's failures have been read or
+its report copied to an ignored artifact; concurrent runs can overwrite the
+evidence needed to diagnose a failure.
 Forward named-case flags directly, for example `pnpm test:postgres src/...
 -t 'case name'`; adding `--` here reaches Vitest as a literal separator and
 does not apply the intended filter. Likewise, use `pnpm db:generate

@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { KernelActionName } from "~/contracts/mcp-define";
 import {
   entitySummaryFields,
+  entityWriteSummaryFields,
   entitySummaryResultSchema,
   mcpResultsEnvelope,
   projectEntityResult,
@@ -45,6 +46,7 @@ import {
   entityRelationMutationResultSchema,
   entitySearchResultSchema,
 } from "~/server/entity-kernel/contracts";
+import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import {
   entityPreviewInputSchema,
   entityPreviewOutputSchema,
@@ -151,7 +153,14 @@ const executeMcpEntity: McpEntityExecutor = async (context, command, detail) =>
         { ...command, filters: command.filters ?? {} },
         entitySummaryFields(command.entity),
       )
-    : executeEntity(context, command);
+    : detail === "summary" &&
+        (command.action === "create" || command.action === "update")
+      ? executeEntityMutationRead(
+          context,
+          command,
+          entityWriteSummaryFields(command.entity),
+        )
+      : executeEntity(context, command);
 
 const writtenEntity = z.object({
   entity: z.string(),
@@ -187,6 +196,7 @@ async function executeWithCoverage(
   context: ReturnType<typeof getEntityKernelContext>,
   command: McpEntityCommand,
   project: (result: z.output<z.ZodType>) => z.output<z.ZodType> = (r) => r,
+  detail?: ResultDetail,
 ) {
   const productUpdate = productUpdateIdentity.safeParse(command);
   const finishProduct = productUpdate.success
@@ -199,7 +209,7 @@ async function executeWithCoverage(
   const result = z
     .object({ action: z.string(), entity: z.string() })
     .passthrough()
-    .parse(await execute(context, command));
+    .parse(await execute(context, command, detail));
   const projected = z.looseObject({}).parse(project(result));
   const written = writtenEntity.safeParse(projected);
   if (!written.success) return projected;
@@ -241,6 +251,7 @@ const commandAction = (
         context,
         kernelCommand(command),
         project,
+        detail,
       );
     return project(
       z

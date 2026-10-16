@@ -401,6 +401,8 @@ export interface RepositorySpec<
   lifecycle?: EntityLifecycleContract;
   listRead?: EntityRepository<E, SchemasFor<E>>["listRead"];
   listSummary?: EntityRepository<E, SchemasFor<E>>["listSummary"];
+  createRead?: EntityRepository<E, SchemasFor<E>>["createRead"];
+  updateRead?: EntityRepository<E, SchemasFor<E>>["updateRead"];
   /** `false` when writes have no projections or dependents to refresh. */
   sideEffects?: boolean;
   get: (
@@ -574,9 +576,11 @@ export function defineRepository<
   if (declared("create") && create)
     repository.create = async (ctx, data) =>
       written(ctx, await create(ctx, data));
+  if (declared("create") && create) repository.createRead = spec.createRead;
   if (declared("update") && update)
     repository.update = async (ctx, id, data) =>
       written(ctx, await update(ctx, id, data));
+  if (declared("update") && update) repository.updateRead = spec.updateRead;
   if (declared("bulkUpdate") && bulkUpdate) repository.bulkUpdate = bulkUpdate;
   if (declared("delete"))
     repository.delete = async (ctx, ids) => {

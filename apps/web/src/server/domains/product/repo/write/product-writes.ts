@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import {
   type ProductId,
   type ProductShortcode,
@@ -10,14 +11,20 @@ import type {
   ProductSummariesOut,
   ProductUpdateInput,
   ProductWithFoodOut,
+  ProductTopLevelOut,
 } from "@cubby/schemas/product";
 import type { FoodSummary } from "@cubby/usda";
+import { eq, and } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
+import { selectListReadFields } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { product as productTable } from "~/server/db/schema";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
 import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
@@ -45,22 +52,69 @@ import {
 import { loadProductOwnershipEvidence } from "../ownership-evidence";
 import { getProductUnitMappingsByProductIds } from "../unit-mappings";
 
-export type ProductWriteResult = {
-  output: ProductWithFoodOut;
+export type ProductMutationSnapshot = Pick<ProductWithFoodOut, "id"> & {
+  ingredient: Pick<NonNullable<ProductWithFoodOut["ingredient"]>, "id"> | null;
+};
+
+export type ProductWriteResult<TOutput = ProductWithFoodOut> = {
+  output: TOutput;
   entityId: ProductId;
 };
 
-export type ProductWriteActions = {
+/** The write already computed authoritative quality and external identifiers.
+ * Recipe recomputation independently needs the current ingredient identity. */
+export const readProductMutationFields = async (
+  db: Database,
+  usdaClient: UsdaFoodLookupPort,
+  product: ProductTopLevelOut,
+  id: ProductId,
+  fields: readonly string[],
+): Promise<ListReadRow & ProductMutationSnapshot> => {
+  if (
+    fields.some(
+      (field) => !["name", "externalIds", "dataQuality"].includes(field),
+    )
+  ) {
+    const full = await getProductWithFood(db, usdaClient, id);
+    return {
+      ...selectListReadFields(full, fields),
+      id: full.id,
+      ingredient: full.ingredient,
+    };
+  }
+  const current = await getDb(db).query.product.findFirst({
+    where: and(eq(productTable.id, id), notDeleted(productTable)),
+    columns: { id: true },
+    with: { ingredient: { columns: { shortcode: true, deletedAt: true } } },
+  });
+  if (!current)
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product ${product.id} not found`,
+    );
+  return {
+    ...selectListReadFields(product, fields),
+    id: product.id,
+    ingredient:
+      current.ingredient && !current.ingredient.deletedAt
+        ? { id: ingredientShortcode.parse(current.ingredient.shortcode) }
+        : null,
+  };
+};
+
+export type ProductWriteActions<
+  TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
+> = {
   getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
   createProduct(
     data: ProductCreateInput,
     actor: ActorContext,
-  ): Promise<ProductWriteResult>;
+  ): Promise<ProductWriteResult<TOutput>>;
   updateProduct(
     id: ProductId,
     data: ProductUpdateInput["data"],
     actor: ActorContext,
-  ): Promise<ProductWriteResult>;
+  ): Promise<ProductWriteResult<TOutput>>;
 };
 
 export const getProductWithFood = async (
@@ -190,12 +244,12 @@ export const getProductSummaries = async (
   return summaries;
 };
 
-export const createProductWithFood = async (
+const createProductWithOutput = async <TOutput>(
   db: Database,
-  usdaClient: UsdaFoodLookupPort,
   data: ProductCreateInput,
   actor: ActorContext,
-): Promise<ProductWriteResult> => {
+  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+): Promise<ProductWriteResult<TOutput>> => {
   const ingredientEntityId = data.ingredientId
     ? await resolveOrThrow(db, "ingredient", data.ingredientId)
     : null;
@@ -218,7 +272,7 @@ export const createProductWithFood = async (
   const productId = await resolveCreatedOrInvariant(db, "product", product.id);
   try {
     return {
-      output: await getProductWithFood(db, usdaClient, productId),
+      output: await readOutput(product, productId),
       entityId: productId,
     };
   } catch (error) {
@@ -232,13 +286,13 @@ export const createProductWithFood = async (
   }
 };
 
-export const updateProductWithFood = async (
+const updateProductWithOutput = async <TOutput>(
   db: Database,
-  usdaClient: UsdaFoodLookupPort,
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
-): Promise<ProductWriteResult> => {
+  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+): Promise<ProductWriteResult<TOutput>> => {
   // Explicit `== null` (not a truthy check): the falsy branch must narrow to
   // `null | undefined` so it matches the branded `IngredientId | null |
   // undefined` the repo expects — a truthy check leaves the branch typed as
@@ -252,7 +306,7 @@ export const updateProductWithFood = async (
     data.growsPlantId == null
       ? data.growsPlantId
       : await resolveOrThrow(db, "plant", data.growsPlantId);
-  const { detachedImageKeys } = await updateProductRepo(
+  const { product, detachedImageKeys } = await updateProductRepo(
     db,
     id,
     {
@@ -273,10 +327,45 @@ export const updateProductWithFood = async (
   // the router layer (covers UI + MCP callers) — see the product router's
   // update proc.
   return {
-    output: await getProductWithFood(db, usdaClient, id),
+    output: await readOutput(product, id),
     entityId: id,
   };
 };
+
+export const createProductWithFood = (
+  db: Database,
+  usdaClient: UsdaFoodLookupPort,
+  data: ProductCreateInput,
+  actor: ActorContext,
+): Promise<ProductWriteResult> =>
+  createProductWithOutput(db, data, actor, (_, id) =>
+    getProductWithFood(db, usdaClient, id),
+  );
+
+export const updateProductWithFood = (
+  db: Database,
+  usdaClient: UsdaFoodLookupPort,
+  id: ProductId,
+  data: ProductUpdateInput["data"],
+  actor: ActorContext,
+): Promise<ProductWriteResult> =>
+  updateProductWithOutput(db, id, data, actor, (_, id) =>
+    getProductWithFood(db, usdaClient, id),
+  );
+
+export const createProductReadActions = <
+  TOutput extends ProductMutationSnapshot,
+>(
+  db: Database,
+  usdaClient: UsdaFoodLookupPort,
+  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+): ProductWriteActions<TOutput> => ({
+  getProductByID: (id) => getProductWithFood(db, usdaClient, id),
+  createProduct: (data, actor) =>
+    createProductWithOutput(db, data, actor, readOutput),
+  updateProduct: (id, data, actor) =>
+    updateProductWithOutput(db, id, data, actor, readOutput),
+});
 
 export const createProductWriteActions = (
   db: Database,

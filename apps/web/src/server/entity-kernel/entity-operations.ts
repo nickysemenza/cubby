@@ -21,6 +21,8 @@ import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
+import { listReadRowSchema } from "~/entity/model/list-read-fields";
+import { listReadFields } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
@@ -59,7 +61,11 @@ import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
 import { deferPublications } from "~/server/workflows/background-tasks/publish";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import {
+  bindWorkflow,
+  workflow,
+  mapWorkflowValue,
+} from "~/server/workflows/runtime";
 
 import type {
   EntityBindingSchemas,
@@ -71,6 +77,7 @@ import { resolveValueCollectionPatches } from "./collection-patch";
 import {
   type EntityKernelEntity,
   entityBrowserMutationResultSchema,
+  entityMutationReadResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
 import { resolveCurrentMemberFilters } from "./current-member-filter";
@@ -249,11 +256,27 @@ const recordWriteSources = async <
 
 const writtenCode = z.object({ id: z.string() });
 
-export const defineEntityOperations = <
+type MutationReadDemand<Read extends boolean> = Read extends true
+  ? { fields: readonly string[] }
+  : { fields?: never };
+
+const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
+  const requested = z.array(z.string()).parse(fields);
+  const allowed = Object.values(listReadFields(entity)).flat();
+  for (const field of requested) {
+    if (!allowed.includes(field))
+      throw new Error(`Unknown mutation response field: ${field}`);
+  }
+  return requested;
+};
+
+const buildEntityOperations = <
   const E extends EntityKernelEntity,
   const S extends EntityBindingSchemas,
+  const Read extends boolean,
 >(
   binding: EntityKernelCoreBinding<E, S>,
+  readMode: Read,
 ) => ({
   get: bindWorkflow(
     workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
@@ -415,10 +438,17 @@ export const defineEntityOperations = <
   create: bindWorkflow(
     workflow<
       EntityKernelContext,
-      { data: unknown; sources?: EntitySourceInput[] }
+      {
+        data: unknown;
+        sources?: EntitySourceInput[];
+      } & MutationReadDemand<Read>
     >(`${binding.entity}.create`)
       .call("validated", async (_, { input }) => {
         const schema = binding.schemas.createInput;
+        const read = binding.repository.createRead;
+        const fields = readMode
+          ? mutationReadFields(binding.entity, input.fields)
+          : undefined;
         const run = binding.repository.create;
         if (!schema || !run)
           throw createAppError(
@@ -427,7 +457,14 @@ export const defineEntityOperations = <
           );
         assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
-          run,
+          projected: fields !== undefined && read !== undefined,
+          run:
+            fields && read
+              ? (
+                  context: EntityKernelContext,
+                  data: Parameters<typeof run>[1],
+                ) => read(context, data, fields)
+              : run,
           sources: input.sources ?? [],
           data: parseSchema(
             presentSchema<S["createInput"]>(schema),
@@ -487,25 +524,37 @@ export const defineEntityOperations = <
           created.projectedRefs,
         ),
       )
-      .output(({ created }) =>
-        entityBrowserMutationResultSchema.parse({
-          action: "create",
+      .output(({ validated, created }) => {
+        const item = validated.projected
+          ? listReadRowSchema.parse(created.output)
+          : parseSchema<S["output"], typeof created.output>(
+              binding.schemas.output,
+              created.output,
+            );
+        const result = {
+          action: "create" as const,
           entity: binding.entity,
-          item: parseSchema<S["output"], typeof created.output>(
-            binding.schemas.output,
-            created.output,
-          ),
+          item,
           sideEffects: mutationSideEffectsWithWarnings(created.warnings),
-        }),
-      ),
+        };
+        return result;
+      }),
   ),
   update: bindWorkflow(
     workflow<
       EntityKernelContext,
-      { id: string; data: unknown; sources?: EntitySourceInput[] }
+      {
+        id: string;
+        data: unknown;
+        sources?: EntitySourceInput[];
+      } & MutationReadDemand<Read>
     >(`${binding.entity}.update`)
       .call("validated", async ({ context }, { input }) => {
         const schema = binding.schemas.updateInput;
+        const read = binding.repository.updateRead;
+        const fields = readMode
+          ? mutationReadFields(binding.entity, input.fields)
+          : undefined;
         const run = binding.repository.update;
         if (!schema || !run)
           throw createAppError(
@@ -514,7 +563,15 @@ export const defineEntityOperations = <
           );
         assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
-          run,
+          projected: fields !== undefined && read !== undefined,
+          run:
+            fields && read
+              ? (
+                  context: EntityKernelContext,
+                  id: Parameters<typeof run>[1],
+                  data: Parameters<typeof run>[2],
+                ) => read(context, id, data, fields)
+              : run,
           sources: input.sources ?? [],
           id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
           data: parseSchema(
@@ -656,17 +713,21 @@ export const defineEntityOperations = <
           updated.projectedRefs,
         ),
       )
-      .output(({ updated }) =>
-        entityBrowserMutationResultSchema.parse({
-          action: "update",
+      .output(({ validated, updated }) => {
+        const item = validated.projected
+          ? listReadRowSchema.parse(updated.output)
+          : parseSchema<S["output"], typeof updated.output>(
+              binding.schemas.output,
+              updated.output,
+            );
+        const result = {
+          action: "update" as const,
           entity: binding.entity,
-          item: parseSchema<S["output"], typeof updated.output>(
-            binding.schemas.output,
-            updated.output,
-          ),
+          item,
           sideEffects: mutationSideEffectsWithWarnings(updated.warnings),
-        }),
-      ),
+        };
+        return result;
+      }),
   ),
   delete: bindWorkflow(
     workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
@@ -746,3 +807,41 @@ export const defineEntityOperations = <
       ),
   ),
 });
+
+/** Both output contracts retain the same executable graph and dependencies. */
+export const defineEntityOperations = <
+  const E extends EntityKernelEntity,
+  const S extends EntityBindingSchemas,
+>(
+  binding: EntityKernelCoreBinding<E, S>,
+) => {
+  const operations = buildEntityOperations(binding, false);
+  const reads = buildEntityOperations(binding, true);
+  return {
+    ...operations,
+    create: bindWorkflow({
+      ...operations.create.definition,
+      output: mapWorkflowValue(operations.create.definition.output, (result) =>
+        entityBrowserMutationResultSchema.parse(result),
+      ),
+    }),
+    update: bindWorkflow({
+      ...operations.update.definition,
+      output: mapWorkflowValue(operations.update.definition.output, (result) =>
+        entityBrowserMutationResultSchema.parse(result),
+      ),
+    }),
+    createRead: bindWorkflow({
+      ...reads.create.definition,
+      output: mapWorkflowValue(reads.create.definition.output, (result) =>
+        entityMutationReadResultSchema.parse(result),
+      ),
+    }),
+    updateRead: bindWorkflow({
+      ...reads.update.definition,
+      output: mapWorkflowValue(reads.update.definition.output, (result) =>
+        entityMutationReadResultSchema.parse(result),
+      ),
+    }),
+  };
+};

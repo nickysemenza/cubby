@@ -1249,6 +1249,23 @@ progressive reader run the complete list. Product list readers start the page's
 USDA batch as soon as its barcodes load, so the external lookup overlaps the
 remaining enrichment reads.
 
+MCP create/update summaries request `entityWriteSummaryFields` before response
+hydration through the kernel's `createRead`/`updateRead` repository ports. They
+share the complete mutation workflow, including validation, transactional
+audit/search projection, source recording, and post-commit publications.
+Write summaries include quality coverage; Product summaries also include
+external identifiers and retain the ingredient identity needed for recipe
+recomputation. Task readers reuse `RETURNING` scalars plus authoritative quality,
+and Product readers reuse the write's validated top-level result. Other
+repository writes fall back to their full reader until they support requested
+fields. Full responses and direct domain helpers retain their existing output
+and commit/error contracts, including Product's explicit committed-write receipt
+when a post-commit food read-back fails.
+Full operations cannot select a partial output; read operations require fields
+and reject undeclared fields before writing. Summary responses do not load
+output-only USDA food details, so failures of that unrequested read do not fail
+a summary write. Required write validation and side effects still run.
+
 Timing evidence comes from
 `pnpm --dir apps/web exec tsx tooling/checks/read-performance.ts --origin <origin> --output <artifact.json>`
 with `CUBBY_READ_AUTHORIZATION` or `CUBBY_READ_COOKIE` supplied privately in the
