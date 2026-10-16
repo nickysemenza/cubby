@@ -64,7 +64,9 @@ Web gate identity distinguishes executor and snapshot, and browser blob-report
 selection is a target input. PostgreSQL JSON and browser blob outputs are cached
 with their tasks for ordinary CI. The pilot independently checks transferred
 browser manifests/blobs, PostgreSQL JSON and AI summaries before accepting a pass.
-Each task retains a bounded lane deadline; database services must respond before
+Source fetch/checkout is bounded at 150 seconds and each setup command at
+180 seconds, leaving time for infrastructure fallback. Each task retains a
+bounded lane deadline; database services must respond before
 tasks begin. Streamed application failures stay failures if artifact transfer fails.
 
 The artifact contains per-task records, original browser reports and traces,

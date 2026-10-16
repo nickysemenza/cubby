@@ -276,7 +276,7 @@ export async function coordinatePilot(root: string) {
             }
             // The worker is fetched from the immutable public revision, not from
             // mutable snapshot source. Fetching a merge SHA retains Git identity.
-            const command = `git -C /home/user/cubby-ci fetch --depth=1 origin ${revision} && git -C /home/user/cubby-ci checkout --force --detach ${revision} && CUBBY_CI_SNAPSHOT=${snapshot} node /home/user/cubby-ci/scripts/boat-ci-worker.ts /home/user/boat-manifest.json`;
+            const command = `timeout --kill-after=10s 150s bash -lc 'git -C /home/user/cubby-ci fetch --depth=1 origin ${revision} && git -C /home/user/cubby-ci checkout --force --detach ${revision}' && CUBBY_CI_SNAPSHOT=${snapshot} node /home/user/cubby-ci/scripts/boat-ci-worker.ts /home/user/boat-manifest.json`;
             let frames = "";
             let stdout = "";
             await spawnToExit(

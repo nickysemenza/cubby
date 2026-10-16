@@ -114,7 +114,11 @@ const credentials = manifest.jobs.some((job) => job.id === "ai-smoke")
     )
   : {};
 const run = async (command: string, args: string[], cwd = base) => {
-  const code = await spawnToExit(command, args, { cwd, env, stdio: "inherit" });
+  const code = await spawnToExit(
+    "timeout",
+    ["--signal=TERM", "--kill-after=10s", "180s", command, ...args],
+    { cwd, env, stdio: "inherit" },
+  );
   if (code !== 0) throw new Error(`${command} ${args[0]} exited ${code}`);
 };
 
