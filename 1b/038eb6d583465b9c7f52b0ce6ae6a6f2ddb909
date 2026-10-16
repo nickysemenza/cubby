@@ -1,0 +1,37 @@
+apps/web/src/server/domains/email/repo/email-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_21dd6eff3e1219 1-268
+apps/web/src/server/domains/expense/repo/expense-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_6e390043c1d79e 1-340
+apps/web/src/server/domains/financial-account/financial-account-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_29f79aba7dc0cc 1-113
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_3f9e5bfc55351a 1-213
+apps/web/src/server/domains/garden/repo/garden-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_9de63e3a1e2fd3 1-342
+apps/web/src/server/domains/image-job/image-job-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_091e9a2eb73900 1-103
+apps/web/src/server/domains/image/repo/image-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_e443655fc4dea2 1-294
+apps/web/src/server/domains/ingredient/repo/ingredient-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_5f973ad4002f6e 1-180
+apps/web/src/server/domains/ledger-transfer/ledger-transfer-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_b75c1a1d076a5e 1-104
+apps/web/src/server/domains/plant/repo/plant-list-filters.integration.test.ts
+  s_a6ab29fb52686e::t_3e8bfc5e9d9e09 1-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1b038eb6d583465b9c7f52b0ce6ae6a6f2ddb909",
+  "prompts": {},
+  "sessions": {
+    "s_a6ab29fb52686e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef14048a-b0ff-4e41-bd5d-af494f347122",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
