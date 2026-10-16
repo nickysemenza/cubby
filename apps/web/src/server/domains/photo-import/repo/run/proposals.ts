@@ -84,8 +84,7 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
-import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
+import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
@@ -1621,46 +1620,49 @@ async function loadPhotoRunImages(
     .limit(PHOTO_RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
-  const [representations, summaries, jobs, localAnalyses, descriptionEvidence] =
-    await Promise.all([
-      loadImageRepresentations(db, shortcodes),
-      loadImageAnalysisSummaries(db, shortcodes),
-      getDb(db)
-        .select({
-          id: imageProcessingJob.id,
-          imageId: imageProcessingJob.imageId,
-          kind: imageProcessingJob.kind,
-          processorRevision: imageProcessingJob.processorRevision,
-          state: imageProcessingJob.state,
-          lastError: imageProcessingJob.lastError,
-          dispatchedAt: imageProcessingJob.dispatchedAt,
-          completedAt: imageProcessingJob.completedAt,
-          sourceContentHash: imageProcessingJob.sourceContentHash,
-        })
-        .from(imageProcessingJob)
-        .where(
+  const [
+    representations,
+    { summaries, descriptionEvidence },
+    jobs,
+    localAnalyses,
+  ] = await Promise.all([
+    loadImageRepresentations(db, shortcodes),
+    loadImageAnalysisEvidence(db, shortcodes),
+    getDb(db)
+      .select({
+        id: imageProcessingJob.id,
+        imageId: imageProcessingJob.imageId,
+        kind: imageProcessingJob.kind,
+        processorRevision: imageProcessingJob.processorRevision,
+        state: imageProcessingJob.state,
+        lastError: imageProcessingJob.lastError,
+        dispatchedAt: imageProcessingJob.dispatchedAt,
+        completedAt: imageProcessingJob.completedAt,
+        sourceContentHash: imageProcessingJob.sourceContentHash,
+      })
+      .from(imageProcessingJob)
+      .where(
+        inArray(
+          imageProcessingJob.imageId,
+          rows.map((row) => imageId.parse(row.imageId)),
+        ),
+      )
+      .orderBy(desc(imageProcessingJob.processorRevision)),
+    getDb(db)
+      .select({ imageId: aiAnalysis.entityId })
+      .from(aiAnalysis)
+      .where(
+        and(
+          eq(aiAnalysis.entityKind, "image"),
+          eq(aiAnalysis.feature, "photo-local-analysis"),
           inArray(
-            imageProcessingJob.imageId,
+            aiAnalysis.entityId,
             rows.map((row) => imageId.parse(row.imageId)),
           ),
-        )
-        .orderBy(desc(imageProcessingJob.processorRevision)),
-      getDb(db)
-        .select({ imageId: aiAnalysis.entityId })
-        .from(aiAnalysis)
-        .where(
-          and(
-            eq(aiAnalysis.entityKind, "image"),
-            eq(aiAnalysis.feature, "photo-local-analysis"),
-            inArray(
-              aiAnalysis.entityId,
-              rows.map((row) => imageId.parse(row.imageId)),
-            ),
-            notDeleted(aiAnalysis),
-          ),
+          notDeleted(aiAnalysis),
         ),
-      loadSelectedDescriptionEvidence(db, shortcodes),
-    ]);
+      ),
+  ]);
   const descriptionJobIds = jobs
     .filter(
       (job) =>

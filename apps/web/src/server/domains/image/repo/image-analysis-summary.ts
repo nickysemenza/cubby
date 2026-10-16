@@ -10,7 +10,7 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { aiAnalysis, image } from "~/server/db/schema";
 import { loadImageIdentifications } from "~/server/domains/image/repo/image-identification";
 
-import { loadSelectedDescriptions } from "./image-description-selection";
+import { loadSelectedDescriptionEvidence } from "./image-description-selection";
 
 /**
  * The slice of an on-device `photo-local-analysis` row this reader needs.
@@ -99,33 +99,41 @@ async function loadNewestAnalysisByImage(
  *
  * Every feature is loaded in a batch, including freshness and live-Product
  * filtering for identification; query count stays independent of page size.
- * Keyed by the public
+ * Both summary and description-evidence maps are keyed by the public
  * `IMG-` shortcode, matching every other batched image loader in this repo
  * (`loadImageRepresentations`, `loadImageProcessingIssues`). An image with
- * no retained analysis yet is simply absent from the returned map —
+ * no retained analysis yet is simply absent from the summary map —
  * callers read that as `analysisSummary: null`.
  */
-export async function loadImageAnalysisSummaries(
+export async function loadImageAnalysisEvidence(
   db: Database | DrizzleTransaction,
   imageShortcodes: readonly string[],
-): Promise<Map<string, ImageAnalysisSummary>> {
+) {
   const shortcodes = [...new Set(imageShortcodes)];
-  if (shortcodes.length === 0) return new Map();
+  if (shortcodes.length === 0)
+    return {
+      summaries: new Map<string, ImageAnalysisSummary>(),
+      descriptionEvidence: await loadSelectedDescriptionEvidence(
+        db,
+        shortcodes,
+      ),
+    };
 
-  const [localByImage, descriptionByImage, identificationByImage] =
+  const [localByImage, descriptionEvidence, identificationByImage] =
     await Promise.all([
       loadNewestAnalysisByImage(db, shortcodes, "photo-local-analysis"),
-      loadSelectedDescriptions(db, shortcodes),
+      loadSelectedDescriptionEvidence(db, shortcodes),
       loadImageIdentifications(db, shortcodes),
     ]);
 
   const summaries = new Map<string, ImageAnalysisSummary>();
   for (const shortcode of shortcodes) {
+    const description = descriptionEvidence.get(shortcode)?.description;
     const summary = composeImageAnalysisSummary(
       localByImage.get(shortcode),
-      descriptionByImage.has(shortcode)
+      description
         ? {
-            description: descriptionByImage.get(shortcode),
+            description,
             claims: [],
             cutoutEligibility: "review",
           }
@@ -134,5 +142,13 @@ export async function loadImageAnalysisSummaries(
     );
     if (summary) summaries.set(shortcode, summary);
   }
-  return summaries;
+  return { summaries, descriptionEvidence };
+}
+
+/** Summary-only consumers project from the same selected evidence. */
+export async function loadImageAnalysisSummaries(
+  db: Database | DrizzleTransaction,
+  imageShortcodes: readonly string[],
+): Promise<Map<string, ImageAnalysisSummary>> {
+  return (await loadImageAnalysisEvidence(db, imageShortcodes)).summaries;
 }

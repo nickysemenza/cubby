@@ -26,7 +26,10 @@ import {
   deleteImages,
   imageList,
 } from "~/server/domains/image/repo/image";
-import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
+import {
+  loadImageAnalysisEvidence,
+  loadImageAnalysisSummaries,
+} from "~/server/domains/image/repo/image-analysis-summary";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
@@ -429,6 +432,21 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.description,
     ).toBe(analysis.result.description);
+    // Combined consumers must select the same source-fenced description for
+    // summaries and rich provenance, including fresh member corrections.
+    const initialEvidence = await loadImageAnalysisEvidence(ctx.db, [
+      row.shortcode,
+    ]);
+    expect(initialEvidence.summaries.get(row.shortcode)?.description).toBe(
+      analysis.result.description,
+    );
+    expect(
+      initialEvidence.descriptionEvidence.get(row.shortcode),
+    ).toMatchObject({
+      authority: "model",
+      description: analysis.result.description,
+      claims: analysis.result.claims,
+    });
     expect(
       (await loadSelectedDescriptionEvidence(ctx.db, [row.shortcode])).get(
         row.shortcode,
@@ -448,6 +466,13 @@ describe("durable image representations", () => {
         row.shortcode,
       ),
     ).toBeUndefined();
+    const staleEvidence = await loadImageAnalysisEvidence(ctx.db, [
+      row.shortcode,
+    ]);
+    expect(staleEvidence.summaries.get(row.shortcode)).toBeUndefined();
+    expect(
+      staleEvidence.descriptionEvidence.get(row.shortcode)?.description,
+    ).toBeNull();
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: hash })
@@ -464,6 +489,20 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.description,
     ).toBe("Confirmed navy cotton shirt");
+    const correctedEvidence = await loadImageAnalysisEvidence(ctx.db, [
+      row.shortcode,
+    ]);
+    expect(correctedEvidence.summaries.get(row.shortcode)?.description).toBe(
+      "Confirmed navy cotton shirt",
+    );
+    expect(
+      correctedEvidence.descriptionEvidence.get(row.shortcode),
+    ).toMatchObject({
+      authority: "member",
+      description: "Confirmed navy cotton shirt",
+      claims: [],
+      analysis: null,
+    });
     expect(
       (await loadSelectedDescriptionEvidence(ctx.db, [row.shortcode])).get(
         row.shortcode,
