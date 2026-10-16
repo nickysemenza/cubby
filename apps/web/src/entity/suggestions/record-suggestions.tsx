@@ -223,9 +223,9 @@ export interface StoredSuggestionOperations {
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
 
 /**
- * Every pending row for a list page's records: no confidence floor, and a
- * read that fills the row limit is split by record until none does, so a page
- * with many suggestible fields is never silently truncated.
+ * Every pending row for a list page's records, with no confidence floor.
+ * Split oversized rosters before reading, then split full result pages by
+ * record so pages with many suggestible fields are never silently truncated.
  */
 export const everyPendingSuggestion =
   (
@@ -234,12 +234,19 @@ export const everyPendingSuggestion =
     ) => Promise<SuggestionReviewRow[]>,
   ) =>
   async (input: PendingPageInput): Promise<SuggestionReviewRow[]> => {
-    const rows = await read({
-      ...input,
-      minConfidence: 0,
-      limit: SUGGESTION_LIST_LIMIT_MAX,
-    });
-    if (rows.length < SUGGESTION_LIST_LIMIT_MAX || input.recordIds.length < 2)
+    // Grouped lists can contain more records than a single queue read accepts.
+    const rows =
+      input.recordIds.length > 250
+        ? null
+        : await read({
+            ...input,
+            minConfidence: 0,
+            limit: SUGGESTION_LIST_LIMIT_MAX,
+          });
+    if (
+      rows &&
+      (rows.length < SUGGESTION_LIST_LIMIT_MAX || input.recordIds.length < 2)
+    )
       return rows;
     const middle = Math.ceil(input.recordIds.length / 2);
     const halves = await Promise.all(
