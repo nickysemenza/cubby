@@ -1,6 +1,9 @@
 name: Boat CI pilot
 
 on:
+  # Temporary pre-merge verification; remove after this branch run.
+  push:
+    branches: [t3/evaluate-boat-dev-actions-1]
   workflow_dispatch:
     inputs:
       executor:
@@ -38,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      BOAT_EXECUTOR: ${{ inputs.executor }}
+      BOAT_EXECUTOR: ${{ inputs.executor || 'boat' }}
       BOAT_CI_ENABLED: ${{ vars.BOAT_CI_ENABLED }}
       BOAT_CI_SNAPSHOT: ${{ vars.BOAT_CI_SNAPSHOT }}
       BOAT_MACHINE_TYPE: default
@@ -53,7 +56,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
       - name: Install Boat CLI
         id: cli
-        if: inputs.executor == 'boat' && vars.BOAT_CI_ENABLED != 'false'
+        if: (inputs.executor || 'boat') == 'boat' && vars.BOAT_CI_ENABLED != 'false'
         continue-on-error: true
         run: |
           mkdir -p "$RUNNER_TEMP/boat-bin"
