@@ -118,36 +118,22 @@ are preserved, then confirm the retired column and exception records are gone.
 
 ## VendorAccount label retirement
 
-The member chose to discard stored Vendor Account labels; titles derive from
-the current Vendor and member names. Deployed code reads and writes the
-`label` column, so this is a staged expand/contract. Old code requires a
-non-empty label and the column itself, so it cannot read a label-free row or a
-dropped column. Run the whole sequence in an owner-confirmed idle window: no
-one uses the app from the expansion until the contraction is read back, so
-old readers never meet a label-free row. The usual exclusive-operator and
-no-overlapping-release rules above apply; stop if there is evidence of active
-background Vendor Account reads or writes.
+The member chose to discard stored Vendor Account labels and use the current
+Vendor and member names for display. Use one column-drop migration in the
+owner-confirmed idle cutover; a nullable expansion adds no value when no
+label-free writes occur between migrations. Keep the app unused until the
+matching code and schema are in place, following the breaking-cutover procedure
+above. Deployed old code still reads `label`, so the drop and matching deploy
+must complete before use resumes.
 
-1. Before merge, set `PRODUCTION_MIGRATION_THROUGH` to
-   `0074_vendor_account_label_optional`. That expansion only drops `NOT NULL`
-   and leaves existing labels in place.
-2. Merge; Actions applies the expansion and deploys the code that no longer
-   declares `label`.
-3. After that deploy finishes, apply the contraction:
-
-```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=0075_drop_vendor_account_label
-```
-
-Before the contraction and after it, compare VendorAccount rows excluding
-`label` (UUID, shortcode, vendor, member, status, cursor, owner default,
-timestamps) and the Purchase, Run and ImportSourceClaim rows that reference
-them; only `label` may change. Confirm the column is gone and the journal ends
-at the contraction tag, then delete the environment boundary and end the idle
-window. The populated predecessor regression
-`vendor-account-label-migration.integration.test.ts` proves data preservation
-across both stages with synthetic data; it does not prove mixed-version reads
-during a live rollout.
+Apply through `0074_drop_vendor_account_label` and deploy the matching code in
+that idle window. Compare VendorAccount rows excluding `label` (UUID, shortcode,
+vendor, member, status, cursor, owner default, timestamps) and the Purchase, Run
+and ImportSourceClaim rows that reference them. Only the old label values may
+be discarded. Confirm the column is gone before ending the idle window. The
+populated-predecessor regression
+`vendor-account-label-migration.integration.test.ts` verifies preservation with
+synthetic data.
 
 ## Durable member AI work
 

@@ -9,12 +9,8 @@ import { z } from "zod";
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
 import { testServiceConfig } from "./test-service-config";
 
-// The expansion must accept both old label-writing and new label-free inserts;
-// the contraction may discard only the stored labels — never an account's
-// identity, scope, status, cursor, owner default, or the Purchases, Runs and
-// source claims that reference it. This proves data preservation, not
-// mixed-version reads: old readers reject label-free rows, so the rollout runs
-// in an idle window (docs/runbooks/production-migrations.md).
+// Dropping the retired label must preserve account identities, scope, status,
+// cursor, ownership defaults, and linked Purchases, Runs and source claims.
 it("retires VendorAccount labels without losing accounts or their references", async () => {
   const service = testServiceConfig();
   const adminUrl = `postgresql://postgres:password@${service.host}:${service.port}/postgres`;
@@ -35,15 +31,12 @@ it("retires VendorAccount labels without losing accounts or their references", a
         ),
       )
       .entries.map((entry) => entry.tag);
-    const expand = tags.findIndex((tag) =>
-      tag.endsWith("_vendor_account_label_optional"),
-    );
     const contract = tags.findIndex((tag) =>
       tag.endsWith("_drop_vendor_account_label"),
     );
-    if (expand < 1 || contract !== expand + 1)
-      throw new Error("VendorAccount label stages are not adjacent");
-    await migrateDatabase(drizzle(client), { through: tags[expand - 1]! });
+    if (contract < 1)
+      throw new Error("VendorAccount label migration has no predecessor");
+    await migrateDatabase(drizzle(client), { through: tags[contract - 1]! });
 
     await client.query(
       `INSERT INTO "user" (id, name, email) VALUES ('synthetic-vendor-member', 'Synthetic member', 'vendor-label@example.invalid')`,
@@ -80,15 +73,14 @@ it("retires VendorAccount labels without losing accounts or their references", a
           (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM "Entity" e WHERE e.kind = 'vendorAccount') AS identities`)
       ).rows;
 
-    await migrateDatabase(drizzle(client), { through: tags[expand]! });
-    // Old deployed code still writes labels; the new code omits them.
+    // Preserve both a soft-deleted account and its live replacement.
     await client.query(`INSERT INTO "VendorAccount" (shortcode, label, "vendorId", "ledgerPartyId")
       SELECT 'VACCT-7M4K', 'Old writer label', v.id, p.id FROM "Vendor" v, "LedgerParty" p WHERE v.shortcode = 'VEN-7M4K'`);
     await client.query(
       `UPDATE "VendorAccount" SET "deletedAt" = now() WHERE shortcode = 'VACCT-7M4K'`,
     );
-    await client.query(`INSERT INTO "VendorAccount" (shortcode, "vendorId", "ledgerPartyId")
-      SELECT 'VACCT-M4K7', v.id, p.id FROM "Vendor" v, "LedgerParty" p WHERE v.shortcode = 'VEN-7M4K'`);
+    await client.query(`INSERT INTO "VendorAccount" (shortcode, label, "vendorId", "ledgerPartyId")
+      SELECT 'VACCT-M4K7', 'Synthetic replacement label', v.id, p.id FROM "Vendor" v, "LedgerParty" p WHERE v.shortcode = 'VEN-7M4K'`);
     expect(
       (
         await client.query(
@@ -98,7 +90,7 @@ it("retires VendorAccount labels without losing accounts or their references", a
     ).toEqual([
       { shortcode: "VACCT-4K7M", label: "Synthetic custom login" },
       { shortcode: "VACCT-7M4K", label: "Old writer label" },
-      { shortcode: "VACCT-M4K7", label: null },
+      { shortcode: "VACCT-M4K7", label: "Synthetic replacement label" },
     ]);
 
     const beforeAccounts = await accounts();

@@ -1,5 +1,5 @@
 {
-  "id": "27f3722d-174c-4acd-ad9b-e864b15923c1",
+  "id": "399fcf68-984c-44d8-b51f-eb39422f8958",
   "prevId": "b9a7fcf5-6702-488a-99b9-93aed7c231d2",
   "version": "7",
   "dialect": "postgresql",
@@ -20051,12 +20051,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "vendorId": {
           "name": "vendorId",
