@@ -65,7 +65,16 @@ export async function getRunLiveProgress(
 ) {
   const database = getDb(db);
   const [record] = await database
-    .select({ run })
+    .select({
+      run: {
+        status: run.status,
+        purpose: run.purpose,
+        shortcode: run.shortcode,
+        progress: run.progress,
+        progressHistory: run.progressHistory,
+        routine: run.routine,
+      },
+    })
     .from(run)
     .where(
       and(eq(run.shortcode, runShortcode.parse(shortcode)), notDeleted(run)),

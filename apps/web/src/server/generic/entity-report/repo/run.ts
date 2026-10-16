@@ -547,7 +547,9 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
         ),
       ];
 
-const importTimeline = (run: RunDetail): ReportBlock[] => [
+export const runTimelineBlocks = (
+  run: Pick<RunDetail, "operations">,
+): ReportBlock[] => [
   records(
     run.operations.map((operation) => {
       const state = statusState(operation.state, operation.state);
@@ -778,7 +780,7 @@ const IMPORT_BUILDERS = {
   "run.import-findings": importFindings,
   "run.import-targets": importTargets,
   "run.import-prepared-orders": importPreparedOrders,
-  "run.import-timeline": importTimeline,
+  "run.import-timeline": runTimelineBlocks,
 } as const satisfies Record<string, (run: RunDetail) => ReportBlock[]>;
 export type ImportReportSlot = keyof typeof IMPORT_BUILDERS;
 
@@ -790,7 +792,7 @@ export function importReportBlocks(
   slot: ImportReportSlot,
   run: RunDetail,
 ): ReportBlock[] {
-  if (slot === "run.import-timeline") return importTimeline(run);
+  if (slot === "run.import-timeline") return runTimelineBlocks(run);
   return hasImportRunReports(run.purpose) ? IMPORT_BUILDERS[slot](run) : [];
 }
 

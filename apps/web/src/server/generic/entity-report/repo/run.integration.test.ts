@@ -4,7 +4,8 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog, run as runTable } from "~/server/db/schema";
+import { auditLog, run as runTable, runOperation } from "~/server/db/schema";
+import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -121,6 +122,90 @@ describe("Run detail reports", () => {
     expect(block.rows[0]?.lines?.map((line) => line.text)).toContain(
       "displayLabel: Old → Report purchase",
     );
+  });
+
+  // Photo Runs have no import reports; their durable timeline must not load
+  // targets, prepared orders, or restart inputs on each report poll. Private
+  // provider receipts stay hidden and the next request must see new work.
+  it("polls photo Run reports with only their public operation evidence", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic photo report member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      actorUserId: ctx.actor.userId,
+    });
+    const id = runShortcode.parse(run.publicId);
+    const operationId = "synthetic-photo-work";
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values([
+        {
+          runId: run.id,
+          operationId,
+          kind: "synthetic_photo_work",
+          inputFingerprint: "a".repeat(64),
+          startedAt: new Date("2026-09-20T00:00:00Z"),
+          state: "completed",
+          result: { privatePayload: "Synthetic result" },
+        },
+        {
+          runId: run.id,
+          operationId: "synthetic-private-receipt",
+          kind: "research_mail_page",
+          inputFingerprint: "b".repeat(64),
+          state: "completed",
+        },
+      ]);
+    const batch = await countTestDbQueries(() =>
+      buildEntityReports(ctx.db, { id, slots: [...POLLED] }),
+    );
+    const timeline = batch.result.reports.find(
+      (entry) => entry.slot === "run.import-timeline",
+    )?.report;
+    const rows = timeline?.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(rows?.map((row) => row.key)).toEqual([operationId]);
+    expect(JSON.stringify(timeline)).not.toContain("Synthetic result");
+    const importReports = batch.result.reports.filter(
+      ({ slot }) =>
+        slot !== "run.live-progress" && slot !== "run.import-timeline",
+    );
+    expect(importReports.flatMap(({ report }) => report.blocks)).toEqual([]);
+    console.info(
+      "Run report read evidence",
+      JSON.stringify({
+        workload: "synthetic-photo-polled-reports",
+        sqlCount: batch.queryCount,
+      }),
+    );
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values({
+        runId: run.id,
+        operationId: "synthetic-new-work",
+        kind: "synthetic_photo_work",
+        inputFingerprint: "c".repeat(64),
+        startedAt: new Date("2026-09-20T00:00:01Z"),
+        state: "completed",
+      });
+    const next = await buildEntityReport(ctx.db, {
+      id,
+      slot: "run.import-timeline",
+    });
+    const nextRows = next.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(nextRows).toHaveLength(1);
+    expect(nextRows[0]).toMatchObject({
+      key: operationId,
+      trailing: "×2",
+      detail: { label: "2 events" },
+    });
+    expect(nextRows[0]?.detail?.text).toContain(operationId);
+    expect(nextRows[0]?.detail?.text).toContain("synthetic-new-work");
   });
 
   it("reads every polled run slot in one batch that loads the run once", async () => {

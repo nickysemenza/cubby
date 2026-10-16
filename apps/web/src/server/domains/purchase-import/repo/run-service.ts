@@ -1021,6 +1021,20 @@ const PRIVATE_OPERATION_KINDS = [
   "research_mail_continuation",
 ] as const;
 
+const PUBLIC_OPERATION_COLUMNS = {
+  operationId: runOperation.operationId,
+  kind: runOperation.kind,
+  state: runOperation.state,
+  error: runOperation.error,
+  startedAt: runOperation.startedAt,
+  completedAt: runOperation.completedAt,
+};
+const publicRunOperations = (runId: RunId) =>
+  and(
+    eq(runOperation.runId, runId),
+    notInArray(runOperation.kind, [...PRIVATE_OPERATION_KINDS]),
+  );
+
 export const STALE_RUN_MS = 2 * 60 * 60_000;
 
 /** The approval decision a `controlRun` wake event names (`approvalWakeEvent`). */
@@ -1254,6 +1268,24 @@ function restartInputSummary(
   return null;
 }
 
+/** A durable timeline needs public operation metadata, never result payloads
+ * or the import-specific targets, approvals and restart context. */
+export async function loadRunTimeline(
+  db: Database,
+  runId: RunId,
+): Promise<RunDetail["operations"]> {
+  const operations = await getDb(db)
+    .select(PUBLIC_OPERATION_COLUMNS)
+    .from(runOperation)
+    .where(publicRunOperations(runId))
+    .orderBy(asc(runOperation.startedAt));
+  return operations.map((operation) => ({
+    ...operation,
+    startedAt: operation.startedAt.toISOString(),
+    completedAt: iso(operation.completedAt),
+  }));
+}
+
 export async function loadRunDetail(
   db: Database,
   shortcode: string,
@@ -1301,21 +1333,11 @@ export async function loadRunDetail(
       .limit(1),
     database
       .select({
-        operationId: runOperation.operationId,
-        kind: runOperation.kind,
-        state: runOperation.state,
-        error: runOperation.error,
-        startedAt: runOperation.startedAt,
-        completedAt: runOperation.completedAt,
+        ...PUBLIC_OPERATION_COLUMNS,
         result: runOperation.result,
       })
       .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, run.id),
-          notInArray(runOperation.kind, [...PRIVATE_OPERATION_KINDS]),
-        ),
-      )
+      .where(publicRunOperations(run.id))
       .orderBy(asc(runOperation.startedAt)),
     database
       .select({
