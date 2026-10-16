@@ -56,7 +56,7 @@ Boolean filter trees are not part of this ([§11](#11-non-goals-and-deferred-wor
   both names the parent field and enables nested lists by default; only run,
   product category, and spending category declare it.
 - **Grouping:** `sort.groupable` / `grouping` (`definition.ts:763-792`),
-  parsed by `parseGroupBy` (`entity-kernel/list-input.ts:48`).
+  parsed by `parseGroupBy` (`entity-kernel/list-input.ts:49`).
   `groupBy` is a list request param (`pagination.ts:217`); saved views
   (`definition.ts:1257-1300`) cannot declare it, and Apple reads it out of the
   filter dictionary (`EntityKernel.swift:91`). Web entity lists have no Group
@@ -160,11 +160,15 @@ current UX. A filter on a hierarchical reference, own or at the end of a
 `via` path, gets a generated **Include sub-‹entity›** toggle, on by default.
 It replaces paired filters such as inventory's `locationIdFilter` and
 `locationSubtreeFilter`. Descendant expansion reads
-`hierarchy` and replaces the helpers only where list filters use them
+`hierarchy` and replaces the helpers where list filters use them
 (`project/repo/lookup.ts:236`, `task/repo/lookup.ts:147`,
-`inventory/repo/crud.ts:374,378`). About 10 non-list `collectDescendantIds`
-callers (calendar, expense, reports, dashboards) rely on its depth cap and
-cycle guard and stay.
+`inventory/repo/crud.ts:374,378`, `product/repo/crud.ts:674,775`). The
+non-list callers of the two SQL helpers (`product-category.ts:533,633`,
+`entity-embedding-cleanup.ts:170`, `productSearch` in `product/repo/crud.ts`)
+move to the generator too, which deletes `locationDescendantsSql` and
+`categoryDescendantsSql`. About 10 non-list `collectDescendantIds` callers
+(calendar, expense, reports, dashboards) rely on its depth cap and cycle guard
+in JS and stay.
 
 ## 4. Filter semantics
 
@@ -204,7 +208,7 @@ filter has the same generic forms:
 - Multi-valued fields show a **Match any | Match all** toggle at the top of
   the editor. The chip joins values with "or" or "and" ("Tags: winter and
   wool"). Single-valued fields never show the toggle.
-- An inactive chip still reads "any" (DESIGN.md). An active Any value chip
+- An inactive chip still reads "any" (`filterSummary` in `ui/data-table/filter-bar.tsx`). An active Any value chip
   reads "has a value", so the two states don't look alike.
 - On Apple, `EntityFilterValue.single` (about 70 call sites with tests) and the single/multi branches in
   `EntityFilterSheet.swift` go away. `SavedViewFilter.isList` leaves the native
@@ -241,14 +245,16 @@ compiler's related-path case.
 - **Web:** `GroupConfig` is generated from the declaration rather than wired
   in `list-columns.tsx`. A Group by menu joins the list's view options, offers
   every groupable declared field (disabled ones with their reason), and writes
-  the URL `groupBy`, so a saved view can capture it. Generic sections use the neutral gray band; a domain
+  the URL `groupBy`. A declared saved view sets its default `groupBy` in its
+  declaration. Generic sections use the neutral gray band; a domain
   color stays optional. Headers are sticky and show a quiet tabular count.
   A **Filter to this** button appears on hover and is keyboard reachable.
   Collapsing sections is not in v1.
 - **Apple:** `EntityListView` gets pinned section headers in table, Cards,
   and Compact. Tapping a header filters to that value. **Group by** sits in
-  the view-options menu next to the Cards/Compact/List choice, and is stored
-  with the saved view. The Wardrobe saved view declares its `groupBy`.
+  the view-options menu next to the Cards/Compact/List choice and is kept with
+  the list's other view state. A declared saved view's `groupBy` arrives on the
+  manifest wire as the default; the Wardrobe saved view declares one.
 - **Header action:** selecting a header sets that value as the field's
   include filter and keeps grouping, leaving one section and an active chip. A
   header has the action only when its field has a declared filter. Inventory
@@ -322,15 +328,16 @@ MCP reject the same request with the same text, unmasked
   correlated subquery per row. Check query plans on the largest synthetic list
   (inventory) before #2259 merges.
 - **Wire changes.** Dropping `select`, `id`, and `isList` touches HTTP, MCP,
-  the native wire, and about 40 Swift call sites. Follow
+  the native wire, and about 70 Swift call sites including tests. Follow
   [breaking changes](../agents/domain-rules.md#breaking-changes).
 - **Installed native app.** The web Worker deploys on merge, while the app
   updates through [TestFlight](../ci.md#apple-testflight-release). The
   installed app may break between PRs; that is accepted, and there is no
-  compatibility shim. The last PR in the chain bumps
+  compatibility shim. The last PR of the chain to merge, whichever it is, bumps
   `APPLE_CLIENT_COMPATIBILITY_VERSION` once, which publishes promptly and
   raises the server minimum, then confirms the TestFlight upload processed.
-  Nightly uploads of intermediate `main` may still happen.
+  Earlier PRs do not bump, despite the breaking-changes rule to bump in the
+  same change. Nightly uploads of intermediate `main` may still happen.
 
 ## 11. Non-goals and deferred work
 
@@ -354,7 +361,8 @@ and tapping a header filters to that type.
 ## 13. Execution
 
 An orchestrating session runs the issues in §9 order, one T3 thread and
-`nicky/` worktree per issue, with #2412 alongside the filter work. Each PR
+`nicky/` worktree per issue, with #2412 alongside the filter work and at most
+two implementation threads at once ([model routing](../agents/model-routing.md)). Each PR
 follows [model routing](../agents/model-routing.md) for its independent review
 and merges itself once final-head CI passes and the review has no unresolved
 findings; merging deploys web. The derived-field shape in §3 is approved, so
