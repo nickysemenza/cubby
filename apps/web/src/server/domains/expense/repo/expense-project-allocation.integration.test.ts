@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
+import { expense } from "~/server/db/schema";
 import {
   expenseDerivedReadSql,
   expenseDerivedMembershipSql,
@@ -16,6 +17,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { expenseDerivedCostsSql } from "./expense-derived-read";
 import { effectiveExpenseProjectSql } from "./expense-inheritance";
 import { loadExpenseProjectAllocations } from "./expense-project-allocation";
+import { buildExpenseWhereClause } from "./lookup";
 
 const allocationPlanNode = z.object({
   "Subplan Name": z.string().optional(),
@@ -256,6 +258,21 @@ describe("expense project allocation", () => {
     ).toBe(5n);
     expect(rows.every((row) => row.sourceCents === 5n)).toBe(true);
     expect(rows.every((row) => row.basis === "positive")).toBe(true);
+
+    // Stored row filters must select complete purchases before allocation:
+    // these principals fail the tax/cost filters but still supply its weights.
+    const filteredWhere = await buildExpenseWhereClause(ctx.db, {
+      lineKind: "tax",
+      costMin: 0.01,
+      costMax: 0.1,
+      projectId: smallProject.shortcode,
+    });
+    expect(
+      await unwrapDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(filteredWhere),
+    ).toEqual([{ id: tax.id }]);
 
     // Filtering the output to one adjustment must retain both principals in
     // its denominator, and each selected line must produce just one total.
