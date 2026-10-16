@@ -23,7 +23,7 @@
     "test:e2e:install-browser": "playwright install",
     "typecheck": "node ../../scripts/ensure.ts wasm && node ../../scripts/ensure.ts generate && tsc --noEmit --checkers 1 -p tsconfig.json",
     "typecheck:app": "node ../../scripts/ensure.ts wasm && node ../../scripts/ensure.ts generate && tsc --noEmit --checkers 1 -p tsconfig.app.json",
-    "db:generate": "node ../../scripts/ensure.ts generate && tsx tooling/db-generate.ts",
+    "db:generate": "node ../../scripts/ensure.ts generate && drizzle-kit generate",
     "db:check": "node ../../scripts/ensure.ts generate && node ../../scripts/test-services.ts -- tsx tooling/db-check.ts",
     "db:migrate": "tsx tooling/db-migrate.ts",
     "db:promote-historical-orders": "tsx tooling/historical-accepted-orders.ts",

@@ -208,14 +208,12 @@ const classificationConstraintSql = (): string =>
     .join("\n");
 
 /**
- * DDL derived from the application model that drizzle-kit cannot express:
+ * Desired-state DDL for the database catalog check beyond the Drizzle schema:
  * entity identity, EntityLink liveness and Suggestion superseding triggers,
- * plus classification constraints. Every statement is idempotent
- * (`CREATE OR REPLACE`, or drop-and-create where Postgres has no replace), so
- * `pnpm db:generate` can emit the whole script as a custom migration whenever
- * it changes and the result replays cleanly over any earlier version.
- * `drizzle/derived.lock` records the hash of the rendering the committed
- * migrations already contain.
+ * plus classification constraints. db:check applies it only to its scratch
+ * model database and compares that catalog with a migration-built database.
+ * Changes require targeted SQL in an unmerged migration, not another copy of
+ * this whole script.
  */
 export function renderDerivedDdl(): string {
   return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${productIdentityInvalidationDdl(entityFieldModels.product.fields.filter((field) => field.control?.suggest?.basis.some((basis) => String(basis) === "classificationEvidence")).map((field) => field.key))}\n`;

@@ -24,12 +24,20 @@ and transform existing rows in the same migration that changes their shape;
 clients update with the change ([breaking changes](#breaking-changes)).
 Establish data preservation before pushing, then verify the applied schema.
 Schema reaches every database only through
-committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
-(drizzle-kit for `schema.ts`, plus a custom migration when the derived DDL in
-`src/server/db/derived-ddl.ts` changes), and `pnpm --filter @cubby/web
+committed migrations in `apps/web/drizzle/`: `pnpm db:generate` runs native
+Drizzle generation for `schema.ts`, and `pnpm --filter @cubby/web
 db:migrate --target=production` applies them with
 `PRODUCTION_DIRECT_DATABASE_URL`.
-Run `db:generate` with a TTY and unredirected stdout when Drizzle asks create/rename questions. An interactive-prompt diagnostic can still leave a derived-only journal entry; inspect the journal and schema SQL before treating generation as complete.
+Run `db:generate` with a TTY and unredirected stdout when Drizzle asks
+create/rename questions; inspect the journal and generated SQL before treating
+generation as complete.
+
+For functions, triggers, views, or other derived DDL, update the desired-state
+definition in `src/server/db/derived-ddl.ts` and its helpers, then handwrite only
+the changed objects in the new, unmerged migration. If there is no schema
+migration to extend, use `pnpm db:generate --custom --name=description`.
+Do not copy the entire desired-state script into another migration or add a
+generator wrapper or hash lock. The catalog check detects missing SQL changes.
 
 Migrations are the one committed generated artifact and are immutable once
 merged — the runner refuses bookkeeping that is not a prefix of the journal.
@@ -38,7 +46,8 @@ A stored-shape transform accompanying schema work is a custom migration
 correction, use a transactional update and verify preservation and read-back;
 keep the script outside the repository and add no journal entry or schema guard
 solely to route it through migrations. CI `db:check` fails when `schema.ts` has no migration or the
-migrations build a catalog different from `schema.ts`; `tooling/db-catalog.ts`
+migrations build a catalog different from `schema.ts` plus the desired-state
+derived DDL, including function, trigger and view definitions; `tooling/db-catalog.ts`
 reads the same catalog from production. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
 relational query builder selects every declared column, so the declaration is
