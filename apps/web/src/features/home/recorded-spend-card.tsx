@@ -7,7 +7,7 @@ import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { Row } from "~/ui/layout";
-import { CardActionLink, DashboardCard } from "~/ui/layout/dashboard-card";
+import { Section, SectionActionLink } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -65,11 +65,12 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
   const previous = monthly.at(-2);
 
   return (
-    <DashboardCard
-      icon={ChartBarIcon}
+    <Section
+      headingAs="h3"
+      icon={<ChartBarIcon />}
       title="Recorded spend"
       description="Last six calendar months · actual expenses only"
-      action={<CardActionLink to="/expenses">Ledger</CardActionLink>}
+      actions={<SectionActionLink to="/expenses">Ledger</SectionActionLink>}
     >
       {query.isLoading ? (
         <>
@@ -109,7 +110,7 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
           <RecordedSpendBars monthly={monthly} />
         </>
       )}
-    </DashboardCard>
+    </Section>
   );
 }
 

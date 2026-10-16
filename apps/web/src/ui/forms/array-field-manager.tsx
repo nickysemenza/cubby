@@ -4,9 +4,8 @@ import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 
 import { cn } from "~/lib/utils";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-
-import { FormSection } from "./form-section";
 
 /**
  * Generic array field manager for react-hook-form.
@@ -43,7 +42,7 @@ interface ArrayFieldManagerProps<
    * Tabular mode: one header row of the given column labels above the
    * visually unlabeled row controls (`children` retains associated, visually
    * hidden field labels and owns each row's actual
-   * fields), and the title + "+ Add" button move into `FormSection`'s own
+   * fields), and the title + "+ Add" button move into `Section`'s own
    * header slot instead of this component's plain title row. `className`
    * on a column aligns its header label with the matching row control's own
    * width class; omit it to fall back to `flex-1`, matching a row control
@@ -154,9 +153,11 @@ export const ArrayFieldManager = <
 
   if (columns) {
     return (
-      <FormSection
+      <Section
+        className="!mt-3"
+        headingAs="h4"
         title={title}
-        action={
+        actions={
           <AddRowButton
             addButtonText={addButtonText}
             onClick={handleAdd}
@@ -184,7 +185,7 @@ export const ArrayFieldManager = <
           )}
           {rows}
         </div>
-      </FormSection>
+      </Section>
     );
   }
 

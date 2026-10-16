@@ -83,6 +83,28 @@ test("design showcase renders every section and its live demos", async ({
   await expect(review.getByRole("status")).toHaveText("Accepted locally");
 
   const sections = page.locator("#section-compositions");
+  const context = sections.getByRole("region", {
+    name: "Household context demo",
+  });
+  const deferredContext = context.getByText(
+    "The workshop shelf has space for spare parts.",
+    { exact: true },
+  );
+  await expect(deferredContext).toHaveCount(0);
+  await context
+    .getByRole("button", { name: "Reset demo task count", exact: true })
+    .click();
+  await expect(deferredContext).toHaveCount(0);
+  const disclosure = context.getByRole("button", {
+    name: "Explore household context",
+    exact: true,
+  });
+  await disclosure.focus();
+  await disclosure.press("Enter");
+  await expect(deferredContext).toBeVisible();
+  await disclosure.press("Enter");
+  await expect(deferredContext).toHaveCount(0);
+
   await sections.getByRole("button", { name: "Notes", exact: true }).click();
   await sections
     .getByRole("textbox", { name: "Task note" })

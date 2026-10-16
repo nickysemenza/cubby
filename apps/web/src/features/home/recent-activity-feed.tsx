@@ -3,7 +3,7 @@ import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
-import { DashboardCard } from "~/ui/layout/dashboard-card";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -71,10 +71,11 @@ export function RecentActivityFeed({
 
   return (
     <div ref={hostRef}>
-      <DashboardCard
-        icon={ClockIcon}
+      <Section
+        headingAs="h3"
+        icon={<ClockIcon />}
         title="Recent activity"
-        action={
+        actions={
           // `render` keeps this one element — a <button> inside an <a> is
           // invalid HTML and produced two tab stops for one destination.
           <Button
@@ -110,7 +111,7 @@ export function RecentActivityFeed({
             ))}
           </div>
         )}
-      </DashboardCard>
+      </Section>
     </div>
   );
 }

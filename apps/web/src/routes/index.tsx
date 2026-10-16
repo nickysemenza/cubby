@@ -22,7 +22,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
-import { CollapsibleSection, Grid, Section } from "~/ui/layout";
+import { Grid, Section } from "~/ui/layout";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/features/home/home-insights");
@@ -170,9 +170,10 @@ function Home() {
         <RecentActivityFeed limit={6} />
       </Section>
 
-      <CollapsibleSection
+      <Section
         title="Browse records"
-        summary="Everything the household has on record"
+        meta={"Everything the household has on record"}
+        disclosure={{}}
       >
         <Suspense
           fallback={
@@ -183,16 +184,16 @@ function Home() {
         >
           <EntityCount />
         </Suspense>
-      </CollapsibleSection>
+      </Section>
 
       {/* Insights — the visualization panels folded in from the retired
           /insights page. Exploration, not operation: they are the heaviest
           reads on the most-visited route and the least likely to change what
           anyone does next, so the whole region is collapsed by default.
-          The disclosure IS the gate — CollapsibleSection mounts its body only
+          The disclosure IS the gate — Section mounts its body only
           while open, so a closed region runs no queries at all, and the panels
           need no per-panel scroll-gating of their own. */}
-      <CollapsibleSection title="Insights" summary="Four exploratory views">
+      <Section title="Insights" meta={"Four exploratory views"} disclosure={{}}>
         <Suspense
           fallback={
             <output className="block min-h-24 text-sm text-muted-foreground">
@@ -202,7 +203,7 @@ function Home() {
         >
           <HomeInsights />
         </Suspense>
-      </CollapsibleSection>
+      </Section>
     </Page>
   );
 }

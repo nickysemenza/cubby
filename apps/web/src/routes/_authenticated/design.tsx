@@ -187,22 +187,12 @@ const GROUPS: IndexedSectionGroup[] = [
       },
       {
         id: "section-compositions",
-        title: "Sections, dashboard and forms",
+        title: "Sections and forms",
         icon: ListBulletsIcon,
         description: (
           <ComponentsLine
-            components={[
-              "SectionHeading",
-              "DashboardCard",
-              "FormSection",
-              "CollapsibleSection",
-            ]}
-            source={[
-              "ui/layout/section.tsx",
-              "ui/layout/dashboard-card.tsx",
-              "ui/forms/form-section.tsx",
-              "ui/layout/collapsible-section.tsx",
-            ]}
+            components={["SectionHeading", "Section", "SectionActionLink"]}
+            source={["ui/layout/section.tsx"]}
           />
         ),
         content: <SectionCompositionsSection />,
