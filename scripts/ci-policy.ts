@@ -68,6 +68,10 @@ export interface MatrixEntry {
   checks?: { lane: string; name: string; run: string }[];
 }
 
+// Browser shards run alone: a companion check behind a shard serializes the
+// slowest lane's wall time.
+const E2E_SHARDS = [1, 2, 3, 4];
+
 export function laneMatrix(lanes: readonly string[]): MatrixEntry[] {
   const entries: MatrixEntry[] = [
     {
@@ -87,37 +91,19 @@ export function laneMatrix(lanes: readonly string[]): MatrixEntry[] {
       db: true,
       run: "pnpm exec nx run @cubby/web:postgres --outputStyle=stream",
     },
-    ...[1, 2].map((shard) => ({
+    ...E2E_SHARDS.map((shard) => ({
       lane: "e2e",
-      name: `E2E tests (desktop ${shard}/2)`,
+      name: `E2E tests (desktop ${shard}/${E2E_SHARDS.length})`,
       db: true,
       browser: `desktop-${shard}`,
-      run: `CUBBY_E2E_SHARD=${shard}/2 pnpm exec nx run @cubby/web:e2e --outputStyle=stream`,
+      run: `CUBBY_E2E_SHARD=${shard}/${E2E_SHARDS.length} pnpm exec nx run @cubby/web:e2e --outputStyle=stream`,
     })),
   ].filter((entry) => lanes.includes(entry.lane!));
-  const browsers = entries.filter((entry) => entry.browser);
   const companion = (entry: MatrixEntry) => ({
     lane: entry.lane!,
     name: entry.name,
     run: entry.run,
   });
-  if (browsers.length) {
-    // Keep the former two-slot pairings while paying setup only once per pair.
-    // Heavy checks stay sequential inside each runner.
-    return browsers.map((browser, index) => {
-      const checks = entries.filter(
-        (entry) =>
-          !entry.browser &&
-          (index === 0 ? entry.lane !== "postgres" : entry.lane === "postgres"),
-      );
-      return {
-        ...browser,
-        name: [browser.name, ...checks.map((entry) => entry.name)].join(" + "),
-        ...(checks.length ? { timeout: 40 } : {}),
-        checks: checks.map(companion),
-      };
-    });
-  }
   const aux = entries.find((entry) => entry.lane === "aux");
   const worker = entries.find((entry) => entry.lane === "build-worker");
   if (!aux || !worker) return entries;

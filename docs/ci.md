@@ -455,16 +455,10 @@ Generated output is never committed, except `.github/ci-lanes.yml`, which
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
 document lints.
 
-The `lanes` job is one dynamic matrix over the selected web lanes. When browser
-coverage is selected, its two entries also run the selected companion checks:
-the first shard precedes auxiliary and Worker checks, and the second precedes
-PostgreSQL checks. Each entry shares one dependency install and service setup;
-heavy checks remain sequential within a runner. Companion steps run after an
-earlier check fails, but not after setup failure or cancellation. Every failure
-still fails the job and `CI passed`. Browser reports upload before the companion
-checks, and each Nx target retains its own cache key. Paired entries have the
-combined timeout budget of the former separate entries. Without browsers,
-non-browser checks retain their standalone/combined routing.
+The `lanes` job is one dynamic matrix over the selected web lanes, up to six
+runners at once. Browser shards run alone, so no companion check waits behind
+one. Every failure still fails the job and `CI passed`, and each Nx target
+retains its own cache key.
 
 Each entry uses one standard runner; only database entries start PostgreSQL and
 IntegreSQL service containers (an empty service `image` starts none).
@@ -477,7 +471,7 @@ worker environment together. `Build Workers and runtime tests` runs the
 `integration-workerd` Vitest project against a Worker it builds itself. When
 both lanes are selected without browsers they share one runner as `Auxiliary,
 Worker, and runtime tests`, two steps that each run despite the other's failure.
-Desktop Chromium runs as two Playwright shards (two workers each) through the
+Desktop Chromium runs as four Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
@@ -507,8 +501,7 @@ with four fork workers; local explicit partitions remain supported and separatel
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
 Workers and runtime tests`. Keep every Worker-consuming integration test in
-that project explicitly. An ordinary PostgreSQL step can inherit a valid
-browser-built Worker when paired; the harness's refusal to rebuild missing or
+that project explicitly. The harness's refusal to rebuild missing or
 stale Workers in CI does not enforce project membership. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container

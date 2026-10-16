@@ -311,7 +311,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout || 20 }}
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 6
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     services: &test-databases # An empty image starts no service container.
