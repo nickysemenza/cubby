@@ -19,32 +19,28 @@ is roughly ten times the allowance.
 
 ## Decision
 
-- Every required check is an Nx target. A passing result is stored in a shared
-  Nx remote cache (Nx's built-in HTTP cache client, served by the
-  `apps/nx-cache` Worker over an R2 bucket), keyed by the hash of the
-  target's inputs.
-- Test inputs are deliberately broad: every non-documentation file, the
-  lockfile, and the CI configuration; the Apple lanes key on what the Apple
-  build reads. Any code change
-  misses the cache. Rebases, documentation-only changes, and re-pushes of an
-  already-tested tree hit it.
-- CI and the developer's Mac write to the cache; fork PRs receive no
-  credentials and use only their runner's local cache. A
-  result produced locally for the same input hash satisfies the merge gate
-  exactly as a CI result does.
-- The Apple lane runs locally through the same Nx target. A Linux job probes
-  each Apple target after dependency setup. A verified
-  cache hit skips that target's macOS job entirely; a miss or failed probe
-  falls back to hosted macOS. The
-  required check accepts native success or a skipped native job backed by its
-  own verified Linux probe hit.
-- Apple inputs exclude the named root documentation and the explicitly excluded
-  CubbyAPI README. Markdown copied as a test fixture or build resource remains
-  keyed; add new consumed documentation to the inputs when changing the build.
-- Keys leave out platform, Node and Xcode versions, locale, and CI's own
-  environment, so a Mac result counts for CI's Linux and macOS lanes. A nightly run executes every lane
-  uncached on CI as the backstop for platform-only failures; `main` pushes
-  reuse the cache.
+- Every required check has a declared Nx target. The shared HTTP remote cache
+  (`apps/nx-cache`, backed by R2) stores successful results keyed by complete
+  source and execution inputs. Failed tasks are never passing evidence.
+- Runtime passes distinguish their relevant platform/toolchains. Web gates also
+  include bundled Markdown, CI/runtime identity and test selectors. Apple keys
+  contain actual Xcode/Swift/SDK/macOS/Rust identity, FFI settings and the generated
+  bytes each target reads. Portable generation/WASM have separate artifact keys.
+- Local results count only when those inputs match the hosted execution. A Mac
+  result cannot substitute for a Linux result. Credentials remain trusted check
+  publishing authority; fork PRs cannot access the shared cache.
+- Native-relevant CI observes the floating hosted toolchain within the configured
+  Xcode major on a lightweight Mac job, then performs guarded Nx lookups on Linux.
+  A verified hit skips expensive native preparation/build. A Mac executor checks
+  its own environment again; discovery on another runner is not its identity.
+- PR/main/manual/nightly runs are cache-first. Nightly selects all lanes and
+  detects runtime drift by environment-aware keys, rather than forcing daily
+  rebuilds. Unrelated PRs can reuse the known source baseline before nightly
+  discovers a hosted-native regression. Explicit fresh diagnostics bypass remote
+  reads/writes while retaining fresh per-run local prerequisites.
+- Policy-versioned passing-tree artifacts and baseline eligibility prevent old
+  proof from bypassing an amended cache contract. Manual diagnostics are named
+  apart from `CI passed` and publish no merge evidence.
 
 ## Considered options
 

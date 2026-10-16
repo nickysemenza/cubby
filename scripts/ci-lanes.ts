@@ -24,58 +24,22 @@ import type { InputDefinition } from "nx/src/config/workspace-json-project-json.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const LANES_FILE = ".github/ci-lanes.yml";
 
-// The Nx tasks (`project:target`, `*` for every project with the target) each
-// CI lane runs, and the files a lane's non-Nx steps read. Keep each lane's
-// tasks in step with its command in ci.yaml.
-// `deleted` patterns select the lane only when a matching file is deleted.
-export type LaneSpec = {
-  tasks?: string[];
-  files?: string[];
-  deleted?: string[];
-};
-export const LANES = {
-  // Named Validation steps.
-  validation: {
-    tasks: [
-      "cubby-checks:generate",
-      "cubby-checks:design-tokens",
-      "cubby-checks:types",
-      "cubby-checks:lint",
-      "cubby-checks:knip",
-      "cubby-checks:bindings",
-      "cubby-checks:script-tests",
-      "cubby-checks:ci-lanes",
-      "@cubby/web:workers-tests",
-    ],
-  },
-  // Formatting and the offline Markdown link check (lychee).
-  docs: {
-    tasks: ["cubby-checks:format"],
-    files: [".lycheeignore"],
-    // A deleted or renamed file can be any relative link's target.
-    deleted: ["**"],
-  },
-  aux: { tasks: ["*:test"] },
-  "build-worker": {
-    tasks: ["@cubby/web:db-check", "@cubby/web:workerd-tests"],
-  },
-  postgres: { tasks: ["@cubby/web:postgres"] },
-  e2e: { tasks: ["@cubby/web:e2e"] },
-  "purchase-import": { tasks: ["@cubby/web:e2e-purchase-import"] },
-  rust: { tasks: ["*:rust"] },
-  "apple-lint": { tasks: ["apple:lint"] },
-  apple: { tasks: ["apple:host-tests", "apple:simulator-build"] },
-} satisfies Record<string, LaneSpec>;
+import { LANES, type LaneSpec } from "./ci-policy.ts";
+export { LANES, type LaneSpec } from "./ci-policy.ts";
 
 // Every Nx runtime input a lane task reads, keyed by its exact command, with
 // the tracked files it hashes or the tasks whose ignored outputs it hashes.
 // A new or edited command fails generation until it is classified here.
 type RuntimeRoute = { files?: string[]; producedBy?: string[] };
 const RUNTIME = new Map<string, RuntimeRoute>([
-  // Toolchain versions never appear in a diff; the nightly run covers them.
+  // Runtime drift has no source diff; cached nightly runs select every lane.
   ["node --version", {}],
   ['node -p "process.platform + process.arch"', {}],
   ["rustc -V", {}],
+  ...["web", "apple", "swift", "ffi"].map((target): [string, RuntimeRoute] => [
+    `node scripts/ci-environment.ts ${target}`,
+    { files: ["scripts/ci-environment.ts", "rust-toolchain.toml", ".nvmrc"] },
+  ]),
   // Local Cargo packages (rust-fingerprint.ts) plus the wasm toolchain.
   [
     "node scripts/ensure.ts wasm --fingerprint",
@@ -89,11 +53,10 @@ const RUNTIME = new Map<string, RuntimeRoute>([
     },
   ],
   [
-    "git ls-files -z -co --exclude-standard -- docs/README.md docs/guide .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256",
+    "git ls-files -z -co --exclude-standard -- docs .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256",
     {
       files: [
-        "docs/README.md",
-        "docs/guide/**",
+        "docs/**",
         ".claude/skills/purchase-import/**",
         ".claude/skills/product-enrichment/**",
         ".claude/skills/photo-inventory-import/**",

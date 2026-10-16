@@ -8,15 +8,31 @@ on:
   push:
     branches: [main]
   schedule:
-    # Nightly backstop: every lane runs uncached, so a pass reused from another
-    # platform, toolchain, or skipped lane is rechecked on CI's. A manual
-    # dispatch runs the same full pass (and seeds main's native caches).
+    # Nightly selects every lane and reuses passes valid for the observed
+    # environment. Fresh diagnostics are an explicit manual option.
     - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
+      scope:
+        description: Routed changes or every lane (both use valid caches)
+        type: choice
+        options: [routed, full]
+        default: routed
+      fresh:
+        description: Bypass remote passes; reuse only results freshly produced on this runner
+        type: boolean
+        default: false
+      purchase-import:
+        description: Run the informational purchase-import browser after required diagnostics succeed
+        type: boolean
+        default: false
+      live-email:
+        description: Run paid live Email evaluations after required diagnostics succeed
+        type: boolean
+        default: false
       journey:
         description: >-
-          Empty runs full CI. Otherwise runs only this journey on the
+          Empty runs ordinary cached diagnostics. Otherwise runs only this journey on the
           dispatched ref: simulator-search, simulator-inputs, tester-army-web,
           tester-army-visual, tester-army-explore, tester-army-ios,
           tester-army-both, tester-army-import or tester-army-all.
@@ -42,10 +58,11 @@ permissions:
   pull-requests: read
 
 env:
-  # The nightly backstop and a full manual run bypass the Nx cache for every
-  # command, nested ones included; other runs, journey dispatches included,
-  # replay passes for the same input hash.
-  NX_SKIP_NX_CACHE: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.journey)) && 'true' || 'false' }}
+  # Establish the same warning policy before cache probes and compilation.
+  CARGO_BUILD_WARNINGS: deny
+  # Fresh diagnostics bypass only the remote cache. Each runner's initially
+  # empty local cache retains fresh prerequisites for subsequent Nx calls.
+  NX_SKIP_REMOTE_CACHE: ${{ inputs.fresh && 'true' || 'false' }}
   # Read by setup-node-with-deps, which connects Nx to the shared remote cache
   # only when both are present (a fork PR receives neither) and it responds.
   NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
@@ -76,6 +93,15 @@ jobs:
       ios: ${{ steps.journeys.outputs.ios }}
       simulator: ${{ steps.journeys.outputs.simulator }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            .github/ci-lanes.yml
+            scripts/ci-policy.ts
+            scripts/check-outward-text.ts
+            packages/shared/src/shortcode-alphabet.ts
+            packages/schemas/src/entity-definitions
+          sparse-checkout-cone-mode: false
       # Journeys are informational and opt-in: a PR's journey labels, or a
       # dispatch naming one. A labeled event or a journey dispatch is a
       # journey-only run that checks out the PR head (or dispatched ref);
@@ -99,12 +125,10 @@ jobs:
               | tester-army-ios | tester-army-both | tester-army-import | tester-army-all) ;;
             *) echo "::error::Unknown journey '$JOURNEY'"; exit 1 ;;
           esac
-          mode=ci
-          [[ "$ACTION" == labeled || -n "$JOURNEY" ]] && mode=journeys
           if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" != opened ]]; then
             # Current labels, not the event's: one removed while this run
             # queued starts nothing. A later push supersedes this run.
-            pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+            pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" || echo '{}')"
             if jq -e --arg head "$HEAD" --arg repo "$GITHUB_REPOSITORY" \
               '.state == "open" and .head.sha == $head and .head.repo.full_name == $repo' <<< "$pull" > /dev/null; then
               labels="$(jq -c '[.labels[].name]' <<< "$pull")"
@@ -128,55 +152,7 @@ jobs:
                 as $check | $check == null or ($ran | index($check)) == null))' <<< "$labels")"
             fi
           fi
-          selected="$(jq -nc --argjson labels "$labels" --arg journey "$JOURNEY" '
-            def in_list($names): . as $value | $names | index($value) != null;
-            if $journey != "" then {
-              web: ($journey | in_list(["tester-army-web", "tester-army-both", "tester-army-all", "tester-army-visual", "tester-army-explore"])),
-              ios: ($journey | in_list(["tester-army-ios", "tester-army-both", "tester-army-all"])),
-              import: ($journey | in_list(["tester-army-import", "tester-army-all"])),
-              simulator: (if $journey | startswith("simulator-") then $journey | ltrimstr("simulator-") else "" end)
-            } else {
-              web: ("tester-army" | in_list($labels)),
-              ios: ("tester-army:ios" | in_list($labels)),
-              import: ("tester-army:import" | in_list($labels)),
-              simulator: (if "simulator-e2e" | in_list($labels) then "search" else "" end)
-            } end
-            # The label runs three web smoke journeys; a dispatch, the catalog.
-            | .web = [
-                if .web then {lane: "web", harness: "standard", db: true,
-                  mode: ({"tester-army-visual": "visual", "tester-army-explore": "explore"}[$journey] // "agent"),
-                  timeout: (if $journey == "" then 10 else 25 end),
-                  journeys: (if $journey == "" then "product-rename,receive-purchase,field-product-tags" else "" end)}
-                else empty end,
-                if .import then {lane: "import", harness: "coupled", db: true, mode: "agent", timeout: 30, journeys: ""}
-                else empty end
-              ]
-            | del(.import)')"
-          {
-            echo "mode=$mode"
-            echo "ref=${HEAD:-$GITHUB_SHA}"
-            jq -r 'to_entries[] | "\(.key)=\(.value | if type == "string" then . else tojson end)"' <<< "$selected"
-          } >> "$GITHUB_OUTPUT"
-          echo "::notice::Run mode: $mode; journeys: $selected"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: steps.journeys.outputs.mode == 'ci'
-        with:
-          sparse-checkout: |
-            .github/ci-lanes.yml
-            scripts/check-outward-text.ts
-            packages/shared/src/shortcode-alphabet.ts
-            packages/schemas/src/entity-definitions
-          sparse-checkout-cone-mode: false
-      # The commit-msg hook gates commit messages; the PR title and body are
-      # the other outward text AGENTS.md keeps free of live entity codes.
-      - name: PR text names no live entity codes
-        if: github.event_name == 'pull_request' && steps.journeys.outputs.mode == 'ci'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
-            --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
+          LABELS="$labels" node scripts/ci-policy.ts journeys
       # A PR run tests its merge commit, so a squash merge onto an unmoved main
       # pushes the same tree. `CI passed` publishes it only after every job.
       - name: Record the tested tree
@@ -192,7 +168,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TREE: ${{ steps.tree.outputs.tree }}
         run: |
-          count="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=tested-tree-$TREE&per_page=100" \
+          count="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=ci-green-v2-$TREE&per_page=100" \
             --jq '[.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length' \
             || echo 0)"
           if [[ "$count" =~ ^[1-9] ]]; then
@@ -203,14 +179,22 @@ jobs:
       # replay the same pass. Nightly and manual runs have no baseline.
       - name: Find the last green main run
         id: base
-        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.journeys.outputs.mode == 'ci' && steps.tested.outputs.found != 'true'
+        if: github.event_name != 'schedule' && inputs.scope != 'full' && !inputs.fresh && steps.journeys.outputs.mode == 'ci' && steps.tested.outputs.found != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs?branch=main&event=push&status=success&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty')"
+          # A previous cache policy must never bootstrap the new gate.
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs?branch=main&event=push&status=success&per_page=10" \
+            --jq '.workflow_runs[] | [.id, .head_sha] | @tsv' || true)"
+          sha=''
+          while IFS=$'\t' read -r id candidate; do
+            [[ -n "$id" ]] || continue
+            verified="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select((.expired | not) and (.name | startswith("ci-green-v2-")))] | length' || echo 0)"
+            if [[ "$verified" =~ ^[1-9] ]]; then sha="$candidate"; break; fi
+          done <<< "$runs"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "::notice::Lanes routed by changes since ${sha:-no green main run, so every lane runs}"
+          echo "::notice::Lanes routed by policy-v2 baseline ${sha:-none; every lane runs}"
       - name: Match changes to lanes
         id: filter
         if: steps.base.outputs.sha != ''
@@ -221,6 +205,24 @@ jobs:
           base: ${{ steps.base.outputs.sha }}
           filters: .github/ci-lanes.yml
           predicate-quantifier: some-with-excludes
+      - name: Identify relevant purchase-import changes
+        id: purchase
+        if: steps.journeys.outputs.mode == 'ci' && github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        with:
+          token: ""
+          base: ${{ github.event.pull_request.base.sha }}
+          filters: |
+            relevant:
+              - 'apps/web/src/server/domains/purchase-import/**'
+              - 'apps/web/src/features/purchase/**'
+              - 'apps/web/tests/e2e/purchase-import*'
+              - 'apps/web/tests/e2e/fixtures/purchases*'
+              - 'apps/web/tooling/purchase-agent-*.ts'
+              - 'apps/web/tests/e2e/harness-services/purchase-*.ts'
+              - 'apps/web/src/server/mcp/purchase-agent-protocol.ts'
+              - '.claude/skills/purchase-import/**'
+              - 'packages/schemas/src/purchase*'
       # A journey-only run selects no lane.
       - name: Select lanes
         id: select
@@ -229,58 +231,12 @@ jobs:
           CHANGES: ${{ steps.filter.outputs.changes }}
           BASE: ${{ steps.base.outputs.sha }}
           TESTED: ${{ steps.tested.outputs.found }}
-        run: |
-          set -euo pipefail
-          if [[ "$TESTED" == true ]]; then
-            groups='[]'
-          elif [[ -n "$BASE" ]]; then
-            groups="$CHANGES"
-          else
-            groups="$(grep -oE '^[^ #][^:]*' .github/ci-lanes.yml | jq -Rsc 'split("\n") - [""]')"
-          fi
-          lanes="$(jq -c 'map(sub("\\.[0-9]+$"; "") | split("+")) | flatten | unique' <<< "$groups")"
-          matrix="$(jq -nc --argjson lanes "$lanes" '[
-            {lane: "aux", name: "Auxiliary tests and builds",
-             run: "pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only"},
-            {lane: "build-worker", name: "Build Workers and runtime tests", db: true,
-             run: "pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream"},
-            (range(1; 3) | {lane: "postgres", name: "PostgreSQL integration tests (\(.)/2)", db: true,
-             run: "CUBBY_POSTGRES_SHARD=\(.)/2 pnpm exec nx run @cubby/web:postgres --outputStyle=stream"}),
-            # Two Playwright workers per standard runner.
-            (range(1; 5) | {lane: "e2e", name: "E2E tests (desktop \(.)/4)", db: true, browser: "desktop-\(.)",
-             run: "CUBBY_E2E_SHARD=\(.)/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream"})
-          ] | map(select(.lane as $lane | $lanes | index($lane)))
-            # Aux and Build Workers share one runner (two steps) when both run;
-            # together they take about as long as the slowest E2E shard.
-            | (map(select(.lane == "aux" or .lane == "build-worker"))) as $pair
-            | if ($pair | length) == 2 then
-                map(select(.lane != "aux" and .lane != "build-worker")) + [{
-                  lane: "aux+build-worker", name: "Auxiliary, Worker, and runtime tests", db: true,
-                  step: $pair[0].name, run: $pair[0].run, then_step: $pair[1].name, then: $pair[1].run
-                }]
-              else . end')"
-          # Informative checks outside `CI passed`; the live Email run spends
-          # model credits, so only a manual dispatch starts it.
-          optional="$(jq -nc --argjson lanes "$lanes" --arg event "$GITHUB_EVENT_NAME" '[
-            if $lanes | index("purchase-import") then {name: "E2E tests (purchase import agent, optional)", db: true,
-              browser: "purchase-import", run: "pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream"} else empty end,
-            if $event == "workflow_dispatch" then {name: "Live Email decisions (Jev and Clef, optional)", db: true,
-              run: "MAIL_PROMPT_BASELINE_ONLY=1 pnpm --dir apps/web eval:mail-prompts"} else empty end
-          ]')"
-          skips="$(jq -nr --argjson lanes "$lanes" --argjson matrix "$matrix" --arg event "$GITHUB_EVENT_NAME" '[
-            ("rust", "apple-lint") as $job | select($lanes | index($job) | not) | $job
-          ] + (if ($lanes | index("validation")) or ($lanes | index("docs")) then [] else ["validation"] end)
-            + (if $matrix == [] then ["lanes"] else [] end)
-            + (if $lanes | index("apple") | not then ["apple-probe", "apple-host", "apple-simulator"]
-               elif $event == "schedule" or $event == "workflow_dispatch" then ["apple-probe"] else [] end)
-          | join(",")')"
-          {
-            echo "lanes=$lanes"
-            echo "matrix=$matrix"
-            echo "optional=$optional"
-            echo "skips=$skips"
-          } >> "$GITHUB_OUTPUT"
-          echo "::notice::Lanes: $(jq -r 'join(", ")' <<< "$lanes"); skipped jobs: ${skips:-none}"
+          SCOPE: ${{ inputs.scope }}
+          FRESH: ${{ inputs.fresh }}
+          LIVE_EMAIL: ${{ inputs.live-email }}
+          PURCHASE_RELEVANT: ${{ steps.purchase.outputs.relevant }}
+          PURCHASE_OPT_IN: ${{ inputs.purchase-import }}
+        run: node scripts/ci-policy.ts lanes
 
   # The validation and docs lanes share one runner. A docs-only change
   # installs only the root tools and runs only the docs steps.
@@ -355,6 +311,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     services: &test-databases # An empty image starts no service container.
@@ -401,9 +358,9 @@ jobs:
         if: ${{ !matrix.browser }}
         run: ${{ matrix.run }}
       # A combined entry's second lane still runs after the first fails.
-      - name: ${{ matrix.then_step || 'Second lane' }}
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.then }}
-        run: ${{ matrix.then }}
+      - name: ${{ matrix.nextStep || 'Second lane' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.nextRun }}
+        run: ${{ matrix.nextRun }}
       - if: ${{ matrix.browser }}
         uses: ./.github/actions/playwright
         with:
@@ -415,8 +372,12 @@ jobs:
   # and on dispatch the live Email decisions.
   optional:
     name: ${{ matrix.name }}
-    needs: plan
-    if: needs.plan.outputs.optional != '[]'
+    needs: [plan, ci-passed]
+    if: needs.ci-passed.result == 'success' && needs.plan.outputs.optional != '[]'
+    concurrency:
+      group: cubby-informational-ci
+      cancel-in-progress: false
+      queue: max
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -486,10 +447,35 @@ jobs:
   # Linux checks whether each Apple lane's pass is already cached before any
   # macOS runner queues. A probe miss fails before native work and cannot
   # publish a passing Nx cache entry.
+  apple-environment:
+    name: Observe hosted Apple toolchain
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple') && !inputs.fresh
+    runs-on: xcode-27
+    timeout-minutes: 5
+    concurrency:
+      group: cubby-apple-discovery
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      environment: ${{ steps.observe.outputs.environment }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            scripts/ci-environment.ts
+            rust-toolchain.toml
+          sparse-checkout-cone-mode: false
+      - name: Observe selected Xcode 27 without preparing a build
+        id: observe
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+          echo "environment=$(node scripts/ci-environment.ts apple)" >> "$GITHUB_OUTPUT"
+
   apple-probe:
     name: Apple cache probe
-    needs: plan
-    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple') && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    needs: [plan, apple-environment]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.apple-environment.result == 'success' && !inputs.fresh }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -497,6 +483,7 @@ jobs:
       simulator: ${{ steps.simulator.outcome }}
     env:
       CUBBY_NX_CACHE_PROBE: "1"
+      CUBBY_APPLE_ENVIRONMENT: ${{ needs.apple-environment.outputs.environment }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -508,13 +495,17 @@ jobs:
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
 
   # Each Apple lane queues macOS only when Linux did not verify its cached
-  # pass; a failed probe falls through to macOS. The nightly backstop skips
-  # the probe and rebuilds.
+  # pass; a failed probe falls through to macOS. Queued jobs probe again
+  # before preparing native dependencies.
   apple-host:
     name: Apple host tests
     needs: [plan, apple-probe]
     if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.host != 'success' }}
     runs-on: xcode-27
+    concurrency:
+      group: cubby-apple-host
+      cancel-in-progress: false
+      queue: max
     timeout-minutes: 40
     env:
       # The restore and save steps must name the same paths.
@@ -525,17 +516,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # Package clones come from the simulator job's shared clone cache.
-      - uses: ./.github/actions/setup-apple
+      - id: apple
+        uses: ./.github/actions/setup-apple
         with:
+          probe: apple:host-tests
           ffi-targets: mac
           xcodegen: "false"
       # Build products are disposable; unchanged compiler inputs replay through
       # Xcode's compilation cache without forging checkout timestamps. Keep
       # SwiftPM's warning-generator products.
       - name: Compute host Xcode toolchain hash
+        if: steps.apple.outputs.probe-hit != 'true'
         id: host-xcode-version
         run: echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Restore cached host compilation
+        if: steps.apple.outputs.probe-hit != 'true'
         id: host-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -548,6 +543,7 @@ jobs:
         run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
+        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ env.HOST_BUILD_CACHE_PATHS }}
@@ -560,6 +556,10 @@ jobs:
     needs: [plan, apple-probe]
     if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.simulator != 'success' }}
     runs-on: xcode-27
+    concurrency:
+      group: cubby-apple-simulator
+      cancel-in-progress: false
+      queue: max
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -568,12 +568,14 @@ jobs:
       - uses: ./.github/actions/setup-apple
         id: apple
         with:
+          probe: apple:simulator-build
           ffi-targets: sim
           build-cache: "true"
       - name: Run iOS app checks
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
@@ -581,6 +583,7 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.cache-hit }}
           matched-key: ${{ steps.apple.outputs.save-matched-key }}
       - name: Save SPM clone cache
+        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
@@ -867,7 +870,7 @@ jobs:
   # dispatch is no merge evidence: it records no tree, and because a skipped
   # job still reports success, its skipped job is named apart from the gate.
   ci-passed:
-    name: ${{ (github.event.action == 'labeled' || inputs.journey) && 'Journey run (not the merge gate)' || 'CI passed' }}
+    name: ${{ github.event_name == 'workflow_dispatch' && !inputs.journey && 'Manual CI diagnostics' || (github.event.action == 'labeled' || inputs.journey) && 'Journey run (not the merge gate)' || 'CI passed' }}
     needs:
       [
         plan,
@@ -875,6 +878,7 @@ jobs:
         lanes,
         rust,
         apple-lint,
+        apple-environment,
         apple-probe,
         apple-host,
         apple-simulator,
@@ -883,6 +887,22 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            scripts/check-outward-text.ts
+            scripts/ci-summary.ts
+            packages/shared/src/shortcode-alphabet.ts
+            packages/schemas/src/entity-definitions
+          sparse-checkout-cone-mode: false
+      - name: PR text names no live entity codes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+            --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
@@ -895,12 +915,20 @@ jobs:
       # Records that this tree passed, so a main push of the same tree (a
       # squash merge onto an unmoved main) starts no lane.
       - name: Record the passing tree
+        if: github.event_name != 'workflow_dispatch'
         run: echo "$TREE" > tested-tree
         env:
           TREE: ${{ needs.plan.outputs.tree }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'workflow_dispatch'
         with:
-          name: tested-tree-${{ needs.plan.outputs.tree }}
+          name: ci-green-v2-${{ needs.plan.outputs.tree }}
           path: tested-tree
           retention-days: 14
           overwrite: true
+      - name: Report runner demand and timing
+        if: always() && !cancelled()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci-summary.ts

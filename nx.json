@@ -53,23 +53,17 @@
       "!{workspaceRoot}/**/*.md",
       "!{workspaceRoot}/.claude/**"
     ],
-    // Merge-gate test lanes (docs/adr/0009-content-hash-merge-gate.md). A
-    // passing result for this hash satisfies the gate, so a false cache hit
-    // skips a check that should have run: keep it broad. Every
-    // non-documentation file (lockfile and CI configuration included) and the
-    // Markdown that the Worker bundles; generation-only TODO references have
-    // their own generate/types inputs in project.json. Nx applies a
-    // negation to every file input, so that Markdown is hashed at runtime.
-    // Platform and Node version stay out so a developer Mac's pass counts as
-    // CI's; the nightly CI run reruns every lane uncached as the backstop.
+    // Result passes include execution identity; portable generation/WASM keep
+    // their narrower artifact inputs; source coverage remains broad.
     "gate": [
       "{workspaceRoot}/**/*",
+      { "runtime": "node scripts/ci-environment.ts web" },
       "!{workspaceRoot}/**/*.{md,mdx,MD,markdown}",
       "!{workspaceRoot}/.claude/**",
       // Workflows that deploy, publish or review run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,deploy-nx-cache.yaml,apple-testflight.yaml,claude.yml}",
       {
-        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/guide .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
+        "runtime": "git ls-files -z -co --exclude-standard -- docs .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
       }
     ],
     // What Cargo reads for the recipebridge and cubby-ffi merge-gate lanes:
@@ -87,7 +81,13 @@
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
       "{workspaceRoot}/.github/workflows/ci.yaml",
       "{workspaceRoot}/.github/actions/**/*",
+      "{workspaceRoot}/scripts/check-rust.ts",
       { "runtime": "rustc -V" },
+      { "runtime": "node --version" },
+      { "env": "RUSTFLAGS" },
+      { "env": "CARGO_ENCODED_RUSTFLAGS" },
+      { "env": "CARGO_BUILD_WARNINGS" },
+      { "runtime": "node -p \"process.platform + process.arch\"" },
       // Cargo never reads JavaScript dependencies, which Nx hashes by default.
       { "externalDependencies": [] }
     ]

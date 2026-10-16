@@ -17,13 +17,15 @@ jobs, and a hard-coded job list in the Tester Army dispatcher had to agree.
 ## Decision
 
 - A `Plan` job on `ubuntu-slim` diffs the tested tree against the commit of
-  the newest successful `main` push run of `ci.yaml`, using
+  the newest policy-verified successful `main` push run of `ci.yaml`, using
   `dorny/paths-filter` with git, and starts only the lanes whose filter
   matches. Nightly and manual runs, or no green main run, start every lane.
-  A `main` push whose exact tree already passed (a `tested-tree-<tree>`
+  A `main` push whose exact tree already passed (a policy-versioned `ci-green-v2-<tree>`
   artifact from a same-repository green run) starts no lane.
 - Each lane's filter is generated from the Nx inputs of the tasks it runs
-  (`scripts/ci-lanes.ts` → `.github/ci-lanes.yml`). Runtime inputs are
+  (`scripts/ci-lanes.ts` → `.github/ci-lanes.yml`). Dependency-free
+  `scripts/ci-policy.ts` owns lane metadata, matrices and event/journey selection
+  and runs in the sparse, install-free Plan job. Runtime inputs are
   classified by exact command, so a new one fails generation instead of being
   silently unrouted. A test checks every file in Nx's hash plan against the
   generated filter.

@@ -8,7 +8,7 @@
 #   lint  native formatting and state-initialization rules
 #
 # A passing result satisfies the merge gate for its input hash whether CI or a
-# developer's Mac produced it, so neither mode may vary by host.
+# developer's Mac produced it, but only for the same execution environment.
 set -euo pipefail
 
 mode="${1:-}"
@@ -29,6 +29,7 @@ fi
 
 # Needs only a Swift toolchain, so CI runs it on Linux.
 if [ "$mode" = lint ]; then
+  lint_status=0
   # @State/@StateObject must never be seeded from an init parameter: a re-presented
   # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
   # "Traps that cost real time"). Tag a deliberate exception `// state-init-ok: <reason>`
@@ -37,7 +38,7 @@ if [ "$mode" = lint ]; then
   if [ -n "$offenders" ]; then
     echo "Found @State/@StateObject seeded from an init parameter without a state-init-ok tag:" >&2
     echo "$offenders" >&2
-    exit 1
+    lint_status=1
 fi
 
 # swift-format's --recursive can't exclude a subdirectory, and
@@ -53,9 +54,9 @@ for entry in "$kit_dir"/*; do
   targets+=("$entry")
 done
 targets+=(apps/apple/App apps/apple/CubbyKit/Sources/cubby apps/apple/CubbyKit/Sources/CubbyAPISupport apps/apple/CubbyKit/Tests)
-swift format lint --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}"
+swift format lint --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}" || lint_status=1
 
-exit 0
+exit "$lint_status"
 fi
 
 if ! xcode-select -p >/dev/null 2>&1; then
@@ -70,6 +71,7 @@ if [ "$mode" = host ]; then
   # The package scheme runs host-only tests through Xcode's compilation cache;
   # running them on the iOS Simulator cost about 6 minutes to boot plus ~10
   # minutes of CPU starvation on a hosted runner (measured 2026-09-21).
+  host_status=0
   (
     cd apps/apple/CubbyKit
     xcodebuild -showBuildTimingSummary \
@@ -83,9 +85,9 @@ if [ "$mode" = host ]; then
       ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
       COMPILATION_CACHE_ENABLE_CACHING=YES \
       COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES test
-  ) 2>&1 | tee "$host_log"
-  apps/apple/scripts/check-openapi-warnings.sh "$host_log"
-  exit 0
+  ) 2>&1 | tee "$host_log" || host_status=$?
+  apps/apple/scripts/check-openapi-warnings.sh "$host_log" || host_status=1
+  exit "$host_status"
 fi
 
 

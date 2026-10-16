@@ -56,10 +56,8 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
      contention, so macOS defaults to two and other hosts to one. Use
      Playwright's --workers override, including CI's explicit two. */
   workers: !isCI && process.platform === "darwin" ? 2 : 1,
-  /* Backstop for a dead worker harness, which fails every remaining test
-     identically. Kept loose enough that a genuine multi-test regression still
-     reports most of its failures in one go. */
-  maxFailures: isCI ? 6 : 0,
+  // Independent scenarios keep reporting after failures; shard timeouts bound dead harnesses.
+  maxFailures: 0,
   /* Name the slowest spec files after the run; per-test page-load time is
      the `e2e-navigation-ms` annotation in the HTML report. */
   reportSlowTests: { max: 10, threshold: 60_000 },
