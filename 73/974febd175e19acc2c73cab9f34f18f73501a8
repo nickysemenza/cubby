@@ -1,0 +1,23 @@
+tools/oxlint/anti-slop/anti-slop-rules.test.ts
+  s_5285635cb5ec69::t_c140a819b470e3 393,400-401,403-412
+tools/oxlint/anti-slop/fixtures/no-hand-written-filter-predicate.txt
+  s_5285635cb5ec69::t_40fb291f6eb7a2 13-23
+tools/oxlint/cubby/rules/no-hand-written-filter-predicate.ts
+  s_5285635cb5ec69::t_663e987cd1f12c 5,33-53,56-70,73-74,78-79,82-83,85-91,93-97,147-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "73974febd175e19acc2c73cab9f34f18f73501a8",
+  "prompts": {},
+  "sessions": {
+    "s_5285635cb5ec69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36a7f5c0-2a54-429d-8349-ad4f4e7f2675",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
