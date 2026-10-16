@@ -90,20 +90,29 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
 
 /** Vendor paperwork excludes household reimbursements; spend and settlement
  * continue to include every incurred Expense, including those credits. */
-export const vendorExpenseTotalSql = (purchaseAlias: string) =>
-  `(SELECT COALESCE(sum(vp_e."cost"::numeric), 0)::double precision FROM "Expense" vp_e
+const vendorExpenseRowsSql = (purchaseAlias: string) =>
+  `FROM "Expense" vp_e
     WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
-      AND vp_e."economicRole" = 'vendor')`;
+      AND vp_e."economicRole" = 'vendor'`;
+
+const vendorExpenseTotalExpression =
+  'COALESCE(sum(vp_e."cost"::numeric), 0)::double precision';
+
+export const vendorExpenseTotalSql = (purchaseAlias: string) =>
+  `(SELECT ${vendorExpenseTotalExpression} ${vendorExpenseRowsSql(purchaseAlias)})`;
 
 export const vendorExpenseCountSql = (purchaseAlias: string) =>
-  `(SELECT count(*)::int FROM "Expense" vp_e
-    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
-      AND vp_e."economicRole" = 'vendor')`;
+  `(SELECT count(*)::int ${vendorExpenseRowsSql(purchaseAlias)})`;
 
 export const vendorUnpricedExpenseCountSql = (purchaseAlias: string) =>
-  `(SELECT count(*)::int FROM "Expense" vp_e
-    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
-      AND vp_e."economicRole" = 'vendor' AND vp_e."cost" IS NULL)`;
+  `(SELECT count(*)::int ${vendorExpenseRowsSql(purchaseAlias)} AND vp_e."cost" IS NULL)`;
+
+/** One scan when a verdict needs the total and both line counts together. */
+export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
+  `SELECT ${vendorExpenseTotalExpression} AS total,
+    count(*)::int AS "expenseCount",
+    count(*) FILTER (WHERE vp_e."cost" IS NULL)::int AS "unpricedCount"
+    ${vendorExpenseRowsSql(purchaseAlias)}`;
 
 /**
  * The settlement total compared with incurred expenses. Outstanding expected
