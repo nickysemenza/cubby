@@ -63,6 +63,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `count` instead of calling
   `executeListQueryWithCount`), `insertAndReturn`,
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
+  `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`; every
+  recursive descendant expansion over a `model.hierarchy`), `listPrepare`
+  (`field-compiler.ts`; request data a `model.derived` field's SQL reads),
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/generic/removal/repo/`).
   List filtering, sorting, paging, and count share a plain root-table FROM,

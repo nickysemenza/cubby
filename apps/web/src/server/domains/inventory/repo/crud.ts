@@ -24,15 +24,23 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  not,
+  or,
+  sql,
+  sum,
+} from "drizzle-orm";
 import type { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
-import {
-  categoryDescendantsSql,
-  categoryFeatureInSql,
-} from "~/server/db/computed/product-category-sql";
+import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
@@ -51,7 +59,6 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { locationDescendantsSql } from "~/server/domains/location/repo/descendants-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -70,7 +77,11 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
-  declaredFilterPredicates,
+  ListContext,
+  listPrepare,
+} from "~/server/generic/list/repo/field-compiler";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
+import {
   listIdsCondition,
   listScaffold,
 } from "~/server/generic/list/repo/list";
@@ -213,7 +224,10 @@ export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
 // published schema types (`@me` resolves in the kernel before this runs).
 type InventoryFilters = Pick<
   z.output<typeof inventoryFiltersSchema>,
-  "ownerLedgerPartyId" | "ownershipMode" | "categoryFeatureFilter"
+  | "ownerLedgerPartyId"
+  | "ownershipMode"
+  | "categoryFeatureFilter"
+  | "includeSubProductCategories"
 > & {
   searchQuery?: string;
   createdFrom?: string;
@@ -245,47 +259,54 @@ type InventoryFilters = Pick<
   dataGap?: string | string[];
 };
 
-// Joined-column sorts the generic table-column path can't produce. Clauses
-// only DEFINE the field's order — the createdAt tie-break moved to the single
-// trailing tieBreaker so it can't swallow a stacked secondary sort.
-const resolveInventorySort =
-  (valuations: InventoryValuations | undefined) => (sort: SortParams) => {
-    const direction = sort.direction === "asc" ? asc : desc;
-    if (sort.orderBy === "name" || sort.orderBy === "product") {
-      return [direction(product.name)];
-    }
-    if (sort.orderBy === "location") {
-      return [direction(location.name)];
-    }
-    // The Product's category name, so a gallery keeps Shirts beside Shirts;
-    // uncategorized stock trails in either direction.
-    if (sort.orderBy === "category") {
-      return [
-        sql`(SELECT c."name" FROM "ProductCategory" c WHERE c."id" = ${product.categoryId} AND c."deletedAt" IS NULL) ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
-      ];
-    }
-    // Amount is stored as a unit + value pair: group by unit, then by size.
-    if (sort.orderBy === "amount") {
-      return [
-        direction(inventoryEntry.amountUnit),
-        direction(inventoryEntry.amountValue),
-      ];
-    }
-    if (sort.orderBy === "valuation" && valuations) {
-      return [
-        sql`${inventoryValuationSql(valuations, inventoryEntry.id)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
-      ];
-    }
-    return null;
-  };
+// Amount is stored as a unit + value pair: group by unit, then by size. The
+// related and valuation sorts compile from `model.derived`.
+const resolveInventorySort = (sort: SortParams) => {
+  const direction = sort.direction === "asc" ? asc : desc;
+  if (sort.orderBy === "amount") {
+    return [
+      direction(inventoryEntry.amountUnit),
+      direction(inventoryEntry.amountValue),
+    ];
+  }
+  return null;
+};
 
-const inventoryScaffold = listScaffold("inventory", inventoryEntry);
+// One valuation map serves the rows, their sort and filter, and the footer.
+const inventoryValuations = listPrepare((db) =>
+  loadLiveInventoryValuations(db),
+);
+
+const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
+  derived: {
+    valuation: inventoryValuations.value((valuations) =>
+      inventoryValuationSql(valuations, inventoryEntry.id),
+    ),
+    valuationStatus: inventoryValuations.predicate(
+      (valuations, statuses: readonly string[]) => {
+        const valuation = inventoryValuationSql(valuations, inventoryEntry.id);
+        return or(
+          ...statuses.map((status) =>
+            status === "valued"
+              ? sql`${valuation} IS NOT NULL`
+              : status === "missing"
+                ? sql`${valuation} IS NULL`
+                : and(
+                    sql`${valuation} IS NULL`,
+                    sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
+                  ),
+          ),
+        );
+      },
+    ),
+  },
+});
 const inventoryScoreSort = dataQualitySortResolver("inventory", inventoryEntry);
 
 const inventoryListOrderBy = (
   sorts: SortParams[],
   filters: InventoryFilters,
-  valuations: InventoryValuations | undefined,
+  context: ListContext,
 ) => {
   if (filters.searchQuery?.trim() && sorts.length === 0) {
     return [
@@ -302,7 +323,9 @@ const inventoryListOrderBy = (
     [...generatedEntitySort.inventory.fields],
     {
       resolve: (sort) =>
-        inventoryScoreSort(sort) ?? resolveInventorySort(valuations)(sort),
+        inventoryScoreSort(sort) ??
+        resolveInventorySort(sort) ??
+        inventoryScaffold.derivedSort(sort, context),
       tieBreaker: desc(inventoryEntry.createdAt),
     },
   );
@@ -323,25 +346,24 @@ const inventoryListOrderBy = (
 export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,
-  // Valuation is computed on read (WASM, not SQL), so a `valuationStatus`
-  // filter needs the computed map. `inventoryentryList` passes the one it
-  // already loaded; other callers get one loaded on demand.
-  loadedValuations?: InventoryValuations,
+  // `inventoryentryListRead` passes the context it already prepared; other
+  // callers prepare what these filters read.
+  prepared?: ListContext,
 ) => {
-  const valuations =
-    filters.valuationStatus === undefined
-      ? undefined
-      : (loadedValuations ?? (await loadLiveInventoryValuations(db)));
+  // Filter-only: dashboard counts and work-queue predicates load valuations
+  // only when a valuation filter asks.
+  const context =
+    prepared ??
+    (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
   const ownerCodes =
     filters.ownerLedgerPartyId === undefined
       ? undefined
       : [filters.ownerLedgerPartyId].flat();
-  const [locationIds, subtreeLocationIds, productIds, categoryIds, ownedIds] =
+  const [locationIds, subtreeLocationIds, productIds, ownedIds] =
     await Promise.all([
       resolveFilterIds(db, "location", filters.locationIdFilter),
       resolveFilterIds(db, "location", filters.locationSubtreeFilter),
       resolveFilterIds(db, "product", filters.productIdFilter),
-      resolveFilterIds(db, "productCategory", filters.categoryFilter),
       ownerCodes === undefined
         ? undefined
         : inventoryIdsByEffectiveOwner(db, ownerCodes),
@@ -361,9 +383,10 @@ export const buildInventoryWhere = async (
     [
       ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
-      // Stored filters (`ownershipMode`) come from the manifest; this
-      // hand-built where must apply them since it bypasses `inventoryScaffold.where`.
-      ...declaredFilterPredicates("inventory", inventoryEntry, filters),
+      // Stored (`ownershipMode`) and derived (`category`, `valuationStatus`)
+      // filters come from the manifest; this hand-built where must apply them
+      // since it bypasses `inventoryScaffold.where`.
+      ...inventoryScaffold.filterPredicates(filters, context),
       listIdsCondition(inventoryEntry.shortcode, filters),
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
@@ -371,11 +394,8 @@ export const buildInventoryWhere = async (
         ? undefined
         : subtreeLocationIds.length === 0
           ? sql`false`
-          : sql`${inventoryEntry.locationId} IN ${locationDescendantsSql(subtreeLocationIds)}`,
+          : sql`${inventoryEntry.locationId} IN ${hierarchyDescendantsSql("location", subtreeLocationIds)}`,
       eqAnyRequested(inventoryEntry.productId, productIds),
-      categoryIds === undefined
-        ? undefined
-        : sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
       categoryFeatures === undefined
         ? undefined
         : categoryFeatureInSql(sql`${product.categoryId}`, categoryFeatures),
@@ -392,16 +412,6 @@ export const buildInventoryWhere = async (
         : filters.verifiedPresenceFilter === "none"
           ? sql`${inventoryEntry.verifiedAt} IS NULL`
           : undefined,
-      valuations === undefined
-        ? undefined
-        : filters.valuationStatus === "valued"
-          ? sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NOT NULL`
-          : filters.valuationStatus === "missing"
-            ? sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NULL`
-            : and(
-                sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NULL`,
-                sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
-              ),
       ...householdDayRangeConditions(
         inventoryEntry.verifiedAt,
         filters.verifiedFrom,
@@ -426,16 +436,14 @@ export const inventoryentryListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  // The rows, their sort/filter and the footer total all read ONE computed map;
-  // a count-only read shows none of them.
-  const valuations =
-    readIntent === "count" ||
-    (!wantsListGroup(projection, "derived") &&
-      !sorts.some((sort) => sort.orderBy === "valuation") &&
-      filters.valuationStatus === undefined)
-      ? undefined
-      : await loadLiveInventoryValuations(db);
-  const whereCondition = await buildInventoryWhere(db, filters, valuations);
+  // The rows, their sort/filter and the footer total all read ONE computed
+  // map; a count-only read prepares it only for a valuation filter.
+  const request = { filters, sorts, pagination, readIntent, projection };
+  const context = await inventoryScaffold.context(db, request);
+  const valuations = context.has(inventoryValuations)
+    ? context.get(inventoryValuations)
+    : undefined;
+  const whereCondition = await buildInventoryWhere(db, filters, context);
 
   // Count-only consumers deliberately do not request table footers.
   const withSums = projection.kind === "full" && readIntent === "page";
@@ -451,42 +459,39 @@ export const inventoryentryListRead = async (
       withSums,
     ));
 
-  const page = await inventoryScaffold.list(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where: whereCondition,
-      orderBy: inventoryListOrderBy(sorts, filters, valuations),
-      // A plain select, not the relational builder: the text filters and the
-      // product/location sorts read the joined tables.
-      select: (clauses) =>
-        getDb(db)
-          .select({
-            inventoryEntry,
-            productName: product.name,
-            locationName: location.name,
-          })
-          .from(inventoryEntry)
-          .innerJoin(
-            product,
-            and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-          )
-          .innerJoin(
-            location,
-            and(
-              eq(inventoryEntry.locationId, location.id),
-              notDeleted(location),
-            ),
-          )
-          .where(clauses.where)
-          .orderBy(...clauses.orderBy)
-          .limit(clauses.limit)
-          .offset(clauses.offset),
-      count: () => readAggregate().then((result) => result.count),
-      hydrate: (results) =>
-        hydrateInventoryListRows(db, results, valuations, projection),
-    },
-  );
+  const page = await inventoryScaffold.list(db, request, {
+    context,
+    where: whereCondition,
+    orderBy:
+      readIntent === "count"
+        ? []
+        : inventoryListOrderBy(sorts, filters, context),
+    // A plain select, not the relational builder: the product and location
+    // text filters read the joined tables.
+    select: (clauses) =>
+      getDb(db)
+        .select({
+          inventoryEntry,
+          productName: product.name,
+          locationName: location.name,
+        })
+        .from(inventoryEntry)
+        .innerJoin(
+          product,
+          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+        )
+        .innerJoin(
+          location,
+          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+        )
+        .where(clauses.where)
+        .orderBy(...clauses.orderBy)
+        .limit(clauses.limit)
+        .offset(clauses.offset),
+    count: () => readAggregate().then((result) => result.count),
+    hydrate: (results) =>
+      hydrateInventoryListRows(db, results, valuations, projection),
+  });
   const valuationSum = withSums
     ? Number((await readAggregate()).valuationSum ?? 0)
     : 0;
@@ -610,8 +615,13 @@ export const inventoryentryListSummary = async (
   db: Database,
   filters: InventoryFilters,
 ) => {
-  const valuations = await loadLiveInventoryValuations(db);
-  const where = await buildInventoryWhere(db, filters, valuations);
+  // The footer total reads every filtered row's valuation.
+  const context = await inventoryScaffold.context(db, {
+    filters,
+    projection: { kind: "full" },
+  });
+  const valuations = context.get(inventoryValuations);
+  const where = await buildInventoryWhere(db, filters, context);
   const result = await inventoryListAggregate(db, where, valuations, true);
   const value = Number(result.valuationSum ?? 0);
   return { valuation: Number.isNaN(value) ? 0 : value };

@@ -19,7 +19,6 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
@@ -36,13 +35,10 @@ import {
 } from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
-import {
-  collectDescendantIds,
-  loadProjectTree,
-  type ProjectTree,
-} from "~/server/domains/project/repo/subtree";
+import type { ProjectTree } from "~/server/domains/project/repo/subtree";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   loadListGroup,
@@ -65,8 +61,8 @@ import {
 /**
  * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
  * filter pair: a plain equality match, or — when `includeSubProjects` is set —
- * an `inArray` over the project plus every live descendant (walking
- * `parentProjectId` down via project/subtree.ts's shared helpers). Shared by
+ * a match over the project plus every live descendant along the declared
+ * project hierarchy. Shared by
  * `taskList` and `getTaskBoard` so the subtree-expansion logic lives in one
  * place.
  *
@@ -79,6 +75,7 @@ import {
 function buildTaskProjectCondition(
   projectId: TaskFilters["projectId"],
   projectIds: EntityId<"project">[],
+  includeSubProjects: boolean,
   presence?: PresenceFilter,
 ): SQL | undefined {
   const effectiveProjectId = effectiveTaskProjectSql();
@@ -92,7 +89,9 @@ function buildTaskProjectCondition(
   if (selectedCodes.length === 0) return presenceCond;
   if (projectIds.length === 0) return presenceCond ?? sql`false`;
   return or(
-    sql`${effectiveProjectId} = ANY(${uuidArrayParam(projectIds)})`,
+    includeSubProjects
+      ? sql`${effectiveProjectId} IN ${hierarchyDescendantsSql("project", projectIds)}`
+      : sql`${effectiveProjectId} = ANY(${uuidArrayParam(projectIds)})`,
     presenceCond,
   );
 }
@@ -138,18 +137,8 @@ async function resolveTaskFilterReferences(
       filters.subjectProductId ? [filters.subjectProductId].flat() : [],
     ),
   ]);
-  let projectIds = selectedProjectIds;
-  if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
-    const { childrenByParent } = tree ?? (await loadProjectTree(db));
-    projectIds = uniq(
-      selectedProjectIds.flatMap((id) => [
-        id,
-        ...collectDescendantIds(childrenByParent, id),
-      ]),
-    );
-  }
   return {
-    projectIds,
+    projectIds: selectedProjectIds,
     parentTaskCodes,
     parentTaskIds,
     scopedProjectIds,
@@ -228,6 +217,7 @@ export const buildTaskWhere = async (
   const projectCondition = buildTaskProjectCondition(
     filters.projectId,
     projectIds,
+    filters.includeSubProjects === true,
     filters.projectPresenceFilter,
   );
   const subjectProductCondition = () =>

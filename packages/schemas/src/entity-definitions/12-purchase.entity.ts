@@ -1130,6 +1130,7 @@ export default defineEntity({
       "notes",
       "spendingCategoryOrigin",
     ],
+    derived: { reconciliationGap: { type: "number" } },
     sort: {
       fields: [
         "date",
@@ -1144,7 +1145,6 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      computed: ["vendorId", "reconciliationGap"],
     },
     intents: {
       fields: {

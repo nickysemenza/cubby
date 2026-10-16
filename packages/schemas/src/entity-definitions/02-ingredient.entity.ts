@@ -272,9 +272,13 @@ export default defineEntity({
     update: ["naKinds", "usuallyOnHand", "name", "aliases"],
     bulk: ["usuallyOnHand"],
     audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
+    derived: {
+      appearsInRecipes: { type: "number" },
+      // The number of live Products mapped to the ingredient.
+      product: { type: "number" },
+    },
     sort: {
       fields: ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"],
-      computed: ["appearsInRecipes", "product"],
     },
     intents: {
       fields: {

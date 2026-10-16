@@ -159,7 +159,10 @@ and project gain `hierarchy` without gaining `tree`, so their lists keep their
 current UX. A filter on a hierarchical reference, own or at the end of a
 `via` path, gets a generated **Include sub-‹entity›** toggle, on by default.
 It replaces paired filters such as inventory's `locationIdFilter` and
-`locationSubtreeFilter`. Descendant expansion reads
+`locationSubtreeFilter`. #2408 generates the toggle for every compiled
+(`stored` or `via`) filter; the hand-written paired filters collapse onto it
+as their domains migrate: inventory's location pair and project's
+`includeSubProjects` in #2410, task's `includeSubProjects` in #2411. Descendant expansion reads
 `hierarchy` and replaces the helpers where list filters use them
 (`project/repo/lookup.ts:236`, `task/repo/lookup.ts:147`,
 `inventory/repo/crud.ts:374,378`, `product/repo/crud.ts:674,775`). The
@@ -208,6 +211,9 @@ filter has the same generic forms:
 - Multi-valued fields show a **Match any | Match all** toggle at the top of
   the editor. The chip joins values with "or" or "and" ("Tags: winter and
   wool"). Single-valued fields never show the toggle.
+- A filter on a hierarchical reference shows its **Include sub-‹entity›**
+  toggle inside the reference filter's editor, on by default (#2409); #2408
+  generates it as a URL, API, and MCP key with no control yet.
 - An inactive chip still reads "any" (`filterSummary` in `ui/data-table/filter-bar.tsx`). An active Any value chip
   reads "has a value", so the two states don't look alike.
 - On Apple, `EntityFilterValue.single` (about 70 call sites with tests) and the single/multi branches in

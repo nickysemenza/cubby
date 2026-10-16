@@ -553,14 +553,6 @@ export const recipeListRead = async (
         : s.orderBy === "caloriesTotal"
           ? sql`(${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric`
           : null;
-    if (s.orderBy === "cookbook")
-      return [
-        sql.raw(
-          `(SELECT c."name" FROM "Cookbook" c ` +
-            `WHERE c."id" = "Recipe"."cookbookId" AND c."deletedAt" IS NULL) ` +
-            `${isAsc ? "asc" : "desc"} nulls last`,
-        ),
-      ];
     if (s.orderBy === "source")
       return [
         dir(recipe.sourceType),

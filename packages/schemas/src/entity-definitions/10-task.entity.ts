@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -171,6 +172,10 @@ export default defineEntity({
     },
   },
   model: {
+    hierarchy: {
+      parentField: "parentTaskId",
+      maxDepth: MAX_PROJECT_TREE_DEPTH,
+    },
     fields: [
       {
         key: "fieldResolutions",
@@ -783,7 +788,6 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      computed: ["projectId", "subjectProductId", "assigneeId"],
       groupable: ["status"],
     },
     intents: {

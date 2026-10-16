@@ -26,7 +26,6 @@ type PresentationFacts = Readonly<{
   capabilities: EntityDeclarationMetadata["capabilities"];
   ports: CompiledEntity["ports"];
   hasUpdate: boolean;
-  entityKey: string;
 }>;
 
 /**
@@ -227,7 +226,7 @@ const checkList = (
   capabilities: EntityDeclarationMetadata["capabilities"],
   timelineSection: boolean,
   lookup: FieldLookup,
-  entityKey: string,
+  hierarchy: EntityFieldModel["hierarchy"],
 ) => {
   const { context } = lookup;
   const viewIds = new Set<string>();
@@ -244,14 +243,14 @@ const checkList = (
   for (const filter of list.initialFilter)
     lookup.read(filter.id, "list.initialFilter");
   if (list.tree !== null) {
-    const parent = lookup.read(list.tree.parentField, "list.tree.parentField");
-    if (
-      parent.reference?.entity !== entityKey ||
-      parent.reference.multiple ||
-      parent.readKey === null
-    )
+    if (hierarchy === null)
       throw new EntityDeclarationError(
-        `${lookup.context}.list.tree.parentField ${list.tree.parentField} must be a readable single reference to ${entityKey}.`,
+        `${lookup.context}.list.tree requires model.hierarchy.`,
+      );
+    const parent = lookup.read(hierarchy.parentField, "model.hierarchy");
+    if (parent.readKey === null)
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.tree nests by model.hierarchy.parentField ${hierarchy.parentField}, which must be readable.`,
       );
     if (!list.tree.toggle && !list.tree.defaultNested)
       throw new EntityDeclarationError(
@@ -563,7 +562,7 @@ export const compilePresentation = (
     relations,
     lookup,
   );
-  checkList(list, capabilities, timelineSection, lookup, facts.entityKey);
+  checkList(list, capabilities, timelineSection, lookup, fieldModel.hierarchy);
   if ((capabilities.timeline === "custom") !== (ports.timeline !== null))
     throw new EntityDeclarationError(
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
@@ -620,7 +619,10 @@ export const compilePresentation = (
       initialFilter: list.initialFilter,
       savedViews: list.savedViews,
       primarySearch: list.primarySearch,
-      tree: list.tree,
+      tree:
+        list.tree === null || fieldModel.hierarchy === null
+          ? null
+          : { parentField: fieldModel.hierarchy.parentField, ...list.tree },
       actions: [...list.actions, ...derivedListActions(capabilities)],
       links: list.links,
       timeline:

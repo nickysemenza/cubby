@@ -1,3 +1,7 @@
+import {
+  type CompiledEntityListFields,
+  compileListFields,
+} from "./list-fields.ts";
 import type { ChildTableMetadata } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -98,6 +102,8 @@ export type FilterDescriptor = Readonly<{
   expandRef: SourceRef | null;
   schemaRef: SourceRef | null;
   stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
+  /** Compiles through the `model.derived` entry named by `columnId`. */
+  derived: boolean;
   range: Readonly<{
     kind: "number" | "date";
     int: boolean;
@@ -281,7 +287,6 @@ type EntityFieldModelGrouping = Readonly<{
 type EntityFieldModelSort = Readonly<{
   fields: readonly [string, ...string[]];
   default: string;
-  computed: readonly string[];
   groupable: readonly string[];
   grouping: EntityFieldModelGrouping | null;
   direction: "asc" | "desc";
@@ -303,6 +308,11 @@ export type EntityFieldModel = Readonly<{
   audit: readonly string[];
   output: readonly string[];
   sort: EntityFieldModelSort | null;
+  /** `model.derived`: list fields that are not table columns. */
+  derived: Readonly<
+    Record<string, EntityFieldModelMetadata["derived"][string]>
+  >;
+  hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
   intents: EntityEditIntents | null;
 }>;
 /** An operational column the table stores with no model field. */
@@ -408,6 +418,8 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** Compiled `model.derived`, hierarchy, and generated subtree toggles. */
+  listFields: CompiledEntityListFields;
   /** The entity's own table, or null for a table-less entity (usda-food). */
   table: CompiledEntityTable | null;
   children: readonly ChildTableMetadata[];
@@ -503,8 +515,8 @@ export const compileLoadedEntityDeclarations = (
     ...compileEntity(raw, 0),
     overrides: declaredOverrides.get(String(raw.key)) ?? [],
   }));
-  const entities = validateDataQualityDeclarations(
-    deriveRelationSections(compiled),
+  const entities = compileListFields(
+    validateDataQualityDeclarations(deriveRelationSections(compiled)),
   );
   const routes = new Set<string>();
   validateEntityIdentities(entities);

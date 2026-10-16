@@ -755,9 +755,12 @@ renderer enums. Each platform keeps an exhaustive registry that marks every
 declared renderer and slot as implemented, generic, owned by its container, or
 unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
-workflows remain handwritten. A self-referencing tree is declared:
-`presentation.list.tree.parentField` names a readable single reference to the
-entity itself. Nesting is a server scope, never client stitching: every list
+workflows remain handwritten. A self-referencing hierarchy is declared once:
+`model.hierarchy` (`parentField`, `maxDepth`) names a readable single
+reference to the entity itself and the depth its descendant expansion stops
+at ([Filters and search](#filters-and-search)). `presentation.list.tree` opts
+a hierarchy into tree nesting and requires it; location, task, and project
+declare a hierarchy without a tree. Nesting is a server scope, never client stitching: every list
 read of a tree entity (`entity.listBase`, `entity_read.list`, HTTP) accepts
 `nesting` — `{scope:"flat"}` (the default for every caller), `{scope:"roots"}`,
 or `{scope:"children",parentId}` — applied after the same filters and sort. A
@@ -897,18 +900,19 @@ Unknown detail override keys and computed-fact anchors fail explicitly.
 declaration owns each section's labels and membership.
 
 `model.sort` owns the declared list-sort roster: `fields` (the ordered, complete
-sortable-column list) and optional `groupable`/`computed` subsets.
+sortable-column list) and an optional `groupable` subset.
 `defaultOverride` replaces `createdAt` (or the first sort field), and
 `directionOverride` replaces the field-kind-based direction.
-Every `fields` entry not named in `computed` must be a `model.fields` key; a
-`computed` entry names a roster key with no scalar read projection — a
-correlated subquery or rollup resolved in the repository, such as a vendor's
-live purchase count or a product's expected-quantity variance. The generator
+Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
+`related:<view>` count; a `model.fields` key with no stored column (a vendor's
+live purchase count, a product's expected-quantity variance) still resolves
+in the repository's sort resolver. The generator
 emits the roster as `generatedEntitySort` in
 `packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
 derives the kernel's `EntitySortContract` from that map, so no repository
 hand-lists its own sort roster. The compiler enforces
-`default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`. The same
+`default ∈ fields` and `groupable ⊆ fields`, and rejects a sort or group entry
+whose derived field cannot order (below). The same
 roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
 an enum of `groupable`, or of `fields` when `groupable` is empty), so a
 `groupable` entry must stay an identifier the Swift generator can name.
@@ -928,8 +932,10 @@ Filter descriptors are typed metadata. Static choices stay in the declaration;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
-expands the standard created/updated date filters. SQL predicates remain explicit
-in repository filter builders.
+expands the standard created/updated date filters. A `stored` or `derived`
+descriptor compiles its predicate in the list scaffold; any other descriptor's
+SQL stays in the repository's filter builder
+([Filters and search](#filters-and-search)).
 
 `model.intents` owns the browser editor's field fragments: `fields` maps each
 semantic intent (`capture`, `full`, `identity`, ...) to model field keys,
@@ -1281,7 +1287,7 @@ contract cases. Static and deferred controls still live in the explicit filter
 catalog; compound presets retain explicit codecs and option loaders. SQL
 predicates remain repository behavior and are checked through the real-query
 differential matrix—the compiler does not infer database behavior from a URL
-key, except for descriptors declared `stored`.
+key, except for descriptors declared `stored` or `derived`.
 
 A `stored` descriptor names the standard predicate over stored columns, and
 `declaredFilterPredicates` composes it for the repository: `stored: true`
@@ -1294,6 +1300,45 @@ non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds. The compiler rejects every other shape. Predicates that
 join, OR across filters, or resolve ids stay hand-written next to the spread,
 with a comment saying why.
+
+`model.derived` declares a list field that is not a stored column, so its
+filter, sort, and group share one expression
+(`server/generic/list/repo/field-compiler.ts`). Each key takes one shape:
+
+- `{ via: "relation.relation[.field]" }` walks declared `local-path`
+  relations to a record (its stored title) or a field of the last one. The
+  scaffold compiles a filter to `EXISTS` over the path and a sort or group to
+  a correlated scalar subquery. Only a to-one path (every relation `one` and
+  every step outgoing) can sort or group; the compiler rejects any other in
+  `sort.fields`/`groupable` with the reason it derives (`Goes through a list
+  of Purchases. Only paths that lead to a single record can sort.`).
+- `{ type }` is a repository value: the repository passes its SQL as
+  `listScaffold(entity, table, { derived })`, whose argument type is
+  generated, so a declared key without SQL fails typecheck.
+- `{ predicate, reason }` is filter-only SQL the repository passes the same
+  way; `reason` says why it is not one row value (inventory's
+  `valuationStatus` statuses overlap).
+
+A filter descriptor reads a derived field with `derived: true`. SQL that needs
+request data (inventory valuations) wraps a `listPrepare(load)` handle with
+`.value`/`.predicate`; fields share a prepare by sharing the handle.
+`scaffold.context(db, request)` loads each needed prepare at most once, and
+only when the request filters, sorts, groups, or projects on a field that
+reads it. `where`/`orderBy`/`filterPredicates` stay synchronous and take that
+context, `list` builds it unless `spec.context` passes one, and `hydrate`
+receives it. The generated `generatedEntityListFields` map
+(`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
+hierarchy, subtree toggles, and group rejections.
+
+An id filter (stored or `via`) whose target declares `model.hierarchy` matches
+the selected records and their live descendants through
+`hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`), the one
+recursive-descendant generator repositories also call directly. The compiler
+adds a boolean `includeSub<Plural>` toggle descriptor ("Include sub-…") for
+each such filter; absent reads as on, and `false` limits the filter to the
+selected records. Hand-written paired filters (inventory
+`locationIdFilter`/`locationSubtreeFilter`, project and task
+`includeSubProjects`) call the same generator.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection

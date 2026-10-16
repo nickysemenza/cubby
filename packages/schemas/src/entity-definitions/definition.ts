@@ -133,8 +133,17 @@ export type CompiledEntityPresentation = Omit<
       actions: readonly string[];
     };
   };
-  list: Omit<EntityPresentation["list"], "timeline" | "shelf" | "actions"> & {
+  list: Omit<
+    EntityPresentation["list"],
+    "timeline" | "shelf" | "actions" | "tree"
+  > & {
     actions: readonly string[];
+    /** `list.tree` resolved against `model.hierarchy`. */
+    tree:
+      | (NonNullable<EntityPresentation["list"]["tree"]> & {
+          parentField: string;
+        })
+      | null;
     /**
      * Every compiled list has a card presentation. Declarations may refine its
      * caption, while the compiler supplies a mobile-subtitle fallback.
@@ -782,12 +791,15 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  /**
+   * `fields` names model fields, `model.derived` keys, or `related:<view>`
+   * related-view columns.
+   */
   const entityFieldModelSortMetadataSchema = z
     .object({
       fields: z.array(nonEmptyString()).min(1),
       /** Defaults to `createdAt` when sortable, otherwise the first field. */
       defaultOverride: nonEmptyString().optional(),
-      computed: z.array(nonEmptyString()).optional().default([]),
       groupable: z.array(nonEmptyString()).optional().default([]),
       grouping: entityFieldModelGroupingMetadataSchema.optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
@@ -824,6 +836,46 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  const derivedKey = nonEmptyString().regex(
+    /^[A-Za-z_][A-Za-z0-9_]*$/,
+    "must be an identifier",
+  );
+  /**
+   * A list field that is not a table column. `via` is a related path of
+   * relation keys, optionally ending in a field of the last entity; the list
+   * compiler builds it. `type` is a value whose SQL the repository passes to
+   * `listScaffold`. `predicate` is a filter-only declared exception and
+   * carries its reason.
+   */
+  const entityDerivedFieldMetadataSchema = z.union([
+    z.object({ via: nonEmptyString() }).strict(),
+    z
+      .object({
+        type: z.enum(["text", "number", "date", "boolean", "enum"]),
+        options: z.array(nonEmptyString()).min(1).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        predicate: z.enum(["text", "select", "multiselect", "boolean"]),
+        options: z.array(nonEmptyString()).min(1).optional(),
+        reason: nonEmptyString(),
+      })
+      .strict(),
+  ]);
+
+  /**
+   * A self-reference that makes the entity a tree. Filters on a reference to
+   * it include descendants, walking at most `maxDepth` levels below each
+   * selected record.
+   */
+  const entityHierarchyMetadataSchema = z
+    .object({
+      parentField: nonEmptyString(),
+      maxDepth: z.number().int().positive(),
+    })
+    .strict();
+
   const entityFieldModelMetadataSchema = z
     .object({
       fields: z.array(entityFieldMetadataSchema),
@@ -839,6 +891,11 @@ const buildMetadataSchemas = () => {
         .strict()
         .optional(),
       sort: entityFieldModelSortMetadataSchema.optional(),
+      derived: z
+        .record(derivedKey, entityDerivedFieldMetadataSchema)
+        .optional()
+        .default({}),
+      hierarchy: entityHierarchyMetadataSchema.optional(),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .strict();
@@ -1359,8 +1416,8 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           /**
-           * Nest the table under a self-reference: each row sits under the
-           * row its `parentField` names. The server pages the roots and each
+           * Nest the table under the declared `model.hierarchy`: each row
+           * sits under its parent. The server pages the roots and each
            * parent's children (`nesting` on every list read); a row whose
            * parent does not match the filters stays a root, so filtering
            * never hides it. `toggle` offers a nested/flat switch whose
@@ -1368,7 +1425,6 @@ const buildMetadataSchemas = () => {
            */
           tree: z
             .object({
-              parentField: fieldKey,
               toggle: z.boolean().optional().default(false),
               defaultNested: z.boolean().optional().default(true),
             })
@@ -2094,6 +2150,11 @@ const buildMetadataSchemas = () => {
             .strict(),
         ])
         .optional(),
+      /**
+       * The filter compiles through the `model.derived` entry its `columnId`
+       * names (a related path, a repository value, or a declared predicate).
+       */
+      derived: z.literal(true).optional(),
       /** Range bounds; `kind` is inferred from the model field when omitted. */
       range: z
         .object({

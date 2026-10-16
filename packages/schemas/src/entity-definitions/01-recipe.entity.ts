@@ -735,6 +735,7 @@ export default defineEntity({
     ],
     bulk: [],
     audit: ["name", "forkedFromRecipeId"],
+    derived: { cookbook: { via: "cookbook" } },
     sort: {
       fields: [
         "createdAt",
@@ -748,7 +749,6 @@ export default defineEntity({
         "tags",
         "totalMinutes",
       ],
-      computed: ["cookbook", "costTotal", "caloriesTotal"],
       groupable: ["name"],
     },
     intents: {

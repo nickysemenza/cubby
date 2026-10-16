@@ -626,7 +626,11 @@ const documentPresenceCondition = (
       ? sql`${purchaseDocumentCount} = 0`
       : undefined;
 
-const purchaseScaffold = listScaffold("purchase", purchase);
+const purchaseScaffold = listScaffold("purchase", purchase, {
+  derived: {
+    reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
+  },
+});
 
 /**
  * The complete WHERE for a purchase list, filters and all.
@@ -687,11 +691,6 @@ const resolvePurchaseSort = (sort: SortParams) => {
   if (sort.orderBy === "vendorId") return [dir(purchaseVendorName)];
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
-  if (sort.orderBy === "reconciliationGap") {
-    return [
-      dir(sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`),
-    ];
-  }
   if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
   return null;
 };

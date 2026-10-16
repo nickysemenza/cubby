@@ -76,7 +76,6 @@ import {
   categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
-import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import {
   assertNoDependents,
@@ -130,7 +129,6 @@ import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
-import { locationDescendantsSql } from "~/server/domains/location/repo/descendants-sql";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
 import {
   resolveProductCategory,
@@ -158,6 +156,7 @@ import {
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
@@ -263,24 +262,6 @@ const resolveProductSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
-  if (sort.orderBy === "location") {
-    return [
-      sql.raw(
-        `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
-          `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
-          `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "ingredient") {
-    return [
-      sql.raw(
-        `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "Product"."ingredientId") ${dirSql}`,
-      ),
-    ];
-  }
-
   if (sort.orderBy === "expenseTotal") {
     return [
       sql`${productExpenseTotalFilterSql(product.id)} ${sql.raw(dirSql)}`,
@@ -352,7 +333,15 @@ const resolveProductSort = (sort: SortParams) => {
   return null;
 };
 
-const productScaffold = listScaffold("product", product);
+const productScaffold = listScaffold("product", product, {
+  derived: {
+    location: sql.raw(
+      `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
+        `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
+        `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
+    ),
+  },
+});
 
 const loadProductDataQualities = (
   db: Database | DrizzleTransaction,
@@ -674,7 +663,7 @@ const categoryFilterCondition = async (
   filters.categoryFilter?.length || filters.categoryFeatureFilter?.length
     ? or(
         filters.categoryFilter?.length
-          ? sql`${product.categoryId} IN ${categoryDescendantsSql(await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
+          ? sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
           : undefined,
         ...(filters.categoryFeatureFilter
           ? (Array.isArray(filters.categoryFeatureFilter)
@@ -776,7 +765,7 @@ export const buildProductWhere = async (
       and(
         notDeleted(inventoryEntry),
         selectedLocationIds.length > 0
-          ? sql`${inventoryEntry.locationId} IN ${locationDescendantsSql(selectedLocationIds)}`
+          ? sql`${inventoryEntry.locationId} IN ${hierarchyDescendantsSql("location", selectedLocationIds)}`
           : sql`false`,
       ),
     );
@@ -1140,7 +1129,7 @@ export const buildProductWhere = async (
       ...associationConditions(),
       ...qualityConditions(),
     ],
-    readContext,
+    { readContext },
   );
   return whereClause;
 };
@@ -1777,7 +1766,7 @@ export const productSearch = async (
     formatSearchTerm(product.manufacturer, filters.manufacturerFilter),
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
     filters.categoryFilter?.length
-      ? sql`${product.categoryId} IN ${categoryDescendantsSql(await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
+      ? sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
       : undefined,
   );
 

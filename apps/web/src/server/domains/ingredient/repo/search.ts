@@ -438,7 +438,19 @@ export const getIngredientMatches = async (
   return map;
 };
 
-const ingredientScaffold = listScaffold("ingredient", ingredient);
+const ingredientScaffold = listScaffold("ingredient", ingredient, {
+  derived: {
+    // Shared with global search so the sort key matches the displayed
+    // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
+    appearsInRecipes: sql.raw(
+      liveRecipeCountForIngredientSql('"Ingredient"."id"'),
+    ),
+    product: sql.raw(
+      `(SELECT count(*) FROM "Product" p ` +
+        `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL)`,
+    ),
+  },
+});
 
 /**
  * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
@@ -582,39 +594,13 @@ const ingredientListImpl = async (
   const dbClient = getDb(db);
   const whereClause = await buildIngredientListWhere(db, filters);
 
-  const resolveIngredientSort = (s: SortParams): SQL[] | null => {
-    const dirSql = s.direction === "asc" ? "asc nulls last" : "desc nulls last";
-    if (s.orderBy === "appearsInRecipes")
-      return [
-        // Shared with global search so the sort key matches the displayed
-        // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
-        sql.raw(
-          `${liveRecipeCountForIngredientSql('"Ingredient"."id"')} ${dirSql}`,
-        ),
-      ];
-    if (s.orderBy === "product")
-      return [
-        sql.raw(
-          `(SELECT count(*) FROM "Product" p ` +
-            `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
-        ),
-      ];
-    return null;
-  };
-
   if (readIntent === "ids") {
     const { take, skip } = ingredientScaffold.page(pagination);
     const rows = await dbClient
       .select({ shortcode: ingredient.shortcode })
       .from(ingredient)
       .where(whereClause)
-      .orderBy(
-        ...ingredientScaffold.orderBy(
-          sorts,
-          { resolve: resolveIngredientSort },
-          filters,
-        ),
-      )
+      .orderBy(...ingredientScaffold.orderBy(sorts, {}, filters))
       // One look-ahead row avoids a count query for the bulk scan.
       .limit(take + 1)
       .offset(skip);
@@ -646,7 +632,6 @@ const ingredientListImpl = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
-      resolveSort: resolveIngredientSort,
       load: (where) =>
         dbClient.query.ingredient.findMany({
           where,

@@ -5,7 +5,6 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   product as productTable,
@@ -13,6 +12,7 @@ import {
   project,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createProductFixture,
@@ -496,7 +496,7 @@ describe("product category hierarchy", () => {
 
     const descendants = await getDb(ctx.db).execute<{ id: string }>(sql`
       SELECT "id"::text AS "id" FROM "ProductCategory"
-      WHERE "id" IN ${categoryDescendantsSql([root.entityId])}
+      WHERE "id" IN ${hierarchyDescendantsSql("productCategory", [root.entityId])}
       ORDER BY "id"
     `);
     expect(descendants.rows).toHaveLength(3);

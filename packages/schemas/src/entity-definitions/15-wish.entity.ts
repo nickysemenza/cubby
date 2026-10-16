@@ -276,7 +276,6 @@ export default defineEntity({
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
     sort: {
       fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
-      computed: ["priceRange"],
     },
     intents: {
       fields: {

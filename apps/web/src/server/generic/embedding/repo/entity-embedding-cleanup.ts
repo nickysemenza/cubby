@@ -20,7 +20,6 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { categoryDescendantsSql } from "~/server/db/computed/product-category-sql";
 import {
   notDeleted,
   unwrapDb,
@@ -54,6 +53,7 @@ import {
   effectiveTaskSubjectProductSql,
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
@@ -167,7 +167,7 @@ export async function findEmbeddingRefsForCategories(
   if (categoryIds.length === 0) return [];
   const rows = await unwrapDb(db).query.product.findMany({
     where: and(
-      sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
+      sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", categoryIds)}`,
       notDeleted(product),
     ),
     columns: { id: true },

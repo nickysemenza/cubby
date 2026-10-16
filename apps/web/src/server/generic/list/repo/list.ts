@@ -8,7 +8,11 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import {
+  entityInspectorMetadata,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
@@ -75,9 +79,24 @@ import {
 } from "~/server/generic/search/repo/search-lexical";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
 
-import type { ListProjection } from "./list-projection";
+import {
+  type DerivedSqlArg,
+  derivedFieldsOf,
+  derivedOrderBy,
+  derivedPredicateSql,
+  derivedPrepare,
+  derivedValueSql,
+  type AnyDerivedSql,
+  ListContext,
+  type ListPrepare,
+  relatedExistsSql,
+  shortcodeIdsSql,
+} from "./field-compiler";
+import { type HierarchyEntity, hierarchyDescendantsSql } from "./hierarchy";
+import { type ListProjection, wantsListGroup } from "./list-projection";
 
 const filterValues = z.record(z.string(), z.unknown());
+type FilterValues = z.output<typeof filterValues>;
 const suggestionFilterValue = z
   .enum(["any", "addition", "correction"])
   .optional();
@@ -101,6 +120,10 @@ interface StoredDescriptorView {
   }> | null;
   readonly nullable: Readonly<{ field: string }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
+  readonly derived: boolean;
+  readonly wire:
+    | Readonly<{ kind: "param"; name: string }>
+    | Readonly<{ kind: "range"; from: string; to: string }>;
 }
 
 /** A stored column resolved to its table column and declared storage facts. */
@@ -171,9 +194,36 @@ const booleanPredicate = (
         flag === undefined ? undefined : flag ? "has" : "none",
       );
 
+const hierarchyEntities = new Set<string>(
+  Object.entries(generatedEntityListFields).flatMap(([key, fields]) =>
+    fields.hierarchy === null ? [] : [key],
+  ),
+);
+const isHierarchyEntity = (entity: string): entity is HierarchyEntity =>
+  hierarchyEntities.has(entity);
+
+/**
+ * The ids of the requested public shortcodes of `target`, widened to their
+ * descendants when `target` declares `model.hierarchy` and the filter's
+ * generated "Include sub-…" toggle is not switched off.
+ */
+const requestedIdsSql = (
+  target: ShortcodeEntity,
+  codes: readonly string[],
+  includeDescendants: boolean,
+): SQL => {
+  const selected = shortcodeIdsSql(target, (shortcode) =>
+    shortcodeSetCondition(shortcode, codes),
+  );
+  return includeDescendants && isHierarchyEntity(target)
+    ? hierarchyDescendantsSql(target, selected)
+    : selected;
+};
+
 /**
  * An id filter over a foreign-key column: the column is in the set of ids
- * whose public shortcode was requested. The referenced table is aliased so a
+ * whose public shortcode was requested, including descendants of a
+ * hierarchical reference. The referenced table is aliased so a
  * self-reference (a location's parent) never collides with the outer row,
  * preserving the outer root-table column for both selection and count.
  */
@@ -181,17 +231,203 @@ const referencePredicate = (
   entity: Entity,
   { column, reference }: StoredColumn,
   codes: readonly string[] | undefined,
+  includeDescendants: boolean,
 ): SQL | undefined => {
   if (codes === undefined) return undefined;
-  const table = Object.entries(SHORTCODE_TABLE).find(
-    ([key]) => key === reference,
-  )?.[1];
-  if (!table)
+  const target = Object.keys(SHORTCODE_TABLE).find(
+    (key): key is ShortcodeEntity => key === reference,
+  );
+  if (!target)
     throw new Error(
       `${entity} id filter over ${column.name} references ${String(reference)}, which has no shortcode table`,
     );
-  const requested = shortcodeSetCondition(sql`ref."shortcode"`, codes);
-  return sql`${column} IN (SELECT ref."id" FROM ${sql.identifier(getTableName(table))} ref WHERE ${requested})`;
+  return sql`${column} IN ${requestedIdsSql(target, codes, includeDescendants)}`;
+};
+
+/** A generated subtree toggle reads absent as on. */
+const subtreeToggle = (
+  entity: Entity,
+  key: string,
+  values: FilterValues,
+): boolean => {
+  const toggle = Object.entries(generatedEntityListFields[entity].subtree).find(
+    ([filter]) => filter === key,
+  )?.[1];
+  return toggle === undefined
+    ? false
+    : optionalBoolean.parse(values[toggle]) !== false;
+};
+
+/** The request keys a descriptor's predicate reads: a range its compiled bounds. */
+const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] =>
+  descriptor.wire.kind === "range"
+    ? [descriptor.wire.from, descriptor.wire.to]
+    : [descriptor.field ?? descriptor.columnId];
+
+/** Derived SQL and prepared request data a scaffold passes to its filters. */
+interface DerivedFilterInput {
+  readonly derived: AnyDerivedSql;
+  readonly context: ListContext;
+}
+
+/**
+ * The predicate of a filter descriptor declared `derived`: a related path
+ * compiles to `EXISTS` (any cardinality), a repository value through its
+ * SQL, and a declared predicate through the repository's function.
+ */
+const derivedFilterPredicates = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  descriptor: StoredDescriptorView,
+  values: FilterValues,
+  input: DerivedFilterInput | undefined,
+): Array<SQL | undefined> => {
+  const key = descriptor.field ?? descriptor.columnId;
+  const field = derivedFieldsOf(entity)[descriptor.columnId];
+  if (field === undefined)
+    throw new Error(
+      `${entity}.${descriptor.columnId} is derived but declares no model.derived entry`,
+    );
+  const value = values[key];
+  const context = input?.context ?? ListContext.empty;
+  const derived = input?.derived ?? {};
+  if (field.shape === "predicate") {
+    const parsed =
+      field.predicate === "boolean"
+        ? optionalBoolean.parse(value)
+        : field.predicate === "text"
+          ? optionalText.parse(value)?.trim() || undefined
+          : optionalTextList.parse(value);
+    if (parsed === undefined) return [];
+    return [
+      derivedPredicateSql(
+        entity,
+        derived,
+        descriptor.columnId,
+        context,
+        parsed,
+      ),
+    ];
+  }
+  if (field.shape === "value") {
+    const expression = () =>
+      derivedValueSql(entity, derived, descriptor.columnId, context);
+    switch (descriptor.kind) {
+      case "text": {
+        const term = optionalText.parse(value)?.trim();
+        return term ? [formatSearchTerm(expression(), term)] : [];
+      }
+      case "boolean": {
+        const flag = optionalBoolean.parse(value);
+        return flag === undefined ? [] : [sql`${expression()} = ${flag}`];
+      }
+      case "range": {
+        if (descriptor.wire.kind !== "range")
+          throw new Error(
+            `${entity}.${descriptor.columnId} is a range filter without range wire keys`,
+          );
+        const { from, to } = descriptor.wire;
+        const bound = field.type === "date" ? optionalDate : optionalNumber;
+        const [low, high] = [
+          bound.parse(values[from]),
+          bound.parse(values[to]),
+        ];
+        return [
+          low === undefined ? undefined : sql`${expression()} >= ${low}`,
+          high === undefined ? undefined : sql`${expression()} <= ${high}`,
+        ];
+      }
+      default: {
+        const list = optionalTextList.parse(value);
+        return list === undefined || list.length === 0
+          ? []
+          : [
+              sql`${expression()} IN (${sql.join(
+                list.map((item) => sql`${item}`),
+                sql`, `,
+              )})`,
+            ];
+      }
+    }
+  }
+  switch (descriptor.kind) {
+    case "id":
+    case "idMulti": {
+      const codes = optionalTextList.parse(value);
+      if (codes === undefined || codes.length === 0) return [];
+      const target = Object.keys(SHORTCODE_TABLE).find(
+        (entry): entry is ShortcodeEntity => entry === field.target,
+      );
+      if (!target)
+        throw new Error(
+          `${entity}.${key} targets ${field.target}, which has no shortcode`,
+        );
+      const ids = requestedIdsSql(
+        target,
+        codes,
+        subtreeToggle(entity, key, values),
+      );
+      return [
+        relatedExistsSql(
+          entity,
+          field,
+          table.id,
+          (leaf) => sql`${leaf}."id" IN ${ids}`,
+        ),
+      ];
+    }
+    case "presence": {
+      const presence = presenceFilter.parse(value);
+      if (presence === undefined) return [];
+      const exists = relatedExistsSql(
+        entity,
+        field,
+        table.id,
+        (_leaf, column) =>
+          field.terminal.kind === "field"
+            ? sql`${column} IS NOT NULL`
+            : sql`true`,
+      );
+      return [presence === "has" ? exists : sql`NOT ${exists}`];
+    }
+    case "text": {
+      const term = optionalText.parse(value)?.trim();
+      if (!term) return [];
+      return [
+        relatedExistsSql(entity, field, table.id, (_leaf, column) =>
+          formatSearchTerm(column, term),
+        ),
+      ];
+    }
+    case "boolean": {
+      const flag = optionalBoolean.parse(value);
+      if (flag === undefined) return [];
+      return [
+        relatedExistsSql(
+          entity,
+          field,
+          table.id,
+          (_leaf, column) => sql`${column} = ${flag}`,
+        ),
+      ];
+    }
+    default: {
+      const list = optionalTextList.parse(value);
+      if (list === undefined || list.length === 0) return [];
+      return [
+        relatedExistsSql(
+          entity,
+          field,
+          table.id,
+          (_leaf, column) =>
+            sql`${column} IN (${sql.join(
+              list.map((item) => sql`${item}`),
+              sql`, `,
+            )})`,
+        ),
+      ];
+    }
+  }
 };
 
 const dateRange = (
@@ -218,8 +454,9 @@ const dateRange = (
  */
 export function declaredFilterPredicates<Filters extends object>(
   entity: Entity,
-  table: PgTable,
+  table: PgTable & { id: AnyColumn },
   filters: Filters,
+  derivedInput?: DerivedFilterInput,
 ): Array<SQL | undefined> {
   const values = filterValues.parse(filters);
   const suggestionKind = suggestionFilterValue.parse(
@@ -243,6 +480,17 @@ export function declaredFilterPredicates<Filters extends object>(
       : undefined;
   return [
     suggestionPredicate,
+    ...descriptorsFor(entity)
+      .filter((descriptor) => descriptor.derived)
+      .flatMap((descriptor) =>
+        derivedFilterPredicates(
+          entity,
+          table,
+          descriptor,
+          values,
+          derivedInput,
+        ),
+      ),
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.stored !== null)
       .flatMap((descriptor): Array<SQL | undefined> => {
@@ -280,7 +528,12 @@ export function declaredFilterPredicates<Filters extends object>(
           case "id":
           case "idMulti":
             return [
-              referencePredicate(entity, first, optionalTextList.parse(value)),
+              referencePredicate(
+                entity,
+                first,
+                optionalTextList.parse(value),
+                subtreeToggle(entity, key, values),
+              ),
             ];
           case "range":
             return descriptor.range?.kind === "date"
@@ -340,9 +593,27 @@ interface ListRequest<Filters extends object> {
   projection?: ListProjection;
 }
 
+/** What a list request reads, so `scaffold.context` prepares only that. */
+export interface ListContextRequest<Filters extends object> {
+  filters: Filters;
+  sorts?: readonly SortParams[];
+  groupBy?: string;
+  readIntent?: ListReadIntent;
+  projection?: ListProjection;
+}
+
 interface ListHydration<Row, Out> {
-  /** Rows → API items, batched over the page (quality, images, labels). */
-  hydrate: (rows: Row[], projection: ListProjection) => Promise<Out[]> | Out[];
+  /**
+   * Rows → API items, batched over the page (quality, images, labels).
+   * `context` holds the request's prepared derived-field data.
+   */
+  hydrate: (
+    rows: Row[],
+    projection: ListProjection,
+    context: ListContext,
+  ) => Promise<Out[]> | Out[];
+  /** A context the repository already built for its own where-builder. */
+  context?: ListContext;
   where?: SQL | undefined;
   resolveSort?: NonNullable<OrderByOpts>["resolve"];
   tieBreaker?: SQL;
@@ -405,9 +676,22 @@ const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
 
+interface ListScaffoldOptions<E extends Entity> {
+  /** SQL for every declared `model.derived` value and predicate. */
+  derived: DerivedSqlArg<E>;
+}
+
+/** `options` is required exactly when the entity declares derived SQL. */
+type ListScaffoldArgs<E extends Entity> = [keyof DerivedSqlArg<E>] extends [
+  never,
+]
+  ? [options?: ListScaffoldOptions<E>]
+  : [options: ListScaffoldOptions<E>];
+
 /**
- * `entity`/`table` scope the three helpers to one entity's list. Call once per
- * where-builder (module scope is fine — nothing here is request-scoped).
+ * `entity`/`table` scope the helpers to one entity's list. Call once per
+ * repository (module scope is fine — request data lives in the
+ * `scaffold.context` a request builds).
  */
 export function listScaffold<
   E extends SortableEntity,
@@ -418,7 +702,23 @@ export function listScaffold<
     updatedAt: AnyColumn;
     shortcode: AnyColumn;
   },
->(entity: E, table: T) {
+>(entity: E, table: T, ...[options]: ListScaffoldArgs<E>) {
+  const derivedSql: AnyDerivedSql = options?.derived ?? {};
+  const derivedFields = derivedFieldsOf(entity);
+  const fieldModel = fieldModelFor(entity);
+  const readGroups = Object.entries(entitySummary).find(
+    ([key]) => key === entity,
+  )?.[1].list.read;
+  /** Whether a projection reads the derived model field `key`. */
+  const projects = (key: string, projection: ListProjection): boolean => {
+    if (!fieldModel?.fields.some((field) => field.key === key)) return false;
+    const group = (["quality", "media", "relations", "derived"] as const).find(
+      (name) => readGroups?.[name]?.some((field) => field === key) === true,
+    );
+    return group === undefined
+      ? projection.kind !== "enrichment"
+      : wantsListGroup(projection, group);
+  };
   const searchable = isSearchableEntity(entity);
   // A scored entity's `dataStatus`/`dataGap` filters and `dataQualityScore`
   // sort are declared by the manifest block, so they bind here for every
@@ -497,20 +797,70 @@ export function listScaffold<
   };
   const scaffold = {
     /**
-     * `computed` is every condition that isn't a declared stored or
+     * Loads, once, the request data the requested derived fields read: a
+     * field's `prepare` runs only when the request filters, sorts, groups or
+     * projects on it, and fields sharing a handle share its result.
+     */
+    async context<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      request: ListContextRequest<Filters>,
+    ): Promise<ListContext> {
+      const values = filterValues.parse(request.filters);
+      const filtered = new Set(
+        descriptorsFor(entity)
+          .filter(
+            (descriptor) =>
+              descriptor.derived &&
+              descriptorValueKeys(descriptor).some(
+                (key) => values[key] !== undefined,
+              ),
+          )
+          .map(({ columnId }) => columnId),
+      );
+      const counting = request.readIntent === "count";
+      const requested = Object.keys(derivedFields).filter(
+        (key) =>
+          filtered.has(key) ||
+          (!counting &&
+            (request.sorts?.some((sort) => sort.orderBy === key) === true ||
+              request.groupBy === key ||
+              projects(key, request.projection ?? { kind: "full" }))),
+      );
+      const prepares = new Set(
+        requested.flatMap((key) => {
+          const prepare = derivedPrepare(derivedSql, key);
+          return prepare === null ? [] : [prepare];
+        }),
+      );
+      const loaded = await Promise.all(
+        [...prepares].map(
+          async (prepare): Promise<[ListPrepare<unknown>, unknown]> => [
+            prepare,
+            await prepare.load(db),
+          ],
+        ),
+      );
+      return new ListContext(new Map(loaded));
+    },
+
+    /**
+     * `computed` is every condition that isn't a declared stored, derived or
      * related-view predicate —
      * append it exactly where the repo's own extra conditions already live.
      */
     where<Filters extends object>(
       filters: Filters,
       computed: Array<SQL | undefined> = [],
-      readContext: QualityReadContext | undefined = qualityContext,
+      {
+        context = ListContext.empty,
+        readContext = qualityContext,
+      }: { context?: ListContext; readContext?: QualityReadContext } = {},
     ): SQL | undefined {
       return buildSearchConditions(
         table,
         [],
         [
-          ...declaredFilterPredicates(entity, table, filters),
+          ...scaffold.filterPredicates(filters, context),
           ...(scored
             ? dataQualityFilterPredicates(scored, table, filters, readContext)
             : []),
@@ -534,10 +884,33 @@ export function listScaffold<
       );
     },
 
+    /**
+     * The declared stored and derived filter predicates alone, for a
+     * repository whose hand-written where-builder cannot use `where`.
+     */
+    filterPredicates<Filters extends object>(
+      filters: Filters,
+      context: ListContext = ListContext.empty,
+    ): Array<SQL | undefined> {
+      return declaredFilterPredicates(entity, table, filters, {
+        derived: derivedSql,
+        context,
+      });
+    },
+
+    /** A derived field's ORDER BY, or null when the field is not derived. */
+    derivedSort(
+      sort: SortParams,
+      context: ListContext = ListContext.empty,
+    ): SQL[] | null {
+      return derivedOrderBy(entity, derivedSql, sort, table.id, context);
+    },
+
     orderBy<Filters extends object>(
       sorts: SortParams[],
       opts?: OrderByOpts,
       filters?: Filters,
+      context: ListContext = ListContext.empty,
     ): SQL[] {
       const searchQuery = searchQueryFromFilters(filters);
       return buildOrderBy(
@@ -553,7 +926,10 @@ export function listScaffold<
                   desc(table.updatedAt),
                 ]
               : undefined,
-          resolve: (sort) => scoreSort?.(sort) ?? opts?.resolve?.(sort) ?? null,
+          resolve: (sort) =>
+            scoreSort?.(sort) ??
+            opts?.resolve?.(sort) ??
+            scaffold.derivedSort(sort, context),
           // Offset pagination must be deterministic. Repositories may keep a
           // domain-specific tie-breaker, but every explicit list sort then
           // lands on the public shortcode before the private primary key.
@@ -584,8 +960,11 @@ export function listScaffold<
       // Keep the PgTable object: interpolating an aliased table into SQL
       // emits only its alias, while Drizzle's FROM builder names its origin.
       const source: PgTable | SQL = readsQuality ? qualitySource : table;
+      const context = spec.context ?? (await scaffold.context(db, request));
       const filtered =
-        "where" in spec ? spec.where : scaffold.where(request.filters);
+        "where" in spec
+          ? spec.where
+          : scaffold.where(request.filters, [], { context });
       const nesting = listNestingFromFilters(request.filters);
       const parent = nesting.scope === "flat" ? null : treeParent();
       if (parent && spec.count)
@@ -598,13 +977,17 @@ export function listScaffold<
       const { take, skip } = buildTakeSkip(request.pagination);
       const page: ListPage = {
         where,
+        // A count never orders, and skipped the prepares a derived sort reads.
         orderBy:
-          spec.orderBy ??
-          scaffold.orderBy(
-            request.sorts,
-            { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
-            request.filters,
-          ),
+          request.readIntent === "count"
+            ? []
+            : (spec.orderBy ??
+              scaffold.orderBy(
+                request.sorts,
+                { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
+                request.filters,
+                context,
+              )),
         limit: take,
         offset: skip,
       };
@@ -672,7 +1055,7 @@ export function listScaffold<
           if (request.readIntent === "count" || data.length === 0)
             return { data: [], count };
           return withListReadTracing({ rows: data.length }, async () => {
-            const hydrated = await spec.hydrate(data, projection);
+            const hydrated = await spec.hydrate(data, projection, context);
             if (!parent) return { data: hydrated, count };
             const codeOf = (row: Out) => {
               const { id } = listRowIdSchema.parse(row);

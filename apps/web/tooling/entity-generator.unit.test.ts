@@ -772,27 +772,160 @@ describe("typed entity compiler", () => {
     ).toThrow("references undeclared field missing");
   });
 
-  it("compiles a declared sort roster and treats computed keys as exempt from the field roster", () => {
+  it("compiles a declared sort roster over model fields, derived keys and related-view columns", () => {
     const entity = compileEntityDeclarations([
       {
         ...base,
         model: {
           ...model,
+          derived: { score: { type: "number" } },
           sort: {
-            fields: ["name", "related:example.count"],
-            computed: ["related:example.count"],
+            fields: ["name", "score", "related:example.count"],
             groupable: ["name"],
           },
         },
       },
     ])[0]!;
     expect(entity.fieldModel.sort).toEqual({
-      fields: ["name", "related:example.count"],
+      fields: ["name", "score", "related:example.count"],
       default: "name",
       direction: "asc",
-      computed: ["related:example.count"],
       groupable: ["name"],
       grouping: null,
+    });
+  });
+
+  describe("list fields", () => {
+    const parentField = {
+      key: "parentId",
+      kind: "identifier",
+      nullable: true,
+      reference: { entity: "alpha" },
+      validation: { read: z.string().nullable(), create: null, update: null },
+    };
+    const relations = [
+      {
+        key: "parent",
+        label: "Parent",
+        target: "alpha",
+        cardinality: "one" as const,
+        provenance: {
+          kind: "local-path",
+          steps: [{ edge: "Alpha.parentId", direction: "outgoing" }],
+        },
+        inverse: { steps: [{ edge: "Alpha.parentId", direction: "incoming" }] },
+      },
+      {
+        key: "children",
+        label: "Children",
+        target: "alpha",
+        cardinality: "many" as const,
+        provenance: {
+          kind: "local-path",
+          steps: [{ edge: "Alpha.parentId", direction: "incoming" }],
+        },
+        inverse: { steps: [{ edge: "Alpha.parentId", direction: "outgoing" }] },
+      },
+    ];
+    const compile = (
+      extra: Partial<Extract<EntityDeclaration["model"], { fields: unknown }>>,
+      filters: EntityDeclaration["filters"] = base.filters,
+    ) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          relations,
+          filters,
+          model: {
+            ...model,
+            fields: [...model.fields, parentField],
+            storage: ["name", { key: "parentId", reference: "alpha" }],
+            ...extra,
+          },
+        },
+      ])[0]!;
+
+    it("compiles each derived shape with the rejection reasons its declaration implies", () => {
+      const { listFields } = compile({
+        derived: {
+          parentName: { via: "parent" },
+          childName: { via: "children.name" },
+          score: { type: "number" },
+          flagged: { predicate: "boolean", reason: "Spans two tables" },
+        },
+        hierarchy: { parentField: "parentId", maxDepth: 4 },
+      });
+      expect(listFields.derived.parentName).toMatchObject({
+        shape: "via",
+        steps: [{ edge: "Alpha.parentId", direction: "outgoing" }],
+        terminal: { kind: "record", titleColumn: "name" },
+        sort: null,
+      });
+      expect(listFields.derived.childName).toMatchObject({
+        shape: "via",
+        terminal: { kind: "field", column: "name" },
+        group:
+          "Goes through a list of Alphas. Only paths that lead to a single record can group.",
+      });
+      expect(listFields.derived.score).toMatchObject({
+        shape: "value",
+        sort: null,
+      });
+      expect(listFields.derived.flagged?.sort).toBe(
+        "Filter only: Spans two tables.",
+      );
+      expect(listFields.hierarchy).toEqual({
+        parentField: "parentId",
+        column: "parentId",
+        maxDepth: 4,
+      });
+    });
+
+    it.each([
+      [
+        { fields: ["name", "childName"] },
+        "sort.fields childName: Goes through a list of Alphas. Only paths that lead to a single record can sort.",
+      ],
+      [
+        { fields: ["name", "flagged"] },
+        "sort.fields flagged: Filter only: Spans two tables.",
+      ],
+    ])("rejects an unsupported sort: %j", (sort, message) => {
+      expect(() =>
+        compile({
+          derived: {
+            childName: { via: "children.name" },
+            flagged: { predicate: "boolean", reason: "Spans two tables" },
+          },
+          sort,
+        }),
+      ).toThrow(message);
+    });
+
+    it("generates an on-by-default subtree toggle for a stored filter over a hierarchy", () => {
+      const entity = compile(
+        { hierarchy: { parentField: "parentId", maxDepth: 4 } },
+        {
+          descriptors: [
+            {
+              columnId: "parentId",
+              kind: "idMulti",
+              placeholder: "Parent",
+              brandRef: { entity: "alpha" },
+              deriveSchema: true,
+              stored: true,
+            },
+          ],
+        },
+      );
+      expect(entity.listFields.subtree).toEqual({
+        parentId: "includeSubAlphas",
+      });
+      expect(
+        entity.filterDescriptors.find(
+          ({ columnId }) => columnId === "includeSubAlphas",
+        ),
+      ).toMatchObject({ kind: "boolean", label: "Include sub-alphas" });
     });
   });
 
@@ -879,10 +1012,6 @@ describe("typed entity compiler", () => {
     [
       { fields: ["name"], defaultOverride: "missing" },
       "default missing must be one of sort.fields",
-    ],
-    [
-      { fields: ["name"], defaultOverride: "name", computed: ["missing"] },
-      "computed missing must be one of sort.fields",
     ],
     [
       { fields: ["name"], defaultOverride: "name", groupable: ["missing"] },
