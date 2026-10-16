@@ -649,10 +649,11 @@ or this repository.
 Environment serializes and scopes production deployment. Required repository
 or environment secrets are:
 
-| Secret                    | Purpose                                             |
-| ------------------------- | --------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`    | Deploy declared Workers and manage their bindings   |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
+| Secret                           | Purpose                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`           | Deploy declared Workers and manage their bindings           |
+| `PRODUCTION_DIRECT_DATABASE_URL` | Apply production migrations before deploying the web Worker |
+| `CLAUDE_CODE_OAUTH_TOKEN`        | Automated Claude workflows, not application runtime         |
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
