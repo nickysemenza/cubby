@@ -1,0 +1,285 @@
+:root {
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #252821;
+  background: #f8f9f6;
+  font-size: 13px;
+  font-synthesis: none;
+  --muted: #596154;
+  --line: #d9ded3;
+  --hit: #356f4d;
+  --miss: #c8cfc2;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 28px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  padding-bottom: 24px;
+}
+h1 {
+  font-size: 25px;
+  line-height: 1.15;
+  margin: 0 0 6px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+p {
+  margin: 0;
+  line-height: 1.55;
+}
+header p,
+.note,
+footer,
+.tools,
+.scope {
+  color: var(--muted);
+}
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+button {
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #bfc6b9;
+  border-radius: 5px;
+  background: white;
+  color: #252821;
+  padding: 7px 12px;
+  min-height: 34px;
+  cursor: pointer;
+}
+button:hover {
+  background: #edf0e8;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--hit);
+  outline-offset: 3px;
+}
+.scope {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.scope strong {
+  color: #252821;
+  font-weight: 600;
+}
+section {
+  margin: 12px 0 28px;
+}
+h2 {
+  font-size: 13px;
+  font-weight: 650;
+  background: #e9ede4;
+  margin: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin: 0;
+  padding: 22px 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+dt {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+dd {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  font-size: 11px;
+  max-width: 86ch;
+  padding: 12px;
+}
+.table-wrap {
+  overflow: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 12px;
+}
+th,
+td {
+  text-align: right;
+  border-bottom: 1px solid #e4e8df;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+}
+td:first-child,
+th:first-child {
+  text-align: left;
+}
+tbody th {
+  color: #252821;
+  font-size: 12px;
+  font-weight: 500;
+}
+details {
+  margin-top: 16px;
+}
+summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 600;
+  min-height: 38px;
+  border-bottom: 1px solid var(--line);
+}
+summary:hover {
+  background: #edf0e8;
+}
+.legend {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 12px;
+}
+.legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 10px 0 3px;
+}
+.hit {
+  background: var(--hit);
+}
+.miss {
+  background: var(--miss);
+}
+svg {
+  display: block;
+  width: 100%;
+  min-width: 100px;
+  height: 13px;
+}
+.volume {
+  width: 50%;
+}
+.storage-summary {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+#observed {
+  font-size: 17px;
+  line-height: 28px;
+}
+.error,
+.notice {
+  margin: 12px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.error {
+  background: #fff0ed;
+  color: #8e281b;
+  border: 1px solid #efc7be;
+}
+.notice {
+  background: #edf0e8;
+}
+.error:empty {
+  display: none;
+}
+footer {
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+  padding: 18px 12px;
+}
+footer p + p {
+  margin-top: 4px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 640px) {
+  main {
+    padding: 22px 14px;
+  }
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 16px;
+  }
+  .tools {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .scope {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 14px;
+    padding: 18px 10px;
+  }
+  dd {
+    font-size: 21px;
+  }
+  .storage-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .storage-summary > div:last-child {
+    grid-column: 1/-1;
+  }
+  section {
+    margin-bottom: 24px;
+  }
+  button {
+    min-height: 40px;
+  }
+  th,
+  td {
+    padding: 9px 10px;
+  }
+}

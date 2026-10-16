@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nx cache · Cubby</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/dashboard.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Nx cache</h1>
+          <p>Shared build artifacts for Cubby</p>
+        </div>
+        <div class="tools">
+          <span id="updated" role="status">Loading statistics…</span
+          ><button id="refresh" type="button">Refresh</button>
+        </div>
+      </header>
+      <div class="scope">
+        <strong>Last 24 hours</strong
+        ><span>Aggregate traffic · Updates may be delayed or sampled</span>
+      </div>
+      <p id="page-error" class="error" role="alert" hidden></p>
+      <section aria-labelledby="activity-title" aria-busy="true" id="activity">
+        <h2 id="activity-title">Cache activity</h2>
+        <p id="activity-error" class="error" role="alert" hidden></p>
+        <p id="activity-empty" class="notice" hidden>
+          No cache activity recorded in this window. Statistics begin when
+          telemetry is deployed.
+        </p>
+        <dl class="summary">
+          <div>
+            <dt>Read hit rate</dt>
+            <dd id="hit-rate">—</dd>
+          </div>
+          <div>
+            <dt>Cache hits / misses</dt>
+            <dd id="read-counts">—</dd>
+          </div>
+          <div>
+            <dt>Artifact bytes offered</dt>
+            <dd id="served">—</dd>
+          </div>
+          <div>
+            <dt>Storage failures</dt>
+            <dd id="errors">—</dd>
+          </div>
+        </dl>
+        <p class="note">
+          Hit rate = hits ÷ (hits + misses). Health checks, rejected requests
+          and storage errors are excluded. Bytes offered counts artifact sizes
+          returned to readers, not confirmed completed downloads.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <caption>
+              Requests by result
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Result</th>
+                <th scope="col">Requests</th>
+                <th scope="col">Artifact bytes</th>
+                <th scope="col">Average operation</th>
+              </tr>
+            </thead>
+            <tbody id="results">
+              <tr>
+                <td colspan="4">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <details open>
+          <summary>
+            Hourly reads
+            <span class="legend"
+              >Hits <i class="hit"></i> Misses <i class="miss"></i
+            ></span>
+          </summary>
+          <div class="table-wrap">
+            <table>
+              <caption class="sr-only">
+                Hourly cache reads in UTC
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Hour (UTC)</th>
+                  <th scope="col">Read volume</th>
+                  <th scope="col">Hits</th>
+                  <th scope="col">Misses</th>
+                </tr>
+              </thead>
+              <tbody id="hours">
+                <tr>
+                  <td colspan="4">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+      <section aria-labelledby="storage-title" aria-busy="true" id="storage">
+        <h2 id="storage-title">R2 storage</h2>
+        <p id="storage-error" class="error" role="alert" hidden></p>
+        <p id="storage-empty" class="notice" hidden>
+          No storage observations in this window.
+        </p>
+        <dl class="summary storage-summary">
+          <div>
+            <dt>Objects</dt>
+            <dd id="objects">—</dd>
+          </div>
+          <div>
+            <dt>Artifact storage</dt>
+            <dd id="stored-bytes">—</dd>
+          </div>
+          <div>
+            <dt>Latest observation hour (UTC)</dt>
+            <dd id="observed">—</dd>
+          </div>
+        </dl>
+        <details>
+          <summary>Hourly storage observations</summary>
+          <div class="table-wrap">
+            <table>
+              <caption class="sr-only">
+                Hourly R2 storage maxima in UTC
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Hour (UTC)</th>
+                  <th scope="col">Objects</th>
+                  <th scope="col">Artifact bytes</th>
+                </tr>
+              </thead>
+              <tbody id="storage-hours"></tbody>
+            </table>
+          </div>
+        </details>
+        <p class="note">
+          Hourly maxima from Cloudflare’s R2 metrics. These include stored
+          artifacts, not build products kept only on runners. Observations can
+          lag current storage.
+        </p>
+      </section>
+      <footer>
+        <p>
+          Only aggregate measurements are public. Artifact keys, contents and
+          credentials stay private.
+        </p>
+        <p>
+          Transfer speed and build time saved require client measurements; they
+          are not inferred here.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
