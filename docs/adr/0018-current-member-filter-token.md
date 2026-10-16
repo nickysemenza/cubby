@@ -31,7 +31,10 @@ or this other member".
   filter accepts is declared beside its other tokens (Any value, No value,
   Match all). The Work queue's `waitingFor` is an any-of that accepts `@me`
   (work routed to me or Either) beside `either` and member codes, with No
-  value for unresolved items.
+  value for unresolved items. Because its Me also matches Either work, that field is
+  registered in `repositoryCurrentMember` (with its reason): the operation
+  layer leaves `@me` in place and the Work queue repository reads it, while
+  a member code, including the reader's own, stays member-only.
 
 ## Consequences
 
