@@ -1191,7 +1191,7 @@ using a plain `{ operation, input }` or `{ batch: [...] }` request. Only
 registered queries are admitted; the harness serializes and decodes the existing
 SuperJSON and operation contracts. Use a single request for one query, or an
 explicit batch of 2–20 queries. Each sample is one transport attempt, without
-browser retries or fallback. The schema-4 artifact separates HTTP, transport,
+browser retries or fallback. The schema-5 artifact separates HTTP, transport,
 dispatch rejection, protocol and RPC failures, and reports successful per-operation settlement times
 as results arrive, separately from complete-response timing. Both batch
 settlement and the nested operation must succeed. Missing, duplicate,
@@ -1206,6 +1206,33 @@ Request IDs and operation error codes appear only in private raw
 output; inputs, result bodies and diagnostic text are never written. An observed
 failure, including the optional warm-up, produces an artifact and nonzero exit
 status. This is a read-correctness signal, not a performance threshold gate.
+
+Schema 5 adds `requestedReads` and `workloadContext`. Report reads expose only
+schema-enumerated slots (retaining order and duplicates); list reads expose the
+registered entity, projection, groups, declared field ownership and group-loader
+dependencies. These are requested/declared contracts, **not observed loaded work**
+or inferred SQL/report dependencies. Summary output fields, arbitrary sort/group
+expressions, complete resource reads and unsupported operations remain null.
+Progressive mode records the base/enrichment/summary requests actually sent
+during measured samples, keyed to their operation metrics. Empty pages request
+no enrichment; populated pages record only server-selected enrichment groups.
+Repeated phase shapes across samples are coalesced; an operation batch retains
+each query position and duplicate, independently of its sample count. Full list
+metadata omits empty ownership groups. Dependency metadata lists only direct
+declared edges of requested groups; core-only reads report none. Filter field
+names now live inside each list shape and are admitted only from that entity's
+generated filter schema, never arbitrary input keys. Values, IDs, search text,
+paths and diagnostics are excluded from both public and private samples.
+
+Optionally pass `--context <context.json>` with strict operator assertions:
+`{"environment":"local","population":"synthetic","scale":1000,"cache":"warm","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`.
+Environment admits local/ci/staging/production, population only synthetic, cache
+warm/cold/mixed, scale an integer from 0 to one billion (population record count),
+and revision a full lowercase 40-character Git SHA of the **measured deployment**.
+Missing context fields are null. No free-text labels or extra keys are accepted.
+These assertions do not prove scale, cache warmth or deployment provenance;
+response versions remain independently observed. Invocation/warmup, concurrency,
+pagination and input equality fingerprints retain their existing meanings.
 
 ## Filters and search
 

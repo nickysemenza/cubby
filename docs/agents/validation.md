@@ -226,7 +226,11 @@ report using the [existing read harness](../entities.md#progressive-lists):
 requested fields and dependencies versus loaded work, SQL calls and
 plan work at representative synthetic scale, response bytes, decoded operation
 failures, and time until useful data is available. Label the revision,
-environment, workload, cache state, and unavailable measurements. A query timing
+environment, workload, cache state, and unavailable measurements. The harness
+separates declaration-only requested shape from observed work; unsupported shape
+metadata and unprovided bounded operator context stay null. Never use an input
+fingerprint as anonymization or copy arbitrary input keys into evidence, including
+private samples. A query timing
 does not establish page latency, and HTTP success does not establish RPC success.
 
 Review the shared cause before approving a local optimization: read projections,
