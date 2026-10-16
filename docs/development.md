@@ -189,8 +189,9 @@ An image-pull failure is infrastructure setup, not a scenario result; inspect
 the registry diagnostic before rerunning tests. Local test-service images and
 native PostgreSQL installation remain owned by their existing runners.
 
-- Fresh worktrees run `pnpm agent:setup`: a frozen install, then a WASM build
-  restored from the shared Nx cache. Gitignored env comes from
+- Fresh worktrees run `pnpm agent:setup`: a frozen install that restores or
+  generates declaration outputs and installs Git hooks. It does not request
+  WASM, so documentation and tooling work need no Rust toolchain. Gitignored env comes from
   [.worktreeinclude](../.worktreeinclude). Every `pnpm install` re-verifies
   `node_modules` (`optimisticRepeatInstall: false`), so rerunning it relinks a
   missing dependency instead of reporting "Already up to date".
@@ -202,6 +203,12 @@ native PostgreSQL installation remain owned by their existing runners.
   Cargo's resolved graph and file contents, so it never drifts silently.
   `pnpm typecheck`, `pnpm typecheck:web` and every web Vitest run call it, so
   a fresh worktree restores or builds the WASM on demand.
+  Dev and production build entrypoints also ensure WASM before consuming it.
+  The cached Nx target invokes the build directly and hashes Rust inputs and
+  toolchain settings; unrelated root package-script changes do not invalidate it.
+  Use `node scripts/ensure.ts wasm` to prepare it explicitly through that cache;
+  `pnpm wasm` forces the build command. Keep generated WASM checkout-local
+  rather than copying or symlinking another worktree's output.
   The workspace `Cargo.lock` is tracked so worktrees share a key. Commit its
   churn after a parser bump.
 - `pnpm dev` gives each checkout its own database and Worker namespace on free
