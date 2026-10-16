@@ -2,7 +2,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
+import {
+  inventoryentryList,
+  inventoryentryListRead,
+} from "~/server/domains/inventory/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import {
@@ -88,6 +91,18 @@ describe("compiled list fields", () => {
       page,
     );
     expect(sorted.data.map((row) => row.id)).toEqual([blanket.id, anorak.id]);
+
+    // A count skips the valuation prepare, so it must not build the derived
+    // valuation ORDER BY that reads it.
+    const counted = await inventoryentryListRead(
+      ctx.db,
+      { categoryFilter: [root.output.id] },
+      [{ orderBy: "valuation", direction: "asc" }],
+      page,
+      { kind: "full" },
+      "count",
+    );
+    expect(counted.count).toBe(1);
   });
 
   it("includes every level below a selected project", async () => {

@@ -350,8 +350,11 @@ export const buildInventoryWhere = async (
   // callers prepare what these filters read.
   prepared?: ListContext,
 ) => {
+  // Filter-only: dashboard counts and work-queue predicates load valuations
+  // only when a valuation filter asks.
   const context =
-    prepared ?? (await inventoryScaffold.context(db, { filters }));
+    prepared ??
+    (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
   const ownerCodes =
     filters.ownerLedgerPartyId === undefined
       ? undefined
@@ -459,7 +462,10 @@ export const inventoryentryListRead = async (
   const page = await inventoryScaffold.list(db, request, {
     context,
     where: whereCondition,
-    orderBy: inventoryListOrderBy(sorts, filters, context),
+    orderBy:
+      readIntent === "count"
+        ? []
+        : inventoryListOrderBy(sorts, filters, context),
     // A plain select, not the relational builder: the product and location
     // text filters read the joined tables.
     select: (clauses) =>

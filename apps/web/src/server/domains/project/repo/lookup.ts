@@ -229,7 +229,7 @@ export const buildProjectListQuery = async (
         ? sql`false`
         : inArray(project.parentProjectId, parentProjectUuids);
   if (parentProjectUuids.length > 0 && filters.includeSubProjects)
-    parentValues = sql`${project.parentProjectId} IN ${hierarchyDescendantsSql("project", parentProjectUuids)}`;
+    parentValues = sql`${project.id} IN ${hierarchyDescendantsSql("project", parentProjectUuids, { descendantsOnly: true })}`;
   const parentCondition = or(
     parentValues,
     presenceCondition(

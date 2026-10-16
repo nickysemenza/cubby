@@ -966,14 +966,17 @@ export function listScaffold<
       const { take, skip } = buildTakeSkip(request.pagination);
       const page: ListPage = {
         where,
+        // A count never orders, and skipped the prepares a derived sort reads.
         orderBy:
-          spec.orderBy ??
-          scaffold.orderBy(
-            request.sorts,
-            { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
-            request.filters,
-            context,
-          ),
+          request.readIntent === "count"
+            ? []
+            : (spec.orderBy ??
+              scaffold.orderBy(
+                request.sorts,
+                { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
+                request.filters,
+                context,
+              )),
         limit: take,
         offset: skip,
       };

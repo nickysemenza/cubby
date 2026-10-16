@@ -31,10 +31,13 @@ const hierarchyOf = (entity: Entity) => {
  * `maxDepth` levels below each selected record. The visited-array guard keeps
  * a stored parent cycle from looping. `selected` is a list of ids or a
  * parenthesized id subquery (a shortcode lookup the list compiler builds).
+ * `descendantsOnly` drops the selected records themselves; a cycle back to a
+ * selected record still stops at the visited guard, so it never reappears.
  */
 export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
   entity: E,
   selected: readonly EntityId<E>[] | SQL,
+  { descendantsOnly = false }: { descendantsOnly?: boolean } = {},
 ): SQL<EntityId<E>> => {
   const { table, column, maxDepth, softDelete } = hierarchyOf(entity);
   if (Array.isArray(selected) && selected.length === 0)
@@ -59,6 +62,6 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
         FROM descendants d JOIN ${name} child ON child.${parent} = d."id"
         WHERE d.depth < ${sql.raw(String(maxDepth))}
           AND NOT child."id" = ANY(d.visited)${live("child")}
-      ) SELECT "id" FROM descendants
+      ) SELECT "id" FROM descendants${descendantsOnly ? sql` WHERE depth > 0` : sql``}
     )`;
 };
