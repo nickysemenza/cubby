@@ -27,6 +27,7 @@ import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
 // A reviewed link to an existing Purchase must not demand another extraction.
 // Original-content checks must inspect the selected Email's original, rather
 // than decompressing every retained message body to build a hashed SubPlan.
+// Settled unrelated history must not enter the filter-only evidence joins.
 describe("Email data quality", () => {
   const ctx = withTestDb();
 
@@ -67,13 +68,13 @@ describe("Email data quality", () => {
         pendingObjectKey: "synthetic/retained.pdf",
       });
     const expectedMissing = new Set<string>();
-    for (let index = 0; index < 120; index++) {
+    for (let index = 0; index < 300; index++) {
       const record = await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-content-mailbox",
         messageId: `synthetic-content-${index}`,
         checksum: "c".repeat(64),
-        classification: "related",
+        classification: index < 120 ? "related" : "unrelated",
         status: "pending",
         orderMailId: index === 3 ? null : originalAt(index),
         contentClearedAt: index === 5 ? new Date() : null,
@@ -88,7 +89,7 @@ describe("Email data quality", () => {
       z.object({ id: z.string(), gap: z.boolean() }),
     );
     const gaps = resultSchema.parse(rows.rows);
-    expect(gaps).toHaveLength(120);
+    expect(gaps).toHaveLength(300);
     expect(new Set(gaps.filter((row) => row.gap).map((row) => row.id))).toEqual(
       expectedMissing,
     );
@@ -102,6 +103,7 @@ describe("Email data quality", () => {
     );
     const node = z.object({
       "Relation Name": z.string().optional(),
+      Alias: z.string().optional(),
       Filter: z.string().optional(),
       "Actual Rows": z.number().default(0),
       "Actual Loops": z.number().default(0),
@@ -114,8 +116,11 @@ describe("Email data quality", () => {
       )
       .parse(explained.rows);
     let inspected = 0;
+    let qualityCandidates = 0;
     const inspect = (value: unknown) => {
       const current = node.parse(value);
+      if (current["Relation Name"] === "Email" && current.Alias === "candidate")
+        qualityCandidates += current["Actual Rows"] * current["Actual Loops"];
       if (
         current["Relation Name"] === "OrderMail" &&
         current.Filter?.includes("content")
@@ -127,6 +132,8 @@ describe("Email data quality", () => {
     };
     inspect(plans[0]!["QUERY PLAN"][0]!.Plan);
     expect(inspected).toBeLessThanOrEqual(120);
+    expect(qualityCandidates).toBeGreaterThan(0);
+    expect(qualityCandidates).toBeLessThanOrEqual(120);
   });
 
   // Scalar checks must stay bounded with both unrelated history and enough
