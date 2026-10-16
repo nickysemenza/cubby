@@ -170,35 +170,7 @@ describe("mail routing at the paid transport boundary", () => {
         )("Synthetic order confirmation for a purchased item"),
     };
   }
-  it.each(["active", "exhausted"] as const)(
-    "handles Anthropic chat fallback under %s allowance",
-    async (condition) => {
-      const current = await routing(condition);
-      const pending = gatewayFetchThrough({
-        provider: "anthropic",
-        beforePaidRequest: paidResearchPreflight(ctx.db, current.runId),
-        gateway: current.transmit,
-      })("https://ai-gateway.invalid/anthropic/v1/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          model: "claude-opus-5-5",
-          max_tokens: 100,
-          messages: [],
-        }),
-      });
-      const outcome = await pending.then(
-        () => "transmitted",
-        (error) => error.message,
-      );
-      const allowanceError = expect.stringMatching(/allowance/iu);
-      const expected = condition === "active" ? "transmitted" : allowanceError;
-      expect(outcome).toEqual(expected);
-      expect(current.transmit).toHaveBeenCalledTimes(
-        condition === "active" ? 1 : 0,
-      );
-    },
-  );
-
+  // This first catalog read must precede scenarios that warm the isolate cache.
   it("refuses transmission when cancellation completes during the pricing fetch", async () => {
     let pricingEntered = () => {};
     let releasePricing = () => {};
@@ -237,6 +209,35 @@ describe("mail routing at the paid transport boundary", () => {
     ]);
     expect(transmit).not.toHaveBeenCalled();
   });
+  it.each(["active", "exhausted"] as const)(
+    "handles Anthropic chat fallback under %s allowance",
+    async (condition) => {
+      const current = await routing(condition);
+      const pending = gatewayFetchThrough({
+        provider: "anthropic",
+        beforePaidRequest: paidResearchPreflight(ctx.db, current.runId),
+        gateway: current.transmit,
+      })("https://ai-gateway.invalid/anthropic/v1/messages", {
+        method: "POST",
+        body: JSON.stringify({
+          model: "claude-opus-5-5",
+          max_tokens: 100,
+          messages: [],
+        }),
+      });
+      const outcome = await pending.then(
+        () => "transmitted",
+        (error) => error.message,
+      );
+      const allowanceError = expect.stringMatching(/allowance/iu);
+      const expected = condition === "active" ? "transmitted" : allowanceError;
+      expect(outcome).toEqual(expected);
+      expect(current.transmit).toHaveBeenCalledTimes(
+        condition === "active" ? 1 : 0,
+      );
+    },
+  );
+
   it.each(["unapproved", "cancelled"] as const)(
     "refuses %s routing before transmitting to Workers AI",
     async (condition) => {
@@ -310,7 +311,6 @@ describe("mail routing at the paid transport boundary", () => {
       failureCode: "execution_limit",
     });
   });
-
   it("pauses bulk Luna mail import when its dollar allowance is exhausted", async () => {
     const { transmit, runId } = await routing(
       "exhausted",
