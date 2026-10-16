@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import {
@@ -180,12 +181,16 @@ async function list(entity: string, sample: number) {
       mode === "complete"
         ? "resource.list"
         : (path.split("/").at(-1) ?? "unknown");
-    if (sample >= 0)
+    if (sample >= 0) {
+      const metadataInput = unparsedStartOperationDataSchema.safeParse(body);
       requestedReads.push({
         entity,
         operation,
-        shape: body ? requestedReadMetadata(`entity.${operation}`, body) : null,
+        shape: metadataInput.success
+          ? requestedReadMetadata(`entity.${operation}`, metadataInput.data)
+          : null,
       });
+    }
     const value = await request(operation, path, body, method);
     measurements.push(value.measurement);
     return value.result;
