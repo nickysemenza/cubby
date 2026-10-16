@@ -326,7 +326,11 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
       : ["exec", "vite", "dev"];
     child = spawn("pnpm", args, {
       cwd: profile.webRoot,
-      env: devProcessEnvironment(profile),
+      // The runtime's lifecycle plugin exits if this supervisor dies.
+      env: {
+        ...devProcessEnvironment(profile),
+        CUBBY_DEV_SUPERVISOR_PID: String(process.pid),
+      },
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });

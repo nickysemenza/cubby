@@ -23,8 +23,8 @@ Install dependencies with `pnpm install`. On macOS, local development defaults
 to Apple `container`; run `container system start`. Linux defaults to Docker.
 To use Docker on macOS, start its daemon and export
 `CUBBY_DEV_SERVICES=docker` for development commands. Both backends use the same
-loopback port, owned named volume and checkout database guards. A backend has
-its own volume; switching does not transfer existing local data. Then run:
+loopback port and checkout database guards. Neither keeps a volume: the
+synthetic databases are rebuilt by the next `pnpm dev`. Then run:
 
 ```sh
 pnpm dev
@@ -49,19 +49,20 @@ and rejects redirects; it is absent from release app builds.
 
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with
-that id. PostgreSQL's container is shared; databases, D1/R2/DO/queue state, and
-session files belong to each checkout. Database preparation disables JIT for
-that checkout's database, including existing databases without resetting data.
-Neon's PostgreSQL has no JIT provider; the local image's LLVM compiler otherwise
-adds substantial compilation time to complex quality queries. Restart a running
-dev session after applying this setting so its existing connections pick it up.
-The container preloads `pg_stat_statements`; database preparation enables it for
-the selected checkout, providing normalized query counts, execution times and
-buffer statistics for local performance investigations. If an older container
-lacks that preload, preparation refuses readiness and names the upgrade:
-`pnpm db:dev:down`, then `pnpm dev`. This recreates the shared container while
-keeping its volume and all checkout databases; active local clients briefly
-disconnect. It does not reset fixtures. Postgres version and query semantics
+that id. PostgreSQL's container is shared with every checkout and with test runs'
+IntegreSQL databases; databases, D1/R2/DO/queue state, and session files
+belong to each checkout. The server runs with JIT off (Neon's PostgreSQL has
+no JIT provider; the local image's LLVM compiler otherwise adds substantial
+compilation time to complex quality queries) and durability off (`fsync`,
+`synchronous_commit`, `full_page_writes`) and no volume: local data is
+synthetic, and `pnpm dev` re-creates, migrates and seeds a missing checkout
+database. The container preloads
+`pg_stat_statements`; database preparation enables it for the selected
+checkout, providing normalized query counts, execution times and buffer
+statistics for local performance investigations. A container started with
+other settings is recreated empty at the next `pnpm dev` or test run; active
+local clients disconnect, and each checkout's next `pnpm dev` rebuilds its
+database. Postgres version and query semantics
 should track production; connection and cache limits remain sized for the local
 container rather than copying Neon's autoscaled values. Keep the core corpus
 small and opt into the performance pack below for scale-sensitive work.
@@ -82,11 +83,18 @@ credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
 then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
-Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev down` stops
+Ctrl-C stops the owned runtime and keeps the checkout's database. `pnpm dev down` stops
 that checkout's supervisor. `pnpm dev reset` stops it and resets its database and
 Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev seed`
 reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.
+
+A session nobody uses ends on its own, so a settled agent thread cannot leave
+gigabytes behind. After 30 minutes without an HTTP request or a watched file
+change, the runtime stops the supervisor (`CUBBY_DEV_IDLE_MINUTES`, `0` keeps
+it). An open HMR socket is not activity: forgotten preview panes and test
+browsers hold one indefinitely. A runtime whose supervisor was killed closes
+itself within 15 seconds. Built preview (`wrangler dev`) has neither exit.
 
 ## Tooling layout
 

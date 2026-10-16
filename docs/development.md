@@ -166,7 +166,7 @@ native PostgreSQL installation remain owned by their existing runners.
   ports. Discover the session with `pnpm dev status --json`.
   Local development defaults to Apple `container` on macOS and Docker on Linux;
   select Docker on macOS with `CUBBY_DEV_SERVICES=docker`. See
-  [local development](local-development.md#start-and-discover) for volume and
+  [local development](local-development.md#start-and-discover) for database and
   runtime ownership. Test services use their separate setting below.
 - To sign in locally, click **Continue as local dev user** on the sign-in page,
   or open `<origin>/__dev/login?next=/some/path`. Both sign in the seeded
@@ -174,9 +174,13 @@ native PostgreSQL installation remain owned by their existing runners.
   The route exists only in the local dev Worker entry and the button only in
   Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
 - On macOS, every worktree's database and browser test commands share one
-  Apple `container` PostgreSQL/IntegreSQL pair (`cubby-test-<config>-*`),
-  started on first use and reused afterwards; each worktree gets its own
-  IntegreSQL templates and disposable databases. A test reset selects a fixed
+  Apple `container` IntegreSQL (`cubby-test-<config>-integresql`) on the same
+  PostgreSQL as local development (`cubby-dev-pg`,
+  `scripts/lib/shared-postgres.ts`), started on first use and reused
+  afterwards; each worktree gets its own IntegreSQL templates and disposable
+  databases. One capped server (1.5 GB, 4 CPUs, durability off) replaces a
+  second VM: Virtualization.framework guests never return freed memory to
+  macOS. A test reset selects a fixed
   server session set, protects its registered clients across pools on the same
   actual host, port and database, and waits for those sockets to close. Unknown
   sessions fail before any termination: close and drain separate-process runtimes
@@ -185,9 +189,10 @@ native PostgreSQL installation remain owned by their existing runners.
   until socket closure; other database errors remain failures. Workers, peers and Playwright
   listen on OS-assigned ports, so worktrees never collide. Startup runs under
   the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
-  itself in `/tmp/cubby-test-services/runs`: a pair a live run uses is never
-  removed, an idle pair of a superseded configuration is removed, and an idle
-  pair holding more than 250 databases is recreated empty.
+  itself in `/tmp/cubby-test-services/runs`: IntegreSQL a live run uses is never
+  removed, an idle one of a superseded configuration (or an earlier revision's
+  `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
+  than 250 databases is recreated with its `integresql_*` databases dropped.
   - `CUBBY_TEST_SERVICES=external` connects to services already running; it
     does not start a container runtime. Linux and CI use this mode with Docker
     services (`docker compose -p cubby up -d` for local Linux setup). For another

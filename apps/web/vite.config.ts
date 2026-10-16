@@ -16,6 +16,7 @@ import wasm from "vite-plugin-wasm";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
 import { writeLocalDevConfig } from "./tooling/dev/config.ts";
+import { devLifecycle } from "./tooling/dev/lifecycle.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -395,6 +396,7 @@ export default defineConfig(async ({ command }) => {
           });
         },
       } satisfies Plugin,
+      devLifecycle(),
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm

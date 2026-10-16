@@ -77,6 +77,10 @@ Choose local evidence by the changed behavior:
 - Web/server behavior: the affected regression or real user journey. Run one
   app typecheck when TypeScript behavior or signatures change; include the
   test program when tests/tooling change (see [quality](validation-quality.md)).
+  That one run comes before commit or push, never after each edit: a cold
+  apps/web check holds about 4 GB, and parallel worktrees each running one
+  push a 24 GB Mac into swap. Iterate on lint and focused tests, and never
+  start a second typecheck in a worktree while one runs.
 - Generated native labels, fixtures, constants, or incidental Swift changes:
   verify generation and relevant focused contracts. CI owns native compilation;
   these edits alone do not require local host tests, app builds or simulators.
