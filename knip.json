@@ -43,9 +43,11 @@
       // xcode-select: scripts/apple/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the
-      // Apple test-service runtime. All are system tools, never npm
-      // dependencies.
+      // Apple test-service runtime. These platform tools are host-provided;
+      // workflow Playwright and Wrangler commands use apps/web dependencies.
       "ignoreBinaries": [
+        // The Boat workflow invokes it in apps/web, where it is declared.
+        "playwright",
         "xcode-select",
         "plutil",
         "pkill",
