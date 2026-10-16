@@ -108,20 +108,26 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
       exact: true,
     }),
   ).toBeVisible();
-  const advisoryResponse = page.waitForResponse((response) => {
-    return dispatchesOperation(
-      response.request(),
-      "purchase.settlementCandidates",
-    );
-  });
-  await page.getByRole("button", { name: "Match statement activity" }).click();
-  const response = await advisoryResponse;
-  expect(response.status()).toBe(200);
-  const data = await operationResult(
-    response,
-    "purchase.settlementCandidates",
-    purchaseSettlementCandidatesOut,
-  );
+  // Consume the body when the response arrives: click may wait for
+  // navigation, after which Chromium can discard the prior response body.
+  const [data] = await Promise.all([
+    page
+      .waitForResponse((response) =>
+        dispatchesOperation(
+          response.request(),
+          "purchase.settlementCandidates",
+        ),
+      )
+      .then(async (response) => {
+        expect(response.status()).toBe(200);
+        return operationResult(
+          response,
+          "purchase.settlementCandidates",
+          purchaseSettlementCandidatesOut,
+        );
+      }),
+    page.getByRole("button", { name: "Match statement activity" }).click(),
+  ]);
   expect(data.advisory).toBe(true);
   const dialog = page.getByRole("dialog", { name: "Match statement activity" });
   await expect(dialog.getByText("$91.00")).toBeVisible();
