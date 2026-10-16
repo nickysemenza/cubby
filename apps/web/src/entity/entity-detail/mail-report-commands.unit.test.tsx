@@ -32,11 +32,15 @@ function ImportEmail({ command }: { command: ReportCommand }) {
 it("imports a shipment without an order ID and links every server-created Run", async () => {
   const harness = createBrowserTestHarness();
   const calls: unknown[] = [];
-  for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries())
-    harness.queryClient.setQueryData(
-      entityPreviewQueryOptions("run", ref).queryKey,
-      { id: ref, displayName: `Synthetic import ${index + 1}` },
-    );
+  // Keep names available so only refreshed source operands can clear the links.
+  for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries()) {
+    const queryKey = entityPreviewQueryOptions("run", ref).queryKey;
+    harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
+    harness.queryClient.setQueryData(queryKey, {
+      id: ref,
+      displayName: `Synthetic import ${index + 1}`,
+    });
+  }
   const restore = overrideStartDispatch(async (operation, input) => {
     if (operation !== "purchaseImport.emailImport")
       throw new Error(`Unexpected operation: ${operation}`);
