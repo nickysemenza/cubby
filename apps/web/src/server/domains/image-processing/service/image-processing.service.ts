@@ -33,9 +33,7 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
-import { retryFailedImageProcessingJobs } from "~/server/domains/image-processing/repo/image-processing";
-import {
+  retryFailedImageProcessingJobs,
   completeImageProcessingJob,
   getLeasedImageProcessingOutputKey,
   claimImageProcessingOrphans,
@@ -45,17 +43,17 @@ import {
 import {
   assignImageProcessingExecutor,
   findImageProcessingDeviceAssignment,
-} from "~/server/domains/image-processing/repo/image-processing-history";
-import {
   recordImageProcessingEvent,
   createImageProcessingSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-history";
-import { readImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import {
+  readImageProcessingSettings,
+  publishImageProcessingWakeups,
+} from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-submission";
-import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-wakeups";
 import { completeCloudImageDescription } from "~/server/domains/image-processing/service/cloud-description";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
 import {

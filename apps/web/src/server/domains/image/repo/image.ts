@@ -71,6 +71,7 @@ import { match } from "ts-pattern";
 
 import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
+import { deleteStoredObjects } from "~/server/clients/s3";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   edgeScopeWhere,
@@ -3124,5 +3125,15 @@ export const getImagesByProjectIds = async (
     });
     result[row.projectId] = list;
   }
+  return result;
+};
+
+/** Reap abandoned pending uploads, then drain their R2 objects after the delete commits. */
+export const cullPendingImageStorage = async (
+  db: Database,
+  olderThanHours: number,
+) => {
+  const result = await cullPendingImages(db, olderThanHours);
+  await deleteStoredObjects(result.deletedKeys);
   return result;
 };

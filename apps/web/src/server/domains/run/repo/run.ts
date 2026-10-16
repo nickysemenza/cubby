@@ -8,7 +8,11 @@ import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  notDeleted,
+  unwrapDb,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
 import {
   defineRepository,
@@ -201,3 +205,11 @@ export const runRepository = defineRepository("run", {
   list: listOn(listRuns),
   listRead: listReadOn(listRunsRead),
 });
+
+/** One transaction for a Run's work step; services compose repo writes inside it. */
+export async function withRunTransaction<T>(
+  db: Database,
+  operation: (transactionDb: Database) => Promise<T>,
+): Promise<T> {
+  return withTransactionDatabase(db, operation);
+}

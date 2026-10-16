@@ -15,8 +15,8 @@ import {
   pruneExecutorlessWaitingAttempts,
   readImageProcessingSettings,
   writeImageProcessingSettings,
+  publishImageProcessingWakeups,
 } from "~/server/domains/image-processing/repo/image-processing-maintenance";
-import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-wakeups";
 
 import {
   cleanupExpiredImageProcessingOrphans,

@@ -25,6 +25,7 @@ import {
   getImagesByProjectIds,
   markImageUploaded,
   setImagePerceptualHashes,
+  cullPendingImageStorage,
 } from "~/server/domains/image/repo/image";
 import { publishImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata-tasks";
 import { recordImageSightings } from "~/server/domains/image/repo/image-sighting";
@@ -35,7 +36,6 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/domains/image/repo/image-storage";
-import { cullPendingImageStorage } from "~/server/domains/image/repo/pending-image-cull";
 import {
   type EntityKernelContext,
   executeEntityAs,
