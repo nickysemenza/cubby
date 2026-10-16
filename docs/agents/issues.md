@@ -152,7 +152,8 @@ fix addresses its failure. No recent events is not evidence of a fix.
 
 The Sentry organization uses a Sponsored plan. Its installed GitHub integration
 shows Team-level issue linking, assignee/comment synchronization, and stack-trace
-linking enabled; Business-level capabilities still show an upgrade requirement.
+linking enabled; CODEOWNERS and alert-driven automatic issue creation still
+show an upgrade requirement.
 Check live integration settings rather than inferring entitlements from the
 sponsored label or treating it as Developer Free. Availability does not mean
 synchronization is configured: preserve Sentry URLs and inspect the existing
