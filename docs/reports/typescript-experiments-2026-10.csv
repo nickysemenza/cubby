@@ -41,3 +41,17 @@ maps-schemas,1-cold,packages/schemas/tsconfig.json,0,8.221,14.583,880772,590,449
 maps-schemas,1-warm,packages/schemas/tsconfig.json,0,0.525,1.839,171872,590,85,0,0.000s,0.371s
 maps-schemas,2-cold,packages/schemas/tsconfig.json,0,7.955,14.056,855468,590,449837,1499146,6.792s,7.143s
 maps-schemas,2-warm,packages/schemas/tsconfig.json,0,0.513,1.845,169312,590,85,0,0.000s,0.380s
+combined,1-cold,apps/web/tsconfig.json,1,100.998,170.248,6770316,10694,3941696,23753340,85.082s,90.426s
+combined,1-warm,apps/web/tsconfig.json,1,8.158,28.989,1723836,10694,85,0,0.008s,6.654s
+combined,1-body,apps/web/tsconfig.json,1,137.329,208.744,7511880,10694,3941696,23753340,121.042s,128.386s
+combined,1-export,apps/web/tsconfig.json,1,96.766,166.502,7441672,10694,3941697,23753340,78.589s,84.436s
+combined,1-schema,apps/web/tsconfig.json,1,103.421,189.51,7456128,10694,3941698,23753340,81.879s,89.109s
+combined,2-cold,apps/web/tsconfig.json,1,127.522,220.52,6760840,10694,3941696,23753340,110.944s,117.957s
+combined,2-warm,apps/web/tsconfig.json,1,11.543,40.361,1690336,10694,85,0,0.010s,10.033s
+combined,2-body,apps/web/tsconfig.json,1,98.41,167.038,7421936,10694,3941696,23753340,82.742s,89.818s
+combined,2-export,apps/web/tsconfig.json,1,90.303,154.607,6893804,10694,3941697,23753340,75.702s,81.513s
+combined,2-schema,apps/web/tsconfig.json,1,91.868,155.079,7488880,10694,3941698,23753340,75.701s,81.652s
+combined-schemas,1-cold,packages/schemas/tsconfig.json,0,7.827,13.029,904004,590,448392,1491223,6.587s,6.942s
+combined-schemas,1-warm,packages/schemas/tsconfig.json,0,0.538,1.921,175200,590,85,0,0.000s,0.396s
+combined-schemas,2-cold,packages/schemas/tsconfig.json,0,8.285,14.975,884592,590,448392,1491223,7.079s,7.426s
+combined-schemas,2-warm,packages/schemas/tsconfig.json,0,0.576,2.039,170592,590,85,0,0.000s,0.407s
