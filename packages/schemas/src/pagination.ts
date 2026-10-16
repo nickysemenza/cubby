@@ -177,6 +177,13 @@ export const partyFilterList = <T extends z.ZodTypeAny>(
   sentinels: readonly string[] = [],
 ) => tokenFilterList(schema, [CURRENT_MEMBER_FILTER, ...sentinels]);
 
+/**
+ * Party filters whose repository reads `@me` itself, because it means more
+ * than the reader's shortcode (the Work queue's Me also matches Either work).
+ * The operation layer leaves `@me` in place for these; the reason says why.
+ */
+export const repositoryCurrentMember = z.registry<{ reason: string }>();
+
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
   pageSize: z

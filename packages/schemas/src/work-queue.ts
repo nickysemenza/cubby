@@ -16,6 +16,7 @@ import {
   mcpPaginationFields,
   oneOrMany,
   partyFilterList,
+  repositoryCurrentMember,
   presenceFilter,
 } from "./pagination";
 import { problemRowSchema } from "./problems";
@@ -179,7 +180,11 @@ export const workQueueHouseholdInput = workQueuePageInput.extend({
    * Any of: `@me` (work routed to me or Either), `either` (shared work), or a
    * member shortcode (work routed to that member).
    */
-  waitingFor: partyFilterList(ledgerPartyShortcode, ["either"]).optional(),
+  waitingFor: partyFilterList(ledgerPartyShortcode, ["either"])
+    .optional()
+    .register(repositoryCurrentMember, {
+      reason: "Me also matches Either work; a member code is member-only.",
+    }),
   /** `none` is Unresolved routing; `has` is resolved (members or Either). */
   waitingForPresence: presenceFilter.describe(
     "has/none waiting for, ORed with picked members",

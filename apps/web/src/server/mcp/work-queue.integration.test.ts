@@ -32,6 +32,7 @@ import { stopRunForReview } from "~/server/domains/purchase-import/operations/ru
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
@@ -1159,14 +1160,19 @@ describe("member actionable Work queue", () => {
     expect(
       overview.items.every((row) => row.waitingFor.kind === "unresolved"),
     ).toBe(true);
-    // Waiting for is any-of: a member pick also matches Either work, `@me`
-    // is the reader, and No value (Unresolved) ORs beside them.
+    // Waiting for is any-of: `@me` is the reader's work (theirs or Either), a
+    // picked member only theirs, and No value (Unresolved) ORs beside them.
+    // Input passes the operation's `@me` resolution, as the household read does.
     const household = async (input: z.input<typeof workQueueHouseholdInput>) =>
       (
         await readWorkQueue(
           ctx.db,
           first.id,
-          workQueueHouseholdInput.parse(input),
+          await resolveCurrentMemberFilters(
+            { db: ctx.db, actorContext: ctx.actor },
+            workQueueHouseholdInput,
+            workQueueHouseholdInput.parse(input),
+          ),
           false,
         )
       ).items.map((row) => row.id);
@@ -1195,6 +1201,10 @@ describe("member actionable Work queue", () => {
       ]),
     );
     expect(mineOrUnresolved).not.toContain(theirs.shortcode);
+    // Picking myself by code is a member pick, so shared work stays out.
+    const pickedFirst = await household({ waitingFor: first.shortcode });
+    expect(pickedFirst).toContain(mine.shortcode);
+    expect(pickedFirst).not.toContain(shared.id);
     expect(
       await household({
         waitingFor: [CURRENT_MEMBER_FILTER, second.shortcode],

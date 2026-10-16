@@ -1,3 +1,4 @@
+import { repositoryCurrentMember } from "@cubby/schemas/pagination";
 import {
   CURRENT_MEMBER_FILTER,
   UNRESOLVABLE_ENTITY_FILTER,
@@ -67,7 +68,11 @@ export async function resolveCurrentMemberFilters<T>(
       Object.entries(value).map(async ([key, item]) => {
         const field = objectSchema.shape[key];
         if (!(field instanceof z.ZodType)) return [key, item] as const;
-        if (mentionsCurrentMember(item) && isPartyFilter(field)) {
+        if (
+          mentionsCurrentMember(item) &&
+          isPartyFilter(field) &&
+          !repositoryCurrentMember.has(field)
+        ) {
           const resolved = await member();
           const swap = (entry: unknown) =>
             entry === CURRENT_MEMBER_FILTER ? resolved : entry;
