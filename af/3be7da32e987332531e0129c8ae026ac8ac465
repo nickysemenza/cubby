@@ -1,0 +1,35 @@
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_5285635cb5ec69::t_9d52cc23b73d44 459,463
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_5285635cb5ec69::t_7cec6860c1c451 638-643,645,647,649
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_5285635cb5ec69::t_fa92dedc38751d 1173,1175-1176,1178-1184
+apps/web/tests/e2e/work-queue.spec.ts
+  s_5285635cb5ec69::t_cc2bc8db3111bf 89-95,97,99-113,115,131,141
+docs/adr/0018-current-member-filter-token.md
+  s_5285635cb5ec69::t_7e83fda5daa4af 32-34
+docs/entities.md
+  s_5285635cb5ec69::t_88da00da3c3006 1539-1541
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_5285635cb5ec69::t_339e45044de757 1324
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_5285635cb5ec69::t_a6e0398e496463 558
+packages/schemas/src/work-queue.ts
+  s_5285635cb5ec69::t_2337f33945783a 178-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "af3be7da32e987332531e0129c8ae026ac8ac465",
+  "prompts": {},
+  "sessions": {
+    "s_5285635cb5ec69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36a7f5c0-2a54-429d-8349-ad4f4e7f2675",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
