@@ -1,0 +1,41 @@
+apps/web/generator/entities/presentation.ts
+  s_6a763386176fda::t_891d672f5f0b4b 107-113
+apps/web/src/entity/display/entity-display.tsx
+  s_6a763386176fda::t_e3037ba752fb34 1002-1023
+apps/web/src/entity/page/page-hero.preview.test.tsx
+  s_6a763386176fda::t_1fd7c035ecb9ad 52-84
+apps/web/src/entity/page/page-hero.tsx
+  s_6a763386176fda::t_27e0918bfe32ee 16,235,270-272,322-326,329-330
+docs/entities.md
+  s_6a763386176fda::t_143a734e297f3e 159-163
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_6a763386176fda::t_266f7a1404d13d 56
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_6a763386176fda::t_bb91ae34377e89 63
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_6a763386176fda::t_b56acf59f7398d 78-81
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_6a763386176fda::t_deef8f9477228e 69
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_6a763386176fda::t_e1aaa3914db3a0 62
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_6a763386176fda::t_590f06cecbd822 80-84
+packages/schemas/src/entity-definitions/definition.ts
+  s_6a763386176fda::t_7787d30f0c28e7 1098-1108,1114,1118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8e9dd1b6a0c5af180d313aefc30d8437a9598d70",
+  "prompts": {},
+  "sessions": {
+    "s_6a763386176fda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26421de1-62a2-4d30-bfcd-f2fb60cbfae5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
