@@ -1405,6 +1405,7 @@ describe("typed entity compiler", () => {
       chip: null,
       stats: [],
       breadcrumb: null,
+      when: null,
       images: false,
       actions: [],
     });
@@ -1467,6 +1468,11 @@ describe("typed entity compiler", () => {
         "a non-reference breadcrumb",
         { detail: { hero: { breadcrumb: "name" } } },
         "must be a reference field",
+      ],
+      [
+        "a non-temporal hero when",
+        { detail: { hero: { when: { field: "name" } } } },
+        "must be a date or timestamp field",
       ],
       [
         "a timeline view without the capability",
