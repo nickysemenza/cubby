@@ -461,8 +461,19 @@ export async function findOrphanEntities(
     ORPHAN_CHECK_KINDS.map((kind) => sql`${kind}`),
     sql`, `,
   );
+  // Only an edge touching a checked kind can disqualify an orphan. A
+  // polymorphic source can be any kind, so retain those arms as well.
+  const checkedKinds: ReadonlySet<ShortcodeEntity> = new Set(
+    ORPHAN_CHECK_KINDS,
+  );
+  const specs = ENTITY_EDGE_SPECS.filter(
+    (spec) =>
+      checkedKinds.has(spec.targetKind) ||
+      spec.source.kind === "identity" ||
+      checkedKinds.has(spec.source.sourceKind),
+  );
   const result = await unwrapDb(db).execute(sql`
-    WITH edge AS (${entityEdgeSourceSql()}),
+    WITH edge AS (${entityEdgeSourceSql(specs)}),
     connected AS (
       -- A same-kind edge (a location's parent) counts only for its target: a
       -- location that merely sits in the tree is still empty.

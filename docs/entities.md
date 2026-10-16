@@ -1717,6 +1717,13 @@ tab's Connections, the impact preview, the graph explorer's physical edges,
 the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
 through it.
 
+The orphan finder restricts graph arms to edges touching its checked kinds
+before reading rows. Polymorphic source arms remain eligible because their
+source kind is stored on each identity. Both endpoints must still be live;
+same-kind parent edges connect only their target, so an empty child location
+remains a cleanup candidate. This projection does not change Connections or
+graph-explorer reads.
+
 Two generic tables carry the relationships and identifiers that used to have a
 table each (ADR 0007):
 
