@@ -1,6 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
   createProductFixture,
@@ -12,6 +13,11 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { recomputeRecipesForPriceAffectedProducts } from "./price-affected-recipes";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 describe("recomputeRecipesForPriceAffectedProducts", () => {
   const ctx = withTestDb();

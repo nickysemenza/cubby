@@ -4,7 +4,7 @@ import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -20,6 +20,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   makeExpenseInput,
@@ -35,6 +36,11 @@ import {
 import { McpOperationContext } from "./operation-context";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 describe("MCP catalog", () => {
   const ctx = withTestDb("mcp");

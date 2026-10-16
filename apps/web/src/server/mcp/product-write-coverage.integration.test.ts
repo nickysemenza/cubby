@@ -1,7 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -40,6 +40,13 @@ const writeResult = z.object({
   recipeCoverageChanges: changesSchema.optional(),
   lineCoverage: lineCoverageSchema.optional(),
 });
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 describe("coverage diagnostics on product and recipe writes", () => {
   const ctx = withTestDb("mcp");

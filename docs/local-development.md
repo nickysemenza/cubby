@@ -186,7 +186,9 @@ packs use the discovered session origin. Built workerd harnesses install
 their queue producer for Node scenarios, retaining the selected profile's
 consumer routing.
 Integration tests install `captureBackgroundQueue()` and explicitly `drain(db)`
-when asserting consumer effects; the bounded drain runs real handlers, including
+when asserting consumer effects. Workflow finalizers and retry fallbacks also
+need a producer even when a test reads only synchronous writes. The bounded
+drain runs real handlers, including
 follow-up publications, and retains a failed task for diagnosis.
 
 Optional packs still add small focused graphs to the running session:

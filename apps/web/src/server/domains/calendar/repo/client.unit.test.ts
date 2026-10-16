@@ -63,6 +63,7 @@ describe("scheduleCalendarFeedDirty", () => {
     setCfEnv(
       fromPartial<Env>({
         CALENDAR_FEED: { getByName: () => ({ markDirty }) },
+        BACKGROUND_QUEUE: { sendBatch: vi.fn().mockResolvedValue(undefined) },
       }),
     );
 
