@@ -26,7 +26,7 @@ export interface QualityReadContext {
 
 export interface CheckBinding<T extends ScoredTable> {
   /** Whether the check applies to this row at all; omitted = always. */
-  expected?(t: T): SQL;
+  expected?(t: T, context?: QualityReadContext): SQL;
   /** Evaluated only under `expected`. */
   missing(t: T, context?: QualityReadContext): SQL;
   /**

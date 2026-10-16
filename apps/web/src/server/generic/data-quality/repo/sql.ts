@@ -131,9 +131,10 @@ export const expectedCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
+  context?: QualityReadContext,
 ): SQL => {
   const binding = bindingFor(entity, check);
-  return group(binding.expected ? binding.expected(t) : sql`true`);
+  return group(binding.expected ? binding.expected(t, context) : sql`true`);
 };
 
 /** The check's `missing` predicate alone; a gap only where also expected. */
@@ -152,7 +153,7 @@ const rawGapCondition = (
   context?: QualityReadContext,
 ): SQL =>
   group(
-    sql`${expectedCondition(entity, check, t)} AND ${checkMissingCondition(entity, check, t, context)}`,
+    sql`${expectedCondition(entity, check, t, context)} AND ${checkMissingCondition(entity, check, t, context)}`,
   );
 
 /** A live gap: expected, missing, and not covered by an active exception. */
@@ -257,7 +258,7 @@ const fromCheckStates = (
     checks.map((check, index) => {
       const active = activeExceptionSql(entity, check, t);
       return sql`CASE
-    WHEN ${expectedCondition(entity, check, t)} IS NOT TRUE THEN ${code("not_applicable")}
+    WHEN ${expectedCondition(entity, check, t, context)} IS NOT TRUE THEN ${code("not_applicable")}
     WHEN ${checkMissingCondition(entity, check, t, context)} IS NOT TRUE THEN ${code("satisfied")}
     ${active === null ? sql`` : sql`WHEN ${active} THEN ${code("excepted")}`}
     ELSE ${code("gap")} END AS ${sql.identifier(`s${index}`)}`;

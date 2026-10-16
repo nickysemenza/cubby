@@ -11,7 +11,12 @@ import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import {
   costWeighted,
@@ -357,21 +362,13 @@ export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)})`;
 
 /**
- * The list footer projects all filtered unpriced products in one kit walk.
- * Unlike the page-sized loader, it groups live sibling quantities and own
- * acquisition rows once for the visited ancestors; repeating those scans for
- * every product makes a full-catalog footer dominate the list request.
+ * Catalog evidence and the filtered footer group live sibling quantities and
+ * own acquisition rows once for the visited ancestors. Page-sized reads keep
+ * the correlated aggregate so a small scope does not scan unrelated history.
  */
-const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
-  const condition = whereClause ?? sql`TRUE`;
-  return sql<number>`${kitAncestorCteSql(
-    sql`
-    SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
-      FROM "Product"
-     WHERE ${condition} AND "Product"."price" IS NULL
-  `,
-    { groupedSiblingQuantities: true },
-  )}, kit_own_ids AS MATERIALIZED (
+const groupedProductPriceSql = (
+  seed: SQL,
+): SQL => sql`${kitAncestorCteSql(seed, { groupedSiblingQuantities: true })}, kit_own_ids AS MATERIALIZED (
     SELECT DISTINCT ka."productId" FROM kit_anc ka
   ), kit_own AS MATERIALIZED (
     SELECT kpe."productId", ${sql.raw(PRICING_OWN_MEASURES)}
@@ -379,16 +376,39 @@ const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
       JOIN kit_own_ids koi ON koi."productId" = kpe."productId"
      WHERE ${sql.raw(PRICING_OWN_PREDICATES)}
      GROUP BY kpe."productId"
-  ), derived AS (
-    SELECT ka.target, ${sql.raw(PROJECTED_DERIVED_PRICE)} AS price
-      FROM kit_anc ka
-      LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
-     GROUP BY ka.target
   )
-  SELECT (COALESCE((
+  SELECT ka.target AS "entityId", ${sql.raw(PROJECTED_DERIVED_PRICE)} AS "derivedPrice"
+  FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
+  GROUP BY ka.target`;
+
+/** Numeric evidence for bounded quality hydration; an omitted scope shares catalog work. */
+export const productPriceEvidenceSql = (ids?: SQL): SQL => {
+  if (ids === undefined)
+    return groupedProductPriceSql(kitSeedForProductIds([], true));
+  return sql`${kitAncestorCteSql(sql`SELECT kp."id", kp."id", 1::numeric, 1::numeric, 0 FROM "Product" kp WHERE kp."id" = ANY(${uuidArrayParam(ids)})`)}
+    SELECT ka.target AS "entityId", ${sql.raw(PROJECTED_DERIVED_PRICE)} AS "derivedPrice"
+    ${sql.raw(PRICING_PROJECTION_FROM)} GROUP BY ka.target`;
+};
+
+/** A closed membership predicate: callers need no derived-table alias in their FROM. */
+export const hasDerivedProductPriceSql = (
+  productId: AnyColumn,
+): SQL => sql`${productId} IN (
+  SELECT price_evidence."entityId" FROM (${productPriceEvidenceSql()}) price_evidence
+  WHERE price_evidence."derivedPrice" IS NOT NULL
+)`;
+
+const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
+  const condition = whereClause ?? sql`TRUE`;
+  const derived = groupedProductPriceSql(sql`
+    SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
+      FROM "Product"
+     WHERE ${condition} AND "Product"."price" IS NULL
+  `);
+  return sql<number>`SELECT (COALESCE((
     SELECT sum("Product"."price"::numeric) FROM "Product"
      WHERE ${condition} AND "Product"."price" IS NOT NULL
-  ), 0) + COALESCE((SELECT sum(price::numeric) FROM derived), 0))::double precision AS "priceSum"`;
+  ), 0) + COALESCE((SELECT sum(price."derivedPrice"::numeric) FROM (${derived}) price), 0))::double precision AS "priceSum"`;
 };
 
 export const loadProductPriceSum = async (
@@ -403,25 +423,9 @@ export const loadProductPriceSum = async (
 };
 
 /**
- * The same derived price as a Drizzle fragment, for the Product list's shared
- * `whereClause` — NULL exactly when no acquisition, own or projected, prices
- * this product.
- *
- * Interpolates `product.id` rather than hand-qualifying an alias, the opposite
- * of the sort twin above and for the reason `expectedQuantityFilterSql`
- * (quantity-ledger.ts) spells out: one `whereClause` reaches three query
- * builders under three different aliases, and only an interpolated Drizzle
- * column is rewritten to whichever is in scope.
- *
- * It exists because a price filter written any other way is a fourth definition
- * of "an acquisition" free to drift from the three above — and it did. The flat
- * `Expense`-keyed `IN` list this replaced predated the kit projection, so the
- * "Stocked but unpriced" view listed components whose own price column rendered
- * the projected number the filter could not see.
- *
- * The `kpe` alias inside {@link PRICING_OWN_AGGREGATE} is not cosmetic: the
- * footer-total query nests this whole where-clause inside a statement that
- * already has `"Expense"` in scope.
+ * Numeric scalar for exception fingerprints and callers evaluating one Product.
+ * Keep the interpolated column: Drizzle rewrites it to the enclosing alias.
+ * Acquisition predicates, kit weights, and rounding share the batch definitions.
  */
 export const derivedPriceFilterSql = (productId: AnyColumn) =>
   sql`(${kitAncestorCteSql(

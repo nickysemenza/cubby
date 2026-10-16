@@ -270,7 +270,7 @@ const loadEvaluations = async (
   const context = derived ? { derivedAlias: "dq_derived" } : undefined;
   const withFingerprints = dataQualityExceptionEntities[entity];
   const columns = checks.flatMap((check, index) => [
-    sql`${expectedCondition(entity, check, t)} AS ${sql.identifier(expectedKey(index))}`,
+    sql`${expectedCondition(entity, check, t, context)} AS ${sql.identifier(expectedKey(index))}`,
     // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
     // would plan every `expected` twice (see `scoreSql`).
     sql`${checkMissingCondition(entity, check, t, context)} AS ${sql.identifier(gapKey(index))}`,

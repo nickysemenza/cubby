@@ -5,9 +5,13 @@ import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sq
 import { product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { orphanedProductCondition } from "~/server/domains/product/repo/orphan-condition";
-import { derivedPriceFilterSql } from "~/server/domains/product/repo/pricing";
+import {
+  derivedPriceFilterSql,
+  hasDerivedProductPriceSql,
+  productPriceEvidenceSql,
+} from "~/server/domains/product/repo/pricing";
 
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks, type QualityReadContext } from "../registry";
 
 type Product = typeof product;
 
@@ -84,11 +88,19 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
 const hasIdentifier = (t: Product) =>
   sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
 
-const derivedPrice = (t: Product) => derivedPriceFilterSql(t.id);
+const derivedPrice = (t: Product, context?: QualityReadContext) =>
+  context
+    ? sql`${sql.identifier(context.derivedAlias)}."derivedPrice"`
+    : derivedPriceFilterSql(t.id);
+const hasDerivedPrice = (t: Product, context?: QualityReadContext) =>
+  context
+    ? sql`${derivedPrice(t, context)} IS NOT NULL`
+    : hasDerivedProductPriceSql(t.id);
 
 export const productChecks = defineEntityChecks({
   entity: "product",
   table: product,
+  derivedRead: productPriceEvidenceSql,
   checks: {
     product_orphaned: { missing: orphanedProductCondition },
     // Identity applies to every Product, spend or stock or neither: a
@@ -116,10 +128,11 @@ export const productChecks = defineEntityChecks({
       // product otherwise carries no value into its location's total. An
       // unstocked Product earns credit for a known price (zero included) but
       // is never charged a gap: its historical price may be unknowable.
-      expected: (t) =>
-        sql`(${hasStock(t)} OR ${t.price} IS NOT NULL OR ${derivedPrice(t)} IS NOT NULL) AND lower(${t.name}) NOT LIKE 'misc:%'`,
-      missing: (t) => sql`(${t.price} IS NULL AND ${derivedPrice(t)} IS NULL)`,
-      fingerprint: (t) => [sql`${t.price}`, derivedPrice(t)],
+      expected: (t, context) =>
+        sql`(${hasStock(t)} OR ${t.price} IS NOT NULL OR (${hasDerivedPrice(t, context)})) AND lower(${t.name}) NOT LIKE 'misc:%'`,
+      missing: (t, context) =>
+        sql`(${t.price} IS NULL AND NOT (${hasDerivedPrice(t, context)}))`,
+      fingerprint: (t, context) => [sql`${t.price}`, derivedPrice(t, context)],
     },
     product_image: {
       // STOCKED ONLY. An image earns its keep for something you can walk up to

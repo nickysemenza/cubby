@@ -1231,6 +1231,12 @@ and emit no migration.
 
 ## Data quality
 
+Product price checks share catalog price evidence for filtering and a scoped
+numeric projection for quality hydration. Applicability, missing-value checks,
+and exception fingerprints read the same projection during hydration. Both
+projections reuse the kit-pricing rules used by scalar prices and list totals;
+zero remains a known price and an absent derived price remains null.
+
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
 score sorting, and bounded hydration join a shared, deduplicated Email quality
