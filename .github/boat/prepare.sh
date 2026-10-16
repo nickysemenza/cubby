@@ -27,7 +27,7 @@ if ! command -v wasm-pack >/dev/null; then
 fi
 pnpm --dir "$repo" install --frozen-lockfile --prefer-offline
 pnpm --dir "$repo/apps/web" exec playwright install --with-deps chromium
-pnpm --dir "$repo" exec nx run cubby-checks:wasm --outputStyle=stream
+pnpm --dir "$repo" exec nx run cubby-checks:wasm --skip-nx-cache --outputStyle=stream
 
 # Boat retains image references through containers; pulled layers can still
 # hydrate after ready. The executor probes Docker and database readiness.
