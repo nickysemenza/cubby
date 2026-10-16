@@ -1,7 +1,7 @@
 # GitHub backlog
 
 [GitHub Issues](https://github.com/nickysemenza/cubby/issues) owns unfinished
-work. The [Cubby Project](https://github.com/users/nickysemenza/projects/2) owns readiness, work type, priority, and delivery status;
+work. The [Cubby Project](https://github.com/users/nickysemenza/projects/2) owns horizon, readiness, work type, priority, and delivery status;
 read those fields as well as the issue body before selecting work. Repository
 documentation owns behavior and decisions. An issue is a proposal until the
 implementation and validation establish otherwise; do not maintain a second
@@ -9,18 +9,18 @@ editable backlog in Markdown.
 
 ## Fields and selection
 
-| Field     | Values and meaning                                       |
-| --------- | -------------------------------------------------------- |
-| Readiness | Ready; Needs schema plan; Needs decision; Waiting; Later |
-| Work type | Bug; Feature; Maintenance; Investigation                 |
-| Priority  | High; Medium; Low                                        |
-| Status    | Inbox; Todo; In progress; Verify; Done                   |
+| Field     | Values and meaning                                   |
+| --------- | ---------------------------------------------------- |
+| Horizon   | Now; Next; Later; unset for work outside the roadmap |
+| Readiness | Ready; Needs schema plan; Needs decision; Waiting    |
+| Work type | Bug; Feature; Maintenance; Investigation             |
+| Priority  | High; Medium; Low                                    |
+| Status    | Inbox; Todo; In progress; Verify; Done               |
 
-Readiness names the next blocker, independently of priority and delivery status.
+Readiness names the next blocker, independently of horizon, priority, and delivery status.
 Ready means the outcome is decided and needs no schema planning. An unresolved
 decision or missing evidence takes precedence over an eventual schema change.
-Waiting requires a named trigger in the body; Later parks wanted work until
-there is a concrete reason to promote it. Check native Blocked by relationships
+Waiting requires a named trigger in the body. Check native Blocked by relationships
 and parent constraints before starting even a Ready item.
 
 Choose Work type by the primary outcome: repair is Bug, added capability is
@@ -42,12 +42,65 @@ Use native Relates to for associated work whose containment, dependency, or
 common cause is unproven. Similar symptoms alone do not establish a duplicate
 or blocker.
 
+## Triage checklist
+
+Apply this when creating, importing, or reviewing an issue in Intake. Search
+for the same outcome first and update the existing issue when it matches.
+
+1. Read the body, parent, and native blockers. Establish the outcome,
+   acceptance criteria, and any unresolved decision or waiting trigger before
+   choosing metadata. Investigate missing evidence rather than guessing Ready.
+2. Add existing `area:*` labels for each affected domain/platform. Add
+   `operational` for a household data pass. Discover names with `gh label list
+   --repo nickysemenza/cubby`; use `gh issue edit <number> --repo
+   nickysemenza/cubby --add-label <label>` to add them. Preserve relevant
+   existing labels; use Work type and Priority for their structured meanings.
+3. Explicitly add the issue to the Project and set Readiness, Work type, and
+   Priority using the definitions above. Auto-add is asynchronous and does not
+   backfill existing issues. Update native parents/dependencies when the
+   relationship is established, preserving the trigger or decision in the body.
+4. Keep Status Inbox while triage is incomplete; use Todo for accepted backlog
+   work and In progress only when implementation starts. Select Horizon only
+   for a roadmap outcome or explicit deferral, following the roadmap policy
+   below. An unset Horizon is valid and does not mean Later; subissues normally
+   use their parent's roadmap context.
+5. Read back the issue labels and Project fields. Triage is complete when the
+   three required metadata fields are set, Status reflects the work, and the
+   body supports the chosen readiness and relationships. Horizon and dates are
+   optional; selecting metadata does not resolve the issue's blocker.
+
+## Roadmap
+
+Horizon sequences outcomes without promising dates. Now holds 1–3 current
+focus outcomes; Next holds 3–5 ordered candidates after Now; Later preserves
+wanted but deferred work. Leave Horizon unset for the rest of the backlog.
+Priority describes impact; a Ready issue can still be Later, and a Now outcome
+can need a decision. Keep its actual Readiness and Status accurate.
+
+Use an existing parent issue for a larger outcome and subissues for its
+independently deliverable steps. Give the parent a clear finish line. Put
+Horizon on the outcome card; subissues do not automatically inherit the field
+and normally stay off the roadmap. Read the parent's Horizon when selecting
+an implementation task. Routine bugs and maintenance can proceed through
+Delivery without becoming separate roadmap outcomes.
+
+Review Now and Next weekly or when an outcome finishes. Finish or deliberately
+remove an outcome before promoting another into a full Now column. Reassess
+Later when its recorded trigger occurs. Use review/demo dates for feedback;
+reserve delivery dates for real timing constraints. Add iterations only when
+repeating timeboxes serve an actual planning cadence, and milestones only for
+a finite release or other shared finish line; a milestone can be undated.
+
 ## Project views and automation
 
+Roadmap is the board grouped by Horizon, filtered to open issues with a
+Horizon. Order cards manually within each column; show Status, Readiness,
+Priority, and subissue progress. Now's advisory limit is three outcomes.
 Backlog is the open-work table, grouped by Readiness and sorted by Priority.
 Its Labels slice sidebar filters by existing areas without another Area field;
 Updated helps identify neglected work, but activity does not prove progress.
-Ready is the Todo/Ready board, with Work type columns and Priority swimlanes.
+Ready is the Todo/Ready board, excluding Horizon Later, with Work type columns
+and Priority swimlanes.
 Delivery uses Status columns and Priority swimlanes. Intake catches open issues
 in Inbox or missing any of the three metadata fields. These are views of the
 same issues, not separate backlogs.
@@ -56,11 +109,12 @@ OR no:Priority)`; multiword field keys use hyphens in Project filters.
 Leave Readiness, Work type, and Priority defaults unset so Intake exposes
 missing triage. New items receive Status Inbox through automation.
 
-Unblock shows open Needs decision or Needs schema plan work, highest priority
-first. Investigate what can be answered from evidence before asking the human.
+Unblock shows open Needs decision or Needs schema plan work, excluding Horizon
+Later, highest priority first. Investigate what can be answered from evidence
+before asking the human.
 Operations filters the existing `operational` label. Stale review shows active
-Todo/In progress/Verify issues untouched for 30 days, excluding Later and
-Waiting, oldest update first. Review these deliberately; do not close work
+Todo/In progress/Verify issues untouched for 30 days, excluding Horizon Later
+and Readiness Waiting, oldest update first. Review these deliberately; do not close work
 merely for inactivity.
 Delivery's In progress limit is three: an advisory highlight, not a hard limit,
 task reservation, or coordination mechanism.
@@ -147,7 +201,7 @@ public-content constraints; do not upload live household evidence.
 Close abandoned or superseded work as not planned, with the reason or replacement
 link. For a genuine duplicate, preserve useful evidence on the canonical issue
 and close with `gh issue close <number> --duplicate-of <canonical-number>`;
-do not describe distinct symptoms as duplicates without evidence. Wanted-but-deferred work stays open with Readiness Later. Closed is the
+do not describe distinct symptoms as duplicates without evidence. Wanted-but-deferred work stays open with Horizon Later and its actual Readiness. Closed is the
 issue's state; Done is a Project status. Do not count not-planned closures as
 delivered work, or duplicates as additional deliveries, merely because their
 Project status is Done. Closing a parent

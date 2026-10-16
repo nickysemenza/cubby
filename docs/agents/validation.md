@@ -203,6 +203,7 @@ hook format.
 directory. Linked worktrees inherit them; each runs `.husky/` from its own
 checkout. A missing lint-staged installation fails immediately with the local
 install command. Exported source archives without `.git` skip hook setup.
+Confirm staged-check output; a successful commit alone is not validation evidence.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
