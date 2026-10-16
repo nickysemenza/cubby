@@ -86,12 +86,12 @@ export const getDb = (db: Database): DrizzleClient => {
 /**
  * Is this handle an already-open transaction rather than the pooled Database?
  *
- * The `"rollback"` sniff lives here and nowhere else: repository code receives
+ * The `"rollback"` discriminator is shared with the schema-free repository boundary: repository code receives
  * either the request-scoped Database handle or a DrizzleTransaction, and the
  * transaction carries `rollback`, so presence of that key is the structural
  * signal separating them.
- * Centralized so the two consumers ({@link unwrapDb},
- * {@link withTransactionOn}) can't drift on it.
+ * Keep {@link unwrapDb}, {@link withTransactionOn}, and the schema-free
+ * repository boundary aligned; constructor identity does not survive module reloads.
  */
 export const isTransaction = (
   db: Database | DrizzleClient | DrizzleTransaction,

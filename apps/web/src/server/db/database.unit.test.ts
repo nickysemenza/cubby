@@ -20,6 +20,21 @@ const databaseRuntime = (): DatabaseRuntime => {
 };
 
 describe("Database runtime handle", () => {
+  it("keeps existing handles usable across module reloads", async () => {
+    const runtime = databaseRuntime();
+    const database = createDatabase(() => runtime);
+    vi.resetModules();
+    const reloaded = await import("./database-runtime");
+    const { repositoryQueries } = await import("./repository-access.boundary");
+
+    expect(reloaded.resolveDatabaseRuntime(database).client).toBe(
+      runtime.client,
+    );
+    expect(repositoryQueries(database)).toBe(runtime.client);
+    const next = reloaded.createDatabase(() => runtime);
+    expect(resolveDatabaseRuntime(next).client).toBe(runtime.client);
+  });
+
   it("rejects a handle that has no registered runtime", () => {
     expect(() => resolveDatabaseRuntime(new Database())).toThrow(
       "Database handle has no registered runtime",

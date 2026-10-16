@@ -13,7 +13,15 @@ export interface DatabaseRuntime {
 }
 
 // Keep resolver callbacks lazy: the same handle follows the active request role.
-const runtimes = new WeakMap<Database, () => DatabaseRuntime>();
+// Test module reloads and HMR must resolve handles created by the previous graph.
+const runtimeRegistryKey = Symbol.for("cubby.database.runtime-registry");
+const runtimeGlobal: typeof globalThis & {
+  [runtimeRegistryKey]?: WeakMap<Database, () => DatabaseRuntime>;
+} = globalThis;
+const runtimes = (runtimeGlobal[runtimeRegistryKey] ??= new WeakMap<
+  Database,
+  () => DatabaseRuntime
+>());
 
 export function createDatabase(
   resolveRuntime: () => DatabaseRuntime,

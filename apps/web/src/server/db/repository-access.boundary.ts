@@ -1,7 +1,7 @@
 import type { NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import type { PgDatabase, PgTransaction } from "drizzle-orm/pg-core";
 
-import { Database } from "~/server/db/database";
+import type { Database } from "~/server/db/database";
 import { getDb } from "~/server/db/helpers/core";
 
 /** Native SQL builders without the assembled relational schema or pool ownership. */
@@ -32,5 +32,5 @@ export type RepositoryQueryInput = Database | RepositoryQueryTransaction;
 export function repositoryQueries(
   db: RepositoryQueryInput,
 ): RepositoryQueryClient {
-  return db instanceof Database ? getDb(db) : db;
+  return "rollback" in db ? db : getDb(db);
 }
