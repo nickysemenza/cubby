@@ -78,6 +78,7 @@ runs:
           echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target-$TARGETS-$PROFILE"
           echo "CUBBY_FFI_PROFILE=$PROFILE"
           echo "CUBBY_FFI_TARGETS=$TARGETS"
+          echo "CARGO_BUILD_WARNINGS=${CARGO_BUILD_WARNINGS:-deny}"
         } >> "$GITHUB_ENV"
 
     # A miss fails before building and never caches; the caller's own build

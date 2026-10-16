@@ -92,7 +92,9 @@ selectors in `apps/web/project.json`; shard selection is keyed per target and
 browser worker count is part of the target command. The Worker bundles all
 `docs/**/*.md`, so those bytes participate in runtime keys. Native App source
 is excluded only from web-specific passes; root tooling keeps broad coverage.
-Rust checks include their actual compiler and platform. Portable generation and
+Rust checks include their actual compiler, platform and Cargo warning policy.
+CI establishes `CARGO_BUILD_WARNINGS=deny` before native probes as well as
+compilation; a local warning-tolerant pass cannot satisfy that policy. Portable generation and
 WASM artifacts retain their own narrower, content/toolchain-based inputs.
 
 Apple passes key the actual Xcode, Swift, SDK, macOS, architecture and Rust

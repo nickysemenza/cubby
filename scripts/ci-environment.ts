@@ -75,6 +75,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(
       JSON.stringify({
         profile: process.env.CUBBY_FFI_PROFILE || "release",
+        warnings: process.env.CARGO_BUILD_WARNINGS || "warn",
         rustflags: process.env.RUSTFLAGS || "",
         encoded: process.env.CARGO_ENCODED_RUSTFLAGS || "",
       }),

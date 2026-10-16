@@ -49,3 +49,14 @@ test("a web pass distinguishes platform, runtime and test environment", () => {
     webEnvironment({ platform: "linux", node: "27", ci: "true" }),
   );
 });
+
+test("native pass identity distinguishes warning policy before FFI preparation", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const command = new URL("./ci-environment.ts", import.meta.url).pathname;
+  const key = (warnings: string) =>
+    execFileSync(process.execPath, [command, "ffi"], {
+      encoding: "utf8",
+      env: { ...process.env, CARGO_BUILD_WARNINGS: warnings },
+    });
+  assert.notEqual(key("warn"), key("deny"));
+});

@@ -58,6 +58,8 @@ permissions:
   pull-requests: read
 
 env:
+  # Establish the same warning policy before cache probes and compilation.
+  CARGO_BUILD_WARNINGS: deny
   # Fresh diagnostics bypass only the remote cache. Each runner's initially
   # empty local cache retains fresh prerequisites for subsequent Nx calls.
   NX_SKIP_REMOTE_CACHE: ${{ inputs.fresh && 'true' || 'false' }}

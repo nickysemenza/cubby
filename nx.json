@@ -86,6 +86,7 @@
       { "runtime": "node --version" },
       { "env": "RUSTFLAGS" },
       { "env": "CARGO_ENCODED_RUSTFLAGS" },
+      { "env": "CARGO_BUILD_WARNINGS" },
       { "runtime": "node -p \"process.platform + process.arch\"" },
       // Cargo never reads JavaScript dependencies, which Nx hashes by default.
       { "externalDependencies": [] }
