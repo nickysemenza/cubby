@@ -425,7 +425,7 @@ export const runChildren = [
         reference: { table: "ledgerParty", column: "id" },
       },
       { key: "evidence", kind: "text" },
-      /** Null on legacy drafts: identity must be explicitly reviewed before approval. */
+      /** Null on legacy drafts; member apply confirms identity atomically. */
       { key: "review", kind: "jsonb", type: "PhotoGroupReview" },
       /** Last writer of the payload (`photoGroupProposalOrigin`); null = not recorded. */
       {

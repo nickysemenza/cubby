@@ -4,10 +4,14 @@ import type { z } from "zod";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { readImageProcessingSettings } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import {
+  photoRunCandidates,
+  rejectPhotoProductCandidate,
+} from "~/server/domains/photo-import/repo/photo-group-candidates";
 import { commitPhotoImport } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   findPhotoProductCandidates,
-  photoProductCandidates,
+  loadPhotoProductEvidence,
 } from "~/server/domains/photo-import/repo/photo-product-candidates";
 import { linkablePhotoGroupExpenses } from "~/server/domains/photo-import/repo/run/expense-link";
 import { startPhotoGroupingForActor } from "~/server/domains/photo-import/repo/run/grouping";
@@ -19,6 +23,7 @@ import {
   setPhotoRunProcessor,
 } from "~/server/domains/photo-import/repo/run/lifecycle";
 import {
+  resolvePhotoGroupConcern,
   approvePhotoGroupProposals,
   assertPhotoRunReviewer,
   chooseExistingProductForPhotoGroup,
@@ -80,24 +85,67 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const review = await listPhotoGroupProposals(context.db, input.runId);
-      const group = review.proposals.find(
+      const [review, images] = await Promise.all([
+        listPhotoGroupProposals(context.db, input.runId),
+        listPhotoRunImages(context.db, input.runId),
+      ]);
+      const proposal = review.proposals.find(
         (item) => item.groupKey === input.groupKey,
       );
-      if (!group) throw new Error("Photo group was not found");
-      const images = await listPhotoRunImages(context.db, input.runId);
-      return {
-        candidates: await photoProductCandidates(
-          context.db,
-          group,
-          images,
-          {
-            ...context.actorContext,
-            runId: await resolveOrThrow(context.db, "run", input.runId),
-          },
-          decideProductVariantComparisons,
-        ),
-      };
+      if (!proposal) throw new Error("Photo group was not found");
+      const result = await photoRunCandidates(
+        context.db,
+        { ...review, proposals: [proposal] },
+        images,
+        {
+          ...context.actorContext,
+          runId: await resolveOrThrow(context.db, "run", input.runId),
+        },
+        decideProductVariantComparisons,
+      );
+      return result.groups[0]!;
+    },
+    candidatesBatch: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      const [review, images] = await Promise.all([
+        listPhotoGroupProposals(context.db, input.runId),
+        listPhotoRunImages(context.db, input.runId),
+      ]);
+      return photoRunCandidates(
+        context.db,
+        review,
+        images,
+        {
+          ...context.actorContext,
+          runId: await resolveOrThrow(context.db, "run", input.runId),
+        },
+        decideProductVariantComparisons,
+      );
+    },
+    productEvidence: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      const id = await resolveOrThrow(context.db, "product", input.productId);
+      const evidence = (
+        await loadPhotoProductEvidence(context.db, [id], context.actorContext)
+      ).get(id);
+      if (!evidence) throw new Error("Product was not found");
+      return evidence;
+    },
+    rejectCandidate: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return rejectPhotoProductCandidate(context.db, input, context);
     },
     linkableExpenses: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -119,6 +167,22 @@ export const photoImportHandlers = implementOperationDomain(
       );
       const saved = await chooseExistingProductForPhotoGroup(context.db, input);
       return { ...saved, results: [] };
+    },
+    resolveConcern: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      return {
+        ...(await resolvePhotoGroupConcern(
+          context.db,
+          input,
+          context.actorContext,
+        )),
+        results: [],
+        frozenGroupKeys: [],
+      };
     },
     updateDraft: async (context, input) => {
       await assertPhotoRunReviewer(

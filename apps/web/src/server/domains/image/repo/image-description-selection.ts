@@ -1,8 +1,10 @@
 import {
   imageDescriptionResult,
-  selectImageDescription,
+  selectImageDescriptionEvidence,
+  type selectedImageDescriptionEvidence,
 } from "@cubby/schemas/image-processing";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
@@ -13,13 +15,16 @@ import {
 } from "~/server/domains/image-processing/repo/description-policy";
 
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
-export async function loadSelectedDescriptions(
+export async function loadSelectedDescriptionEvidence(
   db: Database | DrizzleTransaction,
   shortcodes: string[],
 ) {
-  if (!shortcodes.length) return new Map<string, string>();
+  if (!shortcodes.length)
+    return new Map<string, z.infer<typeof selectedImageDescriptionEvidence>>();
   const rows = await unwrapDb(db)
     .select({
+      analysisId: aiAnalysis.id,
+      createdAt: aiAnalysis.createdAt,
       shortcode: image.shortcode,
       hash: image.sha256,
       result: aiAnalysis.result,
@@ -66,7 +71,10 @@ export async function loadSelectedDescriptions(
     entries.push(row);
     grouped.set(row.shortcode, entries);
   }
-  const selected = new Map<string, string>();
+  const selected = new Map<
+    string,
+    z.infer<typeof selectedImageDescriptionEvidence>
+  >();
   for (const [shortcode, entries] of grouped) {
     const analyses = entries.flatMap((entry) => {
       const result = imageDescriptionResult.safeParse(entry.result);
@@ -76,6 +84,10 @@ export async function loadSelectedDescriptions(
       if (!result.success) return [];
       return [
         {
+          analysisId: entry.analysisId,
+          provider: entry.provider,
+          model: entry.model,
+          createdAt: entry.createdAt.toISOString(),
           result: result.data,
           inputFingerprint: entry.inputFingerprint,
           preferred:
@@ -91,14 +103,30 @@ export async function loadSelectedDescriptions(
       ];
     });
     const correction = correctionsByImage.get(shortcode) ?? null;
-    const description = selectImageDescription(
+    const description = selectImageDescriptionEvidence(
       analyses,
       correction,
       entries[0]?.hash ?? null,
     );
-    if (description) selected.set(shortcode, description);
+    selected.set(shortcode, description);
   }
   for (const correction of corrections)
-    selected.set(correction.shortcode, correction.description);
+    selected.set(
+      correction.shortcode,
+      selectImageDescriptionEvidence([], correction, null),
+    );
   return selected;
+}
+
+/** Existing prose-only consumers project from the same authority selection. */
+export async function loadSelectedDescriptions(
+  db: Database | DrizzleTransaction,
+  shortcodes: string[],
+) {
+  const evidence = await loadSelectedDescriptionEvidence(db, shortcodes);
+  return new Map(
+    [...evidence].flatMap(([code, selected]) =>
+      selected.description ? [[code, selected.description] as const] : [],
+    ),
+  );
 }

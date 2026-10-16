@@ -10,6 +10,8 @@ Use San Francisco through the standard system font design for record identity an
 
 Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus, and split views. The neutral canvas belongs to content; system bars and Liquid Glass retain native presentation. Resting panels use tonal separation and a hairline; overlays may use native elevation. Controls keep native hit behavior, and phone targets stay at least 44 points. Structured amounts use separate native Form rows for Amount, Upper amount and Unit, with distinct labels and native bordered field targets; do not compress multiple editable inputs and Remove into one row. Task-board Move actions name their task for accessibility.
 
+Action color is the third channel: it marks the outcome of a pending decision, separate from domain ("where am I?") and condition ("what state?"). Adaptive ActionCreate/ActionCreateSurface are blue, link/attach reuses Slate/Inset, ActionChange/ActionChangeSurface are muted ochre, and remove reuses Destructive. Primary controls stay ink; action color belongs on chips, glyphs and step marks.
+
 ## Navigation and generic records
 
 Mac has one main window with Settings in its sidebar. The sidebar is a native `List(.sidebar)` at small sidebar row size in a narrow column (170–260 points, ideal 200). Each domain section is collapsible, and the collapsed set persists across launches and windows. Catalog and Search use a grouped sidebar, selectable record list, adjacent complete detail, and an optional inspector. The inspector summarizes the already loaded row; the complete record and its actions remain in detail. Other workspaces use the main column. Keep menus, keyboard access, window restoration, selection, and related-record history.
@@ -27,6 +29,12 @@ Declared saved views appear in the iPhone Controls menu and the Mac toolbar. App
 The Mac root browser owns split selection even while its detail pane has related-record history. Nested entity lists push a detail onto their current navigation path. Values and source attribution in phone table cells wrap at accessibility text sizes. Totals and paging controls stay within the viewport, outside the horizontally scrolling columns.
 
 Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
+
+## Photo group decisions
+
+Native photo review renders the server's `DecisionStep[]` and `blockedReason`; it does not infer approval readiness. `DecisionSteps` uses a positive dot for done, a faint point for blocked, a hollow ring for not needed and a citron mark for needs input. One step expands at a time; answered rows show the summary and Change. The `apply` key is omitted because Create/Attach lives in the footer and atomically confirms and applies the reviewed revisions. Ready batch selections exclude blocked groups.
+
+Photo and label text lead on narrow layouts and sit beside the steps when space permits. Existing Product evidence loads with selection, independently of candidate ranking. Deterministic agreement alone draws a checkmark; missing or model evidence draws a question or warning mark. Ownership and inventory answers save natively through `saveGroups`, preserving the proposal's photo roster, Product edits and explicit ownership. Agent concerns are read-only and use the explicit Resolved operation with an optional reply.
 
 ## Run evidence pilot
 

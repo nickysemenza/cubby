@@ -87,12 +87,41 @@ it does not start Pi. Neither path creates Products or receives inventory until
 the member approves proposals.
 
 Review groups in one continuous scroll. The item index jumps to a group;
-**Select all ready items** selects eligible proposals, and **Approve selected
-items** remains a separate action. Blocked groups stay in review. Descriptions
+**Select all ready items** selects eligible proposals, and **Apply selected items** confirms and applies each group in one transaction.
+The server records the confirming member and time with the Product, photos,
+inventory, and settled proposal; failed groups roll back independently. Blocked groups stay in review with the server's `blockedReason`. Server-projected
+`steps` order Product, Right one?/Details, Own it now?, and Apply for both clients.
+The identity step stays open until apply; pending input alone does not block a
+ready group. Only `blockedReason` gates batch eligibility.
+Applying a ready group needs no separate identity confirmation. A real agent
+concern blocks apply; Product/draft edits preserve it. Explicit resolution keeps
+the original concern, optional reply, resolving member, and time in history.
+The former synthetic identity warning is not a concern. Descriptions
 and recognized label text are available under disclosure rather than filling
 the main review surface.
-Cards load as they approach the viewport and retain unfinished edits after
-scrolling away. Approved and discarded details stay collapsed until opened.
+The run-wide candidates read checks the full ranked candidate set concurrently
+for every group. Model cache inputs use observed name and extracted identifiers,
+not joined OCR prose. Each group reports ready or failed with raw diagnostics;
+failure supports Retry and never gates apply. Strong duplicate signals require
+an exact identifier or the same manufacturer and matching model/name (at least
+80% of identity terms and two shared terms for the name path). Ranking scores
+are not probabilities. Selected-Product evidence loads independently of ranking:
+latest three purchase lines and total count, vendor and price, Ordered Purchase
+date or Paid standalone Expense date, on-hand quantities/locations, and own
+photos with capture times.
+
+Not this one writes ADR 0016 Wrong Feedback with explicit suppression. The
+recommendation subject is the Run, scoped to each constituent photo and candidate
+Product key, so rejections follow photos through combine/split. Rejected Products
+are returned separately and excluded from suggestions.
+
+Correctness marks use a dedicated tokenizer that preserves short width letters,
+numeric sizes, decimals and fractions. Only literal OCR/label matches produce
+agreement; model colour/size relations produce unknown or disagreement. Name,
+manufacturer, model and identifier checks are independent. Model claims travel
+with their selected analysis provenance; member-corrected prose has no model
+claims, and missing current-source evidence is explicit. Retained analyses hydrate
+older Runs without rewriting them. Unfinished edits remain after scrolling away. Approved and discarded details stay collapsed until opened.
 
 Proposal values name their last recorded writer. They are not Jev/Clef field
 suggestions. Product identity detection reads every live Product through durable AI refresh work; the review queue reads at most 200 open stored pair Assessments after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Migrated pair records with unknown fingerprints remain immutable history. Those with unknown producers or agent provenance can remain visible read-only; rows carrying obsolete rule or model policies stay outside current queues until reassessed under the current policy. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose

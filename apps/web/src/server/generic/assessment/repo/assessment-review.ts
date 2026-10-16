@@ -326,8 +326,13 @@ export async function reviewAssessment(
       `Unsupported ${prediction.family} review action ${input.verdict}`,
     );
   if (input.suppression) {
-    if (input.verdict !== "dismissed" || input.intent !== "history")
-      throw new Error("Suppression requires presentation-only Dismissal");
+    if (
+      !["dismissed", "wrong"].includes(input.verdict) ||
+      input.intent !== "history"
+    )
+      throw new Error(
+        "Suppression requires history-only Dismissal or Wrong Feedback",
+      );
     if (prediction.subject.kind === "recommendation") {
       if (
         input.suppression.scope !== prediction.subject.scope ||
@@ -513,9 +518,9 @@ export async function reviewAssessment(
       .for("update")
       .limit(1);
     if (state?.active && input.suppression) {
-      if (input.verdict !== "dismissed")
+      if (!["dismissed", "wrong"].includes(input.verdict))
         throw new Error(
-          "Only presentation Dismissal accepts suppression scope",
+          "Only history Dismissal or Wrong Feedback accepts suppression scope",
         );
       await getDb(transactionDb)
         .update(assessmentState)

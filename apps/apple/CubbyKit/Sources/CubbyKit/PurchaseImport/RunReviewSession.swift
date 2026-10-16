@@ -34,6 +34,24 @@ public final class RunReviewSession {
     public private(set) var busy = false
     /// Successful commands invalidate reports even when a stopped Run has no active poll.
     public private(set) var actionRevision = 0
+    public private(set) var candidateGroups: [String: PhotoCandidateGroupResult] = [:]
+    public private(set) var candidatesError: String?
+    public private(set) var checkingCandidates = false
+    @ObservationIgnored private var candidateRunID: String?
+
+    public func loadCandidates(runID: String, client: CubbyClient, force: Bool = false) async {
+        guard !checkingCandidates, force || candidateRunID != runID else { return }
+        checkingCandidates = true
+        defer { checkingCandidates = false }
+        do {
+            candidateGroups = try await client.photoCandidateGroups(runID: runID)
+            candidateRunID = runID
+            candidatesError = nil
+        } catch {
+            reportDiagnostic(error, "Check photo candidates")
+            candidatesError = error.localizedDescription
+        }
+    }
 
     @ObservationIgnored private let reportDiagnostic: @MainActor (any Error, String) -> Void
 
@@ -88,9 +106,7 @@ public final class RunReviewSession {
                     guard let group = photoReview.review.proposals.first(where: { $0.groupKey == key }),
                         group.state == .proposed
                     else { throw ReviewRequired("The selected group is absent from the reviewed proposals.") }
-                    if let blocker = PhotoReviewPolicy.approvalBlocker(
-                        group: group, images: photoReview.images, runStatus: photoReview.review.runStatus)
-                    {
+                    if let blocker = group.blockedReason {
                         throw ReviewRequired(blocker)
                     }
                     return group

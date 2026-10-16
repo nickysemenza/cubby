@@ -1,9 +1,11 @@
+import type { DecisionStep } from "@cubby/schemas/decision-step";
 import type {
   InventoryShortcode,
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 /**
  * ProductDiscardDialog — record that units were thrown away or written off.
  *
@@ -20,7 +22,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
  * the point — otherwise expected and actual diverge in the gap between two
  * writes, which is precisely the drift the Variance column exists to catch.
  */
-import { tradeSchema } from "@cubby/schemas/task-fields";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -32,6 +34,7 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { DecisionSteps } from "~/ui/common/decision-steps";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -191,6 +194,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const adjustInventory = form.watch("adjustInventory");
   const inventoryEntryId = form.watch("inventoryEntryId");
   const quantity = form.watch("quantity");
+  const trade = form.watch("trade");
   const {
     selectedEntry,
     warning,
@@ -247,74 +251,117 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       }}
     >
       <Stack gap="md">
-        <NullableNumericField
-          form={form}
-          name="quantity"
-          label="Units discarded"
-          placeholder="1"
-          fraction
-        />
-        <DiscardLineFields
-          receiptHandler={receiptHandler}
-          form={form}
-          productId={product.id}
-          productName={product.name}
-        />
-
-        {entries.length === 0 ? (
-          <Description>
-            Not stocked anywhere, so there is nothing to take off a shelf — this
-            just records the exit in the ledger.
-          </Description>
-        ) : (
-          <Stack gap="sm">
-            <Controller
-              control={form.control}
-              name="adjustInventory"
-              render={({ field }) => (
-                <Row gap="sm" align="center">
-                  <Checkbox
-                    id={adjustInventoryId}
-                    checked={field.value}
-                    onCheckedChange={(checked) =>
-                      field.onChange(checked === true)
-                    }
-                  />
-                  <label htmlFor={adjustInventoryId} className="text-sm">
-                    Also take these units off the shelf
-                  </label>
-                </Row>
-              )}
-            />
-            {adjustInventory && selectedEntry ? (
+        <DecisionSteps
+          aria-label="Discard decisions"
+          steps={
+            [
+              {
+                key: "discard",
+                label: "What left?",
+                status: quantity > 0 && trade ? "done" : "needs_input",
+                summary:
+                  quantity > 0
+                    ? `${countLabel(quantity, "unit")}${trade ? ` · ${trade}` : ""}`
+                    : null,
+                action: "remove",
+                blockedReason: null,
+              },
+              {
+                key: "inventory",
+                label: "Adjust the shelf?",
+                status:
+                  entries.length === 0
+                    ? "not_needed"
+                    : needsEntryChoice
+                      ? "needs_input"
+                      : "done",
+                summary:
+                  entries.length === 0
+                    ? "No stocked units"
+                    : adjustInventory
+                      ? (entryOptions.find(
+                          (entry) => entry.value === inventoryEntryId,
+                        )?.label ?? "Choose a shelf")
+                      : "Leave the count unchanged",
+                action: adjustInventory && entries.length > 0 ? "change" : null,
+                blockedReason: null,
+              },
+            ] satisfies DecisionStep[]
+          }
+          renderBody={(step) =>
+            step.key === "discard" ? (
+              <Stack gap="md">
+                <NullableNumericField
+                  form={form}
+                  name="quantity"
+                  label="Units discarded"
+                  placeholder="1"
+                  fraction
+                />
+                <DiscardLineFields
+                  receiptHandler={receiptHandler}
+                  form={form}
+                  productId={product.id}
+                  productName={product.name}
+                />
+              </Stack>
+            ) : entries.length === 0 ? (
               <Description>
-                Removing from {selectedEntry.location.name}, which currently
-                holds {selectedEntry.amount.value} {selectedEntry.amount.unit}.
+                Not stocked anywhere, so there is nothing to take off a shelf —
+                this just records the exit in the ledger.
               </Description>
-            ) : null}
-            {warning ? (
-              <div
-                className={
-                  warning.tone === "destructive"
-                    ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-xs text-destructive"
-                    : "rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink"
-                }
-              >
-                {warning.message}
-              </div>
-            ) : null}
-            {adjustInventory && entries.length > 1 ? (
-              <PickerField
-                store="option"
-                form={form}
-                name="inventoryEntryId"
-                label="Take from"
-                options={entryOptions}
-                placeholder="Pick a shelf…"
-              />
-            ) : null}
-          </Stack>
-        )}
+            ) : (
+              <Stack gap="sm">
+                <Controller
+                  control={form.control}
+                  name="adjustInventory"
+                  render={({ field }) => (
+                    <Row gap="sm" align="center">
+                      <Checkbox
+                        id={adjustInventoryId}
+                        checked={field.value}
+                        onCheckedChange={(checked) =>
+                          field.onChange(checked === true)
+                        }
+                      />
+                      <label htmlFor={adjustInventoryId} className="text-sm">
+                        Also take these units off the shelf
+                      </label>
+                    </Row>
+                  )}
+                />
+                {adjustInventory && selectedEntry ? (
+                  <Description>
+                    Removing from {selectedEntry.location.name}, which currently
+                    holds {selectedEntry.amount.value}{" "}
+                    {selectedEntry.amount.unit}.
+                  </Description>
+                ) : null}
+                {adjustInventory && entries.length > 1 ? (
+                  <PickerField
+                    store="option"
+                    form={form}
+                    name="inventoryEntryId"
+                    label="Take from"
+                    options={entryOptions}
+                    placeholder="Pick a shelf…"
+                  />
+                ) : null}
+              </Stack>
+            )
+          }
+        />
+        {warning ? (
+          <div
+            className={
+              warning.tone === "destructive"
+                ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-xs text-destructive"
+                : "rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink"
+            }
+          >
+            {warning.message}
+          </div>
+        ) : null}
       </Stack>
     </Overlay>
   );

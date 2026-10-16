@@ -15,6 +15,7 @@ import {
   runShortcode as runShortcodeSchema,
   inventoryShortcode,
 } from "@cubby/schemas/identifiers";
+import { selectImageDescriptionEvidence } from "@cubby/schemas/image-processing";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
   photoRunImageState,
@@ -77,24 +78,32 @@ import {
   photoGroupProposal,
   product,
   productCategory,
+  entityExternalId,
 } from "~/server/db/schema";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
+import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
+import { photoFieldCrossCheck } from "../photo-correctness";
+import {
+  effectivePhotoGroupConcern,
+  photoGroupSteps,
+} from "./photo-group-steps";
 import { assertPhotoGroupReviewIntent, commitPhotoGroup } from "./writer";
 
 function normalizeReview(review: PhotoGroupReview | null | undefined) {
   if (!review) return undefined;
   return {
     ...review,
+    unresolvedReason: effectivePhotoGroupConcern(review.unresolvedReason),
     productChanges:
       review.productChanges && Object.keys(review.productChanges).length
         ? review.productChanges
@@ -234,7 +243,13 @@ function liveRoster(
 async function productSummaries(
   db: Database,
   where: { ids?: ProductId[]; shortcodes?: string[] },
-): Promise<(PhotoGroupProposalProductSummary & { uuid: ProductId })[]> {
+): Promise<
+  (PhotoGroupProposalProductSummary & {
+    uuid: ProductId;
+    manufacturer: string | null;
+    model: string | null;
+  })[]
+> {
   const ids = where.ids ?? [];
   const codes = where.shortcodes ?? [];
   if (!ids.length && !codes.length) return [];
@@ -243,6 +258,8 @@ async function productSummaries(
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
+      manufacturer: product.manufacturer,
+      model: product.model,
     })
     .from(product)
     .where(
@@ -262,6 +279,8 @@ async function productSummaries(
     name: row.name,
     coverUrl: covers.get(row.id) ?? null,
     uuid: row.id,
+    manufacturer: row.manufacturer,
+    model: row.model,
   }));
 }
 
@@ -329,10 +348,38 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   };
 }
 
+function proposedIdentityFields(
+  row: ProposalRow,
+  selected:
+    | Pick<
+        Awaited<ReturnType<typeof productSummaries>>[number],
+        "name" | "manufacturer" | "model"
+      >
+    | undefined,
+  identifiers: string[],
+) {
+  const draft = row.productKind === "create" ? row.productCreate : null;
+  const changes = row.review?.productChanges;
+  return {
+    name: draft?.name ?? changes?.name ?? selected?.name ?? "",
+    manufacturer: draft
+      ? draft.manufacturer
+      : (changes?.manufacturer ?? selected?.manufacturer),
+    model: draft
+      ? draft.model
+      : changes && "model" in changes
+        ? changes.model
+        : selected?.model,
+    identifiers,
+  };
+}
+
 async function toViews(
   db: Database,
   rows: ProposalRow[],
   imagesById: Map<ImageId, RunImage>,
+  runStatus: string,
+  processing: readonly PhotoRunImage[],
 ): Promise<PhotoGroupProposal[]> {
   const productIds = [
     ...new Set(rows.flatMap((row) => (row.productId ? [row.productId] : []))),
@@ -347,21 +394,38 @@ async function toViews(
       ),
     ),
   ];
-  const [chosen, conflicts, locations, linked] = await Promise.all([
-    productSummaries(db, { ids: productIds }),
-    productSummaries(db, { shortcodes: conflictCodes }),
-    locationIds.length
-      ? getDb(db)
-          .select({
-            id: location.id,
-            shortcode: location.shortcode,
-            name: location.name,
-          })
-          .from(location)
-          .where(and(inArray(location.id, locationIds), notDeleted(location)))
-      : Promise.resolve([]),
-    linkedCodes(db, rows),
-  ]);
+  const [chosen, conflicts, locations, linked, identifiers] = await Promise.all(
+    [
+      productSummaries(db, { ids: productIds }),
+      productSummaries(db, { shortcodes: conflictCodes }),
+      locationIds.length
+        ? getDb(db)
+            .select({
+              id: location.id,
+              shortcode: location.shortcode,
+              name: location.name,
+            })
+            .from(location)
+            .where(and(inArray(location.id, locationIds), notDeleted(location)))
+        : Promise.resolve([]),
+      linkedCodes(db, rows),
+      productIds.length
+        ? getDb(db)
+            .select({
+              id: entityExternalId.entityId,
+              value: entityExternalId.externalId,
+            })
+            .from(entityExternalId)
+            .where(
+              and(
+                eq(entityExternalId.entityKind, "product"),
+                inArray(entityExternalId.entityId, productIds),
+                notDeleted(entityExternalId),
+              ),
+            )
+        : Promise.resolve([]),
+    ],
+  );
   const summaryById = new Map(chosen.map((entry) => [entry.uuid, entry]));
   const summaryByCode = new Map(conflicts.map((entry) => [entry.id, entry]));
   const locationById = new Map(locations.map((entry) => [entry.id, entry]));
@@ -389,6 +453,42 @@ async function toViews(
       : undefined;
     return {
       groupKey: row.groupKey,
+      crossCheck: photoFieldCrossCheck(
+        proposedIdentityFields(
+          row,
+          row.productId ? summaryById.get(row.productId) : undefined,
+          identifiers
+            .filter((entry) => entry.id === row.productId)
+            .map((entry) => entry.value),
+        ),
+        processing
+          .filter((photo) => roster.imageCodes.includes(photo.id))
+          .flatMap((photo) =>
+            photo.recognizedText ? [photo.recognizedText] : [],
+          ),
+      ),
+      ...photoGroupSteps({
+        state: row.state,
+        runStatus,
+        kind: row.productKind,
+        productName:
+          row.productKind === "create"
+            ? (row.productCreate?.name ?? null)
+            : (productSummary?.name ?? null),
+        productMissing: row.productKind === "existing" && !productSummary,
+        imageCount: roster.images.length,
+        skipCount: roster.skip.length,
+        concern: row.review?.unresolvedReason ?? null,
+        stockIntent:
+          row.review?.stockIntent ?? (inventory ? "receive" : "evidence"),
+        inventoryMissing: !inventory || !place,
+        descriptionBlocked: processing.some(
+          (photo) =>
+            roster.imageCodes.includes(photo.id) &&
+            photo.describe !== null &&
+            !["ready", "skipped"].includes(photo.describe),
+        ),
+      }),
       review: row.review
         ? {
             ...row.review,
@@ -473,9 +573,10 @@ async function buildList(
   db: Database,
   run: LoadedRun,
 ): Promise<PhotoGroupProposalList> {
-  const [images, rows] = await Promise.all([
+  const [images, rows, processing] = await Promise.all([
     loadRunImages(db, run.id),
     loadProposalRows(db, run.id),
+    listPhotoRunImages(db, run.shortcode),
   ]);
   const assigned = new Set(
     rows
@@ -485,7 +586,7 @@ async function buildList(
   return photoGroupProposalList.parse({
     runId: run.shortcode,
     runStatus: run.status,
-    proposals: await toViews(db, rows, images.byId),
+    proposals: await toViews(db, rows, images.byId, run.status, processing),
     unassignedImageIds: images.ordered
       .filter(
         (entry) =>
@@ -638,6 +739,7 @@ async function upsertProposal(
     review: group.review
       ? {
           ...group.review,
+          confirmation: null,
           productChanges:
             group.review.productChanges &&
             "categoryId" in group.review.productChanges
@@ -739,6 +841,55 @@ export async function proposePhotoGroups(
 
     const resolved: ResolvedGroup[] = [];
     for (const group of writable) {
+      const previous = existingByKey.get(group.groupKey)?.review;
+      if (previous && group.review) {
+        group.review = {
+          ...group.review,
+          unresolvedReason:
+            normalizeReview(previous)?.unresolvedReason ??
+            group.review.unresolvedReason,
+          resolvedConcerns: previous.resolvedConcerns,
+          confirmation: null,
+        };
+      }
+      const rosterCodes = new Set(
+        [...group.images, ...(group.skip ?? [])].map((entry) => entry.id),
+      );
+      const predecessors = existing.filter(
+        (row) =>
+          row.groupKey === group.groupKey ||
+          [...row.images, ...row.skip].some(
+            (entry) =>
+              runImages.byId.has(entry.imageId) &&
+              rosterCodes.has(
+                parseShortcodeFor(
+                  "image",
+                  runImages.byId.get(entry.imageId)!.shortcode,
+                ),
+              ),
+          ),
+      );
+      const lineage = new Set([
+        ...rosterCodes,
+        ...predecessors.flatMap((row) => [
+          ...(row.review?.candidateScopeImageIds ?? []),
+          ...liveRoster(row, runImages.byId).imageCodes,
+          ...liveRoster(row, runImages.byId).skipCodes,
+        ]),
+      ]);
+      group.review = {
+        ...(group.review ?? {
+          observedName:
+            group.product.kind === "create"
+              ? group.product.create.name
+              : group.groupKey,
+          unresolvedReason: null,
+          stockIntent: group.inventory ? "receive" : "evidence",
+        }),
+        candidateScopeImageIds: [...lineage],
+        resolvedConcerns: previous?.resolvedConcerns ?? [],
+        confirmation: null,
+      };
       resolved.push(await resolveGroup(txDb, run, group, runImages.byCode));
     }
 
@@ -768,6 +919,63 @@ export async function proposePhotoGroups(
     return frozen;
   });
   return { ...(await buildList(db, run)), frozenGroupKeys };
+}
+
+/** Resolution is explicit; ordinary edits preserve the original concern. */
+export async function resolvePhotoGroupConcern(
+  db: Database,
+  input: {
+    runId: string;
+    groupKey: string;
+    reply?: string;
+    expectedRevision?: string;
+  },
+  actor: ActorContext,
+): Promise<PhotoGroupProposalList> {
+  const run = await loadRun(db, input.runId);
+  await withTransactionDatabase(db, async (txDb) => {
+    await getDb(txDb)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
+      .for("update");
+    const row = (await loadProposalRows(txDb, run.id)).find(
+      (entry) => entry.groupKey === input.groupKey,
+    );
+    if (!row || row.state !== "proposed")
+      throw new Error("Proposed photo group was not found");
+    if (
+      input.expectedRevision &&
+      row.updatedAt.toISOString() !== input.expectedRevision
+    )
+      throw new Error(
+        "Photo group review changed; reload before resolving its concern",
+      );
+    const review = normalizeReview(row.review);
+    if (!review?.unresolvedReason) return;
+    await getDb(txDb)
+      .update(photoGroupProposal)
+      .set({
+        review: {
+          ...review,
+          unresolvedReason: null,
+          confirmation: null,
+          resolvedConcerns: [
+            ...(review.resolvedConcerns ?? []),
+            {
+              reason: review.unresolvedReason,
+              reply: input.reply?.trim() || null,
+              by: actor.userId,
+              at: new Date().toISOString(),
+            },
+          ],
+        },
+        origin: "member",
+        updatedAt: new Date(),
+      })
+      .where(eq(photoGroupProposal.id, row.id));
+  });
+  return buildList(db, run);
 }
 
 /** A reviewer changes only the destination Product; the photo roster and other evidence stay put. */
@@ -822,7 +1030,7 @@ export async function chooseExistingProductForPhotoGroup(
                   : (group.product.existing?.name ?? group.groupKey),
               stockIntent: inventory ? "receive" : "evidence",
             }),
-            unresolvedReason: null,
+            unresolvedReason: group.review?.unresolvedReason ?? null,
             productChanges: sameProduct
               ? group.review?.productChanges
               : undefined,
@@ -890,7 +1098,7 @@ export async function updatePhotoGroupProductDraft(
               observedName: group.product.create.name,
               stockIntent: inventory ? "receive" : "evidence",
             }),
-            unresolvedReason: null,
+            unresolvedReason: group.review?.unresolvedReason ?? null,
           },
           inventory,
           evidence: group.evidence,
@@ -1096,13 +1304,15 @@ async function approveRow(
       error: `Group ${row.groupKey} was discarded`,
     };
   const roster = liveRoster(row, imagesById);
-  let domainCommitted = false;
   try {
     if (await reconcileCommittedProposal(db, run, row, imagesById))
       return { groupKey: row.groupKey, outcome: "replayed" };
-    if (!row.review)
-      throw new Error("Confirm this group's identity before applying it");
-    if (row.review.unresolvedReason)
+    row.review = normalizeReview(row.review) ?? {
+      observedName: row.productCreate?.name ?? row.groupKey,
+      unresolvedReason: null,
+      stockIntent: row.inventory ? "receive" : "evidence",
+    };
+    if (roster.images.length && row.review.unresolvedReason)
       throw new Error(row.review.unresolvedReason);
     if (roster.images.length) {
       const descriptionJobs = await getDb(db)
@@ -1141,10 +1351,34 @@ async function approveRow(
         );
     }
     const input = await commitInputFor(db, run, row, roster);
-    const result = await commitPhotoGroup(db, input, actor, {
-      id: row.id,
-      updatedAt: row.updatedAt,
-    });
+    const result = await commitPhotoGroup(
+      db,
+      input,
+      actor,
+      {
+        id: row.id,
+        updatedAt: row.updatedAt,
+      },
+      async (txDb, committed) => {
+        const committedProductId = committed.productId
+          ? await resolveOrThrow(txDb, "product", committed.productId)
+          : row.productId;
+        await persistSettled(
+          txDb,
+          run,
+          {
+            ...row,
+            review: {
+              ...row.review!,
+              confirmation: { by: actor.userId, at: new Date().toISOString() },
+            },
+          },
+          roster,
+          "committed",
+          committedProductId,
+        );
+      },
+    );
     if (result.outcome === "conflict") {
       // Only onto the row as read: a newer save already cleared the conflict
       // for a payload this attempt never saw.
@@ -1164,16 +1398,10 @@ async function approveRow(
         );
       return { groupKey: row.groupKey, outcome: "conflict" };
     }
-    domainCommitted = true;
-    const committedProductId = result.productId
-      ? await resolveOrThrow(db, "product", result.productId)
-      : row.productId;
-    await persistSettled(db, run, row, roster, "committed", committedProductId);
+
     return { groupKey: row.groupKey, outcome: result.outcome };
   } catch (error) {
-    const message = domainCommitted
-      ? `Group ${row.groupKey} committed, but saving its review result failed: ${getErrorMessage(error)}`
-      : getErrorMessage(error);
+    const message = getErrorMessage(error);
     // A frozen row never takes an error: a concurrent approval may have
     // committed it while this attempt failed.
     await getDb(db)
@@ -1232,7 +1460,12 @@ export async function approvePhotoGroupProposals(
       expected.size !== keys.length ||
       keys.some((key) => {
         const row = byKey.get(key);
-        return !row || row.updatedAt.toISOString() !== expected.get(key);
+        return (
+          !row ||
+          !expected.has(key) ||
+          (row.state !== "committed" &&
+            row.updatedAt.toISOString() !== expected.get(key))
+        );
       })
     )
       throw new Error(
@@ -1362,44 +1595,46 @@ export async function listPhotoRunImages(
     .limit(PHOTO_RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
-  const [representations, summaries, jobs, localAnalyses] = await Promise.all([
-    loadImageRepresentations(db, shortcodes),
-    loadImageAnalysisSummaries(db, shortcodes),
-    getDb(db)
-      .select({
-        id: imageProcessingJob.id,
-        imageId: imageProcessingJob.imageId,
-        kind: imageProcessingJob.kind,
-        processorRevision: imageProcessingJob.processorRevision,
-        state: imageProcessingJob.state,
-        lastError: imageProcessingJob.lastError,
-        dispatchedAt: imageProcessingJob.dispatchedAt,
-        completedAt: imageProcessingJob.completedAt,
-        sourceContentHash: imageProcessingJob.sourceContentHash,
-      })
-      .from(imageProcessingJob)
-      .where(
-        inArray(
-          imageProcessingJob.imageId,
-          rows.map((row) => imageId.parse(row.imageId)),
-        ),
-      )
-      .orderBy(desc(imageProcessingJob.processorRevision)),
-    getDb(db)
-      .select({ imageId: aiAnalysis.entityId })
-      .from(aiAnalysis)
-      .where(
-        and(
-          eq(aiAnalysis.entityKind, "image"),
-          eq(aiAnalysis.feature, "photo-local-analysis"),
+  const [representations, summaries, jobs, localAnalyses, descriptionEvidence] =
+    await Promise.all([
+      loadImageRepresentations(db, shortcodes),
+      loadImageAnalysisSummaries(db, shortcodes),
+      getDb(db)
+        .select({
+          id: imageProcessingJob.id,
+          imageId: imageProcessingJob.imageId,
+          kind: imageProcessingJob.kind,
+          processorRevision: imageProcessingJob.processorRevision,
+          state: imageProcessingJob.state,
+          lastError: imageProcessingJob.lastError,
+          dispatchedAt: imageProcessingJob.dispatchedAt,
+          completedAt: imageProcessingJob.completedAt,
+          sourceContentHash: imageProcessingJob.sourceContentHash,
+        })
+        .from(imageProcessingJob)
+        .where(
           inArray(
-            aiAnalysis.entityId,
+            imageProcessingJob.imageId,
             rows.map((row) => imageId.parse(row.imageId)),
           ),
-          notDeleted(aiAnalysis),
+        )
+        .orderBy(desc(imageProcessingJob.processorRevision)),
+      getDb(db)
+        .select({ imageId: aiAnalysis.entityId })
+        .from(aiAnalysis)
+        .where(
+          and(
+            eq(aiAnalysis.entityKind, "image"),
+            eq(aiAnalysis.feature, "photo-local-analysis"),
+            inArray(
+              aiAnalysis.entityId,
+              rows.map((row) => imageId.parse(row.imageId)),
+            ),
+            notDeleted(aiAnalysis),
+          ),
         ),
-      ),
-  ]);
+      loadSelectedDescriptionEvidence(db, shortcodes),
+    ]);
   const descriptionJobIds = jobs
     .filter(
       (job) =>
@@ -1436,6 +1671,9 @@ export async function listPhotoRunImages(
     const rendition = representations.get(row.shortcode);
     if (!rendition) return [];
     const summary = summaries.get(row.shortcode);
+    const selectedDescription =
+      descriptionEvidence.get(row.shortcode) ??
+      selectImageDescriptionEvidence([], null, null);
     const cutout = jobByKey.get(`${row.imageId}:subject_lift`);
     const describe = jobByKey.get(`${row.imageId}:describe_image`);
     return {
@@ -1463,7 +1701,8 @@ export async function listPhotoRunImages(
           ? cutout.lastError
           : null,
       describeReason: describe?.state === "failed" ? describe.lastError : null,
-      description: summary?.description ?? null,
+      description: selectedDescription.description,
+      descriptionEvidence: selectedDescription,
       recognizedText: summary?.recognizedText ?? null,
     };
   });

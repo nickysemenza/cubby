@@ -70,6 +70,8 @@ type LockedTarget = Pick<
   "id" | "imageId" | "state" | "outcome" | "commitReceipt"
 >;
 
+import { effectivePhotoGroupConcern } from "./photo-group-steps";
+
 type ResolvedAttach = {
   code: ImageShortcode;
   imageId: ImageId;
@@ -85,7 +87,13 @@ export function assertPhotoGroupReviewIntent(
   input: Pick<CommitPhotoGroupInput, "product" | "review" | "inventory">,
   phase: "draft" | "apply" = "apply",
 ): void {
-  if (!input.review) return;
+  if (!input.review) {
+    if (phase === "apply")
+      throw new Error(
+        "Product writes require explicit photo group review intent",
+      );
+    return;
+  }
   if (
     phase === "apply" &&
     input.review.stockIntent === "receive" &&
@@ -722,11 +730,12 @@ export async function commitPhotoGroup(
     typeof photoGroupProposal.$inferSelect,
     "id" | "updatedAt"
   >,
+  settle?: (txDb: Database, result: CommitPhotoGroupOutput) => Promise<void>,
 ): Promise<CommitPhotoGroupOutput> {
   const input = commitPhotoGroupInput.parse(rawInput);
-  assertPhotoGroupReviewIntent(input);
-  if (input.review?.unresolvedReason)
-    throw new Error(input.review.unresolvedReason);
+  if (groupTouchesProduct(input)) assertPhotoGroupReviewIntent(input);
+  const concern = effectivePhotoGroupConcern(input.review?.unresolvedReason);
+  if (groupTouchesProduct(input) && concern) throw new Error(concern);
   const scope = await loadRunScopeByShortcode(db, input.runId);
   assertRunCapability(scope.public.purpose, "photo_commit");
   // NOT gated on `status === "running"` here: a crash-window retry (see
@@ -770,14 +779,16 @@ export async function commitPhotoGroup(
       retryFailedWithChangedInput: true,
     },
     () =>
-      withTransactionDatabase(db, (transactionDb) =>
-        doCommit(
+      withTransactionDatabase(db, async (transactionDb) => {
+        const result = await doCommit(
           transactionDb,
           scope,
           input,
           actorInRun(actor, runEntityId.parse(scope.public.runId)),
           proposalRevision,
-        ),
-      ),
+        );
+        await settle?.(transactionDb, result);
+        return result;
+      }),
   );
 }

@@ -93,7 +93,11 @@ Products or Inventory yet: the user reviews and edits groups on the run page,
 then approves one or a selected batch. Approval runs `photo_run.commit_group` for
 each selected group with its reviewed payload. Call
 `photo_run.commit_group` directly, or approve with `photo_run.approve_groups`,
-only when the user explicitly asks to skip or finish review.
+only when the user explicitly asks to skip or finish review. Direct Product or
+Inventory writes require `review` with `observedName`, `stockIntent` and a null
+`unresolvedReason`; skip-only groups complete without review. Member approval
+records confirmation provenance and settles the proposal inside the same
+Product/Inventory transaction, with independent outcomes for each batch group.
 
 Each group: `product` is `{ kind: "existing", existingId }` or
 `{ kind: "create", create: {...} }`; `images` lists every attached image with
@@ -101,10 +105,18 @@ Each group: `product` is `{ kind: "existing", existingId }` or
 file, unusable frame, video) with a reason — every image must appear in
 exactly one of `images` or `skip`, across all proposed groups of the run.
 Include `review` with the independent `observedName`, `unresolvedReason` (null
-when resolved), and `stockIntent`: `evidence`, `counted`, `historical`, or
+when there is no concern), and `stockIntent`: `evidence`, `counted`, `historical`, or
 `receive`. An unresolved variant has an explicit reason; prose uncertainty
 alone does not block approval. Choosing a catalog Product must not replace the
 observed identity. Unknown brand/model alone need not block a distinct new item.
+Resolve an existing concern only on the member's answer with
+`photo_run.resolve_concern` `{ runId, groupKey, reply? }`: the original concern
+and resolution provenance remain in `review.resolvedConcerns`. Product/draft
+edits preserve concerns. To record a member's rejected candidate, use
+`photo_run.reject_candidate` `{ runId, groupKey, productId, operationId }`;
+that Wrong Feedback suppresses the candidate for those photos through regrouping.
+Read the server's `steps` and `blockedReason`; inference failure is retryable
+and never blocks apply.
 
 Only `receive` includes `inventory`: a whole-number quantity, real location,
 and ownership. Omit both ownership fields to use the Run member, or pass

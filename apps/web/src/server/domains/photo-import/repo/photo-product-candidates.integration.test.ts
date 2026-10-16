@@ -1,6 +1,6 @@
 import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -8,6 +8,7 @@ import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions"
 import { getDb } from "~/server/db/helpers";
 import {
   entityExternalId,
+  image,
   importSourceOrder,
   sourceOrderObservation,
   user,
@@ -19,12 +20,18 @@ import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
+  createInventoryFixture,
+  createLocationFixture,
+  makeLocationInput,
   createProductFixture,
   insertEntityAttachments,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { findPhotoProductCandidates as queryPhotoProductCandidates } from "./photo-product-candidates";
+import {
+  loadPhotoProductEvidence,
+  findPhotoProductCandidates as queryPhotoProductCandidates,
+} from "./photo-product-candidates";
 
 describe("photo product candidates", () => {
   const ctx = withTestDb();
@@ -60,6 +67,153 @@ describe("photo product candidates", () => {
     queryPhotoProductCandidates(db, input, actor, (args) =>
       decideProductVariantComparisons({ ...args, port }),
     );
+
+  // A model budget cap or OCR-derived title silently leaves otherwise eligible candidates unchecked.
+  it("checks every retrieved candidate concurrently using stable name and identifier inputs", async () => {
+    for (let index = 0; index < 21; index++)
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: `Synthetic Forge canvas boot blue ${index}`,
+          manufacturer: "Synthetic Forge",
+        }),
+        ctx.actor,
+      );
+    let compared = 0;
+    const matches = await queryPhotoProductCandidates(
+      ctx.db,
+      {
+        name: "Synthetic Forge canvas boot blue",
+        manufacturer: "Synthetic Forge",
+        evidenceTexts: [
+          {
+            source: "label_ocr",
+            text: `${"Unrelated prose ".repeat(100)} FW-7744`,
+          },
+        ],
+      },
+      ctx.actor,
+      async ({ comparisons }) => {
+        compared = comparisons.length;
+        expect(
+          comparisons.every(
+            (pair) =>
+              pair.firstTitle === "Synthetic Forge canvas boot blue\nFW-7744",
+          ),
+        ).toBe(true);
+        return comparisons.map((pair) => ({
+          color: { relation: "unknown" },
+          size: { relation: "unknown" },
+          evidence: pair,
+        }));
+      },
+    );
+    expect(compared).toBe(21);
+    expect(matches).toHaveLength(20);
+    expect(
+      matches.every((candidate) => candidate.duplicateStrength === "strong"),
+    ).toBe(true);
+  });
+
+  // Selected evidence cannot depend on lexical retrieval or a successful inference.
+  it("reads selected Product dates, vendor and capture time independently of ranking", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic selected object" }),
+      ctx.actor,
+    );
+    const place = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic evidence shelf",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: item.id,
+        locationId: place.id,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic history store",
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-08-03",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: order.id,
+      productId: item.entityId,
+      name: "Synthetic ordered line",
+      date: "2026-09-04",
+      cost: 42,
+      productQuantity: 1,
+      costType: "materials",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      productId: item.entityId,
+      name: "Synthetic paid line",
+      date: "2026-08-02",
+      cost: 21,
+      productQuantity: 1,
+      costType: "materials",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    const photo = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}-selected.jpg`,
+      filename: "synthetic-selected.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+      source: "own",
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ capturedAt: new Date("2026-08-04T18:00:00.000Z") })
+      .where(eq(image.id, photo.id));
+    await insertEntityAttachments(ctx.db, {
+      entityId: item.entityId,
+      imageId: photo.id,
+    });
+    const evidence = (
+      await loadPhotoProductEvidence(ctx.db, [item.entityId], ctx.actor)
+    ).get(item.entityId);
+    expect(evidence?.purchaseLines).toEqual([
+      expect.objectContaining({
+        name: "Synthetic ordered line",
+        date: "2026-08-03",
+        dateLabel: "Ordered",
+        vendor: "Synthetic history store",
+        cost: 42,
+      }),
+      expect.objectContaining({
+        name: "Synthetic paid line",
+        date: "2026-08-02",
+        dateLabel: "Paid",
+        vendor: null,
+        cost: 21,
+      }),
+    ]);
+    expect(evidence?.purchaseLineCount).toBe(2);
+    expect(evidence?.ownPhotos).toEqual([
+      expect.objectContaining({ capturedAt: "2026-08-04T18:00:00.000Z" }),
+    ]);
+    expect(evidence?.quantity?.onHandUnits).toBe(2);
+    expect(evidence?.inventoryEntries).toEqual([
+      expect.objectContaining({
+        location: expect.objectContaining({ name: "Synthetic evidence shelf" }),
+      }),
+    ]);
+  });
 
   it("exposes only known accepted line selectors owned by the reviewing member", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {

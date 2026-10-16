@@ -122,6 +122,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: firstRun.shortcode,
         groupKey: "synthetic-shared-file",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "item" }],
         product: {
           kind: "create",
@@ -155,6 +160,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-1",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "receive" as const,
+        },
         images: [
           { id: images[0]!.shortcode, purpose: "item" },
           { id: images[1]!.shortcode, purpose: "label" },
@@ -236,6 +246,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "synthetic-tag-transcription",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "label" }],
         product: { kind: "existing", existingId: existing.id },
       },
@@ -337,6 +352,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "synthetic-identity-label",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "label" }],
         product: { kind: "existing", existingId: existing.id },
       },
@@ -373,6 +393,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-existing",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "item" }],
         product: { kind: "existing", existingId: existing.id },
       },
@@ -392,6 +417,11 @@ describe("commitPhotoGroup", () => {
     const commitArgs = {
       runId: run.shortcode,
       groupKey: "group-replay",
+      review: {
+        observedName: "Synthetic reviewed item",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+      },
       images: [{ id: images[0]!.shortcode, purpose: "item" as const }],
       product: { kind: "create" as const, create: { name: "Replay Sweater" } },
     };
@@ -455,6 +485,11 @@ describe("commitPhotoGroup", () => {
         {
           runId: run.shortcode,
           groupKey: "group-drift",
+          review: {
+            observedName: "Synthetic reviewed item",
+            unresolvedReason: null,
+            stockIntent: "evidence" as const,
+          },
           images: [{ id: images[0]!.shortcode, purpose: "item" }],
           product: { kind: "create", create: { name: "Drift Cardigan" } },
         },
@@ -477,6 +512,11 @@ describe("commitPhotoGroup", () => {
           {
             runId: run.shortcode,
             groupKey: "group-drift",
+            review: {
+              observedName: "Synthetic reviewed item",
+              unresolvedReason: null,
+              stockIntent: "evidence" as const,
+            },
             images: [{ id: images[1]!.shortcode, purpose: "item" }],
             product: { kind: "create", create: { name: "Drift Cardigan" } },
           },
@@ -506,6 +546,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-collision",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "item" }],
         product: { kind: "create", create: { name: "green rain boots" } },
       },
@@ -541,6 +586,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-skip",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [],
         skip: [{ id: images[0]!.shortcode, reason: "Too blurry to identify" }],
         product: { kind: "existing", existingId: existing.id },
@@ -580,6 +630,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-a",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[0]!.shortcode, purpose: "item" }],
         product: { kind: "existing", existingId: existing.id },
       },
@@ -592,6 +647,11 @@ describe("commitPhotoGroup", () => {
       {
         runId: run.shortcode,
         groupKey: "group-b",
+        review: {
+          observedName: "Synthetic reviewed item",
+          unresolvedReason: null,
+          stockIntent: "evidence" as const,
+        },
         images: [{ id: images[1]!.shortcode, purpose: "label" }],
         product: { kind: "existing", existingId: existing.id },
       },
@@ -619,6 +679,11 @@ describe("commitPhotoGroup", () => {
         {
           runId: run.shortcode,
           groupKey: "group-no-owner",
+          review: {
+            observedName: "Synthetic reviewed item",
+            unresolvedReason: null,
+            stockIntent: "receive" as const,
+          },
           images: [{ id: images[0]!.shortcode, purpose: "item" }],
           product: { kind: "create", create: { name: "Ownerless Scarf" } },
           inventory: {
@@ -665,6 +730,11 @@ describe("commitPhotoGroup", () => {
     const input = {
       runId: run.shortcode,
       groupKey: "group-add",
+      review: {
+        observedName: "Synthetic reviewed item",
+        unresolvedReason: null,
+        stockIntent: "receive" as const,
+      },
       images: [{ id: images[0]!.shortcode, purpose: "item" as const }],
       product: { kind: "existing" as const, existingId: product.id },
       inventory: {

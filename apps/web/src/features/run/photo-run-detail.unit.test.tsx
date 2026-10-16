@@ -212,6 +212,8 @@ const committedSweater: PhotoGroupProposal = {
   conflict: null,
   lastError: null,
   missingImageCount: 0,
+  steps: [],
+  blockedReason: null,
   committedAt: "2026-09-20T16:04:00.000Z",
   updatedAt: "2026-09-20T16:04:00.000Z",
 };
@@ -259,6 +261,8 @@ describe("PhotoImportRunView", () => {
             conflict: null,
             lastError: null,
             missingImageCount: 0,
+            steps: [],
+            blockedReason: null,
             committedAt: null,
             updatedAt: "2026-09-20T16:04:00.000Z",
           },
@@ -279,7 +283,7 @@ describe("PhotoImportRunView", () => {
     });
 
     expect(
-      await screen.findByRole("button", { name: "Create Product" }),
+      await screen.findByRole("button", { name: "Create product" }),
     ).toBeEnabled();
     expect(
       screen.queryByText(/photos that can no longer be reviewed/),
@@ -535,6 +539,8 @@ describe("PhotoImportRunView", () => {
             conflict: null,
             lastError: null,
             missingImageCount: 0,
+            steps: [],
+            blockedReason: "AI description is still processing or needs retry",
             committedAt: null,
             updatedAt: "2026-09-20T16:04:00.000Z",
           },
@@ -548,14 +554,14 @@ describe("PhotoImportRunView", () => {
     };
     const key = photoImport.review.queryKey({ runId: RUN_ID });
     harness.queryClient.setQueryData(key, pendingReview);
-    answerOperations({ candidates: [] });
+    answerOperations({ groups: [] });
     render(
       <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
       { wrapper: harness.wrapper },
     );
 
     const approveItem = await screen.findByRole("button", {
-      name: "Create Product",
+      name: "Create product",
     });
     expect(approveItem).toBeDisabled();
     expect(
@@ -564,6 +570,13 @@ describe("PhotoImportRunView", () => {
 
     harness.queryClient.setQueryData(key, {
       ...pendingReview,
+      review: {
+        ...pendingReview.review,
+        proposals: pendingReview.review.proposals.map((proposal) => ({
+          ...proposal,
+          blockedReason: null,
+        })),
+      },
       images: pendingReview.images.map((image) =>
         image.id === "IMG-4K7P" ? { ...image, describe: "ready" } : image,
       ),

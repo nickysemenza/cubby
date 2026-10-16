@@ -9,6 +9,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import type {
   PhotoGroupProposal,
   PhotoProductCandidate,
+  PhotoProductEvidence,
   PhotoRunImage,
   PhotoAcceptedSourceLine,
 } from "@cubby/schemas/photo-import-run";
@@ -41,10 +42,12 @@ import {
   ensureRun,
   aiCallRunInput,
 } from "~/server/domains/run/repo/ensure-run";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+import { photoFieldCrossCheck } from "./photo-correctness";
 
 const CANDIDATE_POOL_LIMIT = 240;
-const SUGGESTION_LIMIT = 5;
-const VARIANT_DECISION_LIMIT = 20;
+const SUGGESTION_LIMIT = 20;
 
 type AssociationExpense = Pick<
   typeof expense.$inferSelect,
@@ -312,6 +315,7 @@ export async function photoProductCandidates(
   images: readonly PhotoRunImage[] = [],
   actor: ActorContext,
   compareVariants: ProductVariantComparator,
+  excludedProductIds: readonly string[] = [],
 ): Promise<PhotoProductCandidate[]> {
   const name =
     proposal.review?.observedName ??
@@ -339,7 +343,12 @@ export async function photoProductCandidates(
     {
       name,
       manufacturer,
+      model:
+        proposal.product.kind === "create"
+          ? proposal.product.create.model
+          : null,
       excludeId: proposal.committedProduct?.id,
+      excludedProductIds,
       evidenceTexts,
     },
     actor,
@@ -347,12 +356,80 @@ export async function photoProductCandidates(
   );
 }
 
+function photoCandidateIdentifiers(
+  evidenceTexts: readonly { source: string; text: string }[],
+) {
+  return [
+    ...new Set(
+      evidenceTexts
+        .filter((item) => item.source === "label_ocr")
+        .flatMap(
+          (item) =>
+            item.text.match(/\b(?:[A-Z]{1,8}-?\d[A-Z0-9-]{2,}|\d{6,14})\b/gi) ??
+            [],
+        )
+        .filter((identifier) => identifier.length <= 100)
+        .map((identifier) => identifier.toUpperCase()),
+    ),
+  ]
+    .sort()
+    .slice(0, 30);
+}
+
+export async function selectedPhotoProductComparison(
+  db: Database,
+  proposal: PhotoGroupProposal,
+  images: readonly PhotoRunImage[],
+  actor: ActorContext,
+  compareVariants: ProductVariantComparator,
+) {
+  if (proposal.product.kind !== "existing" || !proposal.product.existing)
+    return null;
+  const id = await resolveOrThrow(db, "product", proposal.product.existing.id);
+  const selected = (await loadPhotoProductEvidence(db, [id], actor)).get(id);
+  if (!selected) return null;
+  const groupImages = new Set(proposal.images.map((entry) => entry.id));
+  const printed = images
+    .filter((entry) => groupImages.has(entry.id))
+    .flatMap((entry) =>
+      entry.recognizedText
+        ? [{ source: "label_ocr", text: entry.recognizedText }]
+        : [],
+    );
+  const name = proposal.review?.observedName ?? proposal.product.existing.name;
+  const runId = await ensureRun(db, actor, aiCallRunInput(actor));
+  const [variant] = await compareVariants({
+    comparisons: [
+      {
+        firstTitle: [name, ...photoCandidateIdentifiers(printed)].join("\n"),
+        secondTitle: [selected.name, selected.model].filter(Boolean).join("\n"),
+      },
+    ],
+    usage: { db, runId, operation: "photo-import.product-variant-comparison" },
+  });
+  if (!variant)
+    throw new Error(
+      "Variant comparison returned no result for the selected Product",
+    );
+  return {
+    id: selected.id,
+    variant,
+    crossCheck: photoFieldCrossCheck(
+      selected,
+      printed.map((item) => item.text),
+      variant,
+    ),
+  };
+}
+
 export async function findPhotoProductCandidates(
   db: Database,
   input: {
     name: string;
     manufacturer?: string | null;
+    model?: string | null;
     excludeId?: string;
+    excludedProductIds?: readonly string[];
     evidenceTexts?: readonly {
       source: "photo_description" | "label_ocr";
       text: string;
@@ -368,17 +445,7 @@ export async function findPhotoProductCandidates(
     .filter((word) => word.length > 3 && !brand?.toLowerCase().includes(word))
     .slice(0, 5);
   const terms = brand ? [brand] : words.slice(0, 2);
-  const identifiers = [
-    ...new Set(
-      (input.evidenceTexts ?? [])
-        .filter((evidence) => evidence.source === "label_ocr")
-        .flatMap(
-          (evidence) =>
-            evidence.text.match(/\b[A-Z0-9][A-Z0-9-]{4,}\b/gi) ?? [],
-        )
-        .slice(0, 30),
-    ),
-  ];
+  const identifiers = photoCandidateIdentifiers(input.evidenceTexts ?? []);
   const exactRows = identifiers.length
     ? await getDb(db)
         .select({
@@ -389,6 +456,7 @@ export async function findPhotoProductCandidates(
         .where(
           and(
             notDeleted(entityExternalId),
+            eq(entityExternalId.entityKind, "product"),
             inArray(entityExternalId.externalId, identifiers),
           ),
         )
@@ -445,7 +513,11 @@ export async function findPhotoProductCandidates(
     )
     .limit(CANDIDATE_POOL_LIMIT);
   const candidateFacts = rows
-    .filter((row) => row.shortcode !== input.excludeId)
+    .filter(
+      (row) =>
+        row.shortcode !== input.excludeId &&
+        !input.excludedProductIds?.includes(row.shortcode),
+    )
     .map((row) => ({
       ...row,
       exactIdentifier: exactIds.includes(row.id),
@@ -453,17 +525,14 @@ export async function findPhotoProductCandidates(
         .filter((entry) => entry.productId === row.id)
         .map((entry) => entry.externalId),
     }));
-  const sourceTitle = [
-    name,
-    ...(input.evidenceTexts ?? []).map((item) => item.text),
-  ].join("\n");
+  const sourceTitle = [name, ...identifiers.sort()].join("\n");
   const preliminary = rankPhotoProductCandidates(
     name,
     manufacturer ?? null,
     candidateFacts,
     (input.evidenceTexts ?? []).map((evidence) => evidence.text),
     new Map(),
-    VARIANT_DECISION_LIMIT,
+    candidateFacts.length,
   );
   const variantComparisons = new Map<ProductId, ProductVariantComparison>();
   if (preliminary.length > 0) {
@@ -476,11 +545,7 @@ export async function findPhotoProductCandidates(
     const comparisons = await compareVariants({
       comparisons: preliminary.map((candidate) => ({
         firstTitle: sourceTitle,
-        secondTitle: [
-          candidate.name,
-          candidate.model,
-          ...(candidate.aliases ?? []),
-        ]
+        secondTitle: [candidate.name, candidate.model]
           .filter(Boolean)
           .join("\n"),
       })),
@@ -497,11 +562,99 @@ export async function findPhotoProductCandidates(
     (input.evidenceTexts ?? []).map((evidence) => evidence.text),
     variantComparisons,
   );
-  const ids = ranked.map((candidate) => candidate.id);
-  const covers = await getProductCoverImageUrlsByProductIds(db, ids);
-  const quantities = await loadProductQuantitySummaries(db, ids);
-  const inventoryEntries = await loadProductInventoryEntries(db, ids);
-  const galleries = await getProductImagesByProductIds(db, ids);
+  const evidence = await loadPhotoProductEvidence(
+    db,
+    ranked.map((candidate) => candidate.id),
+    actor,
+  );
+  return ranked.map((candidate) => ({
+    ...evidence.get(candidate.id)!,
+    id: parseShortcodeFor("product", candidate.shortcode),
+    name: candidate.name,
+    coverUrl: evidence.get(candidate.id)?.coverUrl ?? null,
+    match: {
+      source: "catalog_name" as const,
+      sharedNameTerms: candidate.sharedNameTerms,
+      brandMatches: candidate.brandMatches,
+      variant: candidate.variant,
+      score: candidate.score,
+      factors: candidate.factors,
+      matchedIdentifiers: candidate.matchedIdentifiers,
+    },
+    hasOwnPhoto: candidate.hasOwnPhoto,
+    hasPhotoImport: candidate.hasPhotoImport,
+    hasPurchase: candidate.hasPurchase,
+    hasInventory: candidate.hasInventory,
+    duplicateStrength:
+      candidate.exactIdentifier ||
+      (Boolean(manufacturer?.trim()) &&
+        candidate.manufacturer?.trim().toLowerCase() ===
+          manufacturer?.trim().toLowerCase() &&
+        ((Boolean(input.model?.trim()) &&
+          input.model?.trim().toLowerCase() ===
+            candidate.model?.trim().toLowerCase()) ||
+          (candidate.sharedNameTerms.length >= 2 &&
+            candidate.sharedNameTerms.length /
+              Math.max(
+                1,
+                productIdentityWords(name).size -
+                  productIdentityWords(manufacturer ?? "").size,
+              ) >=
+              0.8)))
+        ? ("strong" as const)
+        : ("weak" as const),
+    crossCheck: photoFieldCrossCheck(
+      evidence.get(candidate.id)!,
+      (input.evidenceTexts ?? [])
+        .filter((item) => item.source === "label_ocr")
+        .map((item) => item.text),
+      candidate.variant,
+    ),
+    variantEvidence: [
+      { source: "proposal_name" as const, text: name },
+      ...(input.evidenceTexts ?? []),
+      { source: "product_name" as const, text: candidate.name },
+    ],
+  }));
+}
+
+export async function loadPhotoProductEvidence(
+  db: Database,
+  ids: ProductId[],
+  actor: Pick<ActorContext, "userId">,
+): Promise<Map<ProductId, PhotoProductEvidence>> {
+  const products = ids.length
+    ? await getDb(db)
+        .select({
+          id: product.id,
+          shortcode: product.shortcode,
+          name: product.name,
+          manufacturer: product.manufacturer,
+          model: product.model,
+        })
+        .from(product)
+        .where(and(inArray(product.id, ids), notDeleted(product)))
+    : [];
+  const externalIds = ids.length
+    ? await getDb(db)
+        .select({
+          id: entityExternalId.entityId,
+          value: entityExternalId.externalId,
+        })
+        .from(entityExternalId)
+        .where(
+          and(
+            inArray(entityExternalId.entityId, ids),
+            notDeleted(entityExternalId),
+          ),
+        )
+    : [];
+  const [covers, quantities, inventoryEntries, galleries] = await Promise.all([
+    getProductCoverImageUrlsByProductIds(db, ids),
+    loadProductQuantitySummaries(db, ids),
+    loadProductInventoryEntries(db, ids),
+    getProductImagesByProductIds(db, ids),
+  ]);
   const expenseRows = ids.length
     ? await getDb(db)
         .select({
@@ -513,6 +666,10 @@ export async function findPhotoProductCandidates(
           purchaseLabel: purchase.displayLabel,
           name: expense.name,
           date: expense.date,
+          orderedDate: purchase.date,
+          vendor: sql<
+            string | null
+          >`(SELECT v.name FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND v."deletedAt" IS NULL)`,
           cost: expense.cost,
           productQuantity: expense.productQuantity,
           lineKind: expense.lineKind,
@@ -523,7 +680,10 @@ export async function findPhotoProductCandidates(
           and(eq(expense.purchaseId, purchase.id), notDeleted(purchase)),
         )
         .where(and(notDeleted(expense), inArray(expense.productId, ids)))
-        .orderBy(desc(expense.date))
+        .orderBy(
+          sql`coalesce(${purchase.date}, ${expense.date}) DESC NULLS LAST`,
+          desc(expense.createdAt),
+        )
         .limit(500)
     : [];
   const acceptedSourceLines = await loadPhotoAcceptedSourceLines(
@@ -544,68 +704,59 @@ export async function findPhotoProductCandidates(
   const expenseCountByProduct = new Map(
     expenseCounts.map((row) => [row.productId, row.count]),
   );
-  return ranked.map((candidate) => ({
-    id: parseShortcodeFor("product", candidate.shortcode),
-    name: candidate.name,
-    coverUrl: covers.get(candidate.id) ?? null,
-    match: {
-      source: "catalog_name" as const,
-      sharedNameTerms: candidate.sharedNameTerms,
-      brandMatches: candidate.brandMatches,
-      variant: candidate.variant,
-      score: candidate.score,
-      factors: candidate.factors,
-      matchedIdentifiers: candidate.matchedIdentifiers,
-    },
-    hasOwnPhoto: candidate.hasOwnPhoto,
-    hasPhotoImport: candidate.hasPhotoImport,
-    hasPurchase: candidate.hasPurchase,
-    hasInventory: candidate.hasInventory,
-    purchaseLineCount: expenseCountByProduct.get(candidate.id) ?? 0,
-    quantity: quantities.get(candidate.id),
-    inventoryEntries: inventoryEntries.get(candidate.id) ?? [],
-    ownPhotos: (galleries[candidate.id] ?? [])
-      .filter((image) => image.source === "own")
-      .slice(0, 4)
-      .map((image) => ({ id: image.id, url: preferredImageUrl(image) })),
-    variantEvidence: [
-      { source: "proposal_name" as const, text: name },
-      ...(input.evidenceTexts ?? []),
-      { source: "product_name" as const, text: candidate.name },
-      ...(candidate.model
-        ? [{ source: "product_model" as const, text: candidate.model }]
-        : []),
-      ...(candidate.aliases ?? []).map((alias) => ({
-        source: "product_alias" as const,
-        text: alias,
-      })),
-      ...expenseRows
-        .filter((row) => row.productId === candidate.id)
-        .map((row) => ({ source: "purchase_line" as const, text: row.name })),
-    ],
-    purchaseLines: expenseRows
-      .filter((row) => row.productId === candidate.id)
-      .map((row) => ({
-        expenseId: parseShortcodeFor("expense", row.expenseId),
-        purchaseId: row.purchaseCode
-          ? parseShortcodeFor("purchase", row.purchaseCode)
-          : null,
-        acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
-        purchaseLabel: row.purchaseLabel,
-        name: row.name,
-        date: row.date,
-        cost: row.cost,
-        productQuantity: row.productQuantity,
-        movement:
-          row.productQuantity == null
-            ? ("unknown" as const)
-            : row.cost != null && row.cost < 0
-              ? row.productQuantity === 0
-                ? ("adjusted" as const)
-                : ("exited" as const)
-              : row.productQuantity < 0
-                ? ("exited" as const)
-                : ("acquired" as const),
-      })),
-  }));
+  return new Map(
+    products.map((item) => [
+      item.id,
+      {
+        id: parseShortcodeFor("product", item.shortcode),
+        name: item.name,
+        coverUrl: covers.get(item.id) ?? null,
+        manufacturer: item.manufacturer,
+        model: item.model,
+        identifiers: externalIds
+          .filter((entry) => entry.id === item.id)
+          .map((entry) => entry.value),
+        purchaseLineCount: expenseCountByProduct.get(item.id) ?? 0,
+        quantity: quantities.get(item.id),
+        inventoryEntries: inventoryEntries.get(item.id) ?? [],
+        ownPhotos: (galleries[item.id] ?? [])
+          .filter((image) => image.source === "own")
+          .slice(0, 4)
+          .map((image) => ({
+            id: image.id,
+            url: preferredImageUrl(image),
+            capturedAt: image.capturedAt?.toISOString() ?? null,
+          })),
+        purchaseLines: expenseRows
+          .filter((row) => row.productId === item.id)
+          .slice(0, 3)
+          .map((row) => ({
+            expenseId: parseShortcodeFor("expense", row.expenseId),
+            purchaseId: row.purchaseCode
+              ? parseShortcodeFor("purchase", row.purchaseCode)
+              : null,
+            acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
+            purchaseLabel: row.purchaseLabel,
+            name: row.name,
+            date: row.purchaseCode ? row.orderedDate : row.date,
+            dateLabel: row.purchaseCode
+              ? ("Ordered" as const)
+              : ("Paid" as const),
+            vendor: row.vendor,
+            cost: row.cost,
+            productQuantity: row.productQuantity,
+            movement:
+              row.productQuantity == null
+                ? ("unknown" as const)
+                : row.cost != null && row.cost < 0
+                  ? row.productQuantity === 0
+                    ? ("adjusted" as const)
+                    : ("exited" as const)
+                  : row.productQuantity < 0
+                    ? ("exited" as const)
+                    : ("acquired" as const),
+          })),
+      },
+    ]),
+  );
 }

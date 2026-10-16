@@ -6,7 +6,5 @@ click "role=Button label=\"Review item groups\""
 wait "id=run.console" 30000
 wait "id=review.workspace" 30000
 wait text "Synthetic Input Crew Shirt" 30000
-click "label=\"Approve all\""
-wait "label=\"Approve 1 items\"" 30000
-click "label=\"Approve 1 items\""
+click "label=\"Apply ready groups\""
 wait text "Settled items" 30000

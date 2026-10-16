@@ -1,3 +1,4 @@
+import type { DecisionStep } from "@cubby/schemas/decision-step";
 /**
  * ReceiveExpenseDialog — put the thing an expense bought onto a shelf.
  *
@@ -13,7 +14,6 @@
  * first and defaults to "Nothing new arrived". Units are added only after an
  * explicit "Additional units arrived" and a typed quantity.
  */
-
 import {
   locationShortcode,
   type ExpenseShortcode,
@@ -39,6 +39,7 @@ import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { DecisionSteps } from "~/ui/common/decision-steps";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -382,10 +383,45 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
         fieldKeys={["locationId"]}
         paths={{ locationId: "location" }}
       >
-        <Stack gap="md">
-          {countedNotice}
-          {body()}
-        </Stack>
+        <DecisionSteps
+          aria-label="Receiving decisions"
+          steps={[
+            ...(alreadyCounted
+              ? [
+                  {
+                    key: "arrival",
+                    label: "New units?",
+                    status: unitsConfirmed ? "not_needed" : "needs_input",
+                    summary: unitsConfirmed ? "Additional units arrived" : null,
+                    action: null,
+                    blockedReason: null,
+                  } satisfies DecisionStep,
+                ]
+              : []),
+            {
+              key: "receive",
+              label: "Where and how many?",
+              status: unitsConfirmed ? "needs_input" : "blocked",
+              summary: null,
+              action: plan.kind === "create" ? "create" : "change",
+              blockedReason: unitsConfirmed
+                ? null
+                : "Confirm additional units first",
+            },
+          ]}
+          renderBody={(step) =>
+            step.key === "arrival" ? (
+              unitsConfirmed ? null : (
+                countedNotice
+              )
+            ) : (
+              <Stack gap="md">
+                {unitsConfirmed ? countedNotice : null}
+                {body()}
+              </Stack>
+            )
+          }
+        />
       </FieldSuggestionProvider>
     </FormProvider>
   );

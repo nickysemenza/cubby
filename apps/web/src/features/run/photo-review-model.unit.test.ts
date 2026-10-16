@@ -31,6 +31,8 @@ const proposal = (
   conflict: null,
   lastError: null,
   missingImageCount: 0,
+  steps: [],
+  blockedReason: null,
   committedAt: null,
   updatedAt: "2026-01-01T00:00:00.000Z",
 });

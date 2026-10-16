@@ -12,11 +12,14 @@ import {
   expenseShortcode,
   purchaseShortcode,
 } from "./identifier-fields";
+import { decisionStep } from "./decision-step";
+import { userId } from "./identifiers";
 import { runStatus } from "./run-fields";
 import { purchaseImportRunExecution } from "./purchase-import";
 import { productImagePurpose } from "./image";
 import { imageSightingReportFields } from "./image-sighting";
 import { photoRunProcessor } from "./photo-run-input";
+import { selectedImageDescriptionEvidence } from "./image-processing";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
 import { runTargetState } from "./purchase-import";
@@ -87,6 +90,23 @@ export const photoGroupReview = z.object({
   unresolvedReason: z.string().trim().min(1).max(500).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
   productChanges: commitPhotoGroupProductCreate.partial().optional(),
+  /** Written by the server only after the Product transaction succeeds. */
+  confirmation: z
+    .object({ by: userId, at: z.iso.datetime() })
+    .nullable()
+    .optional(),
+  /** Server-maintained photo lineage carries candidate rejections through regrouping. */
+  candidateScopeImageIds: z.array(imageShortcode).optional(),
+  resolvedConcerns: z
+    .array(
+      z.object({
+        reason: z.string(),
+        reply: z.string().nullable(),
+        by: userId,
+        at: z.iso.datetime(),
+      }),
+    )
+    .optional(),
 });
 export type PhotoGroupReview = z.infer<typeof photoGroupReview>;
 
@@ -311,8 +331,31 @@ export type PhotoGroupProposalProductSummary = z.infer<
   typeof proposalProductSummary
 >;
 
+export const photoFieldCrossCheck = z.object({
+  field: z.enum([
+    "name",
+    "manufacturer",
+    "model",
+    "identifiers",
+    "color",
+    "size",
+  ]),
+  mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
+  source: z.enum(["deterministic", "model"]),
+  tokens: z.array(
+    z.object({
+      text: z.string(),
+      mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
+    }),
+  ),
+});
+export type PhotoFieldCrossCheck = z.infer<typeof photoFieldCrossCheck>;
+
 export const photoGroupProposal = z.object({
   groupKey: z.string(),
+  steps: z.array(decisionStep),
+  crossCheck: z.array(photoFieldCrossCheck).optional(),
+  blockedReason: z.string().nullable(),
   review: photoGroupReview.optional(),
   state: photoGroupProposalState,
   images: z.array(commitPhotoGroupImage),
@@ -448,6 +491,7 @@ export const photoRunImage = z.object({
   cutoutReason: z.string().nullable(),
   describeReason: z.string().nullable(),
   description: z.string().nullable(),
+  descriptionEvidence: selectedImageDescriptionEvidence.optional(),
   recognizedText: z.string().nullable(),
   /** Device-reported processing state for this photo; null = no device has picked it up yet. */
   deviceWorkState: runTargetDeviceWorkState.nullable(),
@@ -470,6 +514,7 @@ export const photoRunContextImage = photoRunImage
     targetState: true,
     describe: true,
     description: true,
+    descriptionEvidence: true,
     recognizedText: true,
   })
   .extend({
@@ -500,6 +545,8 @@ export const photoProductCandidate = z.object({
       .optional(),
     matchedIdentifiers: z.array(z.string()).optional(),
   }),
+  duplicateStrength: z.enum(["strong", "weak"]).optional(),
+  crossCheck: z.array(photoFieldCrossCheck).optional(),
   hasOwnPhoto: z.boolean(),
   hasPhotoImport: z.boolean(),
   hasPurchase: z.boolean(),
@@ -507,7 +554,13 @@ export const photoProductCandidate = z.object({
   quantity: productQuantitySummaryOut.optional(),
   inventoryEntries: z.array(productListInventoryEntryOut).optional(),
   ownPhotos: z
-    .array(z.object({ id: imageShortcode, url: z.string() }))
+    .array(
+      z.object({
+        id: imageShortcode,
+        url: z.string(),
+        capturedAt: z.string().nullable().optional(),
+      }),
+    )
     .optional(),
   variantEvidence: z
     .array(
@@ -533,6 +586,8 @@ export const photoProductCandidate = z.object({
         purchaseLabel: z.string().nullable(),
         name: z.string(),
         date: z.string().nullable(),
+        dateLabel: z.enum(["Ordered", "Paid"]).optional(),
+        vendor: z.string().nullable().optional(),
         cost: z.number().nullable(),
         productQuantity: z.number().nullable(),
         movement: z.enum(["acquired", "exited", "adjusted", "unknown"]),
@@ -544,8 +599,52 @@ export const photoProductCandidate = z.object({
 });
 export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
 
+export const photoProductEvidence = photoProductCandidate
+  .pick({
+    id: true,
+    name: true,
+    coverUrl: true,
+    quantity: true,
+    inventoryEntries: true,
+    ownPhotos: true,
+    purchaseLines: true,
+    purchaseLineCount: true,
+  })
+  .extend({
+    manufacturer: z.string().nullable(),
+    model: z.string().nullable(),
+    identifiers: z.array(z.string()),
+  });
+export type PhotoProductEvidence = z.infer<typeof photoProductEvidence>;
+export const photoRejectedCandidate = z.object({
+  id: productShortcode,
+  name: z.string(),
+  rejected: z.literal(true),
+});
+export const photoCandidateGroupResult = z.object({
+  groupKey: z.string(),
+  status: z.enum(["ready", "failed"]),
+  error: z.string().nullable(),
+  selectedComparison: z
+    .object({
+      id: productShortcode,
+      variant: productVariantComparison,
+      crossCheck: z.array(photoFieldCrossCheck),
+    })
+    .nullable()
+    .optional(),
+  candidates: z.array(photoProductCandidate),
+  rejectedCandidates: z.array(photoRejectedCandidate),
+});
+export const photoRunCandidatesResponse = z.object({
+  groups: z.array(photoCandidateGroupResult),
+});
+
 export const photoProductCandidatesResponse = z.object({
   candidates: z.array(photoProductCandidate),
+  rejectedCandidates: z.array(photoRejectedCandidate).optional(),
+  status: z.enum(["ready", "failed"]).optional(),
+  error: z.string().nullable().optional(),
 });
 export const photoProductCandidateSearchInput = z.object({
   name: z.string().trim().min(3).max(500),

@@ -43,6 +43,8 @@ export interface IndexedSection {
   description?: ReactNode;
   content: ReactNode;
   icon: ElementType;
+  /** Optional marker beside the label in contents navigation and Jump to. */
+  indexLeading?: ReactNode;
   /** Exclude low-value/debug regions from the jump index. */
   includeInIndex?: boolean;
   /** Right-aligned header slot: a toolbar, action cluster, or rolled-up stat. */
@@ -302,6 +304,11 @@ function SectionIndex({
                           onSelect(section.id);
                         }}
                       >
+                        {section.indexLeading != null ? (
+                          <span className="shrink-0">
+                            {section.indexLeading}
+                          </span>
+                        ) : null}
                         <span className="min-w-0 flex-1 truncate">
                           {section.title}
                         </span>
@@ -393,6 +400,9 @@ function SectionIndex({
                         selectMenuTarget(section.id);
                       }}
                     >
+                      {section.indexLeading != null ? (
+                        <span className="shrink-0">{section.indexLeading}</span>
+                      ) : null}
                       <span
                         className="min-w-0 flex-1 truncate"
                         title={section.title}

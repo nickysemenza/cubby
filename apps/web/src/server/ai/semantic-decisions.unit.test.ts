@@ -61,7 +61,10 @@ describe("semantic decision adapters", () => {
         firstTitle: "Synthetic blue shirt, M",
         secondTitle: "Synthetic blue shirt, M",
       },
-      { firstTitle: "x".repeat(501), secondTitle: "Synthetic bounded source" },
+      {
+        firstTitle: "x".repeat(4_001),
+        secondTitle: "Synthetic bounded source",
+      },
       {
         firstTitle: "Synthetic red hat, L",
         secondTitle: "Synthetic red hat, L",
@@ -107,10 +110,27 @@ describe("semantic decision adapters", () => {
     ).rejects.toThrow("decision gateway unavailable");
   });
 
+  // Stable name + identifier evidence can exceed the old 500-character skip.
+  it("checks full stable variant evidence above 500 characters", async () => {
+    const port = portFor(0, 0.99);
+    const results = await decideProductVariantComparisons({
+      comparisons: [
+        {
+          firstTitle: `Synthetic boot ${"ABC123 ".repeat(80)}`,
+          secondTitle: "Synthetic boot",
+        },
+      ],
+      usage,
+      port,
+    });
+    expect(port).toHaveBeenCalledTimes(1);
+    expect(results[0]?.color.relation).toBe("same");
+  });
+
   it("abstains before model invocation when bounded source text is truncated", async () => {
     const port = portFor(0, 0.99);
     const result = await decideProductVariantComparison({
-      firstTitle: "x".repeat(501),
+      firstTitle: "x".repeat(4_001),
       secondTitle: "Synthetic product",
       usage,
       port,

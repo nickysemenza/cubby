@@ -329,6 +329,80 @@ export const imageDescriptionCorrection = z.object({
   confirmedAt: isoDateTime,
 });
 
+export const selectedImageDescriptionEvidence = z.object({
+  description: z.string().nullable(),
+  authority: z.enum(["model", "member", "missing"]),
+  analysis: z
+    .object({
+      id: z.uuid(),
+      provider: z.string().nullable(),
+      model: z.string(),
+      createdAt: z.string(),
+    })
+    .nullable(),
+  claims: z.array(imageDescriptionClaim),
+  missingReason: z.string().nullable(),
+});
+
+/** Claims and provenance always travel with the prose from the same source. */
+export function selectImageDescriptionEvidence(
+  analyses: readonly {
+    analysisId: string;
+    provider: string | null;
+    model: string;
+    createdAt: string;
+    inputFingerprint: string;
+    preferred: boolean;
+    result: ImageDescriptionResult;
+  }[],
+  correction: { description: string } | null,
+  sourceContentHash: string | null,
+): z.infer<typeof selectedImageDescriptionEvidence> {
+  if (correction)
+    return {
+      description: correction.description,
+      authority: "member",
+      analysis: null,
+      claims: [],
+      missingReason: null,
+    };
+  const current = analyses.filter((entry) => {
+    try {
+      return (
+        sourceContentHash !== null &&
+        z
+          .object({ sourceContentHash: z.string() })
+          .parse(JSON.parse(entry.inputFingerprint)).sourceContentHash ===
+          sourceContentHash
+      );
+    } catch {
+      return false;
+    }
+  });
+  const selected = current.find((entry) => entry.preferred) ?? current[0];
+  if (!selected)
+    return {
+      description: null,
+      authority: "missing",
+      analysis: null,
+      claims: [],
+      missingReason:
+        "No retained description analysis for the current image source",
+    };
+  return {
+    description: selected.result.description,
+    authority: "model",
+    analysis: {
+      id: selected.analysisId,
+      provider: selected.provider,
+      model: selected.model,
+      createdAt: selected.createdAt,
+    },
+    claims: selected.result.claims,
+    missingReason: null,
+  };
+}
+
 /** Confirmed prose wins; machine observations must match the current source. */
 export function selectImageDescription(
   analyses: readonly Pick<

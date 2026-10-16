@@ -27,6 +27,7 @@ import {
   imageList,
 } from "~/server/domains/image/repo/image";
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
+import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -404,7 +405,9 @@ describe("durable image representations", () => {
       inputFingerprint,
       result: {
         description: "A dark woven garment",
-        claims: [],
+        claims: [
+          { text: "Dark woven fabric", evidenceKind: "visual" as const },
+        ],
         cutoutEligibility: "eligible" as const,
       },
     };
@@ -426,6 +429,16 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.description,
     ).toBe(analysis.result.description);
+    expect(
+      (await loadSelectedDescriptionEvidence(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      ),
+    ).toMatchObject({
+      authority: "model",
+      description: analysis.result.description,
+      claims: analysis.result.claims,
+      analysis: { provider, model: IMAGE_DESCRIPTION_FEATURE.model },
+    });
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "b".repeat(64) })
@@ -451,6 +464,11 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.description,
     ).toBe("Confirmed navy cotton shirt");
+    expect(
+      (await loadSelectedDescriptionEvidence(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      ),
+    ).toMatchObject({ authority: "member", claims: [], analysis: null });
     await saveImageDescriptionAnalysis(ctx.db, {
       ...analysis,
       result: {

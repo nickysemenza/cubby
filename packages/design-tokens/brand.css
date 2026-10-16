@@ -20,6 +20,10 @@
   --brand-warning-ink: #75500d;
   --brand-destructive: #b54336;
   --brand-slate: #636368;
+  --brand-action-create: #2f62c3;
+  --brand-action-create-surface: #edf3ff;
+  --brand-action-change: #7a5a12;
+  --brand-action-change-surface: #f6f0e0;
   --brand-graphite: var(--brand-foreground);
   --brand-paper: var(--brand-canvas);
   --brand-paper-alt: var(--brand-inset);

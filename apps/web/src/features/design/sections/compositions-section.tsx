@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type { DecisionStep } from "@cubby/schemas/decision-step";
 import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets";
 import { Command as CommandPrimitive } from "cmdk";
 import { useId, useState } from "react";
@@ -11,8 +12,9 @@ import {
 import { SuggestionReview } from "~/entity/suggestions/suggestion-review";
 import { Demo, DemoGrid } from "~/features/design/components/design-section";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
+import { DecisionSteps } from "~/ui/common/decision-steps";
 import { FormWrapper, UnifiedTextField } from "~/ui/forms/form-utils";
-import { Section, SectionHeading } from "~/ui/layout";
+import { Section, SectionHeading, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -300,6 +302,18 @@ export function SectionCompositionsSection() {
   const [count, setCount] = useState(2);
   return (
     <DemoGrid className="xl:grid-cols-2">
+      <Demo
+        name="DecisionSteps · attach"
+        note="Synthetic photo evidence · neutral attachment, citron attention."
+      >
+        <DecisionStepsDemo action="link" />
+      </Demo>
+      <Demo
+        name="DecisionSteps · create"
+        note="Synthetic product draft · blue marks the pending creation."
+      >
+        <DecisionStepsDemo action="create" />
+      </Demo>
       <Demo name="Section · headings, actions and deferred context">
         <SectionHeading
           as="h3"
@@ -542,5 +556,113 @@ export function QualityChartsSection() {
         </Demo>
       </DemoGrid>
     </Section>
+  );
+}
+
+function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [name, setName] = useState("Synthetic trail shoes · US 10");
+  const steps: DecisionStep[] = [
+    {
+      key: "product",
+      label: "Product",
+      status: "done",
+      summary: name,
+      action,
+      blockedReason: null,
+    },
+    {
+      key: "identity",
+      label: "Right one?",
+      status: confirmed ? "done" : "needs_input",
+      summary: confirmed ? "Label checked" : "Label: US 10 · compare with name",
+      action: null,
+      blockedReason: null,
+    },
+    {
+      key: "ownership",
+      label: "Own it now?",
+      status: confirmed ? "needs_input" : "blocked",
+      summary:
+        action === "link" ? "1 pair · hall cupboard" : "Reference photo only",
+      action: "change",
+      blockedReason: confirmed ? null : "Check the label first",
+    },
+    {
+      key: "apply",
+      label: "Apply",
+      status: confirmed ? "needs_input" : "blocked",
+      summary: null,
+      action,
+      blockedReason: confirmed ? null : "Answer the steps above",
+    },
+  ];
+  return (
+    <DecisionSteps
+      steps={steps}
+      aria-label={`Synthetic ${action} decisions`}
+      media={
+        <figure>
+          <div
+            className="aspect-square rounded border bg-muted"
+            aria-label="Synthetic photo placeholder"
+          />
+          <figcaption>
+            Synthetic photo
+            <br />
+            Label: US 10
+          </figcaption>
+        </figure>
+      }
+      renderBody={(step) =>
+        step.key === "product" ? (
+          <Input
+            aria-label="Synthetic product name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        ) : step.key === "identity" ? (
+          <Stack gap="sm">
+            {action === "link" ? (
+              <p className="text-xs">
+                Ordered Sep 2, 2026 · Example outfitter · $48
+                <br />
+                On hand: 1 pair · hall cupboard
+              </p>
+            ) : (
+              <Stack gap="sm">
+                <Input
+                  aria-label="Draft product name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+                <p className="text-xs">
+                  Label: US 10 · compare with draft name
+                  <br />
+                  Closest existing: Synthetic court shoes · different style
+                </p>
+              </Stack>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmed(!confirmed)}
+            >
+              {confirmed ? "Review label again" : "This is the one"}
+            </Button>
+          </Stack>
+        ) : step.key === "ownership" ? (
+          <p className="text-xs">
+            {action === "link"
+              ? "Keep the existing count. Attaching evidence never adds units."
+              : "Reference photo only · create without adding inventory."}
+          </p>
+        ) : (
+          <Button size="sm" onClick={() => setConfirmed(false)}>
+            {action === "link" ? "Attach 1 photo" : "Create product"}
+          </Button>
+        )
+      }
+    />
   );
 }

@@ -27,6 +27,10 @@ Ink identifies primary controls and current navigation, with light labels. Citro
 
 Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on navigation and record identity. Positive, warning, and destructive colors communicate condition with text or icons.
 
+### Action
+
+Action color marks the outcome of a pending decision: create is blue, link/attach is neutral graphite and inset, change is muted ochre, and remove uses destructive. This third channel never substitutes for domain ("where am I?") or condition ("what state?"). Primary buttons stay ink; action color belongs on chips, glyphs and step marks.
+
 ### Neutral
 
 Canvas, white surface, gray inset, secondary ink, and hairline borders separate regions without decorating every record. Gray section bands use the shared muted surface.
@@ -222,3 +226,7 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 - **Don't** split detail sections into desktop columns or substitute tabs for continuous content.
 - **Don't** use decorative cards, invented metrics, or unrelated placeholder illustrations to fill space.
 - **Don't** trade readable text, visible focus, or phone touch targets for density.
+
+### Decision steps
+
+`DecisionSteps` is the interactive RecordList timeline, using RecordRow expanded detail and actions. Done uses a filled positive dot, blocked a faint point, not needed a hollow ring, and needs input a citron attention mark, never warning. Answered rows keep their summary inline and a quiet change disclosure: 28px on desktop, 44px phone targets. Only the open body is visible; hidden bodies stay mounted to preserve drafts and suggestion receipts. Opening a body moves focus into it. Optional 112px evidence media spans the rows on desktop and precedes them on phone. Callers supply steps and bodies; the component owns only disclosure.

@@ -195,6 +195,11 @@ struct RunPhotoBatchSlot: View {
             let labelID = ImageCode("IMG-2346")
             let group = PhotoGroupProposal(
                 groupKey: "work-shirt",
+                steps: [
+                    .init(key: "product", label: "Product", status: .done, summary: "Canvas pocket T-shirt"),
+                    .init(key: "identity", label: "Details", status: .needsInput),
+                    .init(key: "ownership", label: "Own it now?", status: .done, summary: "Reference only"),
+                ],
                 review: .init(
                     observedName: "Canvas pocket T-shirt · navy", unresolvedReason: nil,
                     stockIntent: .evidence),

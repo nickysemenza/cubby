@@ -143,6 +143,14 @@
   Cubby Theme - Field Guide
 */
 :root {
+  --action-create: var(--brand-action-create);
+  --action-create-surface: var(--brand-action-create-surface);
+  --action-change: var(--brand-action-change);
+  --action-change-surface: var(--brand-action-change-surface);
+  --action-link: var(--brand-graphite-secondary);
+  --action-link-surface: var(--brand-inset);
+  --action-remove: var(--brand-destructive);
+
   /* The Field Guide palette itself lives in @cubby/design-tokens
      (imported above). Only cubby-web-specific derivations stay here. */
   --brand-sage: oklch(0.94 0.025 145);
@@ -327,6 +335,14 @@
   ---break---
 */
 @theme inline {
+  --color-action-create: var(--action-create);
+  --color-action-create-surface: var(--action-create-surface);
+  --color-action-change: var(--action-change);
+  --color-action-change-surface: var(--action-change-surface);
+  --color-action-link: var(--action-link);
+  --color-action-link-surface: var(--action-link-surface);
+  --color-action-remove: var(--action-remove);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
