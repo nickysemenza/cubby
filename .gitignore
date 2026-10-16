@@ -45,7 +45,8 @@ yarn-error.log*
 # idea files
 .idea
 
-# USDA database (large files)
+# Retired USDA downloads can remain in older checkouts; keep them out of staging.
+apps/usda-api/data/
 
 tsconfig.vitest-temp.json
 
