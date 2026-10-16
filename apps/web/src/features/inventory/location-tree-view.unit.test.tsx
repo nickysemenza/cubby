@@ -2,13 +2,22 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sampleLocations } from "~/features/design/data/samples";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { LocationTree } from "./location-tree-view";
+import LocationTreeView, { LocationTree } from "./location-tree-view";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -237,5 +246,56 @@ describe("LocationTree", () => {
     expect(
       screen.getByText(/clear the search to see the whole house/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("location tree query lifecycle", () => {
+  it("shows initial diagnostics and retries into the empty state", async () => {
+    let fail = true;
+    const restore = overrideStartDispatch(async () => {
+      if (fail) throw new Error("SQLSTATE 08006 synthetic location tree");
+      return { ok: true, data: [] };
+    });
+    try {
+      renderTree(<LocationTreeView />);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "SQLSTATE 08006 synthetic location tree",
+      );
+      fail = false;
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await screen.findByText("No locations to display.");
+      expect(screen.getByText("Tree View")).toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+  it("retains tree search and DOM through refresh failure and retry", async () => {
+    harness.queryClient.setQueryData(
+      location.makeTree.queryOptions().queryKey,
+      treeData(),
+    );
+    let fail = true;
+    const restore = overrideStartDispatch(async () => {
+      if (fail) throw new Error("synthetic tree refresh");
+      return { ok: true, data: treeData() };
+    });
+    try {
+      renderTree(<LocationTreeView />);
+      const search = screen.getByRole("searchbox");
+      fireEvent.change(search, { target: { value: "Pantry" } });
+      await act(async () => {
+        await harness.queryClient.refetchQueries();
+      });
+      await screen.findByRole("alert");
+      expect(screen.getByRole("searchbox")).toBe(search);
+      expect(search).toHaveValue("Pantry");
+      fail = false;
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+      expect(screen.getByRole("searchbox")).toBe(search);
+      expect(search).toHaveValue("Pantry");
+    } finally {
+      restore();
+    }
   });
 });

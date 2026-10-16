@@ -15,7 +15,7 @@ import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
@@ -45,19 +45,21 @@ import {
 } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
-import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { EnumPill } from "~/ui/primitives/enum-pill";
-import { Skeleton } from "~/ui/primitives/skeleton";
 import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { Visualization } from "~/ui/visualizations/visualization";
+import {
+  Visualization,
+  visualizationState,
+} from "~/ui/visualizations/visualization";
 
 type EntityTimelineMode = "events" | "lifecycles";
 
@@ -739,14 +741,8 @@ function timelineParams<E extends TimelineEntity>(
   } as EntityTimelineParams<E>;
 }
 
-function isEmptyTimeline(
-  data: EntityTimelineOut | undefined,
-  success: boolean,
-  placeholder: boolean,
-) {
+function isEmptyTimeline(data: EntityTimelineOut | undefined) {
   return (
-    success &&
-    !placeholder &&
     !!data &&
     data.meta.totalCount === 0 &&
     data.stats.length === 0 &&
@@ -775,6 +771,7 @@ export function EntityTimeline<E extends TimelineEntity>({
   });
   // The page belongs to one scope: a new scope reads its first page.
   const scopeKey = JSON.stringify([
+    entity,
     filters ?? null,
     ids ?? null,
     state.from ?? null,
@@ -787,12 +784,17 @@ export function EntityTimeline<E extends TimelineEntity>({
     ...entityTimelineFor(entity, operations.timeline).queryOptions(
       timelineParams(filters, ids, state, pageIndex),
     ),
-    placeholderData: keepPreviousData,
   });
-  const { data, isError, isLoading } = query;
-  useSectionEmpty(
-    isEmptyTimeline(data, query.isSuccess, query.isPlaceholderData),
-  );
+  const hydrated = useHydrated();
+  const data = hydrated ? query.data : undefined;
+  const visualization = visualizationState({
+    data,
+    isLoading: !hydrated || query.isLoading,
+    error: hydrated ? query.error : null,
+    empty: isEmptyTimeline(data),
+    onRetry: () => void query.refetch(),
+  });
+  useSectionEmpty(isEmptyTimeline(data));
   const inBand = controlsPlacement === "band";
   const band = (hasRows: boolean, meta?: EntityTimelineMeta) =>
     inBand ? (
@@ -807,36 +809,12 @@ export function EntityTimeline<E extends TimelineEntity>({
       />
     ) : null;
 
-  if (isError)
-    return (
-      <Stack gap="md">
-        {band(false)}
-        <ErrorDisplay
-          error={query.error}
-          title="the timeline"
-          onRetry={() => void query.refetch()}
-        />
-      </Stack>
-    );
-  if (isLoading || !data)
-    return (
-      <Stack gap="md">
-        {inBand ? band(false) : <Skeleton className="h-10 w-full" />}
-        <StatGrid>
-          {[0, 1, 2, 3].map((index) => (
-            <Skeleton key={index} className="h-14 w-full" />
-          ))}
-        </StatGrid>
-        <Skeleton className="h-64 w-full" />
-      </Stack>
-    );
-
-  const hasRows = data.rows !== undefined;
+  const hasRows = data?.rows !== undefined;
   const activeMode: EntityTimelineMode = hasRows ? state.mode : "events";
   return (
     <Stack gap="md">
       {inBand ? (
-        band(hasRows, data.meta)
+        band(hasRows, data?.meta)
       ) : (
         <Controls
           from={state.from}
@@ -847,36 +825,45 @@ export function EntityTimeline<E extends TimelineEntity>({
           onChange={onChange}
         />
       )}
-      {data.stats.length > 0 && (
-        <StatGrid>
-          {data.stats.map((stat) => (
-            <StatTile key={stat.key} label={stat.label}>
-              {stat.value}
-            </StatTile>
-          ))}
-        </StatGrid>
-      )}
-      {data.notes.length > 0 && (
-        <Description>
-          <ShortcodeProse>{data.notes.join(" ")}</ShortcodeProse>
-        </Description>
-      )}
-      <TimelinePager
-        meta={data.meta}
-        onPageChange={(next) => setPage({ scopeKey, pageIndex: next })}
-      />
-      {activeMode === "lifecycles" && data.rows ? (
-        <>
-          <LifecyclesView rows={data.rows} extent={data.extent} />
-          {data.groups.some((group) => group.date === null) ? (
-            <EventsView
-              groups={data.groups.filter((group) => group.date === null)}
+      <Visualization
+        state={visualization}
+        message="Nothing dated in this window."
+      >
+        {data && (
+          <>
+            {data.stats.length > 0 && (
+              <StatGrid>
+                {data.stats.map((stat) => (
+                  <StatTile key={stat.key} label={stat.label}>
+                    {stat.value}
+                  </StatTile>
+                ))}
+              </StatGrid>
+            )}
+            {data.notes.length > 0 && (
+              <Description>
+                <ShortcodeProse>{data.notes.join(" ")}</ShortcodeProse>
+              </Description>
+            )}
+            <TimelinePager
+              meta={data.meta}
+              onPageChange={(next) => setPage({ scopeKey, pageIndex: next })}
             />
-          ) : null}
-        </>
-      ) : (
-        <EventsView groups={data.groups} />
-      )}
+            {activeMode === "lifecycles" && data.rows ? (
+              <>
+                <LifecyclesView rows={data.rows} extent={data.extent} />
+                {data.groups.some((group) => group.date === null) ? (
+                  <EventsView
+                    groups={data.groups.filter((group) => group.date === null)}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <EventsView groups={data.groups} />
+            )}
+          </>
+        )}
+      </Visualization>
     </Stack>
   );
 }

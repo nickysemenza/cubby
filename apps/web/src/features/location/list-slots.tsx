@@ -6,7 +6,6 @@ import LocationTreeView from "~/features/inventory/location-tree-view";
 import { LocationGallery } from "~/features/location/location-gallery";
 import { HierarchyView } from "~/features/product-category/hierarchy-view";
 import { Stack } from "~/ui/layout";
-import { Visualization } from "~/ui/visualizations/visualization";
 
 const LocationGallerySlot: ListSlotComponent = () => (
   <Suspense>
@@ -18,9 +17,7 @@ const LocationGallerySlot: ListSlotComponent = () => (
 const LocationVisualizationsSlot: ListSlotComponent = () => (
   <Stack gap="md">
     <HierarchyView entity="location" />
-    <Visualization state={{ status: "ready" }} title="Tree View">
-      <LocationTreeView />
-    </Visualization>
+    <LocationTreeView />
   </Stack>
 );
 
