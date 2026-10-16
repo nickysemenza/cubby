@@ -1,14 +1,23 @@
 import type { EntityReportOut } from "@cubby/schemas/entity-report";
 import { runShortcode } from "@cubby/schemas/identifiers";
-import { runStatus } from "@cubby/schemas/run-fields";
+import type { RunOut } from "@cubby/schemas/run";
+import {
+  hasImportRunReports,
+  runPurpose,
+  runStatus,
+} from "@cubby/schemas/run-fields";
+import { and, eq } from "drizzle-orm";
 
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { run as runTable } from "~/server/db/schema";
 import {
   loadRunDetail,
   loadRunLog,
+  loadRunTimeline,
 } from "~/server/domains/purchase-import/repo/run-service";
-import { getRunByID } from "~/server/domains/run/repo/run";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
+import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 
@@ -22,36 +31,64 @@ import {
   isLiveRunStatus,
   liveProgressBlocks,
   runLogBlocks,
+  runTimelineBlocks,
   suggestionBlocks,
   type RunReportSlot,
 } from "./run";
 
 const PAGE_SIZE = 25;
 
+const reportHeaderReader = createEntityReader<
+  Pick<typeof runTable.$inferSelect, "purpose" | "status">,
+  Pick<RunOut, "purpose" | "status">,
+  "run"
+>({
+  entity: "run",
+  fetchById: async (db, id) => {
+    const [row] = await getDb(db)
+      .select({ purpose: runTable.purpose, status: runTable.status })
+      .from(runTable)
+      .where(and(eq(runTable.id, id), notDeleted(runTable)))
+      .limit(1);
+    return row;
+  },
+  fromDB: (_db, row) => ({
+    purpose: runPurpose.parse(row.purpose),
+    status: runStatus.parse(row.status),
+  }),
+});
 const runHeader = reportDependency(async (execution) =>
-  getRunByID(execution.request.db, await execution.read(runId)),
+  reportHeaderReader.getByID(execution.request.db, await execution.read(runId)),
 );
 const runDetail = reportDependency((execution) =>
-  loadRunDetail(
-    execution.request.db,
-    execution.request.id,
-    execution.read(runHeader),
-  ),
+  loadRunDetail(execution.request.db, execution.request.id),
 );
 
-/** Import slots require the detail; other Run slots need only the cheap header. */
+/** Only applicable import reports need full detail. Other purposes and a
+ * standalone timeline use their own evidence projections. */
 const runBase = reportDependency(async (execution) => {
   const code = runShortcode.parse(execution.request.id);
-  const detail = execution.request.slots.some(isImportReportSlot)
-    ? await execution.read(runDetail)
-    : undefined;
-  const header = detail ?? (await execution.read(runHeader));
+  const header = await execution.read(runHeader);
+  const needsDetail =
+    hasImportRunReports(header.purpose) &&
+    execution.request.slots.some(
+      (slot) => slot !== "run.import-timeline" && isImportReportSlot(slot),
+    );
+  const detail = needsDetail ? await execution.read(runDetail) : undefined;
   return {
     code,
     detail,
-    status: runStatus.parse(header.status),
-    purpose: header.purpose,
+    status: runStatus.parse((detail ?? header).status),
+    purpose: (detail ?? header).purpose,
   };
+});
+
+const runTimeline = reportDependency(async (execution) => {
+  const { detail } = await execution.read(runBase);
+  return (
+    detail?.operations ??
+    loadRunTimeline(execution.request.db, await execution.read(runId))
+  );
 });
 
 const runProgress = reportDependency(async (execution) => {
@@ -103,7 +140,8 @@ function runSlot(
 
 const importSlot = (slot: Parameters<typeof importReportBlocks>[0]) =>
   runSlot(async (execution) => {
-    const { detail } = await execution.read(runBase);
+    const { detail, purpose } = await execution.read(runBase);
+    if (!hasImportRunReports(purpose)) return { blocks: [] };
     if (!detail) throw new Error("An import report requires the Run detail.");
     return { blocks: importReportBlocks(slot, detail) };
   });
@@ -126,7 +164,11 @@ export const RUN_REPORTS = {
   "run.import-findings": importSlot("run.import-findings"),
   "run.import-targets": importSlot("run.import-targets"),
   "run.import-prepared-orders": importSlot("run.import-prepared-orders"),
-  "run.import-timeline": importSlot("run.import-timeline"),
+  "run.import-timeline": runSlot(async (execution) => ({
+    blocks: runTimelineBlocks({
+      operations: await execution.read(runTimeline),
+    }),
+  })),
   "run.import-debug-log": runSlot(async (execution) => ({
     blocks: runLogBlocks(await execution.read(runLog)),
   })),

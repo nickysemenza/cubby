@@ -231,7 +231,12 @@ project trees and scopes, record identities, purchase hydration and Run
 headers. Member-gated histories resolve viewer membership before record identity,
 preserving the authorization error when both inputs are invalid. Project analytics supplies the budget summary when both are requested;
 budget alone does not load charts. Reuse ends with the batch: there is no
-cross-request cache or encompassing transaction.
+cross-request cache or encompassing transaction. Cheap identity/status dependencies stay separate from
+reference, quality and content hydration. Slot loaders request the projection
+they render and reuse broader reads only when another requested slot needs them.
+Run report headers select purpose/status; non-import Runs skip import detail,
+and standalone timelines select public operation metadata without result bodies.
+Full import slots share their detail and its operation evidence within the batch.
 
 The full-filter Product price footer groups live sibling quantities and
 visited kit-ancestor Expenses. Page-sized scalar pricing keeps its correlated
