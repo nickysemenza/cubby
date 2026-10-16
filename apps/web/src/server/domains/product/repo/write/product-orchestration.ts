@@ -26,6 +26,7 @@ import type {
   ProductTopLevelOut,
   ProductUpdateInput,
   ProductWithFoodAndSideEffectsOut,
+  ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
@@ -61,13 +62,18 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import type { ProductWriteActions } from "./product-writes";
+import type {
+  ProductWriteActions,
+  ProductMutationSnapshot,
+} from "./product-writes";
 
 const log = createLogger("product-orchestration");
 
-interface ProductWriteServices {
+interface ProductWriteServices<
+  TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
+> {
   db: Database;
-  product: ProductWriteActions;
+  product: ProductWriteActions<TOutput>;
   recipeCosting: RecipeCostingService;
 }
 
@@ -111,11 +117,28 @@ async function importCoverPhoto(
   }
 }
 
-export async function createProductWithSideEffects(
+export const createProductWithSideEffects = (
   services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
   actor: ActorContext,
-): Promise<ProductWithFoodAndSideEffectsOut> {
+): Promise<ProductWithFoodAndSideEffectsOut> =>
+  createProductWithReadSideEffects(services, input, actor);
+
+export const updateProductWithSideEffects = (
+  services: ProductWriteServices,
+  id: ProductId,
+  data: ProductUpdateInput["data"],
+  actor: ActorContext,
+): Promise<ProductWithFoodAndSideEffectsOut> =>
+  updateProductWithReadSideEffects(services, id, data, actor);
+
+export async function createProductWithReadSideEffects<
+  TOutput extends ProductMutationSnapshot,
+>(
+  services: ProductWriteServices<TOutput> & { upcLookupClient: UpcLookupPort },
+  input: ProductCreateInput,
+  actor: ActorContext,
+): Promise<TOutput & { sideEffects: MutationSideEffects }> {
   const { output: product, entityId } = await services.product.createProduct(
     input,
     actor,
@@ -153,12 +176,14 @@ export async function createProductWithSideEffects(
   };
 }
 
-export async function updateProductWithSideEffects(
-  services: ProductWriteServices,
+export async function updateProductWithReadSideEffects<
+  TOutput extends ProductMutationSnapshot,
+>(
+  services: ProductWriteServices<TOutput>,
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
-): Promise<ProductWithFoodAndSideEffectsOut> {
+): Promise<TOutput & { sideEffects: MutationSideEffects }> {
   const previous =
     data.ingredientId !== undefined
       ? await services.product.getProductByID(id)

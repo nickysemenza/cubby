@@ -23,6 +23,7 @@ import {
   generatedEntityRelationListCommandSchema,
   generatedEntityRelationListResultSchema,
 } from "~/entity/generated/entity-relation-lists.gen";
+import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import {
   generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,
@@ -53,6 +54,13 @@ import {
 export const ENTITY_KERNEL_ENTITIES = generatedEntityKernelEntities;
 
 const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
+/** Internal requested-field write result; distinct from a complete entity payload. */
+export const entityMutationReadResultSchema = z.object({
+  action: z.enum(["create", "update"]),
+  entity: entityKernelEntitySchema,
+  item: listReadRowSchema,
+  sideEffects: mutationSideEffectsSchema,
+});
 export type EntityKernelEntity = z.infer<typeof entityKernelEntitySchema>;
 
 const searchableKernelEntitySchema = z.enum(

@@ -39,6 +39,7 @@ import {
   type EntityResultForAction,
   entityCommandSchema,
   entityBrowserMutationResultSchema,
+  entityMutationReadResultSchema,
   type EntityResolveCommand,
   entityResolveCommandSchema,
   entityResolveResultSchema,
@@ -320,4 +321,27 @@ export async function executeEntityAs<
   // returns the command's own entity.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- the guard above narrows by value, not by the generic Action.
   return result as unknown as EntityResultForAction<Action, Command["entity"]>;
+}
+
+/** Requested response fields share the normal write workflow and transaction. */
+export async function executeEntityMutationRead(
+  context: EntityKernelContext,
+  rawCommand: Extract<EntityMutationCommand, { action: "create" | "update" }>,
+  fields: readonly string[],
+): Promise<z.infer<typeof entityMutationReadResultSchema>> {
+  const command = entityCommandSchema.parse(rawCommand);
+  if (command.action === "create")
+    return ENTITY_KERNEL_OPERATIONS[command.entity].createRead(context, {
+      data: command.data,
+      sources: command.sources,
+      fields,
+    });
+  if (command.action === "update")
+    return ENTITY_KERNEL_OPERATIONS[command.entity].updateRead(context, {
+      id: command.id,
+      data: command.data,
+      sources: command.sources,
+      fields,
+    });
+  throw new Error("Requested mutation output requires create or update");
 }

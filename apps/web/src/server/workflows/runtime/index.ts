@@ -1,4 +1,4 @@
-export { inspectWorkflow } from "./definition";
+export { inspectWorkflow, mapWorkflowValue } from "./definition";
 export * from "./execute";
 
 export * from "./operation";

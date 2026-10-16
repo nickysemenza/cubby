@@ -4,11 +4,11 @@ import { z } from "zod";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import {
   type ListEnrichmentGroup,
-  listEnrichmentGroups,
   listReadRowSchema,
 } from "~/entity/model/list-read-fields";
 import {
   listReadFields,
+  listGroupsForFields,
   projectListRows,
 } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
@@ -196,10 +196,7 @@ export function defineProgressiveListOperations<
       value: unknown,
       fields: readonly string[],
     ) {
-      const owners = listReadFields(binding.entity);
-      const requested = listEnrichmentGroups.filter((group) =>
-        owners[group].some((field) => fields.includes(field)),
-      );
+      const requested = listGroupsForFields(binding.entity, fields);
       const input = inputSchema.parse(value);
       const filters = await filtersFor(context, input.filters);
       const [{ pagination, result }, sums] = await Promise.all([

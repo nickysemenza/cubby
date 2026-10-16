@@ -1,3 +1,4 @@
+import { scoredEntities } from "@cubby/schemas/data-quality";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { inventoryMcpOut } from "@cubby/schemas/inventory";
@@ -330,6 +331,17 @@ export const entitySummaryFields = (
 ): string[] => [
   entitySummary[entity].titleField,
   ...(entity === "product" ? ["externalIds"] : []),
+];
+
+/** Write coverage is part of the summary contract, independent of full detail. */
+export const entityWriteSummaryFields = (
+  entity: keyof typeof entitySummary,
+): string[] => [
+  ...entitySummaryFields(entity),
+  ...(scoredEntities.some((scored) => scored === entity)
+    ? ["dataQuality"]
+    : []),
+  ...(entity === "recipe" ? ["totals"] : []),
 ];
 
 function summarizeEntityItem(

@@ -182,8 +182,9 @@ export interface EntityLifecycleContract {
 export interface EntityRepositoryWriteResult<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas,
+  TOutput = ZodOutput<S["output"]>,
 > {
-  output: ZodOutput<S["output"]>;
+  output: TOutput;
   entityId: EntityInternalId<E>;
   detachedImageKeys?: string[];
   /** Best-effort follow-up failures, surfaced as `sideEffects.warnings`. */
@@ -226,11 +227,23 @@ export type EntityRepository<
     ctx: EntityKernelContext,
     data: PresentSchemaOutput<S["createInput"]>,
   ): Promise<EntityRepositoryWriteResult<E, S>>;
+  /** Same write, with explicitly requested response fields; never a partial full output. */
+  createRead?(
+    ctx: EntityKernelContext,
+    data: PresentSchemaOutput<S["createInput"]>,
+    fields: readonly string[],
+  ): Promise<EntityRepositoryWriteResult<E, S, ListReadRow>>;
   update?(
     ctx: EntityKernelContext,
     id: ZodOutput<S["id"]>,
     data: PresentSchemaOutput<S["updateInput"]>,
   ): Promise<EntityRepositoryWriteResult<E, S>>;
+  updateRead?(
+    ctx: EntityKernelContext,
+    id: ZodOutput<S["id"]>,
+    data: PresentSchemaOutput<S["updateInput"]>,
+    fields: readonly string[],
+  ): Promise<EntityRepositoryWriteResult<E, S, ListReadRow>>;
   bulkUpdate?(
     ctx: EntityKernelContext,
     ids: ZodOutput<S["id"]>[],

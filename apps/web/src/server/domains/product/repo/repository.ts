@@ -10,8 +10,14 @@ import type { Database } from "~/server/db";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
+  createProductWithReadSideEffects,
+  updateProductWithReadSideEffects,
 } from "~/server/domains/product/repo/write/product-orchestration";
-import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
+import {
+  createProductWriteActions,
+  createProductReadActions,
+  readProductMutationFields,
+} from "~/server/domains/product/repo/write/product-writes";
 import { entityMutationReferences } from "~/server/entity-kernel/adapter";
 import {
   mutationEvents,
@@ -50,10 +56,9 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
 }
 
 /**
- * `sideEffects: false`: a product write runs its own orchestration (UPC
- * image import, recipe re-costing) rather than the generic fan-out, and its
- * create reaches the UPC provider, so the kernel does not hold a transaction
- * across it.
+ * `sideEffects: false` prevents duplicate generic fan-out: Product writes own
+ * UPC image import and recipe re-costing. They still receive the kernel's
+ * transaction-bound context, and publications wait for its commit.
  */
 export const productRepository = defineRepository("product", {
   sideEffects: false,
@@ -93,12 +98,65 @@ export const productRepository = defineRepository("product", {
       warnings: result.sideEffects.warnings,
     };
   },
+  createRead: async (ctx, data, fields) => {
+    const output = await createProductWithReadSideEffects(
+      {
+        db: ctx.db,
+        product: createProductReadActions(
+          ctx.db,
+          ctx.usdaClient,
+          (product, id) =>
+            readProductMutationFields(
+              ctx.db,
+              ctx.usdaClient,
+              product,
+              id,
+              fields,
+            ),
+        ),
+        recipeCosting: ctx.services.recipeCosting,
+        upcLookupClient: ctx.upcLookupClient,
+      },
+      data,
+      ctx.actorContext,
+    );
+    return {
+      output,
+      entityId: await productShortcodes.one(ctx.db, output.id),
+      warnings: output.sideEffects.warnings,
+    };
+  },
   update: async (ctx, shortcode, data) => {
     const entityId = await productShortcodes.one(ctx.db, shortcode);
     const output = await updateProductWithSideEffects(
       {
         db: ctx.db,
         product: createProductWriteActions(ctx.db, ctx.usdaClient),
+        recipeCosting: ctx.services.recipeCosting,
+      },
+      entityId,
+      data,
+      ctx.actorContext,
+    );
+    return { output, entityId };
+  },
+  updateRead: async (ctx, shortcode, data, fields) => {
+    const entityId = await productShortcodes.one(ctx.db, shortcode);
+    const output = await updateProductWithReadSideEffects(
+      {
+        db: ctx.db,
+        product: createProductReadActions(
+          ctx.db,
+          ctx.usdaClient,
+          (product, id) =>
+            readProductMutationFields(
+              ctx.db,
+              ctx.usdaClient,
+              product,
+              id,
+              fields,
+            ),
+        ),
         recipeCosting: ctx.services.recipeCosting,
       },
       entityId,

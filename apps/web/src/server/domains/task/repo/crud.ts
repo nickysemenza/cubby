@@ -21,6 +21,7 @@ import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -53,6 +54,7 @@ import {
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { type ListReadRow } from "~/server/generic/list/repo/list-projection";
 /**
  * Task CRUD operations.
  *
@@ -386,12 +388,13 @@ export const getTasksByIDs = async (
   });
 };
 
-export const createTask = async (
+const createTaskWithOutput = async <TOutput>(
   db: Database,
   data: TaskCreateInput,
   actor: ActorContext,
-): Promise<{ output: TaskOut; entityId: TaskId }> => {
-  const id = await withTransaction(db, async (tx) => {
+  readOutput: (db: Database, row: TaskStoredRow) => Promise<TOutput>,
+): Promise<{ output: TOutput; entityId: TaskId }> => {
+  const created = await withTransaction(db, async (tx) => {
     let parentTaskId: TaskId | null = null;
     if (data.parentTaskId) {
       parentTaskId = await resolveOrThrow(tx, "task", data.parentTaskId);
@@ -452,12 +455,52 @@ export const createTask = async (
       entityId: created.id,
       action: "create",
     });
-    return created.id;
+    return created;
   });
-  return { output: await getTaskByID(db, id), entityId: id };
+  return { output: await readOutput(db, created), entityId: created.id };
 };
 
+export const createTask = (
+  db: Database,
+  data: TaskCreateInput,
+  actor: ActorContext,
+) =>
+  createTaskWithOutput(db, data, actor, (db, row) => getTaskByID(db, row.id));
+
+export const createTaskRead = (
+  db: Database,
+  data: TaskCreateInput,
+  actor: ActorContext,
+  fields: readonly string[],
+) =>
+  createTaskWithOutput(db, data, actor, (db, row) =>
+    readTaskMutationOutput(db, row, fields),
+  );
+
 type TaskStoredRow = NonNullable<Awaited<ReturnType<typeof fetchTaskRow>>>;
+
+/** RETURNING supplies summary scalars; required coverage remains authoritative. */
+const readTaskMutationOutput = async (
+  db: Database,
+  row: TaskStoredRow,
+  fields: readonly string[],
+): Promise<ListReadRow> => {
+  if (fields.some((field) => field !== "name" && field !== "dataQuality"))
+    return selectListReadFields(await getTaskByID(db, row.id), fields);
+  const dataQuality = fields.includes("dataQuality")
+    ? (await loadDataQualities(db, "task", [row.id])).get(row.id)
+    : undefined;
+  if (fields.includes("dataQuality") && !dataQuality)
+    throw new Error("Task mutation quality coverage was not loaded");
+  return selectListReadFields(
+    {
+      id: row.shortcode,
+      name: row.name,
+      ...(dataQuality ? { dataQuality } : {}),
+    },
+    fields,
+  );
+};
 
 /** An omitted scalar keeps intent; detach alone snapshots an inherited value. */
 function assignmentAfterParentChange<T>(
@@ -551,14 +594,15 @@ async function resolveTaskUpdateAssignments(
   };
 }
 
-export const updateTask = async (
+const updateTaskWithOutput = async <TOutput>(
   db: Database,
   shortcode: TaskShortcode,
   data: TaskUpdateData,
   actor: ActorContext,
-  hooks?: TaskMutationHooks,
+  hooks: TaskMutationHooks | undefined,
+  readOutput: (db: Database, row: TaskStoredRow) => Promise<TOutput>,
 ): Promise<{
-  output: TaskOut;
+  output: TOutput;
   entityId: TaskId;
   detachedImageKeys: string[];
 }> => {
@@ -574,7 +618,7 @@ export const updateTask = async (
       : undefined;
 
   let detachedImageKeys: string[] = [];
-  await withTransaction(db, async (tx) => {
+  const updated = await withTransaction(db, async (tx) => {
     await hooks?.beforeUpdate?.(tx, id);
     const assignments = await resolveTaskUpdateAssignments(
       tx,
@@ -644,10 +688,11 @@ export const updateTask = async (
         changes,
       });
     }
+    return updated;
   });
 
   return {
-    output: await getTaskByID(db, id),
+    output: await readOutput(db, updated),
     entityId: id,
     detachedImageKeys,
   };
@@ -674,6 +719,29 @@ type TaskBulkPatch = Pick<
   | "dueDate"
   | "dueEndDate"
 >;
+
+export const updateTask = (
+  db: Database,
+  shortcode: TaskShortcode,
+  data: TaskUpdateData,
+  actor: ActorContext,
+  hooks?: TaskMutationHooks,
+) =>
+  updateTaskWithOutput(db, shortcode, data, actor, hooks, (db, row) =>
+    getTaskByID(db, row.id),
+  );
+
+export const updateTaskRead = (
+  db: Database,
+  shortcode: TaskShortcode,
+  data: TaskUpdateData,
+  actor: ActorContext,
+  fields: readonly string[],
+  hooks?: TaskMutationHooks,
+) =>
+  updateTaskWithOutput(db, shortcode, data, actor, hooks, (db, row) =>
+    readTaskMutationOutput(db, row, fields),
+  );
 
 export const updateTasksInBulk = (
   db: Database,
