@@ -307,3 +307,25 @@ it("ignores provenance on its line without swallowing a colour on the next OCR l
     suggestion: { kind: "add_to_name", value: "BLUE" },
   });
 });
+
+it("flags a model that contradicts the printed style code", () => {
+  const marks = photoFieldCrossCheck(
+    {
+      name: "Synthetic shell jacket blue XL",
+      manufacturer: "Synthetic Outfitters",
+      model: "SJ-999",
+      identifiers: [],
+    },
+    ["Synthetic Outfitters\nSJ-104\nSynthetic shell jacket blue XL"],
+  );
+  const model = marks.find((field) => field.field === "model");
+  expect(model).toMatchObject({
+    mark: "disagree-or-missing",
+    labelValue: "SJ-104",
+    productValue: "SJ-999",
+    suggestion: { kind: "set_model", value: "SJ-104" },
+  });
+  expect(
+    marks.find((field) => field.field === "identifiers")?.suggestion,
+  ).toBeNull();
+});

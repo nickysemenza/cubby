@@ -968,7 +968,11 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
           variant="chip"
           entity="purchase"
           id={line.purchaseId}
-          name={line.purchaseLabel ?? line.vendor ?? "Purchase"}
+          name={
+            line.purchaseLabel && line.purchaseLabel !== line.vendor
+              ? line.purchaseLabel
+              : "Order"
+          }
           displayImage={null}
         />
       ) : null}
