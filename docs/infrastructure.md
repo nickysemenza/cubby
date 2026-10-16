@@ -316,7 +316,7 @@ pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 | `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts) |
 | `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                |
 | `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent         |
-| `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding       |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK |
 | `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                   |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
@@ -475,9 +475,10 @@ records why paid fallback is allowed. Fixed-model evaluations do not change mode
 Named BYOK uses the native Anthropic endpoint: Universal `gateway.run()` does
 not honor the alias in its payload. The Worker authenticates native passthrough
 with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
-Anthropic key). Deployment uploads that secret atomically with the new version
-from the existing Actions `TESTER_ARMY_CF_API_TOKEN` secret. Managed paid calls
-retain the binding. Missing native authentication fails with an explicit diagnostic.
+Anthropic key). Reuse the existing Worker secret; deploying this feature does
+not provision or overwrite it from a GitHub Actions token. Check the deployed
+secret names with `wrangler secret list` before adding provisioning changes.
+Managed paid calls retain the binding. Missing native authentication fails with an explicit diagnostic.
 
 Console spend limits reset on the first of the calendar month, while promotional
 credits refresh on the subscription billing cycle. A workspace cap is therefore

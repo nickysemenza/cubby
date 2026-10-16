@@ -32,10 +32,6 @@ inputs:
       Shell command that deploys the package, using its own wrangler
       devDependency.
     required: true
-  worker-secrets-json:
-    description: "Secret bindings uploaded atomically with the version; deploy-command can use CUBBY_WORKER_SECRETS_FILE"
-    required: false
-    default: "{}"
   cloudflare-api-token:
     description: "Cloudflare API token"
     required: true
@@ -108,17 +104,4 @@ runs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
-        WORKER_SECRETS_JSON: ${{ inputs.worker-secrets-json }}
-      run: |
-        set -euo pipefail
-        CUBBY_WORKER_SECRETS_FILE="$(mktemp)"
-        export CUBBY_WORKER_SECRETS_FILE
-        trap 'rm -f "$CUBBY_WORKER_SECRETS_FILE"' EXIT
-        node --input-type=module -e '
-          import { writeFileSync } from "node:fs";
-          const secrets = JSON.parse(process.env.WORKER_SECRETS_JSON);
-          if (Object.values(secrets).some(value => typeof value !== "string" || !value))
-            throw new Error("Worker deployment secret is missing or invalid");
-          writeFileSync(process.env.CUBBY_WORKER_SECRETS_FILE, JSON.stringify(secrets), {mode: 0o600});
-        '
-        ${{ inputs.deploy-command }}
+      run: ${{ inputs.deploy-command }}
