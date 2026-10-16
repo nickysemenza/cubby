@@ -34,6 +34,7 @@ import { expense, purchase } from "~/server/db/schema";
 import {
   expenseDerivedMembershipSql,
   expenseDerivedValueSql,
+  expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/domains/project/repo/dashboard-shared";
@@ -43,7 +44,10 @@ import {
 } from "~/server/domains/project/repo/subtree";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { listScaffold } from "~/server/generic/list/repo/list";
+import {
+  declaredFilterPredicates,
+  listScaffold,
+} from "~/server/generic/list/repo/list";
 import {
   loadListGroup,
   wantsListGroup,
@@ -58,6 +62,7 @@ import {
 } from "./expense-inheritance";
 import {
   type ExpenseAllocationProjectScope,
+  type ExpenseIdSelection,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
@@ -169,10 +174,11 @@ export const resolveExpenseProjectAllocationScope = async (
 const projectFilterCondition = async (
   db: Database,
   filters: ExpenseFilters,
+  expenseIds?: ExpenseIdSelection,
 ): Promise<SQL | undefined> => {
   const scope = await resolveExpenseProjectAllocationScope(db, filters);
   if (!scope) return undefined;
-  return expenseDerivedMembershipSql(sql`${expense.id}`, scope);
+  return expenseDerivedMembershipSql(sql`${expense.id}`, scope, expenseIds);
 };
 
 const requestedReferenceCondition = (
@@ -260,12 +266,6 @@ export const buildExpenseWhereClause = async (
     projectScope?: ExpenseAllocationProjectScope;
   },
 ): Promise<SQL | undefined> => {
-  const projectCondition =
-    options && "projectScope" in options
-      ? options.projectScope
-        ? expenseDerivedMembershipSql(sql`${expense.id}`, options.projectScope)
-        : undefined
-      : await projectFilterCondition(db, filters);
   // The `(none)` / `Has project` sentinels OR with that selection instead of
   // ANDing against it, so "Kitchen or unassigned" is one filter. The
   // unassigned-spend worklist is just `projectPresenceFilter: "none"` with no
@@ -308,7 +308,7 @@ export const buildExpenseWhereClause = async (
     spendingCategoryId: undefined,
     spendingCategoryPresenceFilter: undefined,
   };
-  return expenseScaffold.where(storedFilters, [
+  const rowConditions: Array<SQL | undefined> = [
     filters.ledgerPartyId === undefined
       ? undefined
       : sql`EXISTS (
@@ -318,9 +318,7 @@ export const buildExpenseWhereClause = async (
           WHERE ea."expenseId" = ${expense.id}
             AND ea."deletedAt" IS NULL
             AND ${shortcodeSetCondition(sql`lp."shortcode"`, filters.ledgerPartyId)})`,
-    ...(options?.extraConditions ?? []),
     nameSearch,
-    projectCondition,
     // `productIds.length === 0` is ambiguous by itself — it means either
     // "no productId filter was supplied" (no constraint) or "a productId WAS
     // supplied but didn't resolve to a live product" (must match nothing).
@@ -386,6 +384,30 @@ export const buildExpenseWhereClause = async (
       filters.purchaseId !== undefined,
       purchaseIds,
     ),
+  ];
+  // Only independent stored predicates bound allocation inputs. Quality and
+  // caller-supplied conditions may themselves depend on allocation evidence.
+  const selectedWhere = and(
+    ...declaredFilterPredicates("expense", expense, storedFilters),
+    ...rowConditions,
+  );
+  const selectedIds = selectedWhere
+    ? expenseSelectionForWhere(and(notDeleted(expense), selectedWhere))
+    : undefined;
+  const projectCondition =
+    options && "projectScope" in options
+      ? options.projectScope
+        ? expenseDerivedMembershipSql(
+            sql`${expense.id}`,
+            options.projectScope,
+            selectedIds,
+          )
+        : undefined
+      : await projectFilterCondition(db, filters, selectedIds);
+  return expenseScaffold.where(storedFilters, [
+    ...rowConditions,
+    ...(options?.extraConditions ?? []),
+    projectCondition,
   ]);
 };
 

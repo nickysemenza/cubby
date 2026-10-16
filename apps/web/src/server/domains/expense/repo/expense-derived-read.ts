@@ -123,8 +123,9 @@ export function expenseDerivedReadSql(
 export const expenseDerivedMembershipSql = (
   expenseId: SQL,
   scope: ExpenseAllocationProjectScope,
+  expenseIds?: ExpenseIdSelection,
 ): SQL =>
-  sql`${expenseId} IN (SELECT "expenseId" FROM (${expenseDerivedReadSql("costs", { scope })}) derived_member)`;
+  sql`${expenseId} IN (SELECT "expenseId" FROM (${expenseDerivedReadSql("costs", { scope, expenseIds })}) derived_member)`;
 
 type DerivedValues = Pick<typeof expense.$inferSelect, "cost"> & {
   projectNames: ExpenseJointAllocationRow["projectName"];

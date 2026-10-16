@@ -217,7 +217,10 @@ statement; distinct date scopes remain separate. Ledger selection, search,
 related views, contributions and project rollups use the same owner rather
 than correlated allocation calculations per output row. Selection limits the
 purchases to resolve, while every live principal sibling supplies the
-denominator. Prepared ledger selections remain SQL relations through batching;
+denominator. Stored Expense list predicates narrow that relational selection
+before allocation membership; quality and caller-supplied derived conditions
+remain outside it. Reads without stored constraints keep the whole-ledger path.
+Prepared ledger selections remain SQL relations through batching;
 wrapping their IDs in `ARRAY(SELECT ...)` hides broad cardinality and causes
 repeated allocation scans. Analytical callers use `expenseSelectionForWhere`;
 batch contexts accept relational selections or literal IDs, never SQL arrays.
