@@ -365,7 +365,13 @@ export const photoImportContract = defineContract("photoImport", {
       runId: runShortcode,
       groupKey: z.string().min(1).max(200),
       productId: productShortcode,
-      operationId: z.string().min(1).max(200),
+      operationId: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe(
+          "Caller-generated retry key for this candidate rejection, not an entity reference. Reuse it only for an identical decision.",
+        ),
     }),
     output: reviewPhotoGroupsOutput,
     invalidates: ["runOnly"],
