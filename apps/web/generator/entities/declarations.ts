@@ -94,8 +94,11 @@ export type FilterDescriptor = Readonly<{
   expandRef: SourceRef | null;
   schemaRef: SourceRef | null;
   stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
-  /** Compiles through the `model.derived` entry named by `columnId`. */
-  derived: boolean;
+  /**
+   * The `model.derived` key the filter compiles through (`columnId` unless
+   * the declaration names another), or null for a stored/hand-written filter.
+   */
+  derived: string | null;
   range: Readonly<{
     kind: "number" | "date";
     int: boolean;

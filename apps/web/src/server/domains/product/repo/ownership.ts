@@ -17,6 +17,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
@@ -37,8 +38,11 @@ export type { ProductOwnershipTimeline };
  * not become a sale. Quantity timelines intentionally classify every signed
  * movement instead: a quantified return really did remove a unit.
  */
-export const disposalPurchaseIds = (dbc: DrizzleClient) =>
-  dbc
+// Uncorrelated, so list filters can share it without a client.
+const qb = new QueryBuilder();
+
+export const disposalPurchaseIds = () =>
+  qb
     .select({ id: expense.purchaseId })
     .from(expense)
     .where(
@@ -60,11 +64,11 @@ export const disposalPurchaseIds = (dbc: DrizzleClient) =>
  * a free acquisition. Keep this shared by the canonical Product filter and
  * Problems presenter so selection and card totals cannot drift.
  */
-export const ownershipExitExpensePredicate = (dbc: DrizzleClient): SQL =>
+export const ownershipExitExpensePredicate = (): SQL =>
   or(
     and(
       lt(expense.cost, 0),
-      inArray(expense.purchaseId, disposalPurchaseIds(dbc)),
+      inArray(expense.purchaseId, disposalPurchaseIds()),
     ),
     and(eq(expense.cost, 0), lt(expense.productQuantity, 0)),
   )!;

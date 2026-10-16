@@ -56,7 +56,9 @@ import {
   eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
+  flagCondition,
   formatSearchTerm,
+  householdDayRangeConditions,
   type ListReadIntent,
   presenceCondition,
   rangeConditions,
@@ -118,6 +120,7 @@ const optionalText = z.string().optional();
 const optionalNumber = z.number().optional();
 const optionalDate = z.string().optional();
 const optionalBoolean = z.boolean().optional();
+const rangeBound = z.union([z.string(), z.number()]).optional();
 const optionalTextList = z
   .union([z.string(), z.array(z.string())])
   .optional()
@@ -135,10 +138,10 @@ interface StoredDescriptorView {
   readonly nullable: Readonly<{ field: string }> | null;
   readonly match: Readonly<{ field: string }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
-  readonly derived: boolean;
+  readonly derived: string | null;
   readonly wire:
     | Readonly<{ kind: "param"; name: string }>
-    | Readonly<{ kind: "range"; from: string; to: string }>;
+    | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
 }
 
 /** A stored column resolved to its table column and declared storage facts. */
@@ -295,11 +298,86 @@ const subtreeToggle = (
     : optionalBoolean.parse(values[toggle]) !== false;
 };
 
-/** The request keys a descriptor's predicate reads: a range its compiled bounds. */
-const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] =>
-  descriptor.wire.kind === "range"
-    ? [descriptor.wire.from, descriptor.wire.to]
-    : [descriptor.field ?? descriptor.columnId];
+/**
+ * The request keys a descriptor's predicate reads: its value (a range its
+ * bounds and presence) and its Any value / No value and Match all keys.
+ */
+const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
+  ...(descriptor.wire.kind === "range"
+    ? [
+        descriptor.wire.from,
+        descriptor.wire.to,
+        ...(descriptor.wire.presence ? [descriptor.wire.presence] : []),
+      ]
+    : [descriptor.wire.name]),
+  ...(descriptor.nullable ? [descriptor.nullable.field] : []),
+  ...(descriptor.match ? [descriptor.match.field] : []),
+];
+
+/**
+ * Any value / No value over a derived value: a boolean reads true as a value
+ * (an UNKNOWN as none), any other type reads NULL as no value.
+ */
+const valuePresence = (
+  type: string,
+  expression: () => SQL,
+  presence: PresenceFilter,
+): SQL | undefined => {
+  if (presence === undefined) return undefined;
+  const has =
+    type === "boolean"
+      ? sql`COALESCE((${expression()}), false)`
+      : sql`(${expression()}) IS NOT NULL`;
+  return presence === "has" ? has : sql`NOT ${has}`;
+};
+
+/**
+ * The value a declared predicate receives, parsed by its descriptor's kind,
+ * or undefined when the request does not set it.
+ */
+const predicateValue = (
+  descriptor: StoredDescriptorView,
+  values: ListFilterValues,
+  value: unknown,
+  presence: PresenceFilter,
+) => {
+  switch (descriptor.kind) {
+    case "boolean":
+      return optionalBoolean.parse(value);
+    case "text":
+      return optionalText.parse(value)?.trim() || undefined;
+    case "presence":
+      return presenceFilter.parse(value);
+    case "range": {
+      const wire = descriptor.wire;
+      const range =
+        wire.kind === "range"
+          ? {
+              from: rangeBound.parse(values[wire.from]),
+              to: rangeBound.parse(values[wire.to]),
+              presence: wire.presence
+                ? presenceFilter.parse(values[wire.presence])
+                : undefined,
+              param: undefined,
+            }
+          : {
+              from: undefined,
+              to: undefined,
+              presence: undefined,
+              param: optionalText.parse(value),
+            };
+      return Object.values(range).every((part) => part === undefined)
+        ? undefined
+        : range;
+    }
+    default: {
+      const picked = nonEmpty(optionalTextList.parse(value));
+      return picked === undefined && presence === undefined
+        ? undefined
+        : { values: picked ?? [], presence };
+    }
+  }
+};
 
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
 interface DerivedFilterInput {
@@ -315,49 +393,49 @@ interface DerivedFilterInput {
 const derivedFilterPredicates = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
-  descriptor: StoredDescriptorView,
+  descriptor: StoredDescriptorView & { derived: string },
   values: ListFilterValues,
   input: DerivedFilterInput | undefined,
 ): Array<SQL | undefined> => {
   const key = descriptor.field ?? descriptor.columnId;
-  const field = derivedFieldsOf(entity)[descriptor.columnId];
+  const derivedKey = descriptor.derived;
+  const field = derivedFieldsOf(entity)[derivedKey];
   if (field === undefined)
     throw new Error(
-      `${entity}.${descriptor.columnId} is derived but declares no model.derived entry`,
+      `${entity}.${descriptor.columnId} is derived but declares no model.derived.${derivedKey} entry`,
     );
-  const value = values[key];
+  const value =
+    values[descriptor.wire.kind === "param" ? descriptor.wire.name : key];
   const context = input?.context ?? ListContext.empty;
   const derived = input?.derived ?? {};
+  const presence = descriptor.nullable
+    ? presenceFilter.parse(values[descriptor.nullable.field])
+    : undefined;
   if (field.shape === "predicate") {
-    const parsed =
-      field.predicate === "boolean"
-        ? optionalBoolean.parse(value)
-        : field.predicate === "text"
-          ? optionalText.parse(value)?.trim() || undefined
-          : nonEmpty(optionalTextList.parse(value));
+    const parsed = predicateValue(descriptor, values, value, presence);
     if (parsed === undefined) return [];
-    return [
-      derivedPredicateSql(
-        entity,
-        derived,
-        descriptor.columnId,
-        context,
-        parsed,
-      ),
-    ];
+    return [derivedPredicateSql(entity, derived, derivedKey, context, parsed)];
   }
   if (field.shape === "value") {
     const expression = () =>
-      derivedValueSql(entity, derived, descriptor.columnId, context);
+      derivedValueSql(entity, derived, derivedKey, context);
     switch (descriptor.kind) {
       case "text": {
         const term = optionalText.parse(value)?.trim();
         return term ? [formatSearchTerm(expression(), term)] : [];
       }
-      case "boolean": {
-        const flag = optionalBoolean.parse(value);
-        return flag === undefined ? [] : [sql`${expression()} = ${flag}`];
-      }
+      case "boolean":
+        // An UNKNOWN value counts as not met, as `flagCondition` reads it.
+        return [
+          flagCondition(
+            optionalBoolean.parse(value),
+            () => sql`COALESCE((${expression()}), false)`,
+          ),
+        ];
+      case "presence":
+        return [
+          valuePresence(field.type, expression, presenceFilter.parse(value)),
+        ];
       case "range": {
         if (descriptor.wire.kind !== "range")
           throw new Error(
@@ -372,18 +450,28 @@ const derivedFilterPredicates = (
         return [
           low === undefined ? undefined : sql`${expression()} >= ${low}`,
           high === undefined ? undefined : sql`${expression()} <= ${high}`,
+          descriptor.wire.presence === undefined
+            ? undefined
+            : valuePresence(
+                field.type,
+                expression,
+                presenceFilter.parse(values[descriptor.wire.presence]),
+              ),
         ];
       }
       default: {
         const list = optionalTextList.parse(value);
-        return list === undefined || list.length === 0
-          ? []
-          : [
-              sql`${expression()} IN (${sql.join(
-                list.map((item) => sql`${item}`),
-                sql`, `,
-              )})`,
-            ];
+        return [
+          or(
+            list === undefined || list.length === 0
+              ? undefined
+              : sql`${expression()} IN (${sql.join(
+                  list.map((item) => sql`${item}`),
+                  sql`, `,
+                )})`,
+            valuePresence(field.type, expression, presence),
+          ),
+        ];
       }
     }
   }
@@ -395,9 +483,6 @@ const derivedFilterPredicates = (
     );
     return presence === "has" ? exists : sql`NOT ${exists}`;
   };
-  const presence = descriptor.nullable
-    ? presenceFilter.parse(values[descriptor.nullable.field])
-    : undefined;
   const all =
     descriptor.match !== null && matchAll.parse(values[descriptor.match.field]);
   /**
@@ -562,7 +647,12 @@ export function declaredFilterPredicates<Filters extends object>(
         )
       : undefined,
     ...descriptorsFor(entity)
-      .filter((descriptor) => descriptor.derived)
+      .filter(
+        (
+          descriptor,
+        ): descriptor is StoredDescriptorView & { derived: string } =>
+          descriptor.derived !== null,
+      )
       .flatMap((descriptor) =>
         derivedFilterPredicates(
           entity,
@@ -614,21 +704,43 @@ export function declaredFilterPredicates<Filters extends object>(
                 presence,
               ),
             ];
-          case "range":
-            return descriptor.range?.kind === "date"
-              ? dateRange(
-                  first.column,
-                  optionalDate.parse(values[`${key}From`]),
-                  optionalDate.parse(values[`${key}To`]),
-                )
-              : rangeConditions(
+          case "range": {
+            if (descriptor.wire.kind !== "range")
+              throw new Error(
+                `${entity}.${descriptor.columnId} is a stored range without range wire keys`,
+              );
+            const { from, to, presence: presenceKey } = descriptor.wire;
+            const rangePresence =
+              presenceKey === undefined
+                ? undefined
+                : presenceCondition(
+                    first.column,
+                    presenceFilter.parse(values[presenceKey]),
+                  );
+            if (descriptor.range?.kind !== "date")
+              return [
+                ...rangeConditions(
                   first.column,
                   {
-                    [`${key}Min`]: optionalNumber.parse(values[`${key}Min`]),
-                    [`${key}Max`]: optionalNumber.parse(values[`${key}Max`]),
+                    [`${key}Min`]: optionalNumber.parse(values[from]),
+                    [`${key}Max`]: optionalNumber.parse(values[to]),
                   },
                   key,
-                );
+                ),
+                rangePresence,
+              ];
+            const [low, high] = [
+              optionalDate.parse(values[from]),
+              optionalDate.parse(values[to]),
+            ];
+            // A timestamp bounds whole household days; a date compares as is.
+            return [
+              ...(first.kind === "timestamp"
+                ? householdDayRangeConditions(first.column, low, high)
+                : dateRange(first.column, low, high)),
+              rangePresence,
+            ];
+          }
           default:
             throw new Error(
               `${entity}.${descriptor.columnId} cannot derive a ${descriptor.kind} predicate`,
@@ -744,7 +856,7 @@ const listIdsSchema = z
   .object({ ids: z.array(z.string()).optional() })
   .passthrough();
 /** Shared by scaffold lists and repositories with a custom WHERE builder. */
-export const listIdsCondition = (shortcode: AnyColumn, filters: unknown) =>
+const listIdsCondition = (shortcode: AnyColumn, filters: unknown) =>
   shortcodeSetCondition(sql`${shortcode}`, listIdsSchema.parse(filters).ids);
 
 const listNestingCarrier = z
@@ -890,18 +1002,20 @@ export function listScaffold<
     async context<Filters extends object>(
       db: Database | DrizzleTransaction,
       request: ListContextRequest<Filters>,
+      // Data a caller already loaded for a prepare (a Problems sweep's
+      // attention items), used instead of loading it again.
+      seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
     ): Promise<ListContext> {
       const values = listFilterValues.parse(request.filters);
       const filtered = new Set(
-        descriptorsFor(entity)
-          .filter(
-            (descriptor) =>
-              descriptor.derived &&
-              descriptorValueKeys(descriptor).some(
-                (key) => values[key] !== undefined,
-              ),
+        descriptorsFor(entity).flatMap(({ derived, ...descriptor }) =>
+          derived !== null &&
+          descriptorValueKeys({ derived, ...descriptor }).some(
+            (key) => values[key] !== undefined,
           )
-          .map(({ columnId }) => columnId),
+            ? [derived]
+            : [],
+        ),
       );
       const counting = request.readIntent === "count";
       const requested = Object.keys(derivedFields).filter(
@@ -918,11 +1032,14 @@ export function listScaffold<
           return prepare === null ? [] : [prepare];
         }),
       );
+      const seeds = new Map<ListPrepare<unknown>, unknown>(seeded);
       const loaded = await Promise.all(
         [...prepares].map(
           async (prepare): Promise<[ListPrepare<unknown>, unknown]> => [
             prepare,
-            await prepare.load(db, values),
+            seeds.has(prepare)
+              ? seeds.get(prepare)
+              : await prepare.load(db, values),
           ],
         ),
       );
@@ -939,16 +1056,23 @@ export function listScaffold<
       computed: Array<SQL | undefined> = [],
       {
         context = ListContext.empty,
-        readContext = qualityContext,
+        readContext,
       }: { context?: ListContext; readContext?: QualityReadContext } = {},
     ): SQL | undefined {
       return buildSearchConditions(
         table,
         [],
         [
-          ...scaffold.filterPredicates(filters, context),
+          // Only a caller's own read context reaches derived SQL; the
+          // scaffold's quality join alias exists only beside its own FROM.
+          ...scaffold.filterPredicates(filters, context.withRead(readContext)),
           ...(scored
-            ? dataQualityFilterPredicates(scored, table, filters, readContext)
+            ? dataQualityFilterPredicates(
+                scored,
+                table,
+                filters,
+                readContext ?? qualityContext,
+              )
             : []),
           ...auditDateWhereConditions(table, filters),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,

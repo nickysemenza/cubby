@@ -17,12 +17,13 @@ import {
 type Filters = Parameters<typeof inventoryentryList>[1];
 
 /**
- * `locationSubtreeFilter` selects a Location's whole subtree; the older
- * `locationIdFilter` stays exact because the Location detail page lists only
- * what is stocked directly there. Failure modes: the subtree filter returns
- * only direct rows, leaks rows under soft-deleted Locations, duplicates rows
- * for overlapping selections, widens for an unresolved code, or the exact
- * filter starts including descendants.
+ * `locationIdFilter` selects a Location's whole subtree through the generated
+ * `includeSubLocations` toggle (absent is on); `includeSubLocations: false`
+ * keeps it exact, as the Location detail page lists only what is stocked
+ * directly there. Failure modes: the subtree filter returns only direct rows,
+ * leaks rows under soft-deleted Locations, duplicates rows for overlapping
+ * selections, widens for an unresolved code, or the exact filter starts
+ * including descendants.
  */
 describe("inventory list location filters", () => {
   const ctx = withTestDb();
@@ -72,19 +73,24 @@ describe("inventory list location filters", () => {
     const deep = await stockAt("Deep widget", bin);
     const outside = await stockAt("Outside widget", attic);
 
-    const subtree = await listIds({ locationSubtreeFilter: garage.id });
+    const subtree = await listIds({ locationIdFilter: garage.id });
     expect(subtree).toHaveLength(2);
     expect(new Set(subtree)).toEqual(new Set([direct.id, deep.id]));
     expect(subtree).not.toContain(outside.id);
 
     // Overlapping selections do not duplicate rows.
     const overlap = await listIds({
-      locationSubtreeFilter: [garage.id, rack.id],
+      locationIdFilter: [garage.id, rack.id],
     });
     expect(overlap).toHaveLength(2);
 
     // The Location detail page relies on this staying direct-only.
-    expect(await listIds({ locationIdFilter: garage.id })).toEqual([direct.id]);
+    expect(
+      await listIds({
+        locationIdFilter: garage.id,
+        includeSubLocations: false,
+      }),
+    ).toEqual([direct.id]);
   });
 
   it("excludes soft-deleted descendants and matches nothing for a deleted selection", async () => {
@@ -98,7 +104,7 @@ describe("inventory list location filters", () => {
       .set({ deletedAt: new Date() })
       .where(eq(location.id, gone.entityId));
 
-    const ids = await listIds({ locationSubtreeFilter: cellar.id });
+    const ids = await listIds({ locationIdFilter: cellar.id });
     expect(ids).toContain(kept.id);
     expect(ids).not.toContain(lost.id);
 
@@ -106,6 +112,6 @@ describe("inventory list location filters", () => {
       .update(location)
       .set({ deletedAt: new Date() })
       .where(eq(location.id, cellar.entityId));
-    expect(await listIds({ locationSubtreeFilter: cellar.id })).toEqual([]);
+    expect(await listIds({ locationIdFilter: cellar.id })).toEqual([]);
   });
 });

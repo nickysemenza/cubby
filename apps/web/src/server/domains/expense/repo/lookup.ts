@@ -216,16 +216,15 @@ const relativeDateCondition = (
   );
 
 const disposalPurchaseCondition = (
-  db: Database,
   presence: ExpenseFilters["disposalPurchasePresenceFilter"],
 ): SQL | undefined => {
   if (presence === "has") {
-    return inArray(expense.purchaseId, disposalPurchaseIds(getDb(db)));
+    return inArray(expense.purchaseId, disposalPurchaseIds());
   }
   if (presence === "none") {
     return or(
       isNull(expense.purchaseId),
-      notInArray(expense.purchaseId, disposalPurchaseIds(getDb(db))),
+      notInArray(expense.purchaseId, disposalPurchaseIds()),
     );
   }
   return undefined;
@@ -370,7 +369,7 @@ export const buildExpenseWhereClause = async (
     anyOfCondition(filters.costSign, (sign) =>
       sign === "negative" ? lt(expense.cost, 0) : gt(expense.cost, 0),
     ),
-    disposalPurchaseCondition(db, filters.disposalPurchasePresenceFilter),
+    disposalPurchaseCondition(filters.disposalPurchasePresenceFilter),
     // Quantity is nullable evidence, never an inferred one-unit default.
     // Bounds naturally exclude unknown rows; the presence filter is the
     // explicit worklist for those receipts.

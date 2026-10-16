@@ -1,16 +1,12 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQualityStatus } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
   InventoryId,
   LocationId,
-  LocationShortcode,
   ProductId,
-  ProductCategoryShortcode,
-  ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   inventoryDisplayName,
@@ -24,6 +20,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
+import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import {
   and,
   asc,
@@ -36,7 +33,7 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
@@ -45,15 +42,9 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
   amountToColumns,
-  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
-  buildSearchConditions,
-  eqAny,
-  eqAnyRequested,
-  flagCondition,
   getDb,
-  householdDayRangeConditions,
   type ListReadIntent,
   notDeleted,
   relations,
@@ -73,20 +64,14 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
-  dataQualityFilterPredicates,
   dataQualitySortResolver,
   gapCondition,
 } from "~/server/generic/data-quality/repo/sql";
-import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
   ListContext,
   listPrepare,
 } from "~/server/generic/list/repo/field-compiler";
-import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
-import {
-  listIdsCondition,
-  listScaffold,
-} from "~/server/generic/list/repo/list";
+import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   loadListGroup,
@@ -94,11 +79,7 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
-import {
-  lexicalEligibility,
-  lexicalRelevance,
-} from "~/server/generic/search/repo/search-lexical";
-import { resolveFilterIds } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
 
 import {
   inventoryEntryBaseFields,
@@ -222,55 +203,8 @@ const inventoryReader = createEntityReader({
 export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
   inventoryReader.getByShortcode(db, shortcode);
 
-// Effective-owner, ownership, and category-family filters keep their
-// published schema types (`@me` resolves in the kernel before this runs).
-type InventoryValuationStatus =
-  | "valued"
-  | "missing"
-  | "missing_with_priced_product";
-
-type InventoryFilters = Pick<
-  z.output<typeof inventoryFiltersSchema>,
-  | "ownerLedgerPartyId"
-  | "ownershipMode"
-  | "categoryFeatureFilter"
-  | "categoryPresenceFilter"
-  | "includeSubProductCategories"
-> & {
+type InventoryFilters = z.output<typeof inventoryFiltersSchema> & {
   searchQuery?: string;
-  createdFrom?: string;
-  createdTo?: string;
-  updatedFrom?: string;
-  updatedTo?: string;
-  productNameFilter?: string;
-  locationNameFilter?: string;
-  // Public codes, resolved to uuids inside `inventoryentryList` — see
-  // `resolveFilterIds`. A code naming no live row narrows to nothing; it is
-  // not a 404 for the whole list.
-  locationIdFilter?:
-    | LocationShortcode
-    | typeof UNRESOLVABLE_ENTITY_FILTER
-    | (LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
-  // Selected Locations plus their live descendants; `locationIdFilter` stays
-  // exact because the Location detail page lists only direct stock.
-  locationSubtreeFilter?:
-    | LocationShortcode
-    | typeof UNRESOLVABLE_ENTITY_FILTER
-    | (LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
-  productIdFilter?:
-    | ProductShortcode
-    | typeof UNRESOLVABLE_ENTITY_FILTER
-    | (ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
-  manufacturerFilter?: string;
-  categoryFilter?: ProductCategoryShortcode | ProductCategoryShortcode[];
-  verifiedPresenceFilter?: "has" | "none";
-  valuationStatus?: InventoryValuationStatus | InventoryValuationStatus[];
-  verifiedFrom?: string;
-  verifiedTo?: string;
-  placementFilter?: InventoryPlacement | InventoryPlacement[];
-  locationRole?: boolean;
-  dataStatus?: DataQualityStatus | DataQualityStatus[];
-  dataGap?: string | string[];
 };
 
 // One valuation map serves the rows, their sort and filter, and the footer.
@@ -278,8 +212,33 @@ const inventoryValuations = listPrepare((db) =>
   loadLiveInventoryValuations(db),
 );
 
+const ownerFilterCodes = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((value) => (value === undefined ? [] : [value].flat()));
+
+// The ownership resolver runs once per request, only when it filters by owner.
+const effectiveOwners = listPrepare((db, filters) =>
+  inventoryIdsByEffectiveOwner(
+    db,
+    ownerFilterCodes.parse(filters.ownerLedgerPartyId),
+  ),
+);
+
 const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
   derived: {
+    effectiveOwner: effectiveOwners.predicate((ids) =>
+      ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
+    ),
+    categoryFeature: ({ values }) =>
+      categoryFeatureInSql(
+        sql`(SELECT p."categoryId" FROM "Product" p WHERE p."id" = ${inventoryEntry.productId})`,
+        values.flatMap((value) => {
+          const feature = productCategoryFeature.safeParse(value);
+          return feature.success ? [feature.data] : [];
+        }),
+      ),
+    locationRole: gapCondition("inventory", "inventory_unknown_location"),
     valuation: inventoryValuations.value((valuations) =>
       inventoryValuationSql(valuations, inventoryEntry.id),
     ),
@@ -289,7 +248,7 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
       sql`${inventoryEntry.amountValue}`,
     ],
     valuationStatus: inventoryValuations.predicate(
-      (valuations, statuses: readonly string[]) => {
+      (valuations, { values: statuses }) => {
         const valuation = inventoryValuationSql(valuations, inventoryEntry.id);
         return or(
           ...statuses.map((status) =>
@@ -341,13 +300,9 @@ const inventoryListOrderBy = (
  * `{}` — see repo/dashboard.ts.
  *
  * Includes {@link liveProductAndLocation}, the predicate form of the two
- * `INNER JOIN`s below. Folding it in HERE rather than only into the count path
- * is what makes this honest: rows, count, and the valuation aggregate all
+ * `INNER JOIN`s the list reads: rows, count, and the valuation aggregate all
  * narrow the same way, and a caller with no joins gets the same population.
  */
-// Not `inventoryScaffold.where`: the text searches run over the JOINED product and
-// location tables, not this entity's own columns, so no declared stored
-// predicate can express them.
 export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,
@@ -356,78 +311,13 @@ export const buildInventoryWhere = async (
   prepared?: ListContext,
 ) => {
   // Filter-only: dashboard counts and work-queue predicates load valuations
-  // only when a valuation filter asks.
+  // and owners only when a filter asks.
   const context =
     prepared ??
     (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
-  const ownerCodes =
-    filters.ownerLedgerPartyId === undefined
-      ? undefined
-      : [filters.ownerLedgerPartyId].flat();
-  const [locationIds, subtreeLocationIds, productIds, ownedIds] =
-    await Promise.all([
-      resolveFilterIds(db, "location", filters.locationIdFilter),
-      resolveFilterIds(db, "location", filters.locationSubtreeFilter),
-      resolveFilterIds(db, "product", filters.productIdFilter),
-      ownerCodes === undefined
-        ? undefined
-        : inventoryIdsByEffectiveOwner(db, ownerCodes),
-    ]);
-  const categoryFeatures =
-    filters.categoryFeatureFilter === undefined
-      ? undefined
-      : [filters.categoryFeatureFilter].flat();
-
-  return buildSearchConditions(
-    inventoryEntry,
-    [
-      { column: product.name, term: filters.productNameFilter },
-      { column: location.name, term: filters.locationNameFilter },
-      { column: product.manufacturer, term: filters.manufacturerFilter },
-    ],
-    [
-      ...auditDateWhereConditions(inventoryEntry, filters),
-      ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
-      // Stored (`ownershipMode`) and derived (`category`, `valuationStatus`)
-      // filters come from the manifest; this hand-built where must apply them
-      // since it bypasses `inventoryScaffold.where`.
-      ...inventoryScaffold.filterPredicates(filters, context),
-      listIdsCondition(inventoryEntry.shortcode, filters),
-      lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
-      eqAnyRequested(inventoryEntry.locationId, locationIds),
-      subtreeLocationIds === undefined
-        ? undefined
-        : subtreeLocationIds.length === 0
-          ? sql`false`
-          : sql`${inventoryEntry.locationId} IN ${hierarchyDescendantsSql("location", subtreeLocationIds)}`,
-      eqAnyRequested(inventoryEntry.productId, productIds),
-      categoryFeatures === undefined
-        ? undefined
-        : categoryFeatureInSql(sql`${product.categoryId}`, categoryFeatures),
-      ownedIds === undefined
-        ? undefined
-        : ownedIds.length === 0
-          ? sql`false`
-          : inArray(inventoryEntry.id, ownedIds),
-      flagCondition(filters.locationRole, () =>
-        gapCondition("inventory", "inventory_unknown_location"),
-      ),
-      filters.verifiedPresenceFilter === "has"
-        ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`
-        : filters.verifiedPresenceFilter === "none"
-          ? sql`${inventoryEntry.verifiedAt} IS NULL`
-          : undefined,
-      ...householdDayRangeConditions(
-        inventoryEntry.verifiedAt,
-        filters.verifiedFrom,
-        filters.verifiedTo,
-      ),
-      // Any-of; omitted is every placement. The browse list opens on stock
-      // through its declared `initialFilter`, and counts pass it explicitly.
-      eqAny(inventoryEntry.placement, filters.placementFilter),
-      liveProductAndLocation(),
-      ...dataQualityFilterPredicates("inventory", inventoryEntry, filters),
-    ],
+  return and(
+    inventoryScaffold.where(filters, [], { context }),
+    liveProductAndLocation(),
   );
 };
 
@@ -1062,7 +952,5 @@ export const deleteInventoryEntries = (
     ids,
     actor,
   });
-
-import type { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";

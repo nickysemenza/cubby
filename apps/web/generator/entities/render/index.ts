@@ -264,8 +264,14 @@ const renderDerivedFilterFields = (
       case "multiselect":
         needs.oneOrMany = true;
         return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
-      case "range":
-        return derivedRangeEntry(entity, descriptor, name, needs);
+      case "range": {
+        const bounds = derivedRangeEntry(entity, descriptor, name, needs);
+        // A range's declared Any value / No value key rides beside its bounds.
+        if (descriptor.wire.kind !== "range" || !descriptor.wire.presence)
+          return bounds;
+        needs.presence = true;
+        return `${bounds},${JSON.stringify(descriptor.wire.presence)}:presenceFilter`;
+      }
       // The referenced entity's branded shortcode — never the field's
       // read schema, which is nullable for an optional foreign key.
       case "idMulti": {
@@ -298,7 +304,7 @@ const renderDerivedFilterFields = (
       (descriptor) =>
         descriptor.deriveSchema ||
         descriptor.stored !== null ||
-        descriptor.derived,
+        descriptor.derived !== null,
     )
     .flatMap((descriptor) => {
       const label =
@@ -1342,7 +1348,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         ' * "Include sub-…" toggle; `fieldGroup` holds group rejections for\n' +
         " * multi-valued model fields.\n" +
         " */\n" +
-        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "boolean"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
+        'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string };\n\n' +
         renderRecord({
           name: "generatedEntityListFields",
           entries: Object.fromEntries(
@@ -1442,7 +1448,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; derived: string | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null; match: { field: string } | null; subtree: string | null; currentMember: boolean; singleValue: string | null; sentinels: readonly { value: string; label: string }[] | null;\n" +
         '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +

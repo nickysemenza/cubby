@@ -47,7 +47,13 @@ type CompiledListField =
     }>
   | Readonly<{
       shape: "predicate";
-      predicate: "text" | "multiselect" | "boolean";
+      predicate:
+        | "text"
+        | "multiselect"
+        | "idMulti"
+        | "boolean"
+        | "presence"
+        | "range";
       options: readonly string[] | null;
       reason: string;
       sort: string;
@@ -157,12 +163,13 @@ const compatibleKinds = (
   switch (field.shape) {
     case "predicate":
       return [field.predicate];
+    // Any value reads presence: a boolean as true, any other as non-NULL.
     case "value":
       return field.type === "number" || field.type === "date"
-        ? ["range"]
+        ? ["range", "presence"]
         : field.type === "boolean"
-          ? ["boolean"]
-          : ["text", "multiselect"];
+          ? ["boolean", "presence"]
+          : ["text", "multiselect", "presence"];
     case "via":
       return field.terminal.kind === "record"
         ? ["idMulti", "text", "presence"]
@@ -193,7 +200,7 @@ const toggleDescriptor = (
     expandRef: null,
     schemaRef: null,
     stored: null,
-    derived: false,
+    derived: null,
     range: null,
     urlOnly: parent.urlOnly,
     nullable: null,
@@ -216,7 +223,8 @@ const withViaKeys = (
   derived: Readonly<Record<string, CompiledListField>>,
   context: string,
 ): FilterDescriptor => {
-  const bound = descriptor.derived ? derived[descriptor.columnId] : undefined;
+  const bound =
+    descriptor.derived === null ? undefined : derived[descriptor.derived];
   if (
     bound?.shape !== "via" ||
     (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
@@ -300,12 +308,11 @@ export const compileListFields = (
     for (const declared of entity.filterDescriptors) {
       const descriptor = withViaKeys(declared, derived, context);
       compiled.push(descriptor);
-      const bound = descriptor.derived
-        ? derived[descriptor.columnId]
-        : undefined;
-      if (descriptor.derived && bound === undefined)
+      const bound =
+        descriptor.derived === null ? undefined : derived[descriptor.derived];
+      if (descriptor.derived !== null && bound === undefined)
         throw new EntityDeclarationError(
-          `${context}.filters ${descriptor.columnId} is derived but names no model.derived entry.`,
+          `${context}.filters ${descriptor.columnId} is derived but names no model.derived entry ${descriptor.derived}.`,
         );
       if (
         bound !== undefined &&

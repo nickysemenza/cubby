@@ -26,10 +26,11 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import type {
-  PaginationParams,
-  ListGroupSummary,
-  SortParams,
+import {
+  type PaginationParams,
+  type ListGroupSummary,
+  presenceFilter,
+  type SortParams,
 } from "@cubby/schemas/pagination";
 import type {
   ProductBulkStockTrackedInput,
@@ -42,7 +43,11 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import {
+  productCategoryFeature,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
+import { taskStatusSchema } from "@cubby/schemas/project";
 import { formatCategoryLabel, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -50,15 +55,15 @@ import {
   eq,
   inArray,
   isNotNull,
-  isNull,
   ne,
   or,
   sql,
   sum,
   type SQL,
 } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy, uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
@@ -72,6 +77,7 @@ import {
 import {
   categorySummarySql,
   categoryStockTrackingSql,
+  categoryFeatureInSql,
   categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
@@ -80,7 +86,6 @@ import {
   assertNoDependents,
   associatePendingImages,
   countWhere,
-  flagCondition,
   formatSearchTerm,
   getDb,
   idSetPresence,
@@ -90,9 +95,7 @@ import {
   mapImages,
   notDeleted,
   presenceCondition,
-  rangeConditions,
   relations,
-  shortcodeSetCondition,
   textArrayMatches,
   updateLiveAndReturn,
   withTransaction,
@@ -164,6 +167,10 @@ import {
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
+import {
+  listPrepare,
+  listReadValue,
+} from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -253,6 +260,143 @@ import {
   syncProductUnitMappings,
 } from "./update-helpers";
 
+const qb = new QueryBuilder();
+
+const ownerFilterCodes = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((value) => (value === undefined ? [] : [value].flat()));
+
+// The ownership resolver runs once per request, only when it filters by owner.
+const ownedProducts = listPrepare((db, filters) =>
+  productIdsByOwner(
+    db,
+    ownerFilterCodes.parse(filters.ownerLedgerPartyId),
+    presenceFilter.parse(filters.ownerPresenceFilter),
+  ),
+);
+
+// Cross-entity filters stay uncorrelated id-set subqueries.
+const productIdsWithLiveInventory = qb
+  .select({ productId: inventoryEntry.productId })
+  .from(inventoryEntry)
+  .innerJoin(
+    location,
+    and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+  )
+  .where(notDeleted(inventoryEntry));
+
+// Products a Location IS an instance of. `onHandUnitsSql` counts them, so the
+// variance gate unions them with live inventory.
+const productIdsServingAsLocations = qb
+  .select({ productId: location.productId })
+  .from(location)
+  .where(and(notDeleted(location), isNotNull(location.productId)));
+
+const productIdsWithExpenses = qb
+  .select({ productId: expense.productId })
+  .from(expense)
+  .where(and(notDeleted(expense), isNotNull(expense.productId)));
+
+// Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
+const partsAccountedKitsSql = sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
+       FROM "EntityLink" kac
+       JOIN "Product" kac_p
+         ON kac_p."id" = kac."toEntityId" AND kac_p."deletedAt" IS NULL
+      WHERE kac."fromEntityId" = ${product.id}
+        AND kac."deletedAt" IS NULL AND kac."kind" = 'productComponent')`;
+
+// The entity-list form of the sold-but-still-stocked diagnostic. The quantity
+// ledger remains the authority for expected quantity and unknown acquisition
+// lines; the shared exit predicate keeps ordinary refunds/adjustments from
+// reading as an ownership exit while including $0 hand-entered discards.
+const productIdsWithRecordedDisposal = qb
+  .select({ productId: expense.productId })
+  .from(expense)
+  .where(
+    and(
+      notDeleted(expense),
+      eq(expense.future, false),
+      isNotNull(expense.productId),
+      ownershipExitExpensePredicate(),
+    ),
+  );
+
+const productIdsWithConversionCoverage = (condition: SQL) =>
+  inArray(
+    product.id,
+    qb
+      .select({ id: productConversionCoverage.productId })
+      .from(productConversionCoverage)
+      .where(and(currentProductConversionCoverageCondition(), condition)),
+  );
+
+// Mirrors `foodLookupParamFromProduct` returning a key (an explicit fdc_id or
+// a barcode to auto-match), or a label nutrition override, which supersedes
+// the USDA lookup outright. SQL cannot know whether the USDA worker resolves a
+// food for that key, which is why the filter is labelled "USDA key".
+const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelNutrition} IS NOT NULL OR EXISTS (
+    SELECT 1 FROM "EntityExternalId" pei
+    WHERE pei."entityId" = ${product.id}
+      AND pei."source" = ${GTIN_SOURCE}
+      AND pei."deletedAt" IS NULL))`;
+
+const productTaskKeys = z.object({
+  // An empty list is no status filter, as the compiler reads it.
+  taskStatusFilter: z
+    .union([taskStatusSchema, z.array(taskStatusSchema)])
+    .optional()
+    .catch(undefined)
+    .transform((value) => (value === undefined ? [] : [value].flat())),
+  taskOpenOnly: z.boolean().optional().catch(undefined),
+  taskDueFrom: z.string().optional().catch(undefined),
+  taskDueTo: z.string().optional().catch(undefined),
+});
+
+// Status, open, and due constrain ONE task. Each key's predicate reads all
+// three from the request, and only the first present key renders the subquery.
+const productTasks = listPrepare(async (_db, filters) =>
+  productTaskKeys.parse(filters),
+);
+
+/** Products with a live task, whose effective subject is the product, matching every task key. */
+const productHasTask = ({
+  taskStatusFilter,
+  taskOpenOnly,
+  taskDueFrom,
+  taskDueTo,
+}: z.output<typeof productTaskKeys>) => {
+  if (
+    taskStatusFilter.length === 0 &&
+    !taskOpenOnly &&
+    taskDueFrom === undefined &&
+    taskDueTo === undefined
+  )
+    return undefined;
+  return inArray(
+    product.id,
+    qb
+      .select({ productId: effectiveTaskSubjectProductSql() })
+      .from(task)
+      .where(
+        and(
+          notDeleted(task),
+          isNotNull(effectiveTaskSubjectProductSql()),
+          taskStatusFilter.length > 0
+            ? inArray(task.status, taskStatusFilter)
+            : undefined,
+          taskOpenOnly ? ne(task.status, "done") : undefined,
+          taskDueFrom === undefined
+            ? undefined
+            : sql`${task.dueDate} >= ${taskDueFrom}`,
+          taskDueTo === undefined
+            ? undefined
+            : sql`${task.dueDate} <= ${taskDueTo}`,
+        ),
+      ),
+  );
+};
+
 const productScaffold = listScaffold("product", product, {
   derived: {
     location: sql.raw(
@@ -276,6 +420,156 @@ const productScaffold = listScaffold("product", product, {
     quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
+    upcPresence: inArray(
+      product.id,
+      qb
+        .select({ productId: entityExternalId.entityId })
+        .from(entityExternalId)
+        .where(
+          and(
+            notDeleted(entityExternalId),
+            eq(entityExternalId.source, GTIN_SOURCE),
+          ),
+        ),
+    ),
+    usdaKey: productHasUsdaKey,
+    // The shared displayable-image definition: what the thumbnail cell renders.
+    image: productHasDisplayableImageSql(product.id),
+    inventoryMultiplicity: sql`(${eq(product.expectedQuantity, 1)} AND ${inArray(
+      product.id,
+      qb
+        .select({ productId: inventoryEntry.productId })
+        .from(inventoryEntry)
+        .innerJoin(
+          location,
+          and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+        )
+        .where(notDeleted(inventoryEntry))
+        .groupBy(inventoryEntry.productId, inventoryEntry.placement)
+        .having(sql`count(*) > 1`),
+    )})`,
+    kitAccounting: listReadValue((read) => {
+      const onHand = onHandUnitsFilterSql(product.id, read);
+      return sql`(${onHand} > 0 AND ${partsAccountedKitsSql} > 0
+        AND ${onHand} + ${partsAccountedKitsSql} > ${expectedQuantityFilterSql(product.id)})`;
+    }),
+    ownershipReconciliation: listReadValue(
+      (read) => sql`(${inArray(product.id, productIdsWithRecordedDisposal)}
+        AND ${onHandUnitsFilterSql(product.id, read)} > 0
+        AND ${expectedQuantityFilterSql(product.id)} <= 0
+        AND NOT ${hasUnknownAcquisitionLinesSql(product.id)})`,
+    ),
+    conversionCoverage: productIdsWithConversionCoverage(
+      eq(productConversionCoverage.coverageTier, "partial"),
+    ),
+    conversionTopology: productIdsWithConversionCoverage(
+      sql`${productConversionCoverage.islandCount} >= 2`,
+    ),
+    unitMappingQuality: inArray(
+      product.id,
+      qb
+        .select({ productId: productUnitMappings.productId })
+        .from(productUnitMappings)
+        .where(notDeleted(productUnitMappings)),
+    ),
+    // ADR 0013: the undecided worklist reads the effective decision, so a
+    // category default takes its members out of it.
+    stockTrackedDecided: sql`${productStockTrackedSql(
+      sql`${product.stockTracked}`,
+      sql`${product.categoryId}`,
+    )} IS NOT NULL`,
+    miscBucket: sql`lower(${product.name}) LIKE 'misc:%'`,
+    unknownQuantityLines: hasUnknownQuantityLinesSql(product.id),
+    priced: listReadValue(
+      (read) =>
+        sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
+    ),
+    anyGtin: (term) => productMatchesGtinTerm(term),
+    effectiveOwner: ownedProducts.predicate((ids) =>
+      ids.length === 0 ? sql`false` : inArray(product.id, ids),
+    ),
+    categoryFeature: ({ values, presence }) =>
+      or(
+        values.length === 0
+          ? undefined
+          : categoryFeatureInSql(
+              sql`${product.categoryId}`,
+              values.flatMap((value) => {
+                const feature = productCategoryFeature.safeParse(value);
+                return feature.success ? [feature.data] : [];
+              }),
+            ),
+        presenceCondition(product.categoryId, presence),
+      ),
+    externalIdSource: ({ values, presence }) =>
+      or(
+        values.length === 0
+          ? undefined
+          : inArray(
+              product.id,
+              qb
+                .select({ productId: entityExternalId.entityId })
+                .from(entityExternalId)
+                .where(
+                  and(
+                    notDeleted(entityExternalId),
+                    inArray(entityExternalId.source, [...values]),
+                  ),
+                ),
+            ),
+        idSetPresence(
+          product.id,
+          presence,
+          qb
+            .select({ productId: entityExternalId.entityId })
+            .from(entityExternalId)
+            .where(notDeleted(entityExternalId)),
+        ),
+      ),
+    expectedQuantityRange: ({ from, to }) =>
+      from === undefined && to === undefined
+        ? undefined
+        : inArray(
+            product.id,
+            sql`(SELECT quantity_range."productId" FROM (${expectedQuantityReadSql()}) quantity_range
+          WHERE ${and(
+            from === undefined
+              ? undefined
+              : sql`quantity_range."expectedQuantity" >= ${from}`,
+            to === undefined
+              ? undefined
+              : sql`quantity_range."expectedQuantity" <= ${to}`,
+          )})`,
+          ),
+    // Variance only means reconciliation when both physical stock and ledger
+    // evidence exist. Locations count as on-hand here because the compared SQL
+    // projection counts them too.
+    quantityVarianceState: ({ param }, read) => {
+      if (param !== "mismatched" && param !== "matched") return undefined;
+      const onHand = onHandUnitsFilterSql(product.id, read);
+      const expected = expectedQuantityFilterSql(product.id);
+      return and(
+        or(
+          inArray(product.id, productIdsWithLiveInventory),
+          inArray(product.id, productIdsServingAsLocations),
+        ),
+        inArray(product.id, productIdsWithExpenses),
+        comparableQuantityHistoryFilterSql(product.id),
+        param === "mismatched"
+          ? sql`${onHand} <> ${expected}`
+          : sql`${onHand} = ${expected}`,
+      );
+    },
+    taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
+    taskOpen: productTasks.predicate((keys) =>
+      keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,
+    ),
+    // Presence is the related view's `taskPresenceFilter`.
+    taskDue: productTasks.predicate((keys) =>
+      keys.taskStatusFilter.length === 0 && !keys.taskOpenOnly
+        ? productHasTask(keys)
+        : undefined,
+    ),
   },
 });
 
@@ -591,483 +885,34 @@ export const getProductsByShortcodes = async (
   );
 };
 
-const categoryFilterCondition = async (
-  db: Database,
-  filters: ProductListFilters,
-) =>
-  filters.categoryFilter?.length || filters.categoryFeatureFilter?.length
-    ? or(
-        filters.categoryFilter?.length
-          ? sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
-          : undefined,
-        ...(filters.categoryFeatureFilter
-          ? (Array.isArray(filters.categoryFeatureFilter)
-              ? filters.categoryFeatureFilter
-              : [filters.categoryFeatureFilter]
-            ).map((feature) =>
-              categoryFeatureSql(sql`${product.categoryId}`, feature),
-            )
-          : []),
-        filters.categoryPresenceFilter === "none"
-          ? isNull(product.categoryId)
-          : undefined,
-      )
-    : presenceCondition(product.categoryId, filters.categoryPresenceFilter);
-
 /**
  * The complete WHERE for a product list. `getEntityCounts` calls it with `{}`
  * — see repo/dashboard.ts.
  */
 type ProductListFilters = ProductFilters & { ids?: readonly string[] };
 
-export const buildProductWhere = async (
+/** The list WHERE and the context it prepared, which the page read reuses. */
+const productWhere = async (
   db: Database,
   filters: ProductListFilters,
   readContext?: QualityReadContext,
 ) => {
-  const dbClient = getDb(db);
-
-  const requestedLocationCodes = filters.locationIdFilter
-    ? [filters.locationIdFilter].flat()
-    : [];
-  const requestedIngredientCodes = filters.ingredientIdFilter
-    ? [filters.ingredientIdFilter].flat()
-    : [];
-  const requestedGrowsPlantCodes = filters.growsPlantIdFilter
-    ? [filters.growsPlantIdFilter].flat()
-    : [];
-  const [
-    selectedLocationIds,
-    selectedIngredientIds,
-    selectedGrowsPlantIds,
-    ownedProductIds,
-  ] = await Promise.all([
-    resolveAllPresent(db, "location", requestedLocationCodes),
-    resolveAllPresent(db, "ingredient", requestedIngredientCodes),
-    resolveAllPresent(db, "plant", requestedGrowsPlantCodes),
-    filters.ownerLedgerPartyId === undefined &&
-    filters.ownerPresenceFilter === undefined
-      ? undefined
-      : productIdsByOwner(
-          db,
-          filters.ownerLedgerPartyId === undefined
-            ? []
-            : [filters.ownerLedgerPartyId].flat(),
-          filters.ownerPresenceFilter,
-        ),
-  ]);
-
-  // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
-  const productIdsWithLiveInventory = dbClient
-    .select({ productId: inventoryEntry.productId })
-    .from(inventoryEntry)
-    .innerJoin(
-      location,
-      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
-    )
-    .where(notDeleted(inventoryEntry));
-
-  const productIdsWithDuplicatePlacement = dbClient
-    .select({ productId: inventoryEntry.productId })
-    .from(inventoryEntry)
-    .innerJoin(
-      location,
-      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
-    )
-    .where(notDeleted(inventoryEntry))
-    .groupBy(inventoryEntry.productId, inventoryEntry.placement)
-    .having(sql`count(*) > 1`);
-
-  // Products a Location IS an instance of. Deliberately NOT folded into
-  // `productIdsWithLiveInventory`: that set backs the `location` column's
-  // presence filter, and the column renders `inventoryEntry` rows, so widening
-  // it would make the filter and the cell disagree — a shelf-less bin would
-  // read "has inventory" over an empty cell. `onHandUnitsSql` counts both, so
-  // the variance gate below unions them explicitly instead.
-  const productIdsServingAsLocations = dbClient
-    .select({ productId: location.productId })
-    .from(location)
-    .where(and(notDeleted(location), isNotNull(location.productId)));
-
-  const productIdsAtSelectedLocations = dbClient
-    .select({ productId: inventoryEntry.productId })
-    .from(inventoryEntry)
-    .innerJoin(
-      location,
-      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
-    )
-    .where(
-      and(
-        notDeleted(inventoryEntry),
-        selectedLocationIds.length > 0
-          ? sql`${inventoryEntry.locationId} IN ${hierarchyDescendantsSql("location", selectedLocationIds)}`
-          : sql`false`,
-      ),
-    );
-
-  const productIdsWithExpenses = dbClient
-    .select({ productId: expense.productId })
-    .from(expense)
-    .where(and(notDeleted(expense), isNotNull(expense.productId)));
-
-  const taskStatuses = filters.taskStatusFilter
-    ? [filters.taskStatusFilter].flat()
-    : undefined;
-  const taskFilterActive = Boolean(
-    taskStatuses?.length ||
-    filters.taskOpenOnly ||
-    filters.taskDueFrom ||
-    filters.taskDueTo,
-  );
-  const productIdsWithFilteredTasks = dbClient
-    .select({ productId: effectiveTaskSubjectProductSql() })
-    .from(task)
-    .where(
-      and(
-        notDeleted(task),
-        isNotNull(effectiveTaskSubjectProductSql()),
-        taskStatuses?.length ? inArray(task.status, taskStatuses) : undefined,
-        filters.taskOpenOnly ? ne(task.status, "done") : undefined,
-        filters.taskDueFrom
-          ? sql`${task.dueDate} >= ${filters.taskDueFrom}`
-          : undefined,
-        filters.taskDueTo
-          ? sql`${task.dueDate} <= ${filters.taskDueTo}`
-          : undefined,
-      ),
-    );
-
-  const productIdsWithUnitMappings = dbClient
-    .select({ productId: productUnitMappings.productId })
-    .from(productUnitMappings)
-    .where(notDeleted(productUnitMappings));
-
-  // Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
-  const partsAccountedKitsSql = (productId: PgColumn) =>
-    sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
-           FROM "EntityLink" kac
-           JOIN "Product" kac_p
-             ON kac_p."id" = kac."toEntityId" AND kac_p."deletedAt" IS NULL
-          WHERE kac."fromEntityId" = ${productId}
-            AND kac."deletedAt" IS NULL AND kac."kind" = 'productComponent')`;
-
-  const productIdsWithComponents = dbClient
-    .select({ productId: entityLink.fromEntityId })
-    .from(entityLink)
-    .where(liveLinks("productComponent"));
-
-  // This is the entity-list form of the sold-but-still-stocked diagnostic.
-  // The quantity ledger remains the authority for expected quantity and unknown
-  // acquisition lines; the shared exit predicate prevents ordinary
-  // refunds/adjustments from reading as an ownership exit while including $0
-  // hand-entered discards.
-  const productIdsWithRecordedDisposal = dbClient
-    .select({ productId: expense.productId })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        isNotNull(expense.productId),
-        ownershipExitExpensePredicate(dbClient),
-      ),
-    );
-
-  const externalSources = filters.externalIdSource
-    ? [filters.externalIdSource].flat()
-    : undefined;
-  const productIdsWithExternalIds = dbClient
-    .select({ productId: entityExternalId.entityId })
-    .from(entityExternalId)
-    .where(
-      and(
-        notDeleted(entityExternalId),
-        externalSources && externalSources.length > 0
-          ? inArray(entityExternalId.source, externalSources)
-          : undefined,
-      ),
-    );
-
-  const gtinRows = dbClient
-    .select({ productId: entityExternalId.entityId })
-    .from(entityExternalId)
-    .where(
-      and(
-        notDeleted(entityExternalId),
-        eq(entityExternalId.source, GTIN_SOURCE),
-      ),
-    );
-  const productIdsWithGtin = gtinRows;
-
-  // Mirrors `foodLookupParamFromProduct` returning null (no explicit fdc_id AND
-  // no barcode to auto-match) OR'd with "no label nutrition override" — a
-  // label supersedes the USDA lookup outright, so a labelled product counts as
-  // present even with neither key. This is the closest pure-SQL predicate — it
-  // cannot know whether the USDA worker resolves a food for that key, which is
-  // why the filter is labelled "USDA key". Passed as `presenceCondition`'s
-  // `emptyWhen` so "has" is derived as not(this) and the two branches can't
-  // drift.
-  // The outer parens are load-bearing, same as TAGS_ARE_EMPTY in recipe/crud.ts:
-  // `presenceCondition` derives "has" as `not(this)`, and drizzle's `not()`
-  // doesn't add its own. Unparenthesized, `NOT a IS NULL AND NOT EXISTS ...`
-  // binds as `(NOT a IS NULL) AND (NOT EXISTS ...)` — i.e. "has fdc_id AND has
-  // no barcode", which silently drops every barcode-only product from "has".
-  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.labelNutrition} IS NULL AND NOT EXISTS (
-    SELECT 1 FROM "EntityExternalId" pei
-    WHERE pei."entityId" = ${product.id}
-      AND pei."source" = ${GTIN_SOURCE}
-      AND pei."deletedAt" IS NULL))`;
-
-  const classificationConditions = () => [
-    requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
-      ? sql`false`
-      : or(
-          selectedIngredientIds.length > 0
-            ? inArray(product.ingredientId, selectedIngredientIds)
-            : undefined,
-          presenceCondition(
-            product.ingredientId,
-            filters.ingredientPresenceFilter,
-          ),
-        ),
-    requestedGrowsPlantCodes.length > 0 && selectedGrowsPlantIds.length === 0
-      ? sql`false`
-      : selectedGrowsPlantIds.length > 0
-        ? inArray(product.growsPlantId, selectedGrowsPlantIds)
-        : undefined,
-    requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
-      ? sql`false`
-      : or(
-          selectedLocationIds.length > 0
-            ? inArray(product.id, productIdsAtSelectedLocations)
-            : undefined,
-          idSetPresence(
-            product.id,
-            filters.inventoryPresenceFilter,
-            productIdsWithLiveInventory,
-          ),
-        ),
-    idSetPresence(
-      product.id,
-      filters.servingAsLocationPresenceFilter,
-      productIdsServingAsLocations,
-    ),
-    flagCondition(filters.inventoryMultiplicity, () =>
-      and(
-        eq(product.expectedQuantity, 1),
-        inArray(product.id, productIdsWithDuplicatePlacement),
-      ),
-    ),
-  ];
-
-  const inventoryConditions = () => [
-    flagCondition(filters.kitAccounting, () =>
-      and(
-        sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
-        sql`${partsAccountedKitsSql(product.id)} > 0`,
-        sql`${onHandUnitsFilterSql(product.id, readContext)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
-      ),
-    ),
-    flagCondition(filters.ownershipReconciliation, () =>
-      and(
-        inArray(product.id, productIdsWithRecordedDisposal),
-        sql`${onHandUnitsFilterSql(product.id, readContext)} > 0`,
-        sql`${expectedQuantityFilterSql(product.id)} <= 0`,
-        sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
-      ),
-    ),
-    flagCondition(filters.conversionCoverage, () =>
-      inArray(
-        product.id,
-        dbClient
-          .select({ id: productConversionCoverage.productId })
-          .from(productConversionCoverage)
-          .where(
-            and(
-              currentProductConversionCoverageCondition(),
-              eq(productConversionCoverage.coverageTier, "partial"),
-            ),
-          ),
-      ),
-    ),
-    flagCondition(filters.conversionTopology, () =>
-      inArray(
-        product.id,
-        dbClient
-          .select({ id: productConversionCoverage.productId })
-          .from(productConversionCoverage)
-          .where(
-            and(
-              currentProductConversionCoverageCondition(),
-              sql`${productConversionCoverage.islandCount} >= 2`,
-            ),
-          ),
-      ),
-    ),
-    ...rangeConditions(
-      productExpenseCountFilterSql(product.id),
-      filters,
-      "expenseCount",
-    ),
-    ...rangeConditions(
-      productExpenseTotalFilterSql(product.id),
-      filters,
-      "expenseTotal",
-    ),
-    filters.expectedQuantityMin !== undefined ||
-    filters.expectedQuantityMax !== undefined
-      ? inArray(
-          product.id,
-          sql`(SELECT quantity_range."productId" FROM (${expectedQuantityReadSql()}) quantity_range
-          WHERE ${and(...rangeConditions(sql`quantity_range."expectedQuantity"`, filters, "expectedQuantity"))})`,
-        )
-      : undefined,
-    // Variance only means reconciliation when both physical stock and ledger
-    // evidence exist. Locations count as on-hand here because the compared SQL
-    // projection counts them too.
-    filters.quantityVarianceFilter !== undefined
-      ? and(
-          or(
-            inArray(product.id, productIdsWithLiveInventory),
-            inArray(product.id, productIdsServingAsLocations),
-          ),
-          inArray(product.id, productIdsWithExpenses),
-          comparableQuantityHistoryFilterSql(product.id),
-          filters.quantityVarianceFilter === "mismatched"
-            ? sql`${onHandUnitsFilterSql(product.id, readContext)} <> ${expectedQuantityFilterSql(product.id)}`
-            : sql`${onHandUnitsFilterSql(product.id, readContext)} = ${expectedQuantityFilterSql(product.id)}`,
-        )
-      : undefined,
-  ];
-
-  const ledgerConditions = () => [
-    filters.unknownQuantityLinesFilter === "has"
-      ? hasUnknownQuantityLinesSql(product.id)
-      : filters.unknownQuantityLinesFilter === "none"
-        ? sql`NOT ${hasUnknownQuantityLinesSql(product.id)}`
-        : undefined,
-    idSetPresence(
-      product.id,
-      filters.expensePresenceFilter,
-      productIdsWithExpenses,
-    ),
-    // The cell renders acquisition date, not generic Purchase presence; keep
-    // this predicate on the exact same derived projection.
-    filters.purchaseDatePresenceFilter === "has"
-      ? isNotNull(productAcquisitionDateFilterSql(product.id))
-      : filters.purchaseDatePresenceFilter === "none"
-        ? isNull(productAcquisitionDateFilterSql(product.id))
-        : undefined,
-    taskFilterActive
-      ? inArray(product.id, productIdsWithFilteredTasks)
-      : undefined,
-    filters.purchaseDateFrom
-      ? sql`${productAcquisitionDateFilterSql(product.id)} >= ${filters.purchaseDateFrom}`
-      : undefined,
-    filters.purchaseDateTo
-      ? sql`${productAcquisitionDateFilterSql(product.id)} <= ${filters.purchaseDateTo}`
-      : undefined,
-  ];
-
-  const associationConditions = () => [
-    ownedProductIds === undefined
-      ? undefined
-      : ownedProductIds.length === 0
-        ? sql`false`
-        : inArray(product.id, ownedProductIds),
-    // The shared displayable-image definition: what the thumbnail cell renders.
-    filters.imagePresenceFilter === "has"
-      ? productHasDisplayableImageSql(product.id)
-      : filters.imagePresenceFilter === "none"
-        ? sql`NOT ${productHasDisplayableImageSql(product.id)}`
-        : undefined,
-    filters.kitId === undefined
-      ? undefined
-      : sql`EXISTS (
-          SELECT 1
-          FROM "EntityLink" kit_pc
-          JOIN "Product" kit ON kit."id" = kit_pc."fromEntityId" AND kit."deletedAt" IS NULL
-          WHERE kit_pc."toEntityId" = ${product.id}
-            AND kit_pc."deletedAt" IS NULL AND kit_pc."kind" = 'productComponent'
-            AND ${shortcodeSetCondition(sql`kit."shortcode"`, filters.kitId)})`,
-    filters.componentId === undefined
-      ? undefined
-      : sql`EXISTS (
-          SELECT 1
-          FROM "EntityLink" component_pc
-          JOIN "Product" component ON component."id" = component_pc."toEntityId" AND component."deletedAt" IS NULL
-          WHERE component_pc."fromEntityId" = ${product.id}
-            AND component_pc."deletedAt" IS NULL AND component_pc."kind" = 'productComponent'
-            AND ${shortcodeSetCondition(sql`component."shortcode"`, filters.componentId)})`,
-    idSetPresence(
-      product.id,
-      filters.unitMappingPresenceFilter,
-      productIdsWithUnitMappings,
-    ),
-    idSetPresence(
-      product.id,
-      filters.componentPresenceFilter,
-      productIdsWithComponents,
-    ),
-    filters.miscBucketFilter === "has"
-      ? sql`lower(${product.name}) LIKE 'misc:%'`
-      : filters.miscBucketFilter === "none"
-        ? sql`lower(${product.name}) NOT LIKE 'misc:%'`
-        : undefined,
-    idSetPresence(
-      product.id,
-      filters.externalIdPresenceFilter ??
-        (externalSources && externalSources.length > 0 ? "has" : undefined),
-      productIdsWithExternalIds,
-    ),
-    idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
-    filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
-  ];
-
-  const effectiveStockTracked = productStockTrackedSql(
-    sql`${product.stockTracked}`,
-    sql`${product.categoryId}`,
-  );
-  const qualityConditions = () => [
-    presenceCondition(product.fdc_id, filters.usdaPresenceFilter, NO_USDA_KEY),
-    // ADR 0013: the undecided worklist reads the effective decision, so a
-    // category default takes its members out of it.
-    presenceCondition(
-      product.stockTracked,
-      filters.stockTrackedPresenceFilter,
-      sql`${effectiveStockTracked} IS NULL`,
-    ),
-    filters.pricePresenceFilter === "none"
-      ? and(
-          isNull(product.price),
-          sql`NOT (${hasDerivedProductPriceSql(product.id, readContext)})`,
-        )
-      : filters.pricePresenceFilter === "has"
-        ? or(
-            isNotNull(product.price),
-            hasDerivedProductPriceSql(product.id, readContext),
-          )
-        : undefined,
-  ];
-
-  // name/model/notes/manufacturerFilter (text), category (multiselect +
-  // presence), manufacturerExact (multiselect), tags (overlap + presence) and
-  // the model/notes presence filters are declared stored filters — applied by
-  // `productScaffold.where` before the conditions below.
-  const whereClause = productScaffold.where(
+  // Filter-only: owners resolve only when a filter asks.
+  const context = await productScaffold.context(db, {
     filters,
-    [
-      await categoryFilterCondition(db, filters),
-      ...classificationConditions(),
-      ...inventoryConditions(),
-      ...ledgerConditions(),
-      ...associationConditions(),
-      ...qualityConditions(),
-    ],
-    { readContext },
-  );
-  return whereClause;
+    readIntent: "count",
+  });
+  return {
+    where: productScaffold.where(filters, [], { context, readContext }),
+    context,
+  };
 };
+
+export const buildProductWhere = async (
+  db: Database,
+  filters: ProductListFilters,
+  readContext?: QualityReadContext,
+) => (await productWhere(db, filters, readContext)).where;
 
 const loadProductListSums = async (
   db: Database,
@@ -1123,7 +968,7 @@ type ProductSelectedPageRow = typeof product.$inferSelect &
 /** The authoritative filtered, sorted page is shared by every projection. */
 const readProductListPage = async (
   db: Database,
-  whereClause: SQL | undefined,
+  { where: whereClause, context }: Awaited<ReturnType<typeof productWhere>>,
   filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
@@ -1167,6 +1012,7 @@ const readProductListPage = async (
     { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
+      context,
       orderBy: orderByArray,
       load:
         projection.kind === "base"
@@ -1199,7 +1045,8 @@ export const productList = async (
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
 ) => {
-  const whereClause = await buildProductWhere(db, filters);
+  const filtered = await productWhere(db, filters);
+  const whereClause = filtered.where;
   if (readIntent === "count")
     return {
       data: [],
@@ -1210,7 +1057,7 @@ export const productList = async (
   const [{ results, totalCount, groups }, sums] = await Promise.all([
     readProductListPage(
       db,
-      whereClause,
+      filtered,
       filters,
       sorts,
       pagination,
@@ -1327,10 +1174,10 @@ export const listProductsRead = async (
     if (groups) result.groups = groups;
     return result;
   }
-  const whereClause = await buildProductWhere(db, filters);
+  const filtered = await productWhere(db, filters);
   const { results, totalCount, groups } = await readProductListPage(
     db,
-    whereClause,
+    filtered,
     filters,
     sorts,
     pagination,

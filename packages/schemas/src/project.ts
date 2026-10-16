@@ -168,21 +168,8 @@ export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 export const projectFilterFields = {
   ...projectBaseFilterFields,
   assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
-  assigneePresenceFilter: presenceFilter,
   ...dateRangeFields("date"),
   completionYear: oneOrMany(completionYearValue).optional(),
-  parentProjectPresenceFilter: presenceFilter,
-  imagePresenceFilter: presenceFilter.describe(
-    "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
-  ),
-  topLevelOnly: z.boolean().optional(),
-  parentProjectId: entityFilterList(projectShortcode).optional(),
-  // Only meaningful alongside `parentProjectId`: expands the filter to the
-  // whole live subtree under that parent, not just direct children.
-  includeSubProjects: z.boolean().optional(),
-  attention: oneOrMany(
-    z.enum(["stalled", "missing_budget", "blocked_no_next_action"]),
-  ).optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;

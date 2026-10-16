@@ -16,7 +16,7 @@ export const problemFilterSemantics = {
       field: "locationIdFilter",
       kind: "idMulti",
       brand: (value) => parseEntityId("location", value),
-      nullable: { field: "inventoryPresenceFilter", label: "inventory" },
+      nullable: { field: "locationPresenceFilter", label: "location" },
     },
     {
       columnId: "price",
@@ -46,7 +46,7 @@ export const problemFilterSemantics = {
       field: "categoryFilter",
       kind: "idMulti",
       brand: (value) => parseEntityId("productCategory", value),
-      nullable: { field: "categoryPresenceFilter", label: "classification" },
+      nullable: { field: "categoryIdPresenceFilter", label: "category" },
     },
     {
       columnId: "ledgerExpectedQuantity",
@@ -137,6 +137,7 @@ export const problemFilterSemantics = {
   inventory: [
     {
       columnId: "verifiedAt",
+      field: "verified",
       kind: "range",
       expand: (value) =>
         value === "has" || value === "none"

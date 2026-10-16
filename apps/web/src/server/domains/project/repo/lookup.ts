@@ -1,10 +1,5 @@
-import {
-  type ExpenseId,
-  parseEntityId,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { type ExpenseId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type {
@@ -12,21 +7,20 @@ import type {
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
-import { parseShortcode } from "@cubby/shared";
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
   formatSearchTerm,
+  isTransaction,
   textArrayMatches,
-  idSetPresence,
   type ListReadIntent,
   notDeleted,
-  presenceCondition,
-  uuidArrayParam,
+  shortcodeSetCondition,
 } from "~/server/db/helpers";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
@@ -39,7 +33,10 @@ import {
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
+import {
+  listPrepare,
+  shortcodeIdsSql,
+} from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -47,10 +44,6 @@ import {
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
-import {
-  resolveAllPresent,
-  resolveShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { projectContentDates, projectDependencyIds } from "./analytics";
 import {
@@ -68,8 +61,113 @@ import {
   projectCompletionYear,
 } from "./subtree";
 
+const qb = new QueryBuilder();
+
+// Joins Image so presence matches what the thumbnail cell renders: the same
+// `displayableImageWhere` gate, with Image separately soft-deletable.
+const projectIdsWithImages = qb
+  .select({ projectId: entityAttachment.entityId })
+  .from(entityAttachment)
+  .innerJoin(
+    image,
+    and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+  )
+  .where(and(notDeleted(entityAttachment), displayableImageWhere));
+
+const effectiveAssigneeSql = effectiveProjectAssigneeSql(
+  sql.raw('"Project"."id"'),
+);
+const effectiveLocationsSql = effectiveProjectLocationsSql(sql`${project.id}`);
+
+// The tree and attention reads take the request's Database handle; a project
+// list never reads inside a write transaction.
+const projectReadDatabase = (db: Database | DrizzleTransaction): Database => {
+  if (isTransaction(db))
+    throw new Error(
+      "A project list cannot prepare its filters in a transaction.",
+    );
+  return db;
+};
+
+// Exact tracker membership comes from the deep module the dashboard and
+// Problems share, so the list keeps no second copy of the stalled, budget,
+// and blocked-next-action predicates. A caller that already computed the
+// items seeds this prepare (`buildProjectListQuery`).
+const projectAttention = listPrepare((db) =>
+  computeAttentionItems(projectReadDatabase(db)),
+);
+
+// Completion years fold each subtree's effective dates in TS; the tree it
+// loads is handed back so the list's rollups never query it twice.
+const projectCompletion = listPrepare(async (db) => {
+  const tree = await loadProjectTree(projectReadDatabase(db));
+  const { dateWindows } = await loadProjectDateWindows(
+    projectReadDatabase(db),
+    tree,
+  );
+  return { tree, dateWindows };
+});
+
 const projectScaffold = listScaffold("project", project, {
   derived: {
+    image: inArray(project.id, projectIdsWithImages),
+    search: (term) =>
+      or(
+        formatSearchTerm(project.name, term),
+        formatSearchTerm(project.notes, term),
+        textArrayMatches(effectiveLocationsSql, term),
+      ),
+    effectiveLocations: ({ values }) =>
+      values.length === 0
+        ? undefined
+        : sql`${effectiveLocationsSql} && ARRAY[${sql.join(
+            values.map((location) => sql`${location}`),
+            sql`, `,
+          )}]::text[]`,
+    effectiveAssignee: ({ values, presence }) =>
+      or(
+        values.length === 0
+          ? undefined
+          : sql`${effectiveAssigneeSql} IN ${shortcodeIdsSql(
+              "ledgerParty",
+              (shortcode) => shortcodeSetCondition(shortcode, values),
+            )}`,
+        presence === undefined
+          ? undefined
+          : presence === "has"
+            ? sql`${effectiveAssigneeSql} IS NOT NULL`
+            : sql`${effectiveAssigneeSql} IS NULL`,
+      ),
+    attention: projectAttention.predicate((items, { values }) => {
+      const types = new Set<string>(
+        Object.entries(projectAttentionFilterTypes)
+          .filter(([filter]) => values.includes(filter))
+          .map(([, type]) => type),
+      );
+      const codes = items
+        .filter((item) => types.has(item.type))
+        .map((item) => item.entityId);
+      return codes.length ? inArray(project.shortcode, codes) : sql`false`;
+    }),
+    dateRange: ({ from, to }) =>
+      dashboardProjectDateCondition({
+        dateFrom: typeof from === "string" ? from : undefined,
+        dateTo: typeof to === "string" ? to : undefined,
+      }),
+    completionYear: projectCompletion.predicate(
+      ({ tree, dateWindows }, { values }) => {
+        const ids = tree.allRows
+          .filter((row) => {
+            const window = dateWindows.get(row.id);
+            return (
+              window !== undefined &&
+              values.includes(projectCompletionYear(row, window))
+            );
+          })
+          .map((row) => row.id);
+        return ids.length ? inArray(project.id, ids) : sql`false`;
+      },
+    ),
     assigneeId: sql`(SELECT member."name" FROM "LedgerParty" member WHERE member."id" = ${effectiveProjectAssigneeSql(
       sql.raw('"Project"."id"'),
     )} AND member."deletedAt" IS NULL)`,
@@ -163,176 +261,22 @@ export const buildProjectListQuery = async (
   attentionItems?: readonly ProjectAttentionItem[],
   preparedTree?: ProjectTree,
 ) => {
-  // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
-  // comment. Loaded LAZILY and memoized: only `completionYear`'s date windows
-  // need it for the WHERE clause,
-  // and `getEntityCounts` calls this with `{}` inside a function whose entire
-  // design is one round trip. Eagerly loading here made that a second query
-  // before a single filter had been inspected.
-  //
-  // Whoever forces it keeps the result, and it is handed back so the tree is
-  // never queried twice. `loadProjectSubtreeRollups` already declares its
-  // `tree` argument optional and re-fetches when absent (subtree.ts:385), so
-  // the `undefined` this can now return needs no call-site change — and a
-  // `readIntent: "count"` list, which returns before rollups, stops loading the
-  // tree at all.
-  let loadedTree: ProjectTree | undefined = preparedTree;
-  let treePromise: Promise<ProjectTree> | undefined;
-  const getTree = async () => {
-    if (loadedTree) return loadedTree;
-    treePromise ??= loadProjectTree(db);
-    loadedTree = await treePromise;
-    return loadedTree;
-  };
-
-  // Delegate exact tracker membership to the same deep module used by the
-  // dashboard and Problems. This avoids a second copy of the stalled, budget,
-  // and blocked-next-action predicates in the ordinary entity list.
-  const attentionTypes = new Set<string>(
-    oneOrManyValues(filters.attention)?.map(
-      (attention) => projectAttentionFilterTypes[attention],
-    ),
-  );
-  const attentionCodes = attentionTypes.size
-    ? (attentionItems ?? (await computeAttentionItems(db)))
-        .filter((item) => attentionTypes.has(item.type))
-        .map((item) => item.entityId)
-    : undefined;
-
-  const assigneeIds = await resolveAllPresent(
+  // Filter-only: `getEntityCounts` calls this with `{}` inside a function
+  // whose design is one round trip, so the tree and attention items load
+  // only when their filter asks.
+  const context = await projectScaffold.context(
     db,
-    "ledgerParty",
-    filters.assigneeId ? [filters.assigneeId].flat() : [],
+    { filters, readIntent: "count" },
+    attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
   );
-  const effectiveAssignee = effectiveProjectAssigneeSql(
-    sql.raw('"Project"."id"'),
-  );
-  const assigneePresence =
-    filters.assigneePresenceFilter === "has"
-      ? sql`${effectiveAssignee} IS NOT NULL`
-      : filters.assigneePresenceFilter === "none"
-        ? sql`${effectiveAssignee} IS NULL`
-        : undefined;
-  const assigneeCondition =
-    filters.assigneeId && [filters.assigneeId].flat().length
-      ? or(
-          assigneeIds.length
-            ? sql`${effectiveAssignee} = ANY(${uuidArrayParam(assigneeIds)})`
-            : sql`false`,
-          assigneePresence,
-        )
-      : assigneePresence;
-  const parentCodes = filters.parentProjectId
-    ? [filters.parentProjectId].flat()
-    : [];
-  const resolvedParents = preparedTree
-    ? undefined
-    : await resolveShortcodes(db, parentCodes);
-  // `resolveShortcodes` keys its result Map by the CANONICAL code (see its
-  // docstring), so the lookup goes through `parseShortcode(code).shortcode`
-  // rather than the raw input — otherwise a lowercase or legacy-prefix code
-  // resolves fine in SQL but misses the Map here (the trap `resolveAllPresent`
-  // handles for single-entity lists).
-  const parentProjectUuids = parentCodes.flatMap((code) => {
-    const parsed = parseShortcode(code);
-    const preparedParent = parsed
-      ? preparedTree?.rowsByShortcode.get(parsed.shortcode)
-      : undefined;
-    if (preparedTree) return preparedParent ? [preparedParent.id] : [];
-    const resolved = parsed
-      ? resolvedParents?.get(parsed.shortcode)
-      : undefined;
-    return resolved?.entity === "project"
-      ? [parseEntityId("project", resolved.id)]
-      : [];
-  });
-
-  // When scoped to a parent's subtree, match rows whose parent is in that
-  // subtree (every live descendant, excluding the parent itself — the plain
-  // `parentProjectId` filter, just recursive); otherwise a direct-children match.
-  let parentValues =
-    parentCodes.length === 0
-      ? undefined
-      : parentProjectUuids.length === 0
-        ? sql`false`
-        : inArray(project.parentProjectId, parentProjectUuids);
-  if (parentProjectUuids.length > 0 && filters.includeSubProjects)
-    parentValues = sql`${project.id} IN ${hierarchyDescendantsSql("project", parentProjectUuids, { descendantsOnly: true })}`;
-  const parentCondition = or(
-    parentValues,
-    presenceCondition(
-      project.parentProjectId,
-      filters.parentProjectPresenceFilter,
-    ),
-  );
-
-  const completionYears = oneOrManyValues(filters.completionYear);
-  const completionTree = completionYears?.length ? await getTree() : undefined;
-  const completionIds = completionTree
-    ? await loadProjectDateWindows(db, completionTree).then(({ dateWindows }) =>
-        completionTree.allRows
-          .filter((row) => {
-            const window = dateWindows.get(row.id);
-            return (
-              window &&
-              completionYears?.includes(projectCompletionYear(row, window))
-            );
-          })
-          .map((row) => row.id),
-      )
-    : null;
-
-  // Joins Image so this matches what the thumbnail cell actually renders —
-  // `getImagesByProjectIds` (which feeds the column) applies the same
-  // `displayableImageWhere` gate, and Image is separately soft-deletable from
-  // ProjectImage.
-  const projectIdsWithImages = getDb(db)
-    .select({ projectId: entityAttachment.entityId })
-    .from(entityAttachment)
-    .innerJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-    )
-    .where(and(notDeleted(entityAttachment), displayableImageWhere));
-
-  // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location` (an
-  // overlap over the `locations` array) are declared stored filters — applied
-  // by `projectScaffold.where` before the conditions below.
-  const whereClause = projectScaffold.where({ ...filters, search: undefined }, [
-    or(
-      formatSearchTerm(project.name, filters.search),
-      formatSearchTerm(project.notes, filters.search),
-      textArrayMatches(
-        effectiveProjectLocationsSql(sql`${project.id}`),
-        filters.search,
-      ),
-    ),
-    dashboardProjectDateCondition(filters),
-    attentionCodes
-      ? attentionCodes.length
-        ? inArray(project.shortcode, attentionCodes)
-        : sql`false`
-      : undefined,
-    completionIds ? inArray(project.id, completionIds) : undefined,
-    filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
-    parentCondition,
-    assigneeCondition,
-    filters.location && [filters.location].flat().length > 0
-      ? sql`${effectiveProjectLocationsSql(sql`${project.id}`)} && ARRAY[${sql.join(
-          [filters.location].flat().map((location) => sql`${location}`),
-          sql`, `,
-        )}]::text[]`
-      : undefined,
-    idSetPresence(
-      project.id,
-      filters.imagePresenceFilter,
-      projectIdsWithImages,
-    ),
-  ]);
+  const loadedTree = context.has(projectCompletion)
+    ? context.get(projectCompletion).tree
+    : preparedTree;
+  const whereClause = projectScaffold.where(filters, [], { context });
 
   const orderByArray = projectScaffold.orderBy(sorts, {}, filters);
 
-  return { tree: loadedTree, whereClause, orderByArray };
+  return { tree: loadedTree, whereClause, orderByArray, context };
 };
 
 /**
@@ -386,13 +330,8 @@ export const projectListRead = async (
   readIntent: ListReadIntent = "page",
   preparedTree?: ProjectTree,
 ) => {
-  const { tree, whereClause, orderByArray } = await buildProjectListQuery(
-    db,
-    filters,
-    sorts,
-    undefined,
-    preparedTree,
-  );
+  const { tree, whereClause, orderByArray, context } =
+    await buildProjectListQuery(db, filters, sorts, undefined, preparedTree);
   // Both start beside the page read rather than after it.
   const sumsRead =
     readIntent === "page" && projection.kind === "full"
@@ -411,6 +350,7 @@ export const projectListRead = async (
       { filters, sorts, pagination, readIntent, projection },
       {
         where: whereClause,
+        context,
         orderBy: orderByArray,
         hydrate: async (rows) => {
           if (projection.kind === "base")
