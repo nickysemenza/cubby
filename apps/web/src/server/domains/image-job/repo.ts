@@ -33,18 +33,18 @@ import {
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
 
-const scaffold = listScaffold("imageJob", imageProcessingJob);
-
-/** A job joins every submission that scheduled or retried it, not only its first. */
-const submissionMember = (submissionId: string | undefined) =>
-  submissionId === undefined
-    ? undefined
-    : sql`${imageProcessingJob.id} IN (
+const scaffold = listScaffold("imageJob", imageProcessingJob, {
+  derived: {
+    // A job joins every submission that scheduled or retried it, not only
+    // its first.
+    submissionId: (submissionId) => sql`${imageProcessingJob.id} IN (
         SELECT membership."jobId"
         FROM "ImageProcessingSubmissionJob" membership
         JOIN "ImageProcessingSubmission" submission ON submission.id = membership."submissionId"
         WHERE submission."publicId" = ${submissionId}
-      )`;
+      )`,
+  },
+});
 
 type Facts = {
   chargedCost: number;
@@ -195,7 +195,6 @@ export const listImageJobsRead = (
     db,
     { filters, sorts, pagination, projection },
     {
-      where: scaffold.where(filters, [submissionMember(filters.submissionId)]),
       hydrate: (rows, selected) => hydrateRead(db, rows, selected),
     },
   );

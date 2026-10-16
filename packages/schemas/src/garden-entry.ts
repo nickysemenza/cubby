@@ -19,7 +19,6 @@ export {
 export const gardenEntryFilterFields = {
   ...gardenEntryBaseFilterFields,
   locationId: oneOrMany(locationShortcode).optional(),
-  plantingId: oneOrMany(plantingShortcode).optional(),
   /**
    * A planting's journal: its own entries plus whole-location entries
    * observed during one of its confirmed location periods.

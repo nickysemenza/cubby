@@ -744,6 +744,12 @@ export default defineEntity({
       source: { type: "text" },
       // The first tag.
       tags: { type: "text" },
+      // Planned on a live meal.
+      meals: { type: "boolean" },
+      // A displayable image (PDFs don't count).
+      image: { type: "boolean" },
+      // A live section with written instructions.
+      instructions: { type: "boolean" },
     },
     sort: {
       fields: [
@@ -910,6 +916,7 @@ export default defineEntity({
         columnId: "meals",
         field: "mealPresenceFilter",
         kind: "presence",
+        derived: true,
         placeholder: "Filter meals...",
         options: [
           { value: "has", label: "Has meals", meta: true },
@@ -920,6 +927,7 @@ export default defineEntity({
         columnId: "image",
         field: "imagePresenceFilter",
         kind: "presence",
+        derived: true,
         placeholder: "Filter images...",
         options: [
           { value: "has", label: "Has image", meta: true },
@@ -930,6 +938,7 @@ export default defineEntity({
         columnId: "instructions",
         field: "instructionsPresenceFilter",
         kind: "presence",
+        derived: true,
         placeholder: "Filter instructions...",
         options: [
           { value: "has", label: "Has instructions", meta: true },
@@ -947,11 +956,13 @@ export default defineEntity({
           { value: "Other", label: "Other" },
           { value: "Notion", label: "Notion" },
         ],
-        nullable: { field: "sourceTypePresenceFilter", label: "source" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "costTotal",
         kind: "range",
+        derived: true,
         placeholder: "Filter recipe cost...",
         options: [
           {
@@ -974,6 +985,7 @@ export default defineEntity({
       {
         columnId: "caloriesTotal",
         kind: "range",
+        derived: true,
         placeholder: "Filter calories...",
         options: [
           {

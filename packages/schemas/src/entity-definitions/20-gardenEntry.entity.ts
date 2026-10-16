@@ -298,6 +298,9 @@ export default defineEntity({
       "notes",
       "harvestAmount",
     ],
+    derived: {
+      plantingId: { via: "plantings" },
+    },
     sort: {
       fields: ["observedOn", "createdAt", "updatedAt", "kind"],
     },
@@ -400,6 +403,8 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by planting...",
         brandRef: { entity: "planting" },
+        deriveSchema: true,
+        derived: true,
       },
       {
         // A planting's journal: its own entries plus whole-location entries

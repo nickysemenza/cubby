@@ -32,7 +32,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
@@ -44,12 +44,10 @@ import {
   associatePendingImages,
   eqAnyRequested,
   getDb,
-  idSetPresence,
   imageJoinBindings,
   type ListReadIntent,
   notDeleted,
   presenceCondition,
-  rangeConditions,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -414,6 +412,38 @@ const recordNotionRecipePage = async (
 const recipeTotalSql = (path: string) =>
   sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> ${sql.raw(`'${path}'`)})::numeric END`;
 
+const qb = new QueryBuilder();
+
+// Recipes planned into a live meal. A live MealRecipe under a soft-deleted
+// Meal is not a plan — join-guarded, not just notDeleted(mealRecipe).
+const recipeIdsInLiveMeals = qb
+  .select({ recipeId: mealRecipe.recipeId })
+  .from(mealRecipe)
+  .innerJoin(meal, and(eq(meal.id, mealRecipe.mealId), notDeleted(meal)))
+  .where(notDeleted(mealRecipe));
+
+// PDFs are documents, not displayable recipe images.
+const recipeIdsWithImages = qb
+  .select({ recipeId: entityAttachment.entityId })
+  .from(entityAttachment)
+  .innerJoin(
+    image,
+    and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+  )
+  .where(
+    and(notDeleted(entityAttachment), ne(image.contentType, PDF_CONTENT_TYPE)),
+  );
+
+const recipeIdsWithInstructions = qb
+  .select({ recipeId: recipeSection.recipeId })
+  .from(recipeSection)
+  .where(
+    and(
+      notDeleted(recipeSection),
+      sql`jsonb_array_length(${recipeSection.instructions}) > 0`,
+    ),
+  );
+
 const recipeScaffold = listScaffold("recipe", recipe, {
   derived: {
     costTotal: recipeTotalSql("{cost,lower}"),
@@ -424,6 +454,9 @@ const recipeScaffold = listScaffold("recipe", recipe, {
       sql`${recipe.sourceLabel}`,
     ],
     tags: sql`${recipe.tags}[1]`,
+    meals: inArray(recipe.id, recipeIdsInLiveMeals),
+    image: inArray(recipe.id, recipeIdsWithImages),
+    instructions: inArray(recipe.id, recipeIdsWithInstructions),
   },
 });
 
@@ -472,48 +505,9 @@ export const buildRecipeWhere = async (
       ),
     );
 
-  // Recipes planned into a live meal. A live MealRecipe under a soft-deleted
-  // Meal is not a plan — join-guarded, not just notDeleted(mealRecipe).
-  const recipeIdsInLiveMeals = dbClient
-    .select({ recipeId: mealRecipe.recipeId })
-    .from(mealRecipe)
-    .innerJoin(meal, and(eq(meal.id, mealRecipe.mealId), notDeleted(meal)))
-    .where(notDeleted(mealRecipe));
-
-  // PDFs are documents, not displayable recipe images.
-  const recipeIdsWithImages = dbClient
-    .select({ recipeId: entityAttachment.entityId })
-    .from(entityAttachment)
-    .innerJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-    )
-    .where(
-      and(
-        notDeleted(entityAttachment),
-        ne(image.contentType, PDF_CONTENT_TYPE),
-      ),
-    );
-
-  const recipeIdsWithInstructions = dbClient
-    .select({ recipeId: recipeSection.recipeId })
-    .from(recipeSection)
-    .where(
-      and(
-        notDeleted(recipeSection),
-        sql`jsonb_array_length(${recipeSection.instructions}) > 0`,
-      ),
-    );
-
-  const sourceTypes =
-    filters.sourceTypeFilter === undefined
-      ? undefined
-      : [filters.sourceTypeFilter].flat();
-
-  // `nameFilter` (name ∪ notes), `tagFilters` (an overlap over the nullable
-  // `tags` array, ORed with `tagsPresenceFilter`) and `totalMinutes` are
-  // declared stored filters — applied by `recipeScaffold.where` before the
-  // conditions below.
+  // `nameFilter`, `tagFilters`, `sourceTypeFilter`, the meal, image and
+  // instructions presences, and the totals are declared filters — applied by
+  // `recipeScaffold.where` before the conditions below.
   return recipeScaffold.where(filters, [
     // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
     // the id half must distinguish "no cookbook filter" (unrestricted) from
@@ -525,24 +519,6 @@ export const buildRecipeWhere = async (
       presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
     ),
     filters.excludeSubRecipes ? notInArray(recipe.id, subRecipeIds) : undefined,
-    idSetPresence(recipe.id, filters.mealPresenceFilter, recipeIdsInLiveMeals),
-    idSetPresence(recipe.id, filters.imagePresenceFilter, recipeIdsWithImages),
-    idSetPresence(
-      recipe.id,
-      filters.instructionsPresenceFilter,
-      recipeIdsWithInstructions,
-    ),
-    // Presence widens this filter; null is a valid legacy manual source.
-    or(
-      eqAnyRequested(recipe.sourceType, sourceTypes),
-      presenceCondition(recipe.sourceType, filters.sourceTypePresenceFilter),
-    ),
-    ...rangeConditions(recipeTotalSql("{cost,lower}"), filters, "costTotal"),
-    ...rangeConditions(
-      recipeTotalSql("{nutrition,kcal,lower}"),
-      filters,
-      "caloriesTotal",
-    ),
   ]);
 };
 

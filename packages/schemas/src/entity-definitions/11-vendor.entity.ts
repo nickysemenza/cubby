@@ -705,6 +705,10 @@ export default defineEntity({
       spend: { type: "number" },
       purchaseCount: { type: "number" },
       latestPurchaseDate: { type: "date" },
+      // No default spending category yet.
+      needsClassification: { type: "boolean" },
+      // A displayable logo image.
+      hasLogo: { type: "boolean" },
     },
     sort: {
       fields: [
@@ -803,6 +807,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Needs classification",
         deriveSchema: true,
+        derived: true,
       },
       {
         columnId: "name",
@@ -816,6 +821,7 @@ export default defineEntity({
       {
         columnId: "purchaseCount",
         kind: "range",
+        derived: true,
         placeholder: "Filter purchase count...",
         deriveSchema: true,
         range: { int: true, nonnegative: true },
@@ -834,6 +840,7 @@ export default defineEntity({
       {
         columnId: "spend",
         kind: "range",
+        derived: true,
         placeholder: "Filter spend...",
         deriveSchema: true,
         options: [
@@ -859,6 +866,13 @@ export default defineEntity({
       {
         columnId: "latestPurchaseDate",
         kind: "range",
+        derived: true,
+        wire: {
+          kind: "range",
+          from: "latestPurchaseDateFrom",
+          to: "latestPurchaseDateTo",
+          presence: "latestPurchaseDatePresenceFilter",
+        },
         placeholder: "Filter latest purchase...",
         deriveSchema: true,
         options: [
@@ -878,6 +892,7 @@ export default defineEntity({
         columnId: "logo",
         field: "logoPresenceFilter",
         kind: "presence",
+        derived: "hasLogo",
         placeholder: "Filter logos...",
         options: [
           { value: "has", label: "Has logo", meta: true },

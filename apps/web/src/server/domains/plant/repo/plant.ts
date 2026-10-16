@@ -17,7 +17,7 @@ import {
   type ResolvePlantsOutput,
   plantOut,
 } from "@cubby/schemas/plant";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
@@ -30,7 +30,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
-import { ingredient, plant } from "~/server/db/schema";
+import { plant } from "~/server/db/schema";
 import {
   guideWindowsFor,
   plantDisplayName,
@@ -142,16 +142,6 @@ const hydrate = async (
     plantOut.parse(row),
   );
 
-const buildWhere = (filters: PlantFilters) =>
-  scaffold.where(filters, [
-    filters.ingredientId === undefined
-      ? undefined
-      : sql`${plant.ingredientId} IN (
-          SELECT ${ingredient.id} FROM ${ingredient}
-          WHERE ${inArray(ingredient.shortcode, [filters.ingredientId].flat())}
-        )`,
-  ]);
-
 export const listPlantsRead = (
   db: Database,
   filters: PlantFilters,
@@ -163,7 +153,6 @@ export const listPlantsRead = (
     db,
     { filters, sorts, pagination, projection },
     {
-      where: buildWhere(filters),
       hydrate: (rows, selected) => hydrateRead(db, rows, selected),
     },
   );

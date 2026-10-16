@@ -48,7 +48,6 @@ import {
   mapImages,
   type MappableImageRecord,
   notDeleted,
-  shortcodeSetCondition,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -811,31 +810,17 @@ export const plantingListRead = async (
 ) => {
   // Id filters resolve shortcodes first; a requested set that resolves to
   // nothing matches nothing (`eqAnyRequested`), never the whole list.
-  const [locationIds, plantIds, taskIds, sourceProductIds] = await Promise.all([
-    resolveFilterIds(db, "location", filters.locationId),
-    resolveFilterIds(db, "plant", filters.plantId),
-    resolveFilterIds(db, "task", filters.taskId),
-    resolveFilterIds(db, "product", filters.sourceProductId),
-  ]);
+  const locationIds = await resolveFilterIds(
+    db,
+    "location",
+    filters.locationId,
+  );
   const where = plantingScaffold.where(filters, [
-    buildPlantingWhere(),
     filters.activeOn
       ? sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)}) <= ${filters.activeOn}::date
           AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${filters.activeOn}::date)`
       : undefined,
     eqAnyRequested(planting.locationId, locationIds),
-    eqAnyRequested(planting.plantId, plantIds),
-    eqAnyRequested(planting.taskId, taskIds),
-    eqAnyRequested(planting.sourceProductId, sourceProductIds),
-    filters.gardenEntryId === undefined
-      ? undefined
-      : sql`EXISTS (
-          SELECT 1
-          FROM "EntityLink" gep
-          JOIN "GardenEntry" ge ON ge."id" = gep."fromEntityId" AND ge."deletedAt" IS NULL
-          WHERE gep."toEntityId" = ${planting.id}
-            AND gep."deletedAt" IS NULL AND gep."kind" = 'gardenEntryPlanting'
-            AND ${shortcodeSetCondition(sql`ge."shortcode"`, filters.gardenEntryId)})`,
   ]);
   return plantingScaffold.list(
     db,
@@ -957,30 +942,12 @@ export const gardenEntryListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  const [locationIds, plantingIds, journalPlantingIds] = await Promise.all([
+  const [locationIds, journalPlantingIds] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationId),
-    resolveFilterIds(db, "planting", filters.plantingId),
     resolveFilterIds(db, "planting", filters.journalPlantingId),
   ]);
   const where = gardenEntryScaffold.where(filters, [
-    buildGardenEntryWhere(),
     eqAnyRequested(gardenEntry.locationId, locationIds),
-    plantingIds && plantingIds.length > 0
-      ? inArray(
-          gardenEntry.id,
-          unwrapDb(db)
-            .select({ id: entityLink.fromEntityId })
-            .from(entityLink)
-            .where(
-              and(
-                inArray(entityLink.toEntityId, plantingIds),
-                liveLinks("gardenEntryPlanting"),
-              ),
-            ),
-        )
-      : plantingIds
-        ? sql`false`
-        : undefined,
     journalPlantingIds === undefined
       ? undefined
       : journalPlantingIds.length > 0

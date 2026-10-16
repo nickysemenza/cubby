@@ -1416,6 +1416,10 @@ receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
 hierarchy, subtree toggles, and group rejections.
 
+A compiled id filter resolves its shortcodes inside the list query, through
+`shortcodeIdsSql`, rather than in a lookup before it: an unknown or
+soft-deleted code matches nothing (#2333).
+
 An id filter (stored or `via`) whose target declares `model.hierarchy` matches
 the selected records and their live descendants through
 `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`), the one

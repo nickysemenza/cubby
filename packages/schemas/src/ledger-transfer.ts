@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { ledgerPartyShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, partyFilterList } from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 import {
   ledgerTransferBaseFilterFields,
   ledgerTransferOut,
@@ -30,11 +29,7 @@ export {
   type LedgerSourceClaimReconciliation,
 } from "./ledger-transfer-fields";
 
-export const ledgerTransferFilterFields = {
-  ...ledgerTransferBaseFilterFields,
-  fromPartyId: partyFilterList(ledgerPartyShortcode).optional(),
-  toPartyId: partyFilterList(ledgerPartyShortcode).optional(),
-};
+export const ledgerTransferFilterFields = ledgerTransferBaseFilterFields;
 export const ledgerTransferFiltersSchema = z.object(ledgerTransferFilterFields);
 export type LedgerTransferFilters = z.infer<typeof ledgerTransferFiltersSchema>;
 

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { ingredientShortcode, plantShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
+import { plantShortcode } from "./identifiers";
+import { createPaginatedResponseSchema } from "./pagination";
 import { gardenCropKey } from "./garden-practice";
 import { plantBaseFilterFields, plantOut } from "./generated/plant.gen";
 
@@ -15,10 +15,7 @@ export {
   type PlantOut,
 } from "./generated/plant.gen";
 
-export const plantFilterFields = {
-  ...plantBaseFilterFields,
-  ingredientId: oneOrMany(ingredientShortcode).optional(),
-};
+export const plantFilterFields = plantBaseFilterFields;
 export const plantFiltersSchema = z.object(plantFilterFields);
 export type PlantFilters = z.infer<typeof plantFiltersSchema>;
 

@@ -23,13 +23,11 @@ import { imageUrlSummary } from "./image-summary";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
-  oneOrMany,
   presenceFilter,
 } from "./pagination";
 import {
   recipeTopLevelFields,
   recipeTopLevel,
-  recipeSourceValues,
   recipeTotals,
 } from "./recipe-shared";
 import { recipeIngredientInput, recipeSectionsOut } from "./recipe-fields";
@@ -289,14 +287,6 @@ export const recipeFilterFields = {
   instructionsPresenceFilter: presenceFilter.describe(
     "Filter to recipes that do / don't have any written instructions.",
   ),
-  /**
-   * The recipe's provenance. Nullable, so `sourceTypePresenceFilter: "none"`
-   * matches legacy hand-entered rows — and those must stay visible, which is
-   * why an exclusion is spelled as a positive list plus this sentinel rather
-   * than a `!=` that would evaluate UNKNOWN against NULL and drop them.
-   */
-  sourceTypeFilter: oneOrMany(z.enum(recipeSourceValues)).optional(),
-  sourceTypePresenceFilter: presenceFilter,
   ...numericRangeFields("costTotal", { nonnegative: true }),
   ...numericRangeFields("caloriesTotal", { nonnegative: true }),
   // Total elapsed time in minutes — a real column, so this is a plain SQL
