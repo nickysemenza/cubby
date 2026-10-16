@@ -147,7 +147,13 @@ connected history: 6,000 Products, 12,000 Expenses, 8,000 retained Emails,
 signed exits and future Expenses exercise the same pricing, quantity and
 Email-history queries as real records. Values and relationships are entirely
 synthetic and deterministic; providers are never dispatched. It is opt-in and
-does not enlarge the core or required CI fixtures. Seeding time is setup time,
+does not enlarge the core or required CI fixtures. Volume rows are inserted in
+bounded batches in one transaction, with database identity/relationship constraints
+active. The pack then uses the canonical bulk audit and search writers; it does
+not replay interactive commands for every historical record. It updates planner
+statistics before the first reads. Its real-database
+regression checks relationships, ledger totals, search/audit coverage, historical
+Run outcomes and a query-work budget. Seeding time is setup time,
 not request latency. Historical mail outcome receipts use the admitted
 `OrderMail.id` as their work key and its checksum as their fingerprint. Validate
 them through Run detail, including the receipt's completion time: receipt counts
@@ -170,7 +176,7 @@ production page latency.
 
 The Problems pack adds incomplete entities, a failed photo-processing Run/job,
 and an open Run with pending image work. Both work fixtures retain real local
-source bytes and avoid provider dispatch. Each pack uses the entity kernel; the
+source bytes and avoid provider dispatch. Interactive fixture packs use the entity kernel; the
 image pack uploads and finalizes real
 synthetic bytes through the local storage API. A development-only PostgreSQL
 table, `cubby_dev_fixture`, records the pack version and `seeding`, `complete`,
