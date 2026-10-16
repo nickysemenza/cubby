@@ -17,6 +17,7 @@ import type { FoodSummary } from "@cubby/usda";
 import { eq, and } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import { selectListReadFields } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
@@ -33,7 +34,6 @@ import {
   type UsdaFoodBatchPort,
 } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
-import type { ListReadRow } from "~/server/generic/list/repo/list-projection";
 import {
   resolveAllOrThrow,
   resolveCreatedOrInvariant,
