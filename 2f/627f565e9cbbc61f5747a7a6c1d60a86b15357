@@ -1,0 +1,19 @@
+docs/plans/manifest-driven-list-fields.md
+  s_26fedc541d5f08::t_f2edc13f281173 1-313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2f627f565e9cbbc61f5747a7a6c1d60a86b15357",
+  "prompts": {},
+  "sessions": {
+    "s_26fedc541d5f08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b565132-4a65-41ae-878e-3fc038b9c4a6",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
