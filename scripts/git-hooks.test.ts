@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -50,7 +50,7 @@ function fixture(t: TestContext) {
   ok("init", "--initial-branch=main");
   ok("config", "user.name", "Hook Fixture");
   ok("config", "user.email", "hooks@example.invalid");
-  write(".gitignore", "node_modules/\n");
+  write(".gitignore", "node_modules\n");
   write(
     "package.json",
     JSON.stringify({
@@ -79,21 +79,31 @@ function fixture(t: TestContext) {
   ])
     cpSync(join(source, directory), join(root, directory), { recursive: true });
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"), "dir");
-  write("example file.ts", "export const value = 1;\n");
-  ok("add", ".");
-  ok("-c", "core.hooksPath=/dev/null", "commit", "-m", "Fixture baseline");
-
   mkdirSync(join(root, ".husky"));
-  // Copy only tracked hook entrypoints, not the checkout's installed Husky wrappers.
   for (const entry of readdirSync(join(source, ".husky"), {
     withFileTypes: true,
   })) {
-    if (!entry.isFile()) continue;
-    const destination = join(root, ".husky", entry.name);
-    cpSync(join(source, ".husky", entry.name), destination);
-    chmodSync(destination, 0o755);
+    if (entry.isFile())
+      cpSync(
+        join(source, ".husky", entry.name),
+        join(root, ".husky", entry.name),
+      );
   }
-  ok("config", "core.hooksPath", ".husky");
+  write("example file.ts", "export const value = 1;\n");
+  ok("add", ".");
+  ok("-c", "core.hooksPath=/dev/null", "commit", "-m", "Fixture baseline");
+  // Exercise the real prepare lifecycle command, including its installed dispatchers.
+  cpSync(
+    join(source, "scripts/install-git-hooks.ts"),
+    join(root, "scripts/install-git-hooks.ts"),
+  );
+  const installed = spawnSync("sh", ["-c", manifest.scripts.prepare!], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+  assert.equal(installed.status, 0, installed.stderr + installed.stdout);
   return { root, git, ok, write };
 }
 
@@ -129,5 +139,52 @@ test("commit messages naming a live entity code are rejected", (t) => {
   assert.equal(
     ok("log", "--format=%s", "-1").trim(),
     "Explain PRD-4K7M lookups",
+  );
+});
+
+test("a fresh linked worktree cannot silently commit without dependencies", (t) => {
+  const { root, git, ok } = fixture(t);
+  const linked = join(root, "linked");
+  ok("worktree", "add", "-b", "linked-fixture", linked);
+  writeFileSync(join(linked, "example file.ts"), "export const value = 3;\n");
+  ok("-C", linked, "add", "--", "example file.ts");
+  assert.equal(existsSync(join(linked, "node_modules")), false);
+  const rejected = git(
+    "-C",
+    linked,
+    "commit",
+    "-m",
+    "Fixture unprepared worktree",
+  );
+  assert.notEqual(rejected.status, 0, rejected.stderr + rejected.stdout);
+  assert.match(
+    rejected.stderr + rejected.stdout,
+    /pnpm install --frozen-lockfile/,
+  );
+  symlinkSync(
+    join(source, "node_modules"),
+    join(linked, "node_modules"),
+    "dir",
+  );
+  ok("-C", linked, "commit", "-m", "Fixture prepared worktree");
+  assert.equal(
+    ok("-C", linked, "show", "HEAD:example file.ts"),
+    "export const value = 3;\n",
+  );
+});
+
+test("formatting a partial stage preserves unstaged edits", (t) => {
+  const { ok, write } = fixture(t);
+  write("example file.ts", "export const value=3\n");
+  ok("add", "--", "example file.ts");
+  write(
+    "example file.ts",
+    "export const value=3\nexport const unstaged = 4;\n",
+  );
+  ok("commit", "-m", "Fixture partial stage");
+  assert.equal(ok("show", "HEAD:example file.ts"), "export const value = 3;\n");
+  assert.match(
+    ok("diff", "--", "example file.ts"),
+    /export const unstaged = 4/,
   );
 });

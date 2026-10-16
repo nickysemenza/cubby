@@ -1,4 +1,10 @@
 #!/usr/bin/env sh
 set -e
 
-pnpm check:staged
+if [ ! -f node_modules/lint-staged/bin/lint-staged.js ]; then
+  echo 'Commit dependencies are missing. Run pnpm install --frozen-lockfile in this worktree.' >&2
+  exit 1
+fi
+
+export PATH="node_modules/.bin:$PATH"
+exec node node_modules/lint-staged/bin/lint-staged.js --config .lintstagedrc.json --concurrent false
