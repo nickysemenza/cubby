@@ -1,10 +1,9 @@
 name: "Deploy a Cloudflare Worker"
 description: >-
   Checks that this push is still current main (before building and again
-  before deploying) and installs, optionally builds, then deploys one
-  package's Worker via its own deploy-command (every package has wrangler as
-  a devDependency). Shared
-  by every job in deploy.yaml; each job's own concurrency/environment/
+  before deploying) and installs, optionally builds, migrates the production
+  database, then deploys the Worker via its own deploy-command.
+  The web deployment's concurrency/environment/
   timeout-minutes stay on the job because a composite action cannot own them.
 
 inputs:
@@ -40,9 +39,8 @@ inputs:
     description: "Cloudflare account ID"
     required: true
   production-direct-database-url:
-    description: "Direct Neon URL for the web release's migration command"
-    required: false
-    default: ""
+    description: "Direct Neon URL for production migrations"
+    required: true
   production-migration-through:
     description: "Optional exact migration boundary for an operator-managed staged cutover"
     required: false
@@ -76,7 +74,20 @@ runs:
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
-    # Stops a deploy whose build outlived a newer push.
+    - name: Apply production migrations
+      if: steps.current_main.outputs.current == 'true'
+      shell: bash
+      env:
+        PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
+        PRODUCTION_MIGRATION_THROUGH: ${{ inputs.production-migration-through }}
+      run: |
+        args=(--target=production)
+        if [[ -n "$PRODUCTION_MIGRATION_THROUGH" ]]; then
+          args+=("--through=$PRODUCTION_MIGRATION_THROUGH")
+        fi
+        pnpm --filter "${{ inputs.package }}" db:migrate "${args[@]}"
+
+    # Stops a deploy whose build or migration outlived a newer push.
     - name: Re-check current main before deployment
       if: steps.current_main.outputs.current == 'true'
       id: deploy_current
@@ -93,6 +104,4 @@ runs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
-        PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
-        PRODUCTION_MIGRATION_THROUGH: ${{ inputs.production-migration-through }}
       run: ${{ inputs.deploy-command }}
