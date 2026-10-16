@@ -44,6 +44,12 @@ export async function seedLocalFixturePack(
     overrides: EntityOverrides<E> = {},
   ) => createEntity(context, entity, overrides, { faker });
   switch (pack) {
+    case "performance": {
+      const { seedPerformanceCorpus } =
+        await import("../scenarios/performance");
+      await seedPerformanceCorpus(context.db, testUserId(userId));
+      return;
+    }
     case "recipes": {
       const ingredient = await create("ingredient", {
         name: "Synthetic rolled oats",

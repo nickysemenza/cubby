@@ -61,6 +61,7 @@ export const LOCAL_FIXTURE_PACKS = [
   "garden",
   "calendar",
   "problems",
+  "performance",
 ] as const;
 export const devFixturePackSchema = z.enum(LOCAL_FIXTURE_PACKS);
 export type LocalFixturePack = (typeof LOCAL_FIXTURE_PACKS)[number];

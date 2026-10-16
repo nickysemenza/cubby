@@ -125,6 +125,34 @@ pnpm dev seed calendar
 pnpm dev seed problems
 ```
 
+For performance investigations, `pnpm dev seed performance` adds a larger
+connected history: 6,000 Products, 12,000 Expenses, 8,000 retained Emails,
+5,000 completed mail Runs and their outcome receipts, 1,000 Purchases, and
+3,000 kit edges. Nested kits, explicitly priced siblings, unpriced stock,
+signed exits and future Expenses exercise the same pricing, quantity and
+Email-history queries as real records. Values and relationships are entirely
+synthetic and deterministic; providers are never dispatched. It is opt-in and
+does not enlarge the core or required CI fixtures. Seeding time is setup time,
+not request latency. Historical mail outcome receipts use the admitted
+`OrderMail.id` as their work key and its checksum as their fingerprint. Validate
+them through Run detail, including the receipt's completion time: receipt counts
+alone cannot detect a projection falling back to current Email status.
+Use a separate instance to keep ordinary development small:
+
+```sh
+CUBBY_DEV_INSTANCE=performance pnpm dev
+CUBBY_DEV_INSTANCE=performance pnpm dev seed performance
+```
+
+Use that instance's discovered origin and synthetic login to measure Run and
+Work queue navigation, first usable rows, scrolling and concurrent requests.
+Compare query plans and request counts as well as elapsed time. Record initial
+and repeated requests separately; a fresh browser does not establish a cold
+Postgres cache. Local workerd/Postgres exposes query work and browser request
+waterfalls, but Cloudflare/Hyperdrive connection behavior and Neon compute/cache
+effects still require separate deployed measurements. Local results do not prove
+production page latency.
+
 The Problems pack adds incomplete entities, a failed photo-processing Run/job,
 and an open Run with pending image work. Both work fixtures retain real local
 source bytes and avoid provider dispatch. Each pack uses the entity kernel; the
