@@ -16,11 +16,11 @@ import {
  * missing checkout database.
  */
 export const SHARED_POSTGRES = "cubby-dev-pg";
-export const SHARED_POSTGRES_HOST = "localhost";
-export const SHARED_POSTGRES_PORT = 55432;
-export const SHARED_POSTGRES_USER = "postgres";
+const SHARED_POSTGRES_HOST = "localhost";
+const SHARED_POSTGRES_PORT = 55432;
+const SHARED_POSTGRES_USER = "postgres";
 // Synthetic, local-only credential — never used outside this container.
-export const SHARED_POSTGRES_PASSWORD = "password";
+const SHARED_POSTGRES_PASSWORD = "password";
 const DEFAULT_DATABASE = "cubby_dev";
 const IMAGE = "docker.io/pgvector/pgvector:pg17";
 
