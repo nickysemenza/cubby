@@ -76,11 +76,9 @@ test("design showcase renders every section and its live demos", async ({
     page.getByRole("status").filter({ hasText: "Review supplies selected" }),
   ).toBeVisible();
 
-  const review = page
-    .locator("figure")
-    .filter({
-      has: page.getByText("SuggestionReview · inline", { exact: true }),
-    });
+  const review = page.locator("figure").filter({
+    has: page.getByText("SuggestionReview · inline", { exact: true }),
+  });
   await review.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(review.getByRole("status")).toHaveText("Accepted locally");
 
@@ -147,7 +145,7 @@ for (const width of [1440, 402]) {
       .getByRole("button", { name: "Save preview", exact: true })
       .click();
     await expect(
-      dialog.getByRole("button", { name: "Saving preview…", exact: true }),
+      dialog.getByRole("button", { name: /Saving preview…/ }),
     ).toBeDisabled();
     await expect(
       dialog.getByRole("button", { name: "Cancel", exact: true }),
