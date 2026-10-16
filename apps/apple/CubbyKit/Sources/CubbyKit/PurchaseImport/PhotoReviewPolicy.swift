@@ -63,7 +63,9 @@ public enum PhotoReviewPolicy {
             productEffect =
                 "Attach \(group.images.count) photos to \(product.existing?.name ?? "the selected Product"). Keep gallery order and cover."
         }
-        let changesEffect = group.review?.productChanges == nil ? "" : " Apply the reviewed Product edits."
+        let changes = group.review?.productChanges.flatMap { try? JSONValue(encoding: $0).objectValue } ?? [:]
+        let edits = changes.keys.sorted().map { "\($0): \(changeValue(changes[$0]))" }.joined(separator: "; ")
+        let changesEffect = edits.isEmpty ? "" : " Apply Product edits — \(edits)."
         let stockEffect: String
         if let inventory = group.inventory {
             stockEffect =
@@ -72,6 +74,15 @@ public enum PhotoReviewPolicy {
             stockEffect = "No stock change. Historical photos do not record a sale."
         }
         return "\(productEffect)\(changesEffect) \(stockEffect) \(group.skip.count) photos skipped."
+    }
+
+    public static func changeValue(_ value: JSONValue?) -> String {
+        guard let value, value != .null else { return "Empty" }
+        if let text = value.stringValue { return text.isEmpty ? "Empty" : text }
+        if let items = value.arrayValue {
+            return items.isEmpty ? "Empty" : items.map { changeValue($0) }.joined(separator: ", ")
+        }
+        return String(data: (try? JSONEncoder().encode(value)) ?? Data(), encoding: .utf8) ?? "Empty"
     }
 
     public static func approvableSelection(

@@ -1,8 +1,6 @@
 import type { DecisionStep } from "@cubby/schemas/decision-step";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
-import { Badge } from "~/ui/primitives/badge";
-
 import { RecordDot, RecordList, RecordRow } from "./record-list";
 
 import "./decision-steps.css";
@@ -20,12 +18,6 @@ const statusLabel = {
   needs_input: "Needs you",
   blocked: "Blocked",
   not_needed: "Not needed",
-} as const;
-const actionLabel = {
-  create: "+ New",
-  link: "↪ Attach",
-  change: "Change",
-  remove: "Remove",
 } as const;
 
 /** Interactive RecordList timeline. Hidden bodies stay mounted so form drafts and receipts survive. */
@@ -104,7 +96,14 @@ export function DecisionSteps({
               primary={
                 <>
                   <span className="font-medium">{step.label}</span>
-                  <span className="decision-step-summary">
+                  <span
+                    className="decision-step-summary"
+                    data-create={
+                      step.key === "product" && step.action === "create"
+                        ? ""
+                        : undefined
+                    }
+                  >
                     {[step.summary, step.blockedReason]
                       .filter(Boolean)
                       .join(" · ")}
@@ -113,19 +112,7 @@ export function DecisionSteps({
               }
               actions={
                 <>
-                  {step.action || renderAction ? (
-                    <Badge
-                      variant="secondary"
-                      className="decision-step-action"
-                      data-action={step.action ?? undefined}
-                    >
-                      {renderAction
-                        ? renderAction(step)
-                        : step.action
-                          ? actionLabel[step.action]
-                          : null}
-                    </Badge>
-                  ) : null}
+                  {renderAction?.(step)}
                   <button
                     type="button"
                     id={triggerId}

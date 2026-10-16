@@ -8,6 +8,7 @@ struct PhotoGroupDecisionView: View {
     let session: RunReviewSession
 
     @Environment(AppModel.self) private var appModel
+    @State private var currentProduct: JSONValue?
     @State private var evidence: PhotoProductEvidence?
     @State private var evidenceError: String?
     @State private var loadingEvidence = false
@@ -174,6 +175,7 @@ struct PhotoGroupDecisionView: View {
             if checks.isEmpty {
                 Text("? Field evidence unavailable").font(.caption).foregroundStyle(.secondary)
             }
+            pendingProductChanges
             memoryJoggers
             if let concern = group.review?.unresolvedReason,
                 group.steps.first(where: { $0.key == "identity" })?.summary == concern
@@ -191,6 +193,42 @@ struct PhotoGroupDecisionView: View {
                 Button("Not this one…") { reject(productID) }.frame(minHeight: 44)
             }
         }
+    }
+
+    private var productChanges: [String: JSONValue] {
+        guard let changes = group.review?.productChanges else { return [:] }
+        return (try? JSONValue(encoding: changes).objectValue) ?? [:]
+    }
+
+    @ViewBuilder private var pendingProductChanges: some View {
+        if !productChanges.isEmpty {
+            Text("Pending Product edits").font(.subheadline.weight(.semibold))
+            ForEach(productChanges.keys.sorted(), id: \.self) { field in
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    Text(field == "categoryId" ? "Category" : field.capitalized)
+                        .font(.caption.weight(.semibold))
+                    Text(
+                        "Before: \(currentProduct.map { productValue(field: field, from: $0) } ?? (loadingEvidence ? "Loading current Product…" : "Current Product unavailable"))"
+                    )
+                    Text("After: \(PhotoReviewPolicy.changeValue(productChanges[field]))")
+                    Button("Remove \(field == "categoryId" ? "category" : field) change") {
+                        mutate {
+                            let edit = try PhotoReviewEdits.removingProductChange(group: group, field: field)
+                            _ = try await appModel.client.savePhotoGroups(runID: runID, groups: [edit])
+                        }
+                    }
+                    .frame(minHeight: 44)
+                }
+                .font(.caption).textSelection(.enabled)
+            }
+        }
+    }
+
+    private func productValue(field: String, from product: JSONValue) -> String {
+        if field == "categoryId" {
+            return PhotoReviewPolicy.changeValue(product["category"]?["name"] ?? product["category"]?["id"])
+        }
+        return PhotoReviewPolicy.changeValue(product[field])
     }
 
     private var ownershipStep: some View {
@@ -273,6 +311,7 @@ struct PhotoGroupDecisionView: View {
 
     private func loadEvidence() async {
         evidence = nil
+        currentProduct = nil
         evidenceError = nil
         guard let productID = selectedProductID else { return }
         loadingEvidence = true
@@ -282,6 +321,16 @@ struct PhotoGroupDecisionView: View {
             try Task.checkCancellation()
             evidence = loaded
         } catch is CancellationError {
+            return
+        } catch {
+            Diagnostics.report(error, context: "Load photo Product evidence")
+            evidenceError = error.localizedDescription
+        }
+        do {
+            let current = try await appModel.client.row(EntityCatalog[.product], id: productID.rawValue)
+            try Task.checkCancellation()
+            currentProduct = current?.raw
+        } catch is CancellationError {
         } catch {
             Diagnostics.report(error, context: "Load photo Product evidence")
             evidenceError = error.localizedDescription
@@ -290,7 +339,7 @@ struct PhotoGroupDecisionView: View {
 
     private func reload() async {
         await session.refresh(runID: runID, client: appModel.client)
-        await session.loadCandidates(runID: runID, client: appModel.client, force: true)
+        await session.loadCandidates(runID: runID, client: appModel.client)
     }
 
     private func choose(_ productID: ProductCode) {
@@ -302,6 +351,12 @@ struct PhotoGroupDecisionView: View {
 
     private func reject(_ productID: ProductCode) {
         mutate {
+            // Save the safe destination first: a failed save must not leave a rejected
+            // Product applicable, since rejection and saveGroups are separate operations.
+            if selectedProductID == productID {
+                let draft = try PhotoReviewEdits.createAfterRejection(group: group)
+                _ = try await appModel.client.savePhotoGroups(runID: runID, groups: [draft])
+            }
             try await appModel.client.rejectPhotoCandidate(
                 runID: runID, groupKey: group.groupKey, productID: productID)
         }
@@ -325,6 +380,7 @@ struct PhotoGroupDecisionView: View {
             } catch {
                 Diagnostics.report(error, context: "Update photo review")
                 actionError = error.localizedDescription
+                await reload()
             }
         }
     }

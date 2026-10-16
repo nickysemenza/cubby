@@ -1,6 +1,6 @@
 import Foundation
 
-/// Retains proposal evidence and review history when changing the inventory answer.
+/// Retains proposal evidence and review history when changing a review answer.
 public enum PhotoReviewEdits {
     public static func ownership(
         group: PhotoGroupProposal, locationID: String?, quantity: Int, stockIntent: String? = nil
@@ -49,6 +49,50 @@ public enum PhotoReviewEdits {
             body["inventory"] = .object(inventory)
         }
         return .object(body)
+    }
+
+    public static func removingProductChange(group: PhotoGroupProposal, field: String) throws -> JSONValue {
+        var body = try retainedGroup(group)
+        var review = body["review"]?.objectValue ?? [:]
+        var changes = review["productChanges"]?.objectValue ?? [:]
+        changes[field] = nil
+        review["productChanges"] = changes.isEmpty ? nil : .object(changes)
+        body["review"] = .object(review)
+        return .object(body)
+    }
+
+    public static func createAfterRejection(group: PhotoGroupProposal) throws -> JSONValue {
+        var body = try retainedGroup(group)
+        let name = group.review?.observedName ?? productName(group)
+        body["product"] = ["kind": "create", "create": ["name": .string(name)]]
+        var review = body["review"]?.objectValue ?? [:]
+        review["observedName"] = .string(name)
+        review["productChanges"] = nil
+        body["review"] = .object(review)
+        if var inventory = body["inventory"]?.objectValue {
+            inventory["existingEntryId"] = nil
+            inventory["mode"] = "create"
+            body["inventory"] = .object(inventory)
+        }
+        return .object(body)
+    }
+
+    private static func retainedGroup(_ group: PhotoGroupProposal) throws -> [String: JSONValue] {
+        var body =
+            try ownership(
+                group: group, locationID: group.inventory?.locationId?.rawValue,
+                quantity: group.inventory?.quantity ?? 1,
+                stockIntent: group.review?.stockIntent.rawValue
+            ).objectValue ?? [:]
+        if let inventory = group.inventory {
+            var retained = try JSONValue(encoding: inventory).objectValue ?? [:]
+            retained["locationName"] = nil
+            if inventory.ownershipMode == .explicit {
+                retained["ownerPartyId"] = inventory.ownerPartyId.map(JSONValue.string) ?? .null
+            }
+            body["inventory"] = .object(retained)
+        }
+        return body
     }
 
     private static func productName(_ group: PhotoGroupProposal) -> String {

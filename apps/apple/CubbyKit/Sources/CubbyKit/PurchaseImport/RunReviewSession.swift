@@ -37,20 +37,66 @@ public final class RunReviewSession {
     public private(set) var candidateGroups: [String: PhotoCandidateGroupResult] = [:]
     public private(set) var candidatesError: String?
     public private(set) var checkingCandidates = false
-    @ObservationIgnored private var candidateRunID: String?
+    @ObservationIgnored private var candidateKey: String?
+    @ObservationIgnored private var activeCandidateKey: String?
+    @ObservationIgnored private var candidateTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingCandidates:
+        (
+            key: String, load: @MainActor () async throws -> [String: PhotoCandidateGroupResult]
+        )?
+
+    public func candidateRevision(runID: String) -> String {
+        let revisions = (review?.review.proposals ?? []).sorted { $0.groupKey < $1.groupKey }
+            .map { "\($0.groupKey.utf8.count):\($0.groupKey):\($0.updatedAt)" }
+        return "\(runID.utf8.count):\(runID)|\(revisions.joined(separator: "|"))"
+    }
 
     public func loadCandidates(runID: String, client: CubbyClient, force: Bool = false) async {
-        guard !checkingCandidates, force || candidateRunID != runID else { return }
-        checkingCandidates = true
-        defer { checkingCandidates = false }
-        do {
-            candidateGroups = try await client.photoCandidateGroups(runID: runID)
-            candidateRunID = runID
-            candidatesError = nil
-        } catch {
-            reportDiagnostic(error, "Check photo candidates")
-            candidatesError = error.localizedDescription
+        let task = refreshCandidates(key: candidateRevision(runID: runID), force: force) {
+            try await client.photoCandidateGroups(runID: runID)
         }
+        await task?.value
+    }
+
+    /// Own the request independently of SwiftUI task cancellation. Revision changes during a
+    /// request replace a single queued refresh; superseded responses never become visible.
+    func refreshCandidates(
+        key: String, force: Bool = false,
+        load: @escaping @MainActor () async throws -> [String: PhotoCandidateGroupResult]
+    ) -> Task<Void, Never>? {
+        if !force {
+            if pendingCandidates?.key == key || (pendingCandidates == nil && activeCandidateKey == key) {
+                return candidateTask
+            }
+            if candidateTask == nil && candidateKey == key { return nil }
+        }
+        pendingCandidates = (key, load)
+        if let candidateTask { return candidateTask }
+        checkingCandidates = true
+        let task = Task {
+            defer {
+                checkingCandidates = false
+                candidateTask = nil
+                activeCandidateKey = nil
+            }
+            while let request = pendingCandidates {
+                pendingCandidates = nil
+                activeCandidateKey = request.key
+                do {
+                    let groups = try await request.load()
+                    guard pendingCandidates == nil else { continue }
+                    candidateGroups = groups
+                    candidateKey = request.key
+                    candidatesError = nil
+                } catch {
+                    guard pendingCandidates == nil else { continue }
+                    reportDiagnostic(error, "Check photo candidates")
+                    candidatesError = error.localizedDescription
+                }
+            }
+        }
+        candidateTask = task
+        return task
     }
 
     @ObservationIgnored private let reportDiagnostic: @MainActor (any Error, String) -> Void

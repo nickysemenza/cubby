@@ -78,7 +78,7 @@ struct RunPhotoReviewSections: View {
                     .detailContentsHeader().detailContentsAnchor(
                         RunConsoleView.InitialSection.photoReview.rawValue)
                     reviewWorkspace(review)
-                        .task(id: runID) {
+                        .task(id: session.candidateRevision(runID: runID)) {
                             await session.loadCandidates(runID: runID, client: appModel.client)
                         }
                 } header: {
