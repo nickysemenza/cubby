@@ -183,7 +183,8 @@
     "./emoji": "./src/emoji.ts",
     "./email-actions": "./src/email-actions.ts",
     "./ai-evaluation": "./src/ai-evaluation.ts",
-    "./assessment": "./src/assessment.ts"
+    "./assessment": "./src/assessment.ts",
+    "./decision-step": "./src/decision-step.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",
