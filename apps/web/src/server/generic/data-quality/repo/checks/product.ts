@@ -1,4 +1,7 @@
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import {
+  type InventoryPlacement,
+  UNSPECIFIED_MANUFACTURER,
+} from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
@@ -27,11 +30,13 @@ const hasInventory = (t: Product) => sql`EXISTS (
     AND dq_inventory."deletedAt" IS NULL
 )`;
 
+const stockPlacement: InventoryPlacement = "stock";
+
 const hasStock = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "InventoryEntry" dq_stock
   WHERE dq_stock."productId" = ${t.id}
     AND dq_stock."deletedAt" IS NULL
-    AND dq_stock."placement" = 'stock'
+    AND dq_stock."placement" = ${stockPlacement}
 )`;
 
 // The shared definition (live attachment, live Image, not a `label`, not a PDF

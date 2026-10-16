@@ -41,7 +41,7 @@ type PredicateKind = Extract<DerivedField, { shape: "predicate" }>["predicate"];
  * An any-of filter's picked values and its Any value / No value key (a
  * hand-written `nullable`), ORed by the predicate.
  */
-export interface AnyOfValue {
+interface AnyOfValue {
   readonly values: readonly string[];
   readonly presence: PresenceFilter;
 }
@@ -50,7 +50,7 @@ export interface AnyOfValue {
  * A range filter's bounds and declared presence key, or the one request
  * parameter a range whose presets expand to a named state binds (`param`).
  */
-export interface RangeValue {
+interface RangeValue {
   readonly from: string | number | undefined;
   readonly to: string | number | undefined;
   readonly presence: PresenceFilter;

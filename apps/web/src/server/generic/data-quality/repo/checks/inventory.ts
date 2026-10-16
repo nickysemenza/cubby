@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { inventoryEntry } from "~/server/db/retained-tables";
 
@@ -21,7 +21,7 @@ export const inventoryChecks = defineEntityChecks({
       // Installed fixtures are excluded from counting/audits entirely (see
       // the `InventoryPlacement` doc comment in schema.ts) — only movable
       // stock is ever expected to carry a verification date.
-      expected: (t: InventoryEntry) => sql`${t.placement} = 'stock'`,
+      expected: (t: InventoryEntry) => eq(t.placement, "stock"),
       missing: (t: InventoryEntry) => sql`${t.verifiedAt} IS NULL`,
     },
   },
