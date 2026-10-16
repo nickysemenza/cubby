@@ -54,8 +54,8 @@ const MAX_TRAILING = 2;
 
 /**
  * A record's row data from its manifest phone-row projection: the field in
- * the `subtitle` slot reads inline after the name, and `trailing` fields
- * become right-aligned chips. The same declaration drives the phone list row
+ * the `subtitle` slot supplies the secondary/status column, and `trailing`
+ * fields become right-aligned chips. The same declaration drives the phone list row
  * and native, so a picker row says what the record's card says.
  */
 function recordRowProjection<E extends ShortcodeType>(
@@ -121,7 +121,7 @@ function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
 /**
  * A picker row for any manifest entity: the declared `titleField` is the
  * name, aliases stay searchable, the cover is the picture, and the phone-row
- * projection supplies the inline secondary and trailing chips.
+ * projection supplies the secondary/status and trailing columns.
  */
 export function buildRecordComboboxItem<E extends ShortcodeType>(
   entity: E,

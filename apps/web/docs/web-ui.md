@@ -64,7 +64,7 @@ a handful of view modes or formats. `multiple` keeps several values as chips;
 (`PickerOption`); records pass `items` with an `entity`, built by
 `combobox-builders.tsx` from the manifest — `displayImages[0]` is the picture
 and the phone-row projection (`display.mobile` `subtitle` and `trailing` slots)
-supplies the inline secondary and trailing chips, so declare those slots
+supplies the secondary/status and trailing columns, so declare those slots
 rather than hand-building row content. Each mode and `PickerField` store keeps
 its own value, empty value, focus, and search contract. A picker never displays
 or announces a shortcode: a stored code resolves to its record through
