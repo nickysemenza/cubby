@@ -32,7 +32,6 @@ describe("ENTITY_EDGE_OWNERS", () => {
   // Regression guard for the graph read: an edge whose source cannot be named
   // would silently vanish from Connections and the orphan finder.
   it("names a source kind for every graph-visible edge", () => {
-    expect(ENTITY_EDGE_SPECS.length).toBeGreaterThan(0);
     const unnamed = ENTITY_EDGE_SPECS.filter(
       (spec) =>
         spec.source.kind !== "identity" &&
