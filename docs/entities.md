@@ -202,7 +202,10 @@ predicate; Swift reads its generated constant. This is presentation, not
 execution authority: agent-coordinated purposes include photo inventory and
 exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
-review and durable transcript rather than purchase report sections.
+review and durable transcript rather than purchase report sections. Its review
+snapshot shares one current image-evidence read between proposal cross-checks,
+the photo list, and lifecycle readiness. Reuse lasts only for that read; the
+next refresh observes newly settled image work and proposal edits.
 
 Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.

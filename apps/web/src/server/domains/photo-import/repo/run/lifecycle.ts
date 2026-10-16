@@ -29,6 +29,7 @@ import {
 import {
   listPhotoGroupProposals,
   listPhotoRunImages,
+  readPhotoRunReview,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { findActivePurchaseAgentGrant } from "~/server/domains/purchase-import/repo/agent-auth";
 import { dispatchRunEvent } from "~/server/domains/purchase-import/repo/dispatch";
@@ -176,10 +177,9 @@ async function loadPhotoRun(db: Database, publicId: string) {
 
 /** One read of everything the lifecycle derives from. */
 export async function readPhotoRunSnapshot(db: Database, publicId: string) {
-  const [run, images, review] = await Promise.all([
+  const [run, { images, review }] = await Promise.all([
     loadPhotoRun(db, publicId),
-    listPhotoRunImages(db, publicId),
-    listPhotoGroupProposals(db, publicId),
+    readPhotoRunReview(db, publicId),
   ]);
   return {
     run,
