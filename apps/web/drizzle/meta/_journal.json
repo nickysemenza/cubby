@@ -533,6 +533,13 @@
       "when": 1792155390777,
       "tag": "0075_drop_vendor_account_label",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792174060994,
+      "tag": "0076_card_user_funding_history",
+      "breakpoints": true
     }
   ]
 }

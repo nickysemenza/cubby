@@ -9,6 +9,7 @@ import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { financialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import {
+  ledgerPartyShortcode,
   imageShortcode,
   purchaseShortcode,
   projectShortcode,
@@ -44,7 +45,12 @@ export default defineEntity({
         {
           id: "order",
           title: "Order",
-          fields: ["orderId", "vendorAccountId", "displayLabel"],
+          fields: [
+            "orderId",
+            "vendorAccountId",
+            "displayLabel",
+            "purchaserOverrideId",
+          ],
         },
         {
           id: "classification",
@@ -183,6 +189,7 @@ export default defineEntity({
         ],
         media: ["vendorLogo", "images", "displayImages"],
         derived: [
+          "purchaserId",
           "expenseCountLabel",
           "reconciliationLabel",
           "financialReconciliationLabel",
@@ -221,6 +228,33 @@ export default defineEntity({
   model: {
     research: { fillFields: ["spendingCategoryId"] },
     fields: [
+      {
+        key: "purchaserOverrideId",
+        kind: "identifier",
+        nullable: true,
+        description:
+          "Explicit purchaser. Clear to inherit from card access or linked vendor/email evidence.",
+        reference: { entity: "ledgerParty" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().default(null),
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "purchaserId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "ledgerParty" },
+        display: { detail: true },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "bookingCoverage",
         kind: "enum",
@@ -1074,6 +1108,7 @@ export default defineEntity({
       { key: "shortcode", specialized: "shortcode" },
       { key: "vendorId", reference: "vendor" },
       { key: "vendorAccountId", reference: "vendorAccount" },
+      { key: "purchaserOverrideId", reference: "ledgerParty" },
       { key: "defaultProjectId", reference: "project" },
       { key: "defaultTrade", specialized: "enum:trade" },
       "orderId",
@@ -1086,6 +1121,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "purchaserOverrideId",
       "spendingCategoryId",
       "itemizationExpectation",
       "vendorId",
@@ -1100,6 +1136,7 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
+      "purchaserOverrideId",
       "spendingCategoryId",
       "itemizationExpectation",
       "vendorId",
@@ -1117,6 +1154,7 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "purchaserOverrideId",
       "spendingCategoryId",
       "itemizationExpectation",
       "vendorId",
@@ -1167,6 +1205,7 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "purchaserOverrideId",
           "spendingCategoryId",
           "itemizationExpectation",
           "vendorId",
@@ -1186,6 +1225,8 @@ export default defineEntity({
       update: ["full", "vendor", "identity"],
     },
     output: [
+      "purchaserId",
+      "purchaserOverrideId",
       "bookingCoverage",
       "documentCoverage",
       "itemizationCoverage",
@@ -1275,6 +1316,14 @@ export default defineEntity({
       export: "purchaseFilterFields",
     },
     descriptors: [
+      {
+        columnId: "purchaserOverrideId",
+        placeholder: "Filter by purchaser override...",
+        kind: "idMulti",
+        brandRef: { entity: "ledgerParty" },
+        deriveSchema: true,
+        stored: true,
+      },
       {
         columnId: "financialReconciliation",
         kind: "select",
@@ -1529,6 +1578,23 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "purchaser-override",
+      label: "Purchaser override",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.purchaserOverrideId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Purchase.purchaserOverrideId", direction: "incoming" },
+        ],
+      },
+    },
     {
       key: "emails",
       label: "Emails",

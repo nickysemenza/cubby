@@ -42,6 +42,20 @@ per-entity code as possible.
   remainder in a shrink-only baseline and a GitHub issue. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
+## Field resolution and overrides
+
+Before adding an inherited value or override, trace an existing field through its
+stored intent, effective read, `fieldResolutions` provenance, and declared
+`resolution` actions. Reuse that contract for edits, Use inherited, and explicit
+None where supported. Domain rules supply the fallback; the generic framework
+owns its presentation and assignment intent. Generic form controls alone do not
+establish reuse of the resolution framework.
+
+A new field is complete when its normal reads and supported filters/sorts agree
+on the effective value, reset restores inheritance, and source changes update
+inherited values while preserving explicit choices. Extend the shared contract
+when a required state is missing rather than adding a parallel override path.
+
 ## Declaration contracts
 
 Compiled default fact sections reuse the declaration's edit groups, with

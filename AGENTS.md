@@ -55,6 +55,8 @@ RPC, MCP, manifest, stored-shape, or native wire changes, load
 Reuse before writing: search [generic paths](docs/agents/generic-paths.md).
 Entity behavior belongs in declarations and generic runtimes; for entity or
 cross-client changes, load [declaration rules](docs/entities.md#generic-by-default).
+For inherited values or overrides, load [field resolution](docs/entities.md#field-resolution-and-overrides)
+before adding storage or precedence logic.
 
 ## Product constraints
 

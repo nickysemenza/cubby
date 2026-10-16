@@ -18,12 +18,13 @@ import type {
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  uuidArrayParam,
   amountJsonSql,
   amountToColumns,
   buildPartialUpdateValues,
@@ -40,6 +41,7 @@ import {
   mealRecipe,
   mealRecipePortion,
   project,
+  purchase,
   task,
 } from "~/server/db/schema";
 import { applyInventoryOwnershipInTransaction } from "~/server/domains/inventory/repo/ownership-mutations";
@@ -110,6 +112,16 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     code: "block-attributions",
     effect: "block",
     description: "Live expense shares retain their party.",
+  },
+  "FinancialAccount.primaryCardholderId": {
+    code: "block-cardholders",
+    effect: "block",
+    description: "Live cards retain their primary cardholder.",
+  },
+  "Purchase.purchaserOverrideId": {
+    code: "block-purchasers",
+    effect: "block",
+    description: "Purchases retain their explicit purchaser.",
   },
   "FinancialAccount.ledgerPartyId": {
     code: "block-accounts",
@@ -225,6 +237,16 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description: "Colliding weighted shares are summed.",
   },
+  "FinancialAccount.primaryCardholderId": {
+    code: "block-cardholder-merges",
+    effect: "block",
+    description: "Reconcile card access before merging cardholders.",
+  },
+  "Purchase.purchaserOverrideId": {
+    code: "repoint-purchasers",
+    effect: "repoint",
+    description: "Purchaser overrides move to the surviving member.",
+  },
   "FinancialAccount.ledgerPartyId": {
     code: "repoint-accounts",
     effect: "repoint",
@@ -335,6 +357,25 @@ const getById = async (
  * Runs before the crud reads its before-state so the check and the write see
  * the same row.
  */
+const assertNoAccountHistory = async (
+  tx: Database | DrizzleTransaction,
+  ids: LedgerPartyId[],
+) => {
+  const result = await unwrapDb(tx).execute(sql`
+    SELECT fa.shortcode FROM "FinancialAccount" fa
+    JOIN "LedgerParty" party ON party.id = ANY(${uuidArrayParam(ids)})
+    WHERE fa."deletedAt" IS NULL AND (
+      fa."authorizedUsers" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode)) OR
+      fa."fundingPeriods" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode))
+    ) LIMIT 1
+  `);
+  if (result.rows.length)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Reconcile financial-account user/funding history before deleting, merging, or changing this party's kind.",
+    );
+};
+
 const assertKindTransition = async (
   tx: Database | DrizzleTransaction,
   id: LedgerPartyId,
@@ -360,6 +401,34 @@ const assertKindTransition = async (
       "CONSTRAINT_VIOLATION",
       "The singleton household ledger party cannot change kind.",
     );
+  }
+  if (data.kind !== undefined && data.kind !== before.kind) {
+    await assertNoAccountHistory(tx, [id]);
+    const [purchaser] = await unwrapDb(tx)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(and(eq(purchase.purchaserOverrideId, id), notDeleted(purchase)))
+      .limit(1);
+    if (purchaser)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "An explicit purchaser cannot change kind while referenced by a live Purchase.",
+      );
+    const [card] = await unwrapDb(tx)
+      .select({ id: financialAccount.id })
+      .from(financialAccount)
+      .where(
+        and(
+          eq(financialAccount.primaryCardholderId, id),
+          notDeleted(financialAccount),
+        ),
+      )
+      .limit(1);
+    if (card)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A primary cardholder cannot change kind while referenced by a live card.",
+      );
   }
   if (
     data.kind !== undefined &&
@@ -501,7 +570,12 @@ const refuseHouseholdParty = async (
 export const deleteLedgerParties = policyDelete(
   "ledgerParty",
   LEDGER_PARTY_DELETE_EDGE_POLICY,
-  { beforeDelete: refuseHouseholdParty },
+  {
+    beforeDelete: async (tx, ids) => {
+      await refuseHouseholdParty(tx, ids);
+      await assertNoAccountHistory(tx, ids);
+    },
+  },
 );
 
 const lockMealRecipePortionReferences = async (
@@ -666,6 +740,7 @@ export async function mergeLedgerParties(
         "CONSTRAINT_VIOLATION",
         "Only ledger parties of one non-household kind can be merged.",
       );
+    await assertNoAccountHistory(tx, [keepId, ...loserIds]);
     const partyIds = [keepId, ...loserIds];
     const repointed = await applyMergePolicy(tx, {
       entity: "ledgerParty",

@@ -49,7 +49,8 @@ Test subprocesses invoke Node/the installed tool directly and inherit the
 necessary parent environment. Never invoke a package manager from a test: its
 dependency verification can install or prune modules under concurrent suites.
 
-Scripted block edits use bounded, unique markers. Inspect the affected diff
+Scripted block edits match a unique, line-anchored block or AST node; assert a
+single match before replacing nested declarations. Inspect the affected diff
 and parse the edited source before reporting it ready.
 
 For persistent HMR, fixture packs, or runtime discovery, load

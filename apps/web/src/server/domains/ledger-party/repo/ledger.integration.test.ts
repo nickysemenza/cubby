@@ -71,6 +71,9 @@ describe("consolidated household ledger", () => {
         {
           name: "Guest mapping placeholder",
           identity: { kind: "cash" },
+          primaryCardholderId: null,
+          authorizedUsers: [],
+          fundingPeriods: [],
           cardNumbers: [],
           provisional: false,
           sourceAliases: [],

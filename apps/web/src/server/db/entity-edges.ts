@@ -728,6 +728,21 @@ export const ENTITY_EDGES = {
         "A weighted expense beneficiary or funder share; money remains on the expense itself.",
       liveness: { kind: "must-target-live" },
     },
+    "FinancialAccount.primaryCardholderId": {
+      column: financialAccount.primaryCardholderId,
+      role: "reference",
+      label: "primary cards",
+      description: "The member who primarily uses the credit card.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Purchase.purchaserOverrideId": {
+      column: purchase.purchaserOverrideId,
+      role: "reference",
+      label: "purchaser overrides",
+      description:
+        "An explicit purchaser independent of funding and consumption.",
+      liveness: { kind: "must-target-live" },
+    },
     "FinancialAccount.ledgerPartyId": {
       column: financialAccount.ledgerPartyId,
       role: "reference",
