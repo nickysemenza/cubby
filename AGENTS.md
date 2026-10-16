@@ -14,9 +14,11 @@
   routing](docs/agents/model-routing.md) and use its lane, effort, review, and
   handoff contract. Preserve an explicit user model choice and the current main
   session.
-- Use synthetic data in all repository and outward-facing content, including
-  diagnostics and screenshots; exclude private source material and real entity
-  identifiers. Preserve functional public links.
+- Use synthetic data in all repository and outward-facing content — code,
+  fixtures, docs, commit messages, and GitHub issues, PRs, and comments —
+  including diagnostics, screenshots, and mockups; exclude household records,
+  private source material, and real entity identifiers. Preserve functional
+  public links.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
 - Write the failure modes and any failing isolated test before the
