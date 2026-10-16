@@ -196,8 +196,16 @@ export function photoFieldCrossCheck(
       tokens: nameTokens,
       labelValue:
         [
+          // Size and colour words have their own rows; repeating them here
+          // makes a lone "9" look like name evidence.
           ...nameTokens
-            .filter((token) => token.mark === "agree")
+            .filter(
+              (token) =>
+                token.mark === "agree" &&
+                !printedTerms(token.text).some(
+                  (term) => sizeKinds.has(term.kind) || term.kind === "color",
+                ),
+            )
             .map((token) => token.text),
           ...missingNameTerms.map((term) => term.printed),
         ].join(" ") || null,
