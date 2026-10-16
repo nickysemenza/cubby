@@ -1,9 +1,13 @@
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { imageSighting } from "~/server/db/schema";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
+  createImageFixture,
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
@@ -142,5 +146,38 @@ describe("entity edge source", () => {
     // Products are left to the dedicated orphaned-products detector.
     expect(codes).not.toContain(item.id);
     expect(orphans.count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps an image connected only through its sighting owner", async () => {
+    // The owner kind is outside the orphan check: retaining target-kind
+    // arms alone would incorrectly report this image as an orphan.
+    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic sighting owner",
+      kind: "member",
+    });
+    const device = await insertWithShortcode(ctx.db, "device", {
+      name: "Synthetic camera",
+      installationId: crypto.randomUUID(),
+      platform: "ios",
+      ledgerPartyId: owner.id,
+    });
+    const seen = await createImageFixture(ctx.db, "sighting-only");
+    const unseen = await createImageFixture(ctx.db, "unconnected-image");
+    await getDb(ctx.db)
+      .insert(imageSighting)
+      .values({
+        imageId: seen.id,
+        ledgerPartyId: owner.id,
+        deviceId: device.id,
+        sourceType: "userLibrary",
+        assetKey: "synthetic-sighting",
+        matchKind: "import",
+        observedAt: new Date("2026-06-01T10:00:00Z"),
+      });
+    const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
+    expect(orphans.items.map((entry) => entry.id)).not.toContain(
+      seen.shortcode,
+    );
+    expect(orphans.items.map((entry) => entry.id)).toContain(unseen.shortcode);
   });
 });
