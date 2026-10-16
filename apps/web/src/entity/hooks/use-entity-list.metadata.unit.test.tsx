@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createTextColumn } from "~/entity/table/column-helpers";
+import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
@@ -23,6 +24,9 @@ import {
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 import { useEntityList } from "./use-entity-list";
+
+// This isolated renderer bypasses the authenticated route that installs features.
+installFeatures();
 
 interface MetadataRow {
   id: string;
