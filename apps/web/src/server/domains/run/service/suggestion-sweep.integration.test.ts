@@ -188,6 +188,7 @@ describe("persisted Suggestion sweeps", () => {
   // A migrated paused Sweep has counts and processed IDs but no target ledger yet.
   it("prepares a legacy paused roster on resume without losing completed counts", async () => {
     const context = kernelCtx(ctx);
+    const samplePair = vi.fn(() => false);
     const products = await Promise.all(
       ["Legacy first", "Legacy next"].map((name) =>
         productFixture(ctx, `Synthetic ${name}`),
@@ -200,7 +201,7 @@ describe("persisted Suggestion sweeps", () => {
         fields: ["categoryId"],
         filters: { categoryPresenceFilter: "none" },
       },
-      { context, pauseAfter: 1, ...categoryPorts() },
+      { context, pauseAfter: 1, ...categoryPorts(), samplePair },
     );
     const processed = (
       await getDb(ctx.db)
@@ -232,10 +233,15 @@ describe("persisted Suggestion sweeps", () => {
         progress: sql`${JSON.stringify({ total: 2, done: 1, applied: 1, queued: 0, failed: 0, processedTargetIds: [`${processed.target.recordId}:categoryId`] })}::jsonb`,
       })
       .where(eq(runTable.id, started.id));
+    samplePair.mockClear();
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
       ...categoryPorts(),
+      samplePair,
     });
+    // Legacy preparation must honor the caller's sampling seam too; falling
+    // back to production sampling makes this history assertion UUID-dependent.
+    expect(samplePair).toHaveBeenCalled();
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
     expect(finished.progress).toMatchObject({ total: 2, done: 2, applied: 2 });
