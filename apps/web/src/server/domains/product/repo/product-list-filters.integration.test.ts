@@ -186,6 +186,8 @@ describe("product list declared filters", () => {
       // due date and the dated one is done.
       [{ taskStatusFilter: ["in_progress"], taskDueTo: "2026-12-31" }, []],
       [{ taskOpenOnly: false }, all],
+      [{ taskStatusFilter: [], taskOpenOnly: true }, [w.flour]],
+      [{ taskStatusFilter: [], taskDueTo: "2026-08-01" }, []],
       [{ stockTrackedPresenceFilter: "has" }, [w.driver]],
       // The generated sub-category toggle: on by default, off is exact.
       [

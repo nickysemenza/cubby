@@ -342,10 +342,12 @@ const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelN
       AND pei."deletedAt" IS NULL))`;
 
 const productTaskKeys = z.object({
+  // An empty list is no status filter, as the compiler reads it.
   taskStatusFilter: z
     .union([taskStatusSchema, z.array(taskStatusSchema)])
     .optional()
-    .catch(undefined),
+    .catch(undefined)
+    .transform((value) => (value === undefined ? [] : [value].flat())),
   taskOpenOnly: z.boolean().optional().catch(undefined),
   taskDueFrom: z.string().optional().catch(undefined),
   taskDueTo: z.string().optional().catch(undefined),
@@ -364,10 +366,8 @@ const productHasTask = ({
   taskDueFrom,
   taskDueTo,
 }: z.output<typeof productTaskKeys>) => {
-  const statuses =
-    taskStatusFilter === undefined ? [] : [taskStatusFilter].flat();
   if (
-    statuses.length === 0 &&
+    taskStatusFilter.length === 0 &&
     !taskOpenOnly &&
     taskDueFrom === undefined &&
     taskDueTo === undefined
@@ -382,7 +382,9 @@ const productHasTask = ({
         and(
           notDeleted(task),
           isNotNull(effectiveTaskSubjectProductSql()),
-          statuses.length > 0 ? inArray(task.status, statuses) : undefined,
+          taskStatusFilter.length > 0
+            ? inArray(task.status, taskStatusFilter)
+            : undefined,
           taskOpenOnly ? ne(task.status, "done") : undefined,
           taskDueFrom === undefined
             ? undefined
@@ -560,11 +562,11 @@ const productScaffold = listScaffold("product", product, {
     },
     taskStatus: productTasks.predicate((keys) => productHasTask(keys)),
     taskOpen: productTasks.predicate((keys) =>
-      keys.taskStatusFilter === undefined ? productHasTask(keys) : undefined,
+      keys.taskStatusFilter.length === 0 ? productHasTask(keys) : undefined,
     ),
     // Presence is the related view's `taskPresenceFilter`.
     taskDue: productTasks.predicate((keys) =>
-      keys.taskStatusFilter === undefined && !keys.taskOpenOnly
+      keys.taskStatusFilter.length === 0 && !keys.taskOpenOnly
         ? productHasTask(keys)
         : undefined,
     ),
