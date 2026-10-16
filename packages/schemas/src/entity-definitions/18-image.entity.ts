@@ -865,6 +865,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by captured by...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
     ],

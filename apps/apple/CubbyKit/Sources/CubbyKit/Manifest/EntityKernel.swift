@@ -182,7 +182,7 @@ extension EntityDescriptor {
 
     /// Flat filter names as the kernel's nested, typed `filters` object. A timeline's window
     /// names land under `window`.
-    private func filterBody(_ filters: EntityFilterState, includeWindow: Bool) throws -> [String: JSONValue] {
+    func filterBody(_ filters: EntityFilterState, includeWindow: Bool) throws -> [String: JSONValue] {
         let parameters = key.kernel?.parameters ?? [:]
         var result: [String: JSONValue] = [:]
         for name in filters.names where name != "groupBy" {
@@ -204,7 +204,7 @@ extension EntityDescriptor {
 }
 
 extension EntityKernelCapabilities.Parameter {
-    fileprivate func json(_ value: EntityFilterValue, name: String) throws -> JSONValue {
+    fileprivate func json(_ value: [String], name: String) throws -> JSONValue {
         let check = { (raw: String) throws -> String in
             if let values, !values.contains(raw) {
                 throw EntityFilterError.invalidValue(
@@ -214,7 +214,7 @@ extension EntityKernelCapabilities.Parameter {
         }
         switch type {
         case .string: return .string(try check(try value.string(name)))
-        case .strings: return .array(try value.strings.map { .string(try check($0)) })
+        case .strings: return .array(try value.map { .string(try check($0)) })
         case .number: return .number(try value.double(name))
         case .integer: return .number(Double(try value.int(name)))
         case .boolean: return .bool(try value.bool(name))

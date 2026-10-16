@@ -286,6 +286,7 @@ export default defineEntity({
       "status",
     ],
     derived: {
+      // The Vendor and member names; its SQL is `vendorAccountLabelSql`.
       displayName: { type: "text" },
       lastRunAt: { type: "date" },
     },
@@ -383,6 +384,7 @@ export default defineEntity({
         field: "search",
         urlKey: "q",
         kind: "text",
+        derived: true,
         placeholder: "Search vendor accounts...",
         deriveSchema: true,
         schemaFromRead: true,
@@ -401,6 +403,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by member...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
         deriveSchema: true,
         stored: true,

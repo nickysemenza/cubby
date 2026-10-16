@@ -25,23 +25,19 @@ const searchCodec = (
   descriptor: FilterDescriptor,
   alias: (ref: SourceRef) => string,
 ): string => {
+  // The non-value items the filter UI writes into this key's list: Any /
+  // No value, Match all, `@me` (resolved server-side) and declared sentinels.
+  const tokens = [
+    ...(descriptor.nullable === null ? [] : ["FILTER_ANY", "FILTER_NONE"]),
+    ...(descriptor.match === null ? [] : ["FILTER_ALL"]),
+    ...(descriptor.currentMember ? ["CURRENT_MEMBER_FILTER"] : []),
+    ...(descriptor.sentinels ?? []).map(({ value }) => JSON.stringify(value)),
+  ];
   switch (descriptor.kind) {
-    case "id":
-      return descriptor.brandRef === null
-        ? "urlStringParam"
-        : `urlShortcodeParam(${JSON.stringify(descriptor.brandRef.entity)})`;
     case "idMulti": {
       if (descriptor.brandRef === null) return "urlStringParam";
-      // A Ledger Party filter also carries `@me`, resolved server-side.
-      const sentinels = [
-        ...(descriptor.nullable === null ? [] : ["...PRESENCE_SENTINELS"]),
-        ...(descriptor.brandRef.entity === "ledgerParty"
-          ? ["CURRENT_MEMBER_FILTER"]
-          : []),
-      ];
-      return `urlShortcodeListParam(${JSON.stringify(descriptor.brandRef.entity)}${sentinels.length === 0 ? "" : `, { sentinels: [${sentinels.join(", ")}] }`})`;
+      return `urlShortcodeListParam(${JSON.stringify(descriptor.brandRef.entity)}${tokens.length === 0 ? "" : `, { sentinels: [${tokens.join(", ")}] }`})`;
     }
-    case "select":
     case "multiselect": {
       const values =
         descriptor.schemaRef !== null
@@ -52,7 +48,7 @@ const searchCodec = (
       // Options resolved at runtime (`optionsKey` / `optionsRef`) have no
       // static roster to validate against.
       if (values === null) return "urlStringParam";
-      return `urlEnumListParam(${descriptor.nullable === null ? values : `withPresenceSentinels(${values})`})`;
+      return `urlEnumListParam(${tokens.length === 0 ? values : `withTokens(${values}, [${tokens.join(", ")}])`})`;
     }
     default:
       return "urlStringParam";
@@ -73,9 +69,7 @@ export const renderSearchArtifacts = (
   const { imports, alias } = sourceRefImports(
     filterEntities.flatMap(({ filterDescriptors }) =>
       filterDescriptors.flatMap(({ kind, schemaRef }) =>
-        (kind === "select" || kind === "multiselect") && schemaRef !== null
-          ? [schemaRef]
-          : [],
+        kind === "multiselect" && schemaRef !== null ? [schemaRef] : [],
       ),
     ),
     "searchRef",
@@ -169,6 +163,9 @@ export const renderSearchArtifacts = (
       );
     })
     .join("\n");
+  const tokenImports = ["FILTER_ALL", "FILTER_ANY", "FILTER_NONE"]
+    .filter((token) => entries.includes(token))
+    .join(", ");
   return [
     {
       relativePath: "apps/web/src/entity/generated/entity-search.gen.ts",
@@ -179,8 +176,8 @@ export const renderSearchArtifacts = (
         `${imports}\n` +
         'import { z } from "zod";\n\n' +
         'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
-        'import { FILTER_ANY, FILTER_NONE } from "~/entity/filters";\n' +
-        'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlShortcodeParam, urlStringParam } from "~/lib/search-params";\n\n' +
+        `import { ${tokenImports} } from "~/entity/filters";\n` +
+        'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlStringParam } from "~/lib/search-params";\n\n' +
         renderRecord({
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(
@@ -202,10 +199,11 @@ export const renderSearchArtifacts = (
         "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
         "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
         "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
-        "// A nullable filter also accepts the presence sentinels the filter UI writes.\n" +
-        "const PRESENCE_SENTINELS = [FILTER_ANY, FILTER_NONE] as const;\n" +
-        "const withPresenceSentinels = <T extends z.ZodType<string>>(schema: T) =>\n" +
-        "  z.union([schema, z.literal(FILTER_ANY), z.literal(FILTER_NONE)]);\n" +
+        "// A filter list also accepts the tokens the filter UI writes into it.\n" +
+        "const withTokens = <T extends z.ZodType<string>>(\n" +
+        "  schema: T,\n" +
+        "  tokens: readonly [string, ...string[]],\n" +
+        ") => z.union([schema, z.enum(tokens)]);\n" +
         "// `?create=true` opens the capture dialog; a real boolean, not a string.\n" +
         "const createSearchField = z.boolean().optional().catch(undefined);\n\n" +
         `export const entitySearch = {\n${entries}\n};\n`,

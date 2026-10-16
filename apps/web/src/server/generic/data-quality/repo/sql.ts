@@ -363,7 +363,7 @@ export const hasDataQualityFilter = <Filters extends object>(
 
 /**
  * The `dataStatus` / `dataGap` list predicates for one entity, from filters
- * the generated schema already validated. A `dataGap` naming a related
+ * the generated schema already validated. Each is any-of. A `dataGap` naming a related
  * entity's check rolls up through `relatedGapCondition`; an unknown value
  * is dropped rather than matched against nothing.
  */
@@ -375,9 +375,14 @@ export const dataQualityFilterPredicates = <Filters extends object>(
 ): SQL[] => {
   const values = dataQualityFilterValues.parse(filters);
   const predicates: SQL[] = [];
-  const [status] = values.dataStatus;
-  if (status !== undefined) {
-    predicates.push(statusCondition(entity, status, t, context));
+  if (values.dataStatus.length > 0) {
+    predicates.push(
+      orGroup(
+        values.dataStatus.map((status) =>
+          statusCondition(entity, status, t, context),
+        ),
+      ),
+    );
   }
   const own = dataChecksByEntity[entity];
   const related = relatedDataQualityEntities[entity].map(

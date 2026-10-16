@@ -27,12 +27,7 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  formatSearchTerm,
-  notDeleted,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
+import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
@@ -223,9 +218,7 @@ type VendorAccountReferencePatch = {
 };
 
 export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
-  scaffold.where(filters, [
-    formatSearchTerm(vendorAccountLabelSql, filters.search),
-  ]);
+  scaffold.where(filters, []);
 
 export const listVendorAccountsRead = (
   db: Database,

@@ -365,7 +365,7 @@ final class PhotoImportManifest {
             case .param(let name) = relation.wire
         else { return nil }
         var filters = EntityFilterState()
-        filters.set(.single(source.id), for: name)
+        filters.set([source.id], for: name)
         let semanticDateKey = PhotoEntityChooserModel.semanticDateKey(for: descriptor)
         if let captureDate {
             let dateFilters = PhotoEntityChooserModel.captureDateFilters(

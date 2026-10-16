@@ -1,3 +1,5 @@
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+
 import { workQueueContract } from "~/contracts/work-queue.contract";
 import {
   readRecordWorkQueue,
@@ -24,7 +26,7 @@ export const workQueueHandlers = implementOperationDomain(workQueueContract, {
     readWorkQueue(
       context.db,
       (await context.currentParty())?.id ?? null,
-      { ...input, waitingFor: "me" },
+      { ...input, waitingFor: [CURRENT_MEMBER_FILTER] },
       true,
     ),
 });

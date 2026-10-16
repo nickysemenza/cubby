@@ -943,6 +943,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by member...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
         deriveSchema: true,
         stored: true,

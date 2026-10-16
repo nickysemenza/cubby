@@ -25,5 +25,5 @@ rewriting its decision.
 | [0015](0015-unified-durable-work-coordination.md)             | Shared durable execution for member-requested AI work                  |
 | [0016](0016-shared-assessments-and-feedback.md)               | Shared Assessments and Feedback                                        |
 | [0017](0017-subscription-funded-model-fallback.md)            | Subscription-funded model fallback                                     |
-| [0018](0018-current-member-filter-token.md)                   | `@me` is a value of every Ledger Party filter                          |
+| [0018](0018-current-member-filter-token.md)                   | `@me` is a declared value of Ledger Party filters                      |
 | [0019](0019-domain-first-server-layout.md)                    | Domain-first server layout                                             |

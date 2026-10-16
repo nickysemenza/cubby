@@ -46,12 +46,14 @@ import {
   amountFromColumns,
   amountToColumns,
   auditDateWhereConditions,
-  householdDayRangeConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  eqAny,
   eqAnyRequested,
+  flagCondition,
   getDb,
+  householdDayRangeConditions,
   type ListReadIntent,
   notDeleted,
   relations,
@@ -222,11 +224,17 @@ export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
 
 // Effective-owner, ownership, and category-family filters keep their
 // published schema types (`@me` resolves in the kernel before this runs).
+type InventoryValuationStatus =
+  | "valued"
+  | "missing"
+  | "missing_with_priced_product";
+
 type InventoryFilters = Pick<
   z.output<typeof inventoryFiltersSchema>,
   | "ownerLedgerPartyId"
   | "ownershipMode"
   | "categoryFeatureFilter"
+  | "categoryPresenceFilter"
   | "includeSubProductCategories"
 > & {
   searchQuery?: string;
@@ -239,22 +247,28 @@ type InventoryFilters = Pick<
   // Public codes, resolved to uuids inside `inventoryentryList` — see
   // `resolveFilterIds`. A code naming no live row narrows to nothing; it is
   // not a 404 for the whole list.
-  locationIdFilter?: LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
+  locationIdFilter?:
+    | LocationShortcode
+    | typeof UNRESOLVABLE_ENTITY_FILTER
+    | (LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
   // Selected Locations plus their live descendants; `locationIdFilter` stays
   // exact because the Location detail page lists only direct stock.
   locationSubtreeFilter?:
     | LocationShortcode
     | typeof UNRESOLVABLE_ENTITY_FILTER
     | (LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
-  productIdFilter?: ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
+  productIdFilter?:
+    | ProductShortcode
+    | typeof UNRESOLVABLE_ENTITY_FILTER
+    | (ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
   manufacturerFilter?: string;
   categoryFilter?: ProductCategoryShortcode | ProductCategoryShortcode[];
   verifiedPresenceFilter?: "has" | "none";
-  valuationStatus?: "valued" | "missing" | "missing_with_priced_product";
+  valuationStatus?: InventoryValuationStatus | InventoryValuationStatus[];
   verifiedFrom?: string;
   verifiedTo?: string;
-  placementFilter?: InventoryPlacement | "all";
-  locationRole?: "global_unknown";
+  placementFilter?: InventoryPlacement | InventoryPlacement[];
+  locationRole?: boolean;
   dataStatus?: DataQualityStatus | DataQualityStatus[];
   dataGap?: string | string[];
 };
@@ -395,9 +409,9 @@ export const buildInventoryWhere = async (
         : ownedIds.length === 0
           ? sql`false`
           : inArray(inventoryEntry.id, ownedIds),
-      filters.locationRole === "global_unknown"
-        ? gapCondition("inventory", "inventory_unknown_location")
-        : undefined,
+      flagCondition(filters.locationRole, () =>
+        gapCondition("inventory", "inventory_unknown_location"),
+      ),
       filters.verifiedPresenceFilter === "has"
         ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`
         : filters.verifiedPresenceFilter === "none"
@@ -408,11 +422,9 @@ export const buildInventoryWhere = async (
         filters.verifiedFrom,
         filters.verifiedTo,
       ),
-      // The browse contract: an omitted filter means movable stock, NOT
-      // everything. Defaulted here rather than in zod so the UI, MCP
-      // `list_inventory`, and any direct workflow caller cannot disagree about what
-      // an empty filter means — pass "all" to opt back in.
-      placementCondition(filters.placementFilter ?? "stock"),
+      // Any-of; omitted is every placement. The browse list opens on stock
+      // through its declared `initialFilter`, and counts pass it explicitly.
+      eqAny(inventoryEntry.placement, filters.placementFilter),
       liveProductAndLocation(),
       ...dataQualityFilterPredicates("inventory", inventoryEntry, filters),
     ],

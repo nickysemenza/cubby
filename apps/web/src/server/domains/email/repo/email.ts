@@ -17,6 +17,7 @@ import {
   relevanceLabel,
 } from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
@@ -238,37 +239,36 @@ const scaffold = listScaffold("email", emailTable, {
 
 /**
  * The record an Emails section is scoped to, resolved from the list's
- * derived `purchaseId`/`vendorId`/`vendorAccountId` filter (one at a time).
+ * `purchaseId`/`vendorId`/`vendorAccountId` filter. A declared exception to
+ * any-of: `linkState` is relative to one scope record, so exactly one value
+ * across the three is accepted (a scalar reads as a one-element list).
  */
 export async function resolveEmailScope(
   db: Database | DrizzleTransaction,
   filters: Pick<EmailFilters, "purchaseId" | "vendorId" | "vendorAccountId">,
 ): Promise<EmailPurchaseScope | null> {
-  const named = [
-    filters.purchaseId,
-    filters.vendorId,
-    filters.vendorAccountId,
-  ].filter((value) => value !== undefined);
-  if (named.length > 1)
+  const purchaseIds = oneOrManyValues(filters.purchaseId) ?? [];
+  const vendorIds = oneOrManyValues(filters.vendorId) ?? [];
+  const vendorAccountIds = oneOrManyValues(filters.vendorAccountId) ?? [];
+  if (purchaseIds.length + vendorIds.length + vendorAccountIds.length > 1)
     throw new Error(
-      "Scope an Email list by one of purchaseId, vendorId or vendorAccountId.",
+      "Scope an Email list by one value of purchaseId, vendorId or vendorAccountId.",
     );
-  if (filters.purchaseId)
+  const [purchaseId] = purchaseIds;
+  if (purchaseId)
     return {
       kind: "purchase",
-      purchaseId: await resolveOrThrow(db, "purchase", filters.purchaseId),
+      purchaseId: await resolveOrThrow(db, "purchase", purchaseId),
     };
-  if (filters.vendorId)
+  const [vendorId] = vendorIds;
+  if (vendorId)
     return {
       kind: "vendor",
-      vendorId: await resolveOrThrow(db, "vendor", filters.vendorId),
+      vendorId: await resolveOrThrow(db, "vendor", vendorId),
     };
-  if (!filters.vendorAccountId) return null;
-  const accountId = await resolveOrThrow(
-    db,
-    "vendorAccount",
-    filters.vendorAccountId,
-  );
+  const [vendorAccountId] = vendorAccountIds;
+  if (!vendorAccountId) return null;
+  const accountId = await resolveOrThrow(db, "vendorAccount", vendorAccountId);
   const [account] = await unwrapDb(db)
     .select({
       vendorId: vendorAccount.vendorId,
@@ -277,7 +277,7 @@ export async function resolveEmailScope(
     .from(vendorAccount)
     .where(eq(vendorAccount.id, accountId))
     .limit(1);
-  if (!account) throw new Error(`${filters.vendorAccountId} does not exist.`);
+  if (!account) throw new Error(`${vendorAccountId} does not exist.`);
   return { kind: "vendorAccount", ...account };
 }
 

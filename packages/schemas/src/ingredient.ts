@@ -65,10 +65,10 @@ export const ingredientFilterFields = {
     "Filter to ingredients that are / aren't used by at least one live recipe",
   ),
   mappingGap: z
-    .enum(["gap"])
+    .boolean()
     .optional()
     .describe(
-      "Ingredients used by at least one live recipe with no live linked product whose conversion coverage is complete: the product-mapping worklist.",
+      "true: ingredients used by at least one live recipe with no live linked product whose conversion coverage is complete (the product-mapping worklist); false: every other ingredient.",
     ),
 };
 

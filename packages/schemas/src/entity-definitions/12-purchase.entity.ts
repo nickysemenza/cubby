@@ -1326,7 +1326,7 @@ export default defineEntity({
       },
       {
         columnId: "financialReconciliation",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter financial reconciliation...",
         urlOnly: true,
       },

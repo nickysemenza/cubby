@@ -257,11 +257,11 @@ const privateOwnerRelation = (ref: ParsedShortcode): SQL | null => {
 
 const includesWorkSource = (
   scope: WorkQueueScope,
-  source: WorkQueueScope["source"],
-  kind: WorkQueueScope["kind"],
+  source: WorkQueueRow["source"],
+  kind: WorkQueueRow["kind"],
 ) =>
-  (!scope.source || scope.source === source) &&
-  (!scope.kind || scope.kind === kind);
+  (!scope.sources?.length || scope.sources.includes(source)) &&
+  (!scope.kinds?.length || scope.kinds.includes(kind));
 const needsProjectAttention = (source: EntityProblemSource) =>
   source.entity === "project" &&
   source.filters.some((filter) => filter.id === "attention");

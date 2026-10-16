@@ -67,7 +67,7 @@ public final class RelationSectionModel: Identifiable {
             client: client,
             pageSize: spec.limit ?? 25,
             sort: sort,
-            filters: EntityFilterState([wireName: .single(recordID)]),
+            filters: EntityFilterState([wireName: [recordID]]),
             view: .table
         )
     }

@@ -78,6 +78,7 @@
     ],
     "cubby/no-unsafe-identifiers": "error",
     "cubby/no-raw-enum-literal-in-sql": "error",
+    "cubby/no-hand-written-filter-predicate": "error",
     "cubby/no-hand-rolled-plural": "error",
     "cubby/domain-layers": "error",
     "cubby/no-domain-barrel": "error",

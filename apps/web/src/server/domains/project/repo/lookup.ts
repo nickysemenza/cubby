@@ -4,6 +4,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type {
@@ -187,12 +188,14 @@ export const buildProjectListQuery = async (
   // Delegate exact tracker membership to the same deep module used by the
   // dashboard and Problems. This avoids a second copy of the stalled, budget,
   // and blocked-next-action predicates in the ordinary entity list.
-  const attentionFilter = filters.attention;
-  const attentionCodes = attentionFilter
+  const attentionTypes = new Set<string>(
+    oneOrManyValues(filters.attention)?.map(
+      (attention) => projectAttentionFilterTypes[attention],
+    ),
+  );
+  const attentionCodes = attentionTypes.size
     ? (attentionItems ?? (await computeAttentionItems(db)))
-        .filter(
-          (item) => item.type === projectAttentionFilterTypes[attentionFilter],
-        )
+        .filter((item) => attentionTypes.has(item.type))
         .map((item) => item.entityId)
     : undefined;
 
@@ -263,7 +266,8 @@ export const buildProjectListQuery = async (
     ),
   );
 
-  const completionTree = filters.completionYear ? await getTree() : undefined;
+  const completionYears = oneOrManyValues(filters.completionYear);
+  const completionTree = completionYears?.length ? await getTree() : undefined;
   const completionIds = completionTree
     ? await loadProjectDateWindows(db, completionTree).then(({ dateWindows }) =>
         completionTree.allRows
@@ -271,7 +275,7 @@ export const buildProjectListQuery = async (
             const window = dateWindows.get(row.id);
             return (
               window &&
-              projectCompletionYear(row, window) === filters.completionYear
+              completionYears?.includes(projectCompletionYear(row, window))
             );
           })
           .map((row) => row.id),

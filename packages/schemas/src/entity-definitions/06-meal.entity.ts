@@ -620,7 +620,6 @@ Rules:
           { value: "dinner", label: "Dinner" },
           { value: "dessert", label: "Dessert" },
         ],
-        nullable: { field: "mealTypePresenceFilter", label: "meal type" },
       },
       {
         columnId: "mealKind",
@@ -647,9 +646,9 @@ Rules:
       {
         columnId: "recipeCostCoverage",
         field: "recipeCostCoverage",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter recipe cost coverage...",
-        options: [{ value: "understated", label: "Understated" }],
+        options: [{ value: "true", label: "Understated" }],
       },
       {
         columnId: "related:meal.recipes",
@@ -721,6 +720,7 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
       {

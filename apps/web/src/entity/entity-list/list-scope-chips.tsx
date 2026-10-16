@@ -94,7 +94,7 @@ export function ListScopeChips({
       {active.map(({ spec, value }) => {
         const urlKey = filterUrlKey(spec);
         const label = scopeLabel(spec);
-        if (spec.kind === "id" || spec.kind === "idMulti") {
+        if (spec.kind === "idMulti") {
           return (
             <ResolvedScopeChip
               key={urlKey}

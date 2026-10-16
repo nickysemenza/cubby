@@ -6,7 +6,11 @@ import {
 } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
-import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
+import {
+  oneOrManyValues,
+  type PresenceFilter,
+  type SortParams,
+} from "@cubby/schemas/pagination";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
 import type { AnyColumn, SQLWrapper } from "drizzle-orm";
 import {
@@ -645,6 +649,33 @@ export const presenceCondition = (
     )
     .with(undefined, () => undefined)
     .exhaustive();
+
+/**
+ * A boolean filter over a row condition: `true` keeps the rows meeting it,
+ * `false` the rows that do not (an UNKNOWN condition counts as not met).
+ * `condition` is built only when the filter is set.
+ */
+export const flagCondition = (
+  flag: boolean | undefined,
+  condition: () => SQL | undefined,
+): SQL | undefined => {
+  if (flag === undefined) return undefined;
+  const met = condition();
+  if (met === undefined) return undefined;
+  return flag ? met : sql`NOT COALESCE((${met}), false)`;
+};
+
+/**
+ * Any-of for a hand-written {@link oneOrMany} filter: the rows matching at
+ * least one picked value. A scalar reads as a one-element list.
+ */
+export const anyOfCondition = <TValue>(
+  value: TValue | readonly TValue[] | undefined,
+  condition: (value: TValue) => SQL | undefined,
+): SQL | undefined => {
+  const values = oneOrManyValues(value);
+  return values?.length ? or(...values.map(condition)) : undefined;
+};
 
 /**
  * A cross-entity presence sentinel: "this row's id is / isn't in that set".

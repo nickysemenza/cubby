@@ -53,6 +53,9 @@ export default defineEntity({
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {},
     list: {
+      // Installed fixtures (a wired-in dimmer) are not movable stock, so a
+      // fresh inventory list opens on stock; clearing it shows both.
+      initialFilter: [{ id: "placement", value: ["stock"] }],
       savedViews: [
         // `@me` is the viewing member (ADR 0018); the owner filter matches the
         // effective owner, so inherited stock counts as someone's stuff.
@@ -61,6 +64,7 @@ export default defineEntity({
           label: "Wardrobe",
           description: "Your clothes and accessories, grouped by category",
           filters: [
+            { id: "placement", value: ["stock"] },
             { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
             { id: "categoryFeature", value: ["apparel"] },
           ],
@@ -76,6 +80,7 @@ export default defineEntity({
           label: "My stuff",
           description: "Everything you own, wherever it lives",
           filters: [
+            { id: "placement", value: ["stock"] },
             { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
           ],
           sort: [
@@ -91,6 +96,7 @@ export default defineEntity({
           description:
             "Stock inherited as yours from purchases; confirm or reassign it",
           filters: [
+            { id: "placement", value: ["stock"] },
             { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
             { id: "ownershipMode", value: ["inherit"] },
           ],
@@ -100,7 +106,10 @@ export default defineEntity({
           id: "needs-a-home",
           label: "Needs a home",
           description: "Stock waiting in Unknown for a real location",
-          filters: [{ id: "locationRole", value: "global_unknown" }],
+          filters: [
+            { id: "placement", value: ["stock"] },
+            { id: "locationRole", value: "true" },
+          ],
           sort: [{ id: "createdAt", desc: true }],
           view: "shelf",
           pin: { surface: "home", order: 3 },
@@ -111,6 +120,7 @@ export default defineEntity({
           description:
             "Stock whose purchase evidence names no single owner; pick one",
           filters: [
+            { id: "placement", value: ["stock"] },
             { id: "ownerLedgerPartyId", value: [OWNER_FILTER_UNKNOWN] },
           ],
         },
@@ -124,7 +134,10 @@ export default defineEntity({
           // `placementFilter` applied. Installed fixtures never get a
           // `verifiedAt` (nobody recounts a wired-in dimmer), so including them
           // would make this list permanently undrainable.
-          filters: [{ id: "dataGaps", value: ["inventory_verified"] }],
+          filters: [
+            { id: "placement", value: ["stock"] },
+            { id: "dataGaps", value: ["inventory_verified"] },
+          ],
           // Oldest first — the longest-unverified entries lead.
           sort: [{ id: "createdAt", desc: false }],
           problem: {
@@ -485,7 +498,7 @@ export default defineEntity({
       // The unit, then the size within it.
       amount: { type: "number" },
       valuationStatus: {
-        predicate: "select",
+        predicate: "multiselect",
         reason:
           "Missing includes priceable entries, so the statuses overlap and are not one row value",
       },
@@ -619,7 +632,7 @@ export default defineEntity({
       {
         columnId: "productId",
         field: "productIdFilter",
-        kind: "id",
+        kind: "idMulti",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
         urlOnly: true,
@@ -627,7 +640,7 @@ export default defineEntity({
       {
         columnId: "locationId",
         field: "locationIdFilter",
-        kind: "id",
+        kind: "idMulti",
         placeholder: "Filter by location id...",
         brandRef: { entity: "location" },
         urlOnly: true,
@@ -684,6 +697,7 @@ export default defineEntity({
         label: "Owner",
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         deriveSchema: true,
         sentinels: [
           { value: OWNER_FILTER_HOUSEHOLD, label: "Household" },
@@ -730,25 +744,24 @@ export default defineEntity({
       {
         columnId: "placement",
         field: "placementFilter",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter placement...",
         options: [
           { value: "stock", label: "Stock" },
           { value: "installed", label: "Installed" },
-          { value: "all", label: "Stock and installed" },
         ],
       },
       {
         columnId: "locationRole",
         field: "locationRole",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter location role...",
-        options: [{ value: "global_unknown", label: "Global Unknown" }],
+        options: [{ value: "true", label: "Global Unknown" }],
       },
       {
         columnId: "valuationStatus",
         field: "valuationStatus",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter valuation...",
         options: [
           { value: "valued", label: "Valued" },

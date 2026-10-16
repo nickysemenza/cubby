@@ -1496,7 +1496,7 @@ private struct RecordReferenceList: View {
             }),
                 let value = row.raw[binding.sourceField]?.stringValue, let name = descriptor.wire.names.first
             {
-                result.set(.single(value), for: name)
+                result.set([value], for: name)
             }
         }
         return result

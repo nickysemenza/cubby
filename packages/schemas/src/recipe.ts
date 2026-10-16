@@ -272,13 +272,6 @@ export const recipeFilterFields = {
   cookbookId: entityFilterList(cookbookShortcode).optional(),
   cookbookPresenceFilter: presenceFilter,
   /**
-   * `recipe.tags` is a nullable array, so `"none"` means untagged —
-   * `tags IS NULL OR cardinality(tags) = 0`. A cleared-to-`{}` recipe is just
-   * as untagged as a never-tagged one, and both must match. OR-ed with
-   * `tagFilters` (see `taskFilterFields.projectPresenceFilter`).
-   */
-  tagsPresenceFilter: presenceFilter,
-  /**
    * `"none"` is the never-planned worklist. A live MealRecipe under a
    * soft-deleted Meal doesn't count — that isn't a plan.
    */

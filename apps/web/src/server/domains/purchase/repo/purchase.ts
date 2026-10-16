@@ -56,6 +56,7 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  anyOfCondition,
   buildPartialUpdateValues,
   correlated,
   eqAny,
@@ -66,10 +67,10 @@ import {
   notDeleted,
   presenceCondition,
   relations,
+  touchUpdatedAt,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
-  touchUpdatedAt,
 } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -689,9 +690,9 @@ export const buildPurchaseWhereClause = async (
     reconciliationCondition(filters.reconciliation),
     // The canonical settlement worklist: the raw financial mismatch minus an
     // active, evidence-bound exception — exactly the check's gap condition.
-    filters.financialReconciliation === "mismatch"
-      ? gapCondition("purchase", "settlement_mismatch")
-      : undefined,
+    anyOfCondition(filters.financialReconciliation, () =>
+      gapCondition("purchase", "settlement_mismatch"),
+    ),
     documentPresenceCondition(filters.documentPresenceFilter),
     filters.expenseTotalMin !== undefined
       ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`

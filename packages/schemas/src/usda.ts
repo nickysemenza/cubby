@@ -1,8 +1,9 @@
 import { dataTypeEnum, foodLookupParam, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import {
-  createSortPaginationFields,
   createPaginatedResponseSchema,
+  createSortPaginationFields,
+  oneOrMany,
 } from "./pagination";
 import { generatedUSDAFoodFieldSchemas } from "./generated/entity-field-schemas.usda-food.gen";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
@@ -13,7 +14,7 @@ export type USDAFoodSortField = GeneratedEntitySortField<"usda-food">;
 export const usdaListInput = z.object({
   filters: z.object({
     nameFilter: z.string().optional(),
-    dataTypeFilter: dataTypeEnum.optional(),
+    dataTypeFilter: oneOrMany(dataTypeEnum).optional(),
     dataTypes: z.array(dataTypeEnum).optional(),
     foodsOnly: z.boolean().optional(),
     linkedProductsOnly: z.boolean().optional(),

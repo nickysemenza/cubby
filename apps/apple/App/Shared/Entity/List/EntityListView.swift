@@ -175,12 +175,13 @@ struct EntityListView: View {
         .toolbar { toolbarContent }
         .task(id: key) {
             if model == nil {
-                // A saved view opens the list in its own query and view mode in one step, so no
-                // unscoped first page is ever requested.
+                // A saved view (else the route's filters, else the declared `initialFilters`) opens
+                // the list in its own query and view mode in one step, so no unscoped first page
+                // is ever requested.
                 model = GenericEntityListModel(
                     descriptor: descriptor, client: appModel.client,
                     sort: initialSavedView?.sortParameter,
-                    filters: initialSavedView?.filterState ?? initialFilters,
+                    filters: descriptor.openingFilters(savedView: initialSavedView, explicit: initialFilters),
                     view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table)
             }
             await model?.loadInitial()
@@ -379,7 +380,7 @@ struct EntityListView: View {
     private func specialistFilters(_ model: GenericEntityListModel) -> EntityFilterState {
         var filters = model.filters
         if let query = model.searchModel?.query, !query.isEmpty {
-            filters.set(.single(query), for: "search")
+            filters.set([query], for: "search")
         }
         return filters
     }

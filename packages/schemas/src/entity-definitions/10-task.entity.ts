@@ -897,6 +897,7 @@ export default defineEntity({
         placeholder: "Filter by assignee...",
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         nullable: { field: "assigneePresenceFilter", label: "assignee" },
       },
 
@@ -975,14 +976,14 @@ export default defineEntity({
       },
       {
         columnId: "dueRelative",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter by relative due date...",
         options: [{ value: "beforeToday", label: "Before today" }],
         urlOnly: true,
       },
       {
         columnId: "completion",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter task completion...",
         options: [
           { value: "open", label: "Open" },
@@ -1004,7 +1005,7 @@ export default defineEntity({
         columnId: "productId",
         field: "subjectProductId",
         urlKey: "productId",
-        kind: "id",
+        kind: "idMulti",
         placeholder: "Filter by product id...",
         brandRef: { entity: "product" },
         urlOnly: true,

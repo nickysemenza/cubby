@@ -298,7 +298,7 @@ export default defineEntity({
       {
         columnId: "dataTypeFilter",
         field: "dataTypeFilter",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter by USDA data type...",
         options: dataTypeEnum.options.map((value) => ({
           value,

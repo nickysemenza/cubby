@@ -184,6 +184,7 @@ final class NativeBrowserSession {
         let descriptor = EntityCatalog[key]
         let model = GenericEntityListModel(
             descriptor: descriptor, client: client,
+            filters: descriptor.openingFilters(savedView: nil, explicit: EntityFilterState()),
             view: NativePresentationCoverage.listViews(for: descriptor).first ?? .table)
         lists[key] = model
         return model

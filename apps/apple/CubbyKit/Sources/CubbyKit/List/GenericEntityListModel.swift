@@ -470,7 +470,7 @@ public final class GenericEntityListModel {
                 throw EntityOperationError.unsupported(descriptor.key, .search)
             }
             var scopedFilters = filters
-            scopedFilters.set(.single(query), for: primarySearch.key)
+            scopedFilters.set([query], for: primarySearch.key)
             if progressive {
                 return try await client.progressiveList(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters)

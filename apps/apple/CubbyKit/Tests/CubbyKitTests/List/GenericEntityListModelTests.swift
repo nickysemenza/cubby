@@ -51,7 +51,7 @@ struct GenericEntityListModelTests {
         let unassigned = try #require(descriptor.presentation.savedViews.first { $0.id == "unassigned" })
         let model = GenericEntityListModel(
             descriptor: descriptor, client: try makeClient(),
-            filters: EntityFilterState(["search": .single("old scope")]), progressive: false)
+            filters: EntityFilterState(["search": ["old scope"]]), progressive: false)
         await model.apply(savedView: mine)
         #expect(model.activeSavedView?.id == mine.id)
         #expect(requests.withLock { $0.count } == 1)
@@ -61,7 +61,7 @@ struct GenericEntityListModelTests {
         #expect(model.filters["search"] == nil)
         await model.apply(savedView: unassigned)
         #expect(model.filters["assigneeId"] == nil)
-        #expect(model.filters["assigneePresenceFilter"] == .single("none"))
+        #expect(model.filters["assigneePresenceFilter"] == ["none"])
         #expect(requests.withLock { $0.count } == 2)
         let unassignedFilters = requests.withLock { $0[1] }
         #expect(unassignedFilters["assigneePresenceFilter"] == "none")
@@ -116,7 +116,7 @@ struct GenericEntityListModelTests {
         }
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1,
-            filters: EntityFilterState(["upcFilter": .single("000000000000")]), progressive: false)
+            filters: EntityFilterState(["upcFilter": ["000000000000"]]), progressive: false)
         await model.loadInitial()
         await model.loadNextPage()
         await model.apply(sort: "undeclaredField")
@@ -321,7 +321,7 @@ struct GenericEntityListModelTests {
         #expect(model.meta?.sums?.additionalProperties["price"] == 25)
 
         let search = try #require(EntityCatalog[.product].primarySearch)
-        await model.apply(filters: EntityFilterState([search.key: .single("new")]))
+        await model.apply(filters: EntityFilterState([search.key: ["new"]]))
 
         #expect(model.rows.map(\.id) == ["PRD-2345"])
         #expect(model.refreshError?.contains("Try again") == true)
@@ -389,7 +389,7 @@ struct GenericEntityListModelTests {
 
         model.setSearchQuery("sample")
         await staleGate.arrivals(1)
-        await model.apply(filters: EntityFilterState(["upcFilter": .single("000000000000")]))
+        await model.apply(filters: EntityFilterState(["upcFilter": ["000000000000"]]))
         await observe { searchModel.phase == .loaded }
         // The replay cancelled the unscoped request, so its answer, released now, never lands.
         staleGate.open()

@@ -73,6 +73,8 @@ interface PickerCommonProps<TId extends string> {
   clearable?: boolean;
   disabled?: boolean;
   className?: string;
+  /** Pinned above the list — a multi-value filter's Match any | all. */
+  header?: React.ReactNode;
   /** Pinned under the list — a multi-value filter's Clear/Apply. */
   footer?: React.ReactNode;
   /** Segmented mode: icon-only segments on phones, labels kept accessible. */
@@ -597,6 +599,7 @@ function SearchPickerPopup<TId extends string>({
   error,
   emptyMessage,
   create,
+  header,
   footer,
 }: {
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -618,6 +621,7 @@ function SearchPickerPopup<TId extends string>({
   error?: string | null;
   emptyMessage: string;
   create: CreatePickerItem<TId> | null;
+  header?: React.ReactNode;
   footer?: React.ReactNode;
 }) {
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -685,6 +689,11 @@ function SearchPickerPopup<TId extends string>({
         <ComboboxPrimitive.Popup
           className={cn(popupClass, popupWidthClass(records))}
         >
+          {header ? (
+            <div className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--border)] px-1.5 py-1.5">
+              {header}
+            </div>
+          ) : null}
           {clearable && hasValue ? (
             <button
               type="button"
@@ -832,6 +841,7 @@ function SearchPicker<TId extends string>({
   clearable,
   disabled,
   className,
+  header,
   footer,
 }: ResolvedPickerProps<TId>) {
   const [open, setOpen] = React.useState(false);
@@ -1027,6 +1037,7 @@ function SearchPicker<TId extends string>({
           ? { name: normalizedQuery, onCreate: onCreateNew }
           : null
       }
+      header={header}
       footer={footer}
     />
   );
@@ -1111,6 +1122,7 @@ function ChoosePicker<TId extends string>({
   clearable,
   disabled,
   className,
+  header,
   footer,
 }: ResolvedPickerProps<TId>) {
   const [open, setOpen] = React.useState(openOnMount ?? false);
@@ -1201,6 +1213,11 @@ function ChoosePicker<TId extends string>({
             <SelectPrimitive.Popup
               className={cn(popupClass, popupWidthClass(records != null))}
             >
+              {header ? (
+                <div className="flex shrink-0 flex-col gap-1.5 border-b border-[var(--border)] px-1.5 py-1.5">
+                  {header}
+                </div>
+              ) : null}
               <SelectPrimitive.List className={listClass}>
                 {orderedItems.map((item, index) => (
                   <React.Fragment key={item.id}>

@@ -8,6 +8,7 @@ import {
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
 import {
+  FILTER_ALL,
   FILTER_ANY,
   FILTER_NONE,
 } from "../../../../packages/schemas/src/filter-sentinel-fields.ts";
@@ -924,12 +925,10 @@ const compileFieldModel = (
 
 const derivableFilterKinds = new Set<string>([
   "text",
-  "select",
   "multiselect",
   "boolean",
   "presence",
   "range",
-  "id",
   "idMulti",
 ]);
 
@@ -1029,7 +1028,7 @@ const validateStoredReference = (
   fields: readonly EntityStorageField[],
   context: string,
 ): void => {
-  if (kind !== "id" && kind !== "idMulti") return;
+  if (kind !== "idMulti") return;
   if (fields.some((field) => field.reference === null))
     throw new EntityDeclarationError(
       `${context} stored id filter needs a foreign-key field.`,
@@ -1140,7 +1139,7 @@ const validateFilterReference = (
   kind: FilterDescriptor["kind"],
   context: string,
 ): void => {
-  const isIdentifier = kind === "id" || kind === "idMulti";
+  const isIdentifier = kind === "idMulti";
   if (isIdentifier && !value.urlOnly && value.brandRef == null) {
     throw new EntityDeclarationError(
       `${context} rendered ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
@@ -1155,13 +1154,20 @@ const validateFilterReference = (
   }
   if (value.brandRef != null && !isIdentifier) {
     throw new EntityDeclarationError(
-      `${context} brandRef is only valid for id/idMulti filters.`,
+      `${context} brandRef is only valid for idMulti filters.`,
     );
   }
+  if (
+    value.currentMember === true &&
+    !(isIdentifier && value.brandRef?.entity === "ledgerParty")
+  )
+    throw new EntityDeclarationError(
+      `${context} currentMember (@me) applies only to an idMulti filter over ledgerParty.`,
+    );
 };
 
 /**
- * A select filter over an enum field takes the field's options, so a value
+ * A multiselect filter over an enum field takes the field's options, so a value
  * added to the enum reaches the filter menu and its URL schema. A declared
  * copy (kept for per-option colors) must name exactly the field's values:
  * a copy that fell behind the enum once hid every AI Run from `/runs`.
@@ -1178,7 +1184,7 @@ const enumFilterOptions = (
   // such as inventory placement's `all`.
   const filtersField = value.field == null || value.field === value.columnId;
   if (
-    (kind !== "select" && kind !== "multiselect") ||
+    kind !== "multiselect" ||
     modelField?.kind !== "enum" ||
     fieldOptions === null ||
     !filtersField
@@ -1205,6 +1211,32 @@ const enumFilterOptions = (
   return declared;
 };
 
+/**
+ * The generated Any value / No value key of a compiled value filter: every
+ * multiselect or idMulti filter over a nullable (or `text[]`) stored field
+ * that a person can pick from. A hand-written filter declares its own.
+ */
+const storedPresence = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  stored: FilterDescriptor["stored"],
+  storage: readonly EntityStorageField[],
+  label: string,
+  context: string,
+): FilterDescriptor["nullable"] => {
+  if (stored === null) return value.nullable ?? null;
+  if (value.nullable != null)
+    throw new EntityDeclarationError(
+      `${context} is compiled, so its Any value / No value key is generated; remove nullable.`,
+    );
+  if ((kind !== "multiselect" && kind !== "idMulti") || value.urlOnly)
+    return null;
+  const field = storage.find(({ key }) => key === stored.columns[0]);
+  return field?.nullable || field?.kind === "text-array"
+    ? { field: `${value.columnId}PresenceFilter`, label: label.toLowerCase() }
+    : null;
+};
+
 const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
@@ -1213,7 +1245,9 @@ const filterDescriptor = (
 ): FilterDescriptor => {
   const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
   if (parsedKind === undefined) {
-    throw new EntityDeclarationError(`${context}.kind is unsupported.`);
+    throw new EntityDeclarationError(
+      `${context}.kind ${String(value.kind)} is unsupported; value filters are any-of (multiselect, idMulti) or boolean.`,
+    );
   }
   const optionsRef = value.optionsRef ?? null;
   if (value.options != null && optionsRef !== null) {
@@ -1252,7 +1286,22 @@ const filterDescriptor = (
     derived: value.derived === true,
     range,
     urlOnly: value.urlOnly ?? false,
-    nullable: value.nullable ?? null,
+    nullable: storedPresence(
+      value,
+      parsedKind,
+      stored,
+      storage,
+      value.label ?? modelField?.label ?? humanize(value.columnId),
+      context,
+    ),
+    // A multiselect over a `text[]` column holds several values per row, so
+    // it can match all of the picked ones.
+    match:
+      stored?.array && !value.urlOnly
+        ? { field: `${value.columnId}Match` }
+        : null,
+    subtree: null,
+    currentMember: value.currentMember === true,
     sentinels: value.sentinels ?? null,
     wire: filterWire(value, parsedKind, range, modelField),
   };
@@ -1791,10 +1840,11 @@ const validateSavedViews = (
             `${where} pins range ${filter.id}=${value}, a preset that expands to nothing.`,
           );
         if (
-          (descriptor.kind === "select" || descriptor.kind === "multiselect") &&
+          descriptor.kind === "multiselect" &&
           descriptor.options !== null &&
           !optionValues.has(value) &&
-          !(descriptor.nullable !== null && SENTINELS.has(value))
+          !(descriptor.nullable !== null && SENTINELS.has(value)) &&
+          !(descriptor.match !== null && value === FILTER_ALL)
         )
           throw new EntityDeclarationError(
             `${where} pins ${filter.id}=${value}, which is not one of its options.`,
@@ -1898,19 +1948,18 @@ const suggestionFilterDescriptors = (
   if (!fields.some((field) => field.control?.suggest)) return [];
   return [
     {
-      columnId: "suggestionPresenceFilter",
-      field: "suggestionPresenceFilter",
-      urlKey: "suggestionPresenceFilter",
-      kind: "select",
-      placeholder: "Has suggestion",
+      columnId: "suggestion",
+      field: "suggestionKind",
+      urlKey: "suggestion",
+      kind: "multiselect",
+      placeholder: "Filter by pending suggestion...",
       options: [
-        { value: "any", label: "Any" },
         { value: "addition", label: "Addition" },
         { value: "correction", label: "Correction" },
       ],
       optionsRef: null,
       optionsKey: null,
-      label: "Has suggestion",
+      label: "Suggestion",
       schemaDescription: null,
       deriveSchema: true,
       schemaFromRead: false,
@@ -1921,9 +1970,12 @@ const suggestionFilterDescriptors = (
       derived: false,
       range: null,
       urlOnly: false,
-      nullable: null,
+      nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
       sentinels: null,
-      wire: { kind: "param", name: "suggestionPresenceFilter" },
+      match: null,
+      subtree: null,
+      currentMember: false,
+      wire: { kind: "param", name: "suggestionKind" },
     },
   ];
 };
@@ -2064,6 +2116,9 @@ export const compileEntity = (
           urlOnly: false,
           nullable: null,
           sentinels: null,
+          match: null,
+          subtree: null,
+          currentMember: false,
           wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
@@ -2096,6 +2151,9 @@ export const compileEntity = (
           urlOnly: false,
           nullable: null,
           sentinels: null,
+          match: null,
+          subtree: null,
+          currentMember: false,
           wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]

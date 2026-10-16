@@ -378,8 +378,8 @@ describe("buildMealWhere", () => {
     },
   );
 
-  it("recipeCostCoverage=understated matches partial and unavailable costs that recorded contributors", async () => {
-    const rendered = await where({ recipeCostCoverage: "understated" });
+  it("recipeCostCoverage=true matches partial and unavailable costs that recorded contributors", async () => {
+    const rendered = await where({ recipeCostCoverage: true });
     expect(rendered).toContain("'partial'");
     expect(rendered).toContain("'unavailable'");
     expect(rendered).toContain("{cost,coverage,total}");

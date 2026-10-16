@@ -1107,7 +1107,7 @@ export default defineEntity({
     descriptors: [
       {
         columnId: "allocationIntegrity",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter allocation integrity...",
         urlOnly: true,
       },
@@ -1196,7 +1196,7 @@ export default defineEntity({
       },
       {
         columnId: "itemization",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter itemization...",
         options: [
           { value: "bare", label: "No purchase" },

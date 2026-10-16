@@ -526,7 +526,7 @@ describe("useTableState — URL-backed column filters", () => {
 describe("useTableState — URL-only filter specs", () => {
   const SPECS: readonly FilterSpecCore[] = [
     { columnId: "vendor", kind: "multiselect" },
-    { columnId: "productId", kind: "id", urlOnly: true },
+    { columnId: "productId", kind: "idMulti", urlOnly: true },
   ];
 
   beforeEach(() => {
@@ -544,7 +544,7 @@ describe("useTableState — URL-only filter specs", () => {
     ]);
     expect(result.current.allFilters).toEqual([
       { id: "vendor", value: ["Home Depot"] },
-      { id: "productId", value: "prod-1" },
+      { id: "productId", value: ["prod-1"] },
     ]);
   });
 
@@ -582,7 +582,7 @@ describe("useTableState — URL-only filter specs", () => {
     await navigateSearch({ productId: "prod-2" });
 
     expect(result.current.allFilters).toEqual([
-      { id: "productId", value: "prod-2" },
+      { id: "productId", value: ["prod-2"] },
     ]);
   });
 

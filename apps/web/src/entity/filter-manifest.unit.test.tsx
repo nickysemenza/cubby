@@ -24,21 +24,21 @@ describe("manifestFilterConfig", () => {
   it("exposes the generated suggestion filter only on entities with suggest targets", () => {
     expect(
       getEntityFilters("product").find(
-        (spec) => spec.columnId === "suggestionPresenceFilter",
+        (spec) => spec.columnId === "suggestion",
       ),
     ).toMatchObject({
-      label: "Has suggestion",
-      kind: "select",
+      field: "suggestionKind",
+      label: "Suggestion",
+      kind: "multiselect",
       options: [
-        { value: "any", label: "Any" },
         { value: "addition", label: "Addition" },
         { value: "correction", label: "Correction" },
       ],
+      // Any value replaces the old `any` option.
+      nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
     });
     expect(
-      getEntityFilters("recipe").some(
-        (spec) => spec.columnId === "suggestionPresenceFilter",
-      ),
+      getEntityFilters("recipe").some((spec) => spec.columnId === "suggestion"),
     ).toBe(false);
   });
   it.each([
@@ -85,8 +85,8 @@ describe("manifestFilterConfig", () => {
 
   it("resolves a runtime picklist by key", () => {
     const sentinels = [
-      { value: FILTER_ANY, label: "Has project", meta: true },
-      { value: FILTER_NONE, label: "(none)", meta: true },
+      { value: FILTER_ANY, label: "Any value", meta: true },
+      { value: FILTER_NONE, label: "No value", meta: true },
     ];
     const injected = [{ value: "p1", label: "Kitchen" }];
     expect(
@@ -99,7 +99,7 @@ describe("manifestFilterConfig", () => {
   });
 
   it("does not prepend sentinels to a non-nullable multiselect", () => {
-    const options = manifestFilterConfig("expense", "trade")?.options;
+    const options = manifestFilterConfig("task", "trade")?.options;
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
@@ -110,14 +110,14 @@ describe("manifestFilterConfig", () => {
       filters.find((filter) => filter.columnId === "productId"),
     ).toMatchObject({
       field: "productIdFilter",
-      kind: "id",
+      kind: "idMulti",
       urlOnly: true,
     });
     expect(
       filters.find((filter) => filter.columnId === "locationId"),
     ).toMatchObject({
       field: "locationIdFilter",
-      kind: "id",
+      kind: "idMulti",
       urlOnly: true,
     });
     expect(
@@ -138,8 +138,8 @@ describe("manifestFilterConfig", () => {
       placeholder: "Filter by vendor...",
       filterType: "multiselect",
       options: [
-        { value: FILTER_ANY, label: "Has vendor", meta: true },
-        { value: FILTER_NONE, label: "(none)", meta: true },
+        { value: FILTER_ANY, label: "Any value", meta: true },
+        { value: FILTER_NONE, label: "No value", meta: true },
         ...vendors,
       ],
     });
@@ -155,25 +155,22 @@ describe("manifestFilterConfig", () => {
       placeholder: "Filter by project...",
       filterType: "multiselect",
       options: [
-        { value: FILTER_ANY, label: "Has project", meta: true },
-        { value: FILTER_NONE, label: "(none)", meta: true },
+        { value: FILTER_ANY, label: "Any value", meta: true },
+        { value: FILTER_NONE, label: "No value", meta: true },
         ...projects,
       ],
     });
   });
 
   it.each([
-    ["recipe", "source", "cookbook"],
-    ["location", "parent", "parent"],
-  ] as const)(
-    "%s.%s prepends (none) / Has %s sentinels",
-    (entity, columnId, label) => {
-      expect(manifestFilterConfig(entity, columnId)?.options).toEqual([
-        { value: FILTER_ANY, label: `Has ${label}`, meta: true },
-        { value: FILTER_NONE, label: "(none)", meta: true },
-      ]);
-    },
-  );
+    ["recipe", "source"],
+    ["location", "parent"],
+  ] as const)("%s.%s prepends Any value / No value", (entity, columnId) => {
+    expect(manifestFilterConfig(entity, columnId)?.options).toEqual([
+      { value: FILTER_ANY, label: "Any value", meta: true },
+      { value: FILTER_NONE, label: "No value", meta: true },
+    ]);
+  });
 
   it("returns undefined for a column with no declared filter", () => {
     expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
@@ -223,7 +220,7 @@ describe("declared filter specs", () => {
       const urlKeys = specs.map((spec) => spec.urlKey ?? spec.columnId);
       expect(new Set(urlKeys).size).toBe(urlKeys.length);
       for (const spec of specs) {
-        if (spec.kind !== "id" && spec.kind !== "idMulti") continue;
+        if (spec.kind !== "idMulti") continue;
         if (spec.brand === undefined || spec.referenceEntity === undefined) {
           continue;
         }
@@ -239,9 +236,7 @@ describe("declared filter specs", () => {
           }),
         );
         expect(spec.brand(shortcode)).toBe(shortcode);
-        expect(
-          spec.kind === "id" ? filters[field] : [filters[field]].flat()[0],
-        ).toBe(shortcode);
+        expect([filters[field]].flat()[0]).toBe(shortcode);
       }
     }
   });
@@ -275,7 +270,7 @@ describe("expense order-id filters", () => {
 
   it("routes ?order= to the exact orderId field", () => {
     expect(build({ order: "111-1234567-1234567" })).toMatchObject({
-      orderId: "111-1234567-1234567",
+      orderId: ["111-1234567-1234567"],
     });
   });
 
@@ -287,13 +282,13 @@ describe("expense order-id filters", () => {
 
   it("stands alone without a vendor to disambiguate it", () => {
     expect(build({ order: "WN63446464" })).toEqual({
-      orderId: "WN63446464",
+      orderId: ["WN63446464"],
     });
   });
 
   it("still carries a vendor alongside it as a separate condition", () => {
     expect(build({ order: "WN63446464", vendor: VENDOR_ONE })).toMatchObject({
-      orderId: "WN63446464",
+      orderId: ["WN63446464"],
       vendorId: [VENDOR_ONE],
     });
   });
@@ -301,7 +296,7 @@ describe("expense order-id filters", () => {
   it("keeps the exact scope and the presence worklist independent", () => {
     const built = build({ order: "#11325", orderId: FILTER_ANY });
     expect(built).toMatchObject({
-      orderId: "#11325",
+      orderId: ["#11325"],
       orderIdPresenceFilter: FILTER_ANY,
     });
   });
@@ -340,8 +335,8 @@ describe("expense vendor filter", () => {
     });
     expect(config?.filterType).toBe("multiselect");
     expect(config?.options).toEqual([
-      { value: FILTER_ANY, label: "Has purchase", meta: true },
-      { value: FILTER_NONE, label: "(none)", meta: true },
+      { value: FILTER_ANY, label: "Any value", meta: true },
+      { value: FILTER_NONE, label: "No value", meta: true },
       ...injected,
     ]);
   });
@@ -520,7 +515,7 @@ describe("expense URL-only scopes", () => {
         specs,
         filterGetterFromSearch(specs, { productId: PRODUCT_ID }),
       ),
-    ).toMatchObject({ productId: PRODUCT_ID });
+    ).toMatchObject({ productId: [PRODUCT_ID] });
   });
 
   it("still routes ?purchaseId= to the server filter", () => {
@@ -530,7 +525,7 @@ describe("expense URL-only scopes", () => {
         specs,
         filterGetterFromSearch(specs, { purchaseId: PURCHASE_ID }),
       ),
-    ).toMatchObject({ purchaseId: PURCHASE_ID });
+    ).toMatchObject({ purchaseId: [PURCHASE_ID] });
   });
 
   it("still declares a search field for every URL-only key", () => {

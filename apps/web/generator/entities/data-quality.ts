@@ -234,13 +234,16 @@ export const compileDataQuality = (
     urlOnly: false,
     nullable: null,
     sentinels: null,
+    match: null,
+    subtree: null,
+    currentMember: false,
   } as const;
   const statusDescriptor: FilterDescriptor = {
     ...descriptorBase,
     columnId: DATA_QUALITY_FIELD,
     field: "dataStatus",
     urlKey: DATA_QUALITY_FIELD,
-    kind: "select",
+    kind: "multiselect",
     placeholder: "Filter data quality...",
     options: [...STATUS_OPTIONS],
     wire: { kind: "param", name: "dataStatus" },

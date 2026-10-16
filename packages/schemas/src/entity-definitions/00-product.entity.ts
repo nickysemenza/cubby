@@ -2296,6 +2296,7 @@ Rules:
         label: "Owner",
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         deriveSchema: true,
         sentinels: [
           { value: OWNER_FILTER_HOUSEHOLD, label: "Household" },
@@ -2569,11 +2570,11 @@ Rules:
       {
         columnId: "inventoryMultiplicity",
         field: "inventoryMultiplicity",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter inventory multiplicity...",
         options: [
           {
-            value: "duplicate_within_placement",
+            value: "true",
             label: "Duplicate within placement",
           },
         ],
@@ -2581,18 +2582,18 @@ Rules:
       {
         columnId: "kitAccounting",
         field: "kitAccounting",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter kit accounting...",
-        options: [{ value: "double_counted", label: "Counted twice" }],
+        options: [{ value: "true", label: "Counted twice" }],
       },
       {
         columnId: "ownershipReconciliation",
         field: "ownershipReconciliation",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter ownership reconciliation...",
         options: [
           {
-            value: "disposed_still_on_hand",
+            value: "true",
             label: "Disposed but still on hand",
           },
         ],
@@ -2600,16 +2601,16 @@ Rules:
       {
         columnId: "conversionCoverage",
         field: "conversionCoverage",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter conversion coverage...",
-        options: [{ value: "partial", label: "Partial coverage" }],
+        options: [{ value: "true", label: "Partial coverage" }],
       },
       {
         columnId: "conversionTopology",
         field: "conversionTopology",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter conversion topology...",
-        options: [{ value: "islanded", label: "Islanded mappings" }],
+        options: [{ value: "true", label: "Islanded mappings" }],
       },
       {
         columnId: "unitMappingQuality",
@@ -2647,7 +2648,6 @@ Rules:
         },
         // Worklist only: `none` finds Products with no kind yet. It is not a
         // data-quality check.
-        nullable: { field: "kindPresenceFilter", label: "kind" },
         options: [
           { value: "consumable", label: "Consumable" },
           { value: "durable", label: "Durable" },
@@ -2672,7 +2672,6 @@ Rules:
         deriveSchema: true,
         schemaDescription: "Match products carrying any of these tags",
         stored: { array: true },
-        nullable: { field: "tagsPresenceFilter", label: "tags" },
       },
       {
         columnId: "related:product.vendors",
@@ -2879,6 +2878,7 @@ Rules:
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
       {

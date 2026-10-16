@@ -275,7 +275,7 @@ export const purchaseFilterFields = {
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
-  financialReconciliation: z.enum(["mismatch"]).optional(),
+  financialReconciliation: oneOrMany(z.enum(["mismatch"])).optional(),
   documentPresenceFilter: presenceFilter,
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);

@@ -386,9 +386,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "product" as const,
-      filters: [
-        { id: "inventoryMultiplicity", value: "duplicate_within_placement" },
-      ],
+      filters: [{ id: "inventoryMultiplicity", value: "true" }],
       sort: [{ id: "name", desc: false }],
       columnVisibility: { ledgerExpectedQuantity: true, location: true },
     },
@@ -406,9 +404,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "product" as const,
-      filters: [
-        { id: "ownershipReconciliation", value: "disposed_still_on_hand" },
-      ],
+      filters: [{ id: "ownershipReconciliation", value: "true" }],
       sort: [{ id: "updatedAt", desc: true }],
       columnVisibility: { ledgerExpectedQuantity: true, location: true },
     },
@@ -426,7 +422,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "product" as const,
-      filters: [{ id: "kitAccounting", value: "double_counted" }],
+      filters: [{ id: "kitAccounting", value: "true" }],
       sort: [{ id: "updatedAt", desc: true }],
       columnVisibility: {
         ledgerExpectedQuantity: true,
@@ -450,10 +446,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "inventory" as const,
-      filters: [
-        { id: "locationRole", value: "global_unknown" },
-        { id: "placement", value: "all" },
-      ],
+      filters: [{ id: "locationRole", value: "true" }],
       sort: [{ id: "createdAt", desc: false }],
       columnVisibility: { location: true, placement: true },
     },
@@ -472,8 +465,7 @@ const standaloneEntityProblems = [
       kind: "entity" as const,
       entity: "inventory" as const,
       filters: [
-        { id: "valuationStatus", value: "missing_with_priced_product" },
-        { id: "placement", value: "all" },
+        { id: "valuationStatus", value: ["missing_with_priced_product"] },
       ],
       sort: [{ id: "createdAt", desc: false }],
       columnVisibility: { valuation: true, product: true },
@@ -495,7 +487,7 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "meal" as const,
-      filters: [{ id: "recipeCostCoverage", value: "understated" }],
+      filters: [{ id: "recipeCostCoverage", value: "true" }],
       sort: [{ id: "date", desc: false }],
       columnVisibility: { recipes: true },
     },

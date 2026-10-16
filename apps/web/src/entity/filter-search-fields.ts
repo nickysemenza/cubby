@@ -64,11 +64,11 @@ export const problemFilterSemantics = {
       brand: (value) => parseEntityId("ingredient", value),
       nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
     },
-    { columnId: "inventoryMultiplicity", kind: "select" },
-    { columnId: "kitAccounting", kind: "select" },
-    { columnId: "ownershipReconciliation", kind: "select" },
-    { columnId: "conversionCoverage", kind: "select" },
-    { columnId: "conversionTopology", kind: "select" },
+    { columnId: "inventoryMultiplicity", kind: "boolean" },
+    { columnId: "kitAccounting", kind: "boolean" },
+    { columnId: "ownershipReconciliation", kind: "boolean" },
+    { columnId: "conversionCoverage", kind: "boolean" },
+    { columnId: "conversionTopology", kind: "boolean" },
     { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   ingredient: [
@@ -132,7 +132,7 @@ export const problemFilterSemantics = {
       field: "recipePresenceFilter",
       kind: "presence",
     },
-    { columnId: "recipeCostCoverage", kind: "select" },
+    { columnId: "recipeCostCoverage", kind: "boolean" },
   ],
   inventory: [
     {
@@ -143,15 +143,15 @@ export const problemFilterSemantics = {
           ? { verifiedPresenceFilter: value }
           : {},
     },
-    { columnId: "locationRole", kind: "select" },
-    { columnId: "placement", field: "placementFilter", kind: "select" },
-    { columnId: "valuationStatus", kind: "select" },
+    { columnId: "locationRole", kind: "boolean" },
+    { columnId: "placement", field: "placementFilter", kind: "multiselect" },
+    { columnId: "valuationStatus", kind: "multiselect" },
     { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   expense: [
     { columnId: "future", kind: "boolean" },
-    { columnId: "costSign", kind: "select" },
-    { columnId: "dateRelative", kind: "select" },
+    { columnId: "costSign", kind: "multiselect" },
+    { columnId: "dateRelative", kind: "multiselect" },
     {
       columnId: "productId",
       urlKey: "product",
@@ -168,7 +168,11 @@ export const problemFilterSemantics = {
     },
     { columnId: "lineKind", kind: "multiselect" },
     { columnId: "lineBasis", kind: "multiselect" },
-    { columnId: "trade", kind: "multiselect" },
+    {
+      columnId: "trade",
+      kind: "multiselect",
+      nullable: { field: "tradePresenceFilter", label: "trade" },
+    },
     {
       columnId: "cost",
       kind: "range",
@@ -181,9 +185,11 @@ export const problemFilterSemantics = {
   ],
   purchase: [
     { columnId: "reconciliation", kind: "multiselect" },
-    { columnId: "financialReconciliation", kind: "select" },
+    { columnId: "financialReconciliation", kind: "multiselect" },
   ],
-  financialTransaction: [{ columnId: "allocationIntegrity", kind: "select" }],
+  financialTransaction: [
+    { columnId: "allocationIntegrity", kind: "multiselect" },
+  ],
   image: [
     { columnId: "status", kind: "multiselect" },
     { columnId: "processingIssue", kind: "multiselect" },
@@ -205,8 +211,8 @@ export const problemFilterSemantics = {
     { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   task: [
-    { columnId: "dueRelative", kind: "select" },
-    { columnId: "completion", kind: "select" },
+    { columnId: "dueRelative", kind: "multiselect" },
+    { columnId: "completion", kind: "multiselect" },
     {
       columnId: "parentTaskId",
       urlKey: "parentTask",
@@ -216,5 +222,5 @@ export const problemFilterSemantics = {
       nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
     },
   ],
-  project: [{ columnId: "attention", kind: "select" }],
+  project: [{ columnId: "attention", kind: "multiselect" }],
 } as const satisfies Partial<Record<Entity, readonly FilterSpecCore[]>>;

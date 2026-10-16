@@ -381,9 +381,9 @@ export default defineEntity({
       {
         columnId: "mappingGap",
         field: "mappingGap",
-        kind: "select",
+        kind: "boolean",
         placeholder: "Filter product mapping...",
-        options: [{ value: "gap", label: "Needs product mapping" }],
+        options: [{ value: "true", label: "Needs product mapping" }],
       },
       {
         columnId: "usuallyOnHand",
@@ -450,6 +450,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         urlOnly: true,
       },
       {

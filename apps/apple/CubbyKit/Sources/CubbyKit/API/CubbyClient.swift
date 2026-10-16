@@ -62,8 +62,8 @@ public actor CubbyClient {
         pageSize: Int = 50,
         at location: LocationCode? = nil
     ) async throws -> ListPage<EntityRow> {
-        var filters = EntityFilterState(["imagePresenceFilter": .single("none")])
-        if let location { filters.set(.many([location.rawValue]), for: "locationIdFilter") }
+        var filters = EntityFilterState(["imagePresenceFilter": ["none"]])
+        if let location { filters.set([location.rawValue], for: "locationIdFilter") }
         return try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt", filters: filters)
     }
@@ -72,7 +72,7 @@ public actor CubbyClient {
     public func stockedProducts(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<EntityRow> {
         try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize,
-            filters: EntityFilterState(["relatedInventoryPresenceFilter": .single("has")]))
+            filters: EntityFilterState(["relatedInventoryPresenceFilter": ["has"]]))
     }
 
     /// The ids of products that have at least one image, newest first. List rows carry image ids
@@ -81,7 +81,7 @@ public actor CubbyClient {
     {
         let rows = try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt",
-            filters: EntityFilterState(["imagePresenceFilter": .single("has")]))
+            filters: EntityFilterState(["imagePresenceFilter": ["has"]]))
         return ListPage(items: rows.items.map { ProductCode($0.id) }, meta: rows.meta)
     }
 
@@ -90,7 +90,7 @@ public actor CubbyClient {
     public func products(matchingBarcode gtin: String) async throws -> [EntityRow] {
         try await list(
             EntityCatalog[.product], page: 1, pageSize: 5, sort: "name",
-            filters: EntityFilterState(["upcFilter": .single(gtin)])
+            filters: EntityFilterState(["upcFilter": [gtin]])
         ).items
     }
 
@@ -656,7 +656,7 @@ public actor CubbyClient {
     }
 
     public func taskBoard(filters: EntityFilterState) async throws -> TaskBoardOut {
-        let input = try Self.decodeFilters(TaskFilters.self, filters: filters)
+        let input = try Self.decodeFilters(TaskFilters.self, entity: .task, filters: filters)
         return try await perform {
             try await api.task_board(body: .json(input)).ok.body.json
         }
@@ -677,21 +677,21 @@ public actor CubbyClient {
     public func projectAnalytics(filters: EntityFilterState) async throws
         -> (ProjectDashboardSummaryOut, ProjectPortfolioAnalyticsOut)
     {
-        let search = filters["search"]?.strings.first
-        let from = filters["dateFrom"]?.strings.first
-        let to = filters["dateTo"]?.strings.first
-        let locations = filters["location"]?.strings
-        let completionYear = filters["completionYear"]?.strings.first
-        let dashboardStatuses = filters["status"]?.strings.compactMap {
+        let search = filters["search"]?.first
+        let from = filters["dateFrom"]?.first
+        let to = filters["dateTo"]?.first
+        let locations = filters["location"]
+        let completionYear = filters["completionYear"]?.first
+        let dashboardStatuses = filters["status"]?.compactMap {
             Operations.Project_dashboardSummary.Input.Query.StatusScopePayloadPayload(rawValue: $0)
         }
-        let dashboardKinds = filters["kind"]?.strings.compactMap {
+        let dashboardKinds = filters["kind"]?.compactMap {
             Operations.Project_dashboardSummary.Input.Query.KindsPayloadPayload(rawValue: $0)
         }
-        let portfolioStatuses = filters["status"]?.strings.compactMap {
+        let portfolioStatuses = filters["status"]?.compactMap {
             Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayloadPayload(rawValue: $0)
         }
-        let portfolioKinds = filters["kind"]?.strings.compactMap {
+        let portfolioKinds = filters["kind"]?.compactMap {
             Operations.Project_portfolioAnalytics.Input.Query.KindsPayloadPayload(rawValue: $0)
         }
         return try await perform {
@@ -714,19 +714,18 @@ public actor CubbyClient {
     }
 
     public func expenseAnalytics(filters: EntityFilterState) async throws -> ExpenseAnalyticsOut {
-        let input = try Self.decodeFilters(ExpenseFilters.self, filters: filters)
+        let input = try Self.decodeFilters(ExpenseFilters.self, entity: .expense, filters: filters)
         return try await perform {
             try await api.expense_analytics(body: .json(input)).ok.body.json
         }
     }
 
-    private static func decodeFilters<T: Decodable>(_ type: T.Type, filters: EntityFilterState) throws -> T {
-        let fields = filters.values.mapValues { value -> JSONValue in
-            switch value {
-            case .single(let text): .string(text)
-            case .many(let texts): .array(texts.map(JSONValue.string))
-            }
-        }
+    /// The entity's list filters typed by its kernel parameters (`EntityKernel.swift`), so a
+    /// scalar parameter decodes as a scalar and a nested one (`projectScope`) nests.
+    private static func decodeFilters<T: Decodable>(
+        _ type: T.Type, entity: EntityKey, filters: EntityFilterState
+    ) throws -> T {
+        let fields = try EntityCatalog[entity].filterBody(filters, includeWindow: false)
         return try JSONDecoder().decode(T.self, from: JSONEncoder().encode(JSONValue.object(fields)))
     }
 
@@ -793,7 +792,7 @@ public actor CubbyClient {
         return try await perform {
             try await EntityCatalog[.meal].listPage(
                 client: api, page: 1, pageSize: 20, sort: "date",
-                filters: EntityFilterState(["from": .single(day), "to": .single(day)])
+                filters: EntityFilterState(["from": [day], "to": [day]])
             ).items.map { try $0.decoded() }
         }
     }
@@ -859,7 +858,7 @@ public actor CubbyClient {
             guard let value = filters[name] else { continue }
             switch name {
             case "nameFilter": typedFilters.nameFilter = try value.string(name)
-            case "dataTypeFilter": typedFilters.dataTypeFilter = try value.enumCase(name)
+            case "dataTypeFilter": typedFilters.dataTypeFilter = .init(value2: try value.enumCases(name))
             case "dataTypes": typedFilters.dataTypes = try value.enumCases(name)
             case "foodsOnly": typedFilters.foodsOnly = try value.bool(name)
             case "linkedProductsOnly": typedFilters.linkedProductsOnly = try value.bool(name)

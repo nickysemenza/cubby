@@ -957,12 +957,10 @@ export const gardenEntryListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  const [locationIds, plantingIds, journalPlantingId] = await Promise.all([
+  const [locationIds, plantingIds, journalPlantingIds] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationId),
     resolveFilterIds(db, "planting", filters.plantingId),
-    filters.journalPlantingId === undefined
-      ? undefined
-      : resolveLiveShortcode(db, filters.journalPlantingId, "planting"),
+    resolveFilterIds(db, "planting", filters.journalPlantingId),
   ]);
   const where = gardenEntryScaffold.where(filters, [
     buildGardenEntryWhere(),
@@ -983,12 +981,13 @@ export const gardenEntryListRead = async (
       : plantingIds
         ? sql`false`
         : undefined,
-    filters.journalPlantingId === undefined
+    journalPlantingIds === undefined
       ? undefined
-      : journalPlantingId
-        ? await journalPredicate(
-            db,
-            parseEntityId("planting", journalPlantingId),
+      : journalPlantingIds.length > 0
+        ? or(
+            ...(await Promise.all(
+              journalPlantingIds.map((id) => journalPredicate(db, id)),
+            )),
           )
         : sql`false`,
   ]);

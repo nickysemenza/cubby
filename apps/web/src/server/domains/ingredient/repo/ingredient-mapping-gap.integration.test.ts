@@ -76,7 +76,7 @@ describe("ingredient mappingGap filter", () => {
 
     const gap = await ingredientList(
       ctx.db,
-      { mappingGap: "gap" },
+      { mappingGap: true },
       [{ orderBy: "name", direction: "asc" }],
       firstPage,
     );
@@ -90,5 +90,18 @@ describe("ingredient mappingGap filter", () => {
     expect(names).not.toContain(unused.name);
     expect(names).not.toContain("Gap covered");
     expect(names).not.toContain("Gap mixed");
+    // The flag is a boolean now: false is the complement, never-used included.
+    const nonGap = (
+      await ingredientList(
+        ctx.db,
+        { mappingGap: false },
+        [{ orderBy: "name", direction: "asc" }],
+        firstPage,
+      )
+    ).data.map((row) => row.name);
+    expect(nonGap).toEqual(
+      expect.arrayContaining(["Gap covered", "Gap mixed", unused.name]),
+    );
+    expect(nonGap).not.toContain("Gap partial");
   });
 });

@@ -86,7 +86,6 @@ import {
 import {
   createPaginatedResponseSchemaWithContext,
   createPaginatedResponseSchema,
-  entityFilter,
   entityFilterList,
   partyFilterList,
   oneOrMany,
@@ -153,10 +152,8 @@ export const projectOptionsOut = z.object({
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
-const completionYear = z
-  .string()
-  .regex(/^\d{4}$/)
-  .optional();
+const completionYearValue = z.string().regex(/^\d{4}$/);
+const completionYear = completionYearValue.optional();
 
 export const embeddedProjectScopeSchema = z.object({
   statuses: z.array(projectStatusSchema).optional(),
@@ -173,7 +170,7 @@ export const projectFilterFields = {
   assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
   assigneePresenceFilter: presenceFilter,
   ...dateRangeFields("date"),
-  completionYear,
+  completionYear: oneOrMany(completionYearValue).optional(),
   parentProjectPresenceFilter: presenceFilter,
   imagePresenceFilter: presenceFilter.describe(
     "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
@@ -183,9 +180,9 @@ export const projectFilterFields = {
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
-  attention: z
-    .enum(["stalled", "missing_budget", "blocked_no_next_action"])
-    .optional(),
+  attention: oneOrMany(
+    z.enum(["stalled", "missing_budget", "blocked_no_next_action"]),
+  ).optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
@@ -312,8 +309,8 @@ export const taskFilterFields = {
   dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
   duePresenceFilter: presenceFilter,
-  dueRelative: relativeDateFilter.optional(),
-  completion: taskCompletionSchema
+  dueRelative: oneOrMany(relativeDateFilter).optional(),
+  completion: oneOrMany(taskCompletionSchema)
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
   projectPresenceFilter: presenceFilter,
@@ -482,7 +479,7 @@ export const expenseFilterFields = {
    * OR-with-`projectId` semantics documented there.
    */
   projectPresenceFilter: presenceFilter,
-  productId: entityFilter(productShortcode).optional(),
+  productId: entityFilterList(productShortcode).optional(),
   productPresenceFilter: presenceFilter,
   vendorId: entityFilterList(vendorShortcode).optional(),
   vendorPresenceFilter: presenceFilter,
@@ -499,7 +496,7 @@ export const expenseFilterFields = {
    * refund documentation, legacy `"<Vendor> order <ID>"` prose), so this is how
    * you find the rows a previous pass touched.
    */
-  dateRelative: relativeDateFilter.optional(),
+  dateRelative: oneOrMany(relativeDateFilter).optional(),
   /**
    * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
@@ -508,7 +505,7 @@ export const expenseFilterFields = {
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
-  costSign: z.enum(["negative", "positive"]).optional(),
+  costSign: oneOrMany(z.enum(["negative", "positive"])).optional(),
   /**
    * Whether an Expense belongs to a disposal Purchase. This is a relationship
    * fact, not a restatement of a negative line: refunds are often negative but

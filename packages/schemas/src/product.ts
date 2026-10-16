@@ -263,15 +263,14 @@ export const productFilterFields = {
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   inventoryPresenceFilter: presenceFilter,
-  ownerPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
-    .enum(["duplicate_within_placement"])
+    .boolean()
     .optional()
     .describe(
       "Products expected once but recorded more than once within stock or installed placement.",
     ),
   ownershipReconciliation: z
-    .enum(["disposed_still_on_hand"])
+    .boolean()
     .optional()
     .describe(
       "Products with a recorded disposal, no remaining known quantity, and a positive single-unit on-hand count.",
@@ -287,17 +286,17 @@ export const productFilterFields = {
    * always wrong.
    */
   kitAccounting: z
-    .enum(["double_counted"])
+    .boolean()
     .optional()
     .describe(
       "Kits stocked as themselves AND as their components, together accounting for more units than the ledger says were acquired.",
     ),
   conversionCoverage: z
-    .enum(["partial"])
+    .boolean()
     .optional()
     .describe("Products whose persisted conversion coverage is partial."),
   conversionTopology: z
-    .enum(["islanded"])
+    .boolean()
     .optional()
     .describe(
       "Products whose persisted conversion graph has multiple islands.",
@@ -323,18 +322,6 @@ export const productFilterFields = {
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
   ...dateRangeFields("taskDue"),
-  /**
-   * `"none"` is the untagged worklist. Unlike `recipe.tags`, `product.tags` is
-   * `notNull` with a `'{}'` default, so empty is the only untagged state —
-   * `cardinality(tags) = 0`, no `IS NULL` half. OR-ed with `tagFilters` rather
-   * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
-   */
-  tagsPresenceFilter: presenceFilter,
-  /**
-   * `"none"` is the worklist of Products with no consumable/durable kind yet;
-   * OR-ed with the `kind` filter. A worklist only — not a data-quality check.
-   */
-  kindPresenceFilter: presenceFilter,
   categoryFilter: oneOrMany(productCategoryShortcode).optional(),
   categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
   categoryPresenceFilter: presenceFilter,

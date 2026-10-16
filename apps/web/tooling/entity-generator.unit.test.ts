@@ -1238,7 +1238,15 @@ describe("typed entity compiler", () => {
   it("validates filter descriptors and audit ownership", () => {
     const text = { columnId: "name", kind: "text", placeholder: "Search" };
     const cases = [
-      [{ descriptors: [{ ...text, kind: "fuzzy" }] }, "kind is unsupported"],
+      [
+        { descriptors: [{ ...text, kind: "fuzzy" }] },
+        "kind fuzzy is unsupported",
+      ],
+      // The single-value kinds are gone: every value filter is any-of.
+      [
+        { descriptors: [{ ...text, kind: "select" }] },
+        "kind select is unsupported; value filters are any-of",
+      ],
       [
         { descriptors: [text, { ...text, urlKey: "alias" }] },
         "duplicate columnId",
@@ -1418,7 +1426,7 @@ describe("typed entity compiler", () => {
         "range.int/finite apply only to numeric ranges",
       ],
       [
-        { columnId: "name", kind: "id", brandRef: { entity: "alpha" } },
+        { columnId: "name", kind: "idMulti", brandRef: { entity: "alpha" } },
         "stored id filter needs a foreign-key field",
       ],
       [

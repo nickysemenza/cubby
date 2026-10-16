@@ -455,7 +455,7 @@ export const getCookbookSummary = async (
   db: Database,
   shortcode: string,
 ): Promise<CookbookSummary | null> => {
-  const where = cookbookScaffold.where({}, [eq(cookbook.shortcode, shortcode)]);
+  const where = cookbookScaffold.where({ ids: [shortcode] });
   const rows = await selectCookbookSummaryRows(db, {
     where,
     orderBy: [asc(cookbook.shortcode)],

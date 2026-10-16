@@ -20,9 +20,9 @@ export { emailOut, type EmailOut } from "./generated/email.gen";
  */
 export const emailFilterFields = {
   ...emailBaseFilterFields,
-  purchaseId: purchaseShortcode.optional(),
-  vendorId: vendorShortcode.optional(),
-  vendorAccountId: vendorAccountShortcode.optional(),
+  purchaseId: oneOrMany(purchaseShortcode).optional(),
+  vendorId: oneOrMany(vendorShortcode).optional(),
+  vendorAccountId: oneOrMany(vendorAccountShortcode).optional(),
   linkState: oneOrMany(emailLinkState).optional(),
 };
 export const emailFilters = z.object(emailFilterFields);

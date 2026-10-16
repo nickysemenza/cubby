@@ -21,7 +21,10 @@ type Candidate = Pick<
 /** Narrows the branches one read builds. Every narrowing lands inside a
  * branch's own WHERE, so counts and pages see only admitted rows and a record
  * read never plans the whole queue. */
-export type WorkQueueScope = Partial<Pick<WorkQueueRow, "source" | "kind">> & {
+export type WorkQueueScope = {
+  /** Any-of; problem branches outside these drop out. */
+  sources?: readonly WorkQueueRow["source"][];
+  kinds?: readonly WorkQueueRow["kind"][];
   /** Only gap-carrying branches survive, narrowed to these checks. */
   check?: readonly DataCheck[];
   record?: { entity: ShortcodeEntity; id: string };

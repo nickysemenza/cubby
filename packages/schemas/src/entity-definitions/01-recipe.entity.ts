@@ -897,7 +897,6 @@ export default defineEntity({
         optionsKey: "tags",
         deriveSchema: true,
         stored: { array: true },
-        nullable: { field: "tagsPresenceFilter", label: "tags" },
       },
       {
         columnId: "source",

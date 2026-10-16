@@ -250,7 +250,7 @@ export function schemaRow(
     tables,
     filters: metadata.filterDescriptors.length,
     idFilters: metadata.filterDescriptors.filter(
-      (filter) => filter.kind === "id" || filter.kind === "idMulti",
+      (filter) => filter.kind === "idMulti",
     ).length,
     deleteMode: metadata.lifecycle.delete?.mode ?? null,
     merge: metadata.lifecycle.merge,

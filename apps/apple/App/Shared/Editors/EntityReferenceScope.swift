@@ -17,10 +17,9 @@ enum EntityReferenceScope {
         guard !bindings.isEmpty || !reference.filters.isEmpty else {
             return nil
         }
-        var filters: [String: EntityFilterValue] = [:]
+        var filters: [String: [String]] = [:]
         for filter in reference.filters {
-            filters[filter.field] =
-                filter.values.count == 1 ? .single(filter.values[0]) : .many(filter.values)
+            filters[filter.field] = filter.values
         }
         for binding in bindings {
             guard let value = draft[binding.sourceField],
@@ -29,10 +28,7 @@ enum EntityReferenceScope {
             else {
                 return EntityPickerScope(filters: EntityFilterState(filters), ready: false)
             }
-            filters[binding.targetField] =
-                strings.count == 1
-                ? .single(strings[0])
-                : .many(strings)
+            filters[binding.targetField] = strings
         }
         return EntityPickerScope(filters: EntityFilterState(filters), ready: true)
     }

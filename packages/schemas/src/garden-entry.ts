@@ -24,7 +24,7 @@ export const gardenEntryFilterFields = {
    * A planting's journal: its own entries plus whole-location entries
    * observed during one of its confirmed location periods.
    */
-  journalPlantingId: plantingShortcode.optional(),
+  journalPlantingId: oneOrMany(plantingShortcode).optional(),
 };
 export const gardenEntryFiltersSchema = z.object(gardenEntryFilterFields);
 export type GardenEntryFilters = z.infer<typeof gardenEntryFiltersSchema>;

@@ -682,9 +682,9 @@ const validateRelationFilter = (
     throw new EntityDeclarationError(
       `${context} filter descriptor ${section.filter.descriptor} does not exist on ${target.key}.`,
     );
-  if (descriptor.kind !== "id" && descriptor.kind !== "idMulti")
+  if (descriptor.kind !== "idMulti")
     throw new EntityDeclarationError(
-      `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must be an id or idMulti filter.`,
+      `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must be an idMulti filter.`,
     );
   if (descriptor.brandRef?.entity !== entity.key)
     throw new EntityDeclarationError(

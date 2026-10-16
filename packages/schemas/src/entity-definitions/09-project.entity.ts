@@ -939,6 +939,7 @@ Rules:
         placeholder: "Filter by assignee...",
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
+        currentMember: true,
         nullable: { field: "assigneePresenceFilter", label: "assignee" },
       },
 
@@ -1008,7 +1009,7 @@ Rules:
       },
       {
         columnId: "attention",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter tracker attention...",
         options: [
           { value: "stalled", label: "Stalled" },
@@ -1050,7 +1051,7 @@ Rules:
       {
         columnId: "completionYear",
         urlKey: "completed",
-        kind: "select",
+        kind: "multiselect",
         placeholder: "Filter by completion year...",
         optionsKey: "projectCompletionYears",
         urlOnly: true,

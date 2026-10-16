@@ -405,7 +405,7 @@ export default defineEntity({
         // A planting's journal: its own entries plus whole-location entries
         // observed during one of its confirmed location periods.
         columnId: "journalPlantingId",
-        kind: "id",
+        kind: "idMulti",
         placeholder: "Journal for planting...",
         brandRef: { entity: "planting" },
         urlOnly: true,

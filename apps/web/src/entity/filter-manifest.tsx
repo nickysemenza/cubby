@@ -18,6 +18,7 @@ import {
   type FilterSpecCore,
   isMultiFilterKind,
   nullableSentinelOptions,
+  partitionFilterSpecs,
 } from "./filters";
 import { generatedEntityFilters } from "./generated/entity-filter-bindings.gen";
 import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
@@ -47,6 +48,18 @@ const filterTypeForKind = (
 ): "text" | "select" | "multiselect" =>
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
+/** The "Include sub-…" toggle a reference filter's editor shows. */
+const subtreeControl = (
+  spec: FilterSpec,
+  specs: readonly FilterSpec[],
+): FilterConfig["subtree"] => {
+  if (!spec.subtree || spec.urlOnly) return undefined;
+  const toggle = specs.find((candidate) => candidate.columnId === spec.subtree);
+  return {
+    label: toggle?.label ?? humanize(spec.subtree),
+  };
+};
+
 const resolveSpecOptions = (
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,
@@ -55,13 +68,12 @@ const resolveSpecOptions = (
   const resolved = optionsKey
     ? filterOptionItems(runtimeOptions?.[optionsKey])
     : (spec.options ?? []);
-  // Every Ledger Party filter offers the signed-in member as `@me`.
-  const me =
-    spec.referenceEntity === "ledgerParty"
-      ? [{ value: CURRENT_MEMBER_FILTER, label: "Me", meta: true as const }]
-      : [];
+  // A filter declaring `currentMember` offers the signed-in member as `@me`.
+  const me = spec.currentMember
+    ? [{ value: CURRENT_MEMBER_FILTER, label: "Me", meta: true as const }]
+    : [];
   return [
-    ...(spec.nullable ? nullableSentinelOptions(spec.nullable.label) : []),
+    ...(spec.nullable ? nullableSentinelOptions() : []),
     ...me,
     ...(spec.sentinels ?? []).map((sentinel) => ({
       ...sentinel,
@@ -73,6 +85,7 @@ const resolveSpecOptions = (
 
 const specFilterConfig = (
   spec: FilterSpec,
+  specs: readonly FilterSpec[],
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig => {
   const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
@@ -83,6 +96,8 @@ const specFilterConfig = (
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
     options: resolveSpecOptions(spec, runtimeOptions),
+    matchAll: spec.match === undefined ? undefined : true,
+    subtree: subtreeControl(spec, specs),
     onActivate: deferred?.onActivate,
     onSearchChange: deferred?.onSearchChange,
     isLoading: deferred?.isLoading,
@@ -94,24 +109,22 @@ export function manifestFilterConfig(
   columnId: string,
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig | undefined {
-  const spec = getEntityFilters(entity).find(
-    (candidate) => candidate.columnId === columnId,
-  );
+  const specs = getEntityFilters(entity);
+  const spec = specs.find((candidate) => candidate.columnId === columnId);
   if (!spec || spec.urlOnly) return undefined;
-  return specFilterConfig(spec, runtimeOptions);
+  return specFilterConfig(spec, specs, runtimeOptions);
 }
 
 export function manifestFilterFields(
   specs: readonly FilterSpec[],
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterBarField[] {
-  return specs
-    .filter((spec) => !spec.urlOnly)
-    .map((spec) =>
-      barFieldFromConfig(
-        spec.columnId,
-        spec.label ?? humanize(spec.columnId),
-        specFilterConfig(spec, runtimeOptions),
-      ),
-    );
+  const [columnSpecs] = partitionFilterSpecs(specs);
+  return columnSpecs.map((spec) =>
+    barFieldFromConfig(
+      spec.columnId,
+      spec.label ?? humanize(spec.columnId),
+      specFilterConfig(spec, specs, runtimeOptions),
+    ),
+  );
 }

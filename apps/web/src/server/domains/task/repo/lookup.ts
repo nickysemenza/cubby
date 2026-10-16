@@ -24,6 +24,7 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
+  anyOfCondition,
   eqAnyOrPresence,
   formatSearchTerm,
   getDb,
@@ -253,11 +254,11 @@ export const buildTaskWhere = async (
       ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
       : undefined,
     filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
-    filters.dueRelative === "beforeToday"
-      ? lt(effectiveTaskDueDateSql(), householdLocalDate())
-      : filters.dueRelative === "onOrBeforeToday"
-        ? lte(effectiveTaskDueDateSql(), householdLocalDate())
-        : undefined,
+    anyOfCondition(filters.dueRelative, (relative) =>
+      relative === "beforeToday"
+        ? lt(effectiveTaskDueDateSql(), householdLocalDate())
+        : lte(effectiveTaskDueDateSql(), householdLocalDate()),
+    ),
     presenceCondition(
       task.dueDate,
       filters.duePresenceFilter,
@@ -265,11 +266,9 @@ export const buildTaskWhere = async (
     ),
   ];
   const completionCondition = () =>
-    filters.completion === "open"
-      ? ne(task.status, "done")
-      : filters.completion === "done"
-        ? eq(task.status, "done")
-        : undefined;
+    anyOfCondition(filters.completion, (completion) =>
+      completion === "open" ? ne(task.status, "done") : eq(task.status, "done"),
+    );
 
   // `status` is declared stored; trade is resolved below instead of reading the
   // applies them via `declaredFilterPredicates` before the conditions below.

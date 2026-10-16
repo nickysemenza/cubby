@@ -5,7 +5,9 @@ import { z } from "zod";
 import {
   compileFilterCodec,
   buildFiltersFromManifest,
+  FILTER_ALL,
   FILTER_ANY,
+  FILTER_EXACT,
   FILTER_NONE,
   type FilterSpecCore,
   type FilterSearch,
@@ -39,14 +41,20 @@ describe("buildFiltersFromManifest", () => {
   });
 
   it("defaults the server field to the column id", () => {
-    const specs: FilterSpecCore[] = [{ columnId: "trade", kind: "select" }];
+    const specs: FilterSpecCore[] = [
+      { columnId: "trade", kind: "multiselect" },
+    ];
+    // A former single select: one value from a URL or saved view reads as a
+    // one-element any-of list.
     expect(
       buildFiltersFromManifest(specs, getter({ trade: "drywall" })),
-    ).toEqual({ trade: "drywall" });
+    ).toEqual({ trade: ["drywall"] });
   });
 
   it("treats an empty string as unset, not as a filter on ''", () => {
-    const specs: FilterSpecCore[] = [{ columnId: "trade", kind: "select" }];
+    const specs: FilterSpecCore[] = [
+      { columnId: "trade", kind: "multiselect" },
+    ];
     expect(buildFiltersFromManifest(specs, getter({ trade: "" }))).toEqual({});
   });
 
@@ -68,13 +76,13 @@ describe("buildFiltersFromManifest", () => {
       {
         columnId: "project",
         field: "projectId",
-        kind: "id",
+        kind: "idMulti",
         brand: (v) => `branded:${v}`,
       },
     ];
     expect(
       buildFiltersFromManifest(specs, getter({ project: "proj_1" })),
-    ).toEqual({ projectId: "branded:proj_1" });
+    ).toEqual({ projectId: ["branded:proj_1"] });
   });
 
   it("keeps an invalid public entity reference non-widening", () => {
@@ -253,6 +261,62 @@ describe("buildFiltersFromManifest", () => {
     });
   });
 
+  describe("mode tokens", () => {
+    const specs: FilterSpecCore[] = [
+      {
+        columnId: "tags",
+        field: "tagFilters",
+        kind: "multiselect",
+        match: { field: "tagsMatch" },
+      },
+      {
+        columnId: "parent",
+        field: "parentId",
+        kind: "idMulti",
+        subtree: "includeSubCategories",
+      },
+      {
+        columnId: "owner",
+        kind: "idMulti",
+        currentMember: true,
+        brand: (value) => `branded:${value}`,
+      },
+    ];
+
+    it("sends Match all only beside picked values", () => {
+      expect(
+        buildFiltersFromManifest(
+          specs,
+          getter({ tags: ["winter", "wool", FILTER_ALL] }),
+        ),
+      ).toEqual({ tagFilters: ["winter", "wool"], tagsMatch: "all" });
+      expect(
+        buildFiltersFromManifest(specs, getter({ tags: [FILTER_ALL] })),
+      ).toEqual({});
+    });
+
+    it("sends an Include sub-… toggle only when it is off", () => {
+      expect(
+        buildFiltersFromManifest(specs, getter({ parent: ["SCAT-4K7M"] })),
+      ).toEqual({ parentId: ["SCAT-4K7M"] });
+      expect(
+        buildFiltersFromManifest(
+          specs,
+          getter({ parent: ["SCAT-4K7M", FILTER_EXACT] }),
+        ),
+      ).toEqual({ parentId: ["SCAT-4K7M"], includeSubCategories: false });
+    });
+
+    it("keeps @me unbranded only where the descriptor declares it", () => {
+      expect(
+        buildFiltersFromManifest(specs, getter({ owner: ["@me", "LP-4K7M"] })),
+      ).toEqual({ owner: ["@me", "branded:LP-4K7M"] });
+      expect(
+        buildFiltersFromManifest(specs, getter({ parent: ["@me"] })),
+      ).toEqual({ parentId: ["@me"] });
+    });
+  });
+
   it("merges every spec into one object", () => {
     const specs: FilterSpecCore[] = [
       { columnId: "name", field: "search", kind: "text" },
@@ -291,17 +355,16 @@ describe("isMultiFilterKind", () => {
     // "presence" is has/none — complements, so a multi-select there would mean
     // "no filter". Deliberately single.
     expect(isMultiFilterKind("presence")).toBe(false);
-    expect(isMultiFilterKind("select")).toBe(false);
     expect(isMultiFilterKind("text")).toBe(false);
     expect(isMultiFilterKind("range")).toBe(false);
   });
 });
 
 describe("nullableSentinelOptions", () => {
-  it("returns the has/none sentinel pair, both flagged as meta options", () => {
-    expect(nullableSentinelOptions("Category")).toEqual([
-      { value: FILTER_ANY, label: "Has Category", meta: true },
-      { value: FILTER_NONE, label: "(none)", meta: true },
+  it("returns Any value and No value, both flagged as meta options", () => {
+    expect(nullableSentinelOptions()).toEqual([
+      { value: FILTER_ANY, label: "Any value", meta: true },
+      { value: FILTER_NONE, label: "No value", meta: true },
     ]);
   });
 });
@@ -448,7 +511,7 @@ describe("summarizeListState", () => {
   it("names picklist values by label and collapses past two", () => {
     expect(summarize({ category: "power-tools" })).toBe("Power Tools");
     expect(summarize({ category: "power-tools,fasteners" })).toBe(
-      "Power Tools, Fasteners",
+      "Power Tools or Fasteners",
     );
     expect(summarize({ category: "power-tools,fasteners,paint" })).toBe(
       "Power Tools, Fasteners +1",
@@ -529,6 +592,23 @@ describe("paramToSort / sortToParam", () => {
 });
 
 describe("compileFilterCodec", () => {
+  it("folds an Include sub-… toggle's URL key into its filter's state", () => {
+    const codec = compileFilterCodec([
+      { columnId: "parent", kind: "idMulti", subtree: "includeSubCategories" },
+      { columnId: "includeSubCategories", kind: "boolean" },
+    ]);
+    expect(codec.columnKeys).toEqual(["parent", "includeSubCategories"]);
+    const search = { parent: "SCAT-4K7M", includeSubCategories: "false" };
+    expect(codec.decodeColumns(search)).toEqual([
+      { id: "parent", value: ["SCAT-4K7M", FILTER_EXACT] },
+    ]);
+    expect(
+      codec.encode((columnId) =>
+        columnId === "parent" ? ["SCAT-4K7M", FILTER_EXACT] : undefined,
+      ),
+    ).toEqual({ parent: "SCAT-4K7M", includeSubCategories: "false" });
+  });
+
   const specs = [
     { columnId: "name", kind: "text" },
     { columnId: "trade", kind: "multiselect" },

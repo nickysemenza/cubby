@@ -392,7 +392,7 @@ extension LibraryMetadataSync {
             deviceShortcodeProvider: { [weak client] in
                 guard let client else { return nil }
                 let descriptor = EntityCatalog[.device]
-                let filters = EntityFilterState(["installationId": .single(installationID)])
+                let filters = EntityFilterState(["installationId": [installationID]])
                 let page = try? await client.list(descriptor, page: 1, pageSize: 1, filters: filters)
                 return page?.items.first?.id
             },

@@ -64,7 +64,7 @@ struct WhereIsProductIntent: AppIntent {
             throw IntentContext.Failure.notFound("inventory product filter")
         }
         let page = try await client.list(
-            inventory, pageSize: 50, filters: EntityFilterState([wire: .single(hit.id)]))
+            inventory, pageSize: 50, filters: EntityFilterState([wire: [hit.id]]))
         let stocked = page.items.filter { $0.raw["placement"]?.stringValue != "installed" }
         guard !stocked.isEmpty else {
             return .result(dialog: "\(hit.title) isn't stocked anywhere.")
