@@ -602,18 +602,10 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
       aria-label={`Synthetic ${action} decisions`}
       media={
         <figure>
-          <svg viewBox="0 0 112 112" aria-label="Synthetic shoe illustration">
-            <rect width="112" height="112" rx="4" fill="var(--muted)" />
-            <path
-              d="M18 75L27 39 48 44 55 62 92 77 94 88 18 88Z"
-              fill="var(--muted-foreground)"
-            />
-            <path
-              d="M18 83H94M36 51L50 54M33 59L53 63"
-              stroke="var(--card)"
-              strokeWidth="3"
-            />
-          </svg>
+          <div
+            className="aspect-square rounded border bg-muted"
+            aria-label="Synthetic photo placeholder"
+          />
           <figcaption>
             Synthetic photo
             <br />
@@ -630,11 +622,26 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
           />
         ) : step.key === "identity" ? (
           <Stack gap="sm">
-            <p className="text-xs">
-              Ordered Sep 2, 2026 · Example outfitter · $48
-              <br />
-              On hand: 1 pair · hall cupboard
-            </p>
+            {action === "link" ? (
+              <p className="text-xs">
+                Ordered Sep 2, 2026 · Example outfitter · $48
+                <br />
+                On hand: 1 pair · hall cupboard
+              </p>
+            ) : (
+              <Stack gap="sm">
+                <Input
+                  aria-label="Draft product name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+                <p className="text-xs">
+                  Label: US 10 · included in name
+                  <br />
+                  Closest existing: Synthetic court shoes · different style
+                </p>
+              </Stack>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -645,7 +652,9 @@ function DecisionStepsDemo({ action }: { action: "link" | "create" }) {
           </Stack>
         ) : step.key === "ownership" ? (
           <p className="text-xs">
-            Keep the existing count. Attaching evidence never adds units.
+            {action === "link"
+              ? "Keep the existing count. Attaching evidence never adds units."
+              : "Reference photo only · create without adding inventory."}
           </p>
         ) : (
           <Button size="sm" onClick={() => setConfirmed(false)}>
