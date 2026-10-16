@@ -90,9 +90,9 @@ Reuse the key only for the identical rejection, not a different decision.
 `imports_read.photo_context` serves the bounded per-photo text assembled by
 `photo-import/operations/photo-import.server.ts:runContext`. Its
 `photoRunContextImage` schema must match that summary: it does not expose the
-richer web/native `photoRunImage.descriptionEvidence` or its internal
-`AiAnalysis` row UUID. The Image shortcode remains the public reference; an
-analysis row is not an addressable entity or a new MCP identifier exception.
+richer web/native `photoRunImage.descriptionEvidence`. The Image shortcode
+remains the public reference; retained `AiAnalysis` rows are not addressable
+entities or new MCP identifier exceptions.
 
 ## Failures and timeouts
 
