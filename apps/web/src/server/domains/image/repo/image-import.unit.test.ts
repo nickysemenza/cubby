@@ -1,7 +1,7 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   importRecipeImageFromUrl,
@@ -13,7 +13,7 @@ const RECIPE_ID = testEntityId(
   "11111111-1111-1111-1111-111111111111",
 );
 const SOURCE_URL = "https://recipes.example/photo.jpg";
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error(
     "The injected recipe image port must not access the database",
   );

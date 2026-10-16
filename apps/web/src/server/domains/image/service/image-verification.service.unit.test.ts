@@ -1,7 +1,7 @@
 import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   type ImageVerificationPorts,
@@ -9,7 +9,7 @@ import {
   verifyProductImages,
 } from "./image-verification.service";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error(
     "Image-verification unit ports do not resolve a database runtime",
   );

@@ -1,14 +1,14 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   getPlacementRecommendation,
   type PlacementRecommendationPorts,
 } from "./placement-recommendation.service";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("Placement unit ports do not resolve a database runtime");
 });
 

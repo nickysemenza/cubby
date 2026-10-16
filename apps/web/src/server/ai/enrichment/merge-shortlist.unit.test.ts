@@ -2,7 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   buildMergeShortlist,
@@ -11,7 +11,7 @@ import {
   type MergeShortlistPort,
 } from "./merge-shortlist";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error(
     "Merge-shortlist unit ports do not resolve a database runtime",
   );

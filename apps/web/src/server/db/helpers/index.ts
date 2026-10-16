@@ -50,9 +50,7 @@ export {
   eqAnyOrPresence,
   eqAnyRequested,
   executeListQueryWithCount,
-  escapeLike,
   formatSearchTerm,
-  ilikeContains,
   householdDayRangeConditions,
   householdDaySql,
   householdDaySqlText,
@@ -61,7 +59,6 @@ export {
   lockAndValidateForDelete,
   matchesStringValues,
   shortcodeSetCondition,
-  notDeleted,
   presenceCondition,
   rangeConditions,
   textArrayMatches,
@@ -84,3 +81,9 @@ export {
   resolveLiveJoinShortcode,
   brandJoinShortcode,
 } from "./transform";
+
+export {
+  escapeLike,
+  ilikeContains,
+  notDeleted,
+} from "~/server/db/helpers/predicates";

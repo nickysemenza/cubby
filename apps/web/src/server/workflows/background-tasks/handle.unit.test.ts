@@ -1,7 +1,7 @@
 import { backgroundTaskSchema } from "@cubby/schemas/background-tasks";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   handleBackgroundTask,
@@ -9,7 +9,7 @@ import {
   type BackgroundTaskPorts,
 } from "./handle";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("the calendar handler never touches the database");
 });
 

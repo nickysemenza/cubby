@@ -2,7 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   type IngredientMergeAiPort,
@@ -14,7 +14,7 @@ import type {
   MergeShortlistPort,
 } from "./merge-shortlist";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error(
     "ingredient-merge unit ports do not resolve a database runtime",
   );

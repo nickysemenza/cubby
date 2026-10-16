@@ -1,3 +1,4 @@
+import { createDatabase } from "~/server/db/database-runtime";
 import {
   assessmentReviewInput,
   assessmentReviewOut,
@@ -5,7 +6,6 @@ import {
 import { productId, userId } from "@cubby/schemas/identifiers";
 import { productMatchQueueOut } from "@cubby/schemas/recommendations";
 import { z } from "zod";
-import { Database } from "~/server/db/database";
 import * as schema from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -542,7 +542,7 @@ it("reconciles every legacy review family after an intervening writer without lo
       ).toBe("ungraded");
       runtimePool = createPostgresPool({ connectionString: url.href });
       const runtime = drizzle({ client: runtimePool, schema });
-      const db = new Database(() => ({
+      const db = createDatabase(() => ({
         client: runtime,
         withConnection: async (fn) => fn(runtime),
       }));

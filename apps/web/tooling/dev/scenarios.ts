@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import {
   createImageProcessingJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
@@ -225,7 +226,7 @@ async function seedLocalProblemWork(
   baseURL: string,
 ): Promise<void> {
   const db = buildScenarioDatabase(pool);
-  const database = db.clientForRepository();
+  const database = resolveDatabaseRuntime(db).client;
   const bytes = await readFile(
     new URL(
       "../../tests/e2e/fixtures/synthetic-wardrobe-shirt.png",

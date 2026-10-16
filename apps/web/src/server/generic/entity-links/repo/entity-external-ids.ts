@@ -28,17 +28,22 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted } from "~/server/db/helpers";
-import { unwrapDb } from "~/server/db/helpers/core";
-import { entityExternalId, entityIdentity, product } from "~/server/db/schema";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { entityExternalId } from "~/server/db/external-identifier-tables";
+import { product } from "~/server/db/generated/identity-storage-tables.gen";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+  type RepositoryQueryTransaction,
+} from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
 
-type Db = Database | DrizzleTransaction;
+type Db = RepositoryQueryInput;
 
 /** Payload, then identity parent, then children: replacement and new IDs share one fence. */
 export async function lockExternalIdentifierParents(
-  tx: DrizzleTransaction,
+  tx: RepositoryQueryTransaction,
   owners: readonly Pick<
     typeof entityExternalId.$inferInsert,
     "entityId" | "entityKind"
@@ -94,7 +99,7 @@ export async function ensureExternalSources(
 ): Promise<void> {
   const wanted = uniq([...slugs]);
   if (wanted.length === 0) return;
-  await unwrapDb(db).execute(sql`
+  await repositoryQueries(db).execute(sql`
     INSERT INTO "ExternalSource" ("slug", "label", "vendorId")
     SELECT s.slug, s.slug,
       (SELECT (array_agg(v."id" ORDER BY v."id"))[1] FROM "Vendor" v
@@ -124,7 +129,7 @@ export async function settlementRefsFor(
 ): Promise<Map<string, SettlementRef[]>> {
   const out = new Map<string, SettlementRef[]>();
   if (transactionIds.length === 0) return out;
-  const rows = await unwrapDb(db)
+  const rows = await repositoryQueries(db)
     .select({
       entityId: entityExternalId.entityId,
       source: entityExternalId.source,
@@ -158,7 +163,7 @@ export async function assertSettlementRefsAvailable(
   exceptTransactionId?: string,
 ): Promise<void> {
   if (refs.length === 0) return;
-  const [held] = await unwrapDb(db)
+  const [held] = await repositoryQueries(db)
     .select({
       source: entityExternalId.source,
       externalId: entityExternalId.externalId,
@@ -194,7 +199,7 @@ export async function assertSettlementRefsAvailable(
  * caller holds the evidence locks and has checked availability.
  */
 export async function replaceSettlementRefs(
-  tx: DrizzleTransaction,
+  tx: RepositoryQueryTransaction,
   transactionId: string,
   refs: readonly SettlementRef[],
 ): Promise<void> {
@@ -251,7 +256,7 @@ export async function singleExternalIds(
 ): Promise<Map<string, { externalId: string; url: string | null }>> {
   const out = new Map<string, { externalId: string; url: string | null }>();
   if (entityIds.length === 0) return out;
-  const rows = await unwrapDb(db)
+  const rows = await repositoryQueries(db)
     .select({
       entityId: entityExternalId.entityId,
       externalId: entityExternalId.externalId,
@@ -277,7 +282,7 @@ export async function singleExternalIds(
  * only refreshes its url. An identifier another live entity holds is refused.
  */
 export async function setSingleExternalId(
-  tx: DrizzleTransaction,
+  tx: RepositoryQueryTransaction,
   owner: { entityId: string; entityKind: ShortcodeEntity },
   slot: { source: string; kind: EntityExternalIdKind },
   value: { externalId: string; url: string | null } | null,
@@ -335,7 +340,7 @@ async function assertExternalIdAvailable(
   id: { source: string; kind: EntityExternalIdKind; externalId: string },
   ownerEntityId: string,
 ): Promise<void> {
-  const [held] = await unwrapDb(db)
+  const [held] = await repositoryQueries(db)
     .execute<{ shortcode: string | null }>(sql`
     SELECT e."shortcode" FROM "EntityExternalId" x
     JOIN "Entity" e ON e."id" = x."entityId"

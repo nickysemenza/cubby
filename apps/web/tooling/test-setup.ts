@@ -1,4 +1,9 @@
 import {
+  createDatabase,
+  type DatabaseClient,
+  type DatabaseRuntime,
+} from "../src/server/db/database-runtime";
+import {
   createPostgresPool,
   terminateOtherPostgresConnections,
 } from "./postgres-pool";
@@ -24,11 +29,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { type Pool } from "pg";
 import { beforeEach } from "vitest";
-import {
-  Database,
-  type DatabaseClient,
-  type DatabaseRuntime,
-} from "../src/server/db/database";
+import { Database } from "../src/server/db/database";
 import {
   observePgPoolAndClientQueries,
   tracePool,
@@ -59,7 +60,7 @@ const toTestDatabase = (
       }
     },
   };
-  return new Database(() => runtime);
+  return createDatabase(() => runtime);
 };
 
 /**

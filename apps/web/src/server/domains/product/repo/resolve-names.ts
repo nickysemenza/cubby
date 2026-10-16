@@ -11,14 +11,14 @@ import { and, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
+import {
+  externalIdKey,
+  findProductsByExternalIds,
+} from "~/server/domains/product/repo/find-by-external-ids";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 
 import { getProductPickerItemsByIds } from "./crud";
-import {
-  externalIdKey,
-  findProductsByExternalIds,
-} from "./find-by-external-ids";
 
 const MAX_LINES = 200;
 

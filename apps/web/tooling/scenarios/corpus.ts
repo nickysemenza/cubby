@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { createHash } from "node:crypto";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySchema } from "@cubby/schemas/entity-core";
@@ -232,7 +233,7 @@ async function seedConnectedHousehold(
     entity: E,
     overrides: EntityOverrides<E> = {},
   ) => createEntity(context, entity, overrides, { faker });
-  await seedBaseWorld(db.clientForRepository());
+  await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const existingMember = await pool.query<{ shortcode: string }>(
     'SELECT shortcode FROM "LedgerParty" WHERE "userId" = $1 AND kind = \'member\' AND "deletedAt" IS NULL LIMIT 1',
     [userId],

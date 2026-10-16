@@ -1,9 +1,11 @@
 // Guard the actual resolved programs: excludes alone do not prevent imported
 // implementations, unresolved declaration imports, or newly unclassified roots.
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { globSync } from "node:fs";
+import { isBuiltin } from "node:module";
 import { createInterface } from "node:readline";
 import { join, resolve } from "node:path";
+import { storageOwners, storagePrograms } from "../typecheck-storage.ts";
 
 const sharedServerModules = new Set([
   "operation-runtime/start-operation.contract.ts",
@@ -32,58 +34,102 @@ export async function checkTypecheckBoundaries(
   app: string,
   compiler: string,
 ): Promise<void> {
-  const graph = (config: string) =>
-    execFileSync(
-      process.execPath,
-      [compiler, "--listFilesOnly", "-p", join(app, config)],
-      { cwd: app, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
-    ).split(/\r?\n/u);
-  const client: string[] = [];
-  const server = graph("tsconfig.server.json");
-  const serverRoot = join(app, "src/server/");
-  const declarations = join(app, "artifacts/server-contracts/");
-  let resolvingBoundary = false;
-  // Resolution tracing is verbose; inspect it as a stream, retaining only files.
-  const child = spawn(
-    process.execPath,
-    [
-      compiler,
-      "--listFilesOnly",
-      "--traceResolution",
-      "-p",
-      join(app, "tsconfig.client.json"),
-    ],
-    { cwd: app, stdio: ["ignore", "pipe", "inherit"] },
-  );
-  const completed = new Promise<void>((accept, reject) => {
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0 ? accept() : reject(new Error(`Client graph exited ${code}`)),
-    );
-  });
   const failures: string[] = [];
-  for await (const line of createInterface({ input: child.stdout })) {
-    if (line.startsWith(app)) client.push(line);
-    if (line.startsWith("======== Resolving module "))
-      resolvingBoundary = line.includes(`from '${declarations}`);
-    if (resolvingBoundary && line.includes("was not resolved."))
-      failures.push(`Unresolved generated contract dependency: ${line}`);
+  const contracts = [
+    join(app, "artifacts/server-contracts/"),
+    storagePrograms.output + "/",
+  ];
+  const graph = async (config: string): Promise<string[]> => {
+    const files: string[] = [];
+    const child = spawn(
+      process.execPath,
+      [
+        compiler,
+        "--listFilesOnly",
+        "--traceResolution",
+        "-p",
+        resolve(app, config),
+      ],
+      { cwd: app, stdio: ["ignore", "pipe", "inherit"] },
+    );
+    const completed = new Promise<void>((accept, reject) => {
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0
+          ? accept()
+          : reject(new Error(`Graph exited ${code}: ${config}`)),
+      );
+    });
+    let boundary = false;
+    let specifier = "";
+    for await (const line of createInterface({ input: child.stdout })) {
+      if (line.startsWith(app)) files.push(line);
+      const resolution =
+        /^======== Resolving module '([^']+)' from '([^']+)'/u.exec(line);
+      if (resolution) {
+        specifier = resolution[1]!;
+        boundary = contracts.some((directory) =>
+          resolution[2]!.startsWith(directory),
+        );
+      }
+      if (
+        boundary &&
+        line.includes("was not resolved.") &&
+        !isBuiltin(specifier)
+      )
+        failures.push(`Unresolved generated contract dependency: ${line}`);
+    }
+    await completed;
+    return files;
+  };
+  const storage = await graph(storagePrograms.config);
+  const server = await graph(storagePrograms.serverConfig);
+  const client = await graph("tsconfig.client.json");
+  const serverRoot = join(app, "src/server/");
+  for (const file of client) {
     if (
-      line.startsWith(serverRoot) &&
-      !sharedServerModules.has(line.slice(serverRoot.length))
+      file.startsWith(serverRoot) &&
+      !sharedServerModules.has(file.slice(serverRoot.length))
     )
-      failures.push(`Client check reaches a server implementation: ${line}`);
+      failures.push(`Client check reaches a server implementation: ${file}`);
   }
-  await completed;
-  if (failures.length) throw new Error(failures.slice(0, 10).join("\n"));
   const ui = server.find(
     (file) =>
       file.startsWith(join(app, "src/")) &&
       (file.endsWith(".tsx") || file.includes("/src/routes/")),
   );
-  if (ui)
-    throw new Error(`Server check reaches the browser route graph: ${ui}`);
-  const checked = new Set([...client, ...server]);
+  if (ui) failures.push(`Server check reaches the browser route graph: ${ui}`);
+  const owned = new Set(storageOwners.map((file) => resolve(app, file)));
+  const shared = new Set(
+    [
+      "db/database.ts",
+      "db/external-id-schema.ts",
+      "errors/app-error.ts",
+      "observability/tracing.ts",
+    ].map((file) => join(serverRoot, file)),
+  );
+  const leak = server.find((file) => owned.has(file));
+  if (leak)
+    failures.push(`Server check reaches storage implementation: ${leak}`);
+  const backedge = storage.find(
+    (file) =>
+      file.startsWith(serverRoot) && !owned.has(file) && !shared.has(file),
+  );
+  if (backedge)
+    failures.push(`Storage check reaches server composition: ${backedge}`);
+  const missingOwner = [...owned].find((file) => !storage.includes(file));
+  if (missingOwner)
+    failures.push(`Storage source missing from its producer: ${missingOwner}`);
+  const duplicateHandle = [...server, ...storage].find(
+    (file) =>
+      file.startsWith(storagePrograms.output) &&
+      file.endsWith("/db/database.d.ts"),
+  );
+  if (duplicateHandle)
+    failures.push(
+      `Database identity resolves to a declaration copy: ${duplicateHandle}`,
+    );
+  const checked = new Set([...client, ...server, ...storage]);
   const missing = globSync(["src/**/*.ts", "src/**/*.tsx"], {
     cwd: app,
   }).filter(
@@ -93,7 +139,8 @@ export async function checkTypecheckBoundaries(
       !checked.has(resolve(app, file)),
   );
   if (missing.length)
-    throw new Error(
-      `App source missing from both strict programs:\n${missing.join("\n")}`,
+    failures.push(
+      `App source missing from all strict programs:\n${missing.join("\n")}`,
     );
+  if (failures.length) throw new Error(failures.slice(0, 10).join("\n"));
 }

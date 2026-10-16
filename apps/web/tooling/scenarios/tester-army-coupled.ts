@@ -1,3 +1,4 @@
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -57,7 +58,7 @@ export async function seedCoupledJourneys(
 ): Promise<JourneySeed> {
   await seedSimulatorPhotoActor(pool, userId);
   const db = buildScenarioDatabase(pool);
-  await seedBaseWorld(db.clientForRepository());
+  await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const [member] = await getDb(db)
     .select({ id: ledgerParty.id })
     .from(ledgerParty)

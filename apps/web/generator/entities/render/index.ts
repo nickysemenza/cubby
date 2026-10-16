@@ -18,7 +18,10 @@ import type {
 } from "../declarations.ts";
 import { renderFieldExplanationReference } from "./field-explanations-reference.ts";
 import { renderRecord } from "./record.ts";
-import { renderEntityTablesArtifact } from "./tables.ts";
+import {
+  renderEntityTablesArtifact,
+  renderIdentityStorageTablesArtifact,
+} from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import {
   bulkUpdateFor,
@@ -1369,6 +1372,11 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     {
       relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
       source: renderEntityTablesArtifact(entities, moduleChildren),
+    },
+    {
+      relativePath:
+        "apps/web/src/server/db/generated/identity-storage-tables.gen.ts",
+      source: renderIdentityStorageTablesArtifact(entities),
     },
     ...fieldSchemaArtifacts,
     {

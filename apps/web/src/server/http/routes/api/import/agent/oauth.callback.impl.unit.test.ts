@@ -1,7 +1,7 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/domains/purchase-import/repo/agent-auth";
 
 import {
@@ -9,7 +9,7 @@ import {
   handlePurchaseAgentOAuthCallback,
 } from "./oauth.callback.impl";
 
-const database = new Database(() => {
+const database = createDatabase(() => {
   throw new Error("OAuth callback unit tests do not query the database");
 });
 const stateClaims = {

@@ -20,12 +20,16 @@ import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { wasm } from "~/lib/wasm";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { ilikeContains, notDeleted, unwrapDb } from "~/server/db/helpers";
-import { entityExternalId, product } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/external-identifier-tables";
+import { product } from "~/server/db/generated/identity-storage-tables.gen";
+import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 
-const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
-  unwrapDb(db)
+const liveGtinRows = (db: RepositoryQueryInput, ids: ProductId[]) =>
+  repositoryQueries(db)
     .select({
       productId: entityExternalId.entityId,
       externalId: entityExternalId.externalId,
@@ -61,7 +65,7 @@ const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
  * and returns NULL with no error.
  */
 export const loadPrimaryGtins = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   ids: ProductId[],
 ): Promise<Map<ProductId, string | null>> => {
   const unique = [...new Set(ids)];
@@ -81,7 +85,7 @@ export const loadPrimaryGtins = async (
  * unfindable by the very thing it exists to identify.
  */
 export const loadAllGtins = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   ids: ProductId[],
 ): Promise<Map<ProductId, string[]>> => {
   const unique = [...new Set(ids)];

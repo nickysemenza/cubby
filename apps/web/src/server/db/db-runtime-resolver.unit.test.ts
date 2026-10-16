@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { describe, expect, it } from "vitest";
 
-import type { DatabaseRuntime } from "./database";
+import type { DatabaseRuntime } from "./database-runtime";
 import type { RequestDbRole } from "./db-pg-tracing";
 import {
   DatabaseRuntimeResolver,

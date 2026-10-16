@@ -20,10 +20,76 @@ import {
 import {
   identifierTypeNames,
   renderStorageColumn,
-  storageColumnImports,
+  referencedImports,
+  storageColumnImportsFor,
 } from "./columns.ts";
 
 type TabledEntity = CompiledEntity & { table: CompiledEntityTable };
+
+const identifierTypes = new Set<string>(Object.values(identifierTypeNames));
+const declaredColumnTypeImports = (
+  tables: readonly TabledEntity[],
+  imports = new Map<string, Set<string>>(),
+): Map<string, Set<string>> => {
+  for (const { table } of tables)
+    for (const { type } of table.columns) {
+      if (
+        type === null ||
+        (type.module === "@cubby/schemas/identifiers" &&
+          identifierTypes.has(type.export))
+      )
+        continue;
+      const names = imports.get(type.module) ?? new Set<string>();
+      names.add(type.export);
+      imports.set(type.module, names);
+    }
+  return imports;
+};
+
+const renderTypeImports = (
+  imports: ReadonlyMap<string, ReadonlySet<string>>,
+): string =>
+  [...imports]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, names]) =>
+        `import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(module)};\n`,
+    )
+    .join("");
+
+// Compilation ownership roots; actual FK dependencies determine the closed group.
+const identityStorageRoots = ["product", "vendor"] as const;
+
+export const tableDependencyClosure = (
+  entities: readonly CompiledEntity[],
+  roots: readonly string[],
+): readonly TabledEntity[] => {
+  const tables = new Map(
+    entities
+      .filter((entity): entity is TabledEntity => entity.table !== null)
+      .map((entity) => [entity.key, entity]),
+  );
+  const owned = new Set(roots.filter((key) => tables.has(key)));
+  for (const key of owned) {
+    const entity = tables.get(key)!;
+    const dependencies = [
+      ...entity.fieldModel.storage.map((field) => field.reference),
+      ...entity.table.columns.map((column) => column.reference),
+    ];
+    for (const target of dependencies) {
+      if (target === null) continue;
+      if (!tables.has(target))
+        throw new Error(
+          `Storage table group ${key} has an external FK to ${target}.`,
+        );
+      owned.add(target);
+    }
+  }
+  return entities.filter(
+    (entity): entity is TabledEntity =>
+      owned.has(entity.key) && entity.table !== null,
+  );
+};
 
 const escapeTemplate = (text: string) =>
   text.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
@@ -156,6 +222,11 @@ export const renderEntityTablesArtifact = (
   const tabled = entities.filter(
     (entity): entity is TabledEntity => entity.table !== null,
   );
+  const identityTables = tableDependencyClosure(entities, identityStorageRoots);
+  const identityKeys = new Set(identityTables.map((entity) => entity.key));
+  const identityExports = identityTables.map(
+    (entity) => entity.table.exportName,
+  );
   const exports = new Map(
     tabled.map((entity) => [entity.key, entity.table.exportName]),
   );
@@ -204,7 +275,6 @@ export const renderEntityTablesArtifact = (
       ),
     ]),
   ].sort();
-  const identifierTypes = new Set<string>(Object.values(identifierTypeNames));
   const typeImports = new Map<string, Set<string>>();
   for (const table of declaredChildren)
     for (const { module, exports: names } of table.types)
@@ -218,51 +288,84 @@ export const renderEntityTablesArtifact = (
         imports.add(name);
         typeImports.set(module, imports);
       }
-  for (const { table } of tabled)
-    for (const { type } of table.columns) {
-      if (type === null) continue;
-      if (
-        type.module === "@cubby/schemas/identifiers" &&
-        identifierTypes.has(type.export)
-      )
-        continue;
-      const names = typeImports.get(type.module) ?? new Set<string>();
-      names.add(type.export);
-      typeImports.set(type.module, names);
-    }
+  declaredColumnTypeImports(
+    tabled.filter((entity) => !identityKeys.has(entity.key)),
+    typeImports,
+  );
   const usesUser =
     childTableDependencies(declaredChildren).includes("user") ||
     tabled.some(({ table }) =>
       table.columns.some(({ reference }) => reference === "user"),
     );
+  const ownedDefinitions = tabled
+    .filter((entity) => !identityKeys.has(entity.key))
+    .map((entity) => renderTable(entity, exportOf))
+    .join("\n\n");
+  const childDefinitions = renderChildTables(declaredChildren);
   return (
     generatedHeader +
     "// Import through `~/server/db/schema`, never directly: the cycle with\n" +
     "// schema.ts only resolves when schema.ts is the first module loaded.\n\n" +
-    storageColumnImports +
-    [...typeImports]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(
-        ([module, names]) =>
-          `import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(module)};\n`,
-      )
-      .join("") +
+    storageColumnImportsFor(
+      ownedDefinitions + "\n" + childDefinitions,
+      renderTypeImports(typeImports),
+    ) +
     'import { relations, sql } from "drizzle-orm";\n' +
     'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n\n' +
     (usesUser ? 'import { user } from "../auth.schema";\n' : "") +
-    'import { entityIdentity, entityIdentityFk } from "../entity-identity-schema";\n' +
+    'import { entityIdentity, entityIdentityFk } from "~/server/db/entity-identity-schema";\n' +
     (childTables.length === 0
       ? ""
       : `import { ${childTables.join(", ")} } from "../schema";\n`) +
+    (identityExports.length
+      ? `import { ${identityExports.join(", ")} } from "~/server/db/generated/identity-storage-tables.gen";\nexport { ${identityExports.join(", ")} };\n`
+      : "") +
     "\n" +
-    tabled.map((entity) => renderTable(entity, exportOf)).join("\n\n") +
+    ownedDefinitions +
     "\n\n" +
-    renderChildTables(declaredChildren) +
+    childDefinitions +
     "\n\n" +
     tabled
       .filter(({ table }) => table.relations.length > 0)
       .map(({ table }) => renderRelations(table, exportOf))
       .join("\n\n") +
+    "\n"
+  );
+};
+
+/** Canonical FK-closed definitions; relations remain in the full assembly. */
+export const renderIdentityStorageTablesArtifact = (
+  entities: readonly CompiledEntity[],
+): string => {
+  const tables = tableDependencyClosure(entities, identityStorageRoots);
+  const names = new Map(
+    tables.map((entity) => [entity.key, entity.table.exportName]),
+  );
+  const source = tables
+    .map((entity) =>
+      renderTable(entity, (target) => {
+        const name = names.get(target);
+        if (!name)
+          throw new Error(
+            `Identity storage references unowned table ${target}.`,
+          );
+        return name;
+      }),
+    )
+    .join("\n\n");
+  return (
+    generatedHeader +
+    storageColumnImportsFor(
+      source,
+      renderTypeImports(declaredColumnTypeImports(tables)),
+    ) +
+    'import { sql } from "drizzle-orm";\n' +
+    referencedImports(
+      'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
+      source,
+    ) +
+    'import { entityIdentityFk } from "~/server/db/entity-identity-schema";\n\n' +
+    source +
     "\n"
   );
 };

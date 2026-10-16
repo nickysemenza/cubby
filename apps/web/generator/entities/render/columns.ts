@@ -218,7 +218,7 @@ export const renderStorageColumn = (
 };
 
 /** The type and value-array imports the column builders above reference. */
-export const storageColumnImports =
+const storageColumnImports =
   'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
   `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
   'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
@@ -237,3 +237,32 @@ export const storageColumnImports =
   'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
   'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
   'import { inventoryPlacementValues } from "@cubby/shared";\n';
+
+/** Unrelated column imports would reconnect leaf groups to other schema types. */
+export const referencedImports = (imports: string, source: string): string => {
+  const code = source.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/gu, "");
+  const used = new Set(code.match(/[A-Za-z_$][\w$]*/gu));
+  const imported = new Set<string>();
+  return imports
+    .split("\n")
+    .flatMap((line) => {
+      const match = /^(import (?:type )?\{ )(.+)( \} from .+;)$/.exec(line);
+      if (!match) return [];
+      const names = match[2]!.split(", ").filter((name) => {
+        const identifier = name.replace(/^type /u, "");
+        const key = match[3] + identifier;
+        if (!used.has(identifier) || imported.has(key)) return false;
+        imported.add(key);
+        return true;
+      });
+      return names.length
+        ? [`${match[1]}${names.join(", ")}${match[3]}\n`]
+        : [];
+    })
+    .join("");
+};
+
+export const storageColumnImportsFor = (
+  source: string,
+  declaredImports = "",
+): string => referencedImports(storageColumnImports + declaredImports, source);

@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers/core";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { ledgerParty } from "~/server/db/schema";
 
 export type CurrentParty = {

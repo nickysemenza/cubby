@@ -2,7 +2,7 @@ import { buildActorContext } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { readPolicyFor } from "~/server/db/read-policy";
 import {
   requireActor,
@@ -17,10 +17,10 @@ import { databaseFreshness } from "./state";
 
 let freshness: DatabaseFreshness | null = null;
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("strong database must stay lazy");
 });
-const boundedStaleDb = new Database(() => {
+const boundedStaleDb = createDatabase(() => {
   throw new Error("cached database must stay lazy");
 });
 const routing: DatabaseReadRouting = {

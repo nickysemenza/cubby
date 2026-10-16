@@ -2,11 +2,11 @@ import type { TelemetryMessageV1 } from "@cubby/schemas/telemetry";
 import { describe, expect, it } from "vitest";
 
 import { getExecutionCtx, runWithExecutionCtx } from "~/server/cf-env";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import { emitTelemetry, type TelemetryPorts } from "./telemetry";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("Telemetry unit ports do not resolve a database runtime");
 });
 const event: TelemetryMessageV1 = {

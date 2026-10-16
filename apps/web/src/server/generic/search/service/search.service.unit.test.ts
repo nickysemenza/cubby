@@ -2,7 +2,8 @@ import { testEntityId } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { Database, type DrizzleClient } from "~/server/db";
+import type { DrizzleClient } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 
 import {
@@ -101,7 +102,7 @@ describe("related search candidates", () => {
         };
       },
     });
-    const db = new Database(() => ({
+    const db = createDatabase(() => ({
       client: fakeClient,
       withConnection: (fn) => fn(fakeClient),
     }));

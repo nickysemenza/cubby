@@ -1,11 +1,10 @@
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
-  Database,
-  type DrizzleClient,
-  type DrizzleTransaction,
-} from "~/server/db";
-import type { DatabaseClient } from "~/server/db/database";
+  createDatabase,
+  resolveDatabaseRuntime,
+} from "~/server/db/database-runtime";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 /** Work that must not happen unless the enclosing transaction commits. */
@@ -81,7 +80,7 @@ const flushAfterCommit = async (
  * Services and routers should never call this - they just pass Database around.
  */
 export const getDb = (db: Database): DrizzleClient => {
-  return db.clientForRepository();
+  return resolveDatabaseRuntime(db).client;
 };
 
 /**
@@ -175,10 +174,8 @@ export const withTransactionOn = async <T>(
  * together without every repository learning a second parameter type.
  */
 export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
-  // SAFETY: the repository-only Database facade exposes the same schema-bound
-  // Drizzle methods as DatabaseClient; nested transactions become savepoints.
-  const client = tx as DatabaseClient;
-  const database = new Database(() => ({
+  const client = tx;
+  const database = createDatabase(() => ({
     client,
     withConnection: (fn) => fn(client),
   }));

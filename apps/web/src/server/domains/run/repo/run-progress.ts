@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers/core";
-import { notDeleted } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
 import {
   isWorkflowRunPurpose,

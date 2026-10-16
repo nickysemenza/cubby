@@ -1,4 +1,4 @@
-import type { entityExternalId } from "~/server/db/schema";
+import type { entityExternalId } from "~/server/db/external-identifier-tables";
 
 export type MappableProductExternalId = Omit<
   typeof entityExternalId.$inferSelect,

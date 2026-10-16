@@ -2,14 +2,14 @@ import type { TelemetryMessageV1 } from "@cubby/schemas/telemetry";
 import { describe, expect, it, vi } from "vitest";
 
 import type { snapshotAiUsagePrice } from "~/server/ai/pricing";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   processTelemetryQueueBatch,
   type TelemetryQueuePorts,
 } from "./telemetry-queue";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error(
     "Telemetry-queue unit ports do not resolve a database runtime",
   );

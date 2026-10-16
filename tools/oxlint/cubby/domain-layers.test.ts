@@ -256,3 +256,15 @@ test("specifiers resolve against the alias and the importer", () => {
   );
   assert.equal(targetPath(`${S}/domains/wish/repo.ts`, "zod"), undefined);
 });
+
+test("services consume the nominal handle, not storage table or query capabilities", () => {
+  const service = `${S}/domains/image/service/image-storage.service.ts`;
+  for (const target of [
+    "db/generated/identity-storage-tables.gen",
+    "db/external-identifier-tables",
+    "db/repository-access.boundary",
+    "db/database-runtime",
+  ])
+    assert.equal(violation(service, `${S}/${target}`, true), "serviceDb");
+  assert.equal(violation(service, `${S}/db/database`, true), undefined);
+});

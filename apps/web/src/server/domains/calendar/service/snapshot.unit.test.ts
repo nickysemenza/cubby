@@ -3,12 +3,12 @@ import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import type { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 
 import { buildCalendarSnapshot, MAX_CALENDAR_DOCUMENT_BYTES } from "./snapshot";
 
-const database = new Database(() => {
+const database = createDatabase(() => {
   throw new Error("Snapshot unit tests must not open a database");
 });
 const now = new Date("2026-09-03T12:00:00.000Z");

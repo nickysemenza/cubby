@@ -12,14 +12,12 @@ import {
 } from "@cubby/schemas/entity-attachment";
 import type { Entity } from "@cubby/schemas/entity-core";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
-import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
 import type {
   DeviceId,
   ExpenseId,
   RunId,
   LedgerTransferId,
   UserId,
-  VendorId,
 } from "@cubby/schemas/identifiers";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import {
@@ -33,11 +31,9 @@ import {
   type McpToolCallOutcome,
   type McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
-import type { ShortcodeType } from "@cubby/shared";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { relations, sql } from "drizzle-orm";
 import {
-  type AnyPgColumn,
   boolean,
   check,
   customType,
@@ -53,6 +49,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 
 import {
   account,
@@ -70,16 +68,11 @@ import {
   user,
   verification,
 } from "./auth.schema";
-import { entityIdentity } from "./entity-identity-schema";
 import {
   entityLinkKindCheckSql,
   entityLinkNoSelfCheckSql,
   entityLinkQuantityCheckSql,
 } from "./entity-link-schema";
-import {
-  externalIdKindCheckSql,
-  externalIdPrimaryCheckSql,
-} from "./external-id-schema";
 import {
   cookbook,
   device,
@@ -129,78 +122,18 @@ export {
   verification,
 };
 
-const baseTimestamps = () => ({
-  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { mode: "date" })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
-const softDeletedAt = () => ({
-  deletedAt: timestamp("deletedAt", { mode: "date" }),
-});
-const pkUuid = <T extends string = string>() =>
-  uuid("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`)
-    .$type<T>();
-
-const entityIdColumn = () => uuid("entityId");
-const entityKindColumn = <K extends string>() => text("entityKind").$type<K>();
-
-interface EntityRefOptions<K extends string> {
-  nullable: boolean;
-  /** Type-level narrowing of `entityKind`; the table's own CHECK enforces it. */
-  kinds?: readonly K[];
-}
-interface RequiredEntityRef<K extends string> {
-  entityId: ReturnType<ReturnType<typeof entityIdColumn>["notNull"]>;
-  entityKind: ReturnType<ReturnType<typeof entityKindColumn<K>>["notNull"]>;
-}
-interface NullableEntityRef<K extends string> {
-  entityId: ReturnType<typeof entityIdColumn>;
-  entityKind: ReturnType<typeof entityKindColumn<K>>;
-}
-
-/**
- * The one shape of "a column that points at any entity": `entityId`
- * (`Entity.id`) plus the `entityKind` stored beside it. Every such table binds
- * the pair to `Entity(id, kind)` with `entityRefFk`, so a row cannot name an
- * entity of a kind it is not. A nullable ref (an AI call with no subject)
- * passes the composite FK by MATCH SIMPLE while either half is null.
- */
-function entityRef<K extends string = ShortcodeType>(
-  options: EntityRefOptions<K> & { nullable: false },
-): RequiredEntityRef<K>;
-function entityRef<K extends string = ShortcodeType>(
-  options: EntityRefOptions<K> & { nullable: true },
-): NullableEntityRef<K>;
-function entityRef<K extends string>(
-  options: EntityRefOptions<K>,
-): RequiredEntityRef<K> | NullableEntityRef<K> {
-  return options.nullable
-    ? { entityId: entityIdColumn(), entityKind: entityKindColumn<K>() }
-    : {
-        entityId: entityIdColumn().notNull(),
-        entityKind: entityKindColumn<K>().notNull(),
-      };
-}
-
-/** The composite-FK half of `entityRef`; each table keeps its own name. */
-const entityRefFk = (
-  name: string,
-  table: { entityId: AnyPgColumn; entityKind: AnyPgColumn },
-) =>
-  foreignKey({
-    name,
-    columns: [table.entityId, table.entityKind],
-    foreignColumns: [entityIdentity.id, entityIdentity.kind],
-  });
+import {
+  baseTimestamps,
+  softDeletedAt,
+  pkUuid,
+  entityRef,
+  entityRefFk,
+} from "~/server/db/schema-primitives";
 
 export {
   entityIdentity,
   entityIdentityRelations,
-} from "./entity-identity-schema";
+} from "~/server/db/entity-identity-schema";
 // Entity tables + relations are generated from their declarations
 // (`packages/schemas/src/entity-definitions/*.entity.ts`, `storage`).
 export * from "./generated/entity-tables.gen";
@@ -476,74 +409,14 @@ export const entityLink = pgTable(
  * names one, so a slug is spelled once. `vendorId` names the Vendor the slug
  * is, when it is one.
  */
-export const externalSource = pgTable(
-  "ExternalSource",
-  {
-    slug: text("slug").primaryKey(),
-    label: text("label").notNull(),
-    vendorId: uuid("vendorId")
-      .$type<VendorId>()
-      .references(() => vendor.id),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-  },
-  (table) => [
-    check(
-      "ExternalSource_slug_check",
-      sql`${table.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
-    ),
-  ],
-);
-
-/**
- * Every identifier an outside system gives an entity: a product's ASIN or
- * barcode, a settlement's order reference, a task's Notion page. Kinds and the
- * entities they attach to are declared in `EXTERNAL_ID_KINDS`; the CHECKs are
- * rendered from it (`external-id-schema.ts`).
- *
- * An identifier names at most one live entity (`source, kind, externalId`),
- * which is what makes collision detection and statement matching exact. Rows
- * soft-delete with their entity, so a re-import after a delete can claim the
- * identifier again.
- */
-export const entityExternalId = pgTable(
-  "EntityExternalId",
-  {
-    id: pkUuid(),
-    ...entityRef({ nullable: false }),
-    source: text("source")
-      .notNull()
-      .references(() => externalSource.slug, { onUpdate: "cascade" }),
-    kind: text("kind").notNull().$type<EntityExternalIdKind>(),
-    externalId: text("externalId").notNull(),
-    url: text("url"),
-    /** The value that stands for its `(entity, source, kind)` slot; NULL for slotless kinds. */
-    isPrimary: boolean("isPrimary"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    entityRefFk("EntityExternalId_entity_fk", table),
-    check("EntityExternalId_kind_check", sql.raw(externalIdKindCheckSql())),
-    check(
-      "EntityExternalId_primary_check",
-      sql.raw(externalIdPrimaryCheckSql()),
-    ),
-    // Barcodes are stored in ONE canonical encoding (GTIN-14): Postgres
-    // `lpad` truncates longer input, so the format is a constraint, not a
-    // convention.
-    check(
-      "EntityExternalId_gtin_check",
-      sql`${table.kind} <> 'gtin_14' OR ${table.externalId} ~ '^[0-9]{14}$'`,
-    ),
-    uniqueIndex("EntityExternalId_source_kind_externalId_key")
-      .on(table.source, table.kind, table.externalId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("EntityExternalId_entity_source_kind_primary_key")
-      .on(table.entityId, table.source, table.kind)
-      .where(sql`${table.isPrimary} AND ${table.deletedAt} IS NULL`),
-    index("EntityExternalId_entityId_idx").on(table.entityId),
-  ],
-);
+export {
+  externalSource,
+  entityExternalId,
+} from "~/server/db/external-identifier-tables";
+import {
+  externalSource,
+  entityExternalId,
+} from "~/server/db/external-identifier-tables";
 
 /** Canonical external evidence claimed by exactly one Expense or LedgerTransfer. */
 export const ledgerSourceClaim = pgTable(

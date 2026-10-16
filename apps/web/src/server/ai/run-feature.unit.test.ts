@@ -15,7 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import type { GatewayCallOptions } from "~/server/ai/gateway";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -33,7 +33,7 @@ import {
   type StructuredRunPorts,
 } from "./run-feature";
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("run-feature unit tests never resolve a database runtime");
 });
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");

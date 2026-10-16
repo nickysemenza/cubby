@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { GatewayCallOptions } from "~/server/ai/gateway";
 import { type AiUsagePort, recordAiUsage } from "~/server/ai/usage";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   auditPurchaseImportBatch,
@@ -38,7 +38,7 @@ describe("purchase import audit recovery", () => {
         },
       usage: recordUsage,
     });
-    const db = new Database(() => {
+    const db = createDatabase(() => {
       throw new Error(
         "Audit recovery unit test never resolves a database runtime",
       );
@@ -88,7 +88,7 @@ describe("purchase import audit recovery", () => {
       },
       usage: recordUsage,
     });
-    const db = new Database(() => {
+    const db = createDatabase(() => {
       throw new Error(
         "Audit recovery unit test never resolves a database runtime",
       );
@@ -155,7 +155,7 @@ describe("purchase import audit recovery", () => {
           snapshot: async () => ({ amount: null, evidence: null }),
         }),
     });
-    const db = new Database(() => {
+    const db = createDatabase(() => {
       throw new Error(
         "Audit recovery unit test never resolves a database runtime",
       );

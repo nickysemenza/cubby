@@ -134,6 +134,11 @@ import {
   resolveProductCategory,
   loadCategorySummaries,
 } from "~/server/domains/product-category/repo/product-category";
+import {
+  loadPrimaryGtins,
+  productHasGtin,
+  productMatchesGtinTerm,
+} from "~/server/domains/product/repo/gtin";
 import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   resolveEntityDisplayImageLists,
@@ -189,11 +194,6 @@ import {
   isRetainingEdgeKey,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
-import {
-  loadPrimaryGtins,
-  productHasGtin,
-  productMatchesGtinTerm,
-} from "./gtin";
 import {
   enrichProductListItems,
   prefetchProductFoods,

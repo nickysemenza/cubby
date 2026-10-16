@@ -17,7 +17,7 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 
 import {
@@ -32,7 +32,7 @@ const RECIPE_ID = testEntityId(
 const RUN_ID = runEntityId.parse("00000000-0000-4000-8000-000000000009");
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("Recipe-flow unit ports do not resolve a database runtime");
 });
 

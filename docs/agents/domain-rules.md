@@ -119,7 +119,12 @@ orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
 Its callback receives a Drizzle transaction directly. Use
 `withTransactionDatabase` when a called domain module needs a transaction-bound
 `Database`; `getDb` accepts that facade, not a raw Drizzle transaction.
-The repository helper is the sanctioned client-resolution boundary. A service earns existence for
+The repository helper is the sanctioned client-resolution boundary. The handle
+itself carries only nominal identity: `createDatabase` registers a lazy runtime
+callback, and runtime resolution occurs on each use. Query-only storage repos
+use `repositoryQueries`, which projects native Drizzle builders without exposing
+the global relational schema; full relational repos retain `getDb`. Both return
+the actual selected client/transaction, preserving transaction identity. A service earns existence for
 cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain
 compute belongs in recipebridge/WASM; TypeScript assembles inputs and reshapes
 outputs instead of recreating it.

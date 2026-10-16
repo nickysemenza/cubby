@@ -3,7 +3,7 @@ import { testEntityId } from "@cubby/schemas/testing";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
+import { createDatabase } from "~/server/db/database-runtime";
 
 import {
   createUsdaMatchService,
@@ -108,7 +108,7 @@ describe("suggestUsdaFoodBatch", () => {
   });
 });
 
-const db = new Database(() => {
+const db = createDatabase(() => {
   throw new Error("usda-match unit ports do not resolve a database runtime");
 });
 

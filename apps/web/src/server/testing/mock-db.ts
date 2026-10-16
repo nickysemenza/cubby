@@ -1,3 +1,8 @@
+import type { SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { PgDialect } from "drizzle-orm/pg-core";
+
+import { Database } from "~/server/db/database";
 /**
  * Test-only `Database` handle for where-builder guard tests.
  *
@@ -13,18 +18,14 @@
  * `build<Entity>Where`/`build<Entity>WhereClause`). Not a general Database
  * test double — it cannot execute anything, only build query text.
  */
-import type { SQL } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { PgDialect } from "drizzle-orm/pg-core";
-
-import { Database } from "~/server/db/database";
+import { createDatabase } from "~/server/db/database-runtime";
 import * as schema from "~/server/db/schema";
 
 const dialect = new PgDialect();
 
 /** A fresh mock-backed `Database` handle for one test. */
 export const mockWhereDatabase = (): Database =>
-  new Database(() => {
+  createDatabase(() => {
     const client = drizzle.mock({ schema });
     return { client, withConnection: (fn) => fn(client) };
   });

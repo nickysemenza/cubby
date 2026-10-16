@@ -3,7 +3,8 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers/core";
 import {
   ledgerParty,
   vendor,
@@ -30,8 +31,7 @@ export async function listGmailSyncTargets(
   db: Database,
 ): Promise<GmailSyncTarget[]> {
   const [members, vendors, charges] = await Promise.all([
-    db
-      .clientForRepository()
+    getDb(db)
       .selectDistinct({
         ledgerPartyId: ledgerParty.id,
         userId: ledgerParty.userId,
@@ -46,8 +46,7 @@ export async function listGmailSyncTargets(
         ),
       )
       .where(and(isNotNull(ledgerParty.userId), notDeleted(ledgerParty))),
-    db
-      .clientForRepository()
+    getDb(db)
       .select({
         id: vendor.id,
         name: vendor.name,

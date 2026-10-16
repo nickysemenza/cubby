@@ -3,6 +3,7 @@ import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import { PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS } from "~/server/clients/s3";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import {
   getDb,
   isTransaction,
@@ -39,7 +40,7 @@ export async function reserveMailAttachmentUpload(
   }
   if (escapedTransaction) {
     const rootClient = getDb(durable);
-    await durable.withClientConnection(async (client) => {
+    await resolveDatabaseRuntime(durable).withConnection(async (client) => {
       if (client === rootClient)
         throw new Error(
           "Mail attachment upload reservation requires an independent durable connection",

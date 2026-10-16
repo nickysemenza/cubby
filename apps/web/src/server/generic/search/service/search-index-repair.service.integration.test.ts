@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
@@ -124,7 +125,7 @@ describe("search index repair stream", () => {
 
     // Model a source disappearing outside the normal deletion cascade, which
     // makes its still-live SearchDocument a repair candidate.
-    await ctx.db.withClientConnection((client) =>
+    await resolveDatabaseRuntime(ctx.db).withConnection((client) =>
       client.execute(sql`
         UPDATE "Product" SET "deletedAt" = now()
         WHERE id = ${restored.entityId}::uuid
@@ -138,7 +139,7 @@ describe("search index repair stream", () => {
 
     // The Workflow may apply this persisted page much later. Its transaction
     // must recheck liveness rather than retiring the selection blindly.
-    await ctx.db.withClientConnection((client) =>
+    await resolveDatabaseRuntime(ctx.db).withConnection((client) =>
       client.execute(sql`
         UPDATE "Product" SET "deletedAt" = NULL
         WHERE id = ${restored.entityId}::uuid

@@ -5,8 +5,7 @@ import type { Database } from "~/server/db";
 import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
-
-import { productHasAnyGtin } from "./gtin";
+import { productHasAnyGtin } from "~/server/domains/product/repo/gtin";
 
 /** Case, punctuation, and spacing fold, applied identically to both sides. */
 const foldedTitle = (title: SQL) =>
