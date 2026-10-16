@@ -3,7 +3,11 @@ import { DurableObject } from "cloudflare:workers";
 
 import { withInvocationTrace } from "~/server/observability/tracing";
 
-import { AI_RESPONSE_CACHE_BATCH_SIZE } from "./response-cache";
+import {
+  AI_RESPONSE_CACHE_BATCH_SIZE,
+  type AiResponseCacheRpc,
+  type CacheClaim,
+} from "./response-cache-rpc";
 
 const LEASE_MS = 90_000;
 const DAY_MS = 86_400_000;
@@ -16,7 +20,10 @@ type CacheRow = {
 };
 
 /** One of 64 shards; SQLite coordinates claims across Worker isolates. */
-export class AiResponseCacheDurableObject extends DurableObject<Env> {
+export class AiResponseCacheDurableObject
+  extends DurableObject<Env>
+  implements AiResponseCacheRpc
+{
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec(
@@ -27,13 +34,7 @@ export class AiResponseCacheDurableObject extends DurableObject<Env> {
     );
   }
 
-  readOrClaim(
-    key: string,
-    force: boolean,
-  ):
-    | { kind: "hit"; value: string }
-    | { kind: "busy" }
-    | { kind: "claimed"; token: string } {
+  readOrClaim(key: string, force: boolean): CacheClaim {
     const now = Date.now();
     const row = this.ctx.storage.sql
       .exec<CacheRow>(
@@ -58,7 +59,9 @@ export class AiResponseCacheDurableObject extends DurableObject<Env> {
   }
 
   /** Additive RPC: existing entries, claims and single-key callers share the same store. */
-  readOrClaimMany(requests: readonly { key: string; force: boolean }[]) {
+  readOrClaimMany(
+    requests: readonly { key: string; force: boolean }[],
+  ): CacheClaim[] {
     if (requests.length > AI_RESPONSE_CACHE_BATCH_SIZE)
       throw new Error(
         `AI response cache batch supports at most ${AI_RESPONSE_CACHE_BATCH_SIZE} keys, got ${requests.length}`,

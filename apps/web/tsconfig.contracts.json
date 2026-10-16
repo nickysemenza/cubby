@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/server/http/routes/**/*.ts"],
+  "exclude": ["**/*.impl.ts", "**/*.test.ts"],
+  "files": [
+    "src/features/ai/server-functions/ai-smoke.ts",
+    "src/server/operation-runtime/start-operation-dispatch.boundary.ts",
+    "src/server/operation-runtime/middleware/native-workspace.ts",
+    "src/server/operation-runtime/middleware/private-server-functions.ts",
+    "src/server/operation-runtime/middleware/tracing.ts",
+    "src/server/http/guard-session.boundary.ts"
+  ],
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": false,
+    "noCheck": true,
+    "noResolve": true,
+    "isolatedDeclarations": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "./src",
+    "outDir": "./artifacts/server-contracts.pending",
+    "types": []
+  }
+}

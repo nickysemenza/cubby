@@ -2,7 +2,9 @@ import { parseShortcode } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { createContext, useContext, useEffect } from "react";
-import { z } from "zod";
+
+import { postNativeWorkspaceMessage } from "./native-workspace-bridge";
+export type { NativeWorkspaceMessage } from "./native-workspace.contract";
 
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -19,60 +21,6 @@ export function isNativeRunEvidence(
   if (parts.length !== 1 && !(parts.length === 2 && parts[0] === "runs"))
     return false;
   return parseShortcode(parts.at(-1) ?? "")?.type === "run";
-}
-
-const nativeWorkspaceMessageSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("navigate"),
-    entity: z.string(),
-    id: z.string(),
-    replace: z.boolean().optional(),
-  }),
-  z.object({ type: z.literal("changed") }),
-  z.object({ type: z.enum(["ready", "authRequired", "updateRequired"]) }),
-]);
-const nativeWorkspaceWireSchema = nativeWorkspaceMessageSchema.and(
-  z.object({ version: z.literal(1) }),
-);
-export type NativeWorkspaceMessage = z.infer<
-  typeof nativeWorkspaceMessageSchema
->;
-
-const nativeBridgeSchema = z.object({
-  webkit: z.object({
-    messageHandlers: z.object({
-      cubbyWorkspace: z.object({
-        postMessage: z.function({
-          input: [nativeWorkspaceWireSchema],
-          output: z.void(),
-        }),
-      }),
-    }),
-  }),
-});
-
-declare global {
-  interface Window {
-    webkit?: z.infer<typeof nativeBridgeSchema>["webkit"];
-  }
-}
-
-function postNativeWorkspaceMessage(message: NativeWorkspaceMessage) {
-  if (import.meta.env.SSR) return;
-  const parsed = nativeBridgeSchema.safeParse(window);
-  if (!parsed.success || !window.webkit) return;
-  const handler = window.webkit.messageHandlers.cubbyWorkspace;
-  // WebKit message handlers are origin-checked by native; this is not Window.postMessage.
-  // oxlint-disable-next-line unicorn/require-post-message-target-origin
-  handler.postMessage({ version: 1, ...message });
-}
-
-export function notifyNativeWorkspaceResponse(response: Response) {
-  if (response.status === 401)
-    postNativeWorkspaceMessage({ type: "authRequired" });
-  if (response.status === 426)
-    postNativeWorkspaceMessage({ type: "updateRequired" });
-  return response;
 }
 
 function recordDestination(url: URL) {

@@ -1,4 +1,3 @@
-import type { Confidence } from "@cubby/schemas/ai";
 // AI-assisted ingredient merge suggestions
 //
 // EPUB imports create near-duplicate ingredients that string matching can't
@@ -36,15 +35,8 @@ const productionIngredientMergeAiPort: IngredientMergeAiPort = {
   select: runAiSelection,
 };
 
-export interface IngredientMergeSuggestion {
-  target: {
-    id: IngredientId;
-    shortcode: IngredientShortcode;
-    name: string;
-  } | null;
-  confidence: Confidence;
-  reasoning: string;
-}
+export type { IngredientMergeSuggestion } from "./proposals";
+import type { IngredientMergeSuggestion } from "./proposals";
 
 /**
  * Suggest an existing ingredient to merge a bare/imported one into. Read-only —

@@ -4,7 +4,7 @@
  */
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
 
-import { notifyNativeWorkspaceResponse } from "~/lib/native-workspace";
+import { notifyNativeWorkspaceResponse } from "~/lib/native-workspace-bridge";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import { labelStartRequest } from "~/lib/start-dispatch-url";
 import { nativeWorkspaceClientGate } from "~/server/operation-runtime/middleware/native-workspace";

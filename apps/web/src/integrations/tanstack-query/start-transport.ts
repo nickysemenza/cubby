@@ -120,7 +120,7 @@ async function dispatchServerOperation<Input>(
     { startOperationDispatchInput },
   ] = await Promise.all([
     import("@tanstack/react-start/server"),
-    import("~/server/operation-runtime/start-operation-dispatch.server"),
+    import("~/server/operation-runtime/start-operation-dispatch.boundary"),
     import("~/server/operation-runtime/start-operation-dispatch.contract"),
   ]);
   const request = getRequest();

@@ -13,54 +13,21 @@
 // Dev-only: `installJsProfiler()` is gated behind a non-prod check in router.tsx
 // and tree-shaken from production.
 
-// The JS Self-Profiling API isn't in lib.dom yet — declare the slice we use.
-interface ProfilerInit {
-  sampleInterval: number;
-  maxBufferSize: number;
-}
-interface ProfilerFrame {
-  name?: string;
-  resourceId?: number;
-  line?: number;
-  column?: number;
-}
-interface ProfilerStack {
-  frameId: number;
-  parentId?: number;
-}
-interface ProfilerSample {
-  timestamp: number;
-  stackId?: number;
-}
-interface ProfilerTrace {
-  frames: ProfilerFrame[];
-  stacks: ProfilerStack[];
-  samples: ProfilerSample[];
-  resources: string[];
-}
-interface ProfilerSession {
-  stop(): Promise<ProfilerTrace>;
-}
-declare global {
-  var Profiler: {
-    new (init: ProfilerInit): ProfilerSession;
-  };
-  interface Window {
-    __jsProfile?: typeof captureProfile;
-  }
-}
-
-type HotFrame = { frame: string; samples: number; pct: number };
+import type {
+  CaptureProfile,
+  HotFrame,
+  ProfilerSession,
+} from "./js-self-profile.contract";
 
 /**
  * Profile the main thread for `ms`, then aggregate samples into the hottest leaf
  * frames (`name @file:line`). Prints a table and returns the ranked list.
  */
-async function captureProfile(
+const captureProfile: CaptureProfile = async (
   ms = 5000,
   sampleInterval = 10,
   topN = 25,
-): Promise<HotFrame[]> {
+): Promise<HotFrame[]> => {
   let profiler: ProfilerSession;
   try {
     profiler = new Profiler({ sampleInterval, maxBufferSize: 1_000_000 });
@@ -110,7 +77,7 @@ async function captureProfile(
   );
   console.table(top);
   return top;
-}
+};
 
 /** Expose `window.__jsProfile` in dev. No-op on the server. */
 export function installJsProfiler(): void {

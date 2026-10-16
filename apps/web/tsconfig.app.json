@@ -1,20 +1,11 @@
 {
-  // The everyday `pnpm typecheck:web` program: everything in tsconfig.json
-  // except tests and test tooling, which are a quarter to a third of what an
-  // edit re-checks. `pnpm typecheck`, `pnpm check` and CI check the
-  // full tsconfig.json. Excluded files still load when app code imports them.
-  // Measurements: `git show 18f8bd430:docs/reports/local-check-performance.md`.
-  "extends": "./tsconfig.json",
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "src/lib/test/**",
-    "tests/**",
-    "tooling/**",
-    "playwright.config.ts",
-    "vitest.config.ts"
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.server.json"
+    },
+    {
+      "path": "./tsconfig.client.json"
+    }
   ]
 }

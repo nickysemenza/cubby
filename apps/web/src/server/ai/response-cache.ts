@@ -7,9 +7,12 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
 
-const log = createLogger("ai-response-cache");
+import {
+  AI_RESPONSE_CACHE_BATCH_SIZE,
+  type CacheClaim,
+} from "./response-cache-rpc";
 
-export const AI_RESPONSE_CACHE_BATCH_SIZE = 128;
+const log = createLogger("ai-response-cache");
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60_000;
 const LEASE_MS = 90_000;
@@ -46,18 +49,7 @@ export interface AiResponseCacheKeyInput {
 }
 
 interface CacheStore {
-  readOrClaim(
-    key: string,
-    force: boolean,
-  ):
-    | Promise<
-        | { kind: "hit"; value: string }
-        | { kind: "busy" }
-        | { kind: "claimed"; token: string }
-      >
-    | { kind: "hit"; value: string }
-    | { kind: "busy" }
-    | { kind: "claimed"; token: string };
+  readOrClaim(key: string, force: boolean): Promise<CacheClaim> | CacheClaim;
   readOrClaimMany(
     requests: readonly { key: string; force: boolean }[],
   ): Promise<CacheClaim[]> | CacheClaim[];
@@ -71,8 +63,6 @@ interface CacheStore {
   release(key: string, token: string): Promise<void> | void;
   invalidate(key: string, value: string): Promise<void> | void;
 }
-
-type CacheClaim = Awaited<ReturnType<CacheStore["readOrClaim"]>>;
 
 type LocalRow = {
   value: string | null;

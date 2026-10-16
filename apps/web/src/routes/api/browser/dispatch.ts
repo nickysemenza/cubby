@@ -1,13 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { handlers } from "~/server/http/routes/api/browser/dispatch";
+
 export const Route = createFileRoute("/api/browser/dispatch")({
-  server: {
-    handlers: {
-      ANY: async ({ request }) => {
-        const { handleBrowserOperationDispatch } =
-          await import("~/server/operation-runtime/browser-operation-dispatch");
-        return handleBrowserOperationDispatch(request);
-      },
-    },
-  },
+  server: { handlers },
 });

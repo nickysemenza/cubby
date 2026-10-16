@@ -1,4 +1,7 @@
-import { createMiddleware } from "@tanstack/react-start";
+import {
+  createMiddleware,
+  type RequestMiddlewareAfterServer,
+} from "@tanstack/react-start";
 
 import { withRequestId } from "~/lib/http-cache";
 import { getRequestId } from "~/server/observability/tracing";
@@ -23,13 +26,15 @@ export function privateServerFunctionResponse(
 }
 
 /** Authenticated server-function responses must never enter a shared cache. */
-export const privateServerFunctionResponses = createMiddleware().server(
-  async ({ handlerType, next, request }) => {
-    const result = await next();
-    return privateServerFunctionResponse(
-      handlerType,
-      result.response,
-      getRequestId(request.headers),
-    );
-  },
-);
+export const privateServerFunctionResponses: RequestMiddlewareAfterServer<
+  {},
+  undefined,
+  undefined
+> = createMiddleware().server(async ({ handlerType, next, request }) => {
+  const result = await next();
+  return privateServerFunctionResponse(
+    handlerType,
+    result.response,
+    getRequestId(request.headers),
+  );
+});

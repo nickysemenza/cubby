@@ -1,0 +1,45 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx", "worker-configuration.d.ts"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "artifacts",
+    "src/server/**",
+    "src/cf-server.ts",
+    "src/server.ts",
+    "src/lib/auth.ts",
+    "src/features/ai/server-functions/ai-smoke.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "src/lib/test/**"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "~/*": ["./src/*"],
+      "tooling/*": ["./tooling/*"],
+      "~/server/http/routes/*": [
+        "./artifacts/server-contracts/server/http/routes/*"
+      ],
+      "~/features/ai/server-functions/ai-smoke": [
+        "./artifacts/server-contracts/features/ai/server-functions/ai-smoke"
+      ],
+      "~/server/operation-runtime/start-operation-dispatch.boundary": [
+        "./artifacts/server-contracts/server/operation-runtime/start-operation-dispatch.boundary"
+      ],
+      "~/server/operation-runtime/middleware/native-workspace": [
+        "./artifacts/server-contracts/server/operation-runtime/middleware/native-workspace"
+      ],
+      "~/server/operation-runtime/middleware/private-server-functions": [
+        "./artifacts/server-contracts/server/operation-runtime/middleware/private-server-functions"
+      ],
+      "~/server/operation-runtime/middleware/tracing": [
+        "./artifacts/server-contracts/server/operation-runtime/middleware/tracing"
+      ],
+      "~/server/http/guard-session.boundary": [
+        "./artifacts/server-contracts/server/http/guard-session.boundary"
+      ]
+    }
+  }
+}

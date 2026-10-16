@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["../../src/**/*.d.ts"],
+  "files": [
+    "../../worker-configuration.d.ts",
+    "../../src/types/cloudflare-workers.d.ts"
+  ],
+  "compilerOptions": {
+    "incremental": false
+  }
+}
