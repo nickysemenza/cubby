@@ -965,6 +965,13 @@ describe("problems — purchase financial settlement mismatches", () => {
       ctx.actor,
     );
     expect(await mismatches()).toEqual([]);
+    await updateFinancialTransaction(
+      ctx.db,
+      parseShortcodeFor("financialTransaction", posted.shortcode),
+      { status: "void" },
+      ctx.actor,
+    );
+    expect(await mismatches()).toEqual([]);
   });
 });
 
