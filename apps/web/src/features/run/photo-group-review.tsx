@@ -29,7 +29,6 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  Fragment,
   useEffect,
   useMemo,
   useId,
@@ -923,7 +922,11 @@ function FieldCrossChecks({
         <span className="text-muted-foreground">In Cubby</span>
         <span />
         {evidenced.map((check) => (
-          <Fragment key={check.field}>
+          <div
+            key={check.field}
+            className="contents"
+            data-cross-check={check.field}
+          >
             <span className="text-muted-foreground">
               {fieldLabel(check.field)}
             </span>
@@ -939,7 +942,7 @@ function FieldCrossChecks({
               ) : null}
             </span>
             <FieldMark check={check} />
-          </Fragment>
+          </div>
         ))}
       </div>
       {absent.length ? (
