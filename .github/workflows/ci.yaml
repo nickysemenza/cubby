@@ -308,7 +308,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.matrix != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.timeout || 20 }}
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -359,15 +359,19 @@ jobs:
       - name: ${{ matrix.step || 'Run lane' }}
         if: ${{ !matrix.browser }}
         run: ${{ matrix.run }}
-      # A combined entry's second lane still runs after the first fails.
-      - name: ${{ matrix.nextStep || 'Second lane' }}
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.nextRun }}
-        run: ${{ matrix.nextRun }}
       - if: ${{ matrix.browser }}
         uses: ./.github/actions/playwright
         with:
           command: ${{ matrix.run }}
           artifact: ${{ matrix.browser }}
+      # Companion checks retain independent results even after a browser or
+      # earlier companion fails. Setup failure and cancellation still stop them.
+      - name: ${{ matrix.checks[0].name || 'Companion check 1' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.checks[0] }}
+        run: ${{ matrix.checks[0].run }}
+      - name: ${{ matrix.checks[1].name || 'Companion check 2' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.checks[1] }}
+        run: ${{ matrix.checks[1].run }}
 
   # Informative only, outside `CI passed` and allowed to fail: the purchase
   # agent driven through the browser against a scripted model and gateway,

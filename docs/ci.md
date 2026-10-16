@@ -451,8 +451,18 @@ Generated output is never committed, except `.github/ci-lanes.yml`, which
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
 document lints.
 
-The `lanes` job is one dynamic matrix over the selected web lanes, one
-standard runner per entry; only database entries start the PostgreSQL and
+The `lanes` job is one dynamic matrix over the selected web lanes. When browser
+coverage is selected, its two entries also run the selected companion checks:
+the first shard precedes auxiliary and Worker checks, and the second precedes
+PostgreSQL checks. Each entry shares one dependency install and service setup;
+heavy checks remain sequential within a runner. Companion steps run after an
+earlier check fails, but not after setup failure or cancellation. Every failure
+still fails the job and `CI passed`. Browser reports upload before the companion
+checks, and each Nx target retains its own cache key. Paired entries have the
+combined timeout budget of the former separate entries. Without browsers,
+non-browser checks retain their standalone/combined routing.
+
+Each entry uses one standard runner; only database entries start PostgreSQL and
 IntegreSQL service containers (an empty service `image` starts none).
 `Auxiliary tests and builds` runs `nx run-many -t test`: every auxiliary
 package's tests and the `unit`, `mcp-contract`, `worker-safety`, and `ui`
@@ -461,9 +471,8 @@ then UI uses Vitest's standard project group ordering, keeping each phase's
 worker environment together. `Build Workers and runtime tests` runs the
 `db-check` migration drift check against disposable scratch databases and the
 `integration-workerd` Vitest project against a Worker it builds itself. When
-both lanes are selected they share one runner as `Auxiliary, Worker, and
-runtime tests`, two steps that each run despite the other's failure; together
-they take about as long as the slowest E2E shard and save a runner slot.
+both lanes are selected without browsers they share one runner as `Auxiliary,
+Worker, and runtime tests`, two steps that each run despite the other's failure.
 Desktop Chromium runs as two Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
@@ -493,9 +502,10 @@ The `integration` Vitest project runs once through the `postgres` target
 with four fork workers; local explicit partitions remain supported and separately keyed. The
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
-Workers and runtime tests`. A workerd consumer missing from that list runs in
-an ordinary integration shard and fails there, because in CI the harness
-refuses to rebuild a missing or stale Worker. Jobs that need the databases
+Workers and runtime tests`. Keep every Worker-consuming integration test in
+that project explicitly. An ordinary PostgreSQL step can inherit a valid
+browser-built Worker when paired; the harness's refusal to rebuild missing or
+stale Workers in CI does not enforce project membership. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
@@ -594,8 +604,8 @@ and do not require human review.
 Optimize readiness across four concurrent PRs on the existing hosted plan.
 The Linux matrix admits two entries per PR; validation and short control jobs
 are additional demand, and native/optional work has repository-level limits.
-The normal web matrix has two browser entries, one PostgreSQL entry, and a
-combined auxiliary/Worker entry. This reduces repeated setup and leaves room
+The normal web matrix pairs the selected non-browser checks with its two
+browser entries. This reduces repeated setup and leaves room
 for other PRs, main and release work; it does not reserve account-wide capacity
 or guarantee fairness against unrelated repositories.
 
@@ -623,8 +633,9 @@ links remain in Git history.
   without a reliable critical-path gain. Shard counts and worker settings live
   in the workflows and Playwright configuration.
 - Fast projects share a job to reduce runner demand outside the browser
-  critical path. Each browser shard and the workerd job build their own Worker:
-  a separate build job would add startup and install prerequisites.
+  critical path. Browser and workerd checks prepare their Worker on their own
+  runner, reusing a matching build when available; a separate build job would
+  add startup and install prerequisites.
 - HTTP/2 proxying and WASM preloading did not improve end-to-end hydration.
   `context.route` asset caching disabled Chromium's HTTP/code cache and made
   navigation slower. Catch-all chunk grouping caused module initialization
