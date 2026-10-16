@@ -1,0 +1,57 @@
+apps/apple/App/Shared/Entity/List/EntityFilterSheet.swift
+  s_5285635cb5ec69::t_1ca304e9e1fd82 277-280
+apps/web/generator/entities/compile.ts
+  s_5285635cb5ec69::t_70b0c87d4a66b7 1167-1170,1309,1983,2128,2164
+apps/web/generator/entities/data-quality.ts
+  s_5285635cb5ec69::t_622f532e2f1705 240
+apps/web/generator/entities/declarations.ts
+  s_5285635cb5ec69::t_c5aac3dd91ff04 115-116
+apps/web/generator/entities/list-fields.ts
+  s_5285635cb5ec69::t_d201e056b7e776 204
+apps/web/generator/entities/render/index.ts
+  s_5285635cb5ec69::t_fa33698f640cb0 1440
+apps/web/generator/entities/render/swift-catalog.ts
+  s_5285635cb5ec69::t_bf6189ad7a715b 225
+apps/web/src/entity/filters.ts
+  s_5285635cb5ec69::t_75a16b118c4b9e 461-467,469
+apps/web/src/entity/filters.unit.test.ts
+  s_5285635cb5ec69::t_2b119ed6c5c688 8,613-630
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_5285635cb5ec69::t_4bfadf00d9344b 131,155,158
+docs/entities.md
+  s_5285635cb5ec69::t_8bb99dc601ff78 1321-1323,1327-1332
+packages/schemas/src/email.ts
+  s_5285635cb5ec69::t_8f42d58eaa8d04 9,14-20,30-32
+packages/schemas/src/email.unit.test.ts
+  s_5285635cb5ec69::t_26497795031b09 1-17
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_5285635cb5ec69::t_b82420ee146136 29-32,660,668,676
+packages/schemas/src/entity-definitions/definition.ts
+  s_5285635cb5ec69::t_f88a8ea3c76698 2188-2193
+packages/schemas/src/manifest-wire.ts
+  s_5285635cb5ec69::t_c195d01a2bfbdf 155
+tools/oxlint/anti-slop/anti-slop-rules.test.ts
+  s_5285635cb5ec69::t_aee83c8b99ba78 403-417
+tools/oxlint/anti-slop/fixtures/no-hand-written-filter-predicate.txt
+  s_5285635cb5ec69::t_3b8f290b6d6ccf 1-12
+tools/oxlint/cubby/no-hand-written-filter-predicate-baseline.json
+  s_5285635cb5ec69::t_5f33a2a280536a 3,9
+tools/oxlint/cubby/rules/no-hand-written-filter-predicate.ts
+  s_5285635cb5ec69::t_89e90d46c66022 33-38,40-42,44-66,90-91,97-103,106-118,127,130-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3c201e6d1002755a64529040be883fb07ac0f021",
+  "prompts": {},
+  "sessions": {
+    "s_5285635cb5ec69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36a7f5c0-2a54-429d-8349-ad4f4e7f2675",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
