@@ -217,7 +217,55 @@ function RecipeNotesForm({
   );
 }
 
+function CardScalarFields({
+  onSubmit,
+}: {
+  onSubmit: (values: unknown) => void;
+}) {
+  const form = useForm({
+    defaultValues: { issuer: "Synthetic Bank", network: "visa" },
+  });
+  return (
+    <FormProvider {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <EntityPrimitiveFields
+          entity="financialAccount"
+          mode="edit"
+          include={["issuer", "network"]}
+        />
+        <button type="submit">Save card fields</button>
+      </form>
+    </FormProvider>
+  );
+}
+
 describe("EntityPrimitiveFields", () => {
+  it("edits the card issuer and network through their generic scalar controls", async () => {
+    let submitted: unknown;
+    render(
+      <CardScalarFields
+        onSubmit={(values) => {
+          submitted = values;
+        }}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Issuer" }), {
+      target: { value: "Synthetic Union" },
+    });
+    const picker = screen.getByRole("combobox", { name: "Network" });
+    picker.focus();
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    const item = screen.getByRole("option", { name: "Mastercard" });
+    fireEvent.mouseMove(item);
+    fireEvent.click(item);
+    fireEvent.submit(screen.getByRole("button", { name: "Save card fields" }));
+    await waitFor(() =>
+      expect(submitted).toEqual({
+        issuer: "Synthetic Union",
+        network: "mastercard",
+      }),
+    );
+  });
   it("composes relationship provenance into editor help and accessibility", () => {
     render(<WishAcquisitionFields />);
 

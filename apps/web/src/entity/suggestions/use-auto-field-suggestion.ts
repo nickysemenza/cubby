@@ -1,5 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import { useCallback, useEffect, useRef } from "react";
 import {
   type FieldValues,
@@ -78,16 +79,6 @@ const suggestedConfidence = (probability: number | null) =>
 type SuggestionWriteValue = string | ComboboxItem | null;
 
 const comboboxItemIdSchema = z.object({ id: z.string() });
-
-function requiresSuggestionReview(
-  entity: FieldSuggestionContextValue["entity"],
-  field: string,
-) {
-  return Boolean(
-    entityFieldModels[entity].fields.find((item) => item.key === field)?.control
-      ?.suggest?.reviewRequired,
-  );
-}
 
 function explicitModeField(entity: string | undefined, field: string) {
   if (entity !== "task") return null;

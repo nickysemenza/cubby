@@ -7,7 +7,10 @@ subprocess workspaces declare their module type explicitly, matching the consume
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
-focus and history; empty sections retain headings, index entries and actions. After changing
+focus and history; empty sections retain headings, index entries and actions.
+When adding editable fields, complete editor-test record baselines, including
+nullable output projections, and run the untouched-submit regression: an absent
+baseline can make an untouched form appear changed. After changing
 any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
@@ -165,6 +168,9 @@ A PostgreSQL test file that starts workerd belongs in
 `integration-workerd` project; CI runs it in the Worker build job against
 that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
+A runtime borrowing a `withTestDb` database must close in `afterEach` before
+the next reset. Suite-level reuse leaves unowned Worker database sessions and
+causes reset to fail; `afterAll` cleanup is too late.
 
 Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting

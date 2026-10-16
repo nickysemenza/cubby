@@ -133,6 +133,21 @@ function spendingCategoryDecision(
 }
 
 const FIELD_SUGGEST_DECISION_OVERRIDES = {
+  "financialAccount.primaryCardholderId": {
+    kind: "reference",
+    entity: "ledgerParty",
+    maxCandidates: REFERENCE_ROSTER_CAP,
+    rules:
+      "Choose a primary cardholder only from explicit primary-cardholder or account-holder evidence in saved notes or statement evidence. An authorized user, funding party, purchase frequency, shared funding, an account nickname or inventory ownership never establishes the primary cardholder. Choose none for missing, conflicting or ambiguous evidence. Preserve the saved assignment until explicitly reviewed and applied. Never change Provisional status.",
+    subject: (basis) => renderSubject("financialAccount", basis),
+  } satisfies ReferenceSuggestDecision,
+  "financialAccount.issuer": {
+    kind: "text",
+    maxCandidates: REFERENCE_ROSTER_CAP,
+    rules:
+      "Choose the credit-card issuer supported by this account's name, provider identity or explicit statement evidence. A payment network is not an issuer. Saved issuer vocabulary from other accounts is not evidence about this account. Choose none for ambiguous or insufficient evidence. Preserve the saved identity until explicitly reviewed and applied; never change the account kind or Provisional status.",
+    subject: (basis) => renderSubject("financialAccount", basis),
+  } satisfies TextRosterSuggestDecision,
   "vendor.defaultSpendingCategoryId": {
     ...spendingCategoryDecision("vendor"),
     rules:
@@ -255,6 +270,7 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
 >;
 
 export type EnumSuggestKey =
+  | "financialAccount.network"
   | "vendor.spendingProfile"
   | "planting.status"
   | "gardenEntry.kind"

@@ -1,3 +1,4 @@
+import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import { sql, type SQL } from "drizzle-orm";
 
 /** Nonempty history replaces the undated fallback; a gap remains unknown. */
@@ -11,16 +12,19 @@ export const accountFundingPartySql = (account: SQL, date: SQL) => sql`(
   ) END
 )`;
 
-/** One server-owned detail line per dated party, preserving membership order. */
-export const accountPartyPeriodsLabelSql = (periods: SQL) => sql<
-  string | null
->`(
-  SELECT string_agg(
-    coalesce(party.name, period->>'ledgerPartyId') || CASE
-      WHEN period->>'validFrom' IS NULL AND period->>'validTo' IS NULL THEN ''
-      ELSE ' · ' || coalesce(period->>'validFrom', '…') || ' → ' || coalesce(period->>'validTo', '…')
-    END, E'\n' ORDER BY ordinal
-  )
+/** Linked detail rows preserve dated membership order on every client. */
+// oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- jsonb_build_object keys describe the DisplayItem wire shape, not enum values.
+export const accountPartyPeriodItemsSql = (periods: SQL) => sql<DisplayItem[]>`(
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'entity', 'ledgerParty',
+    'id', period->>'ledgerPartyId',
+    'title', coalesce(party.name, period->>'ledgerPartyId'),
+    'subtitle', CASE
+      WHEN period->>'validFrom' IS NULL AND period->>'validTo' IS NULL THEN NULL
+      ELSE coalesce(period->>'validFrom', '…') || ' → ' || coalesce(period->>'validTo', '…')
+    END,
+    'trailing', NULL
+  ) ORDER BY ordinal), '[]'::jsonb)
   FROM jsonb_array_elements(${periods}) WITH ORDINALITY history(period, ordinal)
   LEFT JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
 )`;

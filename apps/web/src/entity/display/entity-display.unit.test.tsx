@@ -128,6 +128,49 @@ describe("declared entity displays", () => {
     expect(container.firstElementChild).toHaveClass("whitespace-pre-line");
   });
 
+  // History rows must retain a navigable party and date context instead of flattening to text.
+  it("links each dated party from server-composed history rows", () => {
+    const harness = createBrowserTestHarness();
+    render(
+      <>
+        {renderDetailFieldValue(
+          "financialAccount",
+          {
+            authorizedUserItems: [
+              {
+                entity: "ledgerParty",
+                id: "LPY-4K7M",
+                title: "Morgan",
+                subtitle: "2023-12-27 → …",
+                trailing: null,
+              },
+              {
+                entity: "ledgerParty",
+                id: "LPY-7K4M",
+                title: "Alex",
+                subtitle: "… → 2023-12-26",
+                trailing: null,
+              },
+            ],
+          },
+          fieldOf("financialAccount", "authorizedUsers"),
+        )}
+      </>,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("link", { name: "Morgan" })).toHaveAttribute(
+      "href",
+      "/ledger-parties/LPY-4K7M",
+    );
+    expect(screen.getByRole("link", { name: "Alex" })).toHaveAttribute(
+      "href",
+      "/ledger-parties/LPY-7K4M",
+    );
+    expect(screen.getByText("2023-12-27 → …")).toBeVisible();
+    expect(screen.getByText("… → 2023-12-26")).toBeVisible();
+    harness.dispose();
+  });
+
   it("shows an empty structured detail field as none rather than raw JSON", () => {
     const field = fieldOf("financialAccount", "sourceAliases");
     render(

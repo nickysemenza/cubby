@@ -3,6 +3,8 @@ import type {
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
+export { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
@@ -119,32 +121,6 @@ function fieldByKey(
   key: string,
 ): ManifestField | undefined {
   return entityFieldModels[entity].fields.find((field) => field.key === key);
-}
-
-const basisIdSchema = z.object({ id: z.string() });
-const basisArraySchema = z.array(z.string());
-
-/**
- * A basis value in the shape `ai.suggestFields` wants: a trimmed string, an
- * id pulled off a picker's `{ id }` value (`ComboboxItem`-shaped or a raw
- * `{id}`), a JSON-encoded array (a text-array field's current entries — a
- * prune target's own self-basis, or a sibling array field like `aliases`),
- * or `null` when the value carries nothing usable.
- */
-export function basisValueOf(value: unknown): string | null {
-  const text = z.string().safeParse(value);
-  if (text.success) {
-    const trimmed = text.data.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  const withId = basisIdSchema.safeParse(value);
-  if (withId.success) {
-    const trimmed = withId.data.id.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  const array = basisArraySchema.safeParse(value);
-  if (array.success) return JSON.stringify(array.data);
-  return null;
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
@@ -299,7 +300,10 @@ export async function saveSweepSuggestions(
         if (row) created.push({ row, entry });
       }
       for (const { row, entry } of created) {
-        if (entry.status === "applied") {
+        if (
+          entry.status === "applied" &&
+          !requiresSuggestionReview(input.entity, input.field)
+        ) {
           try {
             await acceptSuggestion(
               tx,

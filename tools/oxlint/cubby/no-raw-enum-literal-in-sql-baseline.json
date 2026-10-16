@@ -55,7 +55,6 @@
   "apps/web/src/server/domains/inventory/repo/receive-expense.integration.test.ts": 1,
   "apps/web/src/server/domains/cookbook/repo/cookbook-source-count.ts": 2,
   "apps/web/src/server/generic/data-quality/repo/hydrate.ts": 1,
-  "apps/web/src/server/domains/financial-account/repo.ts": 3,
   "apps/web/src/server/generic/search/service/search.service.ts": 15,
   "apps/web/src/server/domains/statement-import/repo/statement-row.ts": 10,
   "apps/web/src/server/generic/entity-graph/repo/entity-graph.ts": 3,

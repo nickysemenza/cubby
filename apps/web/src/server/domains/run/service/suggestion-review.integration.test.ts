@@ -745,7 +745,7 @@ describe("Suggestion review", () => {
     expect(saved?.spendingCategoryId).toBeNull();
   });
 
-  it("applies a Vendor default category with Expense history on auto-apply and on accept", async () => {
+  it("requires review for Vendor default categories with Expense history at either confidence", async () => {
     const context = kernelCtx(ctx);
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic vendor category",
@@ -769,7 +769,7 @@ describe("Suggestion review", () => {
       return suggestion("defaultSpendingCategoryId", {
         value: category.shortcode,
         label: category.name,
-        // Auto-apply above the threshold; queue the other for review.
+        // The declared review requirement applies above and below the confidence threshold.
         probability: input.entityId === autoVendor.shortcode ? 0.95 : 0.7,
         financeReview: {
           entity: "vendor",
@@ -797,17 +797,19 @@ describe("Suggestion review", () => {
         .where(eq(vendorTable.id, id));
       return saved?.defaultSpendingCategoryId;
     };
-    expect(await vendorCategory(autoVendor.id)).toBe(category.id);
+    expect(await vendorCategory(autoVendor.id)).toBeNull();
     expect(await vendorCategory(reviewedVendor.id)).toBeNull();
 
     const pending = await listSuggestions(ctx.db, {
       runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });
-    expect(pending).toEqual([
-      expect.objectContaining({ recordId: reviewedVendor.shortcode }),
-    ]);
-    await acceptSuggestion(ctx.db, context, { id: pending[0]!.id });
+    expect(pending.map(({ recordId }) => recordId).sort()).toEqual(
+      vendors.map(({ shortcode }) => shortcode).sort(),
+    );
+    for (const row of pending)
+      await acceptSuggestion(ctx.db, context, { id: row.id });
+    expect(await vendorCategory(autoVendor.id)).toBe(category.id);
     expect(await vendorCategory(reviewedVendor.id)).toBe(category.id);
     expect(
       (await runSuggestions(ctx.db, started.id)).map(({ status }) => status),

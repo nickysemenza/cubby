@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import {
   parseEntityRef,
   parseEntityId,
@@ -172,14 +173,7 @@ async function prepareField(
   if (!policy) return null;
   const basis = Object.fromEntries(
     [...new Set([...policy.basis.map((row) => row.key), target.field])].map(
-      (key) => [
-        key,
-        record[key] == null
-          ? null
-          : typeof record[key] === "string"
-            ? record[key]
-            : JSON.stringify(record[key]),
-      ],
+      (key) => [key, basisValueOf(record[key])],
     ),
   );
   const lastWrite = await latestFieldWrite(
@@ -742,6 +736,8 @@ export async function executeAiRefreshTarget(
       const model = snapshot.decisionModel;
       const entry = decision
         ? makeSweepSuggestion({
+            entity: snapshot.entity,
+            field: snapshot.field,
             currentValue: snapshot.currentValue,
             decision: {
               value: decision.value,

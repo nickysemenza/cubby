@@ -540,6 +540,13 @@
       "when": 1792174060994,
       "tag": "0076_card_user_funding_history",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792180268946,
+      "tag": "0077_card_field_suggestions",
+      "breakpoints": true
     }
   ]
 }

@@ -3,10 +3,11 @@ import {
   financialAccountFundingPeriods,
 } from "../financial-account-party-fields";
 import { defineEntity } from "./definition.js";
-import { labelField } from "./label-field.js";
+import { displayItemsField, labelField } from "./label-field.js";
 import {
   financialAccountCardNumbers,
   financialAccountIdentity,
+  financialAccountNetwork,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account-fields";
 import {
@@ -124,8 +125,92 @@ export default defineEntity({
         },
       },
       {
+        key: "issuer",
+        kind: "text",
+        nullable: true,
+        description:
+          "Credit-card issuer, stored in identity. Suggestions require account-specific issuer evidence.",
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Account identity" }],
+        },
+        control: {
+          kind: "text",
+          suggest: {
+            basis: ["name", "identity", "notes", "sourceAliases"],
+            backedBy: [{ column: "identity" }],
+            reviewRequired: true,
+          },
+        },
+        display: { detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: z.string().nullable().optional(),
+          update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "network",
+        kind: "enum",
+        nullable: true,
+        description:
+          "Credit-card payment network, stored in identity. Choose none without explicit network evidence.",
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Account identity" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            {
+              value: "visa",
+              label: "Visa",
+              description: "Visa payment network.",
+            },
+            {
+              value: "mastercard",
+              label: "Mastercard",
+              description: "Mastercard payment network.",
+            },
+            {
+              value: "amex",
+              label: "American Express",
+              description: "American Express payment network.",
+            },
+            {
+              value: "discover",
+              label: "Discover",
+              description: "Discover payment network.",
+            },
+            {
+              value: "other",
+              label: "Other",
+              description:
+                "An explicitly identified payment network outside the listed networks; not an unknown network.",
+            },
+          ],
+          suggest: {
+            basis: ["name", "identity", "notes", "sourceAliases"],
+            backedBy: [{ column: "identity" }],
+            allowNone: true,
+            reviewRequired: true,
+            rules: [
+              "Choose a payment network only from explicit network evidence in the account name, identity, saved notes or statement evidence. An issuer name or card tier does not establish a network. Choose none for missing, conflicting or ambiguous evidence; never use Other to mean unknown. Preserve the saved identity until reviewed and applied; never change the account kind or Provisional status.",
+            ],
+          },
+        },
+        display: { detail: true },
+        validation: {
+          read: financialAccountNetwork.nullable(),
+          create: financialAccountNetwork.nullable().optional(),
+          update: financialAccountNetwork.nullable().optional(),
+        },
+      },
+      {
         key: "provisional",
         kind: "boolean",
+        description:
+          "Imported or unconfirmed account identity. Clear only after a household member confirms this account's identity.",
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
@@ -192,7 +277,20 @@ export default defineEntity({
         description:
           "The member who alone makes purchases outside authorized-user periods. Independent of funding and inventory ownership.",
         reference: { entity: "ledgerParty" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: [
+              "name",
+              "identity",
+              "notes",
+              "authorizedUsers",
+              "fundingPeriods",
+            ],
+            reviewRequired: true,
+          },
+        },
         display: { detail: true },
         validation: {
           read: ledgerPartyShortcode.nullable(),
@@ -206,7 +304,7 @@ export default defineEntity({
         description:
           "Members authorized to use this credit card, with inclusive membership dates.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, detailLabelPath: "authorizedUsersLabel" },
+        display: { detail: true, itemsPath: "authorizedUserItems" },
         validation: {
           read: financialAccountAuthorizedUsers,
           create: financialAccountAuthorizedUsers.default([]),
@@ -219,7 +317,7 @@ export default defineEntity({
         description:
           "Dated funding parties. Empty uses the account Ledger Party; gaps in a nonempty history are unknown. Does not change inventory ownership.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, detailLabelPath: "fundingPeriodsLabel" },
+        display: { detail: true, itemsPath: "fundingPeriodItems" },
         validation: {
           read: financialAccountFundingPeriods,
           create: financialAccountFundingPeriods.default([]),
@@ -346,8 +444,8 @@ export default defineEntity({
       // Server-composed text for the structured detail fields above (`display.detailLabelPath`).
       labelField("sourceAliasesLabel", "Source aliases"),
       labelField("cardNumbersLabel", "Card numbers"),
-      labelField("authorizedUsersLabel", "Authorized users"),
-      labelField("fundingPeriodsLabel", "Funding periods"),
+      displayItemsField("authorizedUserItems", "Authorized users"),
+      displayItemsField("fundingPeriodItems", "Funding periods"),
     ],
     storage: [
       {
@@ -391,6 +489,8 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "issuer",
+      "network",
       "primaryCardholderId",
       "authorizedUsers",
       "fundingPeriods",
@@ -405,6 +505,8 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "issuer",
+      "network",
       "primaryCardholderId",
       "authorizedUsers",
       "fundingPeriods",
@@ -448,6 +550,8 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "issuer",
+          "network",
           "name",
           "identity",
           "cardNumbers",
@@ -457,6 +561,8 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "issuer",
+          "network",
           "primaryCardholderId",
           "authorizedUsers",
           "fundingPeriods",
@@ -475,8 +581,10 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
-      "authorizedUsersLabel",
-      "fundingPeriodsLabel",
+      "issuer",
+      "network",
+      "authorizedUserItems",
+      "fundingPeriodItems",
       "primaryCardholderId",
       "authorizedUsers",
       "fundingPeriods",

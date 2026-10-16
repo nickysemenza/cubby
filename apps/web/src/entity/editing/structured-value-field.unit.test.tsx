@@ -112,15 +112,14 @@ describe("StructuredValueField", () => {
     expect(screen.queryByRole("textbox", { name: "Issuer" })).toBeNull();
 
     choose("Identity", "Credit card");
-    fireEvent.change(await screen.findByRole("textbox", { name: "Issuer" }), {
-      target: { value: "Synthetic Bank" },
-    });
+    expect(screen.queryByRole("textbox", { name: "Issuer" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       kind: "credit_card",
-      issuer: "Synthetic Bank",
+      issuer: null,
+      network: null,
     });
   });
 
@@ -175,7 +174,7 @@ describe("StructuredValueField", () => {
     ]);
   });
 
-  it("locks an account's identity kind once it exists but keeps its other fields editable", () => {
+  it("locks an account's identity kind and carries projected scalar siblings without duplicate controls", () => {
     render(
       <Harness
         entity="financialAccount"
@@ -188,7 +187,9 @@ describe("StructuredValueField", () => {
     );
 
     expect(screen.getByRole("combobox", { name: "Identity" })).toBeDisabled();
-    expect(screen.getByRole("textbox", { name: "Issuer" })).toBeEnabled();
+    expect(
+      screen.queryByRole("textbox", { name: "Issuer" }),
+    ).not.toBeInTheDocument();
   });
 
   it("warns that changing card numbers changes statement matching", () => {

@@ -256,6 +256,8 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
 }
 
 const financialAccountFieldModels = {
+  issuer: requiredFieldModel("financialAccount", "issuer"),
+  network: requiredFieldModel("financialAccount", "network"),
   identity: requiredFieldModel("financialAccount", "identity"),
   cardNumbers: requiredFieldModel("financialAccount", "cardNumbers"),
   providerVendorId: requiredFieldModel("financialAccount", "providerVendorId"),
@@ -291,12 +293,19 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
         entity="financialAccount"
         mode={mode}
         section="main"
+        exclude={["issuer", "network"]}
         options={{
           name: { focusOnMount: true },
           notes: { placeholder: "Optional evidence" },
         }}
       />
       {render(financialAccountFieldModels.identity)}
+      {kind === "credit_card" ? (
+        <>
+          {render(financialAccountFieldModels.issuer)}
+          {render(financialAccountFieldModels.network)}
+        </>
+      ) : null}
       {render(financialAccountFieldModels.cardNumbers)}
       {kind === "stored_value"
         ? render(financialAccountFieldModels.providerVendorId)

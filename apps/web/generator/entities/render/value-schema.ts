@@ -251,7 +251,12 @@ const convert = (
   raw: JsonSchema | undefined,
   context: Context,
 ): ValueSchemaJSON => {
-  const base = convertNode(raw, context);
+  const converted = convertNode(raw, context);
+  // Projected siblings retain their stored value while their scalar controls own editing.
+  const base: ValueSchemaJSON =
+    raw?.opaque === true
+      ? { ...converted, node: { text: { format: "opaque" } } }
+      : converted;
   const createOnly = raw?.createOnly === true;
   const notice = raw?.notice;
   if (createOnly && notice !== undefined)

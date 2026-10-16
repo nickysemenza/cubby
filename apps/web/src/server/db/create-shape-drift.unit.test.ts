@@ -52,6 +52,10 @@ type EntityFieldNotes = {
 };
 
 const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
+  financialAccount: {
+    issuer: "writes identity.issuer for credit-card accounts",
+    network: "writes identity.network for credit-card accounts",
+  },
   expense: {
     vendor: "free-text vendor name; the repo resolves it to Expense.vendorId",
     orderId: "attaches the expense to a Purchase rather than storing a column",

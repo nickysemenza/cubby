@@ -49,6 +49,10 @@ import { locationSuggestionSpec } from "~/server/ai/policy/prompts/location-sugg
 import type { Database } from "~/server/db";
 import { expenseTradeAffinity } from "~/server/domains/expense/repo/analytics";
 import {
+  cardholderSuggestionMembers,
+  savedCardIssuers,
+} from "~/server/domains/financial-account/repo/suggestion-candidates";
+import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
 } from "~/server/domains/location/repo/lookup";
@@ -66,6 +70,7 @@ import {
 } from "~/server/generic/search/service/search.service";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { issuerCandidates, hasCreditCardIdentity } from "./account-evidence";
 import { rankCategoryCandidates } from "./category-ranking";
 
 /**
@@ -350,6 +355,23 @@ const spendingCategoryRuntime = {
 };
 
 const FIELD_SUGGEST_OVERRIDES = {
+  "financialAccount.primaryCardholderId": {
+    ...FIELD_SUGGEST_DECISIONS["financialAccount.primaryCardholderId"],
+    roster: async (db, basis) =>
+      hasCreditCardIdentity(basis) ? await cardholderSuggestionMembers(db) : [],
+    idOf: (candidate) => candidate.id,
+    labelOf: (candidate) => candidate.name,
+    renderLine: (candidate) => `${candidate.id} | ${candidate.name}`,
+  } satisfies ReferenceSuggestSpec<
+    Awaited<ReturnType<typeof cardholderSuggestionMembers>>[number]
+  >,
+  "financialAccount.issuer": {
+    ...FIELD_SUGGEST_DECISIONS["financialAccount.issuer"],
+    roster: async (db, basis) =>
+      hasCreditCardIdentity(basis)
+        ? issuerCandidates(await savedCardIssuers(db), basis)
+        : [],
+  } satisfies TextRosterSuggestSpec,
   "vendor.defaultSpendingCategoryId": {
     ...FIELD_SUGGEST_DECISIONS["vendor.defaultSpendingCategoryId"],
     ...spendingCategoryRuntime,
@@ -509,6 +531,13 @@ const PRODUCT_CATEGORY_FEATURE =
 
 export const FIELD_SUGGEST_REGISTRY = {
   ...FIELD_SUGGEST_DECISIONS,
+  "financialAccount.network": {
+    ...FIELD_SUGGEST_DECISIONS["financialAccount.network"],
+    candidates: async (_db: Database, raw: RawBasis) =>
+      hasCreditCardIdentity(raw)
+        ? FIELD_SUGGEST_DECISIONS["financialAccount.network"].values
+        : [],
+  } satisfies EnumSuggestSpec<string>,
   "productCategory.feature": {
     ...PRODUCT_CATEGORY_FEATURE,
     candidates: async (db, raw) => {
