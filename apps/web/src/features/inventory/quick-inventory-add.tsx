@@ -466,7 +466,7 @@ export function QuickInventoryAdd({
             className="mb-1"
           >
             {isCreating ? (
-              <Spinner size="sm" />
+              <Spinner size="sm" aria-hidden="true" />
             ) : (
               <PlusIcon className="mr-1 size-3" />
             )}

@@ -364,3 +364,28 @@ test("a notDeleted() predicate inside the subquery satisfies the guard", () => {
 
   assert.deepEqual(diagnostics, []);
 });
+
+// Imported names, not local aliases or JSX spelling, define the boundary.
+test("ordinary dialogs cannot bypass Overlay but triggers and confirmations remain available", () => {
+  const diagnostics = lintFixture(
+    "no-ordinary-dialog-bypass",
+    "no-ordinary-dialog-bypass.txt",
+    "cubby",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3, 4, 5, 6, 7, 8, 13, 14],
+  );
+});
+
+// Reuse the scoped harness so parallel Knip scans exclude the temporary file.
+test("relative dialog imports resolve against the caller", () => {
+  const diagnostics = lintScopedFixture(
+    "no-ordinary-dialog-bypass",
+    "no-ordinary-dialog-relative.txt",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3],
+  );
+});

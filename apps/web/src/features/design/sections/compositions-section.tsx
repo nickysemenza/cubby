@@ -155,7 +155,70 @@ export function ActionWorkflowSection() {
           </FormWrapper>
         </Overlay>
       </Demo>
+      <OverlayOverflowDemo />
     </DemoGrid>
+  );
+}
+
+function OverlayOverflowDemo() {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formId = useId();
+  const form = useForm({
+    defaultValues: { name: "Synthetic workshop supplies" },
+  });
+  return (
+    <Demo
+      name="Overlay · long labels and diagnostics"
+      note="Long actions wrap; fields and raw diagnostics scroll independently."
+    >
+      <Overlay
+        open={open}
+        onOpenChange={setOpen}
+        trigger={
+          <DialogTrigger
+            render={<Button variant="outline">Open long-label workflow</Button>}
+          />
+        }
+        title="Review replacement supplies for the workshop maintenance project"
+        cancelLabel="Cancel supply review"
+        primary={{
+          label: "Save all replacement supply descriptions",
+          form: formId,
+        }}
+        bodyMode="form"
+        pending={pending}
+        error={error}
+      >
+        <FormWrapper
+          form={form}
+          id={formId}
+          hideActions
+          footerMode="dialog"
+          isPending={pending}
+          onSubmittingChange={setPending}
+          submitButtonText="Save all replacement supply descriptions"
+          onSubmit={() =>
+            setError(
+              `SQLSTATE 23514: synthetic_supply_check ${"synthetic_detail_".repeat(400)}`,
+            )
+          }
+        >
+          <UnifiedTextField
+            form={form}
+            name="name"
+            label="Supply description"
+            placeholder="Supply description"
+          />
+          {Array.from({ length: 24 }, (_, index) => (
+            <p key={`supply-${index}`} className="border-b py-2 text-xs">
+              Synthetic supply detail {index + 1}
+            </p>
+          ))}
+        </FormWrapper>
+      </Overlay>
+    </Demo>
   );
 }
 

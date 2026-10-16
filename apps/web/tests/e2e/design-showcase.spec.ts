@@ -197,3 +197,57 @@ for (const width of [1440, 402]) {
     ).toBeVisible();
   });
 }
+
+// Long actions must stay reachable without horizontal overflow; an unbroken
+// diagnostic must not consume the form or scroll the fixed header offscreen.
+for (const width of [1440, 320]) {
+  test(`long overlay actions and raw diagnostics stay reachable at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto("/design");
+    const trigger = page.getByRole("button", {
+      name: "Open long-label workflow",
+      exact: true,
+    });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", {
+      name: "Review replacement supplies for the workshop maintenance project",
+    });
+    const save = dialog.getByRole("button", {
+      name: "Save all replacement supply descriptions",
+      exact: true,
+    });
+    await dialog
+      .getByRole("textbox", { name: "Supply description" })
+      .fill("Synthetic retained draft");
+    await save.click();
+    const diagnostic = dialog.getByRole("alert");
+    await expect(diagnostic).toContainText(
+      "SQLSTATE 23514: synthetic_supply_check",
+    );
+    await dialog
+      .getByText("Synthetic supply detail 24", { exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(save).toBeInViewport();
+    await expect(
+      dialog.getByRole("button", { name: "Cancel supply review", exact: true }),
+    ).toBeInViewport();
+    const bounds = await dialog.evaluate((element) => ({
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      alertHeight: element
+        .querySelector('[role="alert"]')!
+        .getBoundingClientRect().height,
+    }));
+    expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width);
+    expect(bounds.alertHeight).toBeLessThan(250);
+    await save.click();
+    await expect(
+      dialog.getByRole("textbox", { name: "Supply description" }),
+    ).toHaveValue("Synthetic retained draft");
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+  });
+}

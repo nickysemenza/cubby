@@ -146,7 +146,7 @@ function ScenarioCard({
           >
             {running ? (
               <>
-                <Spinner size="sm" /> Running
+                <Spinner size="sm" aria-hidden="true" /> Running
               </>
             ) : (
               "Run"

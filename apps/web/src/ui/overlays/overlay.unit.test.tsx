@@ -213,3 +213,22 @@ describe("ordinary overlay actions", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 });
+
+// The standalone form path also supplies an accessible action name while busy.
+it("keeps a pending form action named by its text alone", () => {
+  function Example() {
+    const form = useForm({ defaultValues: { name: "Synthetic part" } });
+    return (
+      <FormWrapper
+        form={form}
+        isPending
+        onSubmit={vi.fn()}
+        submitButtonText="Save part"
+      >
+        Fields
+      </FormWrapper>
+    );
+  }
+  render(<Example />);
+  expect(screen.getByRole("button", { name: "Save part…" })).toBeDisabled();
+});

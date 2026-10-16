@@ -346,7 +346,7 @@ export function ProductUpcField({
           disabled={isLookingUp || !upcValue}
         >
           {isLookingUp ? (
-            <Spinner />
+            <Spinner aria-hidden="true" />
           ) : (
             <MagnifyingGlassIcon className="size-4" />
           )}

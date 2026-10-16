@@ -323,7 +323,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
                 variant={submitButtonVariant}
                 className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
               >
-                {isPending && <Spinner size="sm" />}
+                {isPending && <Spinner size="sm" aria-hidden="true" />}
                 {submitText}
               </Button>
               <Button

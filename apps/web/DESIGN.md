@@ -77,7 +77,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   body scrolling, explicit primary/native-form actions, summary and raw diagnostics.
   Phone writes use a full-height sheet with Cancel/title/primary in its header;
   desktop actions stay in the fixed footer. Pending-action spinners are decorative;
-  the action text supplies the button's accessible name. Form owners pass the same form id to
+  the action text supplies the button's accessible name and stays mounted while
+  pending, including pagination. Mark each spinner decorative even when a caller
+  sometimes supplies an explicit `aria-label`. Form owners pass the same form id to
   `primary.form` and `FormWrapper`, hide the form's own actions, and forward
   `onSubmittingChange` into the overlay's `pending` state. This covers resolver
   validation, custom commits, suggestion receipts and completion callbacks.
@@ -86,6 +88,16 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   remain dismissible. Command search, the full photo viewer, desktop calendar popover and modeless/graph
   inspectors retain their specialized presentations; AlertDialog retains explicit
   confirmation semantics. Dialog and Sheet remain low-level Base UI surfaces.
+  `cubby/no-ordinary-dialog-bypass` rejects their composition imports (including
+  aliases, namespaces, re-exports and static dynamic loads); `DialogTrigger`
+  stays available to ordinary callers. Exact-path lint exceptions cover only
+  Overlay itself, the Dialog/Sheet implementations, cmdk's command presentation,
+  the full photo viewer, the relationship graph inspector, the modeless entity
+  preview and the modeless MCP tool-detail inspector. New exceptions require a
+  specialized interaction reason here, not a directory-wide exemption.
+  Long phone action labels wrap within their share of the header; it grows
+  beyond its 52px minimum rather than clipping controls. Raw overlay diagnostics
+  wrap unbroken values and scroll within 30dvh so forms retain space.
 - Chart, relationship-map and specialized layout engines follow the
   [visualization contracts](#data-visualization); a common frame does not require
   one renderer.
@@ -94,7 +106,7 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   `keepMounted` is explicit when a caller accepts eager work. Drafts that must
   survive closing belong in the form state owner, not a disclosure child.
 - Badge owns named semantic tones, EnumPill owns declaration-driven category
-  color/description, and Pill owns shared geometry and suggestion treatment.
+  color/description, and Pill owns shared geometry, compact icon spacing and suggestion treatment.
 - Apple keeps native SwiftUI controls and platform geometry; shared semantic
   tokens and declarations do not require a shared rendering implementation.
 
@@ -116,7 +128,7 @@ These are Cubby's own components, designed and built here rather than adopted fr
 The showcase is a curated reference using fixed synthetic fixtures and real
 module interactions, without fixture editors. Working compositions cover
 command actions and responsive workflow retry (`/design#action-workflows`),
-inline/cell suggestion review (`/design#suggestion-review`), owner-held form
+long action labels and scrollable raw diagnostics, inline/cell suggestion review (`/design#suggestion-review`), owner-held form
 state and shared Section disclosure (`/design#section-compositions`), and quality
 states with signed/empty chart data (`/design#quality-charts`). Source labels
 name current modules rather than historical locations. Debug JSON remains

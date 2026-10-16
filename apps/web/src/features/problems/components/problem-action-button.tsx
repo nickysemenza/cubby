@@ -22,7 +22,7 @@ export function ProblemActionButton({
     <Button size="sm" onClick={onClick} disabled={isPending}>
       {isPending ? (
         <>
-          <Spinner className="mr-2" />
+          <Spinner className="mr-2" aria-hidden="true" />
           {pendingLabel}
         </>
       ) : (

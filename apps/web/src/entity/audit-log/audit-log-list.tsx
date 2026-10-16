@@ -183,7 +183,7 @@ export function AuditLogList({
             >
               {isFetchingNextPage ? (
                 <>
-                  <Spinner className="mr-2" />
+                  <Spinner className="mr-2" aria-hidden="true" />
                   Loading...
                 </>
               ) : (

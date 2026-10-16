@@ -151,7 +151,7 @@ export function ServingAliasField({
         onClick={handleAdd}
       >
         {updateProductMutation.isPending ? (
-          <Spinner size="sm" />
+          <Spinner size="sm" aria-hidden="true" />
         ) : (
           <PlusIcon aria-hidden />
         )}
