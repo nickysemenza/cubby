@@ -3,7 +3,7 @@ import { imageIdentificationResult } from "@cubby/schemas/image-identification";
 import type {
   DecisionChoicePrompt,
   DecisionImage,
-} from "~/server/ai/decision-model";
+} from "~/server/ai/policy/decision-choice";
 
 /** The production composition choice is also the standalone vision smoke probe. */
 export function imageIdentificationCompositionPrompt(

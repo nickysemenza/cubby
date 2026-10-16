@@ -6,7 +6,7 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import { retryWithBackoff } from "@cubby/shared/retry";
 
-import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/features";
+import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import {
   getStoredEmbeddingHashes,

@@ -10,7 +10,7 @@ import {
   safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
 
-import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
 import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";

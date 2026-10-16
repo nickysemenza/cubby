@@ -22,6 +22,8 @@ import {
   suggestUsdaFoodBatch,
 } from "~/server/ai/enrichment/usda-match";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import {
   IMAGE_IDENTIFICATION_FEATURE,
   ENTITY_EMBEDDING_FEATURE,
@@ -34,11 +36,9 @@ import {
   SEMANTIC_QUERY_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
-} from "~/server/ai/features";
-import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+} from "~/server/ai/policy/features";
+import { imageIdentificationCompositionPrompt } from "~/server/ai/policy/prompts/image-identification";
 import { productIdentityPrompt } from "~/server/ai/product-identity";
-import { imageIdentificationCompositionPrompt } from "~/server/ai/prompts/image-identification";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import {
   runStructuredFeature,
   type StructuredRunPorts,
@@ -379,7 +379,7 @@ async function runCase(
         );
       const url = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
       const { IMAGE_DESCRIPTION_FEATURE } =
-        await import("~/server/ai/features");
+        await import("~/server/ai/policy/features");
       return {
         result: await runStructuredFeature(
           IMAGE_DESCRIPTION_FEATURE,
@@ -640,7 +640,7 @@ async function runCase(
     case "purchaseMail": {
       const { fixture } = aiSmokeInputs.purchaseMail.parse(raw);
       const { orderMailRequest } =
-        await import("~/server/ai/prompts/purchase-import");
+        await import("~/server/ai/policy/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_MAIL_FEATURE,
@@ -713,7 +713,7 @@ async function runCase(
     case "purchaseRepair": {
       const { fixture } = aiSmokeInputs.purchaseRepair.parse(raw);
       const { purchaseRepairRequest } =
-        await import("~/server/ai/prompts/purchase-import");
+        await import("~/server/ai/policy/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_REPAIR_FEATURE,

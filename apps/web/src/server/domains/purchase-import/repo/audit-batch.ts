@@ -1,7 +1,7 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { PurchaseAuditRenderedBatch } from "~/server/ai/prompts/purchase-import";
+import type { PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {

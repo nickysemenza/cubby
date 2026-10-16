@@ -38,22 +38,21 @@ import { z } from "zod";
 import { classifyWithDecisionModel } from "~/server/ai/classify";
 import {
   runDecisionChoices,
-  type DecisionChoicePrompt,
   type DecisionChoiceResult,
   type DecisionPort,
 } from "~/server/ai/decision-model";
-import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
 import {
   fieldSuggestSpecFor,
   type FieldSuggestSpec,
+} from "~/server/ai/field-suggest/registry";
+import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
+import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
+import {
+  prunePrompt,
   type RawBasis,
   type ResolvedBasis,
-} from "~/server/ai/field-suggest/registry";
-import {
-  type AiSelectionSpec,
-  type AiSelectionUsage,
-  runAiSelection,
-} from "~/server/ai/selection";
+} from "~/server/ai/policy/field-suggest";
+import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import {
@@ -684,27 +683,6 @@ async function resolveOneTarget(
  * hit — deliberately terser than the decision choice label below, which is the
  * full instruction text the model sees. */
 const DECISION_TAG_REMOVAL_REASON = "a sibling field";
-/** `runDecisionChoice`'s two per-tag criteria: index 0 is "redundant", index 1 is
- * "genuine". A removal only ever acts on index 0; the `evaluated/none`
- * outcome (every entry survived) also reports index 1, the probability the
- * survivor is genuinely worth keeping. */
-const TAG_PRUNE_CHOICES = [
-  "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
-  "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
-] as const;
-/** One survivor tag's binary judgment; the Decisions catalog renders it. */
-export function prunePrompt(
-  spec: Extract<FieldSuggestSpec, { kind: "prune" }>,
-  basis: ResolvedBasis,
-  value: string,
-): DecisionChoicePrompt {
-  return {
-    subject: spec.subject(basis, value),
-    rules: spec.rules,
-    choices: [...TAG_PRUNE_CHOICES],
-    allowNone: false,
-  };
-}
 /** A removal needs at least this calibrated probability to surface — the
  * same "high confidence" floor a `set` suggestion auto-applies at. */
 const PRUNE_INCLUDE_THRESHOLD = 0.85;

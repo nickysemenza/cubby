@@ -13,7 +13,7 @@ import { wasm } from "~/lib/wasm";
  * docs: size-unit-vocabulary-derives-from-wasm) up front, merges the results,
  * and hands the model one shortlist to pick from.
  */
-import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/features";
+import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
 
 export interface UsdaLookupPort {

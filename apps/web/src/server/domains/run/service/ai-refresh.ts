@@ -31,6 +31,13 @@ import {
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
 import {
+  compiledRefreshManifest,
+  dependencyStamps,
+  fieldDependencyKeys,
+  dependenciesCurrent,
+  fieldPolicyKey,
+} from "~/server/ai/policy/refresh-manifest";
+import {
   evaluateProductIdentity,
   publishProductIdentity,
   prepareProductIdentityCatalog,
@@ -45,13 +52,6 @@ import {
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
-import {
-  compiledRefreshManifest,
-  dependencyStamps,
-  fieldDependencyKeys,
-  dependenciesCurrent,
-  fieldPolicyKey,
-} from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
 import {
   productIdentitySnapshot,

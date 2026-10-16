@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { getDb } from "~/server/db/helpers";
 import { run, user } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";

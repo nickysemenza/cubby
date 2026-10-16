@@ -10,8 +10,8 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiEvaluation, email, run } from "~/server/db/schema";

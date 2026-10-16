@@ -37,16 +37,16 @@ import {
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import {
   listAiUsageFilterOptions,
   listRecentAiUsage,
   summarizeAiUsage,
 } from "~/server/ai/repo/ai-usage";
-import {
-  dependencyStamps,
-  fieldDependencyKeys,
-} from "~/server/ai/repo/refresh-policy";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";

@@ -15,12 +15,9 @@ import {
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { SETTLEMENT_CANDIDATE_RANK_FEATURE } from "~/server/ai/features";
-import {
-  type AiSelectionSpec,
-  type AiSelectionUsage,
-  runAiSelection,
-} from "~/server/ai/selection";
+import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
+import { SETTLEMENT_CANDIDATE_RANK_FEATURE } from "~/server/ai/policy/features";
+import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 
 /** One deterministic candidate row, as `listPurchaseSettlementCandidates`
  * ranks it. */

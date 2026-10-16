@@ -11,10 +11,12 @@ import type { ESTree } from "@oxlint/plugins";
  * entry points `http/`, `mcp/`, and `workflows/` import like `operations` but
  * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
- * `db`), in any domain; `repo` never imports `ai/` (except `ai/repo/`); a
- * `service` value-imports nothing from `db/` but `db/freshness/` and never
- * imports a schema or `db/helpers`; other platform code and `generic/*` never
- * import a domain's `service` or `operations`.
+ * `db`), in any domain; `ai/repo/` ranks as `repo`. `repo` never imports
+ * `ai/` except `ai/repo/` and `ai/policy/`, and `ai/policy/` value-imports
+ * only itself and packages, so a repo never reaches model code. A `service`
+ * value-imports nothing from `db/` but `db/freshness/` and never imports a
+ * schema or `db/helpers`; other platform code and `generic/*` never import a
+ * domain's `service` or `operations`.
  *
  * Client: `ui/` imports neither `features/` nor `entity/`; `entity/` does not
  * import `features/`.
@@ -39,7 +41,11 @@ const ENTRY_PATH = /^apps\/web\/src\/server\/(?:http|mcp|workflows)(?:[./]|$)/u;
 const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";
 
+const AI_REPO_PATH = /^apps\/web\/src\/server\/ai\/repo(?:[./]|$)/u;
+const AI_POLICY_PATH = /^apps\/web\/src\/server\/ai\/policy(?:[./]|$)/u;
+
 function roleOf(path: string): { area: string; role: Role } | undefined {
+  if (AI_REPO_PATH.test(path)) return { area: "ai", role: "repo" };
   const match = ROLE_PATH.exec(path);
   const role = match?.[3];
   if (!match || !isRole(role)) return;
@@ -56,7 +62,8 @@ const isDbFreshness = (path: string) =>
   /^apps\/web\/src\/server\/db\/freshness(?:[./]|$)/u.test(path);
 const isAi = (path: string) =>
   /^apps\/web\/src\/server\/ai(?:[./]|$)/u.test(path) &&
-  !/^apps\/web\/src\/server\/ai\/repo(?:[./]|$)/u.test(path);
+  !AI_REPO_PATH.test(path) &&
+  !AI_POLICY_PATH.test(path);
 const isDomainUpper = (path: string) => {
   const role = roleOf(path);
   return role?.area === "domains" && role.role !== "repo";
@@ -75,6 +82,7 @@ export function targetPath(
 type LayerMessage =
   | "upward"
   | "repoAi"
+  | "policyImpure"
   | "serviceDb"
   | "platformUpward"
   | "uiUpward"
@@ -94,6 +102,8 @@ export function violation(
   if (from.startsWith(SERVER)) {
     if (fromRole?.role === "service" && isDbInternals(to)) return "serviceDb";
     if (typeOnly) return;
+    if (AI_POLICY_PATH.test(from) && !AI_POLICY_PATH.test(to))
+      return "policyImpure";
     if (fromRole?.role === "service" && isDb(to) && !isDbFreshness(to))
       return "serviceDb";
     if (fromRole?.role === "repo" && isAi(to)) return "repoAi";
@@ -127,6 +137,8 @@ export const domainLayersRule = defineRule({
         'A {{from}} module may not import "{{source}}" ({{to}}): roles import only the same or a lower layer (operations → service → repo → db). See docs/adr/0019-domain-first-server-layout.md.',
       repoAi:
         'A repo module may not import "{{source}}": model calls belong in a service. See docs/adr/0019-domain-first-server-layout.md.',
+      policyImpure:
+        'ai/policy/ may not import "{{source}}": AI policy declarations value-import only ai/policy/ and packages, so repos can read them without model code. See docs/adr/0019-domain-first-server-layout.md.',
       serviceDb:
         'A service may not import "{{source}}": reach the database through a repo function. See docs/adr/0019-domain-first-server-layout.md.',
       platformUpward:

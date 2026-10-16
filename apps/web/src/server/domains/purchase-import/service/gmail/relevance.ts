@@ -12,7 +12,7 @@ import {
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { wasm } from "~/lib/wasm";
-import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/features";
+import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/policy/features";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import {
   ModelImageInputError,

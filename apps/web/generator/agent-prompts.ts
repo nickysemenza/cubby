@@ -26,7 +26,7 @@ export async function renderAgentPromptArtifact(
   );
   return {
     relativePath:
-      "apps/web/src/server/ai/prompts/purchase-import-prompt-text.gen.ts",
+      "apps/web/src/server/ai/policy/prompts/purchase-import-prompt-text.gen.ts",
     source: `${generatedHeader}export const purchaseImportPromptText = ${JSON.stringify(Object.fromEntries(entries))} as const;\n`,
   };
 }

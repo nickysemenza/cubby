@@ -10,7 +10,7 @@ import {
   type DecisionPort,
   type DecisionChoiceResult,
 } from "~/server/ai/decision-model";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import {
   groundedVariantEvidence,
@@ -87,7 +87,8 @@ export async function groundProductIdentityVariants(input: {
   provenance?: AiProvenance;
 }) {
   const { producingAiManifest } = await import("~/server/ai/repo/ai-refresh");
-  const { dependencyStamps } = await import("~/server/ai/repo/refresh-policy");
+  const { dependencyStamps } =
+    await import("~/server/ai/policy/refresh-manifest");
   const sides = [
     variantSourceSide.parse(input.first),
     variantSourceSide.parse(input.second),

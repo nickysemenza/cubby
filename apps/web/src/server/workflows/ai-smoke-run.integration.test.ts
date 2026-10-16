@@ -20,7 +20,7 @@ import {
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { PURCHASE_IMPORT_MAIL_FEATURE } from "../ai/features";
+import { PURCHASE_IMPORT_MAIL_FEATURE } from "../ai/policy/features";
 import { RESPOND_TOOL_NAME, type StructuredRunPorts } from "../ai/run-feature";
 import { runAiSmoke } from "./ai-smoke-run";
 

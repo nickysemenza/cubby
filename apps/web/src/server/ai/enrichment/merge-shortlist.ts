@@ -10,7 +10,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  * semantic nearest-neighbour search (when embeddings are configured) into one
  * shortlist for the model to pick from.
  */
-import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/features";
+import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import {
   getIngredientMergeCandidatesByIds,

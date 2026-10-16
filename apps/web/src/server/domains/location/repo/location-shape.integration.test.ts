@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   LOCATION_DESCRIPTION_FEATURE,
   buildLocationAnalysisFingerprint,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

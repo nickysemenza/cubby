@@ -260,7 +260,8 @@ async function observeClassification(
     unchanged,
   );
   if (unchanged && !conflict) return;
-  const { dependencyStamps } = await import("~/server/ai/repo/refresh-policy");
+  const { dependencyStamps } =
+    await import("~/server/ai/policy/refresh-manifest");
   const manifest = await (
     await import("~/server/ai/repo/ai-refresh")
   ).producingAiManifest(db);

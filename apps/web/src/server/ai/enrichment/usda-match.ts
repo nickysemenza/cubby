@@ -10,7 +10,7 @@ import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/features";
+import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 

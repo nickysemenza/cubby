@@ -8,7 +8,7 @@ import {
 import {
   MAILBOX_TRIAGE_FEATURE,
   type AiDecisionFeature,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/domains/run/service/execution-transport";
 

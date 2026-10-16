@@ -35,12 +35,13 @@ process.env.AI_GATEWAY_API_KEY = apiKey;
 const { scrubErrorMessage } = await import("~/lib/error-diagnostics");
 const { runDecisionChoice } = await import("./decision-model");
 const { MAILBOX_TRIAGE_FEATURE, MAILBOX_RELEVANCE_FEATURE } =
-  await import("./features");
+  await import("./policy/features");
 const { normalizeMessage } =
   await import("../domains/purchase-import/repo/gmail/normalize");
 const { routeGmailMessage } =
   await import("../domains/purchase-import/service/gmail/triage");
-const { mailTriagePrompt, mailTriageChoices } = await import("./prompts/mail");
+const { mailTriagePrompt, mailTriageChoices } =
+  await import("./policy/prompts/mail");
 
 // An optional full rules draft is compared without changing deployed routing.
 const candidateRules = process.env.MAIL_PROMPT_CANDIDATE_RULES?.trim();

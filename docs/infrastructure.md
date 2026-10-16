@@ -450,7 +450,7 @@ the gateway before relying on a feature that selects it.
 AI catalog/pricing implementation is owned by
 `packages/shared/src/ai/pricing.ts`; runtime model defaults by
 `packages/shared/src/ai/models.ts` and feature tiers by
-`apps/web/src/server/ai/features.ts`. Pricing belongs to accounting, outside
+`apps/web/src/server/ai/policy/features.ts`. Pricing belongs to accounting, outside
 inference. Unavailable prices stay unknown; failed calls without reported usage
 are unpriced, and token evidence is not a second SDK cost estimate.
 
@@ -476,7 +476,7 @@ Product identity grounding batches source-literal questions before eligible
 relation questions; usage is attributed to the literal or relation phase, while
 individual dimension prompts, source literals, and fingerprints stay in receipts.
 Application feature tiers are declared in
-`apps/web/src/server/ai/features.ts`; retier only with live-eval evidence or an
+`apps/web/src/server/ai/policy/features.ts`; retier only with live-eval evidence or an
 explicit member choice. Small ceiling-scoring evals cannot establish parity.
 The opt-in feature eval uses production prompts, schema, validation and repair
 turns, scores synthetic cases, and saves revision/replay/results under

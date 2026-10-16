@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import type { AiFeature } from "./features";
+import type { AiFeature } from "./policy/features";
 
 const capturedInput = z.object({
   feature: z.string(),

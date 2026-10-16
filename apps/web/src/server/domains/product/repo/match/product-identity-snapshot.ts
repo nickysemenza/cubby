@@ -7,8 +7,8 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {

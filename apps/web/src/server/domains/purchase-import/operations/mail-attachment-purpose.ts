@@ -7,7 +7,7 @@ import {
   runDecisionChoice,
   type DecisionPort,
 } from "~/server/ai/decision-model";
-import { MAIL_ATTACHMENT_PURPOSE_FEATURE } from "~/server/ai/features";
+import { MAIL_ATTACHMENT_PURPOSE_FEATURE } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";

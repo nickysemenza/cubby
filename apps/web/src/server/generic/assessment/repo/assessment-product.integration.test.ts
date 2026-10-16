@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
   publishProductIdentity,
@@ -21,8 +23,6 @@ import {
   activateAiRefresh,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/repo/feature-identity";
-import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,

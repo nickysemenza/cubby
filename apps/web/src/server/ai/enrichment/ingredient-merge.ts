@@ -15,7 +15,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/features";
+import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 

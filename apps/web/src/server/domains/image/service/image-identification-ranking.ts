@@ -1,10 +1,10 @@
 import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
 
+import type { DecisionChoiceResult } from "~/server/ai/decision-model";
 import type {
   DecisionChoicePrompt,
-  DecisionChoiceResult,
   DecisionImage,
-} from "~/server/ai/decision-model";
+} from "~/server/ai/policy/decision-choice";
 
 type Candidate = Pick<
   ImageIdentificationResult["candidates"][number],

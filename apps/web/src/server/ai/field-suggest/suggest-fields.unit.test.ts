@@ -11,10 +11,10 @@ import { z } from "zod";
 import type {
   ArrayPruneSuggestSpec,
   FieldSuggestSpec,
-  RawBasis,
   ReferenceSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { FIELD_SUGGEST_REGISTRY } from "~/server/ai/field-suggest/registry";
+import type { RawBasis } from "~/server/ai/policy/field-suggest";
 
 const productCategoryFeatureSpec =
   FIELD_SUGGEST_REGISTRY["productCategory.feature"];

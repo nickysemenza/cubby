@@ -1,5 +1,5 @@
-import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
-import type { AiSelectionSpec } from "~/server/ai/selection";
+import type { AiSelectionSpec } from "~/server/ai/policy/decision-choice";
+import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import type { LocationPutAwayCandidate } from "~/server/domains/location/repo/lookup";
 
 /** Bound prompt size; tell the model when candidates are omitted. */

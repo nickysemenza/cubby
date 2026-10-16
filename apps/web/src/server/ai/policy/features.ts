@@ -46,6 +46,17 @@ import {
 } from "@cubby/schemas/recipe-flow";
 
 import {
+  defineFeature,
+  IMAGE_DESCRIPTION_IDENTITY,
+  PRODUCT_IDENTITY_FEATURE,
+  RECIPE_FLOW_IDENTITY,
+  type AiAnalysisFeature,
+  type AiDecisionFeature,
+  type AiEmbeddingFeature,
+  type AiFeature,
+  type AiStructuredFeature,
+} from "./feature-identity";
+import {
   usdaFoodSpec,
   usdaMatchSubject,
   ingredientMergeSpec,
@@ -84,17 +95,6 @@ import {
   buildLocationDescriptionRequest,
   descriptionRequest,
 } from "./prompts/vision";
-import {
-  defineFeature,
-  IMAGE_DESCRIPTION_IDENTITY,
-  PRODUCT_IDENTITY_FEATURE,
-  RECIPE_FLOW_IDENTITY,
-  type AiAnalysisFeature,
-  type AiDecisionFeature,
-  type AiEmbeddingFeature,
-  type AiFeature,
-  type AiStructuredFeature,
-} from "./repo/feature-identity";
 
 export type {
   AiAnalysisFeature,
@@ -103,7 +103,7 @@ export type {
   AiEmbeddingFeature,
   AiFeature,
   AiStructuredFeature,
-} from "./repo/feature-identity";
+} from "./feature-identity";
 
 // ---------------------------------------------------------------------------
 // Decision tier — Jev/Clef trial on Workers AI. Closed-set classification and

@@ -21,7 +21,7 @@ import { isGtin } from "@cubby/shared/upc";
 
 import { classifyWithDecisionModel } from "~/server/ai/classify";
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
+import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import {
   EXTERNAL_ID_KIND_DESCRIPTIONS,

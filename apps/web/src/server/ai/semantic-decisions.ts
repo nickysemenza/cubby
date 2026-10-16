@@ -5,18 +5,18 @@ import {
 } from "@cubby/shared/ai/models";
 
 import {
-  type DecisionChoicePrompt,
   type DecisionChoiceResult,
   type DecisionPort,
   decisionChoiceFitsContext,
   runDecisionChoice,
   runDecisionChoices,
 } from "~/server/ai/decision-model";
+import { type DecisionChoicePrompt } from "~/server/ai/policy/decision-choice";
 import {
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import {
   IMAGE_PROVENANCE_CHOICES,
   imageProvenancePrompt,
@@ -26,7 +26,7 @@ import {
   upcOfferComparabilityPrompt,
   type ImageProvenanceDecisionInput,
   type ProductVariantRelationChoice,
-} from "~/server/ai/prompts/semantic-decisions";
+} from "~/server/ai/policy/prompts/semantic-decisions";
 import type { AiRunContext } from "~/server/ai/run-feature";
 
 const choice = async <Value extends string>(args: {

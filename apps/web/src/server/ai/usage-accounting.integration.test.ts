@@ -22,7 +22,7 @@ import {
   ENTITY_EMBEDDING_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   FIELD_SUGGESTION_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import {
   RESPOND_TOOL_NAME,
   recordApplicationCacheHit,

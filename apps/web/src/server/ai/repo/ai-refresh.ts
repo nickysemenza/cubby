@@ -6,7 +6,7 @@ import {
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { compiledRefreshManifest } from "~/server/ai/repo/refresh-policy";
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";

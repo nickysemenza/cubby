@@ -35,7 +35,7 @@ import {
   scoreRecipeFlow,
   scoreRepair,
 } from "./feature-routing-eval.score";
-import type { AiChatFeature } from "./features";
+import type { AiChatFeature } from "./policy/features";
 import type { StructuredRunPorts } from "./run-feature";
 
 /**
@@ -73,12 +73,12 @@ const [
   { runStructuredFeature },
 ] = await Promise.all([
   import("~/server/domains/purchase-import/operations/agents/extract"),
-  import("~/server/ai/prompts/purchase-import"),
-  import("~/server/ai/prompts/recipe-flow"),
+  import("~/server/ai/policy/prompts/purchase-import"),
+  import("~/server/ai/policy/prompts/recipe-flow"),
   import("~/server/ai/adapters"),
   import("~/server/domains/recipe/service/recipe-flow/recipe-flow.service"),
   import("~/server/domains/recipe/repo/recipe-flow-state"),
-  import("./features"),
+  import("./policy/features"),
   import("./run-feature"),
 ]);
 

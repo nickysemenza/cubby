@@ -21,14 +21,14 @@ import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
   decisionChoiceFitsContext,
-  type DecisionChoicePrompt,
   type DecisionPort,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
 import {
-  type AiDecisionFeature,
-  SELECTION_OVERFLOW_FEATURE,
-} from "~/server/ai/features";
+  type AiSelectionSpec,
+  selectionPrompt,
+} from "~/server/ai/policy/decision-choice";
+import { SELECTION_OVERFLOW_FEATURE } from "~/server/ai/policy/features";
 import {
   type AiRunContext,
   runStructuredFeature,
@@ -40,26 +40,6 @@ import {
  * only names the operation and the entity it is about.
  */
 export type AiSelectionUsage = AiRunContext;
-
-/**
- * One consumer's declaration: which feature record it runs on, what it
- * selects over, how one candidate becomes a shortlist line, how to read a
- * candidate's stable id back out, its feature-specific prompt rules, and how
- * many candidates the model is ever shown.
- */
-export interface AiSelectionSpec<C> {
-  /** The `features.ts` record this selection runs as. */
-  feature: AiDecisionFeature;
-  /** The feature-specific prompt paragraph, sent alongside the shared frame. */
-  rules: string;
-  /** The stable id the overflow model is asked to echo back to name its
-   * choice; the decision tier answers by index and never sees it. */
-  idOf: (candidate: C) => string;
-  /** One shortlist line for one candidate, in the spec's own format. */
-  renderLine: (candidate: C) => string;
-  /** Candidates beyond this many are never rendered or shown to the model. */
-  maxCandidates: number;
-}
 
 /** The overflow call a spec's consumer fakes in tests instead of the network. */
 export interface AiSelectionPort {
@@ -102,16 +82,6 @@ export interface AiSelectionOutcome<C> {
  * whitespace/case noise that introduces rather than reject an
  * otherwise-correct answer. */
 const normalizeId = (id: string): string => id.trim().toLowerCase();
-
-/** The roster choice a selection asks the decision tier; the Decisions
- * catalog renders the same prompt. */
-export function selectionPrompt<C>(
-  spec: Pick<AiSelectionSpec<C>, "rules" | "renderLine">,
-  subject: string,
-  shown: readonly C[],
-): DecisionChoicePrompt & { choices: string[] } {
-  return { subject, rules: spec.rules, choices: shown.map(spec.renderLine) };
-}
 
 /**
  * Truncate `candidates` to `spec.maxCandidates` and ask the model to pick

@@ -38,7 +38,7 @@ import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
-} from "~/server/ai/features";
+} from "~/server/ai/policy/features";
 import {
   getCachedAiAnalysisRecord,
   upsertAiAnalysis,

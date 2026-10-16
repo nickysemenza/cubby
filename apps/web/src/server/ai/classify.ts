@@ -8,10 +8,8 @@
  * methods and `field-suggest/suggest-fields.ts`'s enum targets share the one
  * implementation.
  */
-import {
-  type DecisionChoicePrompt,
-  runDecisionChoice,
-} from "~/server/ai/decision-model";
+import { runDecisionChoice } from "~/server/ai/decision-model";
+import { classificationPrompt } from "~/server/ai/policy/decision-choice";
 
 type ClassificationInput<Value extends string> = Omit<
   Parameters<typeof runDecisionChoice>[0],
@@ -55,23 +53,6 @@ function alternativesFrom<Value extends string>(
         ? []
         : [{ value, probability: entry.probability }];
     });
-}
-
-/** The choice an enum classification asks; the Decisions catalog
- * renders the same prompt. */
-export function classificationPrompt<Value extends string>(args: {
-  subject: string;
-  rules: string;
-  values: readonly Value[];
-  describe: (value: Value) => string;
-  allowNone?: boolean;
-}): DecisionChoicePrompt {
-  return {
-    subject: args.subject,
-    rules: args.rules,
-    choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
-    allowNone: args.allowNone ?? false,
-  };
 }
 
 export function classifyWithDecisionModel<Value extends string>(

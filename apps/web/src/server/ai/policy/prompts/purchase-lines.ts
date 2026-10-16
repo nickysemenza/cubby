@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/expense-line-kind";
 import type { ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
 
-import type { DecisionChoicePrompt } from "~/server/ai/decision-model";
+import type { DecisionChoicePrompt } from "~/server/ai/policy/decision-choice";
 
 export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";

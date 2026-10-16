@@ -112,6 +112,41 @@ test("repo stays off ai/ and services stay off the schema and helpers", () => {
   );
 });
 
+test("ai/repo ranks as repo and ai/policy stays free of model code", () => {
+  assert.equal(
+    violation(`${S}/ai/repo/ai-refresh.ts`, `${S}/ai/decision-model`, false),
+    "repoAi",
+  );
+  assert.equal(
+    violation(`${S}/db/computed/relations.ts`, `${S}/ai/repo/ai-usage`, false),
+    "upward",
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/product/repo/product-variant-evidence.ts`,
+      `${S}/ai/policy/refresh-manifest`,
+      false,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(`${S}/ai/policy/features.ts`, `${S}/ai/run-feature`, false),
+    "policyImpure",
+  );
+  assert.equal(
+    violation(`${S}/ai/policy/features.ts`, `${S}/ai/run-feature`, true),
+    undefined,
+  );
+  assert.equal(
+    violation(
+      `${S}/ai/policy/refresh-manifest.ts`,
+      `${S}/ai/policy/field-decisions`,
+      false,
+    ),
+    undefined,
+  );
+});
+
 test("platform and generic code never reach a domain's service or operations", () => {
   assert.equal(
     violation(
