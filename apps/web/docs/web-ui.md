@@ -73,6 +73,8 @@ and the `cmdk` command menu are for navigation and actions, never a value.
 Reference displays whose projection omits the name use the shared by-id
 resolver instead of rendering the stored identifier. Pending reads show loading;
 missing records and failed reads remain explicit, with raw error diagnostics.
+Inventory and cookbook shortcodes retain their individual detail destinations;
+legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
 The picker's frame owns its focus ring. Its nested search input suppresses
 the standalone input shadow and border so focus never stacks two outlines.

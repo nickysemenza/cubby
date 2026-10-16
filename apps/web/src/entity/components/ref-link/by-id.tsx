@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   imageUrlSummary,
   type ImageUrlSummary,
@@ -24,18 +25,14 @@ import { ChipRefLink } from "./leaf";
 const isNamedEntity = (
   entity: Entity,
 ): entity is DetailEntity & BrowserRoutedEntity =>
-  entity !== "inventory" &&
-  entity !== "cookbook" &&
-  isBrowserRoutedEntity(entity) &&
-  isDetailEntity(entity);
+  isBrowserRoutedEntity(entity) && isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
   displayImages: z.array(imageUrlSummary).optional().catch(undefined),
   emoji: z.string().nullish(),
 });
 
-// Entity types this link resolves to a name via the detail transport. Inventory &
-// cookbook are intentionally excluded — they render as plain links below.
+// These detail records retain their richer inline relationship presentation.
 const FETCHABLE = [
   "product",
   "location",
@@ -70,33 +67,29 @@ export function ByIdRefLink({
   wrap,
 }: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
   const hydrated = useHydrated();
-  // Resolve the name via the shared entity-detail mapping for every named
-  // entity; everything else (inventory, cookbook, or an out-of-union runtime
-  // entityKind from a legacy audit row) gets a skipped query so useQuery never
-  // receives a non-object arg — v5 throws "only the Object form is allowed".
+  // Legacy audit references carried UUIDs for these kinds; only public record
+  // shortcodes may enter the detail transport or a record URL.
+  const legacyReference =
+    (entityKind === "inventory" || entityKind === "cookbook") &&
+    !shortcodeSchema(entityKind).safeParse(entityId).success;
+  // Unsupported runtime kinds and legacy UUID references skip the query.
   const queryOptions = useMemo(
     () =>
-      isNamedEntity(entityKind) && !name
+      isNamedEntity(entityKind) && !legacyReference && !name
         ? entityPreviewQueryOptions(entityKind, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityKind, entityId, name],
+    [entityKind, entityId, name, legacyReference],
   );
 
   // SAFETY: the options union is narrowed by the named entity guard, but
   // React Query's generic overload cannot express that correlation.
   const query = useQuery(queryOptions as never);
 
-  // Inventory entries have no getByID that returns product info, so there is
-  // no name to resolve here — and this component is handed a uuid, not the
-  // public shortcode a URL needs. Render unlinked rather than build a uuid URL;
-  // callers that can supply a shortcode should use the inline variant.
-  if (entityKind === "inventory") {
+  if (entityKind === "inventory" && legacyReference) {
     return <span className="text-sm font-medium">Inventory Entry</span>;
   }
 
-  // Cookbooks are browsed by name, not id, and have no getByID — link to the
-  // cookbook index rather than resolving the id to a name here.
-  if (entityKind === "cookbook") {
+  if (entityKind === "cookbook" && legacyReference) {
     return (
       <a href="/cookbooks" className="text-sm font-medium hover:underline">
         Cookbook
