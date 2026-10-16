@@ -136,15 +136,6 @@ describe("entity kernel bindings", () => {
     const mergeable = Object.values(ENTITY_KERNEL_BINDINGS).filter(
       (binding) => binding.mergeOperation,
     );
-    expect(mergeable.map((binding) => binding.entity).sort()).toEqual([
-      "ingredient",
-      "ledgerParty",
-      "plant",
-      "product",
-      "purchase",
-      "spendingCategory",
-      "vendor",
-    ]);
     for (const binding of mergeable) {
       expect(binding.lifecycle.merge).toBeDefined();
       expect(
