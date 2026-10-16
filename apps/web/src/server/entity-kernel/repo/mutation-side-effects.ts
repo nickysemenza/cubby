@@ -232,12 +232,20 @@ async function collectSearchRefs(
  * error, not a swallowed log — the projection is a SQL view of the row being
  * written and has no reason to fail independently.
  */
+export async function projectMutationEvent(
+  db: Database | DrizzleTransaction,
+  event: MutationSideEffectEvent,
+): Promise<SearchableEntityRef[]> {
+  const refs = await collectSearchRefs(db, [event]);
+  if (refs.length > 0) await refreshSearchDocuments(db, refs);
+  return refs;
+}
+
 export async function refreshProjectionsForEvent(
   db: Database | DrizzleTransaction,
   event: MutationSideEffectEvent,
 ): Promise<void> {
-  const refs = await collectSearchRefs(db, [event]);
-  if (refs.length > 0) await refreshSearchDocuments(db, refs);
+  await projectMutationEvent(db, event);
 }
 
 async function publishEmbeddingRefreshes(
@@ -327,6 +335,8 @@ export interface RunMutationSideEffectsOptions {
    * its response returns.
    */
   projection?: "refresh" | "skip";
+  /** Dependency wave captured while projecting this write, before commit. */
+  projectedRefs?: SearchableEntityRef[];
 }
 
 export async function runMutationSideEffects(
@@ -351,7 +361,7 @@ export async function runMutationSideEffectsForEntities(
 ): Promise<void> {
   const [firstEvent] = events;
   if (!firstEvent) return;
-  const refs = await collectSearchRefs(db, events);
+  const refs = options.projectedRefs ?? (await collectSearchRefs(db, events));
   if (options.projection !== "skip" && refs.length > 0)
     await refreshSearchDocuments(db, refs);
   await publishEmbeddingRefreshes(

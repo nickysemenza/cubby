@@ -42,6 +42,7 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { formatCategoryLabel, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
@@ -71,6 +72,7 @@ import {
 } from "~/server/db/computed/expense-aggregate-sql";
 import {
   categorySummarySql,
+  categoryStockTrackingSql,
   categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
@@ -2043,22 +2045,26 @@ export const createProduct = async (
         );
       }
 
+      let createdExternalIds: Array<typeof entityExternalId.$inferSelect> = [];
       if (desiredExternalIds.length > 0) {
         await ensureExternalSources(
           tx,
           desiredExternalIds.map((eid) => eid.source.trim().toLowerCase()),
         );
-        await tx.insert(entityExternalId).values(
-          desiredExternalIds.map((eid) => ({
-            entityId: newProduct.id,
-            entityKind: "product" as const,
-            source: eid.source.trim().toLowerCase(),
-            kind: eid.kind,
-            externalId: eid.externalId,
-            url: storedExternalIdUrl(eid),
-            isPrimary: eid.isPrimary ?? true,
-          })),
-        );
+        createdExternalIds = await tx
+          .insert(entityExternalId)
+          .values(
+            desiredExternalIds.map((eid) => ({
+              entityId: newProduct.id,
+              entityKind: "product" as const,
+              source: eid.source.trim().toLowerCase(),
+              kind: eid.kind,
+              externalId: eid.externalId,
+              url: storedExternalIdUrl(eid),
+              isPrimary: eid.isPrimary ?? true,
+            })),
+          )
+          .returning();
       }
 
       let images: Array<typeof image.$inferSelect> = [];
@@ -2114,13 +2120,6 @@ export const createProduct = async (
         action: "create",
       });
 
-      const createdExternalIds =
-        desiredExternalIds.length > 0
-          ? await tx.query.entityExternalId.findMany({
-              where: eq(entityExternalId.entityId, newProduct.id),
-            })
-          : [];
-
       const growsPlant = productData.growsPlantId
         ? await tx.query.plant.findFirst({
             where: and(
@@ -2138,17 +2137,21 @@ export const createProduct = async (
         externalIds: createdExternalIds,
       };
       const qualities = await reads.loadProductDataQualities(tx, [created.id]);
+      const categoryDetails = await tx.execute<{
+        category: ProductCategorySummary | null;
+        categoryStockTracking: Awaited<
+          ReturnType<typeof loadCategoryStockTracking>
+        >;
+      }>(sql`SELECT ${categorySummarySql(sql`${newProduct.categoryId}::uuid`)} AS category,
+        ${categoryStockTrackingSql(sql`${newProduct.categoryId}::uuid`)} AS "categoryStockTracking"`);
       return dbProductToTopLevelAPI({
         classificationEvidence: await getProductClassificationEvidence(
           tx,
           newProduct.id,
         ),
-        category:
-          (await loadCategorySummaries(tx)).get(newProduct.categoryId!) ?? null,
-        categoryStockTracking: await loadCategoryStockTracking(
-          tx,
-          newProduct.categoryId,
-        ),
+        category: categoryDetails.rows[0]?.category ?? null,
+        categoryStockTracking:
+          categoryDetails.rows[0]?.categoryStockTracking ?? null,
         ...created,
         pricing: resolveProductPricing(created.price),
         dataQuality: qualities.get(created.id)!,

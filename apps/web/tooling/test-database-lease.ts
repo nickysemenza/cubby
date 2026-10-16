@@ -6,6 +6,7 @@ import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 import { migrateDatabase } from "./db-migrate";
+import { cloneSchemaTemplate } from "./schema-template";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
   assertSimulatorAdminUrl,
@@ -124,20 +125,11 @@ async function initializeOwnedTemplate(
   try {
     await integreSQL().initializeTemplate(hash, async (config) => {
       console.log(`[test database] Migrating the ${namespace} template`);
-      const pool = createPostgresPool({
-        connectionString: connectionUrl(config),
-      });
       try {
-        await migrateDatabase(drizzle(pool));
+        await cloneSchemaTemplate(config.database);
       } catch (error) {
         migrationError = error;
-        console.error(
-          `[test database] Migrating the ${namespace} template failed`,
-          error,
-        );
         throw error;
-      } finally {
-        await pool.end();
       }
       console.log(`[test database] Migrated the ${namespace} template`);
     });

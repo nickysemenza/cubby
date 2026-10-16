@@ -61,8 +61,20 @@ async function ensureDatabase(): Promise<void> {
     `SELECT 1 FROM pg_database WHERE datname = '${devDatabaseName}'`,
   );
   if (exists.trim() !== "1") {
-    await psql(`CREATE DATABASE "${devDatabaseName}"`);
-    console.log(`[dev-db] Created ${devDatabaseName}`);
+    const code = await spawnToExit(
+      "node",
+      [
+        path.join(__dirname, "test-services.ts"),
+        "--",
+        "pnpm",
+        "exec",
+        "tsx",
+        "tooling/dev/corpus-template.ts",
+      ],
+      { cwd: webRoot, stdio: "inherit", env: process.env },
+    );
+    if (code !== 0) throw new Error("Dev corpus template preparation failed");
+    console.log(`[dev-db] Cloned ${devDatabaseName}`);
   }
   await psql(
     "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",

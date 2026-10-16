@@ -173,12 +173,14 @@ native PostgreSQL installation remain owned by their existing runners.
   synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
   The route exists only in the local dev Worker entry and the button only in
   Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
-- On macOS, every worktree's database and browser test commands share one
-  Apple `container` IntegreSQL (`cubby-test-<config>-integresql`) on the same
+- Every worktree's database, browser tests and local development share one
+  container IntegreSQL (`cubby-test-<config>-integresql`) on the same
   PostgreSQL as local development (`cubby-dev-pg`,
   `scripts/lib/shared-postgres.ts`), started on first use and reused
-  afterwards; each worktree gets its own IntegreSQL templates and disposable
-  databases. One capped server (1.5 GB, 4 CPUs, durability off) replaces a
+  afterwards. A common migration-keyed base template feeds each checkout's
+  namespaced test pools and the shared dev-corpus template; local development
+  clones that corpus to its stable `cubby_dev_*` name
+  ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
   second VM: Virtualization.framework guests never return freed memory to
   macOS. A test reset selects a fixed
   server session set, protects its registered clients across pools on the same
@@ -192,10 +194,15 @@ native PostgreSQL installation remain owned by their existing runners.
   itself in `/tmp/cubby-test-services/runs`: IntegreSQL a live run uses is never
   removed, an idle one of a superseded configuration (or an earlier revision's
   `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
-  than 250 databases is recreated with its `integresql_*` databases dropped.
-  - `CUBBY_TEST_SERVICES=external` connects to services already running; it
-    does not start a container runtime. Linux and CI use this mode with Docker
-    services (`docker compose -p cubby up -d` for local Linux setup). For another
+  than 100 databases is recreated with its `integresql_*` databases dropped.
+  Apple container is the macOS default; Docker is the Linux default and can be
+  selected on macOS with `CUBBY_DEV_SERVICES=docker`. Docker publishes IntegreSQL
+  on an assigned loopback port; IntegreSQL and PostgreSQL communicate on the
+  `cubby-local` Docker network.
+  - `CUBBY_TEST_SERVICES=managed` is the local default.
+    `CUBBY_TEST_SERVICES=external` connects to services already running; it
+    does not start a container runtime. CI uses this mode with Docker services;
+    `docker compose -p cubby up -d` also supports explicit external local runs. For another
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
   - A killed run's record is ignored once its PID is gone; a reused PID is

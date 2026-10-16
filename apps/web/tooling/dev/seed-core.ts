@@ -1,10 +1,10 @@
 import { Buffer } from "node:buffer";
-import type { Pool } from "pg";
+import { seedUpcLookupFixture } from "./upc-fixture";
 
 import boots from "../../tests/e2e/fixtures/synthetic-wardrobe-boots.png?inline";
 import label from "../../tests/e2e/fixtures/synthetic-wardrobe-label.png?inline";
 import shirt from "../../tests/e2e/fixtures/synthetic-wardrobe-shirt.png?inline";
-import { seedCorpus, type FixtureImageReader } from "../scenarios/corpus";
+import type { FixtureImageReader } from "../scenarios/corpus";
 import { ensureDevUser, seedFixturePack, type AuthPost } from "./fixture-pack";
 
 const images = { boots, label, shirt };
@@ -15,21 +15,7 @@ const readBundledImage: FixtureImageReader = async (name) => {
   return Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
 };
 
-/** One synthetic barcode answer so the lookup path is exercised without upstream calls. */
-async function seedUpcLookupFixture(pool: Pool): Promise<void> {
-  await pool.query(
-    `INSERT INTO "UpcLookupCache" (upc, name, manufacturer, brand, category, description, "priceDollars", source, status, "fetchedAt")
-     VALUES ('012345678905', 'Synthetic cotton shirt', 'Synthetic Works', 'Synthetic', 'Clothing', 'Local synthetic barcode fixture', 18, 'manual', 'ready', now())
-     ON CONFLICT (upc) DO NOTHING`,
-  );
-}
-
-/**
- * Seed the core corpus inside the dev Worker. Here the background queue is
- * bound, so each write publishes to the local queue instead of running its
- * tasks inline (Node seeding spent ~100 ms per record awaiting them), and the
- * server modules are the ones Vite already compiled.
- */
+/** Seed absent core fixtures; cloned rows only need their checkout's R2 bytes. */
 export async function seedCoreFixtures(options: {
   databaseUrl: string;
   origin: string;
@@ -37,7 +23,27 @@ export async function seedCoreFixtures(options: {
   keyPrefix: string;
   post: AuthPost;
 }): Promise<void> {
+  // A database clone contains Image rows, while R2 belongs to this checkout.
+  for (const name of ["shirt", "boots", "label"] as const) {
+    const url = `${options.origin}/__local-storage/s3/${options.bucket}/${options.keyPrefix}/household/${name}.png`;
+    const present = await fetch(url, { method: "HEAD" });
+    if (present.status === 404) {
+      const restored = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "image/png" },
+        body: new Uint8Array(await readBundledImage(name)),
+      });
+      if (!restored.ok)
+        throw new Error(
+          `Restoring fixture image failed: ${restored.status} ${await restored.text()}`,
+        );
+    } else if (!present.ok)
+      throw new Error(
+        `Reading fixture image failed: ${present.status} ${await present.text()}`,
+      );
+  }
   await seedFixturePack(options.databaseUrl, "core", async (pool) => {
+    const { seedCorpus } = await import("../scenarios/corpus");
     const userId = await ensureDevUser(options.post);
     await seedCorpus(
       pool,

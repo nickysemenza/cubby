@@ -103,7 +103,9 @@ function assertHouseholdDatabase(pool: Pool) {
     url.protocol !== "postgresql:" ||
     url.hostname !== config.host ||
     Number(url.port || 5432) !== config.port ||
-    !/^integresql_test_[0-9a-f]{40}_[0-9]+$/u.test(name)
+    !/^integresql_(?:test_[0-9a-f]{40}_[0-9]+|template_[0-9a-f]{40})$/u.test(
+      name,
+    )
   )
     throw new Error(
       "Connected household seeding requires a guarded dev/native database or an IntegreSQL test lease",
@@ -832,7 +834,11 @@ async function seedHouseholdPhotos(
     const key = `${storage.keyPrefix}/household/${label}.png`;
     const upload = await fetch(
       `${storage.storageOrigin}/${encodeURIComponent(storage.bucket)}/${key}`,
-      { method: "PUT", headers: { "Content-Type": "image/png" }, body: bytes },
+      {
+        method: "PUT",
+        headers: { "Content-Type": "image/png" },
+        body: new Uint8Array(bytes),
+      },
     );
     if (!upload.ok)
       throw new Error(

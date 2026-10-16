@@ -13,15 +13,15 @@ import { z } from "zod";
 
 import {
   containerAddress,
-  containerCli,
-  findContainer,
   httpReady,
-  listContainers,
-  runDetached,
-  stopAndRemove,
   waitFor,
 } from "./apple/lib/apple-container.ts";
-import { devContainerBackend } from "./lib/dev-container.ts";
+import {
+  devContainerBackend,
+  devContainerCli as containerCli,
+  findDevContainer as findContainer,
+  stopDevContainer as stopAndRemove,
+} from "./lib/dev-container.ts";
 import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
 import { spawnToExit } from "./lib/run.ts";
 import {
@@ -35,6 +35,9 @@ const integresqlImage =
   "ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a";
 
 const integresqlArgs = (postgresHost: string) => [
+  ...(devContainerBackend() === "docker"
+    ? ["--network", "cubby-local", "--publish", "127.0.0.1::5000"]
+    : []),
   "--cpus",
   "1",
   "--memory",
@@ -149,12 +152,12 @@ function liveRuns(): RunRecord[] {
   });
 }
 
-const serviceModeSchema = z.enum(["apple", "external"]);
+const serviceModeSchema = z.enum(["managed", "external"]);
 type ServiceMode = z.infer<typeof serviceModeSchema>;
 
 function serviceMode(env: NodeJS.ProcessEnv): ServiceMode {
   return serviceModeSchema
-    .default("apple")
+    .default("managed")
     .parse(env.CUBBY_TEST_SERVICES || undefined);
 }
 
@@ -165,6 +168,49 @@ function logPhase(label: string, startedAt: number): void {
 const INTEGRESQL_DATABASES =
   "SELECT datname FROM pg_database WHERE datname LIKE 'integresql\\_%'";
 
+/** Docker's loopback publication is host-only; peers use their own network. */
+async function connectDockerPostgres(): Promise<void> {
+  if (devContainerBackend() !== "docker") return;
+  const networks = JSON.parse(
+    await containerCli(["network", "ls", "--format", "json"]).then(
+      (output) => `[${output.split("\n").filter(Boolean).join(",")}]`,
+    ),
+  );
+  const present = z
+    .array(z.object({ Name: z.string() }))
+    .parse(networks)
+    .some((network) => network.Name === "cubby-local");
+  if (!present) await containerCli(["network", "create", "cubby-local"]);
+  const [network] = z
+    .array(
+      z.object({
+        Containers: z.record(z.string(), z.object({ Name: z.string() })),
+      }),
+    )
+    .parse(
+      JSON.parse(await containerCli(["network", "inspect", "cubby-local"])),
+    );
+  if (
+    !Object.values(network?.Containers ?? {}).some(
+      (container) => container.Name === SHARED_POSTGRES,
+    )
+  )
+    await containerCli(["network", "connect", "cubby-local", SHARED_POSTGRES]);
+}
+
+/** Reach the local service through Apple's address or Docker's assigned port. */
+async function integresqlAddress(): Promise<string> {
+  if (devContainerBackend() === "apple")
+    return `http://${await containerAddress(INTEGRESQL)}:5000`;
+  const [info] = JSON.parse(await containerCli(["inspect", INTEGRESQL]));
+  const ports = z
+    .array(z.object({ containerPort: z.number(), hostPort: z.number() }))
+    .parse(info.configuration.publishedPorts);
+  const port = ports.find((entry) => entry.containerPort === 5000)?.hostPort;
+  if (!port) throw new Error("IntegreSQL has no published API port");
+  return `http://localhost:${port}`;
+}
+
 /** Whether IntegreSQL answers and targets the shared server's current address. */
 async function healthyIntegresql(postgresHost: string): Promise<boolean> {
   const integresql = await findContainer(INTEGRESQL);
@@ -174,13 +220,11 @@ async function healthyIntegresql(postgresHost: string): Promise<boolean> {
     info?.configuration?.initProcess?.environment ?? [];
   if (!environment.includes(`PGHOST=${postgresHost}`)) return false;
   try {
-    const integresqlHost = await containerAddress(INTEGRESQL);
+    const integresqlUrl = await integresqlAddress();
     // Generous: another worktree's suite may be loading it.
-    await waitFor(
-      "IntegreSQL",
-      () => httpReady(`http://${integresqlHost}:5000`),
-      { timeoutMs: 15_000 },
-    );
+    await waitFor("IntegreSQL", () => httpReady(integresqlUrl), {
+      timeoutMs: 15_000,
+    });
     return true;
   } catch {
     console.log("[test-services] IntegreSQL is unhealthy");
@@ -207,8 +251,11 @@ async function createIntegresql(postgresHost: string): Promise<void> {
   }
   const startedAt = Date.now();
   console.log(`[test-services] Starting ${INTEGRESQL}`);
-  await runDetached(INTEGRESQL, integresqlArgs(postgresHost));
-  const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+  await containerCli(
+    ["run", "--detach", "--name", INTEGRESQL, ...integresqlArgs(postgresHost)],
+    180_000,
+  );
+  const integresqlUrl = await integresqlAddress();
   await waitFor("IntegreSQL", () => httpReady(integresqlUrl));
   logPhase("IntegreSQL ready", startedAt);
 }
@@ -238,7 +285,12 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
     const others = liveRuns();
     write();
     for (const name of removablePairContainers(
-      (await listContainers()).map((entry) => entry.id),
+      z
+        .array(z.object({ id: z.string() }))
+        .parse(
+          JSON.parse(await containerCli(["list", "--all", "--format", "json"])),
+        )
+        .map((entry) => entry.id),
       others,
       configuration,
     )) {
@@ -246,7 +298,11 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       console.log(`[test-services] Removed idle ${name}`);
     }
     await ensureSharedPostgres();
-    const postgresHost = await containerAddress(SHARED_POSTGRES);
+    await connectDockerPostgres();
+    const postgresHost =
+      devContainerBackend() === "apple"
+        ? await containerAddress(SHARED_POSTGRES)
+        : SHARED_POSTGRES;
     let healthy = await healthyIntegresql(postgresHost);
     const sharing = others.filter((run) => run.configuration === configuration);
     // Recreating IntegreSQL drops databases a live run is using; a transient
@@ -268,15 +324,17 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       healthy = false;
     }
     if (!healthy) await createIntegresql(postgresHost);
-    const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+    const integresqlUrl = await integresqlAddress();
     console.log(
       `[test-services] Ready: PostgreSQL ${postgresHost}:5432, IntegreSQL ${integresqlUrl}`,
     );
     const overlay: NodeJS.ProcessEnv = {
       CUBBY_TEST_SERVICES: "external",
       INTEGRESQL_URL: integresqlUrl,
-      INTEGRESQL_DATABASE_HOST: postgresHost,
-      INTEGRESQL_DATABASE_PORT: "5432",
+      INTEGRESQL_DATABASE_HOST:
+        devContainerBackend() === "apple" ? postgresHost : "localhost",
+      INTEGRESQL_DATABASE_PORT:
+        devContainerBackend() === "apple" ? "5432" : "55432",
       VITEST_MAX_WORKERS: env.VITEST_MAX_WORKERS ?? "6",
       // A report server after a failed browser run would keep the run live.
       PLAYWRIGHT_HTML_OPEN: env.PLAYWRIGHT_HTML_OPEN ?? "never",
@@ -297,7 +355,12 @@ async function stopIdleServices(): Promise<void> {
   try {
     const live = liveRuns();
     for (const name of removablePairContainers(
-      (await listContainers()).map((entry) => entry.id),
+      z
+        .array(z.object({ id: z.string() }))
+        .parse(
+          JSON.parse(await containerCli(["list", "--all", "--format", "json"])),
+        )
+        .map((entry) => entry.id),
       live,
     )) {
       await stopAndRemove(name);
@@ -324,10 +387,9 @@ export async function runWithTestServices(
       "Usage: node scripts/test-services.ts -- <command> [arguments]",
     );
   }
-  const managed =
-    serviceMode(env) === "apple" && !env.CI && platform === "darwin";
-  // Managed means macOS, where the command runs as its own process group.
-  const detachedCommand = managed;
+  const managed = serviceMode(env) === "managed" && !env.CI;
+  // Managed commands keep their process group registered while services are in use.
+  const detachedCommand = managed && platform !== "win32";
   let child: ChildProcess | undefined;
   let interrupted: NodeJS.Signals | undefined;
   let killTimer: NodeJS.Timeout | undefined;
@@ -363,10 +425,6 @@ export async function runWithTestServices(
   try {
     let childEnv = env;
     if (managed) {
-      if (devContainerBackend(env, platform) !== "apple")
-        throw new Error(
-          "Managed test services share the Apple container PostgreSQL; unset CUBBY_DEV_SERVICES or use CUBBY_TEST_SERVICES=external",
-        );
       // Startup is not interrupted mid-create: the pair is shared, and a
       // finished create leaves it usable for the next run.
       const joined = await joinSharedServices(env);
