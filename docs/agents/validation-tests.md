@@ -240,7 +240,9 @@ List URLs in browser fixtures use the filter descriptor's declared `urlKey`
 (for example, `q` for Expense and Purchase search). Assert the active filter
 control and include unrelated records with a small page size when testing a
 filtered record; an ignored filter can pass against a small local corpus and
-hide the target behind pagination in CI.
+hide the target behind pagination in CI. Fuzzy searches can legitimately include
+neighboring records: assert the intended records and their relevance rather
+than treating a fixture prefix as an exact total-result contract.
 
 When changing shared list view controls, update interaction tests for every
 consumer, including USDA lists. Preserve their query and destination regressions

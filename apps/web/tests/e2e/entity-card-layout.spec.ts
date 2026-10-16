@@ -137,13 +137,33 @@ test("cookbooks keep server search across card and list presentations", async ({
 }) => {
   const name = `Cookbook cards ${Date.now()}`;
   const first = await seedCookbookSourcePrerequisite(page, `${name} Roasting`);
-  await seedCookbookSourcePrerequisite(page, `${name} Baking`);
+  const second = await seedCookbookSourcePrerequisite(page, `${name} Baking`);
+  // Shared worker data can legitimately fuzzy-match this query. Put an
+  // alphabetically earlier neighbor behind the two relevant prefix matches.
+  await seedCookbookSourcePrerequisite(
+    page,
+    `A photo cookbook ${Date.now() - 60_000}`,
+  );
   await gotoAuthenticatedPage(
     page,
     `/cookbooks?view=shelf&searchQuery=${encodeURIComponent(name)}`,
   );
   const grid = page.getByTestId("entity-card-grid");
-  await expect(grid.locator(":scope > *")).toHaveCount(2);
+  const cards = grid.locator(":scope > *");
+  await expect(cards.nth(0)).toContainText(name);
+  await expect(cards.nth(1)).toContainText(name);
+  await expect(
+    grid.getByRole("link", { name: `${name} Roasting`, exact: true }),
+  ).toHaveAttribute("href", `/cookbooks/${first.id}`);
+  await expect(
+    grid.getByRole("link", { name: `${name} Baking`, exact: true }),
+  ).toHaveAttribute("href", `/cookbooks/${second.id}`);
+  await expect(
+    page.getByRole("textbox", {
+      name: "Search cookbooks or shortcode",
+      exact: true,
+    }),
+  ).toHaveValue(name);
   await chooseListView(page, "Compact");
   await page
     .getByRole("textbox", {
