@@ -26,15 +26,20 @@ export function templateMarkerDirectory(
   return directory;
 }
 
-/** Only the service owner retires obsolete incarnations, or all markers at teardown. */
+/** The service owner can prove only named prior incarnations are gone. */
 export function retireTemplateMarkers(url: string, incarnation?: string): void {
   const directory = serviceDirectory(url);
   if (!existsSync(directory)) return;
   const keep = incarnation
     ? createHash("sha1").update(incarnation).digest("hex")
     : undefined;
-  for (const entry of readdirSync(directory)) {
-    if (entry !== keep)
-      rmSync(join(directory, entry), { recursive: true, force: true });
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    // Legacy files and unverified scopes may still belong to live older clients.
+    if (
+      entry.isDirectory() &&
+      /^[0-9a-f]{40}$/u.test(entry.name) &&
+      entry.name !== keep
+    )
+      rmSync(join(directory, entry.name), { recursive: true, force: true });
   }
 }

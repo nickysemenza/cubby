@@ -11,7 +11,10 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
-import { processIdentity } from "../../../scripts/lib/process-identity.ts";
+import {
+  processIdentity,
+  processStatus,
+} from "../../../scripts/lib/process-identity.ts";
 import { templateMarkerDirectory } from "../../../scripts/lib/template-markers.ts";
 import { testServiceConfig } from "./test-service-config";
 import { templateClient } from "./schema-template";
@@ -28,22 +31,6 @@ const initializer = z.object({
 });
 type Initializer = z.infer<typeof initializer>;
 
-function provenDead(owner: Initializer): boolean {
-  if (owner.host !== hostname()) return false;
-  try {
-    process.kill(owner.pid, 0);
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "ESRCH";
-  }
-  try {
-    const start = processIdentity(owner.pid);
-    return (
-      !!start && owner.start.startsWith("ps-utc-v1:") && start !== owner.start
-    );
-  } catch {
-    return false;
-  }
-}
 function marker(hash: string): string {
   const directory = templateMarkerDirectory(
     testServiceConfig().url,
@@ -87,11 +74,13 @@ export async function initializeRecoverableTemplate(
     const owner = ownerAt(file);
     if (owner) {
       // Separate hosts/temp namespaces cannot prove ownership; external callers
-      // without an incarnation may wait, but must never discard a pending owner.
-      if (!process.env.CUBBY_TEMPLATE_SERVICE_ID || owner.host !== hostname()) {
-        await delay(50);
-        continue;
-      }
+      // without an incarnation must fail rather than discard a pending owner.
+      const unknownOwner = () =>
+        new Error(
+          `Template ${hash}: PID ${owner.pid} ownership unknown (host ${owner.host}, service ${process.env.CUBBY_TEMPLATE_SERVICE_ID ?? "unverified"}); stop that process (kill ${owner.pid}) or run pnpm dev down, then retry`,
+        );
+      if (!process.env.CUBBY_TEMPLATE_SERVICE_ID || owner.host !== hostname())
+        throw unknownOwner();
       if (owner.redirect) {
         if (visited.has(hash))
           throw new Error(`Cyclic template redirect at ${hash}`);
@@ -99,7 +88,9 @@ export async function initializeRecoverableTemplate(
         hash = owner.redirect;
         continue;
       }
-      if (!provenDead(owner)) {
+      const ownerStatus = processStatus(owner.pid, owner.start);
+      if (ownerStatus === "unknown") throw unknownOwner();
+      if (ownerStatus === "alive") {
         await delay(50);
         continue;
       }

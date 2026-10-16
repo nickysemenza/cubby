@@ -182,11 +182,14 @@ native PostgreSQL installation remain owned by their existing runners.
   All template layers use IntegreSQL's initializer election without a template
   lock. Recovery supports one Mac or one CI runner: all clients must share the
   same host temporary marker directory and service incarnation. Separate machines,
-  containers with separate temp directories, and unmarked pending owners time out;
+  containers with separate temp directories, and unmarked pending owners fail closed;
   there is no cross-host recovery. Pending records under `cubby-template-initializers`
   are keyed by service URL, incarnation and hash and record host, PID and a
   versioned process birth identity read with `TZ=UTC LC_ALL=C`. A live or
-  unverifiable owner is never discarded; waiting is bounded to two minutes.
+  unverifiable owner is never discarded. Recovery uses the shared
+  [tri-state process-liveness contract](local-development.md#checkout-runtime);
+  unknown ownership reports the PID and resolution command, while live owners
+  wait at most two minutes.
   A proven-dead owner redirects to a deterministic successor hash. Only newly
   created redirects consume the eight-interruption budget; established redirects
   may be traversed across any number of past interruptions within the deadline.
@@ -194,8 +197,11 @@ native PostgreSQL installation remain owned by their existing runners.
   A kill before the owner record exists times out rather than guessing ownership.
   Successful finalization removes its pending record. Managed startup derives
   `CUBBY_TEMPLATE_SERVICE_ID` from both containers' start identities and retires
-  markers from previous incarnations; recycling and teardown remove service
-  markers. External services must provide a shared, fresh ID whenever either
+  named directories from previous incarnations; recycling and teardown remove
+  named incarnation directories. Legacy-layout marker files and unverified scopes
+  remain untouched because they cannot prove a gone service incarnation and an
+  older live initializer still needs its pending file for finalization. External
+  services must provide a shared, fresh ID whenever either
   service restarts (CI uses its fresh job's identity). Without it, initialization
   and finalized-template reuse work, but pending-owner recovery fails closed.
   Local development clones that corpus to its stable `cubby_dev_*` name

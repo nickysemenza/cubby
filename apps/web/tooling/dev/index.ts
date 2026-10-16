@@ -1,4 +1,7 @@
-import { processIdentity } from "../../../../scripts/lib/process-identity.ts";
+import {
+  processIdentity,
+  processStatus,
+} from "../../../../scripts/lib/process-identity.ts";
 import { createPostgresPool } from "../postgres-pool";
 import {
   devSessionSchema as sessionSchema,
@@ -61,10 +64,15 @@ function readSession(profile: DevProfile): Session | undefined {
   return session;
 }
 function alive(session: Session): boolean {
-  return (
-    !!session.supervisorIdentity &&
-    processIdentity(session.supervisorPid) === session.supervisorIdentity
-  );
+  return ownedProcessAlive(session.supervisorPid, session.supervisorIdentity);
+}
+function ownedProcessAlive(pid: number, identity: string | undefined): boolean {
+  const status = processStatus(pid, identity);
+  if (status === "unknown")
+    throw new Error(
+      `PID ${pid} ownership unknown; stop that process (kill ${pid}), then run pnpm dev down before retrying. Persistent data retained`,
+    );
+  return status === "alive";
 }
 function writeSession(profile: DevProfile, session: Session): void {
   const destination = sessionPath(profile);
@@ -174,16 +182,17 @@ const untilGone = (isAlive: () => boolean, timeoutMs: number) =>
 async function stop(profile: DevProfile): Promise<void> {
   const session = readSession(profile);
   if (!session) return;
+  const runtimeAlive = () =>
+    !!session.runtimePid &&
+    ownedProcessAlive(session.runtimePid, session.runtimeIdentity);
+  // Verify both owners before signalling either or changing persistent state.
+  runtimeAlive();
   if (alive(session)) process.kill(session.supervisorPid, "SIGTERM");
   await untilGone(() => alive(session), 5000);
   if (alive(session))
     throw new Error(
       "Development supervisor did not stop; persistent data retained",
     );
-  const runtimeAlive = () =>
-    !!session.runtimePid &&
-    !!session.runtimeIdentity &&
-    processIdentity(session.runtimePid) === session.runtimeIdentity;
   if (runtimeAlive() && session.runtimePid) {
     process.kill(-session.runtimePid, "SIGTERM");
     await untilGone(runtimeAlive, 5000);
@@ -509,11 +518,12 @@ async function diagnostics(
 ): Promise<void> {
   const checks: DiagnosticChecks = {
     session: !!session,
-    process: !!session && alive(session),
+    process: false,
     ready: false,
     tools: {},
   };
   try {
+    checks.process = !!session && alive(session);
     if (!session || !alive(session))
       throw new Error("No live development session");
     await readiness(session);

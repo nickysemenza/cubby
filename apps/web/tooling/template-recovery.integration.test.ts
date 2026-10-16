@@ -194,7 +194,7 @@ it("fails closed for unverifiable identities and marker namespaces", async () =>
           },
           { timeoutMs: 100 },
         ),
-      ).rejects.toThrow(/Timed out/u);
+      ).rejects.toThrow(new RegExp(`PID ${process.pid}.*unknown.*stop`, "u"));
       rmSync(file);
     }
   } finally {

@@ -92,3 +92,38 @@ it("forces a fresh corpus generation for an explicit reseed", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Package imports stay external in the app graph. Their runtime code and
+// export maps must still invalidate the seed even without a lockfile change.
+it("invalidates templates for workspace runtime sources and export manifests", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "cubby-hash-workspace-"));
+  const root = join(workspace, "apps/web");
+  try {
+    fixtureGraph(root);
+    writeFileSync(
+      join(root, "tooling/dev/corpus-template.ts"),
+      'import "@cubby/usda"; import "@cubby/worker-tracing";',
+    );
+    for (const file of [
+      "packages/usda/src/index.ts",
+      "packages/worker-tracing/src/index.ts",
+      "packages/usda/package.json",
+      "packages/worker-tracing/package.json",
+    ]) {
+      const path = join(workspace, file);
+      mkdirSync(dirname(path), { recursive: true });
+      const source = file.endsWith(".ts")
+        ? "export const synthetic = 1;"
+        : '{"exports":"./src/index.ts"}';
+      writeFileSync(path, source);
+      const before = corpusTemplateHash(root);
+      writeFileSync(
+        path,
+        source.replace("1", "2").replace("index.ts", "other.ts"),
+      );
+      expect(corpusTemplateHash(root)).not.toBe(before);
+    }
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

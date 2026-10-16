@@ -43,6 +43,15 @@ running origin; ports can differ between checkouts. `/__dev/health` reports
 runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
 release has loaded (`usdaReady`).
+
+Dev sessions and template recovery share one process-liveness contract: `alive`
+means equal verified birth identities; `dead` means an absent PID or a verified
+different birth in the same identity format; everything unreadable or in another
+format is `unknown`. Unknown ownership never authorizes termination, replacement,
+reset, or template discard. Unprefixed legacy identities are unknown because their
+original timezone/locale was not recorded. The diagnostic names the PID: stop that
+process with `kill <pid>`, then run `pnpm dev down` before retrying. Session and
+persistent data stay intact until ownership is resolved.
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
 Debug Swift apps launched with `--cubby-dev-server <origin>` use
@@ -72,8 +81,10 @@ A second layer, keyed by migrations, `LOCAL_FIXTURE_VERSION`, corpus/application
 sources, shared code and fixture bytes, seeds once through application code.
 The key follows the corpus preparation entry's runtime module graph with esbuild,
 including dynamic imports, server calculations and write paths, tooling fixtures,
-factories and scenarios. Shared/schema sources, Rust/WASM inputs, migrations,
-lockfiles and bundled wardrobe PNG bytes are also hashed. Unrelated UI sources
+factories and scenarios. All workspace packages' runtime sources and package
+manifests (including USDA and Worker tracing), workspace resolution configuration,
+Rust/WASM inputs, migrations, lockfiles and bundled wardrobe PNG bytes are also
+hashed. Unrelated UI sources
 (features, UI, routes and components outside that graph) do not invalidate the
 seed. Existing checkout edits survive startup; `pnpm dev reset` adopts the
 current template. For an exceptional dependency outside the discovered graph or

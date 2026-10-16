@@ -1,4 +1,6 @@
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { hostname } from "node:os";
 import {
   templateMarkerDirectory,
   retireTemplateMarkers,
@@ -65,5 +67,32 @@ test("retires redirects by service incarnation and clears them on teardown", () 
   } finally {
     retireTemplateMarkers(url);
     retireTemplateMarkers(other);
+  }
+});
+
+// A pre-incarnation initializer still owns <service>/<hash>.json. New startup
+// must not make its finalization cleanup throw ENOENT and discard the template.
+test("startup preserves a live legacy initializer and unverified marker scope", () => {
+  const url = `http://synthetic-legacy-${process.pid}.example.test:5000`;
+  const current = templateMarkerDirectory(url, "synthetic-current-birth");
+  const unknown = templateMarkerDirectory(url);
+  const legacy = join(dirname(current), `${"a".repeat(40)}.json`);
+  const owner = JSON.stringify({
+    pid: process.pid,
+    start: "legacy-birth",
+    host: hostname(),
+  });
+  try {
+    writeFileSync(legacy, owner);
+    writeFileSync(join(unknown, "pending.json"), owner);
+    retireTemplateMarkers(url, "synthetic-current-birth");
+    assert.equal(readFileSync(legacy, "utf8"), owner);
+    assert.equal(readFileSync(join(unknown, "pending.json"), "utf8"), owner);
+    // The older initializer can finish its original non-forced cleanup.
+    rmSync(legacy);
+    retireTemplateMarkers(url);
+    assert.equal(existsSync(unknown), true);
+  } finally {
+    rmSync(dirname(current), { recursive: true, force: true });
   }
 });
