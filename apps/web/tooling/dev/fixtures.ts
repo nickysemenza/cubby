@@ -15,7 +15,7 @@ export const LOCAL_FIXTURE_PACKS = [
 export const devFixturePackSchema = z.enum(LOCAL_FIXTURE_PACKS);
 export type LocalFixturePack = (typeof LOCAL_FIXTURE_PACKS)[number];
 
-/** Seed an opt-in pack from Node (`pnpm dev seed <pack>`). The core corpus
+/** Seed an opt-in pack from Node, forwarding publications to the running Worker. The core corpus
  * seeds inside the dev Worker through `POST /__dev/seed`. */
 export async function seedDevDatabase(options: {
   databaseUrl: string;
@@ -29,6 +29,13 @@ export async function seedDevDatabase(options: {
     );
   }
   await seedFixturePack(options.databaseUrl, options.pack, async (pool) => {
+    const { buildScenarioDatabase } = await import("../scenarios/context");
+    const { installScenarioBackgroundQueue } =
+      await import("../scenarios/background-queue");
+    installScenarioBackgroundQueue(
+      buildScenarioDatabase(pool),
+      options.baseURL,
+    );
     const userId = await ensureDevUser((path, body) =>
       fetch(new URL(path, options.baseURL), {
         method: "POST",

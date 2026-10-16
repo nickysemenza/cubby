@@ -61,7 +61,7 @@ export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
 
 /**
  * Run one task against the current database. Shared by the Cloudflare queue
- * consumer and the inline dev path, so both execute identical domain code.
+ * consumer and explicit test drains.
  *
  * Every branch re-reads the derived state's own freshness marker before doing
  * work and reports `"skipped"` when there is nothing to do. That, not message

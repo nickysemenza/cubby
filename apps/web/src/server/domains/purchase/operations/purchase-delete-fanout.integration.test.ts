@@ -4,7 +4,14 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput, purchaseOut } from "@cubby/schemas/purchase";
 import { vendorCreateInput, vendorOut } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
@@ -93,12 +100,9 @@ describe("purchase deletion embedding fanout", () => {
       ids: [purchase.id],
     });
 
-    // Purchase delete detaches these rows and fans out
-    // entity-embedding.refresh for both; with no queue bound in tests, that
-    // task runs inline and refreshes the search-document projection as its
-    // first step (see refreshEntityEmbedding), so a live projection is the
-    // observable proof the fanout ran — the background-job ledger this used
-    // to assert against no longer exists.
+    // Financial rows are projected synchronously. Draining any published
+    // follow-up work must retain those projections after detach.
+    await backgroundQueue.drain(ctx.db);
     const [expenseDoc, transactionDoc] = await Promise.all([
       getSearchDocumentEmbeddingText(ctx.db, "expense", expenseId),
       getSearchDocumentEmbeddingText(

@@ -12,7 +12,14 @@ import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";

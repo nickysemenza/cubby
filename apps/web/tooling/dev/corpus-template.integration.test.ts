@@ -1,3 +1,4 @@
+import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,6 +32,14 @@ it("clones the application corpus, retains checkout edits, and collects only aba
       expect(counts.rows[0].search).toBeGreaterThan(100);
       expect(counts.rows[0].images).toBe(3);
       expect(counts.rows[0].credentials).toBe(1);
+      const pending = await db.query<{ body: unknown }>(
+        "SELECT body FROM cubby_dev_background_task",
+      );
+      expect(pending.rows.length).toBeGreaterThan(0);
+      for (const row of pending.rows)
+        expect(backgroundTaskMessageSchema.safeParse(row.body).success).toBe(
+          true,
+        );
       await db.query(
         `UPDATE cubby_dev_fixture SET state = 'retained' WHERE pack = 'core'`,
       );

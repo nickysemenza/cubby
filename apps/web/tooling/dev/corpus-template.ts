@@ -1,3 +1,5 @@
+import { fromPartial } from "@total-typescript/shoehorn";
+import { setCfEnv } from "../../src/server/cf-env";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -115,6 +117,22 @@ export async function prepareDevDatabase(
             `[dev-template] import: ${Math.round(performance.now() - importStart)} ms`,
           );
           const corpusStart = performance.now();
+          await pool.query(
+            "CREATE TABLE cubby_dev_background_task (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body jsonb NOT NULL)",
+          );
+          setCfEnv(
+            fromPartial<Env>({
+              BACKGROUND_QUEUE: {
+                sendBatch: async (messages: Iterable<{ body: unknown }>) => {
+                  for (const { body } of messages)
+                    await pool.query(
+                      "INSERT INTO cubby_dev_background_task (body) VALUES ($1)",
+                      [JSON.stringify(body)],
+                    );
+                },
+              },
+            }),
+          );
           await seedCorpus(pool, userId, {
             storageOrigin: `http://127.0.0.1:${address.port}`,
             bucket: "cubby-local",
@@ -132,6 +150,7 @@ export async function prepareDevDatabase(
             [LOCAL_FIXTURE_VERSION],
           );
         } finally {
+          setCfEnv(undefined);
           await pool.end();
           await new Promise<void>((resolve, reject) =>
             storage.close((error) => (error ? reject(error) : resolve())),

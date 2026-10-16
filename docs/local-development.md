@@ -66,7 +66,12 @@ IntegreSQL coordinates one migration-keyed base template for tests and dev.
 A second layer, keyed by migrations, `LOCAL_FIXTURE_VERSION`, corpus/application
 sources, shared code and fixture bytes, seeds once through application code.
 It inserts the synthetic account with Better Auth's password hasher, then runs
-the entity kernel and specialist repositories. Import, account and corpus timings
+the entity kernel and specialist repositories. Before a Worker exists, its
+background publications are stored in the template's development-only
+`cubby_dev_background_task` outbox. Clones hand those envelopes to the local
+Worker queue on startup, deleting them only after acceptance. A partial handoff
+may redeliver; handlers retain their freshness checks. Import, account and corpus
+timings
 are logged separately. Once finalized, a new checkout database is a physical
 `CREATE DATABASE … TEMPLATE …` clone. Test pools remain per namespace and
 checkout; idle IntegreSQL recycling drops only `integresql_*` databases, so
@@ -158,6 +163,19 @@ and meals) is anchored to the household-local day when the corpus template is se
 explicit `referenceDate` makes artifact dates reproducible. Reseeding a completed
 pack is a no-op. Reset adopts the current template and retains its chronology;
 a changed template hash or a recycled template seeds a new reference day.
+Background tasks always use a queue; publishing nonempty work without a
+`BACKGROUND_QUEUE` producer throws with the publication source. Post-commit
+publication errors remain logged and reported, with durable stale markers for
+repair. No Node fallback runs handlers. Node opt-in pack writers forward queue
+envelopes to the running development Worker at `/__dev/background-tasks`; the
+receiver checks the writer's database identity before accepting work. Opt-in
+packs use the discovered session origin. Built workerd harnesses install
+their queue producer for Node scenarios, retaining the selected profile's
+consumer routing.
+Integration tests install `captureBackgroundQueue()` and explicitly `drain(db)`
+when asserting consumer effects; the bounded drain runs real handlers, including
+follow-up publications, and retains a failed task for diagnosis.
+
 Optional packs still add small focused graphs to the running session:
 
 ```sh
@@ -265,6 +283,12 @@ HEAD/ETag metadata, and a single HTTP byte range (206 or 416).
 `/cdn-cgi/image/<options>/<key>` passes through the original local bytes; it
 does not reproduce Cloudflare CDN resizing, compression, or cache behavior.
 Validate those transformations against the deployed boundary when relevant.
+
+Port probes do not reserve ports. If Vite/workerd exits with `EADDRINUSE`
+before readiness, the supervisor reaps that launch, selects fresh app
+and inspector ports, re-resolves all origin-derived settings and rewrites the
+session discovery file before relaunching. It retries at most three times;
+other failures and exits after readiness are reported directly.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes
 the Worker debugging target. To inspect PostgreSQL directly, use the connection

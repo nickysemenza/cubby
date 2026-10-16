@@ -1,7 +1,9 @@
+import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { Client } from "pg";
 import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
+import { setCfEnv } from "../../src/server/cf-env";
 import worker from "../../src/cf-server";
 import { activeUsdaRelease } from "../../src/server/domains/usda-release/service/client";
 import { PREVIEW_DOCUMENT } from "./preview/document";
@@ -226,10 +228,28 @@ export default {
         headers.append("Set-Cookie", cookie);
       return new Response(null, { status: 303, headers });
     }
+    if (url.pathname === "/__dev/background-tasks") {
+      if (request.method !== "POST") return new Response(null, { status: 405 });
+      const input = z
+        .object({
+          database: z.string(),
+          messages: z.array(backgroundTaskMessageSchema).max(100),
+        })
+        .parse(await request.json());
+      if (input.database !== env.CUBBY_DEV_DB_NAME)
+        return new Response("Background queue database identity mismatch", {
+          status: 409,
+        });
+      await env.BACKGROUND_QUEUE.sendBatch(
+        input.messages.map((body) => ({ body })),
+      );
+      return Response.json({ published: input.messages.length });
+    }
     if (url.pathname === "/__dev/seed") {
       if (request.method !== "POST")
         return new Response(null, { status: 405, headers: { Allow: "POST" } });
       const started = performance.now();
+      setCfEnv(env);
       try {
         const { seedCoreFixtures } = await import("./seed-core");
         await seedCoreFixtures({

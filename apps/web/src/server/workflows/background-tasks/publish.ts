@@ -1,7 +1,6 @@
 import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
-  backgroundTaskSchema,
 } from "@cubby/schemas/background-tasks";
 import {
   BACKGROUND_TASK_MESSAGE_VERSION,
@@ -87,61 +86,34 @@ async function sendToQueue(
   }
 }
 
-async function runInline(
-  db: Database,
-  tasks: readonly BackgroundTaskInput[],
-): Promise<void> {
-  // Deferred boundary: producer-side services never statically import the
-  // handlers that import those same services.
-  const { handleBackgroundTask } = await import("./handle");
-  for (const task of tasks) {
-    await handleBackgroundTask(db, backgroundTaskSchema.parse(task));
-  }
-}
-
-/**
- * Hand a task list to the queue and return once it has been accepted.
- *
- * On Cloudflare the queue's acceptance is the durable handoff; there is no
- * execution row behind it. In plain Node development there is no queue, so
- * the same handler runs inline — same code, same freshness gates, no separate
- * retry engine.
- */
+/** Queue acceptance is the handoff; Node callers must install an explicit producer. */
 export async function publishBackgroundTasks(
-  db: Database,
+  _db: Database,
   tasks: readonly BackgroundTaskInput[],
   options: PublishOptions,
 ): Promise<BackgroundTaskReceipt> {
   if (tasks.length === 0) return { transport: "queue", count: 0 };
-  const queue = getBackgroundQueue();
-  if (queue) {
-    await sendToQueue(queue, tasks);
-    log.info(`published count=${tasks.length} source=${options.source}`);
-    return { transport: "queue", count: tasks.length };
-  }
-  await runInline(db, tasks);
-  return { transport: "inline", count: tasks.length };
+  const queue = requireBackgroundQueue(options.source);
+  await sendToQueue(queue, tasks);
+  log.info(`published count=${tasks.length} source=${options.source}`);
+  return { transport: "queue", count: tasks.length };
 }
 
-/**
- * Enqueue one task from code that holds no `Database` — a Durable Object's
- * fallback once its own retries are spent. Resolves `true` once the queue
- * accepted the task. Plain Node development has no queue binding and no
- * request database to run the handler inline against, so there it logs and
- * resolves `false`; a failed send rejects.
- */
+function requireBackgroundQueue(source: string): BackgroundQueueProducer {
+  const queue = getBackgroundQueue();
+  if (!queue)
+    throw new Error(
+      `BACKGROUND_QUEUE binding is required to publish background tasks (source=${source}); Node callers must configure an explicit queue producer`,
+    );
+  return queue;
+}
+
+/** Enqueue from a caller without a Database; missing bindings and failed sends reject. */
 export async function enqueueBackgroundTask(
   task: BackgroundTaskInput,
   options: PublishOptions,
 ): Promise<boolean> {
-  const queue = getBackgroundQueue();
-  if (!queue) {
-    log.warn(
-      `no queue binding; not enqueued kind=${task.kind} source=${options.source}`,
-    );
-    return false;
-  }
-  await sendToQueue(queue, [task]);
+  await sendToQueue(requireBackgroundQueue(options.source), [task]);
   log.info(`published count=1 source=${options.source}`);
   return true;
 }
@@ -200,7 +172,7 @@ export type BackgroundTaskPublisher = (
   db: Database,
   tasks: readonly BackgroundTaskInput[],
   options: PublishOptions,
-) => Promise<{ transport: string; count: number }>;
+) => Promise<BackgroundTaskReceipt | void>;
 
 export interface DeferredPublications {
   readonly publish: BackgroundTaskPublisher;
@@ -225,7 +197,6 @@ export function deferPublications(): DeferredPublications {
     publish: async (_db, tasks, options) => {
       if (tasks.length > 0)
         pending.push({ tasks: [...tasks], source: options.source });
-      return { transport: "deferred", count: tasks.length };
     },
     flush: async (db) => {
       for (const { tasks, source } of pending.splice(0)) {

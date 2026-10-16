@@ -6,7 +6,14 @@ import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
+
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
+let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
+beforeEach(() => {
+  backgroundQueue = captureBackgroundQueue();
+});
+afterEach(() => backgroundQueue.restore());
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
