@@ -21,6 +21,7 @@ import {
   IMAGE_PROVENANCE_CHOICES,
   imageProvenancePrompt,
   PRODUCT_VARIANT_RELATION_CHOICES,
+  PRODUCT_VARIANT_TITLE_LIMIT,
   productVariantRelationPrompt,
   UPC_OFFER_COMPARABILITY_CHOICES,
   upcOfferComparabilityPrompt,
@@ -188,7 +189,10 @@ export async function decideProductVariantComparison(args: {
   usage: AiRunContext;
   port?: DecisionPort;
 }) {
-  if (args.firstTitle.length > 500 || args.secondTitle.length > 500)
+  if (
+    args.firstTitle.length > PRODUCT_VARIANT_TITLE_LIMIT ||
+    args.secondTitle.length > PRODUCT_VARIANT_TITLE_LIMIT
+  )
     return variantComparison(args, null);
   const result = await choice({
     feature: PRODUCT_VARIANT_RELATION_FEATURE,
@@ -207,7 +211,8 @@ export async function decideProductVariantComparisons(args: {
   port?: DecisionPort;
 }): Promise<ProductVariantComparison[]> {
   const eligible = args.comparisons.flatMap((comparison, index) =>
-    comparison.firstTitle.length <= 500 && comparison.secondTitle.length <= 500
+    comparison.firstTitle.length <= PRODUCT_VARIANT_TITLE_LIMIT &&
+    comparison.secondTitle.length <= PRODUCT_VARIANT_TITLE_LIMIT
       ? [{ comparison, index }]
       : [],
   );

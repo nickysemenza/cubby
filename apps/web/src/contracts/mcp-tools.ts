@@ -902,7 +902,7 @@ export const MCP_TOOLS = defineMcpTools({
       commit_group: mcpAction({
         op: photoImportContract.ops.commitGroup,
         description:
-          'The bounded writer approval runs. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
+          'The bounded writer approval runs. Product/Inventory writes require explicit review with observedName, stockIntent and a null unresolvedReason; skip-only groups need no review. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
       }),
       approve_groups: mcpAction({
         op: photoImportContract.ops.approveGroups,
@@ -916,6 +916,16 @@ export const MCP_TOOLS = defineMcpTools({
       choose_existing: mcpAction({
         op: photoImportContract.ops.chooseExisting,
         description: "Point one proposed group at an existing productId.",
+      }),
+      reject_candidate: mcpAction({
+        op: photoImportContract.ops.rejectCandidate,
+        description:
+          "Record the member's Not this one verdict for a candidate Product. Suppression follows the group's photos through combine/split; supply a stable operationId.",
+      }),
+      resolve_concern: mcpAction({
+        op: photoImportContract.ops.resolveConcern,
+        description:
+          "Explicitly resolve the agent's original identity concern, preserving it with member/time and an optional reply. Product edits never resolve a concern.",
       }),
       update_draft: mcpAction({
         op: photoImportContract.ops.updateDraft,

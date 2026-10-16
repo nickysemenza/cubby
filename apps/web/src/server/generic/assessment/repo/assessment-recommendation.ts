@@ -1,4 +1,5 @@
 import { assessmentReviewReference } from "@cubby/schemas/assessment";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -18,8 +19,9 @@ export async function assessRecommendation(
   scope: string,
   keys: readonly string[],
   evidence: unknown,
+  entity: ShortcodeEntity = "product",
 ) {
-  const recordId = await resolveOrThrow(db, "product", sourceId);
+  const recordId = await resolveOrThrow(db, entity, sourceId);
   const candidateKey = await assessmentCandidateKey(scope, keys);
   const snapshot = z.json().parse(evidence);
   const fingerprint = await sha256Hex(canonicalJson(snapshot));
@@ -36,7 +38,7 @@ export async function assessRecommendation(
       family: "recommendation",
       subject: {
         kind: "recommendation",
-        entity: "product",
+        entity,
         recordId,
         scope,
         candidateKey,

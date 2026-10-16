@@ -19,6 +19,8 @@ import {
   proposePhotoGroupsInput,
   proposePhotoGroupsOutput,
   photoProductCandidatesResponse,
+  photoRunCandidatesResponse,
+  photoProductEvidence,
   photoAcceptedSourceLine,
   photoRunReviewResponse,
   reviewPhotoGroupsAction,
@@ -314,6 +316,33 @@ export const photoImportContract = defineContract("photoImport", {
     }),
     output: photoProductCandidatesResponse,
   }),
+  candidatesBatch: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents can read individual photo candidates",
+    },
+    native:
+      "Check all candidates for every group with independent failure results",
+    input: z.object({ runId: runShortcode }),
+    output: photoRunCandidatesResponse,
+  }),
+  productEvidence: query({
+    mcp: { omit: "client_view" },
+    native: "Read selected Product history independently of candidate ranking",
+    input: z.object({ runId: runShortcode, productId: productShortcode }),
+    output: photoProductEvidence,
+  }),
+  rejectCandidate: mutation({
+    native: "Record Not this one for the photos in a group",
+    input: z.object({
+      runId: runShortcode,
+      groupKey: z.string().min(1).max(200),
+      productId: productShortcode,
+      operationId: z.string().min(1).max(200),
+    }),
+    output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
+  }),
   linkableExpenses: query({
     mcp: { omit: "client_view" },
     input: z.object({
@@ -348,6 +377,22 @@ export const photoImportContract = defineContract("photoImport", {
       productId: productShortcode,
     }),
     output: reviewPhotoGroupsOutput,
+  }),
+  resolveConcern: mutation({
+    native: "Explicitly resolve an agent concern without erasing its history",
+    input: z.object({
+      runId: runShortcode,
+      groupKey: z.string().min(1).max(200),
+      reply: z
+        .string()
+        .trim()
+        .max(500)
+        .regex(/^[^\r\n]*$/, "Use a one-line reply")
+        .optional(),
+      expectedRevision: z.iso.datetime().optional(),
+    }),
+    output: reviewPhotoGroupsOutput,
+    invalidates: ["runOnly"],
   }),
   updateDraft: mutation({
     native: "Correct proposed product identity before approving photos",

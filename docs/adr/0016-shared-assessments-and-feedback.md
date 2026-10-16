@@ -74,7 +74,12 @@ publication identity and evidence fingerprints. Legacy origins explicitly allow
 unknown producer/evidence and standalone confirmations without fabricating a
 predecessor prediction. Corrected JSON null is distinct from absent correction.
 
-Suppression retains its original declared scope and candidate key. Legacy field
+Suppression retains its original declared scope and candidate key. Recommendation
+subjects may name any shortcode entity, including a Run with a group/photo scope
+and candidate Product key. Explicit history-only Wrong Feedback can suppress that
+declared candidate, just as Dismissal can; a bare Wrong verdict remains a grade.
+The [photo identity journey](../guide/product-identity-journey.md#photo-inventory-review)
+owns photo-group lineage and client behavior. Legacy field
 value rejection, Product-pair suppression, group-key recommendation suppression
 and related/tag preferences do not become universal negative labels. Preserve
 old application receipts and distinguish automatic application from explicit

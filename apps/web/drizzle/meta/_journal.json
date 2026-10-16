@@ -512,6 +512,13 @@
       "when": 1792118311156,
       "tag": "0072_derived_ddl",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792120576425,
+      "tag": "0073_photo_group_review_authority",
+      "breakpoints": true
     }
   ]
 }

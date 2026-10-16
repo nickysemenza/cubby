@@ -122,6 +122,8 @@ const actionCapability = {
   "photo_run.save_groups": "member_decision",
   "photo_run.choose_existing": "member_decision",
   "photo_run.update_draft": "member_decision",
+  "photo_run.resolve_concern": "member_decision",
+  "photo_run.reject_candidate": "member_decision",
   "photo_run.discard_group": "member_decision",
   "run.lifecycle": "start_run",
   "run.approve_execution": "member_decision",
