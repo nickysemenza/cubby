@@ -6,6 +6,7 @@ import { page } from "vitest/browser";
 import { Button } from "~/ui/primitives/button";
 
 import { BasicInfo } from "./basic-info";
+import { RecordList, RecordRow } from "./record-list";
 
 // Failure modes: captions always add height, actions drift with value lengths,
 // and narrow dossiers let long facts paint beneath the action rail.
@@ -14,6 +15,45 @@ const action = (name: string) => (
     <InfoIcon className="size-3.5" />
   </Button>
 );
+
+// A size-contained record list inside a flex fact value must fill the value
+// column, or its dates and linked identities collapse to a few characters.
+it("gives nested funding history the full fact value width", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <div style={{ width: 680 }}>
+      <BasicInfo
+        fields={[
+          {
+            label: "Funding periods",
+            value: (
+              <RecordList data-testid="funding-history">
+                <RecordRow
+                  primary={<a href="#household">Example household</a>}
+                  secondary="… → 2024-04-30"
+                  clip={false}
+                />
+                <RecordRow
+                  primary={<a href="#member">Example member</a>}
+                  secondary="2024-05-01 → …"
+                  clip={false}
+                />
+              </RecordList>
+            ),
+          },
+        ]}
+      />
+    </div>,
+  );
+  const list = screen.getByTestId("funding-history");
+  const value = list.closest('[data-slot="basic-info-value"]')!;
+  expect(list.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+    value.getBoundingClientRect().width - 1,
+  );
+  expect(
+    screen.getByText("… → 2024-04-30").getBoundingClientRect().height,
+  ).toBeLessThan(24);
+});
 
 it("keeps a short provenance caption inline and aligns fact actions", async () => {
   await page.viewport(1440, 900);

@@ -56,7 +56,7 @@ export function RecordList({
   if (empty !== undefined && isEmpty(children))
     return <p className="text-xs/5 text-muted-foreground">{empty}</p>;
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-1">
       <Ledger data-record-list={variant} className={className} {...props}>
         {children}
       </Ledger>

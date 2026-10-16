@@ -142,7 +142,7 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { detail: true },
+        display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -199,7 +199,7 @@ export default defineEntity({
             ],
           },
         },
-        display: { detail: true },
+        display: { list: true, detail: true },
         validation: {
           read: financialAccountNetwork.nullable(),
           create: financialAccountNetwork.nullable().optional(),
@@ -291,7 +291,7 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { detail: true },
+        display: { list: true, detail: true },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
