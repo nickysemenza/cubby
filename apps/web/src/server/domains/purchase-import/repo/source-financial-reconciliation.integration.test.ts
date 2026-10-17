@@ -500,6 +500,11 @@ describe("accepted source financial reconciliation", () => {
     expect(after.orders[0]!.checksum).toBe("d".repeat(64));
     expect(after.payments).toEqual(initial.payments);
     expect(after.allocations).toEqual(initial.allocations);
+    // Expiry prevents a new application, not replay of an applied receipt.
+    await database
+      .update(runFinding)
+      .set({ expiresAt: new Date("2000-01-01T00:00:00.000Z") })
+      .where(eq(runFinding.id, finding!.id));
     expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
       status: "applied",
     });

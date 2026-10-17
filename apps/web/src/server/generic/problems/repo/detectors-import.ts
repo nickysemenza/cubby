@@ -1,18 +1,15 @@
 import { storedImportFix } from "@cubby/schemas/purchase-import";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityIdentity, runFinding } from "~/server/db/schema";
+import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 
 export async function findOpenRunFindings(db: Database) {
   const database = getDb(db);
   const now = new Date();
-  await database
-    .update(runFinding)
-    .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
-    .where(and(eq(runFinding.status, "open"), lt(runFinding.expiresAt, now)));
   const rows = await database
     .select({
       id: runFinding.id,
@@ -27,7 +24,7 @@ export async function findOpenRunFindings(db: Database) {
     .leftJoin(entityIdentity, eq(runFinding.entityId, entityIdentity.id))
     .where(
       and(
-        eq(runFinding.status, "open"),
+        activeFindingSql("RunFinding", now),
         sql`NOT ${obsoleteExecutionFindingSql('"RunFinding"')}`,
       ),
     )
