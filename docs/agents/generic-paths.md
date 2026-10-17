@@ -240,7 +240,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   keeps `withTestDb`; browser workers use `createE2EDatabase`. A per-test
   fixture whose seed costs more than a clone (~250 ms under parallel load) uses
   `ctx.fixture(key, seed)` (`apps/web/tooling/test-fixture-template.ts`):
-  seeded once per run, cloned per test. Cheaper setup stays in the test body,
+  seeded once per run (`ctx.prepareFixture` in `beforeAll`, outside the test
+  timeout), cloned per test. Cheaper setup stays in the test body,
   on the per-file DELETE reset.
 - The synthetic household: clone the dev corpus template
   (`prepareDevDatabase`, `apps/web/tooling/dev/corpus-template.ts`) rather than

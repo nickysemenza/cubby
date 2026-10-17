@@ -6,7 +6,6 @@ import {
   writeFileSync,
   existsSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inject } from "vitest";
 import type { TestProject } from "vitest/node";
@@ -19,6 +18,8 @@ import {
 } from "./schema-template";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import { initializeRecoverableTemplate } from "./template-recovery";
+import { templateMarkerDirectory } from "./dev-services/template-markers.ts";
+import { testServiceConfig } from "./test-service-config";
 
 /**
  * Per-run IntegreSQL templates for expensive per-test fixtures.
@@ -42,10 +43,22 @@ declare module "vitest" {
   }
 }
 
-const runRoot = join(tmpdir(), "cubby-test-fixtures");
+/**
+ * Run records live beside the template initializer markers, which are keyed
+ * by IntegreSQL service and incarnation: a sweep only ever discards hashes
+ * against the service that created them.
+ */
+const runRoot = () =>
+  join(
+    templateMarkerDirectory(
+      testServiceConfig().url,
+      process.env.CUBBY_TEMPLATE_SERVICE_ID,
+    ),
+    "fixture-runs",
+  );
 
 function runDirectory(run: string): string {
-  return join(runRoot, run);
+  return join(runRoot(), run);
 }
 
 const isMissing = (error: unknown) =>
@@ -95,11 +108,12 @@ async function discardRun(directory: string): Promise<void> {
 
 /** `globalSetup`: name this run and collect templates from dead runs. */
 export async function setupFixtureRun(project: TestProject): Promise<string> {
-  mkdirSync(runRoot, { recursive: true });
-  for (const entry of readdirSync(runRoot)) {
+  const root = runRoot();
+  mkdirSync(root, { recursive: true });
+  for (const entry of readdirSync(root)) {
     const pid = Number(entry.split("-")[0]);
     if (Number.isSafeInteger(pid) && processStatus(pid, undefined) === "dead")
-      await discardRun(join(runRoot, entry));
+      await discardRun(join(root, entry));
   }
   const run = `${process.pid}-${randomUUID()}`;
   mkdirSync(runDirectory(run));
