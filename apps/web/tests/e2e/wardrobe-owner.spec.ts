@@ -238,14 +238,17 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   await page
     .getByRole("button", { name: "Category: any", exact: true })
     .click();
+  const picker = page.getByRole("combobox", { name: "Filter Category" });
+  await picker.click();
   await page.getByRole("button", { name: "is not", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Filter Category" })
-    .fill(`${name} Outerwear`);
+  await picker.fill(`${name} Outerwear`);
   await page
     .getByRole("option", { name: new RegExp(`${name} Outerwear`) })
     .click();
+  // Picking closes the popup; Apply sits in its footer.
+  await picker.click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await page.keyboard.press("Escape");
 
   await expect(
     page.getByRole("button", {
