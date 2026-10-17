@@ -60,9 +60,9 @@ Workflows own inference deadlines and retries. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The singleton uses its own compiled manifest, never a caller-supplied version;
 a request from an old Worker cannot reinstall that Worker's policy. Saved field results resume
-without another inference. Missing evidence, missing authorization and genuine
-ambiguity wait for a relevant fingerprint change; authorization changes create
-fresh eligible work. Admission waits defer without consuming inference retries.
+without another inference. Missing evidence, Mail import switched off and
+genuine ambiguity wait for a relevant fingerprint change; switching Mail import
+on creates fresh eligible work. Admission waits defer without consuming inference retries.
 Cancelled Runs remain stopped. Exhausted failures require Run retry; replacement
 evaluations retain the earlier failed rows and link their receipts.
 

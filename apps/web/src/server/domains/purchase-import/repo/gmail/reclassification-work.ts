@@ -1,8 +1,4 @@
 import {
-  executionAuthorizationRef,
-  type ExecutionAuthorizationRef,
-} from "@cubby/schemas/execution-authorization";
-import {
   selectDecisionModel,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
@@ -20,16 +16,12 @@ export const reclassificationSnapshot = z.object({
   publicId: z.string(),
   checksum: z.string().nullable(),
   decisionModel: supportedDecisionModelSchema,
-  executionAuthorization: executionAuthorizationRef,
-  authorizationHistory: z.array(executionAuthorizationRef).default([]),
-  minimumBudgetMicroUSD: z.number().int().nonnegative().optional(),
 });
 
 export async function prepareReclassification(
   db: Database,
   runId: typeof run.$inferSelect.id,
   emails: readonly (typeof email.$inferSelect)[],
-  authorization: ExecutionAuthorizationRef,
   decisionModel = selectDecisionModel(),
 ) {
   const manifest = await compiledRefreshManifest();
@@ -69,7 +61,6 @@ export async function prepareReclassification(
           publicId: item.shortcode,
           checksum: item.checksum,
           decisionModel,
-          executionAuthorization: authorization,
         }),
       },
       sequence,

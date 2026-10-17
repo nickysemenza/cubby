@@ -603,7 +603,6 @@ describe("MCP catalog schemas", () => {
       "mail.mailboxId",
       "mail.messageId",
       "run.mailboxId",
-      "run.scope.mailboxId",
       // Assessment child handles and caller-generated idempotency keys do
       // not address shortcode entities. Batch review uses the same contract.
       "entity.assessmentId",

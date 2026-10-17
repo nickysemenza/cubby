@@ -128,7 +128,7 @@ const actionCapability = {
   "photo_run.reject_candidate": "member_decision",
   "photo_run.discard_group": "member_decision",
   "run.lifecycle": "start_run",
-  "run.approve_execution": "member_decision",
+  "run.set_mail_import": "member_decision",
   "run.discover_mail": "member_decision",
   "run.commit_prepared": "member_decision",
   "run.resolve_finding": "member_decision",

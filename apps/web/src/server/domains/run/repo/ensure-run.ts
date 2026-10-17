@@ -24,8 +24,6 @@ import {
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { inheritExecutionAuthorization } from "./execution-context";
-
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
  * refreshes. Work a member starts (a backfill button) stays attributed to
@@ -122,10 +120,7 @@ export async function ensureRun(
     deviceId: actor.deviceId,
     clientKey: input.clientKey ?? null,
     notes: input.notes ?? null,
-    input:
-      (await inheritExecutionAuthorization(db, input.input, {
-        parentRunId: input.parentRunId,
-      })) ?? null,
+    input: input.input ?? null,
     progress: input.progress ?? null,
   };
   if (!input.clientKey) {

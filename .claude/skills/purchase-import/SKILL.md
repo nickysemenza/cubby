@@ -45,39 +45,38 @@ Retired coordinators return an absent transcript without reopening storage or
 execution; their retained Run status, operations and source associations remain
 separate evidence.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
-approve, reject …) through the shared member-owned controls. Paid grants and
-review decisions (`run.approve_execution`, `run.discover_mail`,
+approve, reject …) through the shared member-owned controls. Spending and
+review decisions (`run.set_mail_import`, `run.discover_mail`,
 `run.commit_prepared`, `run.resolve_finding`, approve/reject) are callable, but
-only on the member's explicit instruction for that specific budget or scope;
-never infer one. Respect an explicit member pause: do
+only on the member's explicit instruction; never infer one. Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
 An explicit `mail.import` selection — up to 50 Emails, each by its `id`
 (`EML-` code) and current checksum as `mail.search` and `imports_read.mail`
-return them — starts Luna without a dollar allowance or an inherited
-historical budget. An Email with no order id that is already linked to exactly
+return them — starts Luna as foreground work outside the household AI budget. An Email with no order id that is already linked to exactly
 one Purchase imports into that Purchase rather than booking a second one.
 Member-controlled retries
 keep their frozen source scope. These selected Luna calls have no dollar ceiling;
-this does not authorize another paid model, historical discovery, unattended bulk admission,
-another member's sources, or receiving stock. Ownership, retained originals,
+this does not authorize another paid model, another member's sources, or
+receiving stock. Ownership, retained originals,
 checksums, replay, money conservation and unresolved-identity review still apply.
 
 ## Connect and converge evidence
 
-1. Connect Google with read-only Gmail access. Start with selected Vendor-history
-   approvals and unmatched financial transactions. Broad history is optional and
-   requires its own explicit approval; completing Vendor research never widens
-   that scope. Incremental new-mail discovery includes unfamiliar senders,
-   excluding Spam and Trash. The decision model
+1. Connect Google with read-only Gmail access and turn Mail import on for the
+   mailbox (`run.set_mail_import`, only on the member's instruction). Daily
+   discovery then searches known Vendors' verified senders and website domains
+   and unmatched transaction merchants, and reads new mail from all senders,
+   excluding Spam and Trash; there is no all-of-Gmail crawl. The decision model
    routes relevant mail and escalates uncertainty to the relevance model; each
    message records which stage decided and why. An
    unrelated message retains only its provider identity and scan/classification
    status; related originals and useful attachments become retained evidence.
-   A historical launch needs its separately approved backfill allowance;
-   pilot candidate and Product limits, and continuous new-mail's monthly
-   metered allowance, are independent. Confirmation,
+   Frontier chat-model calls share the household AI budget, a $1 per six-hour
+   UTC safety net; classification, decision models and embeddings are not
+   budgeted (`imports_read.mail_import` shows the window).
+   Confirmation,
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,
    dates, totals, tracking or thread context together. Sender, thread or model

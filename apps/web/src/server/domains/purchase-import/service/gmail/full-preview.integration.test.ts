@@ -1,6 +1,5 @@
 /** Failures: preview stops before fallback, reruns a definite decision, or
  * publishes classification/history/content while measuring the pipeline. */
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailTriagePreviewOut } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -14,7 +13,6 @@ import {
   orderMail,
   run,
 } from "~/server/db/schema";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
@@ -48,18 +46,6 @@ describe("full read-only Email preview", () => {
         userId: ctx.actor.userId,
         updatedAt: new Date(),
       });
-      await issueExecutionAuthorization(
-        ctx.db,
-        ctx.actor,
-        executionAuthorizationInput.parse({
-          kind: "execution_authorization",
-          version: 1,
-          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-          scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-          meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        }),
-      );
       const saved = await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: party.id,
         mailboxId,

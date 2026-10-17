@@ -1,46 +1,27 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import {
-  isMailReclassifyRun,
-  isAiRefreshMailRun,
-  mailResearchRunInput,
-} from "@cubby/schemas/run-fields";
-import {
-  workersAiModel,
   type GatewayFetchRoutes,
   type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
-import {
-  supportedDecisionModelSchema,
-  providerFor,
-  supportedChatModelSchema,
-} from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import {
-  quoteAiDecisionRequestUsd,
-  quoteAiChatRequestUsd,
-} from "~/server/ai/pricing";
+  AiBudgetExhaustedError,
+  aiBudgetCovers,
+  assertAiBudget,
+} from "~/server/ai/budget";
 import type { Database } from "~/server/db";
 import {
   assertSelectedMailSources,
-  readLiveRunOwner,
   readMailImportLineage,
   type RunExecutionIdentity,
 } from "~/server/domains/run/repo/execution-lineage";
 
 import {
-  assertExecutionAuthorization,
-  reserveExecutionAuthorization,
-  ExecutionBudgetError,
-} from "../repo/execution-authorization";
-import {
-  executionRequestForRun,
+  assertRunExecutable,
   pauseExecutionRun,
 } from "../repo/execution-context";
-
-const decisionQuestions = z.object({
-  questions: z.record(z.string(), z.unknown()),
-});
 
 function runningOwnerMatches(
   live: RunExecutionIdentity | undefined,
@@ -117,102 +98,36 @@ async function selectedCoordinatorExecution(
   return false;
 }
 
-/** Check live execution authority; metered models reserve their full bill. */
-export function paidResearchPreflight(
+/**
+ * Run-bound paid admission: the Run must still be executable, then frontier
+ * chat calls draw from the household AI budget. A budget stop pauses the Run
+ * so recovery can resume it in a later window.
+ */
+export function paidRunPreflight(
   db: Database,
   runId: RunId,
+  feature: string,
 ): NonNullable<GatewayFetchRoutes["beforePaidRequest"]> {
   return async (request) => {
+    // A member-requested coordinator is foreground work, not background spend.
     if (await selectedCoordinatorExecution(db, runId, request)) return;
-    const authority = await executionRequestForRun(db, runId, {
-      requireRunning: true,
-    });
-    if (!authority) {
-      throw new Error(
-        "Paid research requires an explicit execution authorization.",
-      );
-    }
-    await assertExecutionAuthorization(db, authority);
-    const assertCurrentRun = async () => {
-      const current = await readLiveRunOwner(db, runId);
-      const binding = await executionRequestForRun(db, runId, {
-        requireRunning: true,
-      });
-      if (!current || current.retiredAt || !binding)
-        throw new Error("Execution authorization Run is no longer executable.");
-      await assertExecutionAuthorization(db, binding);
-      const ref = binding.ref;
-      if (
-        ref?.runId !== authority.ref.runId ||
-        ref.approvalFingerprint !== authority.ref.approvalFingerprint ||
-        current.actorUserId !== authority.owner.userId ||
-        current.ledgerPartyId !== authority.owner.ledgerPartyId
-      )
-        throw new Error("Execution authorization Run binding changed.");
-      return current;
-    };
-    const body = await request.query();
+    await assertRunExecutable(db, runId);
+    // Only frontier chat models are budgeted.
     const chat =
       request.endpoint === "responses" || request.endpoint === "v1/messages";
-    const quote = chat
-      ? await quoteAiChatRequestUsd({
-          provider: providerFor(supportedChatModelSchema.parse(body.model)),
-          model: supportedChatModelSchema.parse(body.model),
-        })
-      : await quoteAiDecisionRequestUsd({
-          provider: providerFor(
-            supportedDecisionModelSchema.parse(
-              workersAiModel(request.endpoint),
-            ),
-          ),
-          model: supportedDecisionModelSchema.parse(
-            workersAiModel(request.endpoint),
-          ),
-          questionCount: Object.keys(decisionQuestions.parse(body).questions)
-            .length,
-        });
-    if (!quote)
-      throw new Error(
-        "Paid research allowance cannot price this model call's full billing bounds.",
-      );
-    const reservationMicroUSD = Math.ceil(quote.maxCostUsd * 1_000_000);
-    if (!Number.isSafeInteger(reservationMicroUSD))
-      throw new Error(
-        "Paid research allowance exceeds safe integer accounting.",
-      );
-    const current = await assertCurrentRun();
-    // The household authorizes unlimited classification-tier dollars. A
-    // classification Run still needs live ownership, authorization and bounds;
-    // responses and other models retain their original monetary allowance.
-    if (
-      (current.purpose === "mail_discovery" ||
-        current.purpose === "mail_import" ||
-        isMailReclassifyRun(current) ||
-        isAiRefreshMailRun(current)) &&
-      !chat &&
-      ["typesafe/jev", "@cf/cloudflare/clef"].includes(
-        workersAiModel(request.endpoint),
-      )
-    )
-      return;
-    if (reservationMicroUSD === 0) return;
-    const decision = await reserveExecutionAuthorization(db, {
-      ...authority,
-      physicalAttemptId: crypto.randomUUID(),
-      reservationMicroUSD,
-    });
-    if (decision.status === "refused") {
-      const message = `Paid research allowance refused: ${decision.reason}.`;
-      if (decision.reason === "budget_exhausted")
-        await pauseExecutionRun(db, runId, message, {
-          reason: "budget_exhausted",
-        });
-      if (decision.reason === "budget_exhausted")
-        throw new ExecutionBudgetError(reservationMicroUSD);
-      throw new Error(message);
+    const model = chat
+      ? z.object({ model: z.string() }).safeParse(await request.query()).data
+          ?.model
+      : undefined;
+    if (!model || !aiBudgetCovers({ model, feature })) return;
+    try {
+      await assertAiBudget(db);
+    } catch (error) {
+      if (error instanceof AiBudgetExhaustedError)
+        await pauseExecutionRun(db, runId, error.message);
+      throw error;
     }
-    // The final admission read is the cancellation boundary. Keep a committed
-    // reservation when cancellation wins here; it must never grant a retry.
-    await assertCurrentRun();
+    // The final admission read is the cancellation boundary.
+    await assertRunExecutable(db, runId);
   };
 }

@@ -1,8 +1,4 @@
 import { buildActorContext } from "@cubby/schemas/context";
-import type {
-  ExecutionAuthorizationInput,
-  ExecutionAuthorizationRequestedScope,
-} from "@cubby/schemas/execution-authorization";
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
@@ -33,17 +29,9 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { assertExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
-import {
-  executionRequestForRun,
-  executionAuthorizationPaused,
-  latestExecutionAuthorization,
-} from "~/server/domains/run/repo/execution-context";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishInBackground } from "~/server/workflows/background-tasks/publish";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   productionWorkflowLauncher,
@@ -66,11 +54,11 @@ import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {
   initializeMailboxCoverage,
   listGmailPage,
-  listScopedGmailPage,
   mergeMailboxQueries,
 } from "../../repo/gmail/sync";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
 import type { startMailImport } from "../../repo/mail-import-run";
+import { mailImportEnabled } from "../../repo/mail-import-settings";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import type { MailRelevance } from "../../service/gmail/relevance";
 import type { MailTriage } from "../../service/gmail/triage";
@@ -122,20 +110,14 @@ export async function recordDeletedHistoryEvent(
 
 const ROUTINE_RETENTION_MS = 30 * 86_400_000;
 const MAIL_DISCOVERY_CONSTRAINT = "Run_one_active_mail_discovery";
-type DiscoveryMode = ExecutionAuthorizationRequestedScope["discovery"];
-async function discoveryMode(
-  db: Database,
-  id: typeof runTable.$inferSelect.id,
-  mailboxId: string,
-): Promise<DiscoveryMode> {
-  const authority = await executionRequestForRun(db, id);
-  if (!authority) return "new_mail";
-  if (authority.requestedScope.mailboxId !== mailboxId)
-    throw new Error(
-      "Discovery mailbox is outside its execution authorization.",
-    );
-  return (await assertExecutionAuthorization(db, authority)).scope.discovery;
-}
+type DiscoveryMode = "new_mail" | "targeted";
+/** A paginated new-mail catch-up finishes first; otherwise pending targets alternate with new mail. */
+const discoveryMode = (coverage: MailboxCoverage): DiscoveryMode =>
+  coverage.history.pageToken ||
+  coverage.nextLane === "history" ||
+  !coverage.scoped.some((query) => !query.completed)
+    ? "new_mail"
+    : "targeted";
 const scopedQueriesPending = (
   coverage: MailboxCoverage | null,
   queries: GmailSyncTarget["scopedQueries"],
@@ -146,68 +128,25 @@ const scopedQueriesPending = (
       )
     : queries.length > 0;
 
-/** Each successor owns one lane; causal lineage never changes its allowance. */
-async function nextDiscoveryAllowance(
+/** The member's switch gates every pass; a continuation needs remaining coverage. */
+async function discoveryAllowed(
   db: Database,
-  target: GmailSyncTarget,
+  target: Pick<
+    GmailSyncTarget,
+    "ledgerPartyId" | "mailboxId" | "scopedQueries"
+  >,
   continuation = false,
 ) {
-  const owner = {
-    userId: userId.parse(target.userId),
-    ledgerPartyId: parseEntityId("ledgerParty", target.ledgerPartyId),
-  };
-  const latest = async (kind: ExecutionAuthorizationInput["scope"]["kind"]) => {
-    try {
-      const ref = await latestExecutionAuthorization(
-        db,
-        owner,
-        target.mailboxId,
-        kind,
-      );
-      if (!ref) return { present: false, ref: undefined };
-      return {
-        present: true,
-        ref: (await executionAuthorizationPaused(db, ref, "mail_discovery"))
-          ? undefined
-          : ref,
-      };
-    } catch (error) {
-      reportServerError(error, {
-        operation: "mail-discovery-allowance",
-        stage: kind,
-      });
-      return { present: true, ref: undefined };
-    }
-  };
-  const [pilot, backfill, continuous] = await Promise.all([
-    latest("pilot"),
-    latest("backfill"),
-    latest("continuous"),
-  ]);
+  if (!(await mailImportEnabled(db, target.mailboxId))) return false;
+  if (!continuation) return true;
   const { coverage } = await loadGmailCursor(db, {
     ledgerPartyId: target.ledgerPartyId,
     mailboxId: target.mailboxId,
   });
-  const scopedPending = scopedQueriesPending(coverage, target.scopedQueries);
-  if (
-    continuous.ref &&
-    coverage &&
-    (coverage.history.pageToken || coverage.nextLane === "history")
-  )
-    return { executionAuthorization: continuous.ref };
-  if (pilot.ref && scopedPending) return { executionAuthorization: pilot.ref };
-  if (backfill.ref && (scopedPending || !coverage?.broad.completed))
-    return { executionAuthorization: backfill.ref };
-  if (continuous.ref && !continuation)
-    return { executionAuthorization: continuous.ref };
-  if (
-    !pilot.present &&
-    !backfill.present &&
-    !continuous.present &&
-    (!continuation || Boolean(coverage?.history.pageToken))
-  )
-    return { executionAuthorization: undefined };
-  return null;
+  return (
+    Boolean(coverage?.history.pageToken) ||
+    scopedQueriesPending(coverage, target.scopedQueries)
+  );
 }
 export type DiscoveryPorts = {
   providerForUser?: (userId: string) => Promise<GmailProvider>;
@@ -286,8 +225,13 @@ export async function startMailDiscovery(
       "Selected discovery mailbox is not connected to this member.",
     );
   for (const target of selected) {
-    const allowance = await nextDiscoveryAllowance(db, target);
-    if (!allowance) continue;
+    if (!(await discoveryAllowed(db, target))) {
+      if (requested)
+        throw new Error(
+          "Mail import is off for this mailbox; turn it on in Settings first.",
+        );
+      continue;
+    }
     let runId;
     try {
       runId = await ensureRun(
@@ -302,8 +246,7 @@ export async function startMailDiscovery(
             emailAuditVersion: 1,
             mailboxId: target.mailboxId,
             scopedQueries: target.scopedQueries,
-            executionPolicy: "classification_only",
-            ...allowance,
+            executionPolicy: "import",
           },
           progress: {
             attempt: 0,
@@ -351,13 +294,9 @@ export async function listMailDiscovery(
 ): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }> {
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
-  const mode = await discoveryMode(db, claimed.row.id, claimed.input.mailboxId);
-  if (claimed.input.vendorHistory || mode === "vendor_history")
-    return listVendorHistory(db, params, claimed, mode, ports);
-  // Historical pages yield to a fresh Run so incremental work spends only its
-  // continuous allowance. A history catch-up keeps its own paginated scope.
+  // A new-mail catch-up keeps paginating; each targeted page is its own pass.
   const continuing = (coverage: MailboxCoverage) =>
-    mode === "new_mail" && Boolean(coverage.history.pageToken);
+    Boolean(coverage.history.pageToken);
   if (claimed.progress.page)
     return {
       kind: "listed",
@@ -375,7 +314,7 @@ export async function listMailDiscovery(
     if (!coverage) {
       const baseline = await initializeMailboxCoverage(
         provider,
-        mode === "new_mail" ? [] : claimed.input.scopedQueries,
+        claimed.input.scopedQueries,
       );
       if (
         !(await checkpointMailboxCoverage(db, {
@@ -388,10 +327,7 @@ export async function listMailDiscovery(
         return { kind: "stopped" };
       coverage = baseline;
     }
-    const merged = mergeMailboxQueries(
-      coverage,
-      mode === "new_mail" ? [] : claimed.input.scopedQueries,
-    );
+    const merged = mergeMailboxQueries(coverage, claimed.input.scopedQueries);
     if (JSON.stringify(merged) !== JSON.stringify(coverage)) {
       if (
         !(await checkpointMailboxCoverage(db, {
@@ -408,7 +344,7 @@ export async function listMailDiscovery(
       provider,
       claimed.input.mailboxId,
       coverage,
-      mode,
+      discoveryMode(coverage),
     );
     const [frozen] = await getDb(db)
       .update(runTable)
@@ -427,67 +363,6 @@ export async function listMailDiscovery(
   }
 }
 
-const vendorQueriesRemain = (positions: readonly { completed: boolean }[]) =>
-  positions.some((position) => !position.completed);
-
-/**
- * A vendor history Run pages only the queries its approval froze, tracking
- * them in its own progress; the shared mailbox cursor, with every other
- * objective's queries, is never read or moved.
- */
-async function listVendorHistory(
-  db: Database,
-  params: WorkflowRunParams,
-  claimed: NonNullable<Awaited<ReturnType<typeof claimDiscovery>>>,
-  mode: DiscoveryMode,
-  ports: DiscoveryPorts,
-): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }> {
-  if (
-    mode !== "vendor_history" ||
-    !claimed.input.vendorHistory?.resolvedAt ||
-    !claimed.input.scopedQueries.length
-  )
-    throw new Error(
-      "Vendor history reads only its resolved queries under a vendor-scoped approval.",
-    );
-  if (claimed.progress.vendorPage)
-    return {
-      kind: "listed",
-      more: vendorQueriesRemain(claimed.progress.vendorPage.nextScoped),
-    };
-  const positions =
-    claimed.progress.vendorScoped ??
-    claimed.input.scopedQueries.map((query) => ({
-      ...query,
-      pageToken: null,
-      completed: false,
-    }));
-  try {
-    const provider = await (
-      ports.providerForUser ??
-      ((id) => gmailProviderForUser(db, id, claimed.input.mailboxId))
-    )(claimed.row.actorUserId);
-    const vendorPage = await listScopedGmailPage(provider, positions);
-    const [frozen] = await getDb(db)
-      .update(runTable)
-      .set({
-        progress: patchProgress({
-          phase: "fetching",
-          vendorScoped: positions,
-          vendorPage,
-        }),
-      })
-      .where(eligibleAttempt(params))
-      .returning({ id: runTable.id });
-    return frozen
-      ? { kind: "listed", more: vendorQueriesRemain(vendorPage.nextScoped) }
-      : { kind: "stopped" };
-  } catch (error) {
-    if (await pauseAuthorization(db, params, error)) return { kind: "stopped" };
-    throw error;
-  }
-}
-
 /** Process before cursor movement; an interrupted page reuses its message ledger and Runs. */
 export async function saveMailDiscoveryBatch(
   db: Database,
@@ -498,8 +373,8 @@ export async function saveMailDiscoveryBatch(
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
   if (claimed.progress.pagesDone > index) return { kind: "done" };
-  const { page, vendorPage } = claimed.progress;
-  if ((!page && !vendorPage) || claimed.progress.pagesDone !== index)
+  const { page } = claimed.progress;
+  if (!page || claimed.progress.pagesDone !== index)
     throw new Error(`Discovery page ${index} is not current`);
   try {
     const provider = await (
@@ -521,9 +396,7 @@ export async function saveMailDiscoveryBatch(
     const ingested = await ingestGmailMessages(db, provider, {
       ledgerPartyId: claimed.ledgerPartyId,
       mailboxId: claimed.input.mailboxId,
-      messageIds: (page?.messageIds ?? vendorPage?.messageIds ?? []).filter(
-        (id) => !removed.has(id),
-      ),
+      messageIds: page.messageIds.filter((id) => !removed.has(id)),
       runId: claimed.row.id,
       triage: ports.triage,
       relevance: ports.relevance,
@@ -563,15 +436,12 @@ export async function saveMailDiscoveryBatch(
       const current = await claimDiscovery(tx, params);
       if (!current || current.progress.pagesDone !== index)
         return { kind: "stopped" as const };
-      const events = page
-        ? await persistGmailEvents(tx, {
-            ledgerPartyId: claimed.ledgerPartyId,
-            mailboxId: claimed.input.mailboxId,
-            events: page.events,
-          })
-        : { saved: 0, dropped: 0 };
+      const events = await persistGmailEvents(tx, {
+        ledgerPartyId: claimed.ledgerPartyId,
+        mailboxId: claimed.input.mailboxId,
+        events: page.events,
+      });
       if (
-        page &&
         !(await checkpointMailboxCoverage(tx, {
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
@@ -593,10 +463,6 @@ export async function saveMailDiscoveryBatch(
         droppedEvents: current.progress.droppedEvents + events.dropped,
       };
       delete progress.page;
-      if (vendorPage) {
-        progress.vendorScoped = vendorPage.nextScoped;
-        delete progress.vendorPage;
-      }
       await getDb(tx)
         .update(runTable)
         .set({ progress })
@@ -624,7 +490,7 @@ export async function finishMailDiscovery(
 ): Promise<{ kind: "stopped" } | { kind: "done" }> {
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
-  if (claimed.progress.page || claimed.progress.vendorPage)
+  if (claimed.progress.page)
     throw new Error("Cannot complete discovery with an unprocessed page");
   const [finished] = await getDb(db)
     .update(runTable)
@@ -636,14 +502,6 @@ export async function finishMailDiscovery(
     })
     .where(eligibleAttempt(params))
     .returning({ id: runTable.id });
-  // A finished vendor pass frees the mailbox: let generic work start the next
-  // waiting Vendor once this completion is committed.
-  if (finished && claimed.input.vendorHistory)
-    await publishInBackground(
-      db,
-      [{ kind: "work.advance", requestedAt: now.toISOString() }],
-      { source: "mail-discovery:vendor-history" },
-    );
   if (finished)
     await recordRunProgress(
       db,
@@ -691,40 +549,20 @@ export async function continueMailDiscovery(
     Number(mailboxDiscoveryProgress.parse(existing.progress).attempt) > 0
   )
     return;
-  if (input.vendorHistory) {
-    await continueVendorHistory(
-      db,
-      previous,
-      { ...input, vendorHistory: input.vendorHistory },
-      existing,
-      options,
-    );
-    return;
-  }
-  if (existing && input.executionPolicy === "classification_only") {
-    await getDb(db)
-      .update(runTable)
-      .set({
-        input: {
-          ...mailboxDiscoveryInput.parse(existing.input),
-          executionPolicy: "classification_only",
-        },
-      })
-      .where(eq(runTable.id, existing.id));
-  }
   let nextRunId = existing?.id;
   if (!nextRunId) {
-    const allowance = await nextDiscoveryAllowance(
-      db,
-      {
-        ledgerPartyId: previous.ledgerPartyId,
-        userId: previous.actorUserId,
-        mailboxId: input.mailboxId,
-        scopedQueries: input.scopedQueries,
-      },
-      true,
-    );
-    if (!allowance) return;
+    if (
+      !(await discoveryAllowed(
+        db,
+        {
+          ledgerPartyId: previous.ledgerPartyId,
+          mailboxId: input.mailboxId,
+          scopedQueries: input.scopedQueries,
+        },
+        true,
+      ))
+    )
+      return;
     try {
       nextRunId = await ensureRun(
         db,
@@ -735,12 +573,7 @@ export async function continueMailDiscovery(
           status: "running",
           clientKey,
           notes: "Continue Gmail history coverage",
-          input: {
-            ...input,
-            emailAuditVersion: 1,
-            ...allowance,
-            executionPolicy: input.executionPolicy,
-          },
+          input: { ...input, emailAuditVersion: 1 },
           progress: {
             attempt: 0,
             phase: "listing",
@@ -762,80 +595,6 @@ export async function continueMailDiscovery(
   await launchWorkflowRun(
     db,
     { runId: nextRunId, purpose: "mail_discovery" },
-    options.launcher ?? productionWorkflowLauncher,
-  );
-}
-
-type MailboxDiscoveryInput = ReturnType<typeof mailboxDiscoveryInput.parse>;
-
-/**
- * A vendor history pass that stopped at its page budget continues the same
- * Vendor, approval and frozen queries from its own positions; it never reads
- * Vendor senders again or attaches another discovery allowance. When the
- * mailbox is busy the continuation waits for generic work to resume it.
- */
-async function continueVendorHistory(
-  db: Database,
-  previous: typeof runTable.$inferSelect,
-  input: MailboxDiscoveryInput & {
-    vendorHistory: NonNullable<MailboxDiscoveryInput["vendorHistory"]>;
-  },
-  existing: typeof runTable.$inferSelect | undefined,
-  options: { launcher?: WorkflowLauncher },
-) {
-  const progress = mailboxDiscoveryProgress.parse(previous.progress);
-  if (!existing && !vendorQueriesRemain(progress.vendorScoped ?? [])) return;
-  let next = existing;
-  if (!next) {
-    const clientKey = `mailbox-continuation:${previous.id}`;
-    const row = (status: "running" | "needs_review") => ({
-      purpose: "mail_discovery" as const,
-      trigger: previous.trigger,
-      status,
-      failureCode:
-        status === "needs_review" ? "vendor_history_mailbox_busy" : null,
-      clientKey,
-      predecessorRunId: previous.id,
-      parentRunId: previous.parentRunId,
-      vendorId: previous.vendorId,
-      ledgerPartyId: previous.ledgerPartyId,
-      actorUserId: previous.actorUserId,
-      actorName: previous.actorName,
-      actorEmail: previous.actorEmail,
-      actorLedgerPartyShortcode: previous.actorLedgerPartyShortcode,
-      actorLedgerPartyName: previous.actorLedgerPartyName,
-      actorLedgerPartyKind: previous.actorLedgerPartyKind,
-      channel: previous.channel,
-      notes: "Continue vendor history coverage",
-      input: {
-        ...input,
-        vendorHistory: { ...input.vendorHistory, generation: clientKey },
-      },
-      progress: {
-        attempt: 0,
-        phase: "listing" as const,
-        pagesDone: 0,
-        saved: 0,
-        deleted: 0,
-        excluded: 0,
-        unrelated: 0,
-        events: 0,
-        droppedEvents: 0,
-        vendorScoped: progress.vendorScoped,
-      },
-    });
-    try {
-      next = await insertWithShortcode(db, "run", row("running"));
-    } catch (error) {
-      if (!isUniqueViolation(error, MAIL_DISCOVERY_CONSTRAINT)) throw error;
-      await insertWithShortcode(db, "run", row("needs_review"));
-      return;
-    }
-  }
-  if (next.status !== "running") return;
-  await launchWorkflowRun(
-    db,
-    { runId: next.id, purpose: "mail_discovery" },
     options.launcher ?? productionWorkflowLauncher,
   );
 }

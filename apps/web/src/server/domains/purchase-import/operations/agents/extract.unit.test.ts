@@ -2,6 +2,7 @@ import { gatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { GatewayCallOptions } from "~/server/ai/gateway";
 import { type AiUsagePort, recordAiUsage } from "~/server/ai/usage";
 import { createDatabase } from "~/server/db/database-runtime";
@@ -74,6 +75,61 @@ describe("purchase import audit recovery", () => {
         transport: "gateway",
       }),
     );
+  });
+
+  // The Opus fallback must neither buy past a spent frontier budget nor skip
+  // the budget check on its own call.
+  it("propagates a spent budget without recovery, and budgets the recovery call", async () => {
+    const exhausted = new AiBudgetExhaustedError({
+      windowStart: "2026-10-17T06:00:00.000Z",
+      windowEnd: "2026-10-17T12:00:00.000Z",
+      limitUsd: 1,
+      spentUsd: 1,
+    });
+    const gateway = vi.fn();
+    const db = createDatabase(() => {
+      throw new Error("Audit budget unit test never resolves a database");
+    });
+    const args = {
+      db,
+      runId: "00000000-0000-4000-8000-000000000001",
+      renderedBatch: [],
+    };
+    await expect(
+      auditPurchaseImportBatch(
+        args,
+        fromPartial<PurchaseAuditPorts>({
+          runStructured: vi.fn(async () => {
+            throw new Error("Synthetic gateway wrapper", { cause: exhausted });
+          }),
+          gateway,
+        }),
+      ),
+    ).rejects.toThrow("Synthetic gateway wrapper");
+    expect(gateway).not.toHaveBeenCalled();
+
+    let budgeted = false;
+    await auditPurchaseImportBatch(
+      args,
+      fromPartial<PurchaseAuditPorts>({
+        runStructured: vi.fn(async () => {
+          throw new Error("primary schema rejected");
+        }),
+        gateway: (_provider: string, call: GatewayCallOptions) => async () => {
+          budgeted = call.beforePaidRequest !== undefined;
+          return new Response(
+            JSON.stringify({
+              content: [
+                { type: "text", text: JSON.stringify({ findings: [] }) },
+              ],
+              usage: { input_tokens: 1, output_tokens: 1 },
+            }),
+          );
+        },
+        usage: vi.fn(),
+      }),
+    );
+    expect(budgeted).toBe(true);
   });
 
   it("records a failed recovery on its transport and rethrows", async () => {

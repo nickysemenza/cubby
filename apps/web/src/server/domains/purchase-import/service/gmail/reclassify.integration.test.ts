@@ -7,7 +7,6 @@
  * admitting more than one capped batch; and a triage preview that writes
  * Relevance, history or retained content.
  */
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import * as models from "@cubby/shared/ai/models";
 import { desc, eq } from "drizzle-orm";
@@ -20,6 +19,7 @@ import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtu
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { requestedAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import { account } from "~/server/db/auth.schema";
@@ -27,18 +27,13 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
+  aiUsage,
   email as emailTable,
   emailClassificationObservation,
   orderMail,
   run,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
-import {
-  issueExecutionAuthorization,
-  revokeExecutionAuthorization,
-  reserveExecutionAuthorization,
-  ExecutionBudgetError,
-} from "~/server/domains/run/repo/execution-authorization";
 import { pauseExecutionRun } from "~/server/domains/run/repo/execution-context";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { recoverManualAiWork } from "~/server/domains/run/service/ai-work";
@@ -78,9 +73,7 @@ describe("member Reclassify", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
 
-  async function fixture(
-    approvals: readonly ("backfill" | "continuous")[] = ["backfill"],
-  ) {
+  async function fixture() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic reclassify member",
       kind: "member",
@@ -93,32 +86,6 @@ describe("member Reclassify", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    const refs = new Map<
-      "backfill" | "continuous",
-      Awaited<ReturnType<typeof issueExecutionAuthorization>>
-    >();
-    for (const kind of approvals)
-      refs.set(
-        kind,
-        await issueExecutionAuthorization(
-          ctx.db,
-          ctx.actor,
-          executionAuthorizationInput.parse({
-            kind: "execution_authorization",
-            version: 1,
-            owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-            scope:
-              kind === "backfill"
-                ? { kind, mailboxId, discovery: "all_history" }
-                : { kind, mailboxId, discovery: "new_mail" },
-            meteredBudget: {
-              period: kind === "backfill" ? "lifetime" : "utc_calendar_month",
-              limitMicroUSD: 1_000_000,
-            },
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-          }),
-        ),
-      );
     const originals = new Map<string, GmailMessage>();
     const getMessage = vi.fn<GmailProvider["getMessage"]>(async (id) => {
       const found = originals.get(id);
@@ -206,7 +173,6 @@ describe("member Reclassify", () => {
       )[0]!;
     return {
       party,
-      refs,
       seed,
       retain,
       history,
@@ -651,42 +617,6 @@ describe("member Reclassify", () => {
     expect(retained?.content.bodyText).toContain("synthetic order 2002");
   });
 
-  it("binds the continuous approval when the backfill approval is revoked", async () => {
-    const f = await fixture(["backfill", "continuous"]);
-    await revokeExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      f.refs.get("backfill")!,
-    );
-    const email = await f.seed("synthetic-continuous", "Synthetic body.", {});
-    const result = await reclassifyEmails(
-      ctx.db,
-      { ids: [email.shortcode] },
-      ctx.actor,
-      { triage: f.triage, relevance: f.relevance },
-    );
-    expect(result.results[0]?.outcome).toBe("replaced");
-    const [recorded] = await getDb(ctx.db)
-      .select({ input: run.input })
-      .from(run)
-      .where(eq(run.shortcode, result.runIds[0]!));
-    expect(
-      mailReclassifyRunInput.parse(recorded!.input).executionAuthorization,
-    ).toEqual(f.refs.get("continuous"));
-  });
-
-  it("refuses before any Run or Gmail read when the mailbox has no usable approval", async () => {
-    const f = await fixture([]);
-    const email = await f.seed("synthetic-unapproved", "Synthetic body.", {});
-    await expect(
-      reclassifyEmails(ctx.db, { ids: [email.shortcode] }, ctx.actor, {
-        triage: f.triage,
-        relevance: f.relevance,
-      }),
-    ).rejects.toThrow(/execution approval/iu);
-    expect(f.getMessage).not.toHaveBeenCalled();
-  });
-
   it("durably finishes every requested Email without a request time-budget deferral", async () => {
     const f = await fixture();
     const first = await f.seed("synthetic-first", "Synthetic order 3003.", {});
@@ -990,54 +920,6 @@ describe("member Reclassify", () => {
     ).toBe("completed");
   });
 
-  // Expiring authority after queueing cannot strand work when another current approval exists.
-  it("rebinds queued work after revocation and retains the approval audit", async () => {
-    const f = await fixture(["backfill", "continuous"]);
-    const selected = await f.seed("synthetic-rebind", "Synthetic order", {});
-    const submitted = await startReclassification(
-      ctx.db,
-      { ids: [selected.shortcode] },
-      ctx.actor,
-      { launcher: TEST_AI_WORK_LAUNCHER },
-    );
-    await revokeExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      f.refs.get("backfill")!,
-    );
-    const [oldBackfill] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, f.refs.get("backfill")!.runId));
-    await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse(oldBackfill!.input),
-    );
-    const [oldContinuous] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, f.refs.get("continuous")!.runId));
-    const newest = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse(oldContinuous!.input),
-    );
-    const [owner] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.shortcode, submitted.runIds[0]!));
-    await driveAiWork(ctx.db, owner!.id, {
-      reclassification: { triage: f.triage, relevance: f.relevance },
-    });
-    const [item] = await requestedAiEvaluations(ctx.db, owner!.id);
-    expect(item?.state).toBe("completed");
-    expect(item?.snapshot).toMatchObject({
-      executionAuthorization: newest,
-      authorizationHistory: [f.refs.get("backfill")],
-    });
-  });
-
   it("retains legacy failed receipts when member retry has no durable roster", async () => {
     const f = await fixture();
     const selected = await f.seed(
@@ -1231,7 +1113,7 @@ describe("member Reclassify", () => {
     ).toHaveLength(1);
   });
 
-  it("waits for replacement metered authority without consuming target retries", async () => {
+  it("waits for the next budget window without consuming target retries", async () => {
     const f = await fixture();
     const selected = await f.seed(
       "synthetic-budget-wait",
@@ -1248,26 +1130,27 @@ describe("member Reclassify", () => {
       .select()
       .from(run)
       .where(eq(run.shortcode, submitted.runIds[0]!));
-    const bound = f.refs.get("backfill")!;
-    await reserveExecutionAuthorization(ctx.db, {
-      ref: bound,
-      owner: { userId: ctx.actor.userId, ledgerPartyId: owner!.ledgerPartyId! },
-      requestedScope: { mailboxId, discovery: "all_history" },
-      physicalAttemptId: crypto.randomUUID(),
-      reservationMicroUSD: 1_000_000,
-    });
+    const [spent] = await getDb(ctx.db)
+      .insert(aiUsage)
+      .values({
+        runId: owner!.id,
+        feature: "purchase_import_agent",
+        provider: "openai",
+        model: "gpt-6-luna",
+        operation: "agent.generation",
+        durationMs: 1,
+        chargedCost: 1,
+      })
+      .returning();
+    const exhausted = await readAiBudget(ctx.db);
     await driveAiWork(ctx.db, owner!.id, {
       reclassification: {
         triage: f.triage,
         relevance: async () => {
-          await pauseExecutionRun(
-            ctx.db,
-            owner!.id,
-            "Paid research allowance refused: budget_exhausted.",
-          );
+          await pauseExecutionRun(ctx.db, owner!.id, "Synthetic budget stop.");
           throw wrapAiGatewayError(
             new Error("Synthetic provider wrapper", {
-              cause: new ExecutionBudgetError(100),
+              cause: new AiBudgetExhaustedError(exhausted),
             }),
             {
               model: "gpt-6-luna",
@@ -1287,31 +1170,28 @@ describe("member Reclassify", () => {
     expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]).toMatchObject({
       state: "retry_wait",
       attempts: 0,
+      nextAttemptAt: new Date(exhausted.windowEnd),
     });
     await recoverManualAiWork(ctx.db, TEST_AI_WORK_LAUNCHER, [owner!.id]);
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
         ?.status,
     ).toBe("paused_auth");
-    const [approval] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, bound.runId));
-    const replacement = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse(approval!.input),
-    );
+    // The spend ages out of the window, as at the next window boundary.
+    await getDb(ctx.db)
+      .update(aiUsage)
+      .set({ createdAt: new Date(Date.parse(exhausted.windowStart) - 1) })
+      .where(eq(aiUsage.id, spent!.id));
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ nextAttemptAt: new Date() })
+      .where(eq(aiEvaluation.runId, owner!.id));
     await recoverManualAiWork(ctx.db, TEST_AI_WORK_LAUNCHER, [owner!.id]);
     await driveAiWork(ctx.db, owner!.id, {
       reclassification: { triage: f.triage, relevance: f.relevance },
     });
     expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]).toMatchObject({
       state: "completed",
-      snapshot: {
-        executionAuthorization: replacement,
-        authorizationHistory: [bound],
-      },
     });
   });
 

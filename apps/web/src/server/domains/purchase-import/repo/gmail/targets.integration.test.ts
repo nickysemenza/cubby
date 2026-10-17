@@ -41,11 +41,15 @@ describe("Gmail sync targets", () => {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
       mailboxId: "synthetic-google-subject",
+      // Literal sender and website-domain searches; never the Vendor name.
       scopedQueries: [
         {
-          key: `vendor:${vendor.id}`,
-          query:
-            '{"Example Outfitters" from:example-outfitters.test from:orders@example-outfitters.test}',
+          key: `vendor:${vendor.id}:domain:example-outfitters.test`,
+          query: '"example-outfitters.test"',
+        },
+        {
+          key: `vendor:${vendor.id}:from:orders@example-outfitters.test`,
+          query: "from:orders@example-outfitters.test",
         },
       ],
     });

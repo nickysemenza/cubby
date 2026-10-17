@@ -111,94 +111,56 @@ export async function loadWorkContexts(
         lifecycle: workRunLifecycle(runStatus.parse(execution.status)),
         readiness: execution.status === "running" ? "ready" : undefined,
         prerequisites:
-          execution.failureCode === "vendor_history_prerequisite"
+          execution.failureCode === "execution_limit"
             ? [
                 {
-                  code: "vendor_senders",
+                  code: "execution_allowance",
                   state: "missing",
                   reason:
-                    "Research a verified Vendor website or receipt sender.",
-                  record: execution.vendorCode
-                    ? { entity: "vendor", id: execution.vendorCode }
-                    : null,
+                    execution.error ??
+                    "This window's AI budget is spent; paid work resumes in the next window.",
+                  record: null,
                 },
               ]
-            : execution.failureCode === "vendor_history_mailbox_busy"
+            : execution.status === "paused"
               ? [
                   {
-                    code: "mailbox_execution",
+                    code: "explicit_resume",
                     state: "missing",
-                    reason: "Another discovery Run is using this mailbox.",
+                    reason:
+                      "This Run is explicitly paused. A member must resume it.",
                     record: null,
                   },
                 ]
-              : execution.failureCode === "vendor_history_authorization"
+              : execution.status === "paused_auth"
                 ? [
                     {
-                      code: "execution_allowance",
+                      code: "account_access",
                       state: "missing",
-                      reason:
-                        execution.error ??
-                        "Restore an explicit Vendor-history execution allowance in Settings.",
+                      reason: "Restore the source account's authorized access.",
                       record: null,
                     },
                   ]
-                : execution.status === "paused"
+                : execution.status === "paused_offline"
                   ? [
                       {
-                        code: "explicit_resume",
+                        code: "companion_online",
                         state: "missing",
-                        reason:
-                          "This Run is explicitly paused. A member must resume it.",
+                        reason: "The required companion must reconnect.",
                         record: null,
                       },
                     ]
-                  : execution.status === "paused_auth"
+                  : execution.status === "paused_approval"
                     ? [
                         {
-                          code: "account_access",
+                          code: "member_approval",
                           state: "missing",
                           reason:
-                            "Restore the source account's authorized access.",
+                            "Review the pending decision before execution continues.",
                           record: null,
                         },
                       ]
-                    : execution.status === "paused_offline"
-                      ? [
-                          {
-                            code: "companion_online",
-                            state: "missing",
-                            reason: "The required companion must reconnect.",
-                            record: null,
-                          },
-                        ]
-                      : execution.status === "paused_approval"
-                        ? [
-                            {
-                              code: "member_approval",
-                              state: "missing",
-                              reason:
-                                "Review the pending decision before execution continues.",
-                              record: null,
-                            },
-                          ]
-                        : [],
-      });
-    } else if (row.entity === "vendor" && row.source === "research") {
-      contexts.set(row.key, {
-        unblocks: executions
-          .filter(
-            (execution) =>
-              execution.vendorCode === row.id &&
-              execution.status === "needs_review" &&
-              execution.failureCode === "vendor_history_prerequisite",
-          )
-          .map((execution) => ({
-            key: `execution:run:${execution.code}`,
-            record: { entity: "run", id: execution.code },
-            reason:
-              "Recheck already-authorized Vendor mail history when verified sender evidence is saved.",
-          })),
+                    : [],
       });
     }
   }

@@ -334,6 +334,6 @@ held by domain write/readback tests (for example, source-claim-family tests own
 invalid alias-family refusal, and fact-evidence-subject tests own canonical
 Product/Purchase proof and idempotent preservation).
 
-Provider discovery scenarios grant historical backfill and continuous new-mail
-catchup independently. A backfill continuation never authorizes a history pass;
-assert that each continuation retains its own execution authorization.
+Provider discovery scenarios turn Mail import on and assert the exact targeted
+queries paged, interleaved new-mail reads, and that completed coverage chains no
+further pass.

@@ -2,16 +2,15 @@ import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import { mailReclassificationRead } from "@cubby/schemas/email-actions";
 import {
-  executionAuthorizationApprovalInput,
-  executionAuthorizationRef,
-  executionAuthorizationRequestedScope,
-} from "@cubby/schemas/execution-authorization";
-import {
   runShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import {
+  mailImportStatus,
+  setMailImportInput,
+} from "@cubby/schemas/mail-import-settings";
 import {
   mailboxDiscoveryStartOutput,
   mailboxDiscoveryInput,
@@ -258,27 +257,21 @@ const runControlOutput = z.object({
 });
 
 export const runContract = defineContract("run", {
-  executionMailboxes: query({
-    native: "Select a connected owned mailbox for an execution approval",
+  mailImport: query({
+    native: "Show automatic Mail import switches and the AI budget window",
     input: z.strictObject({}),
-    output: z.object({
-      mailboxes: z.array(
-        executionAuthorizationRequestedScope.pick({ mailboxId: true }),
-      ),
-    }),
+    output: mailImportStatus,
     cache: { tags: [] },
   }),
-  approveExecution: mutation({
-    native:
-      "Approve exact mailbox discovery scope, limits, metered budget and expiry",
-    input: executionAuthorizationApprovalInput,
-    output: executionAuthorizationRef,
+  setMailImport: mutation({
+    native: "Turn automatic Mail import on or off for a connected mailbox",
+    input: setMailImportInput,
+    output: mailImportStatus,
     invalidates: ["runOnly"],
   }),
   discoverMail: mutation({
-    native:
-      "Start discovery for one owned mailbox under its current execution approvals",
-    input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
+    native: "Start Mail discovery now for one mailbox with Mail import on",
+    input: setMailImportInput.pick({ mailboxId: true }),
     output: mailboxDiscoveryStartOutput,
     invalidates: ["runOnly"],
   }),
@@ -361,28 +354,7 @@ export const runContract = defineContract("run", {
           }),
           failureCode: z.string().nullable(),
           error: z.string().nullable(),
-          authorization: executionAuthorizationApprovalInput
-            .extend({
-              runId: runShortcode,
-              approvalFingerprint:
-                executionAuthorizationRef.shape.approvalFingerprint,
-              status: runStatus,
-              deletedAt: z.iso.datetime().nullable(),
-              retiredAt: z.iso.datetime().nullable(),
-              expired: z.boolean(),
-              reservations: z.array(
-                z.object({
-                  periodKey: z.string(),
-                  reservedMicroUSD: z.number().int().positive(),
-                  reservedAt: z.iso.datetime(),
-                }),
-              ),
-              candidateClaims: z.number().int().nonnegative(),
-              productClaims: z.number().int().nonnegative(),
-              revokedAt: z.iso.datetime().nullable(),
-            })
-            .nullable(),
-          /** Recorded AI calls only; reservations are separate from priced usage. */
+          /** Recorded AI calls only. */
           usage: aiRunUsageOut
             .omit({ records: true, nextCursor: true })
             .extend({

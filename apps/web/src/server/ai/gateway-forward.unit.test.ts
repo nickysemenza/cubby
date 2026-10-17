@@ -207,6 +207,17 @@ describe("forwardGatewayRequest", () => {
     },
   );
 
+  // A paid frontier transmission is checked against the household AI budget.
+  it("attaches the budget check to a frontier model's paid transmission", async () => {
+    const { port, sent } = fakePort(() => new Response("{}", { status: 200 }));
+    await forwardGatewayRequest(
+      request,
+      { db, runId, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(sent[0]?.opts.beforePaidRequest).toBeTypeOf("function");
+  });
+
   it("preserves a top-level SSE error code without buying a generic retry", async () => {
     const error = {
       type: "error",

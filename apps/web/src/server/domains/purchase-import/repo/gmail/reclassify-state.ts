@@ -1,11 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ExecutionAuthorizationRef } from "@cubby/schemas/execution-authorization";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   mailReclassifyRunInput,
   type MailReclassifyRunInput,
 } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -71,17 +70,6 @@ export async function ownedEmails(
   return codes.map((code) => found.get(code)!);
 }
 
-/** The most recently created of `runIds`. */
-export async function newestRunId(db: Database, runIds: readonly RunId[]) {
-  const [latest] = await getDb(db)
-    .select({ id: run.id })
-    .from(run)
-    .where(inArray(run.id, [...runIds]))
-    .orderBy(desc(run.createdAt), desc(run.id))
-    .limit(1);
-  return latest?.id;
-}
-
 export async function finishReclassifyRun(
   db: Database,
   runId: RunId,
@@ -101,16 +89,15 @@ export async function finishReclassifyRun(
 }
 
 /**
- * One Run per mailbox holds the rerun's model usage and observations. It binds
- * the member's Gmail execution approval for that mailbox and never becomes the
- * Email's processing Run, so later discovery refreshes are not frozen by it.
+ * One Run per mailbox holds the rerun's model usage and observations. It never
+ * becomes the Email's processing Run, so later discovery refreshes are not
+ * frozen by it.
  */
 export async function startReclassifyRun(
   db: Database,
   actor: ActorContext,
   mode: MailReclassifyRunInput["mode"],
   emails: readonly OwnedEmail[],
-  executionAuthorization: ExecutionAuthorizationRef,
 ) {
   const [first] = emails;
   if (!first) throw new Error("Reclassify needs at least one Email.");
@@ -134,7 +121,6 @@ export async function startReclassifyRun(
       input: mailReclassifyRunInput.parse({
         kind: "mail_reclassify",
         mode,
-        executionAuthorization,
         mailboxId: first.mailboxId,
         emails: emails.map((email) => ({
           emailId: email.id,
@@ -161,22 +147,13 @@ export async function startReclassifyRun(
 export async function startPreparedReclassifyRuns(
   db: Database,
   actor: ActorContext,
-  batches: readonly {
-    group: readonly OwnedEmail[];
-    approval: ExecutionAuthorizationRef;
-  }[],
+  groups: readonly (readonly OwnedEmail[])[],
 ) {
   return withTransactionDatabase(db, async (tx) => {
     const runs = [];
-    for (const { group, approval } of batches) {
-      const started = await startReclassifyRun(
-        tx,
-        actor,
-        "relevance",
-        group,
-        approval,
-      );
-      await prepareReclassification(tx, started.id, group, approval);
+    for (const group of groups) {
+      const started = await startReclassifyRun(tx, actor, "relevance", group);
+      await prepareReclassification(tx, started.id, group);
       runs.push(started);
     }
     return runs;

@@ -7,7 +7,6 @@ import type { Database } from "~/server/db";
 import { deferClassificationRefresh } from "~/server/domains/purchase-import/repo/gmail/admitted-source";
 import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { mailboxApproval } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import {
   hasLaterReclassifyEvaluation,
   laterLegacyReclassifyRuns,
@@ -20,8 +19,6 @@ import {
 } from "~/server/domains/run/repo/reclassification-recovery-state";
 
 import { ensureRun } from "../repo/ensure-run";
-import { assertExecutionAuthorization } from "../repo/execution-authorization";
-import { executionRequestForRun } from "../repo/execution-context";
 import { withRunTransaction } from "../repo/run";
 
 const fulfilled = new Set([
@@ -104,38 +101,10 @@ export async function recoverHistoricalReclassification(db: Database) {
           continue;
         candidates.push(item);
       }
-      let authorization = input.executionAuthorization;
-      if (candidates.length) {
-        try {
-          const request = await executionRequestForRun(db, source.id);
-          if (!request)
-            throw new Error(
-              "Historical reclassification has no authority binding",
-            );
-          await assertExecutionAuthorization(db, request);
-        } catch {
-          // SILENT: unusable old authority is replaced only by an applicable current approval.
-          if (!source.ledgerPartyId) continue;
-          try {
-            authorization = await mailboxApproval(
-              db,
-              {
-                userId: source.actorUserId,
-                ledgerPartyId: source.ledgerPartyId,
-              },
-              input.mailboxId,
-              { newest: true },
-            );
-          } catch {
-            // SILENT: preserve unknown historical work for a later approval wake.
-            continue;
-          }
-        }
-      }
       await withRunTransaction(db, async (tx) => {
         if (await lockRunAndCheckRecovery(tx, source.id)) return;
         let continuationRunId = null;
-        if (candidates.length && authorization) {
+        if (candidates.length) {
           const actor = buildActorContext(source.actorUserId, source.channel, {
             oauthClientId: source.oauthClientId,
             deviceId: source.deviceId,
@@ -148,7 +117,6 @@ export async function recoverHistoricalReclassification(db: Database) {
             clientKey: `reclassification-recovery:${source.id}`,
             input: {
               ...input,
-              executionAuthorization: authorization,
               emails: candidates.map((item) => ({
                 emailId: item.id,
                 checksum: item.checksum,
@@ -162,12 +130,7 @@ export async function recoverHistoricalReclassification(db: Database) {
               results: [],
             },
           });
-          await prepareReclassification(
-            tx,
-            continuationRunId,
-            candidates,
-            authorization,
-          );
+          await prepareReclassification(tx, continuationRunId, candidates);
         }
         await recordReclassificationRecovery(
           tx,

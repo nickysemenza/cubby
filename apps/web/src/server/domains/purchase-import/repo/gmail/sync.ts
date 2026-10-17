@@ -1,10 +1,8 @@
-import type { ExecutionAuthorizationRequestedScope } from "@cubby/schemas/execution-authorization";
 import {
   mailboxCoverage,
   type MailboxCoverage,
   type MailboxPage,
   type MailboxScopedQuery,
-  type ScopedQueryPosition,
 } from "@cubby/schemas/mailbox-research";
 
 import { normalizeHistoryPage } from "~/server/domains/purchase-import/repo/gmail/normalize";
@@ -26,36 +24,6 @@ export const maxHistoryId = (
     return candidate > current ? candidate : current;
   }
 };
-
-/**
- * One page of a vendor history Run's own frozen queries. It never reads or
- * moves the shared mailbox cursor, so another objective's incomplete query
- * cannot ride along.
- */
-export async function listScopedGmailPage(
-  provider: GmailProvider,
-  positions: readonly ScopedQueryPosition[],
-) {
-  const nextScoped = positions.map((position) => ({ ...position }));
-  const position = nextScoped.find((query) => !query.completed);
-  if (!position) return { messageIds: [], nextScoped };
-  const request: Parameters<GmailProvider["listMessages"]>[0] = {
-    query: `(${position.query}) ${ELIGIBLE_MAIL_QUERY}`,
-    maxResults: GMAIL_PAGE_SIZE,
-  };
-  if (position.pageToken) request.pageToken = position.pageToken;
-  const page = await provider.listMessages(request);
-  position.pageToken = page.nextPageToken ?? null;
-  position.completed = !page.nextPageToken;
-  return {
-    messageIds: [
-      ...new Set(
-        (page.messages ?? []).map((message) => message.id).filter(Boolean),
-      ),
-    ],
-    nextScoped,
-  };
-}
 
 /** Persist this baseline before calling listGmailPage, including first connection. */
 export async function initializeMailboxCoverage(
@@ -105,24 +73,17 @@ export async function listGmailPage(
   provider: GmailProvider,
   mailboxId: string,
   startCoverage: MailboxCoverage,
-  discovery: ExecutionAuthorizationRequestedScope["discovery"] = "new_mail",
+  discovery: "new_mail" | "targeted" = "new_mail",
 ): Promise<MailboxPage> {
   if (!mailboxId.trim() || mailboxId === "me")
     throw new Error("A stable Google account id is required");
   const nextCoverage = mailboxCoverage.parse(startCoverage);
-  const scoped = nextCoverage.scoped.find((query) => !query.completed);
-  const scanPending =
-    Boolean(scoped) ||
-    (discovery === "all_history" && !nextCoverage.broad.completed);
-  if (discovery !== "new_mail") {
-    if (!scanPending)
+  if (discovery === "targeted") {
+    const position = nextCoverage.scoped.find((query) => !query.completed);
+    if (!position)
       return { messageIds: [], events: [], startCoverage, nextCoverage };
-    const position = scoped ?? nextCoverage.broad;
-    const query = scoped
-      ? `(${scoped.query}) ${ELIGIBLE_MAIL_QUERY}`
-      : ELIGIBLE_MAIL_QUERY;
     const request: Parameters<GmailProvider["listMessages"]>[0] = {
-      query,
+      query: `(${position.query}) ${ELIGIBLE_MAIL_QUERY}`,
       maxResults: GMAIL_PAGE_SIZE,
     };
     if (position.pageToken) request.pageToken = position.pageToken;

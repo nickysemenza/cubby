@@ -1,4 +1,3 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
@@ -7,17 +6,14 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
-import {
-  issueExecutionAuthorization,
-  reserveExecutionAuthorization,
-} from "~/server/domains/run/repo/execution-authorization";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
@@ -26,13 +22,12 @@ import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failure modes: an owned Workflow Run incorrectly needs a coordinator session;
-// frozen scope disappears; approval expiry or reservation is mistaken for spend;
-// foreign members read mailbox evidence; a readiness read wakes or changes work.
+// frozen scope disappears; foreign members read mailbox evidence; a readiness
+// read wakes or changes work.
 // Missing historical query/policy fields must not prevent status reads or imply
 // a known full-mailbox, classification-only execution scope.
 describe("member discovery readiness through MCP", () => {
   const ctx = withTestDb("mcp");
-  afterEach(() => vi.useRealTimers());
 
   it.each([
     { mailboxId: "synthetic-legacy-mailbox" },
@@ -101,7 +96,7 @@ describe("member discovery readiness through MCP", () => {
     },
   );
 
-  it("reads frozen scope, checkpoints and expired receipts without execution and refuses foreign members", async () => {
+  it("reads frozen scope and checkpoints without execution and refuses foreign members", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic discovery owner",
       kind: "member",
@@ -115,27 +110,7 @@ describe("member discovery readiness through MCP", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    const authorization = await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      }),
-    );
-    expect(
-      await reserveExecutionAuthorization(ctx.db, {
-        ref: authorization,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        requestedScope: { mailboxId, discovery: "all_history" },
-        physicalAttemptId: crypto.randomUUID(),
-        reservationMicroUSD: 125,
-      }),
-    ).toEqual({ status: "reserved" });
+    await setMailImport(ctx.db, { mailboxId, enabled: true });
     const launched: string[] = [];
     await startMailDiscovery(ctx.db, {
       launcher: {
@@ -205,12 +180,9 @@ describe("member discovery readiness through MCP", () => {
           chargedCost: null,
         },
       ]);
-    // Expiry does not erase retained authorization evidence or block its read.
     const beforeRuns = await getDb(ctx.db).select().from(run);
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(Date.now() + 120_000));
     const operationContext = new McpOperationContext(
       requireActor(
         createTestRequestContext(ctx.db, {
@@ -236,16 +208,10 @@ describe("member discovery readiness through MCP", () => {
         scope: {
           mailboxId,
           scopedQueries: [],
-          executionPolicy: "classification_only",
+          executionPolicy: "import",
         },
         checkpoint: { attempt: 2, phase: "listing", pagesDone: 3, saved: 7 },
         mailbox: { historyId: "110", coverage },
-        authorization: {
-          approvalFingerprint: authorization.approvalFingerprint,
-          scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-          expired: true,
-          reservations: [{ periodKey: "lifetime", reservedMicroUSD: 125 }],
-        },
         usage: {
           callCount: 2,
           retryCount: 1,

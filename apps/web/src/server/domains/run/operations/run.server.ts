@@ -1,9 +1,11 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
+import type { MailImportStatus } from "@cubby/schemas/mail-import-settings";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
+import { readAiBudget } from "~/server/ai/budget";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
@@ -19,6 +21,10 @@ import {
   dispatchRunEvent,
   dispatchStartedRun,
 } from "~/server/domains/purchase-import/repo/dispatch";
+import {
+  readMailImportSettings,
+  setMailImport,
+} from "~/server/domains/purchase-import/repo/mail-import-settings";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
@@ -38,7 +44,6 @@ import {
   resolvePurchaseImportTarget,
 } from "~/server/domains/purchase-import/repo/run-target";
 import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/service/agent-proxy";
-import { issueExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
 import {
   findOwnedMailDiscovery,
   loadMailDiscoveryRead,
@@ -114,10 +119,13 @@ async function controlRunOperation(
   };
 }
 
-export const runHandlers = implementOperationDomain(runContract, {
-  executionMailboxes: async (context) => {
-    await memberParty(context);
-    const mailboxes = await getDb(context.db)
+/** The member's connected Google mailboxes with their switches and the budget window. */
+async function mailImportStatusFor(
+  context: Parameters<typeof memberParty>[0],
+): Promise<MailImportStatus> {
+  await memberParty(context);
+  const [connected, settings, budget] = await Promise.all([
+    getDb(context.db)
       .selectDistinct({ mailboxId: account.accountId })
       .from(account)
       .where(
@@ -126,33 +134,29 @@ export const runHandlers = implementOperationDomain(runContract, {
           eq(account.providerId, "google"),
         ),
       )
-      .orderBy(account.accountId);
-    return { mailboxes };
-  },
-  approveExecution: async (context, input) => {
-    const party = await memberParty(context);
-    const scope =
-      input.scope.kind === "vendor_backfill"
-        ? {
-            ...input.scope,
-            vendors: await Promise.all(
-              input.scope.vendors.map(async (vendor) => ({
-                vendorId: await resolveOrThrow(
-                  context.db,
-                  "vendor",
-                  vendor.vendorId,
-                ),
-              })),
-            ),
-          }
-        : input.scope;
-    return issueExecutionAuthorization(context.db, context.actorContext, {
-      kind: "execution_authorization",
-      version: 1,
-      owner: { userId: context.auth.userId, ledgerPartyId: party.id },
-      ...input,
-      scope,
-    });
+      .orderBy(account.accountId),
+    readMailImportSettings(context.db),
+    readAiBudget(context.db),
+  ]);
+  return {
+    mailboxes: connected.map(({ mailboxId }) => ({
+      mailboxId,
+      enabled: settings.enabledMailboxes.includes(mailboxId),
+    })),
+    budget,
+  };
+}
+
+export const runHandlers = implementOperationDomain(runContract, {
+  mailImport: async (context) => mailImportStatusFor(context),
+  setMailImport: async (context, input) => {
+    const { mailboxes } = await mailImportStatusFor(context);
+    if (!mailboxes.some((mailbox) => mailbox.mailboxId === input.mailboxId))
+      throw new Error(
+        `Mailbox ${input.mailboxId} is not connected to this member.`,
+      );
+    await setMailImport(context.db, input);
+    return mailImportStatusFor(context);
   },
   discoverMail: async (context, input) =>
     startMailDiscovery(context.db, {

@@ -998,6 +998,70 @@ export async function resumeAuthorizedRuns(
   });
 }
 
+/** A pending budget resume this old was interrupted before its send was recorded. */
+const BUDGET_RESUME_RECLAIM_MS = 5 * 60_000;
+
+/**
+ * Redispatch agent imports a spent AI budget window paused; the caller checks
+ * the current window has room. A resumed Run stays `budget_resume_pending`
+ * until its queue send is recorded. Each send is claimed atomically (the
+ * resuming update, or reclaiming a stale pending generation), so concurrent
+ * recoveries never send one generation twice and a late failed duplicate
+ * cannot overwrite a recorded success.
+ */
+export async function redispatchBudgetPausedImports(
+  db: Database,
+  now = new Date(),
+) {
+  const sent = {
+    id: runTable.id,
+    purpose: runTable.purpose,
+    eventId: runTable.dispatchEventId,
+  };
+  const resumed = await getDb(db)
+    .update(runTable)
+    .set({
+      status: "running",
+      dispatchEventId: sql`gen_random_uuid()`,
+      dispatchError: null,
+      failureCode: "budget_resume_pending",
+      endedAt: null,
+      coordinatorStartedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(runTable.status, "paused_auth"),
+        eq(runTable.failureCode, "execution_limit"),
+        inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+        notDeleted(runTable),
+      ),
+    )
+    .returning(sent);
+  const reclaimed = await getDb(db)
+    .update(runTable)
+    .set({ updatedAt: now })
+    .where(
+      and(
+        eq(runTable.status, "running"),
+        eq(runTable.failureCode, "budget_resume_pending"),
+        isNotNull(runTable.dispatchEventId),
+        lt(
+          runTable.updatedAt,
+          new Date(now.getTime() - BUDGET_RESUME_RECLAIM_MS),
+        ),
+        notDeleted(runTable),
+      ),
+    )
+    .returning(sent);
+  const { dispatchStartedRun } = await import("./dispatch");
+  // A recorded send clears the pending marker (`recordRunDispatchAttempt`).
+  for (const run of [...resumed, ...reclaimed])
+    if (run.eventId)
+      await dispatchStartedRun(db, { ...run, eventId: run.eventId });
+  return resumed.length + reclaimed.length;
+}
+
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
   return getDb(db)
     .update(runTable)

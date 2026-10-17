@@ -9,7 +9,6 @@ import {
   ledgerPartyShortcode,
   runShortcode,
 } from "./identifier-fields";
-import { executionAuthorizationRef } from "./execution-authorization.js";
 import { importSourceIdentity } from "./import-source";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
@@ -87,7 +86,6 @@ const pagePosition = z.object({
   completed: z.boolean(),
 });
 const scopedQueryPosition = mailboxScopedQuery.extend(pagePosition.shape);
-export type ScopedQueryPosition = z.infer<typeof scopedQueryPosition>;
 /** Tokens move only after that page's acquisition and research dispatch succeed. */
 export const mailboxCoverage = z.object({
   version: z.literal(1),
@@ -126,19 +124,11 @@ export type MailboxPage = z.infer<typeof mailboxPage>;
 export const mailboxDiscoveryInput = z.object({
   /** Present only for Runs whose every handled Email has a durable handling receipt. */
   emailAuditVersion: z.literal(1).optional(),
-  executionAuthorization: executionAuthorizationRef.optional(),
   executionPolicy: z
     .enum(["classification_only", "import"])
     .default("classification_only"),
   mailboxId: z.string().min(1),
   scopedQueries: z.array(mailboxScopedQuery),
-  /** One authorized Vendor generation freezes sender queries at first start. */
-  vendorHistory: z
-    .object({
-      generation: z.string().min(1),
-      resolvedAt: z.iso.datetime().nullable(),
-    })
-    .optional(),
 });
 export const mailboxDiscoveryProgress = z.object({
   ...workflowRecoveryProgress.shape,
@@ -152,15 +142,6 @@ export const mailboxDiscoveryProgress = z.object({
   unrelated: z.number().int().nonnegative().default(0),
   events: z.number().int().nonnegative().default(0),
   droppedEvents: z.number().int().nonnegative().default(0),
-  /** Vendor history only: this Run's frozen-query positions, never the shared mailbox cursor. */
-  vendorScoped: z.array(scopedQueryPosition).optional(),
-  /** Vendor history only: the frozen page awaiting processing. */
-  vendorPage: z
-    .object({
-      messageIds: z.array(z.string()),
-      nextScoped: z.array(scopedQueryPosition),
-    })
-    .optional(),
 });
 export type MailboxDiscoveryProgress = z.infer<typeof mailboxDiscoveryProgress>;
 /** Stateless relevance is resolved before original content enters a durable transcript. */

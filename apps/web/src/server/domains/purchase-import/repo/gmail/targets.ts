@@ -14,6 +14,7 @@ import {
 } from "~/server/db/retained-tables";
 
 import { vendorSearchTerms } from "./vendor-identity";
+import { vendorMailQueries } from "./vendor-mail-scope";
 
 export type GmailSyncTarget = {
   ledgerPartyId: string;
@@ -49,7 +50,6 @@ export async function listGmailSyncTargets(
     getDb(db)
       .select({
         id: vendor.id,
-        name: vendor.name,
         website: vendor.website,
         orderEmailSenders: vendor.orderEmailSenders,
       })
@@ -88,12 +88,10 @@ export async function listGmailSyncTargets(
       ),
   ]);
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
-  const vendorQueries = vendors.map((row) => ({
-    key: `vendor:${row.id}`,
-    query: `{${quote(row.name)} ${vendorSearchTerms(row)
-      .map((term) => `from:${term}`)
-      .join(" ")}}`,
-  }));
+  // A Vendor without a verified sender or website domain waits for research.
+  const vendorQueries = vendors.flatMap((row) =>
+    vendorMailQueries(row.id, vendorSearchTerms(row)),
+  );
   return members.flatMap((row) =>
     row.userId && row.mailboxId
       ? [

@@ -592,10 +592,10 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample. Each items row joins the blind roster by predictionId and supplies its frozen inclusionProbability and inverse-probability weight for session-only grades and fresh previews. Read after blind grading; this never records a member grade.",
       }),
-      execution_mailboxes: mcpAction({
-        op: runContract.ops.executionMailboxes,
+      mail_import: mcpAction({
+        op: runContract.ops.mailImport,
         description:
-          "The member's connected Gmail mailboxes that run.approve_execution and run.discover_mail can name.",
+          "The member's connected Gmail mailboxes with their automatic Mail import switch, and frontier chat-model spend in the current six-hour budget window (classification excluded).",
       }),
 
       mail: mcpAction({
@@ -640,7 +640,7 @@ export const MCP_TOOLS = defineMcpTools({
           ),
         }),
         description:
-          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope, persisted Workflow checkpoint, current mailbox coverage, retained execution approval/expiry and receipt summary, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. Reservations are allowance consumption, not measured spend. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
+          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope, persisted Workflow checkpoint, current mailbox coverage, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
       }),
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,
@@ -958,7 +958,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   run: {
     description:
-      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. approve_execution, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction for that specific budget or scope.",
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,
@@ -968,16 +968,16 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; approve/reject (with approvalId) settle a pending approval; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. Unsupported states refuse without changing the Run.",
       }),
-      approve_execution: mcpAction({
-        op: runContract.ops.approveExecution,
+      set_mail_import: mcpAction({
+        op: runContract.ops.setMailImport,
         description:
-          "Grant paid Mail import execution for one owned mailbox (imports_read.execution_mailboxes): exact scope, limits, metered budget and expiry. Returns the authorization Run.",
+          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants, imports unambiguous purchases, and spends within the household AI budget.",
       }),
       discover_mail: mcpAction({
         op: runContract.ops.discoverMail,
         openWorld: true,
         description:
-          "Start Mail discovery for one owned mailbox under its current execution approvals; replays an active launch.",
+          "Start Mail discovery now for one mailbox with Mail import on; replays an active launch.",
       }),
       commit_prepared: mcpAction({
         op: runContract.ops.commitPrepared,

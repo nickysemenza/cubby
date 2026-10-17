@@ -262,9 +262,8 @@ export class PurchaseImportRunAgent
         return {
           subscriptionRequired: !photo,
           subscriptionFallback: photo ? undefined : "budgeted",
-          beforePaidRequest: photo
-            ? undefined
-            : (request) => this.services().admitPaidInference(request),
+          beforePaidRequest: (request) =>
+            this.services().admitPaidInference(request),
         };
       },
       onTransport: (transport) => {

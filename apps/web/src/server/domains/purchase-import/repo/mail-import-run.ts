@@ -38,10 +38,6 @@ import {
   actorSnapshot,
   assertRunParent,
 } from "~/server/domains/run/repo/ensure-run";
-import {
-  bindRetainedMailBackfill,
-  inheritExecutionAuthorization,
-} from "~/server/domains/run/repo/execution-context";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
@@ -186,19 +182,15 @@ export async function admitMailImport(
         actorUserId: actorId,
         ledgerPartyId: partyId,
       });
-    let selectedVendorId: typeof run.$inferSelect.vendorId = null;
     if (input.parentRunId) {
       const [parent] = await tx
         .select({
           purpose: run.purpose,
           input: run.input,
-          vendorId: run.vendorId,
         })
         .from(run)
         .where(eq(run.id, input.parentRunId));
       const policy = mailboxDiscoveryInput.safeParse(parent?.input);
-      if (policy.success && policy.data.vendorHistory)
-        selectedVendorId = parent?.vendorId ?? null;
       if (
         parent?.purpose === "mail_discovery" &&
         (!policy.success ||
@@ -231,24 +223,6 @@ export async function admitMailImport(
       .where(eq(run.clientKey, clientKey))
       .limit(1);
     if (replayed) return [...existing, { created: false, row: replayed }];
-    const inherited = mailResearchRunInput.parse(
-      await inheritExecutionAuthorization(tx, sourceSet, {
-        parentRunId: input.parentRunId,
-      }),
-    );
-    const authorized = memberSelected
-      ? inherited
-      : await bindRetainedMailBackfill(
-          tx,
-          inherited,
-          { userId: actorId, ledgerPartyId: party.id },
-          fresh.map((source) => [
-            {
-              externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
-              checksum: source.rawChecksum,
-            },
-          ]),
-        );
     const snapshot = await actorSnapshot(tx, actorId);
     const id = runEntityId.parse(crypto.randomUUID());
     const row = await insertWithShortcode(tx, "run", {
@@ -265,10 +239,9 @@ export async function admitMailImport(
       actorLedgerPartyName: snapshot.ledgerPartyName,
       actorLedgerPartyKind: snapshot.ledgerPartyKind,
       parentRunId: input.parentRunId ?? null,
-      vendorId: selectedVendorId,
       cause: memberSelected ? "member_request" : "source_discovered",
       coordinatorModel: coordinatorModelFor("mail_import"),
-      input: authorized,
+      input: sourceSet,
       clientKey,
       startedAt: new Date(),
       dispatchEventId: crypto.randomUUID(),

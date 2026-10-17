@@ -7,7 +7,6 @@ import {
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import {
-  oneOrManyValues,
   type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -621,18 +620,6 @@ export const flagCondition = (
   const met = condition();
   if (met === undefined) return undefined;
   return flag ? met : sql`NOT COALESCE((${met}), false)`;
-};
-
-/**
- * Any-of for a hand-written {@link oneOrMany} filter: the rows matching at
- * least one picked value. A scalar reads as a one-element list.
- */
-export const anyOfCondition = <TValue>(
-  value: TValue | readonly TValue[] | undefined,
-  condition: (value: TValue) => SQL | undefined,
-): SQL | undefined => {
-  const values = oneOrManyValues(value);
-  return values?.length ? or(...values.map(condition)) : undefined;
 };
 
 /**

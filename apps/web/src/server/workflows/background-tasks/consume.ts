@@ -3,6 +3,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { createLogger } from "@cubby/worker-tracing";
+import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -262,6 +263,18 @@ export async function handleBackgroundQueueBatch(
   const embeddingRequestedAts: string[] = [];
 
   for (const [index, message] of batch.messages.entries()) {
+    // TODO(#2601): remove once the predecessor Worker's queued `work.advance`
+    // wake hints have drained; the kind no longer exists and grants no work.
+    if (
+      z
+        .object({ task: z.object({ kind: z.literal("work.advance") }) })
+        .safeParse(message.body).success
+    ) {
+      log.info(`retired kind=work.advance acknowledged queue=${batch.queue}`);
+      message.ack();
+      outcomes[index] = "skipped";
+      continue;
+    }
     const parsed = parseBackgroundQueueMessage(message.body);
     if ("error" in parsed) {
       log.error(`unreadable message queue=${batch.queue}`, {

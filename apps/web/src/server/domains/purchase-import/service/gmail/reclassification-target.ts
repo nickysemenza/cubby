@@ -3,11 +3,7 @@ import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { assertExecutionAuthorization } from "~/server/domains/run/repo/execution-authorization";
-import {
-  executionRequestForRun,
-  withRunExecutionAuthorization,
-} from "~/server/domains/run/repo/execution-context";
+import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";
 
 import {
   deferClassificationRefresh,
@@ -23,7 +19,6 @@ import {
   type ReclassificationEvaluation,
 } from "../../repo/gmail/reclassification-work";
 import { ingestGmailMessages } from "./ingest";
-import { mailboxApproval } from "./reclassify";
 
 export type ReclassificationPorts = Pick<
   Parameters<typeof ingestGmailMessages>[2],
@@ -85,70 +80,35 @@ export async function executeReclassificationTarget(
   )
     return settle("frozen");
   const snapshot = reclassificationSnapshot.parse(evaluation.snapshot);
-  let authorization = snapshot.executionAuthorization;
-  try {
-    const request = await withRunExecutionAuthorization(
-      owner.id,
-      authorization,
-      () => executionRequestForRun(db, owner.id),
-    );
-    if (!request)
-      throw new Error("Reclassification has no bound execution approval");
-    await assertExecutionAuthorization(db, request, {
-      minimumBudgetMicroUSD: snapshot.minimumBudgetMicroUSD,
-    });
-  } catch {
-    // SILENT: a failed binding is replaced by the newest currently usable mailbox approval.
-    authorization = await mailboxApproval(
-      db,
-      { userId: owner.actorUserId, ledgerPartyId: current.ledgerPartyId },
-      input.mailboxId,
-      { minimumBudgetMicroUSD: snapshot.minimumBudgetMicroUSD, newest: true },
-    );
-  }
-  const changedBinding =
-    authorization.runId !== snapshot.executionAuthorization.runId ||
-    authorization.approvalFingerprint !==
-      snapshot.executionAuthorization.approvalFingerprint;
-  const nextSnapshot = {
+  await saveReclassificationSnapshot(db, evaluation.id, token, {
     ...snapshot,
     checksum: current.checksum,
-    executionAuthorization: authorization,
-    authorizationHistory: changedBinding
-      ? [...snapshot.authorizationHistory, snapshot.executionAuthorization]
-      : snapshot.authorizationHistory,
-  };
-  await saveReclassificationSnapshot(db, evaluation.id, token, nextSnapshot);
-  await withRunExecutionAuthorization(
-    owner.id,
-    authorization,
-    async () => {
-      const provider = await gmailProviderForUser(
+  });
+  await withRunEvaluation(owner.id, { id: evaluation.id, token }, async () => {
+    const provider = await gmailProviderForUser(
+      db,
+      owner.actorUserId,
+      input.mailboxId,
+    );
+    const triage =
+      ports.triage ??
+      (await import("./triage-model")).productionMailTriage(
         db,
-        owner.actorUserId,
-        input.mailboxId,
+        owner.id,
+        undefined,
+        snapshot.decisionModel,
       );
-      const triage =
-        ports.triage ??
-        (await import("./triage-model")).productionMailTriage(
-          db,
-          owner.id,
-          undefined,
-          snapshot.decisionModel,
-        );
-      await ingestGmailMessages(db, provider, {
-        ...ports,
-        triage,
-        ledgerPartyId: current.ledgerPartyId,
-        mailboxId: input.mailboxId,
-        messageIds: [current.messageId],
-        runId: owner.id,
-        reclassify: true,
-        evaluation: { id: evaluation.id, token, reclassification: true },
-      });
-    },
-    { id: evaluation.id, token },
-  );
+    await ingestGmailMessages(db, provider, {
+      ...ports,
+      triage,
+      ledgerPartyId: current.ledgerPartyId,
+      mailboxId: input.mailboxId,
+      messageIds: [current.messageId],
+      runId: owner.id,
+      reclassify: true,
+      evaluation: { id: evaluation.id, token, reclassification: true },
+    });
+  });
   const published = await readEvaluationState(db, evaluation.id);
   if (published && !["running", "result_ready"].includes(published)) return;
   const after = await readReclassifiedEmail(db, current.id);

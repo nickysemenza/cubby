@@ -18,35 +18,39 @@ just to discover email. A processor or marketplace description is a lead, not
 proof of the seller. Research uncertain vendor identity and missing websites
 or logos through the shared queue. A VendorAccount records a member's vendor
 relationship, not proof of a login, and is not a prerequisite for discovery.
-VendorAccounts have no active/disabled status. Execution authorization and
-explicit Run controls own whether work can proceed.
+VendorAccounts have no active/disabled status. The Mail import switch, the AI
+budget and explicit Run controls own whether work can proceed.
 
-Verified vendor websites and receipt senders seed targeted historical Gmail
-searches. Learn additional supported senders and domains as evidence arrives.
-Shared platform domains do not identify the seller or establish purchase
-ownership. Website domains may match links in a platform Email, while verified
-sender addresses use exact sender searches. Each history Run and its import
-children retain one selected Vendor; preparation, commit, existing-Purchase
-Email links and financial booking
-check the actual Vendor against that scope before writing. A missing per-Run
-Vendor refuses work rather than requesting the approval's entire Vendor list.
-Search completion describes the scope actually scanned, not proof
-that every purchase from that Vendor has been found.
+Mail import is one switch per connected mailbox (Settings → Mail import, or
+`run.set_mail_import` over MCP). While it is on, the daily discovery pass needs
+no further approval: it classifies new mail across all senders, so an
+unfamiliar vendor can be discovered, and pages targeted history searches. Each
+known Vendor's verified receipt senders and website domain seed exact
+`from:`/domain searches; a Vendor name never becomes a free-text search, and a
+Vendor without a verified sender or website waits for research. Merchant
+descriptions on unallocated financial transactions seed further searches.
+Targets are recomputed on every pass, so a Vendor that gains a verified sender
+joins history search automatically. Targeted pages alternate with new mail;
+there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared
+platform domains do not identify the seller or establish purchase ownership.
+Search completion describes the scope actually scanned, not proof that every
+purchase from that Vendor has been found.
 
-Historical backfill starts with selected Vendors or transaction investigations.
-Settings → Vendor email history selects the owned mailbox, Vendors, date window,
-candidate and Product limits, maximum model spend and expiry. Saving the
-approval starts eligible work or exposes its missing prerequisites in the queue.
-The approved Vendor identities remain fixed; verified sender and website-domain queries freeze
-once per generation when research makes it runnable.
+Discovery admits retained candidates to Pi, which imports what is unambiguous
+under the writer contracts and leaves the rest in the Work queue. Keep a
+minimal identity and classification footprint for scanned negatives; retain
+useful related evidence and uncertain candidates for resolution.
 
-Global history is optional. Represent vendor-scoped history explicitly in its
-execution authorization; completing vendor research must not widen a targeted
-scope into all-history discovery. Classify new mail incrementally across senders so
-an unfamiliar vendor can be discovered. Keep a minimal identity and
-classification footprint for scanned negatives; retain useful related evidence
-and uncertain candidates for resolution. Metadata retention does not remove
-classification or execution costs.
+The household AI budget is a stopgap safety net on frontier chat-model spend:
+$1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from
+`AiUsage`. Embeddings, closed-set decision models (Jev/Clef) and other model
+roles are not budgeted, and neither is classification (mail triage and
+relevance escalation). The limit is soft: usage lands after each call, so calls
+already in flight can overshoot a window by their own cost. A Run that reaches
+the limit pauses with `execution_limit`, and the Work queue shows it waiting on
+the budget. Reclassification, suggestion sweeps and agent imports resume
+through missed-work recovery once a later window has room. A member-selected
+coordinator import is foreground work and is not budgeted.
 
 ## Follow the evidence
 

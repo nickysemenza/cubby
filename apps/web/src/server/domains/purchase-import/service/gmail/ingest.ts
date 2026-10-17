@@ -2,7 +2,6 @@ import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
 import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
-import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
   mailboxClassification,
@@ -22,7 +21,6 @@ import {
   type GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { claimRunExecution } from "~/server/domains/run/repo/execution-context";
 
 import {
   deferClassificationRefresh,
@@ -969,12 +967,6 @@ export async function ingestGmailMessages(
       );
       if (published) outcome[removed].push(messageId);
     } else if (message) {
-      if (input.runId)
-        await claimRunExecution(db, runEntityId.parse(input.runId), {
-          kind: "candidate",
-          mailboxId: input.mailboxId,
-          messageId,
-        });
       const result = await acquireEligible(
         db,
         provider,
