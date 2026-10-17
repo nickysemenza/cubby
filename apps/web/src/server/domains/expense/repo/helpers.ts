@@ -394,6 +394,9 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     return null;
   const allocations = row.spendingCategoryAllocations;
   if (!allocations?.length) return null;
+  // With no item line to follow, an adjustment keeps its own cost type.
+  if (key === "costTypes" && allocations.every((a) => a.basis === "default"))
+    return null;
   const values = [...new Set(allocations.flatMap((a) => a[key]))];
   return {
     mode: "allocated",
