@@ -30,7 +30,7 @@ import {
   inheritedFieldSql,
   inheritedSourceEntity,
   inheritedSourceSql,
-} from "~/server/generic/inheritance/effective-field";
+} from "~/server/generic/inheritance/repo/effective-field";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const taskColumn = (alias: string, column: string) =>

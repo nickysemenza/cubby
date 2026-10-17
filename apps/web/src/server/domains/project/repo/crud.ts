@@ -38,7 +38,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Project CRUD operations.

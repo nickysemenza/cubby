@@ -58,7 +58,7 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { readTaskActionability } from "~/server/domains/task/repo/actionable";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   loadProjectSubtreeRollups,

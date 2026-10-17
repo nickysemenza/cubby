@@ -11,7 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityLink, project, task } from "~/server/db/schema";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 type ProjectRow = {
   id: ProjectId;

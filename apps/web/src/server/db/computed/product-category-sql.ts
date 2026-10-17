@@ -2,14 +2,10 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { fieldResolutionEvaluationSchema } from "@cubby/schemas/field-resolution";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
-  type ProductCategoryFeature,
-  productCategoryFeatureValues,
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
-
-import { effectiveFieldInSql } from "~/server/generic/inheritance/effective-field";
 
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),
@@ -17,44 +13,8 @@ import { effectiveFieldInSql } from "~/server/generic/inheritance/effective-fiel
  * `sql.join(...)`, which silently drops `.inlineParams()`'s inline flag and binds
  * the value as a parameter instead — breaking the requirement below that repeated
  * SELECT/GROUP BY expressions stay textually identical. Both values are
- * compile-time literals: the depth is a module constant, and the feature is
- * validated against the feature enum by `featureLiteral` before it ever reaches
- * `sql.raw`, so no user input can reach a raw template. */
+ * compile-time literals: the depth is a module constant. */
 const MAX_ANCESTOR_DEPTH = sql.raw(String(PRODUCT_CATEGORY_MAX_DEPTH - 1));
-
-/** Quotes a feature as a raw SQL literal after validating it is a real member of
- * the feature enum — the only guard standing between `sql.raw` and injection. */
-function featureLiteral(feature: ProductCategoryFeature): SQL {
-  if (!productCategoryFeatureValues.includes(feature)) {
-    throw new Error(`Invalid product category feature: ${String(feature)}`);
-  }
-  return sql.raw(`'${feature}'`);
-}
-
-/** True when a category's effective feature (`resolution.inherit`) is one
- * of `features`; false for no category or no feature. The taxonomy resolves
- * once per query (the set form), not per row. */
-export const categoryFeatureInSql = (
-  categoryIdExpr: SQL,
-  features: readonly ProductCategoryFeature[],
-) => {
-  if (features.length === 0) return sql<boolean>`false`;
-  const matches = effectiveFieldInSql(
-    "productCategory",
-    "feature",
-    categoryIdExpr,
-    sql.join(features.map(featureLiteral), sql`, `),
-  );
-  if (matches === null)
-    throw new Error("productCategory.feature no longer inherits by hierarchy");
-  return matches;
-};
-
-/** True only when the category's effective feature matches. */
-export const categoryFeatureSql = (
-  categoryIdExpr: SQL,
-  feature: ProductCategoryFeature,
-) => categoryFeatureInSql(categoryIdExpr, [feature]);
 
 /** A nullable JSON summary expression for product and relation projections. */
 export const categorySummarySql = (categoryIdExpr: SQL) =>

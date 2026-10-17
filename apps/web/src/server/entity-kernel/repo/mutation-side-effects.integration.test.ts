@@ -33,6 +33,7 @@ import {
   updateProject,
 } from "~/server/domains/project/repo/crud";
 import { createTask } from "~/server/domains/task/repo/crud";
+import { executeEntity } from "~/server/entity-kernel";
 import {
   getEntityEmbeddingDeletedAtForRef,
   seedEntityEmbedding,
@@ -42,6 +43,7 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
+import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -427,6 +429,43 @@ describe("mutation side effects integration", () => {
     const text = await semanticText(ctx.db, "task", bottom.id);
     expect(text).toContain("Lineage awning");
     expect(text).not.toContain("Lineage tarp");
+  });
+
+  it("deleting a task refreshes a surviving descendant that inherited through it", async () => {
+    const seed = kernelSeeder(ctx.db);
+    const tarp = await seed("product", { name: "Orphan tarp" });
+    const top = await seed("task", {
+      name: "Orphan top chore",
+      trade: "other",
+      subjectProductId: tarp.code,
+    });
+    const middle = await seed("task", {
+      name: "Orphan middle chore",
+      trade: "other",
+      parentTaskId: top.code,
+    });
+    // Older data nests below the one-level delete cascade.
+    const bottom = await insertWithShortcode(ctx.db, "task", {
+      name: "Orphan bottom chore",
+      trade: "other",
+      parentTaskId: middle.id as never,
+    });
+    await refreshSearchDocuments(ctx.db, [
+      { entityKind: "task", entityId: bottom.id },
+    ]);
+    expect(await semanticText(ctx.db, "task", bottom.id)).toContain(
+      "Orphan tarp",
+    );
+
+    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+      action: "delete",
+      entity: "task",
+      ids: [top.code],
+    });
+
+    expect(await semanticText(ctx.db, "task", bottom.id)).not.toContain(
+      "Orphan tarp",
+    );
   });
 
   it("a parent category rename reaches descendant Products and their Inventory", async () => {

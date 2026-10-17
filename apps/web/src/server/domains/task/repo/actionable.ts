@@ -77,7 +77,7 @@ import { entityLink, project, task } from "~/server/db/schema";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import {
   type EntityRef,

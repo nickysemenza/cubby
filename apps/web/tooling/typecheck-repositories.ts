@@ -30,6 +30,8 @@ export const repositoryOwners = [
   "src/server/db/helpers/crud.ts",
   "src/server/db/helpers/transform.ts",
   "src/server/generic/list/repo/list-contracts.ts",
+  "src/server/generic/inheritance/repo/effective-field.ts",
+  "src/server/domains/product-category/repo/category-feature.ts",
   "src/server/generic/entity-links/repo/entity-links.ts",
   "src/server/generic/list/repo/label-canonical.ts",
   "src/server/generic/work-queue/repo/catch-up-claim.ts",

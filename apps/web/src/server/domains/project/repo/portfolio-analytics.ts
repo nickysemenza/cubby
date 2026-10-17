@@ -38,7 +38,7 @@ import {
   executeExpenseDerivedBatch,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";

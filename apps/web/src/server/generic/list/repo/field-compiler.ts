@@ -31,7 +31,7 @@ import { relatedSortExpression } from "~/server/generic/entity-links/repo/relate
 import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/effective-field";
+} from "~/server/generic/inheritance/repo/effective-field";
 import {
   hierarchyAncestorSql,
   hierarchyLevelSql,

@@ -56,7 +56,7 @@ import {
   hydrateTaskInheritanceRows,
 } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {

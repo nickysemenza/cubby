@@ -74,7 +74,7 @@ import {
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 /** Mirrors `GARDEN_ENTRY_KIND_LABELS` in `domains/garden/repo/garden.ts` — that map is
  * private to the garden module, and `kind` is a plain `text` column here, not

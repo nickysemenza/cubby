@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { product } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
 
-import { categoryFeatureSql } from "./product-category-sql";
+import { categoryFeatureSql } from "./category-feature";
 
 /**
  * ⚠️ REGRESSION GUARD: `categoryFeatureSql` (through `effectiveFieldSql`) and

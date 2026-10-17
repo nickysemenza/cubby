@@ -21,7 +21,6 @@ import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
-import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import {
   getDb,
   notDeleted,
@@ -39,10 +38,11 @@ import {
   loadInventoryOwnershipTraces,
   inventoryOwnerResolution,
 } from "~/server/domains/inventory/repo/ownership";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import { purchaseEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { eligibleParentTaskTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
 const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();

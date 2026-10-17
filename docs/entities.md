@@ -53,7 +53,7 @@ establish reuse of the resolution framework.
 
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
-generator, `server/generic/inheritance/effective-field.ts`. `mode` says when the
+generator, `server/generic/inheritance/repo/effective-field.ts`. `mode` says when the
 row's own stored value decides (absent: NULL inherits; a `none` mode value is
 an explicit None); `from` lists the ordered sources, and the first that
 decides (a value or an explicit None) ends the chain: `"hierarchy"` is the

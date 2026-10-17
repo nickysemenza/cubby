@@ -87,7 +87,7 @@ import {
   effectiveFieldInSql,
   effectiveFieldSql,
   inheritedFieldOfColumn,
-} from "~/server/generic/inheritance/effective-field";
+} from "~/server/generic/inheritance/repo/effective-field";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,

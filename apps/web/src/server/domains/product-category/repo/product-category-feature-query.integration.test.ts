@@ -3,13 +3,15 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  categoryFeatureInSql,
-  categoryFeatureSql,
   categoryStockTrackedSql,
   categoryStockTrackingSql,
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
 import { getDb } from "~/server/db/helpers";
+import {
+  categoryFeatureInSql,
+  categoryFeatureSql,
+} from "~/server/domains/product-category/repo/category-feature";
 
 const ctx = withTestDb();
 

@@ -34,7 +34,7 @@ import { buildSearchConditions, getDb, notDeleted } from "~/server/db/helpers";
 import { project, task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 

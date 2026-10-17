@@ -74,7 +74,6 @@ import {
 import {
   categorySummarySql,
   categoryStockTrackingSql,
-  categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
@@ -128,6 +127,7 @@ import {
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import {
   resolveProductCategory,
   loadCategorySummaries,
@@ -160,7 +160,7 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   listPrepare,

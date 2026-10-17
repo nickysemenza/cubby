@@ -36,10 +36,7 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
-import {
-  categoryFeatureSql,
-  categorySummarySql,
-} from "~/server/db/computed/product-category-sql";
+import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -54,6 +51,7 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import {
   loadPrimaryGtins,
   productHasAnyGtin,

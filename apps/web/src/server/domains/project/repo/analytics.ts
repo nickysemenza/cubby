@@ -17,7 +17,7 @@ import { task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dependencyIdsFor } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   EMPTY_PROJECT_CONTENT_DATES,

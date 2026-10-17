@@ -282,7 +282,7 @@ export type EntityField = Readonly<{
   }>;
 }>;
 /** A field's declared fallback chain (`resolution.inherit`). */
-export type EntityFieldInherit = Readonly<{
+type EntityFieldInherit = Readonly<{
   mode?: Readonly<{
     field: string;
     inherit: string;

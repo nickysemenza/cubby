@@ -54,7 +54,7 @@ import {
   dependencyIdsFor,
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
-import { effectiveFieldSql } from "~/server/generic/inheritance/effective-field";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
  * Task CRUD operations.
@@ -867,7 +867,7 @@ type TaskQueryClient = DrizzleClient | DrizzleTransaction;
  * Live subtasks of `ids`, carrying both `id` and `parentTaskId` for
  * `deleteTasks`' one-level cascade expansion.
  */
-const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
+export const liveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
   dbc.query.task.findMany({
     where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
     columns: { id: true, shortcode: true, parentTaskId: true },
@@ -882,7 +882,7 @@ export const deleteTasks = policyDelete("task", TASK_DELETE_EDGE_POLICY, {
   expand: async (tx, ids) => [
     ...new Set([
       ...ids,
-      ...(await fetchLiveSubtasks(tx, ids)).map((subtask) => subtask.id),
+      ...(await liveSubtasks(tx, ids)).map((subtask) => subtask.id),
     ]),
   ],
 });
