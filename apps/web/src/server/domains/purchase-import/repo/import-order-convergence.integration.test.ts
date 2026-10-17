@@ -24,7 +24,7 @@ import {
 } from "tooling/scenarios/context";
 import { seededRandom, testShuffleSeed } from "tooling/test-seed";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -569,6 +569,10 @@ async function createConvergenceHarness(ctx: TestDbContext) {
 describe("import order convergence", { timeout: 30_000 }, () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
+  // Seed outside the first order's test timeout.
+  beforeAll(() =>
+    ctx.prepareFixture("convergence-world", seedConvergenceWorld),
+  );
 
   beforeEach(() => {
     // Background publishes are captured, not run inline: processing and

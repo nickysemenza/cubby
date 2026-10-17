@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
@@ -5,8 +6,9 @@ import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { eq, inArray } from "drizzle-orm";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
@@ -66,100 +68,120 @@ import {
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
   // The imported order is the expensive part of every case, so each variant
-  // is seeded once per run and every case gets its own clone of it.
-  async function world(linked = false, multi = false, unboundSecond = false) {
-    const { party, vendor, retainedProduct, photographed } = await ctx.fixture(
-      `world:${multi}:${unboundSecond}`,
-      async (db, actor) => {
-        const { party, vendor } = await memberImportWorld(db, actor, {
-          vendor: { name: "Synthetic photo retailer" },
-        });
-        const retainedProduct = multi
-          ? await createProductFixture(
-              db,
-              makeProductInput({ name: "Synthetic retained item" }),
-              actor,
-            )
-          : null;
-        await memberImport(db, actor, {
-          key: "accepted-photo-item",
-          orders: [
-            {
-              stableOrderId: "accepted-photo-item",
-              resolutions:
-                retainedProduct && !unboundSecond
-                  ? [
-                      undefined,
-                      { kind: "existing", productId: retainedProduct.id },
-                    ]
-                  : undefined,
-              vendorId: vendor.shortcode,
-              source: {
-                kind: "receipt_photo",
-                externalKey: "synthetic:photo-association",
-                checksum: "a".repeat(64),
-              },
-              extraction: {
-                status: "ready",
-                candidate: {
-                  orderId: "SYNTHETIC-PHOTO-ITEM",
-                  orderedAt: "2026-09-01T18:00:00Z",
-                  merchant: "Synthetic photo retailer",
-                  currency: "USD",
-                  printedGrandTotal: multi ? 65 : 40,
-                  lines: [
-                    {
-                      title: "Synthetic household item",
-                      amount: 40,
-                      quantity: 2,
-                      lineKind: "principal",
-                    },
-                    ...(multi
-                      ? [
-                          {
-                            title: "Synthetic retained item",
-                            amount: 20,
-                            quantity: 3,
-                            lineKind: "principal" as const,
-                          },
-                          {
-                            title: "Synthetic order tax",
-                            amount: 5,
-                            lineKind: "tax" as const,
-                          },
-                        ]
-                      : []),
-                  ],
-                  payments: [
-                    {
-                      amount: multi ? 65 : 40,
-                      chargedAt: "2026-09-01T18:00:00Z",
-                    },
-                  ],
-                  allShipmentsDelivered: true,
-                },
+  // is seeded once per run (in beforeAll, outside the tests' timeout) and every
+  // case gets its own clone of it.
+  const worldKey = (multi: boolean, unboundSecond: boolean) =>
+    `world:${multi}:${unboundSecond}`;
+  const seedWorld =
+    (multi: boolean, unboundSecond: boolean) =>
+    async (db: Database, actor: ActorContext) => {
+      const { party, vendor } = await memberImportWorld(db, actor, {
+        vendor: { name: "Synthetic photo retailer" },
+      });
+      const retainedProduct = multi
+        ? await createProductFixture(
+            db,
+            makeProductInput({ name: "Synthetic retained item" }),
+            actor,
+          )
+        : null;
+      await memberImport(db, actor, {
+        key: "accepted-photo-item",
+        orders: [
+          {
+            stableOrderId: "accepted-photo-item",
+            resolutions:
+              retainedProduct && !unboundSecond
+                ? [
+                    undefined,
+                    { kind: "existing", productId: retainedProduct.id },
+                  ]
+                : undefined,
+            vendorId: vendor.shortcode,
+            source: {
+              kind: "receipt_photo",
+              externalKey: "synthetic:photo-association",
+              checksum: "a".repeat(64),
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: "SYNTHETIC-PHOTO-ITEM",
+                orderedAt: "2026-09-01T18:00:00Z",
+                merchant: "Synthetic photo retailer",
+                currency: "USD",
+                printedGrandTotal: multi ? 65 : 40,
+                lines: [
+                  {
+                    title: "Synthetic household item",
+                    amount: 40,
+                    quantity: 2,
+                    lineKind: "principal",
+                  },
+                  ...(multi
+                    ? [
+                        {
+                          title: "Synthetic retained item",
+                          amount: 20,
+                          quantity: 3,
+                          lineKind: "principal" as const,
+                        },
+                        {
+                          title: "Synthetic order tax",
+                          amount: 5,
+                          lineKind: "tax" as const,
+                        },
+                      ]
+                    : []),
+                ],
+                payments: [
+                  {
+                    amount: multi ? 65 : 40,
+                    chargedAt: "2026-09-01T18:00:00Z",
+                  },
+                ],
+                allShipmentsDelivered: true,
               },
             },
-          ],
-        });
-        const photographed = await createProductFixture(
-          db,
-          makeProductInput({ name: "Synthetic photographed household item" }),
-          actor,
-        );
-        return {
-          party: { id: party.id },
-          vendor: { id: vendor.id, shortcode: vendor.shortcode },
-          retainedProduct: retainedProduct && {
-            id: retainedProduct.id,
-            entityId: retainedProduct.entityId,
           },
-          photographed: {
-            id: photographed.id,
-            entityId: photographed.entityId,
-          },
-        };
-      },
+        ],
+      });
+      const photographed = await createProductFixture(
+        db,
+        makeProductInput({ name: "Synthetic photographed household item" }),
+        actor,
+      );
+      return {
+        party: { id: party.id },
+        vendor: { id: vendor.id, shortcode: vendor.shortcode },
+        retainedProduct: retainedProduct && {
+          id: retainedProduct.id,
+          entityId: retainedProduct.entityId,
+        },
+        photographed: {
+          id: photographed.id,
+          entityId: photographed.entityId,
+        },
+      };
+    };
+  beforeAll(() =>
+    Promise.all(
+      [
+        [false, false],
+        [true, false],
+        [true, true],
+      ].map(([multi = false, unboundSecond = false]) =>
+        ctx.prepareFixture(
+          worldKey(multi, unboundSecond),
+          seedWorld(multi, unboundSecond),
+        ),
+      ),
+    ),
+  );
+  async function world(linked = false, multi = false, unboundSecond = false) {
+    const { party, vendor, retainedProduct, photographed } = await ctx.fixture(
+      worldKey(multi, unboundSecond),
+      seedWorld(multi, unboundSecond),
     );
     const db = getDb(ctx.db);
     const association = await db.query.importSourceOrder.findFirst();

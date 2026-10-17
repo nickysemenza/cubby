@@ -342,6 +342,15 @@ export interface TestDbContext {
     key: string,
     seed: (db: Database, actor: ActorContext) => Promise<T>,
   ): Promise<T>;
+  /**
+   * Seed `key`'s template from a `beforeAll`, so its one-time cost runs under
+   * the hook timeout instead of inside the first test's budget. Pass the same
+   * `seed` that {@link fixture} receives for the key.
+   */
+  prepareFixture<T extends FixtureJson>(
+    key: string,
+    seed: (db: Database, actor: ActorContext) => Promise<T>,
+  ): Promise<void>;
 }
 
 /** A per-test clone of a fixture template, released after the test. */
@@ -370,14 +379,15 @@ async function closeFixtureDb(fixtureDb: FixtureDb | null) {
   }
 }
 
-async function leaseFixtureDb<T extends FixtureJson>(
+/** The seeded template's IntegreSQL hash, seeding it on first use. */
+function fixtureTemplate<T extends FixtureJson>(
   key: string,
   actor: ActorContext,
   seed: (db: Database, actor: ActorContext) => Promise<T>,
-): Promise<{ fixtureDb: FixtureDb; value: T }> {
+): Promise<string> {
   // Keys are file-scoped: workers share one module graph and one run.
   const scopedKey = `${expect.getState().testPath ?? ""}\0${key}`;
-  const hash = await prepareFixtureTemplate(scopedKey, async (databaseUrl) => {
+  return prepareFixtureTemplate(scopedKey, async (databaseUrl) => {
     const pool = openTestPool(databaseUrl);
     try {
       const rawDb = drizzle({ client: pool, schema });
@@ -397,6 +407,14 @@ async function leaseFixtureDb<T extends FixtureJson>(
       await pool.end();
     }
   });
+}
+
+async function leaseFixtureDb<T extends FixtureJson>(
+  key: string,
+  actor: ActorContext,
+  seed: (db: Database, actor: ActorContext) => Promise<T>,
+): Promise<{ fixtureDb: FixtureDb; value: T }> {
+  const hash = await fixtureTemplate(key, actor, seed);
   const { lease, prepared } = await leaseTemplateDatabase(
     hash,
     async ({ databaseUrl }) => {
@@ -476,8 +494,14 @@ export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
   interface TestDbState {
     db: Database | null;
     fixtureDb: FixtureDb | null;
+    /**
+     * An acquisition still in flight. A test that times out mid-seed leaves it
+     * running; teardown waits for it and closes whatever it produces, so a
+     * late clone never leaks or attaches to the next test.
+     */
+    acquiring: Promise<FixtureDb | null> | null;
   }
-  const state: TestDbState = { db: null, fixtureDb: null };
+  const state: TestDbState = { db: null, fixtureDb: null, acquiring: null };
   const ctx: TestDbContext = {
     get db() {
       if (!state.db) {
@@ -492,14 +516,30 @@ export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
       return state.fixtureDb?.databaseUrl ?? fileDb?.databaseUrl ?? "";
     },
     actor,
+    async prepareFixture(key, seed) {
+      await fixtureTemplate(key, actor, seed);
+    },
     async fixture(key, seed) {
       if (!state.db) {
         throw new Error("withTestDb fixture is unavailable before beforeEach");
       }
-      if (state.fixtureDb) {
+      if (state.fixtureDb || state.acquiring) {
         throw new Error("withTestDb fixture is already active for this test");
       }
-      const { fixtureDb, value } = await leaseFixtureDb(key, actor, seed);
+      const acquisition = leaseFixtureDb(key, actor, seed);
+      const acquiring = acquisition.then(
+        ({ fixtureDb }) => fixtureDb,
+        () => null,
+      );
+      state.acquiring = acquiring;
+      const { fixtureDb, value } = await acquisition;
+      // Teardown already claimed (and closes) this acquisition: the test timed
+      // out. Stop its body rather than let it continue on the file database.
+      if (state.acquiring !== acquiring)
+        throw new Error(
+          `withTestDb fixture ${key} resolved after its test ended`,
+        );
+      state.acquiring = null;
       state.fixtureDb = fixtureDb;
       return value;
     },
@@ -510,9 +550,11 @@ export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
     ctx.actor = actor;
   });
   afterEach(async () => {
-    const fixtureDb = state.fixtureDb;
+    const { fixtureDb, acquiring } = state;
     state.fixtureDb = null;
+    state.acquiring = null;
     await closeFixtureDb(fixtureDb);
+    await closeFixtureDb(acquiring ? await acquiring : null);
   });
   return ctx;
 }

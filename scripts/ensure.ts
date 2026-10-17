@@ -109,6 +109,8 @@ async function ensureWithMarker(
           : path === output || path.startsWith(`${output}/`),
       );
       const stat = lstatSync(file, { bigint: true });
+      // A link's own stat says nothing about the bytes behind it.
+      if (stat.isSymbolicLink()) return undefined;
       hash.update(`${path}\0`);
       if (isOutput && stat.isFile()) hash.update(readFileSync(file));
       else
