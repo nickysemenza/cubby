@@ -101,8 +101,8 @@ export const oneOrManyValues = <T>(
 /**
  * A route asked for an exact entity filter, but its value was not a valid
  * shortcode. This value is deliberately NOT a shortcode: the route boundary
- * produces it, then `resolveFilterIds` resolves it to an empty id set so the
- * request matches nothing. Ordinary entity-id inputs keep the canonical
+ * produces it, and the list query's live-row shortcode subquery resolves it to
+ * no ids so the request matches nothing. Ordinary entity-id inputs keep the canonical
  * shortcode schema, inferred brand, and published regex.
  *
  * Keeping this distinct from omission is load-bearing. Omitted filters are

@@ -1,12 +1,14 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { vendor as vendorTable } from "~/server/db/schema";
+import { plant as plantTable, vendor as vendorTable } from "~/server/db/schema";
 import { cookbookList } from "~/server/domains/cookbook/repo/cookbook";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
+import { plantingList } from "~/server/domains/garden/repo/garden";
 import {
   inventoryentryList,
   inventoryentryListRead,
@@ -43,7 +45,8 @@ const page = { pageIndex: 0, pageSize: 50 };
  * generated Any value / No value narrows instead of ORing beside picked
  * values; Match all matches any; Exclude drops rows with no value (a plain
  * `NOT IN`), keeps a hierarchy node's descendants, cannot combine with an
- * include, or silently ignores a predicate that cannot negate.
+ * include, or silently ignores a predicate that cannot negate; an id filter
+ * matches a soft-deleted or unknown record's code.
  */
 describe("compiled list fields", () => {
   const ctx = withTestDb();
@@ -667,6 +670,50 @@ describe("compiled list fields", () => {
       ).data.map((row) => row.id);
     expect(await purchases("desc")).toEqual([vendorless.id, named.id]);
     expect(await purchases("asc")).toEqual([named.id, vendorless.id]);
+  });
+
+  it("matches nothing for an id filter naming a soft-deleted or unknown record", async () => {
+    const basil = await insertWithShortcode(ctx.db, "plant", {
+      name: "Compiler basil",
+    });
+    const seeds = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Compiler basil seeds",
+        growsPlantId: basil.shortcode,
+      }),
+      ctx.actor,
+    );
+    const bed = await insertWithShortcode(ctx.db, "planting", {
+      plantId: basil.id,
+      status: "planned",
+    });
+    // Product reads the plant through a related path; planting's stored
+    // reference compiles to the live-row shortcode subquery.
+    const matches = async (input: string) => {
+      const code = parseShortcodeFor("plant", input);
+      return {
+        products: (
+          await productList(ctx.db, { growsPlantIdFilter: code }, [], page)
+        ).data.map((row) => row.id),
+        plantings: (
+          await plantingList(ctx.db, { plantId: code }, page)
+        ).data.map((row) => row.id),
+      };
+    };
+    expect(await matches(basil.shortcode)).toEqual({
+      products: [seeds.id],
+      plantings: [bed.shortcode],
+    });
+    // Both rows still reference the retired plant's id.
+    await getDb(ctx.db)
+      .update(plantTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(plantTable.id, basil.id));
+    const none = { products: [], plantings: [] };
+    expect(await matches(basil.shortcode)).toEqual(none);
+    const prefix = basil.shortcode.split("-")[0];
+    expect(await matches(`${prefix}-ZZZZ`)).toEqual(none);
   });
 
   it("counts locations under a valuation sort", async () => {
