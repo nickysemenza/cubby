@@ -158,8 +158,10 @@ describe("batched category feature lookup", () => {
           evaluation: unknown[];
         } | null;
         tracked: boolean | null;
+        inherited: { value: boolean | null; evaluation: unknown[] } | null;
       }>(sql`SELECT candidate."id" AS candidate,
           ${categoryStockTrackingSql(sql`candidate."id"`)} AS tracking,
+          ${categoryStockTrackingSql(sql`candidate."id"`, { inherited: true })} AS inherited,
           CASE WHEN ${trackedIn(true)} THEN true WHEN ${trackedIn(false)} THEN false END AS tracked
         FROM (
           SELECT "id" FROM "ProductCategory"
@@ -187,6 +189,17 @@ describe("batched category feature lookup", () => {
           },
         );
       }
+      // A category that decides nothing inherits exactly its effective value,
+      // along its own capped chain: the over-deep fourth level inherits
+      // nothing, though its parent decides (#2624 review).
+      for (const [index, node] of nodes.entries()) {
+        if (node.deleted || node.tracked !== null) continue;
+        const row = byId.get(id(index));
+        expect(row?.inherited?.value ?? null, `category ${index}`).toBe(
+          row?.tracking?.value ?? null,
+        );
+      }
+      expect(byId.get(id(5))?.inherited?.evaluation).toHaveLength(2);
       expect(byId.get(null)?.tracking ?? null).toBeNull();
       expect(byId.get(id(99))?.tracking ?? null).toBeNull();
     });

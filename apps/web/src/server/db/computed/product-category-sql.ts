@@ -11,6 +11,8 @@ import {
   effectiveFieldSql,
   effectiveSourceSql,
   inheritanceLadderSql,
+  inheritedFieldSql,
+  inheritedSourceSql,
 } from "~/server/db/computed/effective-field";
 
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
@@ -58,21 +60,37 @@ export type CategoryStockTracking = z.infer<typeof categoryStockTrackingSchema>;
 
 /** The effective decision at or above a category, the category that made
  * it, and every category the chain reads, for page-bounded reads that
- * explain the value. Inner aliases are `ih_`-prefixed so a caller's
- * correlated `categoryIdExpr` (`c."parentId"`) is never shadowed. */
-export const categoryStockTrackingSql = (categoryIdExpr: SQL) => {
-  const source = effectiveSourceSql("productCategory", "stockTracked", {
-    id: categoryIdExpr,
-  });
+ * explain the value. `inherited` reads what the category would inherit
+ * instead (its own decision ignored, the ladder from its parent), along the
+ * category's own capped chain, so a category's provenance agrees with its
+ * value. Inner aliases are `ih_`-prefixed so a caller's correlated
+ * `categoryIdExpr` is never shadowed. */
+export const categoryStockTrackingSql = (
+  categoryIdExpr: SQL,
+  { inherited = false }: { inherited?: boolean } = {},
+) => {
+  const row = { id: categoryIdExpr };
+  const source = inherited
+    ? inheritedSourceSql("productCategory", "stockTracked", row)
+    : effectiveSourceSql("productCategory", "stockTracked", row);
+  const value = inherited
+    ? inheritedFieldSql("productCategory", "stockTracked", row)
+    : effectiveFieldSql("productCategory", "stockTracked", row);
+  const minDepth = sql.raw(inherited ? "1" : "0");
+  const ladder = inheritanceLadderSql(
+    "productCategory",
+    "stockTracked",
+    categoryIdExpr,
+  );
   const decider = (column: "shortcode" | "name") =>
     sql`(SELECT ih_pd.${sql.identifier(column)} FROM "ProductCategory" ih_pd WHERE ih_pd."id" = (${source}->>'id')::uuid)`;
   return sql<CategoryStockTracking | null>`(
     SELECT jsonb_build_object(
-      'value', ${effectiveFieldSql("productCategory", "stockTracked", { id: categoryIdExpr })},
+      'value', ${value},
       'id', ${decider("shortcode")},
       ${"name"}::text, ${decider("name")},
       ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', l."value", ${"assigned"}::text, l."decides") ORDER BY l."depth")
-        FROM ${inheritanceLadderSql("productCategory", "stockTracked", categoryIdExpr)} l JOIN "ProductCategory" ih_pc ON ih_pc."id" = l."id")
-    ) WHERE EXISTS (SELECT 1 FROM "ProductCategory" ih_pe WHERE ih_pe."id" = ${categoryIdExpr} AND ih_pe."deletedAt" IS NULL)
+        FROM ${ladder} l JOIN "ProductCategory" ih_pc ON ih_pc."id" = l."id" WHERE l."depth" >= ${minDepth})
+    ) WHERE EXISTS (SELECT 1 FROM ${ladder} ih_pe WHERE ih_pe."depth" >= ${minDepth})
   )`;
 };

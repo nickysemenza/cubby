@@ -150,7 +150,7 @@ const inheritedFactsFor = async (
       ${inheritedFieldSql("productCategory", "feature", "c")} AS "featureFallback",
       (SELECT json_build_object('id', s."shortcode", ${"title"}::text, s."name") FROM "ProductCategory" s
         WHERE s."id" = (${featureSource}->>'id')::uuid) AS "featureSource",
-      ${categoryStockTrackingSql(sql`c."parentId"`)} AS "stockFallback"
+      ${categoryStockTrackingSql(sql`c."id"`, { inherited: true })} AS "stockFallback"
     FROM "ProductCategory" c
     WHERE c."id" IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
