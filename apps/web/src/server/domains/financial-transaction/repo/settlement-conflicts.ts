@@ -307,9 +307,18 @@ export async function refuseSettlementConflicts(
   input: {
     transactionId: FinancialTransactionId;
     purchaseIds: readonly PurchaseId[];
+    /** Conflicts the charge already carried before this write; not new. */
+    existing?: ReadonlyMap<PurchaseId, readonly SettlementConflictKind[]>;
   },
 ): Promise<void> {
   const conflicts = await transactionSettlementConflicts(tx, input);
+  for (const [purchaseId, kinds] of conflicts) {
+    const fresh = kinds.filter(
+      (kind) => !input.existing?.get(purchaseId)?.includes(kind),
+    );
+    if (fresh.length > 0) conflicts.set(purchaseId, fresh);
+    else conflicts.delete(purchaseId);
+  }
   if (conflicts.size === 0) return;
   const codes = await tx
     .select({ id: purchase.id, shortcode: purchase.shortcode })

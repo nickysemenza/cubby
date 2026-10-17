@@ -158,6 +158,37 @@ describe("settlement conflicts", () => {
     ).rejects.toThrow(/vendor-account member/);
   });
 
+  it("refuses redating a charge outside the order member's card access", async () => {
+    const { buyer, order, charge } = await world();
+    const otherMember = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Card owner",
+      kind: "member",
+      userId: null,
+    });
+    const shared = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Card with an authorized user",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: otherMember.id,
+      authorizedUsers: [
+        {
+          ledgerPartyId: buyer.shortcode,
+          validFrom: "2026-09-01",
+          validTo: null,
+        },
+      ],
+    });
+    const paid = await charge(shared.id, 13.59);
+    await allocate(paid.shortcode, order.shortcode, 13.59);
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        parseShortcodeFor("financialTransaction", paid.shortcode),
+        financialTransactionUpdateData.parse({ postedDate: "2026-08-15" }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/vendor-account member/);
+  });
+
   it("flags a conflicting allocation that predates the guard", async () => {
     const { order, charge } = await world();
     // No primary cardholder: the sole-user purchaser rule never applies, and

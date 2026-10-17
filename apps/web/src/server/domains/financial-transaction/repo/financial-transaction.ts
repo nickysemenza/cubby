@@ -65,7 +65,10 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
-import { refuseSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
+  findSettlementConflicts,
+  refuseSettlementConflicts,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
@@ -694,6 +697,7 @@ const applyUpdatedAllocations = async (
   state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
   actor: ActorContext,
   options: FinancialTransactionUpdateOptions,
+  priorCharge: FinancialTransactionDbRow,
 ) => {
   const before = await readAllocations(tx, [id]);
   const next = await requestedUpdateAllocations(tx, id, data, state, before);
@@ -709,23 +713,28 @@ const applyUpdatedAllocations = async (
     });
     await writeAllocationSet(tx, id, next, before);
   }
-  // A newly named purchase is a new settlement judgment; so is moving an
-  // allocated charge to another account or kind. Amount, status and date
-  // follow-ups (statement re-imports) are not; an allocation that was already
-  // wrong stays visible through the Purchase conflict checks instead.
+  // Every write that names a purchase or changes the charge's account, kind
+  // or dates is checked; a conflict the charge already carried before this
+  // write (a statement re-import touching an already-wrong allocation) is
+  // not new and stays visible through the Purchase conflict checks instead.
   const held = (before.get(id) ?? []).map((row) => row.purchaseId);
-  const settlementEvidenceChanged = (["accountId", "kind"] as const).some(
-    (key) => data[key] !== undefined,
-  );
-  const recheck = settlementEvidenceChanged
-    ? (next?.map((row) => row.purchaseId) ?? held)
-    : (next ?? [])
-        .map((row) => row.purchaseId)
-        .filter((purchaseId) => !held.includes(purchaseId));
+  const chargeChanged = (
+    ["accountId", "kind", "transactionDate", "postedDate"] as const
+  ).some((key) => data[key] !== undefined);
+  const named = next?.map((row) => row.purchaseId) ?? held;
+  const recheck = chargeChanged
+    ? named
+    : named.filter((purchaseId) => !held.includes(purchaseId));
   if (!options.acknowledgeSettlementConflicts)
     await refuseSettlementConflicts(tx, {
       transactionId: id,
       purchaseIds: recheck,
+      existing: await findSettlementConflicts(tx, {
+        accountId: priorCharge.accountId,
+        kind: financialTransactionKind.parse(priorCharge.kind),
+        transactionDate: priorCharge.transactionDate ?? priorCharge.postedDate,
+        purchaseIds: held,
+      }),
     });
   await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
 };
@@ -877,7 +886,7 @@ export async function updateFinancialTransaction(
     //     slice for the whole amount", or clear it;
     //   • an amount change on a singly-allocated transaction, where the sole
     //     legal allocation value is the new amount.
-    await applyUpdatedAllocations(tx, id, data, state, actor, options);
+    await applyUpdatedAllocations(tx, id, data, state, actor, options, before);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.

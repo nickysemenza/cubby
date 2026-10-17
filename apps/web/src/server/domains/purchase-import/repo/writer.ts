@@ -238,8 +238,8 @@ async function findPurchase(
  * learns how an already-retained line was paid (an export naming the gift
  * card) is not a financial disagreement. It fills an `unknown` tender in
  * place, matching lines by their financial facts rather than position (sources
- * reorder payments); facts whose proposed lines disagree on tender stay
- * unknown, and a known tender is never rewritten by a later read.
+ * reorder payments); identical facts whose proposed lines disagree or include
+ * an unnamed line stay unknown, and a known tender is never rewritten.
  */
 async function recordLearnedTender(
   tx: DrizzleTransaction,
@@ -254,7 +254,7 @@ async function recordLearnedTender(
     `${cents(payment.amount)}|${payment.chargedAt ?? ""}|${payment.cardLastFour ?? ""}`;
   const learned = new Map<string, PaymentTender | null>();
   for (const payment of proposed) {
-    if (payment.tender === undefined || payment.tender === "unknown") continue;
+    const tender = payment.tender ?? "unknown";
     const key = factKey({
       amount: payment.amount,
       chargedAt: payment.chargedAt
@@ -263,12 +263,11 @@ async function recordLearnedTender(
       cardLastFour: payment.cardLastFour ?? null,
     });
     const prior = learned.get(key);
-    learned.set(
-      key,
-      prior === undefined || prior === payment.tender ? payment.tender : null,
-    );
+    // Identical facts that disagree, or include an unnamed line, are ambiguous.
+    learned.set(key, prior === undefined || prior === tender ? tender : null);
   }
-  if (learned.size === 0) return;
+  if (![...learned.values()].some((tender) => tender && tender !== "unknown"))
+    return;
   const retained = await tx
     .select()
     .from(purchasePaymentEvidence)
@@ -287,7 +286,7 @@ async function recordLearnedTender(
         cardLastFour: row.cardLastFour,
       }),
     );
-    if (!tender) continue;
+    if (!tender || tender === "unknown") continue;
     await tx
       .update(purchasePaymentEvidence)
       .set({ tender, updatedAt: new Date() })

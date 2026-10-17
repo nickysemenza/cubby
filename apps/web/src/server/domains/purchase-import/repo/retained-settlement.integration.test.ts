@@ -311,6 +311,33 @@ describe("settlement from retained order evidence", () => {
       { amount: 5, tender: "stored_value" },
       { amount: 8.59, tender: "card" },
     ]);
+    // Identical lines where only one is named stay ambiguous.
+    const twins = await importOrder(run, {
+      orderId: "FW-1603",
+      total: 10,
+      payments: [
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z" },
+      ],
+    });
+    await importOrder(run, {
+      orderId: "FW-1603",
+      total: 10,
+      payments: [
+        {
+          amount: 5,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z" },
+      ],
+    });
+    expect(
+      await getDb(ctx.db)
+        .selectDistinct({ tender: purchasePaymentEvidence.tender })
+        .from(purchasePaymentEvidence)
+        .where(eq(purchasePaymentEvidence.purchaseId, twins)),
+    ).toEqual([{ tender: "unknown" }]);
     await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
     await settleRetainedPaymentEvidence(ctx.db);
     expect(await allocationsFor([purchaseId])).toEqual([]);
