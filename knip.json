@@ -36,7 +36,9 @@
         "vite",
         "concurrently",
         "agent-device",
-        "@neon/env"
+        "@neon/env",
+        // scripts/tsc.ts resolves its bin through import.meta.resolve.
+        "tsrs"
       ],
       // xcode-select: scripts/apple/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
