@@ -1,7 +1,9 @@
 import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
+import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { cents } from "@cubby/shared";
 import { getTableName, sql } from "drizzle-orm";
 
+import { sqlEnumConstant } from "~/server/db/helpers/query";
 import { purchase } from "~/server/db/schema";
 import {
   postedRefundTotalSql,
@@ -47,6 +49,15 @@ const hasItemization = (t: Purchase) =>
 const expectsOrderId = (t: Purchase) => sql`EXISTS (
   SELECT 1 FROM "ImportSourceOrder" dq_order
   WHERE dq_order."purchaseId" = ${t.id} AND dq_order."orderKey" LIKE '%/order/%'
+)`;
+
+// A vendor declared to have no orders (a shared-expense settle-up container)
+// has no member account to record.
+const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
+  SELECT 1 FROM "Vendor" dq_vendor
+  WHERE dq_vendor.id = ${t.vendorId}
+    AND dq_vendor."deletedAt" IS NULL
+    AND dq_vendor."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "not_expected")}
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (
@@ -115,8 +126,13 @@ export const purchaseChecks = defineEntityChecks({
   },
   checks: {
     purchase_vendor_account: {
+      expected: expectsVendorAccount,
       missing: (t) => sql`${t.vendorAccountId} IS NULL`,
-      fingerprint: (t) => [sql`${t.vendorId}`, sql`${t.vendorAccountId}`],
+      fingerprint: (t) => [
+        expectsVendorAccount(t),
+        sql`${t.vendorId}`,
+        sql`${t.vendorAccountId}`,
+      ],
     },
     purchase_date: {
       missing: (t) => sql`${t.date} IS NULL`,

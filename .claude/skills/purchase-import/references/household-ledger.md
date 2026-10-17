@@ -19,6 +19,11 @@ The project total is then the household's net cost: charges paid, less refunds
 and Credits. Adjustment lines (tax, fees, refunds) inherit the Purchase's default
 project; set `defaultProjectId` on each trip Purchase instead of tagging lines.
 
+The settle-up Purchase is only a home for Credits: give the shared-expense app's
+Vendor `orderEvidence: "not_expected"` and no vendor account. The app's payout
+balance is a Financial Account (see Provider balances), and each repayment's
+payment rail (a payment app, a bank) is the Financial Account of its transaction.
+
 ## Recipe
 
 1. **Card and bank rows decide amounts.** Preview the statement rows for every

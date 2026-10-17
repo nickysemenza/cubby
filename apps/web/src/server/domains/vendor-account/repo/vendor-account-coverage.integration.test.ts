@@ -127,6 +127,34 @@ describe("vendor identity and purchase account coverage", () => {
     );
   });
 
+  it("expects no vendor account on a Purchase from a vendor with no order evidence", async () => {
+    const settleUp = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic shared-expense app",
+      orderEvidence: "not_expected",
+    });
+    const unclassified = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic unclassified vendor",
+    });
+    const purchaseFrom = (vendorId: typeof settleUp.id) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        displayLabel: "Synthetic settle-up",
+        date: "2026-09-01",
+      });
+    const settleUpPurchase = await purchaseFrom(settleUp.id);
+    const unclassifiedPurchase = await purchaseFrom(unclassified.id);
+    const quality = await loadDataQualities(ctx.db, "purchase", [
+      settleUpPurchase.id,
+      unclassifiedPurchase.id,
+    ]);
+    expect(
+      quality.get(settleUpPurchase.id)?.gaps.map((gap) => gap.check),
+    ).not.toContain("purchase_vendor_account");
+    expect(
+      quality.get(unclassifiedPurchase.id)?.gaps.map((gap) => gap.check),
+    ).toContain("purchase_vendor_account");
+  });
+
   it("previews only each account's latest three live purchases and counts all its purchases", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic shared vendor",
