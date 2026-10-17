@@ -2,7 +2,6 @@
   "email": ["purchaseId", "vendorAccountId", "vendorId"],
   "expense": [
     "costTypeFilter",
-    "dateRelative",
     "ledgerPartyId",
     "projectFilter",
     "spendingCategoryFilter",
@@ -14,8 +13,6 @@
   "image": ["runId", "targetState"],
   "imageJob": ["submissionId"],
   "inventory": ["effectiveOwner"],
-  "location": ["recountOverdue"],
-  "planting": ["activeOn"],
   "product": [
     "anyGtin",
     "effectiveOwner",
@@ -25,6 +22,6 @@
     "taskStatus"
   ],
   "project": ["attention", "dateRange", "search"],
-  "task": ["dueRelative", "search"],
+  "task": ["search"],
   "wish": ["search"]
 }

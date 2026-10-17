@@ -127,6 +127,25 @@ export type FilterDescriptor = Readonly<{
   sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;
+/**
+ * A date range filter's bound keys, which accept relative date tokens and
+ * the `from..to` bounds value: a range declared `date`, or the From/To wire
+ * names `filterWire` gives dates (numbers bind Min/Max). Null for any other
+ * filter.
+ */
+export const dateRangeBounds = (
+  descriptor: FilterDescriptor,
+): Readonly<{ from: string; to: string }> | null => {
+  if (descriptor.kind !== "range" || descriptor.wire.kind !== "range")
+    return null;
+  const { from, to } = descriptor.wire;
+  const dates =
+    descriptor.range === null
+      ? from.endsWith("From") && to.endsWith("To")
+      : descriptor.range.kind === "date";
+  return dates ? { from, to } : null;
+};
+
 export type EntityPorts = Readonly<{
   repository: SourceRef | null;
   references: Readonly<{ label: SourceRef | null; resolver: SourceRef | null }>;

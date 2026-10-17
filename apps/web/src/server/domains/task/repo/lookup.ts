@@ -5,11 +5,10 @@ import {
   taskStatusSchema,
 } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
-import { and, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, isNull, or, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   formatSearchTerm,
@@ -66,14 +65,6 @@ const taskScaffold = listScaffold("task", task, {
           .where(
             and(notDeleted(product), formatSearchTerm(product.name, term)),
           )}`,
-      ),
-    dueRelative: ({ values }) =>
-      or(
-        ...values.map((relative) =>
-          relative === "beforeToday"
-            ? lt(effectiveTaskDueDateSql(), householdLocalDate())
-            : lte(effectiveTaskDueDateSql(), householdLocalDate()),
-        ),
       ),
   },
 });

@@ -67,27 +67,6 @@ export const locationFilterFields = {
   childPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one live child location.",
   ),
-  /**
-   * Locations whose last deliberate recount is older than N days — or that have
-   * never been recounted at all.
-   *
-   * Relative rather than an absolute date pair on purpose: this is the shape a
-   * static declaration can hold. Every other date control in the manifest
-   * expands to absolute `yyyy-MM-dd` strings computed from the browser's clock,
-   * which a saved view could never pin — the value would change daily.
-   *
-   * The never-recounted half is part of the predicate, not an oversight. A
-   * plain `<` bound drops NULLs, and a bin nobody has ever counted is the worst
-   * offender rather than an exempt one.
-   */
-  lastBulkInventoryOlderThanDays: z.coerce
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      "Locations last recounted more than this many days ago, or never recounted.",
-    ),
   ...numericRangeFields("directItemCount", { int: true, nonnegative: true }),
   ...numericRangeFields("valuation"),
 };

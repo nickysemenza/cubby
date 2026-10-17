@@ -351,7 +351,7 @@ const standaloneEntityProblems = [
       entity: "expense" as const,
       filters: [
         { id: "future", value: "true" },
-        { id: "dateRelative", value: "beforeToday" },
+        { id: "date", value: "..@today-1d" },
       ],
       sort: [{ id: "date", desc: false }],
     },

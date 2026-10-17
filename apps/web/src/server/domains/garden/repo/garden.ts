@@ -803,9 +803,10 @@ export const updateGardenEntry = async (
 
 const plantingScaffold = listScaffold("planting", planting, {
   derived: {
-    activeOn: (day) =>
-      sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)}) <= ${day}::date
-        AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${day}::date)`,
+    activeSpan: [
+      sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)})`,
+      sql`${planting.finishedOn}`,
+    ],
   },
 });
 

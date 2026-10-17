@@ -14,7 +14,6 @@ describe("listScaffold", () => {
       completion: sql`NULL`,
       topLevel: sql`true`,
       search: () => undefined,
-      dueRelative: () => undefined,
     },
   });
 

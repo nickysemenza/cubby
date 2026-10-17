@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
-import { humanize } from "@cubby/shared";
+import { describeRangeBounds, humanize } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
@@ -92,10 +92,9 @@ const optionLabel = (entity: Entity, id: string, value: string): string => {
   // and render the raw `__none__` on the page.
   if (value === FILTER_NONE || value === "none") return `No ${noun}`;
   if (value === FILTER_ANY || value === "has") return `Has ${noun}`;
-  // A url-only filter with no declared options (e.g. the expense `dateRelative`
-  // twin of the task `dueRelative`) still reaches the page, and its raw
-  // camelCase value was rendering verbatim as "beforeToday".
-  return humanize(value);
+  // A date range's bounds read as words ("on or before today − 1 day"); any
+  // other undeclared value would otherwise render its raw camelCase.
+  return describeRangeBounds(value) ?? humanize(value);
 };
 
 const assemblyChips = (query: ProblemQuery): string[] => {

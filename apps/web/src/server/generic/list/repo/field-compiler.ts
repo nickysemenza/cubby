@@ -311,6 +311,27 @@ export const derivedValueSql = (
   return value instanceof SQL ? value : value.sql;
 };
 
+/**
+ * A `dateInterval` value's `[start, end]` in `context`; a NULL end is open.
+ * Range filters test it for overlap, a one-date filter for containment.
+ */
+export const derivedIntervalSql = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+) => {
+  const parts = derivedValueParts(entity, derived, key, context);
+  const [start, end] = parts.map((part) =>
+    part instanceof SQL ? part : part.sql,
+  );
+  if (start === undefined || end === undefined || parts.length !== 2)
+    throw new Error(
+      `${entity}.model.derived.${key} is a dateInterval and needs its SQL as [start, end]`,
+    );
+  return { start, end };
+};
+
 /** A value's filter relation (`SetValue`), or null when filters read its scalar. */
 export const derivedValueSet = (
   derived: AnyDerivedSql,

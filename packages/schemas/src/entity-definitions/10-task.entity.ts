@@ -811,10 +811,6 @@ export default defineEntity({
         reason:
           "Searches the task name and its inherited subject product's name",
       },
-      dueRelative: {
-        predicate: "multiselect",
-        reason: "Relative to the household's today",
-      },
     },
     sort: {
       fields: [
@@ -1010,14 +1006,6 @@ export default defineEntity({
           module: "~/entity/filter-behavior",
           export: "resolveTaskDueFilter",
         },
-      },
-      {
-        columnId: "dueRelative",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter by relative due date...",
-        options: [{ value: "beforeToday", label: "Before today" }],
-        urlOnly: true,
       },
       {
         columnId: "completion",

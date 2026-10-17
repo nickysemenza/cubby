@@ -536,11 +536,9 @@ export default defineEntity({
     ],
     derived: {
       gardenEntryId: { via: "entries" },
-      activeOn: {
-        predicate: "text",
-        reason:
-          "Active on a date: started on or before it and not finished before it",
-      },
+      // From the first of sowed, transplanted or created to `finishedOn`
+      // (open while unfinished).
+      activeSpan: { type: "dateInterval" },
     },
     sort: {
       fields: ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"],
@@ -640,12 +638,23 @@ export default defineEntity({
         brandRef: { entity: "location" },
       },
       {
-        // Virtual, URL-only scope consumed by dependent Garden Entry
-        // planting pickers; the repository computes lifecycle membership.
+        // URL-only scope consumed by dependent Garden Entry planting
+        // pickers: plantings whose active span contains the day.
         columnId: "activeOn",
-        kind: "text",
-        derived: true,
+        kind: "range",
+        wire: { kind: "param", name: "activeOn" },
+        derived: "activeSpan",
         placeholder: "Filter plantings active on...",
+        urlOnly: true,
+      },
+      {
+        // Plantings whose active span overlaps the window ("active this
+        // season").
+        columnId: "activeSpan",
+        kind: "range",
+        wire: { kind: "range", from: "activeFrom", to: "activeTo" },
+        derived: true,
+        placeholder: "Filter plantings active between...",
         urlOnly: true,
       },
       {

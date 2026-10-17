@@ -14,6 +14,7 @@ import {
 import {
   compileProblemFilters,
   findUnexpandedRangeFilter,
+  problemFilterPatch,
 } from "../problems/problem-filter-semantics";
 import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
 
@@ -449,7 +450,7 @@ describe("problem-backed views", () => {
         buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
           values.get(columnId),
         ),
-      ).toEqual(compileProblemFilters(entity, view.filters));
+      ).toEqual(problemFilterPatch(entity, view.filters));
     },
   );
 

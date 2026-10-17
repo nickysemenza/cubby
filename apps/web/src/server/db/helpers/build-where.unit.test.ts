@@ -384,8 +384,11 @@ describe("buildLocationWhere", () => {
   it.each([
     {
       name: "recount age (never recounted counts)",
-      filters: { lastBulkInventoryOlderThanDays: 30 },
-      contains: '"lastBulkInventory" is null or',
+      filters: {
+        lastBulkInventoryTo: "2026-01-01",
+        lastBulkInventoryPresenceFilter: "none",
+      } as const,
+      contains: 'or "Location"."lastBulkInventory" is null',
     },
     {
       name: "direct item count",

@@ -599,11 +599,6 @@ Rules:
       hasImage: { type: "boolean" },
       hasChildren: { type: "boolean" },
       hasAiDescription: { type: "boolean" },
-      recountOverdue: {
-        predicate: "range",
-        reason:
-          "Last recounted more than N days ago, or never: a relative age a saved view can pin",
-      },
     },
     sort: {
       fields: [
@@ -727,26 +722,43 @@ Rules:
         ],
       },
       {
+        // "Not counted in N days" is the bound `@today-Nd` ORed with No
+        // value: a bin nobody has ever counted is the worst offender.
         columnId: "lastBulkInventory",
         kind: "range",
-        wire: { kind: "param", name: "lastBulkInventoryOlderThanDays" },
-        derived: "recountOverdue",
+        wire: {
+          kind: "range",
+          from: "lastBulkInventoryFrom",
+          to: "lastBulkInventoryTo",
+          presence: "lastBulkInventoryPresenceFilter",
+        },
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter recounts...",
         options: [
           {
             value: "30",
             label: "Not counted in 30 days",
-            expand: { lastBulkInventoryOlderThanDays: 30 },
+            expand: {
+              lastBulkInventoryTo: "@today-30d",
+              lastBulkInventoryPresenceFilter: "none",
+            },
           },
           {
             value: "60",
             label: "Not counted in 60 days",
-            expand: { lastBulkInventoryOlderThanDays: 60 },
+            expand: {
+              lastBulkInventoryTo: "@today-60d",
+              lastBulkInventoryPresenceFilter: "none",
+            },
           },
           {
             value: "90",
             label: "Not counted in 90 days",
-            expand: { lastBulkInventoryOlderThanDays: 90 },
+            expand: {
+              lastBulkInventoryTo: "@today-90d",
+              lastBulkInventoryPresenceFilter: "none",
+            },
           },
         ],
       },

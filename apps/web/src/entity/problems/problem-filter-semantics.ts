@@ -8,6 +8,9 @@
  */
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { parseRangeBounds, resolveRelativeDate } from "@cubby/shared";
+
+import { householdLocalDate } from "~/lib/household-date";
 
 import { problemFilterSemantics } from "../filter-search-fields";
 import {
@@ -72,13 +75,17 @@ export function findUnexpandedRangeFilter(
     if (spec?.kind !== "range") return false;
     const preset = Array.isArray(value) ? value[0] : value;
     if (preset === undefined) return false;
+    if (spec.range && parseRangeBounds(preset)) return false;
     const patch = spec.expand?.(preset);
     return !patch || Object.keys(patch).length === 0;
   });
 }
 
-/** Compile a Problem assembly through the server-safe semantic registry. */
-export function compileProblemFilters(
+/**
+ * A Problem assembly's filters through the server-safe semantic registry,
+ * exactly as its URL decodes: relative date tokens stay tokens.
+ */
+export function problemFilterPatch(
   entity: Entity,
   assembly: FilterAssembly,
 ): FilterPatch {
@@ -111,3 +118,21 @@ export function compileProblemFilters(
   }
   return buildFiltersFromManifest(specs, (columnId) => values.get(columnId));
 }
+
+/**
+ * A Problem assembly's repository filters. Problems read repositories
+ * outside the entity kernel, so their relative date bounds (`@today-1d`)
+ * resolve here against the household's `today` (#2415); a declared Problem
+ * spells no other value as a token.
+ */
+export const compileProblemFilters = (
+  entity: Entity,
+  assembly: FilterAssembly,
+  today: string = householdLocalDate(),
+): FilterPatch =>
+  Object.fromEntries(
+    Object.entries(problemFilterPatch(entity, assembly)).map(([key, value]) => [
+      key,
+      typeof value === "string" ? resolveRelativeDate(value, today) : value,
+    ]),
+  );

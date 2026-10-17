@@ -936,8 +936,10 @@ enum-like value a field renders without a select control (a derived status, or
 the `kind`/`status` member of a JSON field); read it through
 `fieldEnumOptions(entity, key)`. A range filter's presets are declared as
 `options[].expand` patches of filter fields (`{ costMin: 500 }`) and the
-generator emits the expander; only presets that cannot be static (today-relative
-dates, open-ended counts) keep an `expandRef`. `display.preview` marks the facts of the hover preview card
+generator emits the expander; a today-relative bound is a static `@today-Nd`
+token (location's "Not counted in 30 days"), so only presets that cannot be
+static (calendar windows such as this week or year to date, open-ended counts)
+keep an `expandRef`. `display.preview` marks the facts of the hover preview card
 (compiled to `detail.preview`, in model order); a computed figure the card
 needs is a read-only projection field on the server output, never a web-side
 map. An entity with no preview field falls back to its hero stats and first
@@ -1534,9 +1536,22 @@ OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
 for its Any value / No value), and a timestamp column bounds by household
-days. The compiler rejects every other shape. A predicate that joins, ORs
+days. A range's No value ORs with its bounds, as it does with picked values
+("recounted before `@today-30d`, or never"); Any value beside bounds is the
+bounds alone. The compiler rejects every other shape. A predicate that joins, ORs
 across filters, or resolves ids is a declared `model.derived` entry, not
 hand-written SQL next to the spread.
+
+A date range bound is a calendar day or a relative date token, `@today`,
+`@today-Nd` or `@today+Nd` (`dateBound`, #2415). Like `@me`, URLs, saved
+views, Problems, MCP and native filter state carry the token, and the entity
+kernel resolves it to the household-local day (`resolveFilterTokens`) before
+any repository runs, so a saved view moves with the day and repositories see
+only dates. A date range's URL value is a preset key or its bounds,
+`from..to` (`..@today-1d` is "before today"); saved views, Problems and the
+native saved-view wire expand bounds onto the range's `from`/`to` keys, and
+the web and Apple range editors offer each bound as a date or as days
+relative to today, keeping the token on edit.
 
 `model.derived` declares a list field that is not a stored column, or the
 value a stored field orders and groups by when its column is not that value
@@ -1564,7 +1579,10 @@ one shape:
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
   (an array of SQL, inventory `amount` as unit then size) orders part by part
-  and cannot filter. A state that is one row value is an `enum` value whose
+  and cannot filter, except a `dateInterval`: its SQL is `[start, end]`, a
+  NULL end is open, a range filter (`from`/`to` wire) matches overlap and a
+  one-date filter (`param` wire, planting `activeOn`) containment. It sorts
+  by start, then end, and cannot group (a disabled choice with its reason). A state that is one row value is an `enum` value whose
   `options` are disjoint and whose CASE yields no value outside them
   (inventory `valuationStatus`, purchase `reconciliation`, product
   `quantityVarianceState`); a filter that means several states picks them
@@ -1585,8 +1603,7 @@ one shape:
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
   descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a
   boolean, a presence, or `{ from, to, presence, param }` (`range`; `param`
-  is the one request parameter of a range whose presets name a state or an
-  age, such as location's `lastBulkInventoryOlderThanDays`).
+  is the one request parameter of a range whose presets name a state).
 
 A stored `text` filter ORs several terms when its value is a list, and a text
 descriptor's `schemaRef` names that value schema (expense's
@@ -1605,7 +1622,8 @@ A filter descriptor reads a derived field with `derived: true` (the entry
 named by its `columnId`) or `derived: "<key>"` (another entry, so several
 filters share one value or a column filters by an effective value). A value
 entry filters by its type: `text` as a search term, any-of, or presence;
-`number`/`date` as a range or presence; `boolean` as a flag (UNKNOWN reads as
+`number`/`date` as a range or presence; `dateInterval` as a range (overlap)
+or one date (containment); `boolean` as a flag (UNKNOWN reads as
 not met) or presence (true is a value). Any other value reads NULL as no
 value. A predicate and a value both receive the caller's quality read context
 (`where(filters, [], { readContext })`); a value that reads it is

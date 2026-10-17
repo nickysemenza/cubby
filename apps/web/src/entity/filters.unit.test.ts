@@ -120,6 +120,25 @@ describe("buildFiltersFromManifest", () => {
     expect(buildFiltersFromManifest(specs, getter({}))).toEqual({});
   });
 
+  it("sets a date range's bounds from a from..to value, keeping tokens for the server", () => {
+    const specs: FilterSpecCore[] = [
+      {
+        columnId: "dueDate",
+        kind: "range",
+        range: { from: "dueFrom", to: "dueTo" },
+        expand: (v) => (v === "none" ? { duePresenceFilter: "none" } : {}),
+      },
+    ];
+    const build = (dueDate: string) =>
+      buildFiltersFromManifest(specs, getter({ dueDate }));
+    expect(build("..@today-1d")).toEqual({ dueTo: "@today-1d" });
+    expect(build("2026-01-01..@today")).toEqual({
+      dueFrom: "2026-01-01",
+      dueTo: "@today",
+    });
+    expect(build("none")).toEqual({ duePresenceFilter: "none" });
+  });
+
   describe("multi-valued kinds", () => {
     const specs: FilterSpecCore[] = [
       { columnId: "tags", field: "tagFilters", kind: "multiselect" },
@@ -494,6 +513,15 @@ describe("summarizeListState", () => {
   ];
 
   const summarize = (search: FilterSearch) => summarizeListState(specs, search);
+
+  it("reads a range's bounds, naming a relative bound from today", () => {
+    expect(summarize({ purchaseDate: "..@today-1d" })).toBe(
+      "on or before today − 1 day",
+    );
+    expect(summarize({ purchaseDate: "@today-30d..2026-06-01" })).toBe(
+      "today − 30 days to 2026-06-01",
+    );
+  });
 
   it("is undefined when nothing is filtered or sorted", () => {
     expect(summarize({})).toBeUndefined();

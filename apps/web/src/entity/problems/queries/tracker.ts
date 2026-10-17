@@ -24,7 +24,8 @@ export const trackerProblemQueries = [
       kind: "entity",
       entity: "task",
       filters: [
-        { id: "dueRelative", value: "beforeToday" },
+        // Before today: the household's today, resolved when the Problem runs.
+        { id: "dueDate", value: "..@today-1d" },
         { id: "completion", value: "open" },
         { id: "parentTaskId", value: [FILTER_NONE] },
       ],

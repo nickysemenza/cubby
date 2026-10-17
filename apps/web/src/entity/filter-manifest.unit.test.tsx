@@ -550,3 +550,15 @@ describe("expense URL-only scopes", () => {
     ).toMatchObject({ includeSubProjects: false });
   });
 });
+
+describe("one-parameter range bindings", () => {
+  // Planting `activeOn` is a range over a date span bound to one day; its URL
+  // value must reach the request, or the picker scope matches every planting.
+  it("passes the URL value through to the parameter", () => {
+    expect(
+      buildFiltersFromManifest(getEntityFilters("planting"), (columnId) =>
+        columnId === "activeOn" ? "@today" : undefined,
+      ),
+    ).toEqual({ activeOn: "@today" });
+  });
+});

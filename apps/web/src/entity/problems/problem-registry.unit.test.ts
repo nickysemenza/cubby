@@ -14,6 +14,7 @@ import { entityFilterUrlKeys } from "../generated/entity-search.gen";
 import { problemActionsFor } from "./problem-actions";
 import {
   compileProblemFilters,
+  problemFilterPatch,
   problemFilterSpecs,
 } from "./problem-filter-semantics";
 import type { DiagnosticKey } from "./problem-query";
@@ -130,6 +131,7 @@ describe("Problem Query registry", () => {
           kind: spec.kind,
           urlKey: spec.urlKey,
           nullableField: spec.nullable?.field,
+          range: spec.range,
         });
         const normalized = semantic(core);
         const ui = uiSpecs.get(core.columnId);
@@ -146,6 +148,7 @@ describe("Problem Query registry", () => {
         expect(ui?.kind).toBe(normalized.kind);
         expect(ui?.urlKey).toBe(normalized.urlKey);
         expect(ui?.nullable?.field).toBe(normalized.nullableField);
+        expect(ui?.range).toEqual(normalized.range);
       }
     }
   });
@@ -165,7 +168,15 @@ describe("Problem Query registry", () => {
       expect(
         buildFiltersFromManifest(specs, (columnId) => decoded.get(columnId)),
         definition.key,
-      ).toEqual(compileProblemFilters(entity, filters));
+      ).toEqual(problemFilterPatch(entity, filters));
     }
+  });
+
+  it("resolves a Problem's relative date bounds on the household's day", () => {
+    const overdue = problemQuery("overdueTasks");
+    if (overdue?.source.kind !== "entity") throw new Error("overdueTasks");
+    expect(
+      compileProblemFilters("task", overdue.source.filters, "2026-03-01"),
+    ).toMatchObject({ dueTo: "2026-02-28" });
   });
 });

@@ -4,7 +4,16 @@ import {
   FILTER_EXACT,
   FILTER_NONE,
 } from "@cubby/schemas/filter-sentinel-fields";
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import {
+  describeRangeBounds,
+  describeRelativeDate,
+  formatRangeBounds,
+  parseRangeBounds,
+  relativeDateOffset,
+  RELATIVE_DATE_TODAY,
+  relativeDateToken,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
@@ -13,6 +22,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 
+import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
@@ -82,6 +92,10 @@ export function filterSummary(
 ): string {
   if (filter === undefined || !isFieldActive(filter)) return "any";
   if (field.type === "text") return filter.values[0] ?? "any";
+  const bounds = field.dateRange
+    ? describeRangeBounds(filter.values[0] ?? "")
+    : undefined;
+  if (bounds !== undefined) return bounds;
   const labels = new Map(
     visibleOptions(field, filter).map((option) => [option.value, option.label]),
   );
@@ -261,6 +275,162 @@ function MultiselectEditor({
   );
 }
 
+type BoundMode = "any" | "date" | "relative";
+
+const MODES = [
+  { value: "any", label: "Any" },
+  { value: "date", label: "Date" },
+  { value: "relative", label: "Relative" },
+] as const satisfies readonly { value: BoundMode; label: string }[];
+
+const DIRECTIONS = [
+  { value: "past", label: "days ago" },
+  { value: "future", label: "days ahead" },
+];
+
+/**
+ * A relative bound's token. "Ahead" at zero is written `@today+0d`, so the
+ * direction survives the URL while the count is still zero.
+ */
+const relativeBound = (count: number, ahead: boolean): string =>
+  ahead && count === 0
+    ? `${RELATIVE_DATE_TODAY}+0d`
+    : relativeDateToken(ahead ? count : -count);
+
+const modeOf = (bound: string | undefined): BoundMode =>
+  bound === undefined
+    ? "any"
+    : relativeDateOffset(bound) === undefined
+      ? "date"
+      : "relative";
+
+/**
+ * One bound of a date range: none, a calendar day, or a day relative to the
+ * household's today (`@today-30d`), which a saved view keeps as the token so
+ * it stays current.
+ */
+function DateBound({
+  label,
+  bound,
+  onChange,
+}: {
+  label: string;
+  bound: string | undefined;
+  onChange: (bound: string | undefined) => void;
+}) {
+  const [mode, setMode] = useState<BoundMode>(() => modeOf(bound));
+  const days = bound === undefined ? undefined : relativeDateOffset(bound);
+  const relative = days ?? 0;
+  const ahead = bound?.startsWith(`${RELATIVE_DATE_TODAY}+`) ?? false;
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1 text-xs font-medium text-muted-foreground">
+        {label}
+      </legend>
+      <Picker
+        mode="segmented"
+        label={`${label} bound`}
+        options={MODES}
+        value={mode}
+        onValueChange={(value) => {
+          const next = MODES.find((option) => option.value === value)?.value;
+          if (next === undefined) return;
+          setMode(next);
+          // Date starts on the household's today, as the Apple editor does,
+          // so switching never drops the bound while a day is being picked.
+          onChange(
+            next === "any"
+              ? undefined
+              : next === "relative"
+                ? relativeDateToken(0)
+                : householdLocalDate(),
+          );
+        }}
+      />
+      {mode === "date" && (
+        <Input
+          type="date"
+          aria-label={`${label} date`}
+          value={bound !== undefined && days === undefined ? bound : ""}
+          onChange={(event) => {
+            if (event.target.value) onChange(event.target.value);
+          }}
+        />
+      )}
+      {mode === "relative" && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              aria-label={`${label} days`}
+              className="w-20 tabular-nums"
+              value={Math.abs(relative)}
+              onChange={(event) => {
+                const count = Math.max(
+                  0,
+                  Math.trunc(Number(event.target.value)),
+                );
+                if (!Number.isFinite(count)) return;
+                onChange(relativeBound(count, ahead));
+              }}
+            />
+            <Picker
+              options={DIRECTIONS}
+              label={`${label} direction`}
+              value={ahead ? "future" : "past"}
+              onValueChange={(value) =>
+                onChange(relativeBound(Math.abs(relative), value === "future"))
+              }
+              className="flex-1"
+            />
+          </div>
+          <p className="px-1 text-xs text-muted-foreground">
+            {describeRelativeDate(relative)}, counted from the household's today
+          </p>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/**
+ * Custom bounds for a date range filter, beside its presets. The value is
+ * the filter's `from..to` bounds, so a relative bound survives the URL, a
+ * saved view and an edit as its token.
+ */
+function DateRangeBounds({
+  value,
+  onChange,
+}: {
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const bounds = value === undefined ? undefined : parseRangeBounds(value);
+  const [from, setFrom] = useState(bounds?.from);
+  const [to, setTo] = useState(bounds?.to);
+  const update = (nextFrom: string | undefined, nextTo: string | undefined) => {
+    setFrom(nextFrom);
+    setTo(nextTo);
+    onChange(formatRangeBounds(nextFrom, nextTo));
+  };
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
+      <DateBound
+        label="From"
+        bound={from}
+        onChange={(next) => update(next, to)}
+      />
+      <DateBound
+        label="To"
+        bound={to}
+        onChange={(next) => update(from, next)}
+      />
+    </div>
+  );
+}
+
 /** The editor body for one field's popover — shape depends on its declared type. */
 function FilterValueEditor({
   field,
@@ -302,12 +472,19 @@ function FilterValueEditor({
       />
     );
   }
-  return (
+  const value = filter?.values[0];
+  const isBounds =
+    field.dateRange === true &&
+    value !== undefined &&
+    describeRangeBounds(value) !== undefined;
+  const picker = (
     <Picker
       options={options}
-      value={filter?.values[0] ?? null}
+      value={isBounds ? null : (value ?? null)}
       onValueChange={(value) => setValues(value === null ? [] : [value])}
-      placeholder={`Filter ${field.label ?? field.key}`}
+      placeholder={
+        isBounds ? "Custom range" : `Filter ${field.label ?? field.key}`
+      }
       label={`Filter ${field.label ?? field.key}`}
       clearable
       className="w-full"
@@ -317,6 +494,18 @@ function FilterValueEditor({
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
     />
+  );
+  if (!field.dateRange) return picker;
+  return (
+    <>
+      {options.length > 0 && picker}
+      {/* A preset replaces the bounds, so the bounds editor starts over. */}
+      <DateRangeBounds
+        key={isBounds || value === undefined ? "bounds" : value}
+        value={isBounds ? value : undefined}
+        onChange={(next) => setValues(next === undefined ? [] : [next])}
+      />
+    </>
   );
 }
 
