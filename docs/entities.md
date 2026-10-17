@@ -1201,11 +1201,14 @@ and tracing. SSR invokes that dispatcher in-process.
 
 The dispatcher measures selected-handler loading in
 `start.dispatch.load.<operation>` before the operation's execution span. Include
-that load and Worker startup when attributing cold request latency; execution
-spans alone omit module initialization. In deployed Workers, application timers
-advance only after I/O, so a zero-duration load span does not establish that module
-initialization used no CPU. Attribute CPU with a matching platform profile;
-label local startup and request profiles separately from production evidence.
+that load and Worker startup when attributing cold request latency. In deployed
+Workers, application timers advance only after I/O: module initialization can
+appear as zero-duration loading and be charged to the next I/O interval instead.
+A long query span therefore does not prove slow database execution. Compare
+matching platform profiles and origin execution evidence; label local startup
+and request profiles separately from production evidence. Focused Problems
+reads dispatch through their canonical source before loading entity readers or
+unrelated diagnostic implementations.
 See [Cloudflare's timer contract](https://developers.cloudflare.com/workers/runtime-apis/performance/).
 
 The operation boundary chooses the read policy before invoking its handler.

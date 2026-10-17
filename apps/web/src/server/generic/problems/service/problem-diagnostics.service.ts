@@ -17,49 +17,37 @@ import { completeProblemQueryDeclarations } from "~/entity/problems/problem-regi
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
-import { readCachedUpcLookups } from "~/server/domains/product/repo/upc-lookup-cache";
-import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import type { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
-import { findOrphanEntities } from "~/server/generic/entity-links/repo/entity-edge-source";
-import { findPartiallyImportedCookbooks } from "~/server/generic/problems/repo/detectors-cookbook";
-import {
-  countEntitiesMissingEmbeddings,
-  findEntitiesMissingEmbeddingsPage,
-} from "~/server/generic/problems/repo/detectors-embedding";
-import {
-  findDuplicateFinancialAccountSourceAliases,
-  findDuplicateFinancialTransactionSourceRefs,
-  findIncompleteStatementImports,
-  findInvalidFinancialJson,
-  findProvisionalFinancialAccounts,
-} from "~/server/generic/problems/repo/detectors-financial";
-import {
-  countOpenRunFindings,
-  findOpenRunFindingsPage,
-} from "~/server/generic/problems/repo/detectors-import";
-import {
-  countDependencyCycles,
-  countReferentialLivenessViolations,
-  findDependencyCycles,
-  findReferentialLivenessViolations,
-} from "~/server/generic/problems/repo/detectors-integrity";
-import {
-  findDuplicateVendors,
-  findManufacturerSpellingVariants,
-} from "~/server/generic/problems/repo/detectors-label-variants";
-import {
-  findDuplicateProductIdentities,
-  findOrphanedProducts,
-  findProductsWithoutUnitMappings,
-  findWeightSoldProducts,
-  findProductsWithUpcGaps,
-  findToolsUsedOutsideOwnership,
-} from "~/server/generic/problems/repo/detectors-product";
-import { findDuplicateSpendCandidates } from "~/server/generic/problems/repo/detectors-purchase";
-import { findParentRecipesWithDeletedSubRecipes } from "~/server/generic/problems/repo/detectors-recipe";
-import { proposeSizeFromTitle } from "~/server/lib/title-unit-size";
+
+// Selecting a diagnostic must not initialize every other detector or provider.
+const loadUpcCache = () =>
+  import("~/server/domains/product/repo/upc-lookup-cache");
+const loadAttention = () => import("~/server/domains/project/repo/attention");
+const loadEmbeddingConfig = () =>
+  import("~/server/generic/embedding/service/semantic/config");
+const loadEmbeddings = () =>
+  import("~/server/generic/embedding/service/semantic/embeddings");
+const loadEntityEdges = () =>
+  import("~/server/generic/entity-links/repo/entity-edge-source");
+const loadCookbookDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-cookbook");
+const loadEmbeddingDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-embedding");
+const loadFinancialDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-financial");
+const loadImportDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-import");
+const loadIntegrityDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-integrity");
+const loadLabelDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-label-variants");
+const loadProductDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-product");
+const loadPurchaseDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-purchase");
+const loadRecipeDetectors = () =>
+  import("~/server/generic/problems/repo/detectors-recipe");
+const loadTitleSize = () => import("~/server/lib/title-unit-size");
 
 type DiagnosticStatus =
   | { state: "healthy" }
@@ -128,7 +116,10 @@ const healthySample = async (
 const runTitleSizeProposals = async (
   db: Database,
 ): Promise<ProblemItem<"productsWithTitleDerivableSize">[]> => {
-  const candidates = await findProductsWithoutUnitMappings(db);
+  const { proposeSizeFromTitle } = await loadTitleSize();
+  const candidates = await (
+    await loadProductDetectors()
+  ).findProductsWithoutUnitMappings(db);
   const proposals: ProblemItem<"productsWithTitleDerivableSize">[] = [];
   for (const row of candidates) {
     const proposal = proposeSizeFromTitle(row.name);
@@ -168,8 +159,12 @@ async function runUpcProposals(
   mode: "sample" | "count",
   limit = Number.POSITIVE_INFINITY,
 ): Promise<DiagnosticSampleResult | DiagnosticCountResult> {
-  const candidates = await findProductsWithUpcGaps(db);
-  const { lookups, freshness } = await readCachedUpcLookups(
+  const candidates = await (
+    await loadProductDetectors()
+  ).findProductsWithUpcGaps(db);
+  const { lookups, freshness } = await (
+    await loadUpcCache()
+  ).readCachedUpcLookups(
     db,
     candidates.map((candidate) => candidate.upc),
     (upcs) =>
@@ -233,48 +228,76 @@ async function runUpcProposals(
 export const diagnosticAdapters = {
   "import-findings": {
     sample: async (db, _options, limit) => {
-      const page = await findOpenRunFindingsPage(db, limit);
+      const page = await (
+        await loadImportDetectors()
+      ).findOpenRunFindingsPage(db, limit);
       return { items: page.items, ...healthyCount(page.count) };
     },
-    count: async (db) => healthyCount(await countOpenRunFindings(db)),
+    count: async (db) => {
+      const { countOpenRunFindings } = await loadImportDetectors();
+      return healthyCount(await countOpenRunFindings(db));
+    },
   },
   "duplicate-product-identities": {
-    sample: (db, _options, limit) =>
-      healthySample(findDuplicateProductIdentities(db), limit),
-    count: async (db) =>
-      healthyCount((await findDuplicateProductIdentities(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findDuplicateProductIdentities } = await loadProductDetectors();
+      return healthySample(findDuplicateProductIdentities(db), limit);
+    },
+    count: async (db) => {
+      const { findDuplicateProductIdentities } = await loadProductDetectors();
+      return healthyCount((await findDuplicateProductIdentities(db)).length);
+    },
   },
   "orphaned-products": {
-    sample: (db, _options, limit) =>
-      healthySample(findOrphanedProducts(db), limit),
-    count: async (db) => healthyCount((await findOrphanedProducts(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findOrphanedProducts } = await loadProductDetectors();
+      return healthySample(findOrphanedProducts(db), limit);
+    },
+    count: async (db) => {
+      const { findOrphanedProducts } = await loadProductDetectors();
+      return healthyCount((await findOrphanedProducts(db)).length);
+    },
   },
   "unconnected-entities": {
     sample: async (db, _options, limit) => {
-      const { items, count } = await findOrphanEntities(db, { limit });
+      const { items, count } = await (
+        await loadEntityEdges()
+      ).findOrphanEntities(db, { limit });
       return { items, count, status: { state: "healthy" } };
     },
     // `findOrphanEntities` reports the true total via a window function
     // computed before its LIMIT is applied, so one row is enough to read it —
     // LIMIT 0 would return no rows at all, and with them the total.
-    count: async (db) =>
-      healthyCount((await findOrphanEntities(db, { limit: 1 })).count),
+    count: async (db) => {
+      const { findOrphanEntities } = await loadEntityEdges();
+      return healthyCount((await findOrphanEntities(db, { limit: 1 })).count);
+    },
   },
   "partially-imported-cookbooks": {
-    sample: (db, _options, limit) =>
-      healthySample(findPartiallyImportedCookbooks(db), limit),
-    count: async (db) =>
-      healthyCount((await findPartiallyImportedCookbooks(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findPartiallyImportedCookbooks } = await loadCookbookDetectors();
+      return healthySample(findPartiallyImportedCookbooks(db), limit);
+    },
+    count: async (db) => {
+      const { findPartiallyImportedCookbooks } = await loadCookbookDetectors();
+      return healthyCount((await findPartiallyImportedCookbooks(db)).length);
+    },
   },
   "tools-used-outside-ownership": {
-    sample: (db, options, limit) =>
-      healthySample(findToolsUsedOutsideOwnership(db, options), limit),
-    count: async (db, options) =>
-      healthyCount((await findToolsUsedOutsideOwnership(db, options)).length),
+    sample: async (db, options, limit) => {
+      const { findToolsUsedOutsideOwnership } = await loadProductDetectors();
+      return healthySample(findToolsUsedOutsideOwnership(db, options), limit);
+    },
+    count: async (db, options) => {
+      const { findToolsUsedOutsideOwnership } = await loadProductDetectors();
+      return healthyCount(
+        (await findToolsUsedOutsideOwnership(db, options)).length,
+      );
+    },
   },
   "entities-missing-embeddings": {
     sample: async (db, _options, limit) => {
-      if (!semanticEmbeddingsConfigured()) {
+      if (!(await loadEmbeddings()).semanticEmbeddingsConfigured()) {
         return {
           items: [],
           count: 0,
@@ -285,16 +308,14 @@ export const diagnosticAdapters = {
           },
         };
       }
-      const config = getSemanticEmbeddingConfig();
-      const { items, count } = await findEntitiesMissingEmbeddingsPage(
-        db,
-        config,
-        { limit },
-      );
+      const config = (await loadEmbeddingConfig()).getSemanticEmbeddingConfig();
+      const { items, count } = await (
+        await loadEmbeddingDetectors()
+      ).findEntitiesMissingEmbeddingsPage(db, config, { limit });
       return { items, count, status: { state: "healthy" } };
     },
     count: async (db) => {
-      if (!semanticEmbeddingsConfigured()) {
+      if (!(await loadEmbeddings()).semanticEmbeddingsConfigured()) {
         return {
           count: 0,
           status: {
@@ -305,105 +326,182 @@ export const diagnosticAdapters = {
         };
       }
       return healthyCount(
-        await countEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig()),
+        await (
+          await loadEmbeddingDetectors()
+        ).countEntitiesMissingEmbeddings(
+          db,
+          (await loadEmbeddingConfig()).getSemanticEmbeddingConfig(),
+        ),
       );
     },
   },
   "stale-parent-recipes": {
-    sample: (db, _options, limit) =>
-      healthySample(findParentRecipesWithDeletedSubRecipes(db), limit),
-    count: async (db) =>
-      healthyCount((await findParentRecipesWithDeletedSubRecipes(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findParentRecipesWithDeletedSubRecipes } =
+        await loadRecipeDetectors();
+      return healthySample(findParentRecipesWithDeletedSubRecipes(db), limit);
+    },
+    count: async (db) => {
+      const { findParentRecipesWithDeletedSubRecipes } =
+        await loadRecipeDetectors();
+      return healthyCount(
+        (await findParentRecipesWithDeletedSubRecipes(db)).length,
+      );
+    },
   },
   "weight-sold-products": {
-    sample: (db, _options, limit) =>
-      healthySample(findWeightSoldProducts(db), limit),
-    count: async (db) =>
-      healthyCount((await findWeightSoldProducts(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findWeightSoldProducts } = await loadProductDetectors();
+      return healthySample(findWeightSoldProducts(db), limit);
+    },
+    count: async (db) => {
+      const { findWeightSoldProducts } = await loadProductDetectors();
+      return healthyCount((await findWeightSoldProducts(db)).length);
+    },
   },
   "manufacturer-spelling-variants": {
-    sample: (db, _options, limit) =>
-      healthySample(findManufacturerSpellingVariants(db), limit),
-    count: async (db) =>
-      healthyCount((await findManufacturerSpellingVariants(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findManufacturerSpellingVariants } = await loadLabelDetectors();
+      return healthySample(findManufacturerSpellingVariants(db), limit);
+    },
+    count: async (db) => {
+      const { findManufacturerSpellingVariants } = await loadLabelDetectors();
+      return healthyCount((await findManufacturerSpellingVariants(db)).length);
+    },
   },
   "duplicate-vendors": {
-    sample: (db, _options, limit) =>
-      healthySample(findDuplicateVendors(db), limit),
-    count: async (db) => healthyCount((await findDuplicateVendors(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findDuplicateVendors } = await loadLabelDetectors();
+      return healthySample(findDuplicateVendors(db), limit);
+    },
+    count: async (db) => {
+      const { findDuplicateVendors } = await loadLabelDetectors();
+      return healthyCount((await findDuplicateVendors(db)).length);
+    },
   },
   "referential-liveness-violations": {
-    sample: (db, _options, limit) =>
-      healthySample(findReferentialLivenessViolations(db), limit),
-    count: async (db) =>
-      healthyCount(await countReferentialLivenessViolations(db)),
+    sample: async (db, _options, limit) => {
+      const { findReferentialLivenessViolations } =
+        await loadIntegrityDetectors();
+      return healthySample(findReferentialLivenessViolations(db), limit);
+    },
+    count: async (db) => {
+      const { countReferentialLivenessViolations } =
+        await loadIntegrityDetectors();
+      return healthyCount(await countReferentialLivenessViolations(db));
+    },
   },
   "dependency-cycles": {
-    sample: (db, _options, limit) =>
-      healthySample(findDependencyCycles(db), limit),
-    count: async (db) => healthyCount(await countDependencyCycles(db)),
+    sample: async (db, _options, limit) => {
+      const { findDependencyCycles } = await loadIntegrityDetectors();
+      return healthySample(findDependencyCycles(db), limit);
+    },
+    count: async (db) => {
+      const { countDependencyCycles } = await loadIntegrityDetectors();
+      return healthyCount(await countDependencyCycles(db));
+    },
   },
   "products-with-better-upc-data": {
-    sample: (db, options, limit) =>
+    sample: async (db, options, limit) =>
       runUpcProposals(db, options, "sample", limit),
-    count: (db, options) => runUpcProposals(db, options, "count"),
+    count: async (db, options) => runUpcProposals(db, options, "count"),
   },
   "title-derivable-unit-size": {
-    sample: (db, _options, limit) =>
+    sample: async (db, _options, limit) =>
       healthySample(runTitleSizeProposals(db), limit),
     count: async (db) => healthyCount((await runTitleSizeProposals(db)).length),
   },
   "duplicate-spend-candidates": {
-    sample: (db, _options, limit) =>
-      healthySample(findDuplicateSpendCandidates(db), limit),
-    count: async (db) =>
-      healthyCount((await findDuplicateSpendCandidates(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findDuplicateSpendCandidates } = await loadPurchaseDetectors();
+      return healthySample(findDuplicateSpendCandidates(db), limit);
+    },
+    count: async (db) => {
+      const { findDuplicateSpendCandidates } = await loadPurchaseDetectors();
+      return healthyCount((await findDuplicateSpendCandidates(db)).length);
+    },
   },
   "duplicate-financial-transaction-source-refs": {
-    sample: (db, _options, limit) =>
-      healthySample(findDuplicateFinancialTransactionSourceRefs(db), limit),
-    count: async (db) =>
-      healthyCount(
+    sample: async (db, _options, limit) => {
+      const { findDuplicateFinancialTransactionSourceRefs } =
+        await loadFinancialDetectors();
+      return healthySample(
+        findDuplicateFinancialTransactionSourceRefs(db),
+        limit,
+      );
+    },
+    count: async (db) => {
+      const { findDuplicateFinancialTransactionSourceRefs } =
+        await loadFinancialDetectors();
+      return healthyCount(
         (await findDuplicateFinancialTransactionSourceRefs(db)).length,
-      ),
+      );
+    },
   },
   "duplicate-financial-account-source-aliases": {
-    sample: (db, _options, limit) =>
-      healthySample(findDuplicateFinancialAccountSourceAliases(db), limit),
-    count: async (db) =>
-      healthyCount(
+    sample: async (db, _options, limit) => {
+      const { findDuplicateFinancialAccountSourceAliases } =
+        await loadFinancialDetectors();
+      return healthySample(
+        findDuplicateFinancialAccountSourceAliases(db),
+        limit,
+      );
+    },
+    count: async (db) => {
+      const { findDuplicateFinancialAccountSourceAliases } =
+        await loadFinancialDetectors();
+      return healthyCount(
         (await findDuplicateFinancialAccountSourceAliases(db)).length,
-      ),
+      );
+    },
   },
   "provisional-financial-accounts": {
-    sample: (db, _options, limit) =>
-      healthySample(findProvisionalFinancialAccounts(db), limit),
-    count: async (db) =>
-      healthyCount((await findProvisionalFinancialAccounts(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findProvisionalFinancialAccounts } =
+        await loadFinancialDetectors();
+      return healthySample(findProvisionalFinancialAccounts(db), limit);
+    },
+    count: async (db) => {
+      const { findProvisionalFinancialAccounts } =
+        await loadFinancialDetectors();
+      return healthyCount((await findProvisionalFinancialAccounts(db)).length);
+    },
   },
   "invalid-financial-json": {
-    sample: (db, _options, limit) =>
-      healthySample(findInvalidFinancialJson(db), limit),
-    count: async (db) =>
-      healthyCount((await findInvalidFinancialJson(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findInvalidFinancialJson } = await loadFinancialDetectors();
+      return healthySample(findInvalidFinancialJson(db), limit);
+    },
+    count: async (db) => {
+      const { findInvalidFinancialJson } = await loadFinancialDetectors();
+      return healthyCount((await findInvalidFinancialJson(db)).length);
+    },
   },
   "incomplete-statement-imports": {
-    sample: (db, _options, limit) =>
-      healthySample(findIncompleteStatementImports(db), limit),
-    count: async (db) =>
-      healthyCount((await findIncompleteStatementImports(db)).length),
+    sample: async (db, _options, limit) => {
+      const { findIncompleteStatementImports } = await loadFinancialDetectors();
+      return healthySample(findIncompleteStatementImports(db), limit);
+    },
+    count: async (db) => {
+      const { findIncompleteStatementImports } = await loadFinancialDetectors();
+      return healthyCount((await findIncompleteStatementImports(db)).length);
+    },
   },
   "project-date-window-drift": {
     sample: async (db, options, limit) =>
       healthySample(
-        (options.attentionItems ?? (await computeAttentionItems(db))).filter(
-          (item) => item.type === "date_window_drift",
-        ),
+        (
+          options.attentionItems ??
+          (await (await loadAttention()).computeAttentionItems(db))
+        ).filter((item) => item.type === "date_window_drift"),
         limit,
       ),
     count: async (db, options) =>
       healthyCount(
-        (options.attentionItems ?? (await computeAttentionItems(db))).reduce(
+        (
+          options.attentionItems ??
+          (await (await loadAttention()).computeAttentionItems(db))
+        ).reduce(
           (count, item) => count + Number(item.type === "date_window_drift"),
           0,
         ),
