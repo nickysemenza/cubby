@@ -237,6 +237,7 @@ const detailSlots = {
         "VendorClassification",
       ),
     ),
+    "mail-search": reportSlot<"vendor">("vendor.mail-search"),
   },
   purchase: {
     runs: slot(() => named(import("~/features/purchase/slots"), "Runs")),

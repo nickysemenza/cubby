@@ -10,6 +10,7 @@ import {
   runShortcode,
 } from "./identifier-fields";
 import { importSourceIdentity } from "./import-source";
+import type { MailSearchState } from "./mail-search-fields";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
 /** One Reclassify request records at most this many Emails in its Run. */
@@ -85,7 +86,14 @@ const pagePosition = z.object({
   pageToken: z.string().nullable(),
   completed: z.boolean(),
 });
-const scopedQueryPosition = mailboxScopedQuery.extend(pagePosition.shape);
+const scopedQueryPosition = mailboxScopedQuery.extend({
+  ...pagePosition.shape,
+  /** When the last page finished; absent on entries completed before it was recorded. */
+  completedAt: z.iso.datetime().optional(),
+  /** Emails retained from this search's pages; absent before it was recorded. */
+  emailCount: z.number().int().nonnegative().optional(),
+});
+export type MailboxScopedPosition = z.infer<typeof scopedQueryPosition>;
 /** Tokens move only after that page's acquisition and research dispatch succeed. */
 export const mailboxCoverage = z.object({
   version: z.literal(1),
@@ -119,6 +127,8 @@ export const mailboxPage = z.object({
   events: z.array(mailboxHistoryEvent),
   startCoverage: mailboxCoverage,
   nextCoverage: mailboxCoverage,
+  /** The targeted search this page advanced; absent for a new-mail page. */
+  scopedKey: z.string().min(1).optional(),
 });
 export type MailboxPage = z.infer<typeof mailboxPage>;
 export const mailboxDiscoveryInput = z.object({
@@ -683,3 +693,96 @@ export const summarizeDiscoveryProgress = ({
     ? { messageCount: page.messageIds.length, eventCount: page.events.length }
     : null,
 });
+
+export {
+  mailSearchState,
+  MAIL_SEARCH_STATE_LABEL,
+  type MailSearchState,
+} from "./mail-search-fields";
+
+/**
+ * The stored position of a current search, or undefined. A changed query text
+ * restarts the search (`mergeMailboxQueries`), so its old position is not it.
+ */
+export const currentScopedPosition = (
+  coverage: MailboxCoverage | null,
+  query: MailboxScopedQuery,
+) =>
+  coverage?.scoped.find(
+    (entry) => entry.key === query.key && entry.query === query.query,
+  );
+
+export const scopedPositionState = (
+  position: MailboxScopedPosition | undefined,
+): MailSearchState =>
+  position?.completed
+    ? "done"
+    : position?.pageToken
+      ? "in_progress"
+      : "not_started";
+
+/** `vendor:<uuid>:…` searches a known Vendor's senders; `merchant:`/`descriptor:` search an unmatched charge. */
+export const isVendorMailSearchKey = (key: string) => key.startsWith("vendor:");
+
+const PENDING_SAMPLE = 5;
+const searchCount = z.object({
+  completed: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+/** One mailbox's targeted-search progress over the current targets only. */
+export const mailSearchProgress = z.strictObject({
+  vendors: searchCount,
+  charges: searchCount,
+  /** The search part-way through its pages, if any. */
+  inProgress: mailboxScopedQuery.nullable(),
+  /** The next untouched searches in search order. */
+  nextPending: z.array(mailboxScopedQuery).max(PENDING_SAMPLE),
+});
+export type MailSearchProgress = z.infer<typeof mailSearchProgress>;
+
+/**
+ * Counts and the search queue for one mailbox. Stored entries that are no
+ * longer targets (kept so a returning target is not rescanned) are ignored;
+ * targets not yet merged into the cursor queue after the stored ones, as the
+ * next merge appends them.
+ */
+export const summarizeMailSearchProgress = (
+  coverage: MailboxCoverage | null,
+  targets: readonly MailboxScopedQuery[],
+): MailSearchProgress => {
+  const states = targets.map((query) => ({
+    query,
+    state: scopedPositionState(currentScopedPosition(coverage, query)),
+  }));
+  const count = (vendor: boolean) => {
+    const group = states.filter(
+      ({ query }) => isVendorMailSearchKey(query.key) === vendor,
+    );
+    return {
+      completed: group.filter(({ state }) => state === "done").length,
+      total: group.length,
+    };
+  };
+  const stored = new Map(
+    (coverage?.scoped ?? []).map((entry, index) => [entry.key, index]),
+  );
+  const queue = states
+    .filter(({ state }) => state !== "done")
+    .map(({ query, state }) => ({
+      query: { key: query.key, query: query.query },
+      state,
+      order: stored.get(query.key) ?? Number.MAX_SAFE_INTEGER,
+    }))
+    .sort((left, right) => left.order - right.order);
+  const inProgress =
+    queue.find(({ state }) => state === "in_progress")?.query ?? null;
+  return {
+    vendors: count(true),
+    charges: count(false),
+    inProgress,
+    nextPending: queue
+      .filter(({ state }) => state === "not_started")
+      .slice(0, PENDING_SAMPLE)
+      .map(({ query }) => query),
+  };
+};

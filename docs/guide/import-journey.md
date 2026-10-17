@@ -41,6 +41,18 @@ platform domains do not identify the seller or establish purchase ownership.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 
+Each search records its finish time and the Emails its pages retained
+(`completedAt`, `emailCount`); searches finished before that was tracked show
+neither. The Mail import card shows, per mailbox, finished Vendor and charge
+searches over today's targets only (a finished search whose target is gone
+stays in the cursor but is not counted), the search in progress, the next five
+queued searches, and a link to Mail import Runs that need review. The Vendor
+list's derived Mail search column is done when every current search of that
+Vendor has finished in every member's connected mailbox, in progress once any
+has a finished page or a page token, not started otherwise, and blank for a
+Vendor with no searches; the Vendor's Mail search section lists each search
+per mailbox.
+
 Discovery admits retained candidates to Pi, which imports what is unambiguous
 under the writer contracts and leaves the rest in the Work queue. Keep a
 minimal identity and classification footprint for scanned negatives; retain

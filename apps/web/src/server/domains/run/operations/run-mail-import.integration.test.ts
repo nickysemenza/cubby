@@ -11,6 +11,7 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { appSettings, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
+import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
@@ -159,6 +160,61 @@ describe("automatic Mail import switch", () => {
     expect(await invoke("mailImport", {})).toMatchObject({
       ok: true,
       data: { mailboxes: [{ mailboxId, enabled: true }] },
+    });
+  });
+
+  it("reports each mailbox's current searches, ignoring stale entries", async () => {
+    const party = await seed();
+    const verified = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Searched Vendor",
+      orderEmailSenders: ["orders@searched.example.test"],
+    });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Queued Vendor",
+      orderEmailSenders: ["orders@queued.example.test"],
+    });
+    const searched = {
+      key: `vendor:${verified.id}:from:orders@searched.example.test`,
+      query: "from:orders@searched.example.test",
+    };
+    await checkpointMailboxCoverage(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      from: null,
+      to: {
+        version: 1,
+        baselineHistoryId: "100",
+        broad: { pageToken: null, completed: false },
+        scoped: [
+          { ...searched, pageToken: "page-2", completed: false },
+          // Finished searches whose targets are gone stay out of the totals.
+          {
+            key: "merchant:retired synthetic shop",
+            query: '"retired synthetic shop"',
+            pageToken: null,
+            completed: true,
+          },
+        ],
+        history: { historyId: "100", pageToken: null, targetHistoryId: null },
+        nextLane: "scan",
+      },
+    });
+    expect(await invoke("mailImport", {})).toMatchObject({
+      ok: true,
+      data: {
+        mailboxes: [
+          {
+            mailboxId,
+            enabled: false,
+            searches: {
+              vendors: { completed: 0, total: 2 },
+              charges: { completed: 0, total: 0 },
+              inProgress: searched,
+              nextPending: [{ query: "from:orders@queued.example.test" }],
+            },
+          },
+        ],
+      },
     });
   });
 

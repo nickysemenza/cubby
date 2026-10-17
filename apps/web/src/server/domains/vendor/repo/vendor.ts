@@ -13,6 +13,7 @@ import {
   type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
+import type { MailSearchState } from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
@@ -58,6 +59,7 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/domains/image/repo/image-displayability";
+import { LITERAL_SENDER } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
@@ -257,6 +259,58 @@ const vendorLatestPurchaseDate = correlated<string | null>(
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
+// The Vendor's current searches (`vendorMailQueries`): one per literal sender
+// and one for the website's registrable domain. That domain needs the public
+// suffix list, so the website expects one `domain:` entry whose domain is the
+// shortest suffix of its host.
+const vendorMailExpectations = `(
+  SELECT 'vendor:' || "Vendor"."id"::text
+           || CASE WHEN t LIKE '%@%' THEN ':from:' ELSE ':domain:' END || t AS key,
+         NULL::text AS host
+    FROM (SELECT lower(s) AS t FROM unnest("Vendor"."orderEmailSenders") AS s) senders
+   WHERE t ~ '${LITERAL_SENDER.source}'
+  UNION
+  SELECT NULL, h
+    FROM (SELECT lower(substring("Vendor"."website"
+            FROM '^[Hh][Tt][Tt][Pp][Ss]?://(?:[^/?#@]*@)?([^/:?#]+)')) AS h) site
+   WHERE h ~ '[.]' AND h !~ '^[0-9.]+$'
+)`;
+
+/**
+ * Mail discovery's progress on this Vendor's searches across every member's
+ * connected Google mailbox (`MailSearchState`), or null with no searches.
+ */
+const vendorMailSearch = correlated<MailSearchState | null>(
+  `(SELECT CASE
+       WHEN count(*) = 0 THEN NULL
+       WHEN bool_and(COALESCE(x.done, false)) THEN 'done'
+       WHEN bool_or(COALESCE(x.started, false)) THEN 'in_progress'
+       ELSE 'not_started'
+     END
+     FROM ${vendorMailExpectations} e
+     LEFT JOIN (
+       SELECT DISTINCT lp."id" AS party, a."account_id" AS mailbox
+         FROM "LedgerParty" lp
+         JOIN "account" a ON a."user_id" = lp."userId" AND a."provider_id" = 'google'
+        WHERE lp."deletedAt" IS NULL AND lp."userId" IS NOT NULL
+     ) m ON true
+     LEFT JOIN LATERAL (
+       SELECT (q->>'completed')::boolean AS done,
+              ((q->>'completed')::boolean OR q->>'pageToken' IS NOT NULL) AS started
+         FROM "MailboxCursor" c
+         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c."coverage"->'scoped', '[]'::jsonb)) q
+        WHERE c."ledgerPartyId" = m.party AND c."provider" = 'gmail' AND c."mailboxId" = m.mailbox
+          AND (q->>'key' = e.key OR (
+            e.host IS NOT NULL
+            AND starts_with(q->>'key', 'vendor:' || "Vendor"."id"::text || ':domain:')
+            AND (e.host = split_part(q->>'key', ':domain:', 2)
+              OR right(e.host, length(split_part(q->>'key', ':domain:', 2)) + 1)
+                = '.' || split_part(q->>'key', ':domain:', 2))))
+        ORDER BY length(q->>'key')
+        LIMIT 1
+     ) x ON true)`,
+);
+
 export async function getVendorCoverage(
   db: Database,
   input: { vendorId: VendorShortcode; from: string; to: string },
@@ -335,6 +389,7 @@ const vendorColumns = {
   purchaseCount: vendorPurchaseCount,
   spend: vendorSpend,
   latestPurchaseDate: vendorLatestPurchaseDate,
+  mailSearch: vendorMailSearch,
   logo: {
     id: image.shortcode,
     key: image.key,
@@ -391,6 +446,7 @@ type VendorRow = {
   purchaseCount: number;
   spend: number;
   latestPurchaseDate: string | null;
+  mailSearch: MailSearchState | null;
   logo: {
     id: string;
     key: string;
@@ -481,6 +537,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     purchaseCount: Number(row.purchaseCount),
     spend: Number(row.spend),
     latestPurchaseDate: row.latestPurchaseDate,
+    mailSearch: row.mailSearch,
     logo: vendorLogoToAPI(row.logo),
     dataQuality,
     createdAt: row.createdAt,
@@ -494,6 +551,7 @@ const vendorScaffold = listScaffold("vendor", vendor, {
     purchaseCount: vendorPurchaseCount,
     // A vendor with no purchases leads a newest-first list.
     latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
+    mailSearch: vendorMailSearch,
     needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
     hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
@@ -511,8 +569,14 @@ export const vendorListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  const { purchaseCount, spend, latestPurchaseDate, logo, ...core } =
-    vendorColumns;
+  const {
+    purchaseCount,
+    spend,
+    latestPurchaseDate,
+    mailSearch,
+    logo,
+    ...core
+  } = vendorColumns;
   return vendorScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
@@ -526,6 +590,7 @@ export const vendorListRead = async (
               purchaseCount,
               spend,
               latestPurchaseDate,
+              mailSearch,
             })),
             ...listGroupFields(projection, "media", () => ({ logo })),
           })

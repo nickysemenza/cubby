@@ -21,6 +21,7 @@ import {
   dispatchRunEvent,
   dispatchStartedRun,
 } from "~/server/domains/purchase-import/repo/dispatch";
+import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
 import {
   readMailImportSettings,
   setMailImport,
@@ -119,11 +120,11 @@ async function controlRunOperation(
   };
 }
 
-/** The member's connected Google mailboxes with their switches and the budget window. */
+/** The member's connected Google mailboxes with their switches, search progress and the budget window. */
 async function mailImportStatusFor(
   context: Parameters<typeof memberParty>[0],
 ): Promise<MailImportStatus> {
-  await memberParty(context);
+  const party = await memberParty(context);
   const [connected, settings, budget] = await Promise.all([
     getDb(context.db)
       .selectDistinct({ mailboxId: account.accountId })
@@ -139,10 +140,14 @@ async function mailImportStatusFor(
     readAiBudget(context.db),
   ]);
   return {
-    mailboxes: connected.map(({ mailboxId }) => ({
-      mailboxId,
-      enabled: settings.enabledMailboxes.includes(mailboxId),
-    })),
+    mailboxes: await withMailSearchProgress(
+      context.db,
+      party.id,
+      connected.map(({ mailboxId }) => ({
+        mailboxId,
+        enabled: settings.enabledMailboxes.includes(mailboxId),
+      })),
+    ),
     budget,
   };
 }

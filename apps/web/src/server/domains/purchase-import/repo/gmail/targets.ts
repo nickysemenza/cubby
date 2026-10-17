@@ -25,29 +25,35 @@ export type GmailSyncTarget = {
 };
 
 /**
- * Members whose login has connected Google: the mailboxes a scheduled
- * discovery pass reads. A member who never connected Gmail gets no pass (and
- * no failing Run) until they do.
+ * Members whose login has connected Google, one row per mailbox: the
+ * mailboxes a scheduled discovery pass reads. A member who never connected
+ * Gmail gets no pass (and no failing Run) until they do.
  */
+export const listMemberMailboxes = (db: Database) =>
+  getDb(db)
+    .selectDistinct({
+      ledgerPartyId: ledgerParty.id,
+      name: ledgerParty.name,
+      userId: ledgerParty.userId,
+      mailboxId: account.accountId,
+    })
+    .from(ledgerParty)
+    .innerJoin(
+      account,
+      and(
+        eq(account.userId, ledgerParty.userId),
+        eq(account.providerId, "google"),
+      ),
+    )
+    .where(and(isNotNull(ledgerParty.userId), notDeleted(ledgerParty)))
+    .orderBy(ledgerParty.name, account.accountId);
+
+/** Each member mailbox with the targeted searches discovery runs in it. */
 export async function listGmailSyncTargets(
   db: Database,
 ): Promise<GmailSyncTarget[]> {
   const [members, vendors, charges] = await Promise.all([
-    getDb(db)
-      .selectDistinct({
-        ledgerPartyId: ledgerParty.id,
-        userId: ledgerParty.userId,
-        mailboxId: account.accountId,
-      })
-      .from(ledgerParty)
-      .innerJoin(
-        account,
-        and(
-          eq(account.userId, ledgerParty.userId),
-          eq(account.providerId, "google"),
-        ),
-      )
-      .where(and(isNotNull(ledgerParty.userId), notDeleted(ledgerParty))),
+    listMemberMailboxes(db),
     getDb(db)
       .select({
         id: vendor.id,
