@@ -379,10 +379,16 @@ async function seedConnectedHousehold(
       }),
     );
   }
-  await create("vendorAccount", {
-    vendorId: vendors[0]!.id,
-    ledgerPartyId: otherMemberCode,
-  });
+  // The visiting member's own orders, paid from their own cash: settlement
+  // from another member's account conflicts with the order (settlement-conflicts).
+  const visitorVendorAccounts = [];
+  for (const vendor of vendors)
+    visitorVendorAccounts.push(
+      await create("vendorAccount", {
+        vendorId: vendor.id,
+        ledgerPartyId: otherMemberCode,
+      }),
+    );
 
   const ingredients: CreatedEntity[] = [];
   const foodProducts = [];
@@ -685,7 +691,9 @@ async function seedConnectedHousehold(
     const purchaseDate = day(index - 20);
     const purchase = await create("purchase", {
       vendorId: vendors[vendorIndex]!.id,
-      vendorAccountId: vendorAccounts[vendorIndex]!.id,
+      vendorAccountId: (index % 2 ? visitorVendorAccounts : vendorAccounts)[
+        vendorIndex
+      ]!.id,
       defaultProjectId: project.id,
       spendingCategoryId: spending[vendorIndex]!.id,
       orderId: `CEDAR-DEMO-${String(index + 1).padStart(3, "0")}`,
