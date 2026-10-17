@@ -201,7 +201,7 @@ private struct EntityBrowseRow: View {
     var body: some View {
         HStack(spacing: FieldGuideTokens.Space.md) {
             DomainMark(descriptor.key, style: .symbol, size: 15)
-                .frame(width: 20)
+                .fieldGuideIconSlot()
             Text(descriptor.plural)
                 .font(.fieldGuideBody)
             Spacer(minLength: FieldGuideTokens.Space.sm)

@@ -23,7 +23,7 @@ struct LocationPickerSheet: View {
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: 20)
+                            .fieldGuideIconSlot()
                         VStack(alignment: .leading, spacing: 1) {
                             Text(option.name)
                                 .font(.fieldGuideBody)

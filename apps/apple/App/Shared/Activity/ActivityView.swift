@@ -103,7 +103,7 @@ private struct LocalActivityRow: View {
                     ProgressView()
                 }
             }
-            .frame(width: 22)
+            .fieldGuideIconSlot(width: 22)
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.title).font(.headline)
                 if let detail = activity.detail {

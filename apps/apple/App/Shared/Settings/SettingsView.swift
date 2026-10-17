@@ -452,13 +452,14 @@ private struct DeviceParticipationSection: View {
 struct DeviceParticipationOnboardingSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @ScaledMetric(relativeTo: .largeTitle) private var heroGlyphSize: CGFloat = 44
 
     var body: some View {
         NavigationStack {
             VStack(spacing: FieldGuideTokens.Space.lg) {
                 Spacer()
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 44))
+                    .font(.system(size: heroGlyphSize))
                     .foregroundStyle(FieldGuideTokens.interaction)
                 Text("Help process photos on this device?")
                     .font(.fieldGuideTitle)

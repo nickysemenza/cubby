@@ -66,6 +66,8 @@ private struct CaptureContent: View {
     @Bindable var capture: CaptureModel
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
+    /// Shared by the location glyph column and the chip dividers so both track Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 20
 
     var body: some View {
         ScrollView {
@@ -151,7 +153,7 @@ private struct CaptureContent: View {
                     if capture.session.location == nil {
                         VStack(spacing: FieldGuideTokens.Space.sm) {
                             Image(systemName: "barcode.viewfinder")
-                                .font(.system(size: 32, weight: .light))
+                                .font(.largeTitle.weight(.light))
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             Text("Pick a location to start the scanner")
                                 .font(.fieldGuideBody)
@@ -184,7 +186,7 @@ private struct CaptureContent: View {
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
                         DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: 20)
+                            .frame(width: iconSlotWidth)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(capture.location?.name ?? "Choose a location")
                                 .font(.fieldGuideTitle)
@@ -351,7 +353,7 @@ private struct CaptureContent: View {
         } else {
             Panel(padding: 0, spacing: 0) {
                 ForEach(Array(capture.session.chips.enumerated()), id: \.element.id) { index, chip in
-                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 20) }
+                    if index > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + iconSlotWidth) }
                     ScanChipRow(chip: chip)
                 }
             }
@@ -368,9 +370,9 @@ struct ScanChipRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Image(systemName: symbol)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundStyle(tint)
-                .frame(width: 20)
+                .fieldGuideIconSlot()
                 // Motion is a secondary cue only: the label and chip already spell the outcome out.
                 .symbolEffect(.pulse, isActive: !reduceMotion && isPending)
                 .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion && isSettled)
@@ -383,7 +385,7 @@ struct ScanChipRow: View {
                     Text(message)
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.destructive)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)

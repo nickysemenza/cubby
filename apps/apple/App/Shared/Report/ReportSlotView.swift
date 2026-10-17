@@ -320,8 +320,8 @@ private struct ReportScheduleView: View {
     let schedule: ReportPresentation.Schedule
     @State private var collapsed: Set<String> = []
 
-    private static let rowHeight: CGFloat = 36
-    private static let labelWidth: CGFloat = 156
+    @ScaledMetric(relativeTo: .footnote) private var rowHeight: CGFloat = 36
+    @ScaledMetric(relativeTo: .footnote) private var labelWidth: CGFloat = 156
 
     var body: some View {
         let rows = schedule.visibleRows(collapsed: collapsed)
@@ -337,11 +337,11 @@ private struct ReportScheduleView: View {
                     ForEach(rows) { row in
                         HStack(spacing: FieldGuideTokens.Space.sm) {
                             label(row)
-                                .frame(width: Self.labelWidth, alignment: .leading)
+                                .frame(width: labelWidth, alignment: .leading)
                             timeline(row)
-                                .frame(width: 320, height: Self.rowHeight)
+                                .frame(width: 320, height: rowHeight)
                         }
-                        .frame(height: Self.rowHeight)
+                        .frame(minHeight: rowHeight)
                         .accessibilityElement(children: .combine)
                         .accessibilityHint(dependencies(row, names: names))
                     }

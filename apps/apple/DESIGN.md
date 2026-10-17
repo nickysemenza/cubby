@@ -32,7 +32,7 @@ Native Mac table cells explicitly receive the owning AppModel so sorting and row
 
 ## Photo group decisions
 
-Native photo review renders the server's `DecisionStep[]` and `blockedReason`; it does not infer approval readiness. `DecisionSteps` uses a positive dot for done, a faint point for blocked, a hollow ring for not needed and a citron mark for needs input. One step expands at a time; answered rows show the summary and Change. The `apply` key is omitted because Create/Attach lives in the footer and atomically confirms and applies the reviewed revisions. Ready batch selections exclude blocked groups.
+Native photo review renders the server's `DecisionStep[]` and `blockedReason`; it does not infer approval readiness. `DecisionSteps` marks each status with a distinct Dynamic Type–scaled symbol: a positive filled checkmark for done, a dashed circle for blocked, a minus circle for not needed and a dark mark on citron for needs input. Summaries wrap rather than truncate. One step expands at a time; answered rows show the summary and Change. The `apply` key is omitted because Create/Attach lives in the footer and atomically confirms and applies the reviewed revisions. Ready batch selections exclude blocked groups.
 
 Photo and label text lead on narrow layouts and sit beside the steps when space permits. Existing Product evidence loads with selection, independently of candidate ranking. Deterministic agreement alone draws a checkmark; missing or model evidence draws a question or warning mark. Ownership and inventory answers save natively through `saveGroups`, preserving the proposal's photo roster, Product edits and explicit ownership. Agent concerns are read-only and use the explicit Resolved operation with an optional reply.
 

@@ -359,7 +359,8 @@ struct FieldsSectionView<Inline: View>: View {
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
                 Spacer(minLength: FieldGuideTokens.Space.sm)
-                if isInherited(field) { InheritedMarker() }
+                // The link announces "Inherited" itself, so VoiceOver has one stop, not two.
+                if isInherited(field) { InheritedMarker().accessibilityHidden(true) }
                 NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
@@ -372,6 +373,7 @@ struct FieldsSectionView<Inline: View>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityValue(isInherited(field) ? "Inherited" : "")
             }
             .frame(maxWidth: .infinity)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
@@ -399,6 +401,8 @@ struct FieldsSectionView<Inline: View>: View {
                     }
                     if isInherited(field) { InheritedMarker() }
                 }
+                // The marker reads as part of the value, not as a separate VoiceOver stop.
+                .accessibilityElement(children: .combine)
             } label: {
                 FieldExplanationLabel(
                     field: field,
