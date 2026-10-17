@@ -80,9 +80,12 @@ const apportionFunders = (
 ): bigint[][] => {
   const total = shares.reduce((sum, cents) => sum + cents, 0n);
   const sign = total < 0n ? -1n : 1n;
-  // Mixed-sign shares have no consistent drawdown; split each independently.
+  // The joint allocator gives every share its source Expense's sign; a drawdown
+  // over mixed signs would move cents between funders.
   if (shares.some((cents) => cents * sign < 0n))
-    return shares.map((cents) => splitCents(cents, weights));
+    throw new Error(
+      `Expense allocation shares have mixed signs: ${shares.join(", ")}`,
+    );
   const remaining = splitCents(total * sign, weights);
   return shares.map((cents) => {
     if (remaining.every((left) => left === 0n))
