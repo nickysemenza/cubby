@@ -129,6 +129,12 @@ export const mailboxPage = z.object({
   nextCoverage: mailboxCoverage,
   /** The targeted search this page advanced; absent for a new-mail page. */
   scopedKey: z.string().min(1).optional(),
+  /**
+   * Retained sources across this page's attempts, saved before research
+   * dispatch: a retry skips an Email whose import already completed, so its
+   * own ingestion result would undercount the page.
+   */
+  retainedOrderMailIds: z.array(z.string().min(1)).optional(),
 });
 export type MailboxPage = z.infer<typeof mailboxPage>;
 export const mailboxDiscoveryInput = z.object({

@@ -19,6 +19,19 @@ import { Switch } from "~/ui/primitives/switch";
 const usd = (value: number) =>
   value.toLocaleString(undefined, { style: "currency", currency: "USD" });
 
+const MAIL_IMPORT_REFRESH_MS = 30_000;
+/** Poll only while a switched-on mailbox still has searches to run. */
+export const mailImportRefetchInterval = (
+  status: MailImportStatus | undefined,
+): number | false =>
+  status?.mailboxes.some(
+    ({ enabled, searches }) =>
+      enabled &&
+      (searches.inProgress !== null || searches.nextPending.length > 0),
+  )
+    ? MAIL_IMPORT_REFRESH_MS
+    : false;
+
 /** Targeted-search progress over today's targets, then the search queue. */
 function MailSearchSummary({
   searches,
@@ -56,7 +69,10 @@ function MailSearchSummary({
 /** One switch per mailbox; paid model work shares the household budget window. */
 export function MailImportCard() {
   const queryClient = useQueryClient();
-  const status = useQuery(run.mailImport.queryOptions({}));
+  const status = useQuery({
+    ...run.mailImport.queryOptions({}),
+    refetchInterval: (query) => mailImportRefetchInterval(query.state.data),
+  });
   const toggle = useActionMutation({
     mutationFn: () => run.setMailImport.mutationOptions(),
     success: "Mail import updated",

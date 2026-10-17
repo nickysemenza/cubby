@@ -404,6 +404,24 @@ export async function saveMailDiscoveryBatch(
       storage: ports.storage,
     });
     if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
+    const retained = [
+      ...new Set([
+        ...(page.retainedOrderMailIds ?? []),
+        ...ingested.orderMailIds,
+      ]),
+    ];
+    if (retained.length !== (page.retainedOrderMailIds?.length ?? 0)) {
+      const [saved] = await getDb(db)
+        .update(runTable)
+        .set({
+          progress: patchProgress({
+            page: { ...page, retainedOrderMailIds: retained },
+          }),
+        })
+        .where(eligibleAttempt(params))
+        .returning({ id: runTable.id });
+      if (!saved) return { kind: "stopped" };
+    }
     for (
       let offset = 0;
       claimed.input.executionPolicy === "import" &&
@@ -447,7 +465,7 @@ export async function saveMailDiscoveryBatch(
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
           from: page.startCoverage,
-          to: creditScopedPage(page, ingested.orderMailIds.length, new Date()),
+          to: creditScopedPage(page, retained.length, new Date()),
         }))
       )
         throw new Error("Mailbox page coverage changed before checkpoint");
