@@ -87,6 +87,12 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "An account cannot be deleted while live financial transactions still retain settlement evidence against it.",
   },
+  "EntityLink[purchasePaymentAccount].to": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "A member's assertion that this account paid an order is soft-deleted with the account; the order's paying accounts fall back to its payment evidence.",
+  },
   "StatementRow.accountId": {
     code: "block-live-statement-rows",
     effect: "block",

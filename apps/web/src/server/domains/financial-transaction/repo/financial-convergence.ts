@@ -7,7 +7,10 @@ import {
   type FinancialWorkPreview,
 } from "@cubby/schemas/financial-booking";
 import type { FinancialMailEvent } from "@cubby/schemas/financial-mail-event";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionKind,
+  type FinancialTransactionSourceRef,
+} from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { cents } from "@cubby/shared";
@@ -49,6 +52,7 @@ import {
   previewFinancialBooking,
 } from "./financial-booking";
 import { updateFinancialTransaction } from "./financial-transaction";
+import { findSettlementConflicts } from "./settlement-conflicts";
 
 type Result = z.infer<typeof financialConvergenceResult>;
 type Ready = {
@@ -455,6 +459,18 @@ async function runFinancialConvergence(
         return review(
           "Resolve the accepted Purchase's live Vendor before automatic booking.",
         );
+      if (target) {
+        const conflicts = await findSettlementConflicts(tx, {
+          accountId: row.accountId,
+          kind: financialTransactionKind.parse(row.kind),
+          transactionDate: row.transactionDate,
+          purchaseIds: [target.id],
+        });
+        if (conflicts.has(target.id))
+          return review(
+            "This payment's account conflicts with the Purchase (another member's account, or not an account its payment evidence names); settle it by review.",
+          );
+      }
       const verifiedTransactionId = row.id;
       const verifiedAccountId = row.accountId;
       async function retainFinancialEmail() {

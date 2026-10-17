@@ -12,12 +12,15 @@ import {
 import {
   importWriterInput,
   importWriterOutput,
+  type ExtractedPaymentEvidence,
   type ExtractedPurchaseLine,
+  type PaymentTender,
   type ImportWriterInput,
   type ImportWriterOutput,
   type ProposedImportFix,
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
@@ -228,6 +231,67 @@ async function findPurchase(
       notDeleted(purchase),
     ),
   });
+}
+
+/**
+ * Tender is excluded from `sourceFinancialFacts`, so a re-read that only
+ * learns how an already-retained line was paid (an export naming the gift
+ * card) is not a financial disagreement. It fills an `unknown` tender in
+ * place, matching lines by their financial facts rather than position (sources
+ * reorder payments); identical facts whose proposed lines disagree or include
+ * an unnamed line stay unknown, and a known tender is never rewritten.
+ */
+async function recordLearnedTender(
+  tx: DrizzleTransaction,
+  source: { purchaseId: PurchaseId; sourceClaimId: string },
+  proposed: readonly ExtractedPaymentEvidence[],
+): Promise<void> {
+  const factKey = (payment: {
+    amount: number;
+    chargedAt: string | null;
+    cardLastFour: string | null;
+  }) =>
+    `${cents(payment.amount)}|${payment.chargedAt ?? ""}|${payment.cardLastFour ?? ""}`;
+  const learned = new Map<string, PaymentTender | null>();
+  for (const payment of proposed) {
+    const tender = payment.tender ?? "unknown";
+    const key = factKey({
+      amount: payment.amount,
+      chargedAt: payment.chargedAt
+        ? new Date(payment.chargedAt).toISOString()
+        : null,
+      cardLastFour: payment.cardLastFour ?? null,
+    });
+    const prior = learned.get(key);
+    // Identical facts that disagree, or include an unnamed line, are ambiguous.
+    learned.set(key, prior === undefined || prior === tender ? tender : null);
+  }
+  if (![...learned.values()].some((tender) => tender && tender !== "unknown"))
+    return;
+  const retained = await tx
+    .select()
+    .from(purchasePaymentEvidence)
+    .where(
+      and(
+        eq(purchasePaymentEvidence.purchaseId, source.purchaseId),
+        eq(purchasePaymentEvidence.sourceClaimId, source.sourceClaimId),
+      ),
+    );
+  for (const row of retained) {
+    if (row.tender !== "unknown") continue;
+    const tender = learned.get(
+      factKey({
+        amount: row.amount,
+        chargedAt: row.chargedAt?.toISOString() ?? null,
+        cardLastFour: row.cardLastFour,
+      }),
+    );
+    if (!tender || tender === "unknown") continue;
+    await tx
+      .update(purchasePaymentEvidence)
+      .set({ tender, updatedAt: new Date() })
+      .where(eq(purchasePaymentEvidence.id, row.id));
+  }
 }
 
 export async function existingExpenses(
@@ -1275,6 +1339,14 @@ export async function importVendorOrder(
       financialProjectionUnchanged
     ) {
       await promoteHistoricalAcceptedObservation(tx, existingOrder.id);
+      await recordLearnedTender(
+        tx,
+        {
+          purchaseId: existingOrder.purchaseId,
+          sourceClaimId: existingOrder.sourceClaimId,
+        },
+        input.extraction.candidate?.payments ?? [],
+      );
       await tx
         .update(importSourceClaim)
         .set({
@@ -1351,6 +1423,14 @@ export async function importVendorOrder(
         });
       }
       const purchaseId = parseEntityId("purchase", existingOrder.purchaseId);
+      await recordLearnedTender(
+        tx,
+        {
+          purchaseId: existingOrder.purchaseId,
+          sourceClaimId: existingOrder.sourceClaimId,
+        },
+        candidate.payments,
+      );
       await attachEvidence(tx, purchaseId, input);
       await recordImportSourceAssociation(
         tx,
@@ -2097,6 +2177,7 @@ export async function importVendorOrder(
           amount: payment.amount,
           chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
           cardLastFour: payment.cardLastFour,
+          tender: payment.tender ?? "unknown",
           description: payment.description,
           evidenceIndex,
         });

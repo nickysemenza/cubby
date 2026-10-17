@@ -37,6 +37,8 @@ const candidate = (
   }),
   days: 2,
   exactAmount: true,
+  nearAmount: false,
+  conflicts: [],
   merchantMatches: true,
   ...rank,
 });

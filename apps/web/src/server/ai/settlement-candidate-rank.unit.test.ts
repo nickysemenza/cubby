@@ -37,6 +37,7 @@ const rank = (
   days: 1,
   exactAmount,
   merchantMatches,
+  conflicts: [],
 });
 
 const transaction = (id: string, amount: number) =>

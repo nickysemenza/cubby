@@ -32,6 +32,8 @@ export const dataExceptionReason = z.enum([
   "not_applicable",
   "insufficient_detail",
   "expected_mismatch",
+  "confirmed_shared_use",
+  "confirmed_tender",
 ]);
 export type DataExceptionReason = z.infer<typeof dataExceptionReason>;
 
@@ -43,6 +45,8 @@ export const dataExceptionReasonLabel = {
   not_applicable: "Not applicable",
   insufficient_detail: "Insufficient detail",
   expected_mismatch: "Expected mismatch",
+  confirmed_shared_use: "Confirmed shared use",
+  confirmed_tender: "Confirmed payment method",
 } as const satisfies Record<DataExceptionReason, string>;
 
 export const dataQualityGapKind = dataQualityCheckKind;

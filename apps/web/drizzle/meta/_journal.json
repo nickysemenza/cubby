@@ -589,6 +589,13 @@
       "when": 1792264010992,
       "tag": "0083_spending_category_stock_and_dual_target_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1792271301338,
+      "tag": "0084_payment_tender_and_payment_account_link",
+      "breakpoints": true
     }
   ]
 }

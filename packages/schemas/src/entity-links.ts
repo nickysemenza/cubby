@@ -100,6 +100,29 @@ export const ENTITY_LINK_KINDS = {
       onMergeCollision: "dropLoser",
     },
   },
+  purchasePaymentAccount: {
+    from: "purchase",
+    to: "financialAccount",
+    quantity: false,
+    forbidSelfLink: false,
+    acyclic: false,
+    fromEnd: {
+      role: "reference",
+      label: "payment accounts",
+      description:
+        "A member's assertion that this account paid for the order. When an order has none, its paying accounts are derived on read from its payment evidence; an explicit link always wins. Carries no money.",
+      liveness: MUST_TARGET_LIVE,
+      onMergeCollision: "dropLoser",
+    },
+    toEnd: {
+      role: "reference",
+      label: "paid purchases",
+      description:
+        "A vendor order a member confirmed this account paid for; settlement checks refuse a charge from an account the order names none of.",
+      liveness: MUST_TARGET_LIVE,
+      onMergeCollision: "dropLoser",
+    },
+  },
   projectTool: {
     from: "project",
     to: "product",

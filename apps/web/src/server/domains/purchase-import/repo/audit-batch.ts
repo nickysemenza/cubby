@@ -91,6 +91,7 @@ export async function loadPurchaseAuditBatch(
         amount: purchasePaymentEvidence.amount,
         chargedAt: purchasePaymentEvidence.chargedAt,
         cardLastFour: purchasePaymentEvidence.cardLastFour,
+        tender: purchasePaymentEvidence.tender,
         description: purchasePaymentEvidence.description,
       })
       .from(purchasePaymentEvidence)

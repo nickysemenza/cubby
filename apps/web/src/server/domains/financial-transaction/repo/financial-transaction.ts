@@ -67,6 +67,10 @@ import {
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import {
+  findSettlementConflicts,
+  refuseSettlementConflicts,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
@@ -557,6 +561,10 @@ export async function createFinancialTransaction(
         kind: data.kind,
         next: requested,
       });
+      await refuseSettlementConflicts(tx, {
+        transactionId: created.id,
+        purchaseIds: requested.map((row) => row.purchaseId),
+      });
       await writeAllocationSet(tx, created.id, requested, new Map());
       await applyAllocationChanges(tx, {
         transactionIds: [created.id],
@@ -699,6 +707,8 @@ const applyUpdatedAllocations = async (
   data: FinancialTransactionUpdateData,
   state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
   actor: ActorContext,
+  options: FinancialTransactionUpdateOptions,
+  priorCharge: FinancialTransactionDbRow,
 ) => {
   const before = await readAllocations(tx, [id]);
   const next = await requestedUpdateAllocations(tx, id, data, state, before);
@@ -714,7 +724,36 @@ const applyUpdatedAllocations = async (
     });
     await writeAllocationSet(tx, id, next, before);
   }
+  // Every write that names a purchase or changes the charge's account, kind
+  // or dates is checked; a conflict the charge already carried before this
+  // write (a statement re-import touching an already-wrong allocation) is
+  // not new and stays visible through the Purchase conflict checks instead.
+  const held = (before.get(id) ?? []).map((row) => row.purchaseId);
+  const chargeChanged = (
+    ["accountId", "kind", "transactionDate", "postedDate"] as const
+  ).some((key) => data[key] !== undefined);
+  const named = next?.map((row) => row.purchaseId) ?? held;
+  const recheck = chargeChanged
+    ? named
+    : named.filter((purchaseId) => !held.includes(purchaseId));
+  if (!options.acknowledgeSettlementConflicts)
+    await refuseSettlementConflicts(tx, {
+      transactionId: id,
+      purchaseIds: recheck,
+      existing: await findSettlementConflicts(tx, {
+        accountId: priorCharge.accountId,
+        kind: financialTransactionKind.parse(priorCharge.kind),
+        transactionDate: priorCharge.transactionDate ?? priorCharge.postedDate,
+        purchaseIds: held,
+      }),
+    });
   await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
+};
+
+/** Write-path options only `finance.allocate_settlement` sets. */
+export type FinancialTransactionUpdateOptions = {
+  /** The caller records the conflict's data exception in the same transaction. */
+  acknowledgeSettlementConflicts?: boolean;
 };
 
 export async function updateFinancialTransaction(
@@ -722,6 +761,7 @@ export async function updateFinancialTransaction(
   shortcode: FinancialTransactionShortcode,
   data: FinancialTransactionUpdateData,
   actor: ActorContext,
+  options: FinancialTransactionUpdateOptions = {},
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
@@ -857,7 +897,7 @@ export async function updateFinancialTransaction(
     //     slice for the whole amount", or clear it;
     //   • an amount change on a singly-allocated transaction, where the sole
     //     legal allocation value is the new amount.
-    await applyUpdatedAllocations(tx, id, data, state, actor);
+    await applyUpdatedAllocations(tx, id, data, state, actor, options, before);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.
@@ -971,7 +1011,9 @@ export const financialTransactionRepository = defineRepository(
         projection,
       ),
     create: asActor(createFinancialTransaction),
-    update: asActor(updateFinancialTransaction),
+    update: asActor((db, shortcode, data, actor) =>
+      updateFinancialTransaction(db, shortcode, data, actor),
+    ),
     deleteHooks: {
       beforeDelete: refuseTransferEvidence,
       afterDelete: touchAllocatedPurchases,

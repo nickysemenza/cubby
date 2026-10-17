@@ -16,6 +16,10 @@ import {
   vendorExpenseAggregateSql,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
+  purchaseSettlementConflictFingerprintRawSql,
+  purchaseSettlementConflictRawSql,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
   purchaseItemizationExpectationSql,
   purchaseEvidenceFingerprintSql,
   purchaseHasItemizationSql,
@@ -192,6 +196,24 @@ export const purchaseChecks = defineEntityChecks({
         sql.raw(purchaseFinancialComparisonTotalSql(aliasOf(t))),
         sql.raw(settleableExpenseTotalSql(aliasOf(t))),
         sql.raw(settleableUnpricedExpenseCountSql(aliasOf(t))),
+      ],
+    },
+    settlement_party_conflict: {
+      missing: (t) =>
+        sql.raw(purchaseSettlementConflictRawSql("party", aliasOf(t))),
+      fingerprint: (t) => [
+        sql.raw(
+          purchaseSettlementConflictFingerprintRawSql("party", aliasOf(t)),
+        ),
+      ],
+    },
+    settlement_tender_conflict: {
+      missing: (t) =>
+        sql.raw(purchaseSettlementConflictRawSql("tender", aliasOf(t))),
+      fingerprint: (t) => [
+        sql.raw(
+          purchaseSettlementConflictFingerprintRawSql("tender", aliasOf(t)),
+        ),
       ],
     },
   },

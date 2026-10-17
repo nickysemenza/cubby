@@ -154,6 +154,8 @@ export type SettlementCandidate = {
   occurredAt: Date;
   /** Every last four the paying account could have presented on that date. */
   cardLastFours: readonly string[];
+  /** The paying account is a gift card, account balance or store credit. */
+  storedValue: boolean;
 };
 
 export type PaymentAllocation = {
@@ -161,6 +163,18 @@ export type PaymentAllocation = {
   paymentIndex: number;
   amount: number;
 };
+
+// A missing last four is not a wildcard across tenders: a gift-card line paid
+// nothing on any card, so it settles only against a stored-value account.
+const tenderAdmits = (
+  tender: ExtractedPaymentEvidence["tender"],
+  storedValue: boolean,
+): boolean =>
+  tender === "stored_value"
+    ? storedValue
+    : tender === "card"
+      ? !storedValue
+      : true;
 
 const withinPostingWindow = (a: Date, b: Date): boolean =>
   Math.abs(a.getTime() - b.getTime()) <= 3 * 86_400_000;
@@ -184,6 +198,7 @@ export const matchCompletePaymentSet = (
     const matches = [...unused.values()].filter(
       (candidate) =>
         cents(candidate.amount) === cents(payment.amount) &&
+        tenderAdmits(payment.tender, candidate.storedValue) &&
         (payment.cardLastFour === undefined ||
           candidate.cardLastFours.includes(payment.cardLastFour)) &&
         (chargedAt === null ||

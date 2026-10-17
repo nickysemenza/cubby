@@ -185,6 +185,7 @@ export async function reviewResolution(
           )!.amount,
           occurredAt: new Date(`${date}T12:00:00Z`),
           cardLastFours: cardLastFoursOn(account?.cardNumbers ?? [], date),
+          storedValue: account?.identity.kind === "stored_value",
         };
       }),
     );
@@ -415,6 +416,7 @@ export async function reviewResolution(
       amount: row.amount,
       chargedAt: row.chargedAt?.toISOString(),
       cardLastFour: row.cardLastFour ?? undefined,
+      tender: row.tender,
       description: row.description ?? undefined,
     })),
     proposedPayments: candidate.payments,
@@ -951,6 +953,7 @@ export async function commitSourceOrderReconciliation(
       amount: payment.amount,
       chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
       cardLastFour: payment.cardLastFour ?? null,
+      tender: payment.tender ?? "unknown",
       description: payment.description ?? null,
     };
     if (old) {
@@ -958,7 +961,8 @@ export async function commitSourceOrderReconciliation(
       if (
         cents(old.amount) !== cents(values.amount) ||
         old.chargedAt?.toISOString() !== values.chargedAt?.toISOString() ||
-        old.cardLastFour !== values.cardLastFour
+        old.cardLastFour !== values.cardLastFour ||
+        old.tender !== values.tender
       )
         await tx
           .update(purchasePaymentEvidence)

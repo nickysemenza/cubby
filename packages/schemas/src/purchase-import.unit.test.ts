@@ -115,6 +115,7 @@ describe("purchase import contracts", () => {
             amount: 24,
             chargedAt: null,
             cardLastFour: null,
+            tender: null,
             description: null,
           },
         ],

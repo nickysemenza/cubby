@@ -1,11 +1,16 @@
 import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
+import {
+  type SettlementConflictKind,
+  settlementConflictKinds,
+  settlementConflictRawSql,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -38,18 +43,40 @@ export async function listPurchaseSettlementCandidates(
     ${purchase.vendorName !== null && purchase.vendorName.length > 0}
     AND position(lower(${purchase.vendorName ?? ""}) in lower(coalesce(${financialTransaction.merchant}, ''))) > 0
   )`;
-  const exactAmount = sql<boolean>`(
+  const centsOff = (amount: SQL) =>
+    sql`abs(round((${amount} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)})`;
+  const amountWithin = (centsAllowed: number) => sql<boolean>`(
     ${financialTransaction.kind} = 'purchase'
     AND ${purchase.statedTotal !== null}
-    AND (abs(round((${financialTransaction.amount} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1
-      OR abs(round((${residual} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1)
+    AND (${centsOff(sql`${financialTransaction.amount}`)} <= ${centsAllowed}
+      OR ${centsOff(residual)} <= ${centsAllowed})
   )`;
-  return getDb(db)
+  const exactAmount = amountWithin(0);
+  const nearAmount = sql<boolean>`(${amountWithin(1)} AND NOT ${exactAmount})`;
+  const conflictWith = (kind: SettlementConflictKind) => sql<boolean>`EXISTS (
+    SELECT 1 FROM "Purchase" settle_target
+    WHERE settle_target.shortcode = ${purchaseId}
+      AND settle_target."deletedAt" IS NULL
+      AND ${sql.raw(
+        settlementConflictRawSql(kind, {
+          purchase: "settle_target",
+          account: '"FinancialAccount"',
+          transaction: '"FinancialTransaction"',
+        }),
+      )}
+  )`;
+  const partyConflict = conflictWith("party");
+  const tenderConflict = conflictWith("tender");
+  const conflicted = sql<boolean>`(${partyConflict} OR ${tenderConflict})`;
+  const rows = await getDb(db)
     .select({
       transactionId: financialTransaction.shortcode,
       days,
       merchantMatches,
       exactAmount,
+      nearAmount,
+      partyConflict,
+      tenderConflict,
     })
     .from(financialTransaction)
     .innerJoin(
@@ -68,10 +95,18 @@ export async function listPurchaseSettlementCandidates(
       ),
     )
     .orderBy(
+      asc(conflicted),
       desc(exactAmount),
+      desc(nearAmount),
       desc(merchantMatches),
       asc(days),
       asc(financialTransaction.shortcode),
     )
     .limit(SETTLEMENT_CANDIDATE_LIMIT);
+  return rows.map(({ partyConflict, tenderConflict, ...row }) => ({
+    ...row,
+    conflicts: settlementConflictKinds.filter((kind) =>
+      kind === "party" ? partyConflict : tenderConflict,
+    ),
+  }));
 }

@@ -522,7 +522,7 @@ export const MCP_TOOLS = defineMcpTools({
       allocate_settlement: mcpAction({
         op: financialTransactionContract.ops.allocateSettlement,
         description:
-          "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation.",
+          "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation. A charge whose account belongs to another member than the order's vendor account, or is not among the accounts the order's payment evidence or payment-account links name, is refused unless `acknowledgeConflicts.note` explains why; that note becomes the Purchase's confirmed_shared_use or confirmed_tender data exception.",
       }),
       book_transaction: mcpAction({
         op: financialTransactionContract.ops.bookTransaction,

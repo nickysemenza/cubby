@@ -81,6 +81,15 @@ export const purchaseChildren = [
       { key: "amount", kind: "doublePrecision", notNull: true },
       { key: "chargedAt", kind: "timestamp" },
       { key: "cardLastFour", kind: "text" },
+      // What the source says paid this line. `stored_value` (gift card or
+      // account balance) never settles against a card charge.
+      {
+        key: "tender",
+        kind: "text",
+        values: ["card", "stored_value", "unknown"],
+        notNull: true,
+        default: "unknown",
+      },
       { key: "description", kind: "text" },
       { key: "evidenceIndex", kind: "integer", notNull: true },
       {
@@ -105,6 +114,12 @@ export const purchaseChildren = [
         on: ["sourceClaimId", "purchaseId", "evidenceIndex"],
       },
       { name: "PurchasePaymentEvidence_purchase_idx", on: ["purchaseId"] },
+    ],
+    checks: [
+      {
+        name: "PurchasePaymentEvidence_tender_check",
+        sql: "{tender} IN ('card', 'stored_value', 'unknown')",
+      },
     ],
   }),
 ];

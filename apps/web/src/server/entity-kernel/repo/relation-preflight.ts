@@ -54,13 +54,13 @@ import { createBlockedError } from "~/server/errors/app-error";
  * three families; a family that cannot produce a given bucket leaves it empty
  * rather than the shape splitting per family.
  */
-export interface RelationPreflight {
+export interface RelationPreflight<Id extends string = ProductId> {
   /**
    * The distinct product ids the caller named, in request order. The parent is
    * NOT in here even when it is itself a Product — the buckets below are all
    * subsets of this, and the preview's per-target breakdown is keyed off it.
    */
-  requested: ProductId[];
+  requested: Id[];
   /**
    * The parent row itself is gone. Kept apart from `missing` because each
    * family refuses it with its OWN reason (`PROJECT_NOT_FOUND`,
@@ -69,7 +69,7 @@ export interface RelationPreflight {
    */
   parentMissing: boolean;
   /** Requested product ids with no live `Product` row. */
-  missing: ProductId[];
+  missing: Id[];
   /**
    * Live products the parent's category gate rejects. Project resources only —
    * a `projectTool` link may only name a Product whose resolved category
@@ -78,16 +78,16 @@ export interface RelationPreflight {
    * module exists to fix: `PRODUCT_NOT_FOUND` for a product that plainly
    * exists sends the caller looking for a typo that isn't there.
    */
-  ineligible: ProductId[];
+  ineligible: Id[];
   /**
    * Requested ids that already sit in the state being asked for — already
    * attached on an attach, already absent on a detach. Not a blocker: this is
    * the `alreadySatisfied` bucket `relationMutationOut` reports, computed
    * before the write instead of inferred from the row count after it.
    */
-  alreadySatisfied: ProductId[];
+  alreadySatisfied: Id[];
   /** The parent named among its own components. `productComponent` only. */
-  selfReference: ProductId[];
+  selfReference: Id[];
   /**
    * Rendered shortcode path of the component cycle the attach would close, or
    * `null`. `productComponent` only.
@@ -101,7 +101,9 @@ export interface RelationPreflight {
   codeById: Map<string, string>;
 }
 
-export const emptyPreflight = (): RelationPreflight => ({
+export const emptyPreflight = <
+  Id extends string = ProductId,
+>(): RelationPreflight<Id> => ({
   requested: [],
   parentMissing: false,
   missing: [],
@@ -214,6 +216,8 @@ interface RelationEdgeCopy {
   /** Short noun phrase naming the edge rows — e.g. "kit components". */
   label: string;
   description: string;
+  /** The target entity's display name; Product when omitted. */
+  target?: string;
 }
 
 /**
@@ -223,10 +227,11 @@ interface RelationEdgeCopy {
  * cannot answer a question the mutation doesn't ask: every bucket here is one
  * the pre-validation already computed.
  */
-export function planRelationAttach(
-  pre: RelationPreflight,
+export function planRelationAttach<Id extends string>(
+  pre: RelationPreflight<Id>,
   copy: RelationEdgeCopy,
 ): RelationPlan {
+  const target = copy.target ?? "Product";
   const blocked = new Set<string>([
     ...pre.missing,
     ...pre.ineligible,
@@ -248,9 +253,8 @@ export function planRelationAttach(
       }),
       relationImpact({
         code: "block-relation-target-not-live",
-        label: "products that are not live",
-        description:
-          "A Product named here does not exist or has been deleted, so the edge cannot be written.",
+        label: `${target}s that are not live`.toLowerCase(),
+        description: `A ${target} named here does not exist or has been deleted, so the edge cannot be written.`,
         ids: pre.missing,
       }),
       relationImpact({
@@ -303,8 +307,8 @@ function edgeImpact(
   };
 }
 
-export function planRelationDetach(
-  pre: RelationPreflight,
+export function planRelationDetach<Id extends string>(
+  pre: RelationPreflight<Id>,
   copy: RelationEdgeCopy,
 ): RelationPlan {
   const willDetach = pre.requested.filter(
