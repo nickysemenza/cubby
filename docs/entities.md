@@ -1319,7 +1319,8 @@ MCP `entity_read.list` at the default summary detail publishes only
 one selected read with the groups owning those fields, and the
 complete-population summary. Selected reads retain authoritative filtering,
 sorting, pagination and counts in that one page read. Their caller validates
-actual loaded fields before schema defaults can insert values. Unknown fields
+actual loaded fields before schema defaults can insert values; a declared-optional
+list key may stay absent, as the complete list also omits it. Unknown fields
 fail before even an empty read. `resultDetail: "full"` and kinds without a
 progressive reader run the complete list. Product list readers start the page's
 USDA batch as soon as its barcodes load, so the external lookup overlaps the
