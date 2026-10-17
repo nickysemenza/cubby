@@ -227,8 +227,11 @@ Calendar-day wire contracts use the shared `plainDate` pattern, with a refinemen
 when strict calendar validity is needed. Do not advertise `z.iso.date()`'s
 `format: date`: MCP clients reject that format. Preserve runtime validation
 without changing the advertised calendar-day shape.
-Timestamp columns are `timestamp without time zone` holding UTC wall time, so
-SQL `::date` and `date_trunc('day', …)` on them are UTC days: use
+Timestamp columns are `timestamp without time zone` holding UTC wall time.
+Bind raw SQL instants with the column's encoder (`sql.param(instant, column)`)
+or UTC ISO text cast to `timestamp`. A raw `Date` bind uses pg's host-local
+offset spelling, whose offset a timestamp-without-time-zone comparison ignores.
+Day extraction with SQL `::date` and `date_trunc('day', …)` produces UTC days: use
 `householdDaySql` and bound day filters with `householdDayRangeConditions`
 (`server/db/helpers`). Deliberate UTC days — retained-settlement
 payment keys that must match `chargedAt::date`, operational bucket keys — carry

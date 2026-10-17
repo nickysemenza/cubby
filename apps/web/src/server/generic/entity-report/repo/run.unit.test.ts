@@ -456,6 +456,30 @@ describe("import report blocks", () => {
         .rows[0];
     const purchaseId = "0e6c4a7a-3e61-4d53-b8d7-8a2f3b6a1c11";
 
+    it("keeps expired finding history dismissible without offering apply", () => {
+      const row = firstRow([
+        {
+          ...finding,
+          expiresAt: "2000-01-01T00:00:00.000Z",
+          proposedFix: {
+            kind: "create_refund",
+            purchaseId,
+            amount: -10,
+            title: "Synthetic expired refund",
+          },
+        },
+      ]);
+      expect(row?.key).toBe(FINDING_ID);
+      expect(row?.commands?.map((action) => action.request)).toEqual([
+        {
+          kind: "resolve-finding",
+          findingId: FINDING_ID,
+          decision: "dismiss",
+          reviewedFingerprint: null,
+        },
+      ]);
+    });
+
     it("offers only dismiss when the finding proposes no fix", () => {
       const row = firstRow([finding]);
       expect(row?.commands?.map((action) => action.request)).toEqual([

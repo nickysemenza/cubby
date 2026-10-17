@@ -55,6 +55,7 @@ import {
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
+import { findingHasExpired } from "./finding-expiry";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockFindingSettlement } from "./reconciliation-state";
 import {
@@ -499,6 +500,7 @@ export async function resolveRunFinding(
       .select({
         id: runFinding.id,
         status: runFinding.status,
+        expiresAt: runFinding.expiresAt,
         proposedFix: runFinding.proposedFix,
         runId: runFinding.runId,
         ledgerPartyId: runFinding.ledgerPartyId,
@@ -535,6 +537,10 @@ export async function resolveRunFinding(
       throw new Error("This import finding has already been resolved.");
     }
     if (input.action === "apply") {
+      if (findingHasExpired(finding.expiresAt))
+        throw new Error(
+          "This import finding has expired. Review fresh source evidence before applying a fix.",
+        );
       const fix = storedImportFix.parse(finding.proposedFix);
       if (!fix) throw new Error("This import finding has no applicable fix.");
       if (

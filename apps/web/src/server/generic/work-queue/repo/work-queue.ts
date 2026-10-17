@@ -65,6 +65,7 @@ import { buildFinancialTransactionWhere } from "~/server/domains/financial-trans
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
 import { onHandUnitsReadSql } from "~/server/domains/product/repo/quantity-ledger";
+import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -107,8 +108,6 @@ import { workExecutorSql } from "./work-routing";
 const either = workWaitingForSchema.options[0].shape.kind.value;
 const members = workWaitingForSchema.options[1].shape.kind.value;
 const unresolved = workWaitingForSchema.options[2].shape.kind.value;
-// RunFinding's retained status column has no generated vocabulary schema.
-const openFindingStatus = "open";
 
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 type Candidate = Pick<
@@ -477,7 +476,7 @@ async function workQueueProjection(
     FROM "RunFinding" finding
     JOIN "Entity" identity ON identity.id = finding."entityId" AND identity.kind = finding."entityKind" AND identity."deletedAt" IS NULL
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
-    WHERE finding.status = ${openFindingStatus} AND NOT ${obsoleteExecutionFindingSql("finding")} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())${findingRecord}
+    WHERE ${activeFindingSql("finding")} AND NOT ${obsoleteExecutionFindingSql("finding")}${findingRecord}
   `);
   selections.push(
     ...workQueueCandidate(scope, {
@@ -487,7 +486,7 @@ async function workQueueProjection(
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       where: sql`"Run"."deletedAt" IS NULL AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
-          AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND finding.status = ${openFindingStatus} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())))
+          AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
         ))

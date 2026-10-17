@@ -23,6 +23,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
+import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import type { suggestionCounts } from "~/server/generic/assessment/repo/suggestion-review";
 import {
@@ -435,7 +436,7 @@ function findingActions(
         ? (finding.proposedFix.review?.reviewedFingerprint ?? null)
         : null;
   const apply: ReportCommand[] =
-    applyConfirm === null
+    applyConfirm === null || findingHasExpired(finding.expiresAt)
       ? []
       : [
           {
