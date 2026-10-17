@@ -37,28 +37,28 @@ table, stores a balance, or introduces a time series.
 
 ## 2. Decision log
 
-| #   | Decision                  | Choice                                                                                                                                                                                                         |
-| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Category taxonomy         | Spending Category, not Product Category. Views over `Expense` show only categories with Expense rows, so transaction-only categories need no flag.                                                             |
-| 2   | Category grain            | Root Spending Category everywhere; children are reached through Ledger filters with subcategories included.                                                                                                    |
-| 3   | Unresolved buckets        | **Uncategorized**: no category resolved (null `spendingCategoryId`, including a Purchase with no principal line). **Unclassified**: receipt role unresolved (`lineKind = unclassified`). No other bucket.      |
-| 4   | Breakdown read            | `expense.analyze` with a root roll-up option on the `spendingCategory` dimension, not a second breakdown on `expenseAnalytics`. `expense.analyze` leaves `deferred_capability` and becomes an MCP read.        |
-| 5   | Cost type label           | The existing cost-type donut is titled **Spending by Cost Type**; the new section is **Spending by Spending Category**.                                                                                        |
-| 6   | Calibration               | A project attention rule `spend_below_estimate`: `done`, `costEstimate > 0`, no ancestor with its own estimate, subtree spend below 10% of the estimate. Diagnostic only; it never scales a forecast.          |
-| 7   | Transfer-pair accept      | A kernel command exposed as `finance.accept_transfer_pair` and an Accept action on suggestion rows (transfer-pair read and work queue).                                                                        |
-| 8   | Same-owner pairs          | Recorded as a `LedgerTransfer` with `fromPartyId = toPartyId`: an **internal move**. The contribution ledger reports internal moves apart from transfers sent and received.                                    |
-| 9   | Unowned account in a pair | Refuse, naming the account; ownership must be set first.                                                                                                                                                       |
-| 10  | Sankey basis              | Net per funder → project → category path, Credits included. Paths that net to zero or below are omitted from links and listed under the chart.                                                                 |
-| 11  | Sankey caps               | Top 8 projects and top 8 categories by flow; the rest are grouped as Other projects / Other categories. No project and Uncategorized/Unclassified stay distinct nodes.                                         |
-| 12  | Multi-funder expenses     | Split by the contribution ledger's funder weights; Unknown funder is an explicit node.                                                                                                                         |
-| 13  | Baseline                  | Per root category, median of the trailing 12 complete months of landed spend not attributed to a project other than the Household project, excluding `future`; empty months count as $0. Carried forward flat. |
-| 14  | Irregular categories      | A category with spend in fewer than 3 of the 12 months is **Irregular**. A URL toggle `irregular=grouped\|separate` (default grouped) shows them as one row or as their own rows; both reconcile.              |
-| 15  | Envelopes                 | Remaining = `max(0, estimate − subtree actual − subtree committed)`, spread evenly from the current month to a future `endDate`; otherwise **unscheduled**.                                                    |
-| 16  | Which projects count      | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only with an estimate. A project under an ancestor with an estimate is excluded.                                            |
-| 17  | Scenarios                 | URL state only, `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`, up to 20. Inflows exist only as scenarios. Structural presets are declared views.                |
-| 18  | Forward Sankey            | Rejected: a Sankey over forecast figures hides timing, which is the point of the page.                                                                                                                         |
-| 19  | Gap deep links            | Dropped. The household page already links each gap to its expense; no bulk-fix need exists.                                                                                                                    |
-| 20  | Sankey renderer           | `@nivo/sankey` at the installed Nivo version, as a specialized renderer inside `Visualization`, lazy-loaded.                                                                                                   |
+| #   | Decision                  | Choice                                                                                                                                                                                                                                                                                                              |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Category taxonomy         | Spending Category, not Product Category. Views over `Expense` show only categories with Expense rows, so transaction-only categories need no flag.                                                                                                                                                                  |
+| 2   | Category grain            | Root Spending Category everywhere; children are reached through Ledger filters with subcategories included.                                                                                                                                                                                                         |
+| 3   | Unresolved buckets        | **Uncategorized**: no category resolved (null `spendingCategoryId`, including a Purchase with no principal line). **Unclassified**: receipt role unresolved (`lineKind = unclassified`). No other bucket.                                                                                                           |
+| 4   | Breakdown read            | `expense.analyze` with a root roll-up option on the `spendingCategory` dimension, not a second breakdown on `expenseAnalytics`. `expense.analyze` leaves `deferred_capability` and becomes an MCP read.                                                                                                             |
+| 5   | Cost type label           | The existing cost-type donut is titled **Spending by Cost Type**; the new section is **Spending by Spending Category**.                                                                                                                                                                                             |
+| 6   | Calibration               | A project attention rule `spend_below_estimate`: `done`, `costEstimate > 0`, no ancestor with its own estimate, subtree spend below 10% of the estimate. Diagnostic only; it never scales a forecast.                                                                                                               |
+| 7   | Transfer-pair accept      | A kernel command exposed as `finance.accept_transfer_pair` and an Accept action on suggestion rows (transfer-pair read and work queue).                                                                                                                                                                             |
+| 8   | Same-owner pairs          | Recorded as a `LedgerTransfer` with `fromPartyId = toPartyId`: an **internal move**. The contribution ledger reports internal moves apart from transfers sent and received.                                                                                                                                         |
+| 9   | Unowned account in a pair | Refuse, naming the account; ownership must be set first.                                                                                                                                                                                                                                                            |
+| 10  | Sankey basis              | Net per funder → project → category path, Credits included. Paths that net to zero or below are omitted from links and listed under the chart.                                                                                                                                                                      |
+| 11  | Sankey caps               | Top 8 projects and top 8 categories by flow; the rest are grouped as Other projects / Other categories. No project and Uncategorized/Unclassified stay distinct nodes.                                                                                                                                              |
+| 12  | Multi-funder expenses     | Split by the contribution ledger's funder weights; Unknown funder is an explicit node.                                                                                                                                                                                                                              |
+| 13  | Baseline                  | Per root category, median of the trailing 12 complete months of landed spend not attributed to a project other than the Household project, excluding `future`; empty months count as $0. Carried forward flat.                                                                                                      |
+| 14  | Irregular categories      | A category with spend in fewer than 3 of the 12 months is **Irregular** and carries its mean (whole-cent trailing total ÷ 12), since its median is almost always $0. `irregular=grouped\|separate` (default grouped) shows them as one row or their own rows; both sum the same figures, so they reconcile exactly. |
+| 15  | Envelopes                 | Remaining = `max(0, estimate − subtree actual − subtree committed)`, spread evenly from the current month to a future `endDate`; otherwise **unscheduled**.                                                                                                                                                         |
+| 16  | Which projects count      | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only with an estimate. A project under an ancestor with an estimate is excluded.                                                                                                                                                 |
+| 17  | Scenarios                 | URL state only, `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`, up to 20. Inflows exist only as scenarios. Structural presets are declared views.                                                                                                                     |
+| 18  | Forward Sankey            | Rejected: a Sankey over forecast figures hides timing, which is the point of the page.                                                                                                                                                                                                                              |
+| 19  | Gap deep links            | Dropped. The household page already links each gap to its expense; no bulk-fix need exists.                                                                                                                                                                                                                         |
+| 20  | Sankey renderer           | `@nivo/sankey` at the installed Nivo version, as a specialized renderer inside `Visualization`, lazy-loaded.                                                                                                                                                                                                        |
 
 ## 3. Category breakdown
 
@@ -118,14 +118,32 @@ estimate, actual, committed, remaining, end date and whether it carries
 `spend_below_estimate`; `totals` with horizon outflow, unscheduled total,
 beyond-horizon envelope remainder, and net after scenarios.
 
+Baseline months are the 12 complete household months before the current one.
+A share counts when it has no live project or sits on the standing Household
+project (`PRJ-HSHD`, its own rows only). Root `categoryIds` narrow the
+baseline only and refuse a non-root code. Each figure is rounded to a whole
+cent per category, and the Irregular row is the sum of those cents.
+
+Envelopes exclude the Household project and need a positive own estimate. An
+envelope's end date is the project's effective end (explicit `endDate`, else
+the derived content end); a date after today spreads the remainder evenly from
+the current month through its month, extra cents first; months past the horizon
+become `beyondHorizon`.
+
 Committed `future` expenses land in their own month; one dated before the
-current month lands in the current month as overdue. Committed rows are already
-subtracted from envelope remaining, so nothing is counted twice.
+current month lands in the current month as overdue, and one past the horizon
+is reported as `committedBeyondHorizon`. Committed rows are already subtracted
+from envelope remaining, so nothing is counted twice. Scenarios outside the
+horizon are ignored; a monthly one starting earlier begins in the current month.
+`spendBelowEstimate` reads the attention rule, which only fires on `done`
+projects, so it is false for every counted project today.
 
 The `/cash-flow` route sits in the Finance domain: monthly stacked bars
 (baseline, envelopes, committed, outflow scenarios; inflow scenarios below the
 axis; a net line), headline totals, an unscheduled table, inline scenario
 editing, and links from each segment to its source.
+Structural presets are not declared views: the view manifest declares only
+entity list views, so `/cash-flow` keeps its presets in URL state.
 
 ## 8. Invariants
 

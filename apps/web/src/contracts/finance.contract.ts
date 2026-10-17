@@ -1,4 +1,8 @@
 import {
+  cashFlowProjectionInput,
+  cashFlowProjectionOut,
+} from "@cubby/schemas/cash-flow";
+import {
   financialBookingInput,
   financialBookingPreview,
   financialBookingResult,
@@ -61,6 +65,17 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
     }),
     output: memberLogins,
     invalidates: ["memberLogins"],
+  }),
+});
+
+export const cashFlowContract = defineContract("cashFlow", {
+  /** Forward monthly projection over Expenses and project estimates (MCP `finance_read`). */
+  projection: query({
+    input: cashFlowProjectionInput,
+    output: cashFlowProjectionOut,
+    // Scenarios are an array of objects; keep them out of a bounded URL.
+    transport: "post",
+    cache: { tags: [["expense"], ["project"], ["spendingCategory"]] },
   }),
 });
 

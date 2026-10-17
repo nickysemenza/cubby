@@ -89,6 +89,7 @@ export const DOMAIN_WAYFINDING = {
       "/financial-accounts",
       "/financial-transactions",
       "/household-contribution",
+      "/cash-flow",
       "/statement-rows",
       "/ledger-parties",
       "/ledger-transfers",

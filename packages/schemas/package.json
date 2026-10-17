@@ -102,6 +102,7 @@
     "./plant": "./src/plant.ts",
     "./ledger-transfer": "./src/ledger-transfer.ts",
     "./ledger-transfer-fields": "./src/ledger-transfer-fields.ts",
+    "./cash-flow": "./src/cash-flow.ts",
     "./household-contribution": "./src/household-contribution.ts",
     "./household-contribution-labels": "./src/household-contribution-labels.ts",
     "./meal-classification": "./src/meal-classification.ts",
