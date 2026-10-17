@@ -1,5 +1,6 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import type { ExpenseAnalyzeBucket } from "@cubby/schemas/project";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -67,7 +68,9 @@ const classifiedLineKinds = expenseLineKindSchema.options
  * subcategories, the no-category rows apart from unresolved receipt roles, or
  * the unresolved receipt roles.
  */
-export const rootSpendingCategoryBucketFilter = (key: string) => {
+export const rootSpendingCategoryBucketFilter = (
+  key: string,
+): ExpenseAnalyzeBucket["filter"] => {
   if (key === UNCLASSIFIED_BUCKET)
     return { lineKind: expenseLineKindSchema.enum.unclassified };
   if (key === UNCATEGORIZED_BUCKET)

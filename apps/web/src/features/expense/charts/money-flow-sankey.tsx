@@ -3,6 +3,12 @@ import type {
   ExpenseFlowSankeyNode,
   ExpenseFlowSankeyOut,
 } from "@cubby/schemas/project";
+import type {
+  DefaultLink,
+  DefaultNode,
+  SankeyLinkDatum,
+  SankeyNodeDatum,
+} from "@nivo/sankey";
 import { FlowArrowIcon } from "@phosphor-icons/react/dist/csr/FlowArrow";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -149,13 +155,21 @@ export function MoneyFlowSankey({
                     : view.nodeById.get(datum.id)?.filter;
                 if (filter) onOpenLedger(filter);
               }}
-              nodeTooltip={({ node }) => (
+              nodeTooltip={({
+                node,
+              }: {
+                node: SankeyNodeDatum<DefaultNode, DefaultLink>;
+              }) => (
                 <ChartTooltip>
                   <strong>{view.labels.get(node.id)}</strong> —{" "}
                   {formatCurrency(node.value, 0)}
                 </ChartTooltip>
               )}
-              linkTooltip={({ link }) => (
+              linkTooltip={({
+                link,
+              }: {
+                link: SankeyLinkDatum<DefaultNode, DefaultLink>;
+              }) => (
                 <ChartTooltip>
                   {view.labels.get(link.source.id)} →{" "}
                   {view.labels.get(link.target.id)} —{" "}

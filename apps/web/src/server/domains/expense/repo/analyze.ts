@@ -30,7 +30,7 @@ import {
   type SQLWrapper,
   sql,
 } from "drizzle-orm";
-import { alias, type PgSelect } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
@@ -148,18 +148,6 @@ const dimensionSpecFor = (dimension: Dimension, rollup: Rollup) =>
         relation: "allocation" as const,
       }
     : dimensionSpecs[dimension];
-
-function withRootSpendingCategory<T extends PgSelect>(
-  query: T,
-  enabled: boolean,
-): T {
-  if (!enabled) return query;
-  const { roots, root } = rootSpendingCategoryJoins;
-  // SAFETY: the joins add no selected fields, so the result shape is unchanged.
-  return query
-    .leftJoin(roots.table, roots.on)
-    .leftJoin(root.table, root.on) as T;
-}
 
 /** Scalar facets all share the same cardinality query and null label policy. */
 const scalarFacetSpecs = {
@@ -339,8 +327,16 @@ function groupedDimensionQuery(
           notDeleted(spendingCategory),
         ),
       )
+      .leftJoin(
+        rootSpendingCategoryJoins.roots.table,
+        rootSpendingCategoryJoins.roots.on,
+      )
+      .leftJoin(
+        rootSpendingCategoryJoins.root.table,
+        rootSpendingCategoryJoins.root.on,
+      )
       .$dynamic();
-    return withRootSpendingCategory(query, rollsUp(dimension, rollup))
+    return query
       .where(
         and(
           where,
@@ -422,11 +418,16 @@ function groupedCellsQuery(
         and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
       )
       .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+      .leftJoin(
+        rootSpendingCategoryJoins.roots.table,
+        rootSpendingCategoryJoins.roots.on,
+      )
+      .leftJoin(
+        rootSpendingCategoryJoins.root.table,
+        rootSpendingCategoryJoins.root.on,
+      )
       .$dynamic();
-    return withRootSpendingCategory(
-      query,
-      rollsUp(rowDimension, rollup) || rollsUp(columnDimension, rollup),
-    )
+    return query
       .where(
         and(
           where,
@@ -505,11 +506,16 @@ function allocatedGridCountQuery(
       and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
     )
     .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+    .leftJoin(
+      rootSpendingCategoryJoins.roots.table,
+      rootSpendingCategoryJoins.roots.on,
+    )
+    .leftJoin(
+      rootSpendingCategoryJoins.root.table,
+      rootSpendingCategoryJoins.root.on,
+    )
     .$dynamic();
-  return withRootSpendingCategory(
-    query,
-    rollsUp(rowDimension, rollup) || rollsUp(columnDimension, rollup),
-  ).where(
+  return query.where(
     and(
       where,
       ...keys,

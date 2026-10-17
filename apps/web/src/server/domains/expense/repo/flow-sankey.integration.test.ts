@@ -122,6 +122,7 @@ describe("expenseFlowSankey", () => {
       filters,
       rowDimension: "trade",
       comparison: "none",
+      spendingCategoryRollup: "none",
     });
     if (analysis.status !== "ready") throw new Error(analysis.status);
     const filteredNet = analysis.totals.scope.current.net;

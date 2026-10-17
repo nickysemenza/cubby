@@ -1,3 +1,4 @@
+import type { EntityId } from "@cubby/schemas/identifiers";
 import {
   parseShortcodeFor,
   type LedgerPartyId,
@@ -38,10 +39,10 @@ describe("acceptFinancialTransferPair", () => {
       ledgerPartyId,
     });
   const transaction = async (
-    accountId: string,
+    accountId: EntityId<"financialAccount">,
     amount: number,
     date: string,
-    ledgerTransferId: string | null = null,
+    ledgerTransferId: EntityId<"ledgerTransfer"> | null = null,
   ) => {
     const row = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId,
