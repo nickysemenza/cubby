@@ -5,10 +5,7 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "../identifier-fields.js";
-import {
-  vendorAccountCursor,
-  vendorAccountStatus,
-} from "../vendor-account-fields.js";
+import { vendorAccountCursor } from "../vendor-account-fields.js";
 import { defineEntity } from "./definition.js";
 
 export default defineEntity({
@@ -114,27 +111,6 @@ export default defineEntity({
           read: z.boolean(),
           create: z.boolean().default(false),
           update: z.boolean().optional(),
-        },
-      },
-      {
-        key: "status",
-        kind: "enum",
-        control: {
-          kind: "select",
-          options: [
-            { value: "active", label: "Active" },
-            { value: "disabled", label: "Disabled" },
-          ],
-        },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "trailing", priority: 10 },
-        },
-        validation: {
-          read: vendorAccountStatus,
-          create: vendorAccountStatus.default("active"),
-          update: vendorAccountStatus.optional(),
         },
       },
       {
@@ -252,11 +228,6 @@ export default defineEntity({
         defaultValue: false,
       },
       {
-        key: "status",
-        defaultValue: "active",
-        specialized: "enum:status",
-      },
-      {
         key: "cursor",
         defaultValue:
           '\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb',
@@ -266,42 +237,22 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "vendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "status",
-    ],
-    update: [
-      "vendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "status",
-    ],
+    create: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
+    update: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
     bulk: [],
-    audit: [
-      "vendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "status",
-    ],
+    audit: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
     derived: {
       // The Vendor and member names; its SQL is `vendorAccountLabelSql`.
       displayName: { type: "text" },
       lastRunAt: { type: "date" },
     },
     sort: {
-      fields: ["displayName", "status", "lastRunAt", "updatedAt"],
+      fields: ["displayName", "lastRunAt", "updatedAt"],
     },
     intents: {
       fields: {
         capture: ["vendorId", "ledgerPartyId"],
-        full: [
-          "vendorId",
-          "ledgerPartyId",
-          "inventoryOwnerDefaultEnabled",
-          "status",
-        ],
+        full: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
         identity: ["vendorId", "ledgerPartyId"],
       },
       create: ["capture", "full"],
@@ -313,7 +264,6 @@ export default defineEntity({
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
-      "status",
       "cursor",
       "lastRunAt",
       "lastSuccessAt",
@@ -347,7 +297,6 @@ export default defineEntity({
         where: "{deletedAt} IS NULL",
       },
     ],
-    checks: [{ column: "status" }],
   },
   filters: {
     audit: true,
@@ -407,17 +356,6 @@ export default defineEntity({
         urlOnly: true,
         deriveSchema: true,
         stored: true,
-      },
-      {
-        columnId: "status",
-        kind: "multiselect",
-        placeholder: "Filter by status...",
-        deriveSchema: true,
-        stored: true,
-        options: [
-          { value: "active", label: "Active" },
-          { value: "disabled", label: "Disabled" },
-        ],
       },
     ],
   },

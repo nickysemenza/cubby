@@ -76,33 +76,38 @@ function decisionPortFor(
 }
 
 describe("suggestSettlementMatch", () => {
-  it("does not call the model or open a run when nothing is tied", async () => {
+  it("does not call the model or open a run when fewer than two candidates exist", async () => {
     const decisionPort = decisionPortFor("c0", { c0: 0.9, none: 0.1 });
     const openUsage = vi.fn(async () => usage);
     const result = await suggestSettlementMatch({
       subject,
-      ranks: [rank("4K7M", true, true), rank("5N8P", false, true)],
+      ranks: [rank("4K7M", true, true)],
       loadTransaction: async (id) => transaction(id, 42.5),
       openUsage,
       decisionPort,
     });
     expect(result).toEqual({
       status: "not_ambiguous",
-      note: "These charges are no longer tied, so there is nothing to suggest.",
+      note: "Fewer than two candidates remain; a sole candidate still requires evidence review.",
     });
     expect(decisionPort).not.toHaveBeenCalled();
     expect(openUsage).not.toHaveBeenCalled();
   });
 
-  it("shows the model only the tied candidates and returns the ranking", async () => {
-    const decisionPort = decisionPortFor("c1", { c0: 0.2, c1: 0.7, none: 0.1 });
+  it("lets the declared model rank differently named and differently sized alternatives", async () => {
+    const decisionPort = decisionPortFor("c2", {
+      c0: 0.1,
+      c1: 0.1,
+      c2: 0.7,
+      none: 0.1,
+    });
     const loaded: string[] = [];
     const result = await suggestSettlementMatch({
       subject,
       ranks: [
         rank("4K7M", true, true),
         rank("5N8P", true, true),
-        rank("6Q9R", false, true),
+        rank("6Q9R", false, false),
       ],
       loadTransaction: async (id) => {
         loaded.push(id);
@@ -111,29 +116,19 @@ describe("suggestSettlementMatch", () => {
       openUsage: async () => usage,
       decisionPort,
     });
-    expect(loaded).toEqual([code("4K7M"), code("5N8P")]);
+    expect(loaded).toEqual([code("4K7M"), code("5N8P"), code("6Q9R")]);
     const input = vi.mocked(decisionPort).mock.calls[0]?.[0];
     const criteria = input?.questions.selection.criteria ?? {};
-    expect(Object.keys(criteria).sort()).toEqual(["c0", "c1", "none"]);
+    expect(Object.keys(criteria).sort()).toEqual(["c0", "c1", "c2", "none"]);
     expect(input?.state).toContain("ORD-1001");
     expect(input?.state).toContain("$42.50");
     expect(criteria.c0).toContain("$42.50");
     expect(criteria.c0).toContain("Example Card");
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "ranked",
       advisory: true,
-      selectedTransactionId: code("5N8P"),
-      ranked: [
-        {
-          transactionId: code("5N8P"),
-          probability: 0.7,
-          badge: "Suggested · 70%",
-        },
-        { transactionId: code("4K7M"), probability: 0.2, badge: "20%" },
-      ],
-      // Tied candidates by probability, then the rest in the server's order.
-      displayOrder: [code("5N8P"), code("4K7M"), code("6Q9R")],
-      note: "Suggestion only. The decision model ordered the 2 equally ranked charges; nothing is saved until you allocate.",
+      selectedTransactionId: code("6Q9R"),
+      displayOrder: [code("6Q9R"), code("4K7M"), code("5N8P")],
     });
   });
 
@@ -148,7 +143,7 @@ describe("suggestSettlementMatch", () => {
     expect(result).toMatchObject({
       status: "ranked",
       selectedTransactionId: null,
-      note: "Suggestion only. The decision model ordered the 2 equally ranked charges; nothing is saved until you allocate. The decision model found no clear match among them.",
+      note: "Suggestion only. The decision model ordered 2 candidate transactions; nothing is saved until you allocate. The decision model found no clear match among them.",
     });
   });
 

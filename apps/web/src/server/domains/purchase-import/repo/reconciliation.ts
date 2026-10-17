@@ -1,7 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
@@ -17,7 +17,11 @@ import { cents } from "@cubby/shared";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  notDeleted,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   entityAttachment,
   expense,
@@ -32,6 +36,7 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
+import { refreshAutomaticBookingFingerprint } from "~/server/domains/financial-transaction/repo/financial-convergence";
 import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
@@ -818,7 +823,7 @@ export async function commitSourceOrderReconciliation(
     throw new Error(
       "Reconciliation did not conserve the reviewed Expense total.",
     );
-  if (resolution.kind === "replace_lines")
+  if (resolution.kind === "replace_lines") {
     await tx
       .update(purchase)
       .set({
@@ -826,6 +831,7 @@ export async function commitSourceOrderReconciliation(
         updatedAt: new Date(),
       })
       .where(eq(purchase.id, state.target.id));
+  }
   if (state.target.orderId === null && candidate.orderId !== null) {
     await tx
       .update(purchase)
@@ -996,4 +1002,18 @@ export async function commitSourceOrderReconciliation(
     },
   });
   await logAuditEntries(tx, actor, audit);
+  if (resolution.kind === "replace_lines") {
+    // The fingerprint covers Purchase identity as well as money and
+    // attribution. Refresh only after every covered write, including a later
+    // source's previously unknown order id, has completed in this transaction.
+    for (const code of new Set(
+      selected.flatMap((row) =>
+        row.bookingTransactionCode ? [row.bookingTransactionCode] : [],
+      ),
+    ))
+      await refreshAutomaticBookingFingerprint(
+        databaseForTransaction(tx),
+        parseShortcodeFor("financialTransaction", code),
+      );
+  }
 }

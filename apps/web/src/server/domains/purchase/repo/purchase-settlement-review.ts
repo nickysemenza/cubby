@@ -34,7 +34,7 @@ export function composeSettlementReview(
     message: !purchase.date
       ? "Add the order date to see likely statement activity."
       : ranked.length === 0
-        ? "No unallocated vendor or exact amount match within 45 days. You can still add a transaction manually."
+        ? "No spending transaction within 45 days. You can still add a transaction manually."
         : null,
     candidates: ranked.map((candidate) => {
       const { transaction, days, merchantMatches } = candidate;
@@ -60,8 +60,8 @@ export function composeSettlementReview(
     }),
     tiedTransactionIds: tied.map(({ transaction }) => transaction.id),
     suggestHint:
-      tied.length >= 2
-        ? `${tied.length} charges rank equally. The decision model can suggest which fits best; you still choose and allocate.`
+      ranked.length >= 2
+        ? `The decision model can compare all ${ranked.length} candidate transactions, including split and differently named payments; you still choose and allocate.`
         : null,
   };
 }

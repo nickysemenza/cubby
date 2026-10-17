@@ -86,7 +86,7 @@ describe("composeSettlementReview", () => {
     ]);
   });
 
-  it("offers a suggestion only while two or more candidates tie at the top rank", () => {
+  it("offers a suggestion over multiple bounded candidates while preserving deterministic ties", () => {
     const tied = composeSettlementReview(purchase, [
       candidate("4K7M"),
       candidate("5N8P"),
@@ -94,13 +94,10 @@ describe("composeSettlementReview", () => {
     ]);
     expect(tied.tiedTransactionIds).toEqual([ftx("4K7M"), ftx("5N8P")]);
     expect(tied.suggestHint).toBe(
-      "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate.",
+      "The decision model can compare all 3 candidate transactions, including split and differently named payments; you still choose and allocate.",
     );
 
-    const single = composeSettlementReview(purchase, [
-      candidate("4K7M"),
-      candidate("6Q9R", {}, { exactAmount: false }),
-    ]);
+    const single = composeSettlementReview(purchase, [candidate("4K7M")]);
     expect(single.tiedTransactionIds).toEqual([]);
     expect(single.suggestHint).toBeNull();
   });
@@ -110,7 +107,7 @@ describe("composeSettlementReview", () => {
       composeSettlementReview({ ...purchase, date: null }, []).message,
     ).toBe("Add the order date to see likely statement activity.");
     expect(composeSettlementReview(purchase, []).message).toBe(
-      "No unallocated vendor or exact amount match within 45 days. You can still add a transaction manually.",
+      "No spending transaction within 45 days. You can still add a transaction manually.",
     );
   });
 });

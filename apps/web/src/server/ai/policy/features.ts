@@ -29,7 +29,11 @@ import {
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
-import { mailboxRelevanceDecision } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxRelevanceDecision,
+  mailFinancialEventModelOutput,
+  type MailFinancialEventModelOutput,
+} from "@cubby/schemas/mailbox-research";
 import {
   type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
@@ -62,7 +66,15 @@ import {
   ingredientMergeSpec,
   ingredientMergeSubject,
 } from "./prompts/ingredient-selection";
-import { mailRelevanceRequest, mailTriagePrompt } from "./prompts/mail";
+import {
+  mailAttributionChoices,
+  mailAttributionPrompt,
+  mailFinancialEventRequest,
+  mailRelevanceRequest,
+  mailSourceRelationChoices,
+  mailSourceRelationPrompt,
+  mailTriagePrompt,
+} from "./prompts/mail";
 import {
   mailAttachmentPurposeChoices,
   mailAttachmentPurposePrompt,
@@ -188,6 +200,40 @@ export const MAIL_ATTACHMENT_PURPOSE_FEATURE = defineFeature({
   cache: true,
   collectPayload: false,
 });
+
+/** Gates automatic import: a forwarded copy alone never attributes a purchase to its recipient. */
+export const MAIL_ATTRIBUTION_FEATURE = defineFeature({
+  prompt: mailAttributionPrompt,
+  choices: mailAttributionChoices,
+  feature: "mail-attribution",
+  promptVersion: "2026-10-16.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
+/** Admits a supporting original to a Mail import Run only for the same purchase. */
+export const MAIL_SOURCE_RELATION_FEATURE = defineFeature({
+  prompt: mailSourceRelationPrompt,
+  choices: mailSourceRelationChoices,
+  feature: "mail-source-relation",
+  promptVersion: "2026-10-16.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
+export const MAIL_FINANCIAL_EVENT_FEATURE = defineFeature({
+  request: mailFinancialEventRequest,
+  feature: "mail-financial-event",
+  tier: "quality",
+  maxTokens: 1_000,
+  effort: "low",
+  cache: true,
+  collectPayload: false,
+  promptVersion: "2026-10-16.1",
+  schema: mailFinancialEventModelOutput,
+}) satisfies AiStructuredFeature<MailFinancialEventModelOutput>;
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
   rules: PRODUCT_IDENTITY_RULES,
@@ -483,6 +529,9 @@ export const AI_FEATURES = [
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
+  MAIL_ATTRIBUTION_FEATURE,
+  MAIL_SOURCE_RELATION_FEATURE,
+  MAIL_FINANCIAL_EVENT_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,

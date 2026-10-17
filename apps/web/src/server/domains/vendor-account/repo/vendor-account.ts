@@ -300,7 +300,6 @@ export async function createVendorAccount(
     const refs = await resolveReferences(tx, data);
     const row = await insertWithShortcode(tx, "vendorAccount", {
       ...refs,
-      status: data.status,
       inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     });
     await logAuditEntry(tx, actor, {
@@ -328,7 +327,6 @@ async function updateVendorAccount(
     refs.ledgerPartyId = await resolveMemberParty(db, data.ledgerPartyId);
   }
   const patch = {
-    status: data.status,
     inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     ...refs,
   };

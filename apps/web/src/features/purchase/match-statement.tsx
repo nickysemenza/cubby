@@ -17,10 +17,11 @@ import {
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  purchase as purchaseOperations,
+  financialTransaction as financeOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -84,10 +85,9 @@ export function MatchStatementDialog({
     enabled: open,
   });
   const review = candidatesQuery.data;
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
-    entity: "financialTransaction",
-  });
+  const update = useMutation(
+    financeOperations.allocateSettlement.mutationOptions(),
+  );
   // Advisory only: the result reorders and badges tied candidates, and never
   // selects or allocates on the person's behalf.
   const suggest = useMutation(
@@ -147,13 +147,20 @@ export function MatchStatementDialog({
       return;
     }
     setSaveError(null);
-    await update.mutateAsync({
-      id: selected.id,
-      data: { allocations: latest.allocations },
-    });
+    try {
+      await update.mutateAsync({
+        transactionId: selected.id,
+        priorAllocations: selected.allocations,
+        allocations: latest.allocations,
+      });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+      return;
+    }
     await invalidateOperationTags(
       queryClient,
       entityRipple("financialTransaction"),
+      { removeInactive: true },
     );
     onOpenChange(false);
     setSelected(null);

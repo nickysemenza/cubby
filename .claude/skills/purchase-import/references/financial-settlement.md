@@ -9,6 +9,14 @@ For every committed account-sync order, including a saved email confirmation,
 check settlement before finishing the run. This is routine import work; the
 member need not supply transaction or account candidates.
 
+Use `finance.converge` for source-proven genuine purchase payments. Its server
+policy checks identity, money, ownership, funding and accepted lineage; inspect
+its result rather than treating a nearby candidate or model ranking as proof.
+Changed accepted facts and partial/split ambiguity require review. Nonpurchase
+financial Emails retain their financial association through `mail.resolve`;
+they must not create Purchase spending. Exact aggregate-to-itemized replacement
+uses the reconciliation writer and refreshes the automatic booking fingerprint.
+
 1. Read the committed Purchase, its allocations, and existing
    FinancialTransactions. Search saved StatementRows by the vendor's known
    descriptors, then verify amount, posted date, account identity, and source
@@ -35,8 +43,8 @@ member need not supply transaction or account candidates.
    after posting or when the member requests it, rather than repeatedly asking
    for evidence during the normal delay. Keep conflicting dispositions and
    ambiguous allocations reviewable. In the web settlement review, the member
-   can ask for a ranked suggestion among candidates tied at the top
-   deterministic rank; it never settles, and agents keep the deterministic
+   can ask for a ranked suggestion across the bounded 20 candidates,
+   including differently named/date alternatives; it never settles, and agents keep the deterministic
    candidates. An absent charge is a coverage gap unless
    the source window proves otherwise; an email total alone cannot create one.
 
@@ -83,12 +91,16 @@ receipt, and what a statement produces when it combines same-day refunds.
 Record it as **one** transaction carrying an `allocations` array:
 
 ```
-entity({ action: "update", entity: "financialTransaction",
-  id: "FTX-TEST", data: { allocations: [
+finance({ action: "allocate_settlement", transactionId: "FTX-TEST",
+  priorAllocations: [], allocations: [
     { purchaseId: "PUR-TSTA", amount: -10.00 },
     { purchaseId: "PUR-TSTB", amount: -5.00 },
-  ] } })
+  ] })
 ```
+
+Pass the complete allocation graph just read as `priorAllocations`; the example
+starts with an unallocated transaction. Preserve every unrelated existing edge
+in the proposed graph. A stale graph refuses without replacing newer links.
 
 Allocations must sum to the transaction's amount to the cent and share its sign;
 the write path refuses anything else. Mixed signs are unsupported by design — a

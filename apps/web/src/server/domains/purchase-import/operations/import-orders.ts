@@ -64,6 +64,7 @@ import { assertRunCapability } from "~/server/domains/purchase-import/repo/capab
 import {
   type ImportScope,
   loadImportScope,
+  parseMailSourceKey,
   type RetainedMailSource,
   retainedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
@@ -75,6 +76,7 @@ import {
 import { resolveImportSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { assertRunVendorAuthorization } from "~/server/domains/run/repo/execution-context";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { resolveImportVendor } from "~/server/domains/vendor/repo/vendor";
@@ -92,6 +94,10 @@ import {
   prepareMailAttachmentDecisions,
   type PreparedMailAttachmentDecisions,
 } from "./mail-attachment-purpose";
+import {
+  applyMailSourceAdmissions,
+  prepareMailSourceAdmissions,
+} from "./mail-source-admission";
 import { linkImportedMail } from "./mail-tool";
 
 const operationArgs = (input: {
@@ -165,6 +171,7 @@ async function preparedOrderVendor(
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
+  await assertRunVendorAuthorization(db, scope.runId, vendorId);
   return vendorId;
 }
 
@@ -517,8 +524,30 @@ export async function preparePurchaseImport(
       payload: input.orders,
       subject: "Preparation",
     },
-    (ledger) =>
-      withTransactionDatabase(db, async (transactionDb) => {
+    async (ledger) => {
+      const recorded = await ledger.replay(getDb(db), preparePurchaseImportOut);
+      if (recorded) return recorded;
+      const admissions =
+        scope.purpose === "mail_import"
+          ? await prepareMailSourceAdmissions(
+              db,
+              scope.runId,
+              input.orders.flatMap(({ source }) => {
+                const { mailboxId, messageId } = parseMailSourceKey(
+                  source.externalKey,
+                );
+                return (source.kind === "mail_message" ||
+                  source.kind === "mail_attachment") &&
+                  mailboxId &&
+                  messageId
+                  ? [{ mailboxId, messageId }]
+                  : [];
+              }),
+              actor,
+              decisionPort,
+            )
+          : [];
+      return withTransactionDatabase(db, async (transactionDb) => {
         const database = getDb(transactionDb);
         const replayed = await ledger.replay(
           database,
@@ -529,6 +558,14 @@ export async function preparePurchaseImport(
           throw new Error(`Purchase import run is fenced in ${scope.status}`);
         // After replay: a completed prepare returns its recorded result even
         // once its Email is excluded or resolved.
+        await applyMailSourceAdmissions(
+          transactionDb,
+          scope.runId,
+          admissions,
+          {
+            requireAttribution: true,
+          },
+        );
         const retainedMail = await retainedMailSources(
           transactionDb,
           scope,
@@ -725,7 +762,8 @@ export async function preparePurchaseImport(
         });
         await ledger.complete(database, result);
         return result;
-      }),
+      });
+    },
   );
 }
 
@@ -851,6 +889,11 @@ export async function commitPurchaseImport(
             throw new Error(
               "The prepared order's Vendor was deleted or merged; prepare it again.",
             );
+          await assertRunVendorAuthorization(
+            transactionDb,
+            scope.runId,
+            vendorId,
+          );
           return vendorId;
         };
         const mailSources = new Map<string, RetainedMailSource | null>();

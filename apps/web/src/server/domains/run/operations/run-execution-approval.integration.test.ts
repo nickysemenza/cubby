@@ -275,6 +275,49 @@ describe("authenticated member execution approval", () => {
     ).toEqual(root?.input);
   });
 
+  it("stores a selected Vendor history approval as canonical Vendor ids under the derived owner, without sender queries", async () => {
+    const party = await seed();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic history vendor",
+      orderEmailSenders: ["orders@history.example.test"],
+    });
+    const input = {
+      scope: {
+        kind: "vendor_backfill",
+        mailboxId,
+        discovery: "vendor_history",
+        vendors: [{ vendorId: vendor.shortcode }],
+        senderPolicy: "verified_at_first_start",
+        receivedAfter: "2024-01-01",
+        receivedBefore: "2026-10-01",
+        candidateLimit: 20,
+        productLimit: 5,
+      },
+      meteredBudget: { period: "lifetime", limitMicroUSD: 5_000_000 },
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    };
+    expect(await invoke("approveExecution", input)).toMatchObject({
+      ok: true,
+    });
+    const [root] = await getDb(ctx.db).select().from(run);
+    expect(executionAuthorizationInput.parse(root?.input)).toEqual({
+      kind: "execution_authorization",
+      version: 1,
+      owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+      ...input,
+      scope: { ...input.scope, vendors: [{ vendorId: vendor.id }] },
+    });
+    expect(JSON.stringify(root?.input)).not.toMatch(/from:|history\.example/);
+
+    expect(
+      await invoke("approveExecution", {
+        ...input,
+        scope: { ...input.scope, vendors: [{ vendorId: "VEN-ZZZZZZ" }] },
+      }),
+    ).toMatchObject({ ok: false });
+    expect(await getDb(ctx.db).select().from(run)).toHaveLength(1);
+  });
+
   it("rejects unauthenticated requests, forged owners, foreign mailboxes and disconnected selections without writing grants", async () => {
     await seed();
     expect(await invoke("approveExecution", approval(), false)).toMatchObject({

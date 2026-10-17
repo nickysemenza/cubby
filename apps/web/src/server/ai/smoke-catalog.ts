@@ -17,6 +17,9 @@ import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
+  MAIL_ATTRIBUTION_FEATURE,
+  MAIL_FINANCIAL_EVENT_FEATURE,
+  MAIL_SOURCE_RELATION_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,
@@ -166,6 +169,27 @@ export const AI_SMOKE_CASES = {
     label: "Email attachment purpose",
     description:
       "Decide whether synthetic shipping paperwork belongs on a Purchase",
+    group: "Purchase research",
+  },
+  mailAttribution: {
+    feature: MAIL_ATTRIBUTION_FEATURE,
+    label: "Email attribution",
+    description:
+      "Decide whether a synthetic purchase Email is the recipient's own or a forwarded third party's",
+    group: "Purchase research",
+  },
+  mailSourceRelation: {
+    feature: MAIL_SOURCE_RELATION_FEATURE,
+    label: "Supporting Email relation",
+    description:
+      "Decide whether two synthetic Emails evidence the same purchase",
+    group: "Purchase research",
+  },
+  mailFinancialEvent: {
+    feature: MAIL_FINANCIAL_EVENT_FEATURE,
+    label: "Email financial event",
+    description:
+      "Copy one synthetic payment Email's verified financial event literals",
     group: "Purchase research",
   },
 

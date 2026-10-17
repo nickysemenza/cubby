@@ -9,7 +9,7 @@ import {
   type ExecutionAuthorizationClaim,
   type ExecutionAuthorizationInput,
 } from "@cubby/schemas/execution-authorization";
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { RunId, VendorId } from "@cubby/schemas/identifiers";
 import {
   runPurpose,
   runStatus,
@@ -58,6 +58,7 @@ import { retainedMailJoin } from "~/server/domains/mail/repo/retained-mail";
 import {
   assertExecutionAuthorization,
   claimExecutionAuthorization,
+  requestedScopeFor,
 } from "./execution-authorization";
 
 const executionContext = z.object({
@@ -249,7 +250,7 @@ export async function latestExecutionAuthorization(
     {
       ref,
       owner,
-      requestedScope: { mailboxId, discovery: parsed.data.scope.discovery },
+      requestedScope: { ...requestedScopeFor(parsed.data.scope), mailboxId },
     },
     { minimumBudgetMicroUSD },
   );
@@ -291,14 +292,38 @@ export async function executionRequestForRun(
     .where(eq(run.id, ref.runId))
     .limit(1);
   const approval = executionAuthorizationInput.parse(root?.input);
+  if (approval.scope.kind === "vendor_backfill" && !scope.vendorId)
+    throw new Error("Vendor history Run has no selected Vendor.");
   return {
     ref,
     owner: { userId: scope.actorUserId, ledgerPartyId: scope.ledgerPartyId },
-    requestedScope: {
-      mailboxId: approval.scope.mailboxId,
-      discovery: approval.scope.discovery,
-    },
+    // A per-Vendor history Run reads only its own Vendor of the approval.
+    requestedScope:
+      approval.scope.kind === "vendor_backfill" && scope.vendorId
+        ? { ...requestedScopeFor(approval.scope), vendorIds: [scope.vendorId] }
+        : requestedScopeFor(approval.scope),
   };
+}
+
+/** Search hits are discovery hints; every writer must retain the Run's seller boundary. */
+export async function assertRunVendorAuthorization(
+  db: Database,
+  runId: RunId,
+  vendorId: VendorId,
+) {
+  const authority = await executionRequestForRun(db, runId, {
+    requireRunning: true,
+  });
+  if (!authority || authority.requestedScope.discovery !== "vendor_history")
+    return;
+  if (
+    authority.requestedScope.vendorIds?.length !== 1 ||
+    authority.requestedScope.vendorIds[0] !== vendorId
+  )
+    throw new Error(
+      "Vendor history order is outside this Run's selected Vendor.",
+    );
+  await assertExecutionAuthorization(db, authority);
 }
 
 /** A scheduled retry cannot reset a stopped lifetime or current-month allowance. */
@@ -388,8 +413,8 @@ export async function inheritExecutionAuthorization(
             ledgerPartyId: source.ledgerPartyId,
           },
           requestedScope: {
+            ...requestedScopeFor(approval.scope),
             mailboxId: manual.data.mailboxId,
-            discovery: approval.scope.discovery,
           },
         },
       );

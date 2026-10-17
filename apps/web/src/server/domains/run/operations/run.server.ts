@@ -131,11 +131,27 @@ export const runHandlers = implementOperationDomain(runContract, {
   },
   approveExecution: async (context, input) => {
     const party = await memberParty(context);
+    const scope =
+      input.scope.kind === "vendor_backfill"
+        ? {
+            ...input.scope,
+            vendors: await Promise.all(
+              input.scope.vendors.map(async (vendor) => ({
+                vendorId: await resolveOrThrow(
+                  context.db,
+                  "vendor",
+                  vendor.vendorId,
+                ),
+              })),
+            ),
+          }
+        : input.scope;
     return issueExecutionAuthorization(context.db, context.actorContext, {
       kind: "execution_authorization",
       version: 1,
       owner: { userId: context.auth.userId, ledgerPartyId: party.id },
       ...input,
+      scope,
     });
   },
   discoverMail: async (context, input) =>

@@ -106,7 +106,17 @@ export async function proxyPurchaseAgentRequest(input: {
       action: suffix === "abort" ? "abort" : "prompt",
     });
   }
-  return await redactJsonAgentResponse(response);
+  const redacted = await redactJsonAgentResponse(response);
+  // Observations read retained storage only. A finite SSE snapshot lets the
+  // existing observer reconnect without constructing or recovering a harness.
+  if (input.request.method === "GET" && suffix === "stream" && redacted.ok)
+    return new Response(`data: ${JSON.stringify(await redacted.json())}\n\n`, {
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-store",
+      },
+    });
+  return redacted;
 }
 
 /** Keep the caller's transport lifecycle and credentials at the Worker boundary. */
@@ -114,14 +124,18 @@ export function createPurchaseAgentRequest(
   request: Request,
   suffix: string,
 ): Request {
-  const internal = new URL(`/${suffix}`, "https://purchase-agent.internal");
+  const read = request.method === "GET" || request.method === "HEAD";
+  const internal = new URL(
+    read ? "/transcript" : `/${suffix}`,
+    "https://purchase-agent.internal",
+  );
   internal.search = new URL(request.url).search;
   const headers = new Headers(request.headers);
   headers.delete("authorization");
   headers.delete("cookie");
   headers.delete("host");
   return new Request(internal, {
-    method: request.method,
+    method: read ? "GET" : request.method,
     headers,
     body:
       request.method === "GET" || request.method === "HEAD"

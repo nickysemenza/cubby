@@ -6,7 +6,7 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { uniqBy } from "es-toolkit";
+import { chunk, uniqBy } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -32,6 +32,7 @@ import {
   findDirectImageSearchOwnerRefs,
   refreshSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
+import { changesWorkPrerequisite } from "~/server/generic/work-queue/repo/work-dependencies";
 import {
   type PublishOptions,
   publishInBackground,
@@ -371,6 +372,22 @@ export async function runMutationSideEffectsForEntities(
     ports,
   );
   for (const event of events) await enqueueLocationAiRefresh(db, event, ports);
+  const workChanges = events
+    .filter((event) => changesWorkPrerequisite(event.entity.entity))
+    .map((event) => ({
+      entityKind: event.entity.entity,
+      entityId: event.entity.id,
+    }));
+  if (workChanges.length)
+    await ports.publishTasks(
+      db,
+      chunk(workChanges, 100).map((changed) => ({
+        kind: "work.advance",
+        requestedAt: new Date().toISOString(),
+        changed,
+      })),
+      { source: `${firstEvent.source}:${firstEvent.action}` },
+    );
 }
 
 /**

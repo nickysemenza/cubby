@@ -92,6 +92,9 @@ const JEV_DEFAULT_LABEL = new Map([
   ["reversal-kind", "return"],
   ["product-line-identity", "No listed choice is a suitable match."],
   ["product-variant-relation", "color unknown; size unknown"],
+  // Synthetic order mail is addressed to its own recipient unless a scenario says otherwise.
+  ["mail-attribution", "recipient"],
+  ["mail-source-relation", "uncertain"],
 ]);
 
 const decisionRequest = z.object({

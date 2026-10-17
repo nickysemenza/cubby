@@ -120,6 +120,12 @@ export async function assertReviewedPreparationOriginal(
   return original;
 }
 
+export function parseMailSourceKey(externalKey: string) {
+  const [, mailboxId, messageId, attachmentId] =
+    /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(externalKey) ?? [];
+  return { mailboxId, messageId, attachmentId };
+}
+
 /**
  * A mail-sourced order must name the member's own retained Email unchanged,
  * never a model-provided key or bytes. A Mail import Run may use only mail
@@ -137,10 +143,9 @@ export async function retainedMailSource(
       throw new Error("A Mail import Run imports only the Emails it admitted.");
     return null;
   }
-  const match = /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(
+  const { mailboxId, messageId, attachmentId } = parseMailSourceKey(
     source.externalKey,
   );
-  const [, mailboxId, messageId, attachmentId] = match ?? [];
   const isAttachment = source.kind === "mail_attachment";
   if (!mailboxId || !messageId || Boolean(attachmentId) !== isAttachment)
     throw new Error(

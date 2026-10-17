@@ -123,7 +123,6 @@ describe("vendor account creation persistence", () => {
       data: {
         vendorId: parseShortcodeFor("vendor", vendor.shortcode),
         ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
-        status: "active",
         inventoryOwnerDefaultEnabled: true,
       },
     });
@@ -140,7 +139,6 @@ describe("vendor account creation persistence", () => {
         ledgerPartyId: vendorAccount.ledgerPartyId,
         inventoryOwnerDefaultEnabled:
           vendorAccount.inventoryOwnerDefaultEnabled,
-        status: vendorAccount.status,
       })
       .from(vendorAccount)
       .where(eq(vendorAccount.id, createdRow.id));
@@ -151,7 +149,6 @@ describe("vendor account creation persistence", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
       inventoryOwnerDefaultEnabled: true,
-      status: "active",
     });
 
     const started = await startImportRunFixture(ctx.db, {

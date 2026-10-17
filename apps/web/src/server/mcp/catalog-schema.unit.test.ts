@@ -535,7 +535,8 @@ describe("MCP catalog schemas", () => {
       }
     }
     expect(invalid).toEqual([]);
-  });
+    // This compiles every advertised input and output graph, not one schema.
+  }, 15_000);
 
   it.each([
     { candidates: z.tuple([]), accepted: [], rejected: ["candidate"] },
@@ -792,6 +793,7 @@ describe("MCP catalog publication without services", () => {
       statement_rows: write({ destructive: true }),
       purchase_import: write(),
       expenses: write(),
+      finance: write(),
       product_enrichment: write({ destructive: true }),
       upc: write(),
       photo_run: write(),

@@ -1,9 +1,34 @@
 # Purchase, photo, and statement evidence
 
 Bank transactions are evidence; Expenses are the spending ledger. Importing a
-CSV never creates spending implicitly. The reviewed booking operation either
+CSV never creates spending implicitly. Booking either
 links recorded Expenses or creates an aggregate allocation line. Purchases
 created from bank evidence have no invented order identifier or printed total.
+
+`finance.converge` is the explicit automatic path for a genuine purchase payment.
+The server rechecks posted transaction identity, stable provider references,
+live account funding and exact Vendor identity. An existing Purchase requires
+an accepted allocation or retained financial Email association plus its
+Purchase link. A sole nearby amount/date candidate is advisory. Creating an
+orderless aggregate requires genuine spending evidence; transfers, repayment,
+refunds, reimbursements and incoming payments do not enter this path.
+
+Financial identifiers are namespaced by provider. A copied payment ID alone
+cannot connect an Email to a bank or Monarch record, even if amounts and labels
+agree. Without a host-verified namespace, automatic reuse requires a current
+member-accepted association for that exact Email, checksum, transaction and
+reviewed account. This applies to financial-only evidence as well as booking;
+otherwise keep the proposed association in review.
+
+Replay compares accepted transaction, account, allocation, Purchase and full
+Expense lineage. Changed accepted facts require review. Adding newly accepted
+financial Email provenance refreshes the fingerprint only after the prior
+accepted facts pass replay validation. Verified exact
+aggregate-to-itemized replacement refreshes that lineage through the normal
+reconciliation writer. Candidate ranking considers the full bounded set of
+20 candidates, including differing merchant names and dates, without granting
+automatic matching authority. Split proposals preserve existing edges;
+`finance.allocate_settlement` refuses a stale prior allocation graph.
 
 SpendingCategory is independent of ProductCategory. Purchase defaults flow to
 Expense lines unless a line has its own category. Itemization expectation resolves

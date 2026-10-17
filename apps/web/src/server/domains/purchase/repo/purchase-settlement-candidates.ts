@@ -1,14 +1,11 @@
+import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, asc, desc, eq, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  financialAccount,
-  financialTransaction,
-  financialTransactionAllocation,
-} from "~/server/db/schema";
+import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -26,6 +23,16 @@ export async function listPurchaseSettlementCandidates(
 
   const effectiveDate = sql`coalesce(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})::date`;
   const days = sql<number>`abs(${effectiveDate} - ${purchase.date}::date)`;
+  const residual = sql`(${financialTransaction.amount} - (
+    SELECT coalesce(sum(a.amount), 0) FROM "FinancialTransactionAllocation" a
+    WHERE a."transactionId" = ${financialTransaction.id} AND a."deletedAt" IS NULL
+  ))`;
+  const targetAllocation = sql`EXISTS (
+    SELECT 1 FROM "FinancialTransactionAllocation" a
+    JOIN "Purchase" p ON p.id = a."purchaseId" AND p."deletedAt" IS NULL
+    WHERE a."transactionId" = ${financialTransaction.id} AND a."deletedAt" IS NULL
+      AND p.shortcode = ${purchaseId}
+  )`;
   // POSITION treats source merchant text literally, including '%' and '_'.
   const merchantMatches = sql<boolean>`(
     ${purchase.vendorName !== null && purchase.vendorName.length > 0}
@@ -34,21 +41,9 @@ export async function listPurchaseSettlementCandidates(
   const exactAmount = sql<boolean>`(
     ${financialTransaction.kind} = 'purchase'
     AND ${purchase.statedTotal !== null}
-    AND abs(round((${financialTransaction.amount} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1
+    AND (abs(round((${financialTransaction.amount} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1
+      OR abs(round((${residual} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1)
   )`;
-  const allocations = getDb(db)
-    .select({ one: sql`1` })
-    .from(financialTransactionAllocation)
-    .where(
-      and(
-        eq(
-          financialTransactionAllocation.transactionId,
-          financialTransaction.id,
-        ),
-        notDeleted(financialTransactionAllocation),
-      ),
-    );
-
   return getDb(db)
     .select({
       transactionId: financialTransaction.shortcode,
@@ -66,10 +61,10 @@ export async function listPurchaseSettlementCandidates(
         notDeleted(financialTransaction),
         notDeleted(financialAccount),
         ne(financialTransaction.status, "void"),
+        isNull(financialTransaction.ledgerTransferId),
         sql`${financialTransaction.kind} IN ('purchase', 'refund')`,
         sql`${days} <= 45`,
-        notExists(allocations),
-        or(merchantMatches, exactAmount),
+        sql`((${residual} <> 0 AND sign(${residual}) = sign(${financialTransaction.amount})) OR ${targetAllocation})`,
       ),
     )
     .orderBy(
@@ -78,5 +73,5 @@ export async function listPurchaseSettlementCandidates(
       asc(days),
       asc(financialTransaction.shortcode),
     )
-    .limit(10);
+    .limit(SETTLEMENT_CANDIDATE_LIMIT);
 }

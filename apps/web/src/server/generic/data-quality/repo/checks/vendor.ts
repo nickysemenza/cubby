@@ -7,8 +7,8 @@ import { defineEntityChecks } from "../registry";
 
 type Vendor = typeof vendor;
 
-// Order evidence and a website become expected once a vendor has purchases.
-// Every live vendor needs a logo independently of purchase history.
+// Website discovery and logo research can precede a first purchase.
+// Order evidence becomes expected once a vendor has purchases.
 const hasLivePurchase = (t: Vendor) => sql`EXISTS (
   SELECT 1 FROM "Purchase" dq_ven_p
   WHERE dq_ven_p."vendorId" = ${t.id} AND dq_ven_p."deletedAt" IS NULL
@@ -53,7 +53,6 @@ export const vendorChecks = defineEntityChecks({
       fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],
     },
     vendor_website: {
-      expected: hasLivePurchase,
       missing: (t) => sql`(${t.website} IS NULL OR trim(${t.website}) = '')`,
       fingerprint: (t) => [sql`${t.name}`, sql`${t.website}`],
     },

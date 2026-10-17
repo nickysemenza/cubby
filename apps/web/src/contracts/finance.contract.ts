@@ -5,6 +5,9 @@ import {
   financialBookingCorrectionInput,
   financialBookingCorrectionPreview,
   financialBookingCorrectionResult,
+  financialConvergenceInput,
+  financialConvergenceResult,
+  financialSettlementAllocationInput,
 } from "@cubby/schemas/financial-booking";
 import {
   financialStatementImportPreviewInput,
@@ -60,6 +63,21 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
 export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
+    allocateSettlement: mutation({
+      input: financialSettlementAllocationInput,
+      output: financialSettlementAllocationInput.omit({
+        priorAllocations: true,
+      }),
+      native:
+        "Save reviewed settlement without replacing a changed allocation graph",
+      invalidates: ["financialTransaction", "purchase", "expense"],
+    }),
+    converge: mutation({
+      input: financialConvergenceInput,
+      output: financialConvergenceResult,
+      native: "Converge uniquely verified financial evidence",
+      invalidates: ["financialTransaction", "purchase", "expense", "email"],
+    }),
     previewBookingCorrection: query({
       mcp: {
         omit: "deferred_capability",

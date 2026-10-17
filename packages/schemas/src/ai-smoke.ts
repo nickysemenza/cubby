@@ -40,6 +40,15 @@ export const aiSmokeInputs = {
   mailAttachmentPurpose: z.object({
     fixture: z.enum(["shipping_label", "receipt", "ambiguous"]),
   }),
+  mailAttribution: z.object({
+    fixture: z.enum(["direct", "forwarded_relative", "self_forward"]),
+  }),
+  mailSourceRelation: z.object({
+    fixture: z.enum(["same_order", "other_order"]),
+  }),
+  mailFinancialEvent: z.object({
+    fixture: z.enum(["reimbursement", "promotion"]),
+  }),
   purchaseProductIdentity: z.object({
     fixture,
     productId: sourceId.optional(),

@@ -382,7 +382,6 @@ async function seedConnectedHousehold(
   await create("vendorAccount", {
     vendorId: vendors[0]!.id,
     ledgerPartyId: otherMemberCode,
-    status: "disabled",
   });
 
   const ingredients: CreatedEntity[] = [];

@@ -6,5 +6,3 @@ export const vendorAccountCursor = z.object({
   backfillBeforeOrderAt: z.iso.datetime().nullable(),
   earliestAvailableOrderAt: z.iso.datetime().nullable(),
 });
-
-export const vendorAccountStatus = z.enum(["active", "disabled"]);

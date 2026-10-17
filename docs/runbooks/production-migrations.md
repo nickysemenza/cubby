@@ -65,6 +65,21 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## VendorAccount status retirement
+
+`0078_drop_vendor_account_status` removes a relationship status that did not
+control execution. Both former active and disabled accounts remain; ownership
+defaults, cursors, tombstones, Purchases, Runs and source claims are preserved.
+The populated-predecessor regression is
+`tooling/vendor-account-status-migration.integration.test.ts`.
+
+Before merging this contraction, set `PRODUCTION_MIGRATION_THROUGH` to
+`0077_card_field_suggestions`, the last compatible journal predecessor.
+Deploy the code that no longer declares or writes status, then apply through
+`0078_drop_vendor_account_status` and read back relationship/reference counts
+and the absent column before clearing the boundary. Do not enable auto-merge
+or apply the contraction before the matching deployment.
+
 ## Image job entity cutover
 
 `0061_image_job_entity`, `0062_image_job_drop_public_id` and `0063_derived_ddl`

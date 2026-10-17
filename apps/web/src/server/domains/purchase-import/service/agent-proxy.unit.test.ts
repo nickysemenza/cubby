@@ -21,13 +21,31 @@ describe("purchase-agent proxy mutation fence", () => {
       "stream",
     );
     expect(internal.url).toBe(
-      "https://purchase-agent.internal/stream?cursor=synthetic",
+      "https://purchase-agent.internal/transcript?cursor=synthetic",
     );
     expect(internal.headers.has("authorization")).toBe(false);
     expect(internal.headers.has("cookie")).toBe(false);
     expect(internal.headers.has("host")).toBe(false);
     abort.abort();
     expect(internal.signal.aborted).toBe(true);
+  });
+
+  it("reads retained evidence for both terminal and active observations without loading execution", () => {
+    for (const suffix of ["", "stream"]) {
+      const request = createPurchaseAgentRequest(
+        new Request("https://example.invalid/agent"),
+        suffix,
+      );
+      expect(new URL(request.url).pathname).toBe("/transcript");
+    }
+    expect(
+      new URL(
+        createPurchaseAgentRequest(
+          new Request("https://example.invalid/agent", { method: "POST" }),
+          "",
+        ).url,
+      ).pathname,
+    ).toBe("/");
   });
 
   it("allows the fenced abort to reach the agent while keeping other terminal writes view-only", () => {

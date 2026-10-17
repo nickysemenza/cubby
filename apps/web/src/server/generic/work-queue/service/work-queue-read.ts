@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
@@ -14,6 +15,7 @@ export const readWorkQueue = (
   currentPartyId: LedgerPartyId | null,
   input: Parameters<typeof readWorkQueueWith>[3],
   memberOnly: boolean,
+  actor?: ActorContext,
 ) =>
   readWorkQueueWith(
     additionalWorkProblemSelections,
@@ -21,6 +23,7 @@ export const readWorkQueue = (
     currentPartyId,
     input,
     memberOnly,
+    actor,
   );
 
 /** One record's rows of the same projection and routing. */
@@ -29,6 +32,7 @@ export const readRecordWorkQueue = (
   currentPartyId: LedgerPartyId | null,
   id: string,
   memberOnly: boolean,
+  actor?: ActorContext,
 ) =>
   readRecordWorkQueueWith(
     additionalWorkProblemSelections,
@@ -36,4 +40,5 @@ export const readRecordWorkQueue = (
     currentPartyId,
     id,
     memberOnly,
+    actor,
   );

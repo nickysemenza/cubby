@@ -26,18 +26,45 @@ const centsToInput = (value: number) => {
  */
 export function proposeSettlementAllocations(
   purchaseId: string,
-  transaction: { amount: number; kind: string },
+  transaction: {
+    amount: number;
+    kind: string;
+    allocations?: readonly { purchaseId: string; amount: number }[];
+  },
   purchase: { statedTotal: number | null },
 ): SettlementAllocationDraft[] {
-  const totalCents = cents(transaction.amount);
+  const existing = transaction.allocations ?? [];
+  const rows: SettlementAllocationDraft[] = existing.map((allocation) => ({
+    purchaseId: allocation.purchaseId,
+    amount: centsToInput(cents(allocation.amount)),
+  }));
+  const totalCents =
+    cents(transaction.amount) -
+    existing.reduce((sum, allocation) => sum + cents(allocation.amount), 0);
+  // An accepted graph is never redistributed merely because it appeared as a
+  // candidate for another order. Conflicting legacy over-allocation stays visible.
+  if (
+    totalCents === 0 ||
+    Math.sign(totalCents) !== Math.sign(transaction.amount)
+  )
+    return rows;
   const statedCents = cents(purchase.statedTotal ?? 0);
+  const target = rows.find((row) => row.purchaseId === purchaseId);
+  const acceptedTargetCents = existing.reduce(
+    (sum, allocation) =>
+      allocation.purchaseId === purchaseId
+        ? sum + cents(allocation.amount)
+        : sum,
+    0,
+  );
   const firstCents =
     transaction.kind === "purchase" && statedCents > 0
-      ? Math.min(totalCents, statedCents)
+      ? Math.min(totalCents, Math.max(0, statedCents - acceptedTargetCents))
       : totalCents;
-  const rows = [
-    { purchaseId, amount: centsToInput(firstCents) },
-  ] satisfies SettlementAllocationDraft[];
+  if (firstCents !== 0) {
+    if (target) target.amount = centsToInput(acceptedTargetCents + firstCents);
+    else rows.push({ purchaseId, amount: centsToInput(firstCents) });
+  }
   if (firstCents !== totalCents)
     rows.push({
       purchaseId: "",

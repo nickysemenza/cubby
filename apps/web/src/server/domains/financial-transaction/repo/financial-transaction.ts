@@ -639,7 +639,7 @@ export async function createFinancialTransaction(
 
 type FinancialTransactionDbRow = typeof financialTransaction.$inferSelect;
 
-const lockUpdatePurchases = async (
+export const lockUpdatePurchases = async (
   tx: DrizzleTransaction,
   id: FinancialTransactionId,
   data: FinancialTransactionUpdateData,

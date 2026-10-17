@@ -507,6 +507,23 @@ export const MCP_TOOLS = defineMcpTools({
     },
   },
 
+  finance: {
+    description:
+      "Apply uniquely supported financial evidence through server checks. Ambiguous or changed accepted facts remain review work.",
+    actions: {
+      allocate_settlement: mcpAction({
+        op: financialTransactionContract.ops.allocateSettlement,
+        description:
+          "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation.",
+      }),
+      converge: mcpAction({
+        op: financialTransactionContract.ops.converge,
+        description:
+          "Automatically book a posted genuine purchase payment only when current server evidence establishes identity, account authority, exact money and unchanged accepted facts. Optionally provide a retained Email for checksum-fenced financial event extraction; transfers, card repayments, refunds, reimbursements and incoming payments are never turned into new purchases. A sole candidate or model ranking grants no write authority. Returns review_required without spending writes when evidence is incomplete or ambiguous.",
+      }),
+    },
+  },
+
   finance_read: {
     description:
       "Statement-row, settlement, and contribution-ledger reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",

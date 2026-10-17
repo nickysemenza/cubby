@@ -1,4 +1,4 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   mailResearchRunInput,
   runInputsErased,
@@ -10,8 +10,13 @@ import {
   type RepositoryQueryTransaction as DrizzleTransaction,
 } from "~/server/db/repository-access.boundary";
 import { email as emailTable, run } from "~/server/db/retained-tables";
+import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 
-/** The admitted source roster is immutable Run input; current Email status only describes its outcome. */
+/**
+ * The admitted source roster is Run input: admission freezes it and a
+ * supporting admission only appends. Current Email status only describes
+ * each source's outcome.
+ */
 export async function readMailRunSources(
   client: DrizzleClient | DrizzleTransaction,
   runId: RunId,
@@ -72,6 +77,124 @@ export async function assertMailRunMembership(
       "Admitted Email evidence changed; reconcile it before importing.",
     );
   return source;
+}
+
+/**
+ * Reading is not writing: under a Mail import Run, Pi may read its member's
+ * retained originals from any mailbox the Run admitted, while every mutation
+ * still requires roster membership.
+ */
+export async function assertMailRunReadAuthority(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+  mail: Pick<RetainedMail, "id" | "ledgerPartyId" | "mailboxId">,
+) {
+  const sources = await readMailRunSources(client, runId);
+  const admitted = sources.find((source) => source.orderMailId === mail.id);
+  if (admitted?.owned) return { admitted: true };
+  const [owner] = await client
+    .select({ ledgerPartyId: run.ledgerPartyId })
+    .from(run)
+    .where(eq(run.id, runId));
+  if (
+    owner?.ledgerPartyId !== mail.ledgerPartyId ||
+    !sources.some((source) => source.email.mailboxId === mail.mailboxId)
+  )
+    throw new Error(
+      "This Mail import Run reads only its member's Emails from the mailboxes it admitted.",
+    );
+  return { admitted: false };
+}
+
+/**
+ * Append one supporting original to a running Mail import Run's roster. The
+ * caller has already established same-purchase identity and recipient
+ * attribution; this enforces ownership, current evidence and the roster bound.
+ */
+export async function admitSupportingMailSource(
+  // Row locks below need the caller's transaction.
+  tx: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+  mail: Pick<
+    RetainedMail,
+    "id" | "ledgerPartyId" | "mailboxId" | "messageId" | "rawChecksum"
+  >,
+) {
+  const [owner] = await tx
+    .select()
+    .from(run)
+    .where(eq(run.id, runId))
+    .for("update");
+  if (
+    owner?.purpose !== "mail_import" ||
+    owner.status !== "running" ||
+    owner.retiredAt ||
+    owner.deletedAt ||
+    owner.ledgerPartyId !== mail.ledgerPartyId
+  )
+    throw new Error(
+      "Only a running Mail import Run of this member admits Email.",
+    );
+  const roster = mailResearchRunInput.parse(owner.input);
+  if (roster.sources.some((source) => source.orderMailId === mail.id)) {
+    await assertMailRunMembership(tx, runId, mail.id);
+    return;
+  }
+  if (roster.sources.length >= 50)
+    throw new Error(
+      "This Mail import Run already holds fifty Emails; the supporting original waits for a later import.",
+    );
+  const [message] = await tx
+    .select()
+    .from(emailTable)
+    .where(
+      and(
+        eq(emailTable.ledgerPartyId, mail.ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
+        eq(emailTable.mailboxId, mail.mailboxId),
+        eq(emailTable.messageId, mail.messageId),
+        eq(emailTable.orderMailId, mail.id),
+      ),
+    )
+    .for("update");
+  if (
+    !message ||
+    message.deletedAt ||
+    message.checksum !== mail.rawChecksum ||
+    message.classification !== "related" ||
+    message.contentClearedAt ||
+    !["pending", "blocked"].includes(message.status)
+  )
+    throw new Error(
+      "A supporting original must be an unchanged, related Email no import has settled.",
+    );
+  if (message.runId) {
+    const [current] = await tx
+      .select({ retiredAt: run.retiredAt, deletedAt: run.deletedAt })
+      .from(run)
+      .where(eq(run.id, runEntityId.parse(message.runId)));
+    if (current && !current.retiredAt && !current.deletedAt)
+      throw new Error(
+        "Another Mail import Run owns that Email; it stays with that Run.",
+      );
+  }
+  await tx
+    .update(run)
+    .set({
+      input: mailResearchRunInput.parse({
+        ...roster,
+        sources: [
+          ...roster.sources,
+          { orderMailId: mail.id, checksum: mail.rawChecksum },
+        ],
+      }),
+      updatedAt: new Date(),
+    })
+    .where(eq(run.id, runId));
+  await tx
+    .update(emailTable)
+    .set({ runId, status: "researching", updatedAt: new Date() })
+    .where(eq(emailTable.id, message.id));
 }
 
 /** An explicit member restart transfers only the original frozen roster, never discovery's pending queue. */

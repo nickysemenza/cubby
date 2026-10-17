@@ -13,6 +13,7 @@ import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   expense,
+  run,
   runFinding,
   assessmentState as suggestion,
 } from "~/server/db/schema";
@@ -88,6 +89,95 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       false,
     );
   const names = (rows: WorkQueueRow[]) => rows.map((row) => row.name);
+
+  // A running interactive handoff has no scheduled executor. Its status alone
+  // must not advertise automatic work or inflate that view's count.
+  it("requires scheduled execution before projecting a running Run as automatic", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic scheduled execution member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const manual = await ensureRun(
+      ctx.db,
+      { ...ctx.actor, runId: null },
+      {
+        purpose: "photo_inventory",
+        trigger: "manual",
+        status: "running",
+      },
+    );
+    const scheduled = await ensureRun(
+      ctx.db,
+      { ...ctx.actor, runId: null },
+      {
+        purpose: "ai_refresh",
+        trigger: "manual",
+        status: "running",
+      },
+    );
+    const page = await read({ view: "automatic" });
+    const [manualRecord] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, manual));
+    const [scheduledRecord] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, scheduled));
+    if (!manualRecord || !scheduledRecord)
+      throw new Error("Synthetic execution Runs missing");
+    expect(page.items.some((row) => row.id === manualRecord.shortcode)).toBe(
+      false,
+    );
+    expect(
+      page.items.some(
+        (row) =>
+          row.id === scheduledRecord.shortcode && row.source === "execution",
+      ),
+    ).toBe(true);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ dispatchEventId: "synthetic-photo-dispatch" })
+      .where(eq(run.id, manual));
+    const dispatched = await read({ view: "automatic" });
+    expect(
+      dispatched.items.some(
+        (row) =>
+          row.id === manualRecord.shortcode && row.source === "execution",
+      ),
+    ).toBe(true);
+  });
+
+  // A view applied after LIMIT would return an empty research page/count
+  // when independent reconciliation or diagnostic rows sort before it.
+  it("selects shared work views before counts and pagination", async () => {
+    const prefix = "Synthetic shared view";
+    await merchandiseOrder(prefix);
+    const page = await read({ query: prefix, view: "research", pageSize: 1 });
+    expect(page.items).toHaveLength(1);
+    expect(page.meta.totalCount).toBeGreaterThan(1);
+    expect(page.items[0]?.kind).toBe("research");
+    expect(page.items[0]?.explanations.length).toBeGreaterThan(0);
+    const record = page.items[0]?.id;
+    if (!record) throw new Error("Research row has no record");
+    const strip = await readRecordWorkQueue(ctx.db, null, record, false);
+    expect(
+      strip.items.find((row) => row.key === page.items[0]?.key)?.explanations,
+    ).toEqual(page.items[0]?.explanations);
+    const automatic = await read({ query: prefix, view: "automatic" });
+    expect(automatic.items).toEqual([]);
+    expect(automatic.meta.totalCount).toBe(0);
+    const review = await read({ query: prefix, view: "review" });
+    expect(review.items.some((row) => row.source === "reconciliation")).toBe(
+      true,
+    );
+    expect(
+      review.items.every((row) =>
+        row.explanations.some((action) => action.executor === "human"),
+      ),
+    ).toBe(true);
+  });
 
   it("excludes future purchases across sources before counts and paging", async () => {
     const prefix = "Synthetic future queue";

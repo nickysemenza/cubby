@@ -1,4 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   dataCheck,
   scoredEntities,
@@ -27,6 +28,7 @@ import { proposedImportFix } from "@cubby/schemas/purchase-import";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { vendorFiltersSchema } from "@cubby/schemas/vendor";
 import {
+  workExplanationSchema,
   workQueueGapChecks,
   workQueueGapViews,
   workQueueHouseholdInput,
@@ -96,6 +98,11 @@ import {
   workRunReviewOwners,
   workRunReviewRead,
 } from "~/server/generic/work-queue/repo/work-queue-routing";
+import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
+
+import { loadWorkContexts } from "./work-context";
+import { projectWorkExplanations } from "./work-explanation";
+import { workExecutorSql } from "./work-routing";
 
 const either = workWaitingForSchema.options[0].shape.kind.value;
 const members = workWaitingForSchema.options[1].shape.kind.value;
@@ -376,6 +383,23 @@ async function workQueueProjection(
   }
   selections.push(
     ...workQueueCandidate(scope, {
+      entity: "run",
+      ...workRunReviewRead(),
+      id: sql`"Run".shortcode`,
+      name: sql`"Run".purpose || ' · ' || "Run".status`,
+      where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
+        WORKFLOW_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+        sql`, `,
+      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('vendor_history_prerequisite', 'vendor_history_mailbox_busy', 'vendor_history_authorization')))`,
+      details: {
+        source: "execution",
+        kind: "repair",
+        reason: "Authorized execution or prerequisite wait",
+        nextAction: "Inspect current progress and retained execution evidence.",
+      },
+      key: "execution:run",
+    }),
+    ...workQueueCandidate(scope, {
       entity: "financialAccount",
       table: sql`${financialAccount}`,
       id: sql`"FinancialAccount".shortcode`,
@@ -461,7 +485,7 @@ async function workQueueProjection(
       ...workRunReviewRead(),
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
-      where: sql`"Run"."deletedAt" IS NULL AND (
+      where: sql`"Run"."deletedAt" IS NULL AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND finding.status = ${openFindingStatus} AND (finding."expiresAt" IS NULL OR finding."expiresAt" > now())))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
@@ -572,6 +596,7 @@ async function queryWorkQueue(
   input: QueueInput,
   memberOnly: boolean,
   record?: WorkQueueScope["record"],
+  actor?: ActorContext,
 ) {
   const sorts = workQueueSortSchema.parse(
     normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
@@ -629,6 +654,35 @@ async function queryWorkQueue(
       ))
   ))`,
   ];
+  switch (input.view) {
+    case "automatic":
+      conditions.push(
+        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.automatic}`,
+      );
+      break;
+    case "research":
+      conditions.push(
+        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.agent_session}`,
+      );
+      break;
+    case "review":
+      conditions.push(
+        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.human}`,
+      );
+      break;
+    case "waiting":
+      conditions.push(sql`(
+      routed.kind = ${workQueueKindSchema.enum.awaiting_posting}
+      OR routed.waiting_kind = ${unresolved}
+      OR (routed.entity = ${entitySchema.enum.run} AND EXISTS (
+        SELECT 1 FROM "Run" waiting
+        WHERE waiting.shortcode = routed.id AND waiting."deletedAt" IS NULL
+          AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}, ${runStatus.enum.paused_approval})
+            OR waiting."failureCode" IN ('vendor_history_prerequisite', 'vendor_history_mailbox_busy', 'vendor_history_authorization'))
+      ))
+    )`);
+      break;
+  }
   if (memberOnly)
     conditions.push(
       sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners) AND NOT EXISTS (SELECT 1 FROM unnest(owners) owner WHERE owner <> ${currentPartyId}::uuid)))`,
@@ -738,6 +792,10 @@ async function queryWorkQueue(
     })
     .parse(result.rows[0]);
   await stateRowQualities(db, row.items);
+  const contexts = await loadWorkContexts(db, row.items, actor);
+  for (const item of row.items) {
+    item.explanations = projectWorkExplanations(item, contexts.get(item.key));
+  }
   for (const item of row.items)
     if (item.entity && item.suggestionField)
       item.name = `${entitySummary[item.entity].singular} · ${fieldLabel(item.entity, item.suggestionField)}`;
@@ -763,7 +821,17 @@ export const readWorkQueueWith = (
   currentPartyId: LedgerPartyId | null,
   input: QueueInput,
   memberOnly: boolean,
-) => queryWorkQueue(db, problemSelections, currentPartyId, input, memberOnly);
+  actor?: ActorContext,
+) =>
+  queryWorkQueue(
+    db,
+    problemSelections,
+    currentPartyId,
+    input,
+    memberOnly,
+    undefined,
+    actor,
+  );
 
 /** One record's rows of the same projection and routing. The record filter is
  * pushed into each branch, so this never plans the whole queue. */
@@ -773,6 +841,7 @@ export async function readRecordWorkQueueWith(
   currentPartyId: LedgerPartyId | null,
   id: string,
   memberOnly: boolean,
+  actor?: ActorContext,
 ) {
   const parsed = parseShortcode(id);
   if (!parsed) throw new Error(`Work queue record ${id} is not a shortcode`);
@@ -786,5 +855,6 @@ export async function readRecordWorkQueueWith(
     }),
     memberOnly,
     { entity: parsed.type, id: parsed.shortcode },
+    actor,
   );
 }

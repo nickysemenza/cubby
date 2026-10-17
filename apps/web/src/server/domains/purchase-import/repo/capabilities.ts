@@ -112,6 +112,8 @@ const actionCapability = {
   "expenses.link_to_purchase": "generic_mutation",
   "expenses.split": "generic_mutation",
   "expenses.confirm_beneficiary": "member_decision",
+  "finance.converge": "business_writer",
+  "finance.allocate_settlement": "member_decision",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_match": "match_proposal",
   "product_enrichment.merge_match": "member_decision",

@@ -159,6 +159,9 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
           undefined,
           keys.includes("authorization") ? undefined : keys,
         );
+        await (
+          await import("~/server/generic/work-queue/service/work-advancement")
+        ).advanceAuthorizedWork(db);
       },
     );
     await this.ctx.blockConcurrencyWhile(async () => {

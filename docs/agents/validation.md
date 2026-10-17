@@ -133,6 +133,12 @@ only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential, including across active sessions on a constrained host.
+A shared-checkout test-slot handoff includes queued invocations: after declaring
+all idle, an old queued grant cannot authorize another launch. Request a fresh
+slot first. Copy that invocation's `apps/web/.vitest-results.json` beside its
+ignored artifact log before releasing the slot, so later runs cannot overwrite
+the failure evidence being reviewed.
+
 Finish cold artifact preparation before launching checks that consume it:
 concurrent wasm-pack invocations can race installation of the shared wasm-bindgen CLI.
 Reuse valid input-hash results at handoff. Finish edits and commits, including staged formatting hooks, before starting

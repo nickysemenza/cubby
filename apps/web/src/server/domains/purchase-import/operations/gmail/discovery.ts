@@ -42,6 +42,8 @@ import {
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishInBackground } from "~/server/workflows/background-tasks/publish";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   productionWorkflowLauncher,
@@ -64,6 +66,7 @@ import { gmailProviderForUser } from "../../repo/gmail/provider";
 import {
   initializeMailboxCoverage,
   listGmailPage,
+  listScopedGmailPage,
   mergeMailboxQueries,
 } from "../../repo/gmail/sync";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
@@ -349,6 +352,8 @@ export async function listMailDiscovery(
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
   const mode = await discoveryMode(db, claimed.row.id, claimed.input.mailboxId);
+  if (claimed.input.vendorHistory || mode === "vendor_history")
+    return listVendorHistory(db, params, claimed, mode, ports);
   // Historical pages yield to a fresh Run so incremental work spends only its
   // continuous allowance. A history catch-up keeps its own paginated scope.
   const continuing = (coverage: MailboxCoverage) =>
@@ -422,6 +427,67 @@ export async function listMailDiscovery(
   }
 }
 
+const vendorQueriesRemain = (positions: readonly { completed: boolean }[]) =>
+  positions.some((position) => !position.completed);
+
+/**
+ * A vendor history Run pages only the queries its approval froze, tracking
+ * them in its own progress; the shared mailbox cursor, with every other
+ * objective's queries, is never read or moved.
+ */
+async function listVendorHistory(
+  db: Database,
+  params: WorkflowRunParams,
+  claimed: NonNullable<Awaited<ReturnType<typeof claimDiscovery>>>,
+  mode: DiscoveryMode,
+  ports: DiscoveryPorts,
+): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }> {
+  if (
+    mode !== "vendor_history" ||
+    !claimed.input.vendorHistory?.resolvedAt ||
+    !claimed.input.scopedQueries.length
+  )
+    throw new Error(
+      "Vendor history reads only its resolved queries under a vendor-scoped approval.",
+    );
+  if (claimed.progress.vendorPage)
+    return {
+      kind: "listed",
+      more: vendorQueriesRemain(claimed.progress.vendorPage.nextScoped),
+    };
+  const positions =
+    claimed.progress.vendorScoped ??
+    claimed.input.scopedQueries.map((query) => ({
+      ...query,
+      pageToken: null,
+      completed: false,
+    }));
+  try {
+    const provider = await (
+      ports.providerForUser ??
+      ((id) => gmailProviderForUser(db, id, claimed.input.mailboxId))
+    )(claimed.row.actorUserId);
+    const vendorPage = await listScopedGmailPage(provider, positions);
+    const [frozen] = await getDb(db)
+      .update(runTable)
+      .set({
+        progress: patchProgress({
+          phase: "fetching",
+          vendorScoped: positions,
+          vendorPage,
+        }),
+      })
+      .where(eligibleAttempt(params))
+      .returning({ id: runTable.id });
+    return frozen
+      ? { kind: "listed", more: vendorQueriesRemain(vendorPage.nextScoped) }
+      : { kind: "stopped" };
+  } catch (error) {
+    if (await pauseAuthorization(db, params, error)) return { kind: "stopped" };
+    throw error;
+  }
+}
+
 /** Process before cursor movement; an interrupted page reuses its message ledger and Runs. */
 export async function saveMailDiscoveryBatch(
   db: Database,
@@ -432,8 +498,8 @@ export async function saveMailDiscoveryBatch(
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
   if (claimed.progress.pagesDone > index) return { kind: "done" };
-  const page = claimed.progress.page;
-  if (!page || claimed.progress.pagesDone !== index)
+  const { page, vendorPage } = claimed.progress;
+  if ((!page && !vendorPage) || claimed.progress.pagesDone !== index)
     throw new Error(`Discovery page ${index} is not current`);
   try {
     const provider = await (
@@ -441,7 +507,7 @@ export async function saveMailDiscoveryBatch(
       ((id) => gmailProviderForUser(db, id, claimed.input.mailboxId))
     )(claimed.row.actorUserId);
     const removed = new Map(
-      page.events
+      (page?.events ?? [])
         .filter((event) => event.kind === "message_deleted")
         .map((event) => [event.messageId, "deleted" as const]),
     );
@@ -455,7 +521,9 @@ export async function saveMailDiscoveryBatch(
     const ingested = await ingestGmailMessages(db, provider, {
       ledgerPartyId: claimed.ledgerPartyId,
       mailboxId: claimed.input.mailboxId,
-      messageIds: page.messageIds.filter((id) => !removed.has(id)),
+      messageIds: (page?.messageIds ?? vendorPage?.messageIds ?? []).filter(
+        (id) => !removed.has(id),
+      ),
       runId: claimed.row.id,
       triage: ports.triage,
       relevance: ports.relevance,
@@ -495,18 +563,22 @@ export async function saveMailDiscoveryBatch(
       const current = await claimDiscovery(tx, params);
       if (!current || current.progress.pagesDone !== index)
         return { kind: "stopped" as const };
-      const events = await persistGmailEvents(tx, {
-        ledgerPartyId: claimed.ledgerPartyId,
-        mailboxId: claimed.input.mailboxId,
-        events: page.events,
-      });
-      const moved = await checkpointMailboxCoverage(tx, {
-        ledgerPartyId: claimed.ledgerPartyId,
-        mailboxId: claimed.input.mailboxId,
-        from: page.startCoverage,
-        to: page.nextCoverage,
-      });
-      if (!moved)
+      const events = page
+        ? await persistGmailEvents(tx, {
+            ledgerPartyId: claimed.ledgerPartyId,
+            mailboxId: claimed.input.mailboxId,
+            events: page.events,
+          })
+        : { saved: 0, dropped: 0 };
+      if (
+        page &&
+        !(await checkpointMailboxCoverage(tx, {
+          ledgerPartyId: claimed.ledgerPartyId,
+          mailboxId: claimed.input.mailboxId,
+          from: page.startCoverage,
+          to: page.nextCoverage,
+        }))
+      )
         throw new Error("Mailbox page coverage changed before checkpoint");
       const progress = {
         ...current.progress,
@@ -521,6 +593,10 @@ export async function saveMailDiscoveryBatch(
         droppedEvents: current.progress.droppedEvents + events.dropped,
       };
       delete progress.page;
+      if (vendorPage) {
+        progress.vendorScoped = vendorPage.nextScoped;
+        delete progress.vendorPage;
+      }
       await getDb(tx)
         .update(runTable)
         .set({ progress })
@@ -548,7 +624,7 @@ export async function finishMailDiscovery(
 ): Promise<{ kind: "stopped" } | { kind: "done" }> {
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
-  if (claimed.progress.page)
+  if (claimed.progress.page || claimed.progress.vendorPage)
     throw new Error("Cannot complete discovery with an unprocessed page");
   const [finished] = await getDb(db)
     .update(runTable)
@@ -560,6 +636,14 @@ export async function finishMailDiscovery(
     })
     .where(eligibleAttempt(params))
     .returning({ id: runTable.id });
+  // A finished vendor pass frees the mailbox: let generic work start the next
+  // waiting Vendor once this completion is committed.
+  if (finished && claimed.input.vendorHistory)
+    await publishInBackground(
+      db,
+      [{ kind: "work.advance", requestedAt: now.toISOString() }],
+      { source: "mail-discovery:vendor-history" },
+    );
   if (finished)
     await recordRunProgress(
       db,
@@ -607,6 +691,16 @@ export async function continueMailDiscovery(
     Number(mailboxDiscoveryProgress.parse(existing.progress).attempt) > 0
   )
     return;
+  if (input.vendorHistory) {
+    await continueVendorHistory(
+      db,
+      previous,
+      { ...input, vendorHistory: input.vendorHistory },
+      existing,
+      options,
+    );
+    return;
+  }
   if (existing && input.executionPolicy === "classification_only") {
     await getDb(db)
       .update(runTable)
@@ -668,6 +762,80 @@ export async function continueMailDiscovery(
   await launchWorkflowRun(
     db,
     { runId: nextRunId, purpose: "mail_discovery" },
+    options.launcher ?? productionWorkflowLauncher,
+  );
+}
+
+type MailboxDiscoveryInput = ReturnType<typeof mailboxDiscoveryInput.parse>;
+
+/**
+ * A vendor history pass that stopped at its page budget continues the same
+ * Vendor, approval and frozen queries from its own positions; it never reads
+ * Vendor senders again or attaches another discovery allowance. When the
+ * mailbox is busy the continuation waits for generic work to resume it.
+ */
+async function continueVendorHistory(
+  db: Database,
+  previous: typeof runTable.$inferSelect,
+  input: MailboxDiscoveryInput & {
+    vendorHistory: NonNullable<MailboxDiscoveryInput["vendorHistory"]>;
+  },
+  existing: typeof runTable.$inferSelect | undefined,
+  options: { launcher?: WorkflowLauncher },
+) {
+  const progress = mailboxDiscoveryProgress.parse(previous.progress);
+  if (!existing && !vendorQueriesRemain(progress.vendorScoped ?? [])) return;
+  let next = existing;
+  if (!next) {
+    const clientKey = `mailbox-continuation:${previous.id}`;
+    const row = (status: "running" | "needs_review") => ({
+      purpose: "mail_discovery" as const,
+      trigger: previous.trigger,
+      status,
+      failureCode:
+        status === "needs_review" ? "vendor_history_mailbox_busy" : null,
+      clientKey,
+      predecessorRunId: previous.id,
+      parentRunId: previous.parentRunId,
+      vendorId: previous.vendorId,
+      ledgerPartyId: previous.ledgerPartyId,
+      actorUserId: previous.actorUserId,
+      actorName: previous.actorName,
+      actorEmail: previous.actorEmail,
+      actorLedgerPartyShortcode: previous.actorLedgerPartyShortcode,
+      actorLedgerPartyName: previous.actorLedgerPartyName,
+      actorLedgerPartyKind: previous.actorLedgerPartyKind,
+      channel: previous.channel,
+      notes: "Continue vendor history coverage",
+      input: {
+        ...input,
+        vendorHistory: { ...input.vendorHistory, generation: clientKey },
+      },
+      progress: {
+        attempt: 0,
+        phase: "listing" as const,
+        pagesDone: 0,
+        saved: 0,
+        deleted: 0,
+        excluded: 0,
+        unrelated: 0,
+        events: 0,
+        droppedEvents: 0,
+        vendorScoped: progress.vendorScoped,
+      },
+    });
+    try {
+      next = await insertWithShortcode(db, "run", row("running"));
+    } catch (error) {
+      if (!isUniqueViolation(error, MAIL_DISCOVERY_CONSTRAINT)) throw error;
+      await insertWithShortcode(db, "run", row("needs_review"));
+      return;
+    }
+  }
+  if (next.status !== "running") return;
+  await launchWorkflowRun(
+    db,
+    { runId: next.id, purpose: "mail_discovery" },
     options.launcher ?? productionWorkflowLauncher,
   );
 }
