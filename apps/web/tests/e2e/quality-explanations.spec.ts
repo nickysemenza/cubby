@@ -601,7 +601,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   expect(product.id).toBeTruthy();
 });
 
-test("specialist board and gallery cards retain the shared quality explanation", async ({
+test("specialist board cards and gallery sections retain the shared quality explanation", async ({
   page,
 }) => {
   const name = `Synthetic specialist quality ${Date.now()}`;
@@ -620,13 +620,15 @@ test("specialist board and gallery cards retain the shared quality explanation",
   const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(popover).toContainText("task.data-quality");
   await page.keyboard.press("Escape");
-  const location = await seedLocationPrerequisite(page, `${name} shelf`);
+  const locationName = `${name} shelf`;
+  await seedLocationPrerequisite(page, locationName);
   await gotoAuthenticatedPage(page, "/locations?view=gallery");
-  const locationCard = page
-    .locator(`[data-location-id="${location.id}"]`)
-    .first();
-  await expect(locationCard).toContainText("Not assessed");
-  await locationCard
+  const locationSection = page.getByRole("region", {
+    name: locationName,
+    exact: true,
+  });
+  await expect(locationSection).toContainText("Not assessed");
+  await locationSection
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   await expect(popover).toContainText("location.data-quality");
