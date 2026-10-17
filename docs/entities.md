@@ -1275,9 +1275,10 @@ reads retain their existing contracts.
 
 The shared list scaffold selects relation-loaded page IDs with a window count,
 so a nonempty page evaluates its canonical filter once for both selection and
-the exact total. The ordered SQL rows determine graph-loading order. Empty and
-out-of-range pages run the canonical count separately because no window row
-carries a total. Count-only reads, custom selectors/counts and group summaries
+the exact total. The ordered SQL rows determine graph-loading order. An empty
+first page has an exact total of zero; later empty pages run the canonical
+count separately because their offset can hide matches. Count-only reads,
+custom selectors/counts and group summaries
 retain their existing paths. Tracing reports the combined page/count phase as
 `entity.list.core.pageWithCount`, without invented separate timings.
 

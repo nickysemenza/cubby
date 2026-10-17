@@ -89,8 +89,10 @@ import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
-import { withListReadTracing } from "~/server/observability/list-read-tracing";
-import { withTrace } from "~/server/observability/tracing";
+import {
+  traceListPageWithCount,
+  withListReadTracing,
+} from "~/server/observability/list-read-tracing";
 
 import {
   type DerivedSqlArg,
@@ -1395,7 +1397,7 @@ export function listScaffold<
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
-              withTrace("entity.list.core.pageWithCount", async (span) => {
+              traceListPageWithCount(async (span) => {
                 // Keep the authoritative FROM, predicates and total order. A window
                 // counts before LIMIT without a second evaluation of the filter.
                 const ids = await unwrapDb(db)
@@ -1408,10 +1410,13 @@ export function listScaffold<
                   .orderBy(...page.orderBy)
                   .limit(page.limit)
                   .offset(page.offset);
-                // An empty or out-of-range page has no window row carrying its
-                // total. Count independently, without loading an empty graph.
+                // With a positive LIMIT, an empty first page proves the total is zero.
+                // Later empty pages need a count because OFFSET may hide matches.
                 const count =
-                  ids[0]?.total ?? (await countWhere(db, table, where, source));
+                  ids[0]?.total ??
+                  (page.offset === 0 && page.limit > 0
+                    ? 0
+                    : await countWhere(db, table, where, source));
                 const data = await loadIds(
                   ids.map((row) => row.id),
                   projection,

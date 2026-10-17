@@ -135,8 +135,8 @@ describe("progressive list readers", () => {
         groups: ["derived"],
       }),
     );
-    // Selection/count share the root FROM; recipe dependencies load by page IDs.
-    expect(measured.queryCount).toBe(3);
+    // Selection/count share one statement; recipe dependencies load by page IDs.
+    expect(measured.queryCount).toBe(2);
     expect(measured.result.data[0]).toMatchObject({
       id: created.output.id,
       totals: { cost: { lower: 24 } },

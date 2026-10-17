@@ -86,6 +86,21 @@ describe("list selection and relation loading", () => {
     const empty = await countTestDbQueries(() => read("page", 5));
     expect(empty.result).toEqual({ count: 2, data: [] });
     expect(empty.queryCount).toBe(2);
+    const noMatches = await countTestDbQueries(() =>
+      scaffold.list(
+        ctx.db,
+        { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },
+        {
+          where: sql`FALSE`,
+          load: async () => {
+            throw new Error("An empty list must not load a graph");
+          },
+          hydrate: (rows) => rows,
+        },
+      ),
+    );
+    expect(noMatches.result).toEqual({ count: 0, data: [] });
+    expect(noMatches.queryCount).toBe(1);
   });
 
   it("counts an aliased table through its real FROM relation", async () => {
@@ -114,7 +129,7 @@ describe("list selection and relation loading", () => {
         mailboxId: "synthetic-quality-reader",
         messageId: `synthetic-quality-${index}`,
         checksum: "a".repeat(64),
-        classification: "related",
+        classification: index === 0 ? "uncertain" : "related",
         classificationStage: "decision",
         status: "pending",
       });
