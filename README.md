@@ -224,6 +224,10 @@ These walkthroughs use made-up data.
    recipe line resolves to an Ingredient, and each Ingredient resolves to the
    Products we stock. Suggestions then lists the recipes we can make from stock
    and staples, with a cost.
+9. **Group trip.** A member books a $1,200 cabin for four on their card. Two
+   friends repay $300 each by payment app; each repayment is a Credit on the
+   cabin Purchase. The other member repays their share as a LedgerTransfer.
+   The trip Project nets to the household's $600.
 
 ## Working on it
 

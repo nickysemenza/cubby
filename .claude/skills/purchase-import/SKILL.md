@@ -1,6 +1,6 @@
 ---
 name: purchase-import
-description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, or reconciling financial settlement.
+description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
 ---
 
 # Purchase-import support
@@ -319,6 +319,19 @@ email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
 Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
+
+Statement previews carry `importFingerprint` and `rowPosition` on every row so
+two identical same-day charges keep distinct source references.
+
+## Repayments and shared costs
+
+Money a non-member sends back for a cost the household fronted is a Credit: a
+`reimbursement` Expense on the Purchase it repaid, booked from the incoming
+transaction with `finance.book_transaction`. A repayment between members is a
+Ledger Transfer. A vendor refund is a negative Expense on its order. None of
+them is a new Purchase of goods. For a group trip or a shared-expense export
+(Splitwise and similar), load
+[household-ledger.md](references/household-ledger.md).
 
 ## Enrichment
 
