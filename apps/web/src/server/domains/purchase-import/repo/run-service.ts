@@ -998,14 +998,27 @@ export async function resumeAuthorizedRuns(
   });
 }
 
+/** A pending budget resume this old was interrupted before its send was recorded. */
+const BUDGET_RESUME_RECLAIM_MS = 5 * 60_000;
+
 /**
  * Redispatch agent imports a spent AI budget window paused; the caller checks
  * the current window has room. A resumed Run stays `budget_resume_pending`
- * until its queue send is recorded, so a resume interrupted before the send is
- * resent with its existing generation on the next recovery.
+ * until its queue send is recorded. Each send is claimed atomically (the
+ * resuming update, or reclaiming a stale pending generation), so concurrent
+ * recoveries never send one generation twice and a late failed duplicate
+ * cannot overwrite a recorded success.
  */
-export async function redispatchBudgetPausedImports(db: Database) {
-  await getDb(db)
+export async function redispatchBudgetPausedImports(
+  db: Database,
+  now = new Date(),
+) {
+  const sent = {
+    id: runTable.id,
+    purpose: runTable.purpose,
+    eventId: runTable.dispatchEventId,
+  };
+  const resumed = await getDb(db)
     .update(runTable)
     .set({
       status: "running",
@@ -1014,7 +1027,7 @@ export async function redispatchBudgetPausedImports(db: Database) {
       failureCode: "budget_resume_pending",
       endedAt: null,
       coordinatorStartedAt: null,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(
       and(
@@ -1023,28 +1036,30 @@ export async function redispatchBudgetPausedImports(db: Database) {
         inArray(runTable.purpose, [...agentImportRunPurpose.options]),
         notDeleted(runTable),
       ),
-    );
-  const pending = await getDb(db)
-    .select({
-      id: runTable.id,
-      purpose: runTable.purpose,
-      eventId: runTable.dispatchEventId,
-    })
-    .from(runTable)
+    )
+    .returning(sent);
+  const reclaimed = await getDb(db)
+    .update(runTable)
+    .set({ updatedAt: now })
     .where(
       and(
         eq(runTable.status, "running"),
         eq(runTable.failureCode, "budget_resume_pending"),
         isNotNull(runTable.dispatchEventId),
+        lt(
+          runTable.updatedAt,
+          new Date(now.getTime() - BUDGET_RESUME_RECLAIM_MS),
+        ),
         notDeleted(runTable),
       ),
-    );
+    )
+    .returning(sent);
   const { dispatchStartedRun } = await import("./dispatch");
   // A recorded send clears the pending marker (`recordRunDispatchAttempt`).
-  for (const run of pending)
+  for (const run of [...resumed, ...reclaimed])
     if (run.eventId)
       await dispatchStartedRun(db, { ...run, eventId: run.eventId });
-  return pending.length;
+  return resumed.length + reclaimed.length;
 }
 
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {

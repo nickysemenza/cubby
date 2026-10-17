@@ -123,7 +123,17 @@ describe("household AI budget at the paid transport boundary", () => {
     const eventId = crypto.randomUUID();
     await getDb(ctx.db)
       .update(run)
-      .set({ failureCode: "budget_resume_pending", dispatchEventId: eventId })
+      .set({
+        failureCode: "budget_resume_pending",
+        dispatchEventId: eventId,
+        updatedAt: new Date(Date.now() - 60_000),
+      })
+      .where(eq(run.id, runId));
+    // Recent: another recovery may still be sending it.
+    expect(await resumeBudgetPausedImports(ctx.db)).toBe(0);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ updatedAt: new Date(Date.now() - 10 * 60_000) })
       .where(eq(run.id, runId));
     expect(await resumeBudgetPausedImports(ctx.db)).toBe(1);
     const [resent] = await getDb(ctx.db)
@@ -139,6 +149,24 @@ describe("household AI budget at the paid transport boundary", () => {
       dispatchAttempts: 1,
     });
     expect(resent?.failureCode).not.toBe("budget_resume_pending");
+  });
+
+  it("lets only one of two concurrent recoveries send a resumed import", async () => {
+    const runId = await setup("mail_import");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused_auth", failureCode: "execution_limit" })
+      .where(eq(run.id, runId));
+    const counts = await Promise.all([
+      resumeBudgetPausedImports(ctx.db),
+      resumeBudgetPausedImports(ctx.db),
+    ]);
+    expect(counts.toSorted()).toEqual([0, 1]);
+    const [sent] = await getDb(ctx.db)
+      .select({ dispatchAttempts: run.dispatchAttempts })
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(sent?.dispatchAttempts).toBe(1);
   });
 
   it("pauses a reclassification Run for recovery in a later window", async () => {

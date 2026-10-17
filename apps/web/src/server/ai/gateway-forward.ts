@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { type UnparsedError } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
+import { withAiBudget } from "~/server/ai/budget";
 import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
@@ -325,6 +326,10 @@ async function forwardGatewayAttempt(
     port.transport(provider, {
       metadata: { feature: opts.feature, operation },
       funding,
+      // Only a paid frontier transmission is budgeted; subscription is not.
+      beforePaidRequest: model
+        ? withAiBudget(opts.db, { model, feature: opts.feature }, undefined)
+        : undefined,
       onTransport: (selected) => {
         transport = selected;
       },
