@@ -97,6 +97,8 @@ export const AppErrors = {
   LIST_FILTER_EXCLUDE_UNSUPPORTED: "BAD_REQUEST",
   LIST_GROUP_BY_FIELD_UNSUPPORTED: "BAD_REQUEST",
   LIST_NESTING_UNSUPPORTED: "BAD_REQUEST",
+  // `entity_read` `fields` named a key the entity's projection does not publish.
+  MCP_FIELD_UNKNOWN: "BAD_REQUEST",
   // `ai.suggestFields` was asked for a target that isn't declared
   // `control.suggest` on the entity's manifest.
   SUGGEST_FIELD_UNKNOWN: "BAD_REQUEST",

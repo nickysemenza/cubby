@@ -1,6 +1,7 @@
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import {
+  mcpReadSelectionFields,
   mcpResultDetail,
   mcpResultDetailFields,
 } from "@cubby/schemas/mcp-detail";
@@ -134,7 +135,7 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       groupBy: listFields.groupBy,
       groupLevel: listFields.groupLevel,
       nesting: listFields.nesting,
-      resultDetail,
+      ...mcpReadSelectionFields,
     });
   },
 );
@@ -245,7 +246,7 @@ export const entityMcpGetCommandSchema = z.object({
   entity: z.enum(generatedMcpEntityActionEntities.get),
   id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
   missing: z.enum(["error", "null"]).default("error"),
-  resultDetail,
+  ...mcpReadSelectionFields,
 });
 export const entityMcpListCommandSchema = mcpListCommandSchema;
 export const entityMcpSearchCommandSchema = z.object({
