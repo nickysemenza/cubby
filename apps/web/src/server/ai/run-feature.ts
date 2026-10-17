@@ -798,7 +798,10 @@ export async function runStructuredFeature<T>(
               applicationCacheStatus: callCtx.applicationCacheStatus,
             },
           );
+        // The next attempt selects its own transport; a refusal before it
+        // does (paid admission) must not inherit this one's.
         gateway = undefined;
+        transport = "unknown";
         startedAt = performance.now();
       },
     };

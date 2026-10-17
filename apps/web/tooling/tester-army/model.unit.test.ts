@@ -400,6 +400,48 @@ it.each([
   },
 );
 
+// An explicit Anthropic override measures that model; a credit refusal must
+// not silently swap it for Sol.
+it("keeps an explicit Anthropic override off the funding ladder", async () => {
+  const config = modelConfiguration(
+    { TESTER_ARMY_MODEL: "anthropic/claude-sonnet-5" },
+    () => "synthetic-token",
+  );
+  const requests: string[] = [];
+  const fetcher: typeof fetch = async (input) => {
+    requests.push(new Request(input).url);
+    return Response.json(
+      {
+        error: {
+          type: "invalid_request_error",
+          message:
+            "Your credit balance is too low to access the Anthropic API.",
+        },
+      },
+      { status: 400 },
+    );
+  };
+  let subscriptionCalls = 0;
+  const subscription = wrapLanguageModel({
+    model: createOpenAI({ apiKey: "synthetic" }).responses(QUALITY_MODEL),
+    middleware: {
+      wrapGenerate: async () => {
+        subscriptionCalls += 1;
+        throw new Error("synthetic subscription must not run");
+      },
+    },
+  });
+  await expect(
+    generateText({
+      model: testerArmyModel(config, fetcher, subscription),
+      prompt: "Synthetic readback",
+      maxRetries: 0,
+    }),
+  ).rejects.toThrow(/credit balance/u);
+  expect(subscriptionCalls).toBe(0);
+  expect(requests).toHaveLength(1);
+});
+
 // Subscription outages and arbitrary authorization failures cannot authorize
 // paid replay. Exact subscription quota errors can; raw failures survive.
 it.each([
