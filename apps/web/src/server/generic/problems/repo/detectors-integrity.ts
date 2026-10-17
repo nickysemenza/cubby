@@ -226,7 +226,7 @@ function matchingTargetCounts(spec: EdgeAuditSpec): SQL {
   const targets = deletedTargetRelation(spec.targetTableName);
   // Count using only FK/filter columns before loading any source IDs. A
   // covering FK index can audit wide history without fetching its heap rows;
-  // unindexed edges retain ordinary joins rather than row × array comparisons.
+  // unindexed edges fall back to ordinary joins.
   // The materialized matches keep source-ID hydration after this narrow read.
   return sql`
     SELECT s.${sql.identifier(spec.sourceColumnName)} AS id, count(*)::int AS "count"
@@ -250,8 +250,6 @@ function auditQuery(
   branch: (spec: EdgeAuditSpec) => SQL,
 ): SQL {
   const tables = new Set(specs.map((spec) => spec.targetTableName));
-  // Domain tombstones remain authoritative when the audit catches corruption
-  // that changed a domain table without updating the Entity identity table.
   const targets = [...tables].map(
     (table) => sql`${deletedTargetRelation(table)} AS MATERIALIZED (
       SELECT id FROM ${sql.identifier(table)} WHERE "deletedAt" IS NOT NULL

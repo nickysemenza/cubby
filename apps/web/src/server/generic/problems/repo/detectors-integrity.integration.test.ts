@@ -1888,6 +1888,45 @@ describe("findReferentialLivenessViolations", () => {
     expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
   });
 
+  it("reapplies source liveness and scope when matching targets have excluded siblings", async () => {
+    // Matching a target must not reintroduce its deleted or other-kind sources
+    // during source-ID hydration after the narrow counting read.
+    const target = await mkProduct(ctx.db);
+    const expense = await sourceFactoryFor("Expense.productId")(
+      ctx.db,
+      target.id,
+    );
+    const deletedExpense = await sourceFactoryFor("Expense.productId")(
+      ctx.db,
+      target.id,
+    );
+    await softDelete(ctx.db, "Expense", deletedExpense.id);
+    const purchaseLink = await sourceFactoryFor(
+      "EntityLink[purchaseProduct].to",
+    )(ctx.db, target.id);
+    const wishLink = await sourceFactoryFor("EntityLink[wishCandidate].to")(
+      ctx.db,
+      target.id,
+    );
+    await softDelete(ctx.db, "Product", target.id);
+
+    const violations = await findReferentialLivenessViolations(ctx.db);
+    for (const [edgeKey, source] of [
+      ["Expense.productId", expense],
+      ["EntityLink[purchaseProduct].to", purchaseLink],
+      ["EntityLink[wishCandidate].to", wishLink],
+    ] as const) {
+      expect(
+        violations
+          .filter(
+            (row) => row.edgeKey === edgeKey && row.targetEntity === "product",
+          )
+          .map((row) => ({ sourceId: row.sourceId, targetId: row.targetId })),
+      ).toEqual([{ sourceId: source.id, targetId: target.id }]);
+    }
+    expect(await countReferentialLivenessViolations(ctx.db)).toBe(3);
+  });
+
   it("keeps per-edge totals exact above the returned sample cap", async () => {
     // Counting after LIMIT would hide the backlog beyond the sampled rows.
     const target = await mkProduct(ctx.db);
