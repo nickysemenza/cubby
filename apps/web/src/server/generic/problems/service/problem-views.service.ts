@@ -67,13 +67,16 @@ import {
   productList,
   listProductsRead,
 } from "~/server/domains/product/repo/crud";
-import { projectList } from "~/server/domains/project/repo/lookup";
+import {
+  projectList,
+  projectListRead,
+} from "~/server/domains/project/repo/lookup";
 import {
   purchaseList,
   purchaseListRead,
 } from "~/server/domains/purchase/repo/purchase";
 import { recipeList } from "~/server/domains/recipe/repo/crud";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { taskList, taskListRead } from "~/server/domains/task/repo/lookup";
 import {
   vendorList,
   vendorListRead,
@@ -127,6 +130,7 @@ type EntityReadAdapter = {
     sorts: SortParams[],
     pagination: { pageIndex: number; pageSize: number },
     projection: Extract<ListProjection, { kind: "selected" }>,
+    prepared?: DiagnosticRunOptions,
   ) => Promise<{ data: ListReadRow[]; count: number }>;
   read: (
     db: Database,
@@ -295,6 +299,16 @@ const ENTITY_READERS = {
       ),
   },
   project: {
+    selected: (db, filters, sorts, pagination, projection, prepared) =>
+      projectListRead(
+        db,
+        parsedFiltersFor("project", filters),
+        sorts,
+        pagination,
+        projection,
+        "sample",
+        { attentionItems: prepared?.attentionItems },
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       projectList(
         db,
@@ -334,6 +348,15 @@ const ENTITY_READERS = {
       ),
   },
   task: {
+    selected: (db, filters, sorts, pagination, projection) =>
+      taskListRead(
+        db,
+        parsedFiltersFor("task", filters),
+        sorts,
+        pagination,
+        projection,
+        "sample",
+      ),
     read: (db, filters, sorts, pagination, kind) =>
       taskList(db, parsedFiltersFor("task", filters), sorts, pagination, kind),
   },
@@ -587,6 +610,7 @@ export const executeProblem = async (
           toSortParams(source.sort),
           pagination,
           selectedListProjection(entity, fields),
+          options.diagnostic,
         );
         return { ...page, data: selectListReadRows(entity, page.data, fields) };
       })()

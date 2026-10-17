@@ -328,10 +328,19 @@ export const projectListRead = async (
   pagination: PaginationParams,
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
-  preparedTree?: ProjectTree,
+  prepared?: {
+    tree?: ProjectTree;
+    attentionItems?: readonly ProjectAttentionItem[];
+  },
 ) => {
   const { tree, whereClause, orderByArray, context } =
-    await buildProjectListQuery(db, filters, sorts, undefined, preparedTree);
+    await buildProjectListQuery(
+      db,
+      filters,
+      sorts,
+      prepared?.attentionItems,
+      prepared?.tree,
+    );
   // Both start beside the page read rather than after it.
   const sumsRead =
     readIntent === "page" && projection.kind === "full"

@@ -1274,6 +1274,12 @@ them only when one of those fields is requested; full and group reads retain
 their complete dependency behavior. For example, requesting inventory product
 and location identities does not resolve acquisition ownership, while any of
 its ownership fields still loads the complete inherited evidence.
+Tracker Problems select only the identities used to join canonical membership
+pages to the shared attention result. Project membership reuses that request's
+complete attention snapshot through the existing list preparation dependency;
+Task and Expense membership retain their canonical filters. Grouped and focused
+tracker cards preserve attention facts, page order, and exact totals without
+loading unused list enrichment.
 Focused raw Problems consumers and count/continuation
 reads retain their existing contracts.
 

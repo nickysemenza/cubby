@@ -22,6 +22,7 @@ beforeEach(() => {
 afterEach(() => backgroundQueue.restore());
 
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
+import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -66,10 +67,14 @@ import {
   reparseStaleWorkflow,
 } from "../operations/problem-workflows.server";
 import { runDiagnostic } from "../service/problem-diagnostics.service";
-import { findViewProblems } from "../service/problem-views.service";
+import {
+  executeProblem,
+  findViewProblems,
+} from "../service/problem-views.service";
 import {
   findFastProblems,
   findProblemByType,
+  findTrackerProblems,
 } from "../service/problems.service";
 import { findEntitiesMissingEmbeddings } from "./detectors-embedding";
 
@@ -84,6 +89,68 @@ const page = { pageIndex: 0, pageSize: 100 };
 
 describe("Problems card read projections", () => {
   const ctx = withTestDb();
+
+  // Identity-only membership must retain canonical order and totals beyond
+  // the sample, while cards retain the attention engine's measured facts.
+  it("selects tracker identities with exact counts and canonical page order", async () => {
+    for (let index = 0; index < 16; index++) {
+      const project = await insertWithShortcode(ctx.db, "project", {
+        name: `Synthetic tracker project ${index}`,
+        status: "in_progress",
+      });
+      await insertWithShortcode(ctx.db, "task", {
+        name: `Synthetic tracker task ${index}`,
+        projectId: project.id,
+        dueDate: householdDaysAgo(2),
+        trade: "other",
+      });
+      await insertWithShortcode(ctx.db, "expense", {
+        name: `Synthetic tracker spend ${index}`,
+        projectId: project.id,
+        cost: index + 1,
+        date: householdDaysAgo(3),
+        future: false,
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+      });
+    }
+    for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
+      const full = await executeProblem(ctx.db, key);
+      const selected = await executeProblem(ctx.db, key, { fields: ["id"] });
+      expect(full.count).toBe(16);
+      expect(selected.count).toBe(full.count);
+      expect(selected.data).toEqual(full.data.map(({ id }) => ({ id })));
+      expect(selected.data).toHaveLength(12);
+    }
+    // An explicitly supplied complete snapshot owns membership, including
+    // empty results; preparing each card again would observe different facts.
+    const emptySnapshot = await executeProblem(
+      ctx.db,
+      "projectsMissingBudget",
+      {
+        fields: ["id"],
+        diagnostic: { attentionItems: [] },
+      },
+    );
+    expect(emptySnapshot.data).toEqual([]);
+    expect(emptySnapshot.count).toBe(0);
+    const grouped = await findTrackerProblems(ctx.db);
+    const clients = createTestRequestContext(ctx.db);
+    for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
+      const focused = await findProblemByType(
+        ctx.db,
+        key,
+        clients.upcLookupClient,
+        clients.usdaClient,
+      );
+      expect(grouped[key]).toEqual(focused.items);
+      expect(grouped.sectionTotals[key]).toBe(focused.total);
+      expect(grouped[key]).toHaveLength(12);
+      expect(grouped.sectionTotals[key]).toBe(16);
+    }
+    expect(grouped.overdueTasks[0]?.facts).toMatchObject({ daysOverdue: 2 });
+  });
 
   // Narrow hydration must preserve rich cards, signed values, full-population
   // totals and the twelve-row sample across independent entity readers.
