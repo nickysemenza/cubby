@@ -416,7 +416,9 @@ describe("runStructuredFeature", () => {
       reasoningEffort: "low",
       toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
-    expect(call.context.systemPrompt).toBe("frame");
+    expect(call.context.systemPrompt).toBe(
+      `frame\n\nGive your final answer only by calling the ${RESPOND_TOOL_NAME} tool.`,
+    );
     expect(call.context.tools).toHaveLength(1);
     expect(call.context.tools?.[0]?.name).toBe(RESPOND_TOOL_NAME);
   });
