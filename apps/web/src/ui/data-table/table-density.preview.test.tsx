@@ -39,6 +39,7 @@ import { useCellSpill } from "./use-cell-spill";
 // - a copied rail glyph swallows the click meant for its cell (a header's
 //   sort), or screen-reader text makes a fitting value spill;
 // - tall chips overflow two lines without counting toward "+N";
+// - overflow fitting removes the last named chip, leaving only "+1";
 // - a plain long word is abbreviated like a code although it fits.
 
 function Fixture({
@@ -608,6 +609,60 @@ describe("table density", () => {
     );
     expect(cluster.querySelector("[data-chip-overflow]")).not.toBeNull();
   });
+
+  it.each([1, 4])(
+    "keeps the first named chip when %i tall chips overflow",
+    async (count) => {
+      await page.viewport(1440, 900);
+      const chip = (label: string) => ({
+        key: label,
+        label,
+        node: (
+          <span
+            className="min-w-0 truncate"
+            style={{ display: "block", height: 32 }}
+          >
+            {label}
+          </span>
+        ),
+      });
+      const view = render(
+        <Fixture
+          cells={[
+            {
+              id: "c17",
+              width: 64,
+              content: (
+                <ChipCluster
+                  items={["Household equipment", "beta", "gamma", "delta"]
+                    .slice(0, count)
+                    .map(chip)}
+                />
+              ),
+            },
+          ]}
+        />,
+      );
+      const cluster = view
+        .getByTestId("cell-0")
+        .querySelector<HTMLElement>("[data-cell-wrap]");
+      if (!cluster) throw new Error("missing cluster");
+      await waitFor(() =>
+        expect(cluster.scrollHeight).toBeLessThanOrEqual(cluster.clientHeight),
+      );
+      const first = cluster.querySelector<HTMLElement>("[data-chip]");
+      if (!first) throw new Error("missing named chip");
+      expect(first.textContent).toBe("Household equipment");
+      expect(rect(first).width).toBeGreaterThan(0);
+      expect(rect(first).bottom).toBeLessThanOrEqual(rect(cluster).bottom);
+      expect(rect(first).right).toBeLessThanOrEqual(rect(cluster).right);
+      const overflow = cluster.querySelector("[data-chip-overflow]");
+      expect(overflow?.textContent ?? null).toBe(
+        count === 1 ? null : `+${count - 1}`,
+      );
+      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(32);
+    },
+  );
 
   it("shows a long unspaced label in full when it fits", async () => {
     await page.viewport(1440, 900);
