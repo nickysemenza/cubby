@@ -3,9 +3,10 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
-/** Ordinary relevance regressions exercise a real persisted import Run. */
+/** Ordinary relevance regressions exercise a real persisted import Run on a mailbox with Mail import on. */
 export async function syntheticMailImportRun(
   db: Database,
   actor: ActorContext,
@@ -18,6 +19,7 @@ export async function syntheticMailImportRun(
     userId: actor.userId,
     updatedAt: new Date(),
   });
+  await setMailImport(db, { mailboxId: input.mailboxId, enabled: true });
   return ensureRun(db, actor, {
     purpose: "mail_import",
     trigger: "manual",
