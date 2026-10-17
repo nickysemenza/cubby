@@ -129,6 +129,24 @@ const storedExpenseSpendingCategorySql = (
     draft,
   );
 
+/**
+ * Joins a Purchase's own category as an input: live, merge-redirected, and
+ * never a statement-sourced category.
+ */
+const purchaseCategoryInputSql = (
+  purchase: string,
+  category: string,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): SQL =>
+  sql`${column(category, "id")}=${redirectedCategory(column(purchase, "spendingCategoryId"), draft)} AND ${column(purchase, "spendingCategoryOrigin")} <> 'source' AND ${column(category, "deletedAt")} IS NULL`;
+
+/** The input category of the joined Purchase `purchase`, or null. */
+export const purchaseDefaultSpendingCategorySql = (
+  purchase: string,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): SQL =>
+  sql`(SELECT fallback_category.id FROM ${spendingCategoryCatalogSql(draft)} fallback_category WHERE ${purchaseCategoryInputSql(purchase, "fallback_category", draft)})`;
+
 /** Stored Purchase defaults are inputs; derived Purchase summaries never are. */
 function expenseSpendingCategoryChoiceSql(
   alias: string,
@@ -148,7 +166,6 @@ function expenseSpendingCategoryChoiceSql(
     projectedValue("v", "defaultSpendingCategoryId", draft?.vendors),
     draft,
   );
-  const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
   const unclassified = sql`${column(alias, "lineKind")} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.unclassified)}`;
   const productCategory = projectedValue("g", "categoryId", draft?.products);
   const food = source
@@ -191,7 +208,7 @@ function expenseSpendingCategoryChoiceSql(
       LEFT JOIN mapping m ON ${source ? sql`m."rootId"=${productCategory}` : sql`TRUE`}
       ${source ? sql`LEFT JOIN category_feature ON category_feature."rootId"=${productCategory}` : sql``}
       LEFT JOIN ${categoryCatalog} override_category ON override_category.id=${storedId} AND override_category."deletedAt" IS NULL
-      LEFT JOIN ${categoryCatalog} purchase_category ON purchase_category.id=${purchaseTarget} AND p."spendingCategoryOrigin" <> 'source' AND purchase_category."deletedAt" IS NULL
+      LEFT JOIN ${categoryCatalog} purchase_category ON ${purchaseCategoryInputSql("p", "purchase_category", draft)}
       LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND mapped_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND vendor_category."deletedAt" IS NULL
     ), candidates AS (

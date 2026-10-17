@@ -1048,6 +1048,21 @@ describe("expense repository — expenseAnalytics", () => {
       value: "services",
       storedValue: "materials",
     });
+    // With no item line, the adjustment's own cost type is the source.
+    const { output: shipping } = await createRepoEntity(ctx, "expense", {
+      vendor: "Synthetic airline",
+      orderId: "SYNTHETIC-RETURN-1",
+      date: "2026-06-13",
+      name: "synthetic return shipping",
+      lineKind: "shipping",
+      trade: null,
+      costType: "services",
+      cost: 9,
+    });
+    expect(
+      (await getExpenseByShortcode(ctx.db, shipping.id))?.fieldResolutions
+        ?.costType,
+    ).toMatchObject({ mode: "explicit", value: "services", source: "expense" });
     const names = async (filters: Parameters<typeof expenseList>[1]) =>
       (
         await expenseList(

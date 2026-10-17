@@ -228,8 +228,15 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       updatedAt: value.updatedAt,
     }));
 
-const expenseSpendingCategoryAllocationSource = (hasSingleCategory: boolean) =>
-  hasSingleCategory ? "Principal line allocation" : "Follows items";
+const expenseSpendingCategoryAllocationSource = (
+  hasSingleCategory: boolean,
+  fromPurchase: boolean,
+) =>
+  !hasSingleCategory
+    ? "Follows items"
+    : fromPurchase
+      ? "purchase default"
+      : "Principal line allocation";
 
 const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
@@ -246,13 +253,27 @@ const expenseSpendingCategoryFieldResolution = (
           .filter(Boolean),
       ),
     ];
+    // An order with no item line lends its own category (basis "default").
+    const fromPurchase = row.spendingCategoryAllocations.every(
+      (a) => a.basis === "default",
+    );
     return {
       mode: "allocated",
       storedValue: null,
       value: categories.length === 1 ? categories[0]! : null,
       fallbackValue: null,
-      source: expenseSpendingCategoryAllocationSource(categories.length === 1),
-      sourceEntity: null,
+      source: expenseSpendingCategoryAllocationSource(
+        categories.length === 1,
+        fromPurchase,
+      ),
+      sourceEntity:
+        fromPurchase && categories.length === 1 && purchaseRow
+          ? {
+              entityKind: "purchase",
+              entityId: purchaseRow.shortcode,
+              name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
+            }
+          : null,
       matchesFallback: true,
       canReset: false,
     };
@@ -373,6 +394,9 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     return null;
   const allocations = row.spendingCategoryAllocations;
   if (!allocations?.length) return null;
+  // With no item line to follow, an adjustment keeps its own cost type.
+  if (key === "costTypes" && allocations.every((a) => a.basis === "default"))
+    return null;
   const values = [...new Set(allocations.flatMap((a) => a[key]))];
   return {
     mode: "allocated",
@@ -380,7 +404,8 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
     fallbackValue: null,
-    source: expenseSpendingCategoryAllocationSource(values.length === 1),
+    // Purchases carry no trade or cost-type default to name as a source.
+    source: expenseSpendingCategoryAllocationSource(values.length === 1, false),
     sourceEntity: null,
     matchesFallback: true,
     canReset: false,

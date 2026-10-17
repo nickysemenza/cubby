@@ -13,6 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import {
   effectiveExpenseSpendingCategoriesSql,
+  purchaseDefaultSpendingCategorySql,
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -165,7 +166,10 @@ export const expenseJointAllocationSql = (
         AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)
   ), fallback_weight AS (
     SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
-      ${projects ? sql`default_project."id"` : sql`NULL::uuid`} AS "projectId", NULL::uuid AS "spendingCategoryId",
+      ${projects ? sql`default_project."id"` : sql`NULL::uuid`} AS "projectId",
+      -- With no item line to follow, adjustments read the order's own category
+      -- under the same rules item lines use, as they read its default project.
+      ${categories ? purchaseDefaultSpendingCategorySql("p", draft) : sql`NULL::uuid`} AS "spendingCategoryId",
       NULL::text AS trade, NULL::text AS "costType",
       'default'::text AS basis, 1::bigint AS weight
     FROM "Purchase" p ${
@@ -245,7 +249,13 @@ export const expenseJointAllocationSql = (
           WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
       END::bigint AS attributed_cents, r.basis,
       r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal OR r.has_unclassified AS incomplete,
-      r."spendingCategoryId" IS NULL OR r.basis = 'default' OR r.has_unpriced_principal OR r.has_unclassified AS category_incomplete
+      r."spendingCategoryId" IS NULL OR r.has_unpriced_principal OR r.has_unclassified
+        -- Unresolved roles are read from principals, so an order with none
+        -- checks them directly before its own category counts as complete.
+        OR (r.basis = 'default' AND EXISTS (SELECT 1 FROM "Expense" unknown_role
+          WHERE unknown_role."purchaseId" = r."purchaseId" AND unknown_role."deletedAt" IS NULL
+            AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
+        AS category_incomplete
     FROM adjustment_ranked r
   )
   SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",
