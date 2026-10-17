@@ -117,6 +117,30 @@ describe("household AI budget at the paid transport boundary", () => {
     expect((await status(runId))?.status).not.toBe("paused_auth");
   });
 
+  // A resume interrupted before its queue send must not strand the Run.
+  it("resends an interrupted budget resume with its existing generation", async () => {
+    const runId = await setup("mail_import");
+    const eventId = crypto.randomUUID();
+    await getDb(ctx.db)
+      .update(run)
+      .set({ failureCode: "budget_resume_pending", dispatchEventId: eventId })
+      .where(eq(run.id, runId));
+    expect(await resumeBudgetPausedImports(ctx.db)).toBe(1);
+    const [resent] = await getDb(ctx.db)
+      .select({
+        dispatchEventId: run.dispatchEventId,
+        dispatchAttempts: run.dispatchAttempts,
+        failureCode: run.failureCode,
+      })
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(resent).toMatchObject({
+      dispatchEventId: eventId,
+      dispatchAttempts: 1,
+    });
+    expect(resent?.failureCode).not.toBe("budget_resume_pending");
+  });
+
   it("pauses a reclassification Run for recovery in a later window", async () => {
     const runId = await setup("mail_reclassify");
     await spend(runId, AI_BUDGET_LIMIT_USD);

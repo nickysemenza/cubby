@@ -1000,16 +1000,18 @@ export async function resumeAuthorizedRuns(
 
 /**
  * Redispatch agent imports a spent AI budget window paused; the caller checks
- * the current window has room. Each resumed Run gets a fresh dispatch generation.
+ * the current window has room. A resumed Run stays `budget_resume_pending`
+ * until its queue send is recorded, so a resume interrupted before the send is
+ * resent with its existing generation on the next recovery.
  */
 export async function redispatchBudgetPausedImports(db: Database) {
-  const resumed = await getDb(db)
+  await getDb(db)
     .update(runTable)
     .set({
       status: "running",
       dispatchEventId: sql`gen_random_uuid()`,
       dispatchError: null,
-      failureCode: null,
+      failureCode: "budget_resume_pending",
       endedAt: null,
       coordinatorStartedAt: null,
       updatedAt: new Date(),
@@ -1021,17 +1023,28 @@ export async function redispatchBudgetPausedImports(db: Database) {
         inArray(runTable.purpose, [...agentImportRunPurpose.options]),
         notDeleted(runTable),
       ),
-    )
-    .returning({
+    );
+  const pending = await getDb(db)
+    .select({
       id: runTable.id,
       purpose: runTable.purpose,
       eventId: runTable.dispatchEventId,
-    });
+    })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.status, "running"),
+        eq(runTable.failureCode, "budget_resume_pending"),
+        isNotNull(runTable.dispatchEventId),
+        notDeleted(runTable),
+      ),
+    );
   const { dispatchStartedRun } = await import("./dispatch");
-  for (const run of resumed)
+  // A recorded send clears the pending marker (`recordRunDispatchAttempt`).
+  for (const run of pending)
     if (run.eventId)
       await dispatchStartedRun(db, { ...run, eventId: run.eventId });
-  return resumed.length;
+  return pending.length;
 }
 
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
