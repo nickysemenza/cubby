@@ -10,7 +10,7 @@ import { chunk, uniqBy } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  findChildTaskEmbeddingRefs,
+  findDescendantTaskEmbeddingRefs,
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForCategories,
   findEmbeddingRefsForPurchases,
@@ -153,7 +153,7 @@ const searchDependents: SearchDependents = {
   inventory: {},
   meal: {},
   project: { updated: [findTrackerEmbeddingRefsForProjects] },
-  task: { updated: [findChildTaskEmbeddingRefs] },
+  task: { updated: [findDescendantTaskEmbeddingRefs] },
   vendor: { updated: [findEmbeddingRefsForVendors] },
   purchase: { updated: [(db, ids) => findEmbeddingRefsForPurchases(db, ids)] },
   financialAccount: { updated: [findTransactionEmbeddingRefsForAccounts] },

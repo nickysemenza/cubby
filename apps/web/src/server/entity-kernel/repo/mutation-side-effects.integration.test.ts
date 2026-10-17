@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
+import { eq } from "drizzle-orm";
 import type { CreatableEntity, EntityOverrides } from "tooling/factories/build";
 import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
@@ -23,6 +24,8 @@ afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { task } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -40,6 +43,7 @@ import {
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -382,6 +386,47 @@ describe("mutation side effects integration", () => {
         { entityKind: "wish", entityId: wish.id },
       ]),
     );
+  });
+
+  it("a task change reaches the search projection of every inheriting descendant", async () => {
+    const seed = kernelSeeder(ctx.db);
+    const tarp = await seed("product", { name: "Lineage tarp" });
+    const awning = await seed("product", { name: "Lineage awning" });
+    const top = await seed("task", {
+      name: "Lineage top chore",
+      trade: "other",
+      subjectProductId: tarp.code,
+    });
+    const middle = await seed("task", {
+      name: "Lineage middle chore",
+      trade: "other",
+      parentTaskId: top.code,
+    });
+    // Two levels down, which writes no longer create (one subtask level)
+    // but older data holds: it inherits the top task's subject.
+    const bottom = await insertWithShortcode(ctx.db, "task", {
+      name: "Lineage bottom chore",
+      trade: "other",
+      parentTaskId: middle.id as never,
+    });
+
+    await getDb(ctx.db)
+      .update(task)
+      .set({ subjectProductId: awning.id as never })
+      .where(eq(task.id, top.id as never));
+    await runMutationSideEffects(
+      ctx.db,
+      {
+        action: "updated",
+        entity: { entity: "task", id: top.id },
+        source: "test.task.subject",
+      },
+      capturingPorts(),
+    );
+
+    const text = await semanticText(ctx.db, "task", bottom.id);
+    expect(text).toContain("Lineage awning");
+    expect(text).not.toContain("Lineage tarp");
   });
 
   it("a parent category rename reaches descendant Products and their Inventory", async () => {

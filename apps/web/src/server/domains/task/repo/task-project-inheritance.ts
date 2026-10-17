@@ -61,7 +61,7 @@ export const effectiveProjectTradeSql = (
 `;
 
 // Effective values and their sources compile from each field's
-// `resolution.inherit`; trade below is a different rule (see #2605).
+// `resolution.inherit`; trade below is a different rule (#2616).
 const effectiveTaskProjectSql = (alias: string) =>
   effectiveFieldSql<ProjectId | null>("task", "projectId", alias);
 /**

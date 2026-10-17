@@ -13,7 +13,7 @@
  */
 
 export {
-  findChildTaskEmbeddingRefs,
+  findDescendantTaskEmbeddingRefs,
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,

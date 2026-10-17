@@ -553,13 +553,24 @@ export async function selectRecentlySoftDeletedSearchRefs(
   };
 }
 
-export async function findChildTaskEmbeddingRefs(
+/**
+ * Every live task below the changed ones: task fields inherit from the
+ * nearest deciding ancestor (`resolution.inherit`), so any descendant's
+ * projection can change, not only a direct child's.
+ */
+export async function findDescendantTaskEmbeddingRefs(
   db: Database | DrizzleTransaction,
   parentIds: TaskId[],
 ): Promise<SearchableEntityRef[]> {
   if (parentIds.length === 0) return [];
   const rows = await unwrapDb(db).query.task.findMany({
-    where: and(inArray(task.parentTaskId, parentIds), notDeleted(task)),
+    where: and(
+      inArray(
+        task.id,
+        hierarchyDescendantsSql("task", parentIds, { descendantsOnly: true }),
+      ),
+      notDeleted(task),
+    ),
     columns: { id: true },
   });
   return rows.map((row) => ({ entityKind: "task", entityId: row.id }));
