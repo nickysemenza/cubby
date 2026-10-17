@@ -9,7 +9,7 @@ import { financialAccount, financialTransaction } from "~/server/db/schema";
 import {
   type SettlementConflictKind,
   settlementConflictKinds,
-  settlementConflictRawSql,
+  settlementConflictSql,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
@@ -57,13 +57,11 @@ export async function listPurchaseSettlementCandidates(
     SELECT 1 FROM "Purchase" settle_target
     WHERE settle_target.shortcode = ${purchaseId}
       AND settle_target."deletedAt" IS NULL
-      AND ${sql.raw(
-        settlementConflictRawSql(kind, {
-          purchase: "settle_target",
-          account: '"FinancialAccount"',
-          transaction: '"FinancialTransaction"',
-        }),
-      )}
+      AND ${settlementConflictSql(kind, {
+        purchase: "settle_target",
+        account: '"FinancialAccount"',
+        transaction: '"FinancialTransaction"',
+      })}
   )`;
   const partyConflict = conflictWith("party");
   const tenderConflict = conflictWith("tender");

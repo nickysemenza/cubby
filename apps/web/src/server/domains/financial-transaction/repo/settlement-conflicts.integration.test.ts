@@ -1,10 +1,15 @@
 import { financialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { financialTransactionAllocation } from "~/server/db/schema";
+import { getDb, insertAndReturn } from "~/server/db/helpers";
+import {
+  financialTransactionAllocation,
+  orderMailEvent,
+} from "~/server/db/schema";
+import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
@@ -79,7 +84,16 @@ describe("settlement conflicts", () => {
         postedDate: "2026-09-13",
         merchant: "Example Store",
       });
-    return { buyer, buyerCard, otherCard, giftCard, order, charge };
+    return {
+      buyer,
+      other,
+      vendor,
+      buyerCard,
+      otherCard,
+      giftCard,
+      order,
+      charge,
+    };
   }
 
   const gaps = async (shortcode: string) =>
@@ -106,7 +120,7 @@ describe("settlement conflicts", () => {
     const wrong = await charge(otherCard.id, 13.59);
     await expect(
       allocate(wrong.shortcode, order.shortcode, 13.59),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
 
     await applyFinancialSettlementAllocation(
       ctx.db,
@@ -155,7 +169,7 @@ describe("settlement conflicts", () => {
         }),
         ctx.actor,
       ),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
   });
 
   it("refuses redating a charge outside the order member's card access", async () => {
@@ -186,7 +200,70 @@ describe("settlement conflicts", () => {
         financialTransactionUpdateData.parse({ postedDate: "2026-08-15" }),
         ctx.actor,
       ),
-    ).rejects.toThrow(/vendor-account member/);
+    ).rejects.toThrow(/order's member/);
+  });
+
+  it("names the order's member by purchaser override, else by one member's Email", async () => {
+    const { buyer, other, vendor, otherCard, charge } = await world();
+    const accountless = (fields: { purchaserOverrideId?: typeof buyer.id }) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-14",
+        statedTotal: 13.59,
+        ...fields,
+      });
+    const asserted = await accountless({ purchaserOverrideId: buyer.id });
+    await expect(
+      allocate(
+        (await charge(otherCard.id, 13.59)).shortcode,
+        asserted.shortcode,
+        13.59,
+      ),
+    ).rejects.toThrow(/order's member/);
+
+    const mailed = await accountless({});
+    const linkMail = async (party: typeof buyer, index: number) => {
+      const original = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: `synthetic-settle-${index}`,
+        messageId: `synthetic-settle-message-${index}`,
+        vendorId: vendor.id,
+        sender: "receipts@example.test",
+        subject: "Synthetic receipt",
+        receivedAt: new Date("2026-09-14T12:00:00Z"),
+        rawChecksum: "e".repeat(64),
+        content: {
+          bodyText: "Synthetic receipt",
+          bodyHtml: null,
+          snippet: null,
+        },
+      });
+      const event = await insertAndReturn(ctx.db, orderMailEvent, {
+        orderMailId: original.id,
+        event: "placed",
+        orderId: "SYN-1002",
+        sourceKey: `synthetic-settle-event-${index}`,
+      });
+      await seedEmailLinkDecision(ctx.db, {
+        eventId: event.id,
+        purchaseId: mailed.id,
+        decision: "linked",
+        evidenceChecksum: "e".repeat(64),
+        decidedByUserId: ctx.actor.userId,
+        proposedBy: "member",
+      });
+    };
+    await linkMail(buyer, 0);
+    const wrong = await charge(otherCard.id, 13.59);
+    await expect(
+      allocate(wrong.shortcode, mailed.shortcode, 13.59),
+    ).rejects.toThrow(/order's member/);
+    // Email naming both members leaves the order's member unknown.
+    await linkMail(other, 1);
+    await allocate(wrong.shortcode, mailed.shortcode, 13.59);
+    expect(await gaps(mailed.shortcode)).not.toContain(
+      "settlement_party_conflict",
+    );
   });
 
   it("flags a conflicting allocation that predates the guard", async () => {

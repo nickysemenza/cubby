@@ -18,8 +18,8 @@ import {
   vendorExpenseAggregateSql,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
-  purchaseSettlementConflictFingerprintRawSql,
-  purchaseSettlementConflictRawSql,
+  purchaseSettlementConflictFingerprintSql,
+  purchaseSettlementConflictSql,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   purchaseItemizationExpectationSql,
@@ -51,13 +51,14 @@ const expectsOrderId = (t: Purchase) => sql`EXISTS (
   WHERE dq_order."purchaseId" = ${t.id} AND dq_order."orderKey" LIKE '%/order/%'
 )`;
 
-// A vendor declared to have no orders (a shared-expense settle-up container)
-// has no member account to record.
-const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
-  SELECT 1 FROM "Vendor" dq_vendor
-  WHERE dq_vendor.id = ${t.vendorId}
-    AND dq_vendor."deletedAt" IS NULL
-    AND dq_vendor."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "not_expected")}
+// Only a vendor whose orders live in a member's online account expects the
+// Purchase to name that account. Receipt-only, no-order (a shared-expense
+// settle-up container) and unclassified vendors do not; an unclassified vendor
+// is already its own `vendor_order_evidence` gap.
+const expectsVendorAccount = (t: Purchase) => sql`EXISTS (
+  SELECT 1 FROM "Vendor" dq_v
+  WHERE dq_v.id = ${t.vendorId} AND dq_v."deletedAt" IS NULL
+    AND dq_v."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "online_account")}
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (
@@ -215,21 +216,15 @@ export const purchaseChecks = defineEntityChecks({
       ],
     },
     settlement_party_conflict: {
-      missing: (t) =>
-        sql.raw(purchaseSettlementConflictRawSql("party", aliasOf(t))),
+      missing: (t) => purchaseSettlementConflictSql("party", aliasOf(t)),
       fingerprint: (t) => [
-        sql.raw(
-          purchaseSettlementConflictFingerprintRawSql("party", aliasOf(t)),
-        ),
+        purchaseSettlementConflictFingerprintSql("party", aliasOf(t)),
       ],
     },
     settlement_tender_conflict: {
-      missing: (t) =>
-        sql.raw(purchaseSettlementConflictRawSql("tender", aliasOf(t))),
+      missing: (t) => purchaseSettlementConflictSql("tender", aliasOf(t)),
       fingerprint: (t) => [
-        sql.raw(
-          purchaseSettlementConflictFingerprintRawSql("tender", aliasOf(t)),
-        ),
+        purchaseSettlementConflictFingerprintSql("tender", aliasOf(t)),
       ],
     },
   },

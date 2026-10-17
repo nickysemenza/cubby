@@ -7,7 +7,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 
 import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
-import { purchaseSettlementConflictRawSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { purchaseSettlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 
 /** Correlated to Purchase; inherited attribution is never persisted. */
 export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
@@ -50,7 +50,7 @@ export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
       (SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId" AND "deletedAt" IS NULL)
     -- A settlement_party_conflict is a disagreement between the paying
     -- account and the order's member, not attribution for either.
-    WHEN ${sql.raw(purchaseSettlementConflictRawSql("party", '"Purchase"'))} THEN NULL
+    WHEN ${purchaseSettlementConflictSql("party", '"Purchase"')} THEN NULL
     WHEN (SELECT count(*) FROM payment_accounts) > 0
       AND (SELECT count(*) FROM payment_accounts) = (SELECT count(*) FROM sole_users)
       AND (SELECT count(DISTINCT shortcode) FROM sole_users) = 1

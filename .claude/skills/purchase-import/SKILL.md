@@ -290,7 +290,9 @@ Create or update the Vendor deliberately, then configure:
 - `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
   where to look, never whether item lines are wanted; the resolved
   `itemizationExpectation` (transaction, then vendor, then category) decides
-  that, and no policy requires a receipt document. An explicit choice is never
+  that, and no policy requires a receipt document. Only `online_account`
+  expects each Purchase to name a member's Vendor Account
+  (`purchase_vendor_account`). An explicit choice is never
   overwritten and weaker signals stay unset for the `vendor_order_evidence`
   gap. The one contradiction is a `not_expected` source with a `required`
   itemization policy (`vendor_order_evidence_conflict`); resolve it by changing

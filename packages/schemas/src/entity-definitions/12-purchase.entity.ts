@@ -1898,7 +1898,8 @@ export default defineEntity({
           weight: 1,
           exceptions: "forbidden",
           label: "Missing vendor account",
-          message: "Purchase is not assigned to a member's vendor account.",
+          message:
+            "This vendor's orders live in a member's online account, but the Purchase is not assigned to one.",
         },
         {
           id: "purchase_date",
@@ -2018,7 +2019,7 @@ export default defineEntity({
           scoreCap: 49,
           label: "Settled from another member's account",
           message:
-            "A settling transaction's account is not one this order's vendor-account member could use on that date. Move the charge to its own order, or record confirmed shared use.",
+            "A settling transaction's account is not one this order's member could use on that date. Move the charge to its own order, or record confirmed shared use.",
         },
         {
           id: "settlement_tender_conflict",

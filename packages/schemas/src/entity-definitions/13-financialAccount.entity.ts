@@ -654,7 +654,7 @@ export default defineEntity({
       { on: ["name"] },
       { on: ["provisional"] },
       // One live balance per provider and owner, so settlement can resolve a
-      // gift-card leg from (purchase vendor, vendor-account member) alone.
+      // gift-card leg from (purchase vendor, order's member) alone.
       // NULL owners stay distinct: a household card coexists with members'
       // balances.
       {

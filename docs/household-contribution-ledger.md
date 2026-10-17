@@ -102,7 +102,8 @@ Purchase's receipt/order date, then the unique member identified by its linked
 Vendor Account and accepted or explicitly linked Email evidence. Conflicting
 identities or shared use without identifying evidence stays unknown; a sole
 user that `settlement_party_conflict` flags (a settling account the order's
-vendor-account member could not use on the charge date) is such a conflict. Suggestions
+member — vendor account, else override, else one member's Email — could not
+use on the charge date) is such a conflict. Suggestions
 are not accepted evidence. Purchaser evidence includes conflicting mailbox and
 vendor-account identities even where account-scoped Email views hide that mailbox. Missing Purchase dates cannot establish sole use.
 Clearing the override restores inheritance. Purchase merges carry an override
