@@ -12,22 +12,23 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
+import { checkerFlags, typeChecker as compiler } from "../../../scripts/tsc.ts";
 import { createRepositoryPrograms } from "./typecheck-repositories";
 
 it("publishes a complete checked incremental boundary and recovers lost output", () => {
   const root = mkdtempSync(join(tmpdir(), "cubby-storage-types-"));
   const app = join(root, "apps/web");
   const installed = resolve(import.meta.dirname, "../node_modules");
-  const compiler = join(installed, "typescript/bin/tsc");
   const write = (file: string, content: string) => {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, content);
   };
   const compile = (args: string[]) => {
-    const result = spawnSync(process.execPath, [compiler, ...args], {
-      cwd: app,
-      encoding: "utf8",
-    });
+    const result = spawnSync(
+      process.execPath,
+      [compiler, ...args, ...checkerFlags],
+      { cwd: app, encoding: "utf8" },
+    );
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   };
@@ -75,7 +76,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     ]);
     program.configure();
     program.build(compiler, compile, []);
-    compile(["--build", program.serverConfig, "--checkers", "1"]);
+    compile(["--build", program.serverConfig]);
     const original = snapshot(program);
     const consumerTime = statSync(join(program.state, "server.tsbuildinfo"), {
       bigint: true,
@@ -86,7 +87,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     write(source, "export function value(): number { return 2; }\n");
     program.build(compiler, compile, []);
     expect(snapshot(program)).toEqual(original);
-    compile(["--build", program.serverConfig, "--checkers", "1"]);
+    compile(["--build", program.serverConfig]);
     expect(
       statSync(join(program.state, "server.tsbuildinfo"), { bigint: true })
         .mtimeNs,
@@ -130,9 +131,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     expect(snapshot(program)).toEqual(original);
     write(source, 'export function value(): string { return "changed"; }\n');
     program.build(compiler, compile, []);
-    expect(() =>
-      compile(["--build", program.serverConfig, "--checkers", "1"]),
-    ).toThrow(/TS2322/u);
+    expect(() => compile(["--build", program.serverConfig])).toThrow(/TS2322/u);
 
     write(source, "export function value(): number { return 2; }\n");
     program = createRepositoryPrograms(app, ["src/server/storage.ts"]);
@@ -141,7 +140,7 @@ it("publishes a complete checked incremental boundary and recovers lost output",
     expect(() =>
       readFileSync(join(program.output, "apps/web/src/server/retired.d.ts")),
     ).toThrow(/ENOENT/u);
-    compile(["--build", program.serverConfig, "--checkers", "1"]);
+    compile(["--build", program.serverConfig]);
     rmSync(program.output, { recursive: true });
     program.build(compiler, compile, []);
     expect(snapshot(program).content).toBe(original.content);

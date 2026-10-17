@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -8,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
   ensureWebBuild,
   readWebBuildProvenance,
@@ -25,13 +26,21 @@ afterEach(() => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
-function fixture() {
-  const root = mkdtempSync(path.join(tmpdir(), "cubby-provenance-"));
-  roots.push(root);
-  const put = (file: string, content = "synthetic") => {
+const writer =
+  (root: string) =>
+  (file: string, content = "synthetic") => {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), content);
   };
+// One committed checkout per file; each test mutates its own copy.
+let template: string | undefined;
+afterAll(() => {
+  if (template) rmSync(template, { recursive: true, force: true });
+});
+function committedTemplate() {
+  if (template) return template;
+  const root = mkdtempSync(path.join(tmpdir(), "cubby-provenance-template-"));
+  const put = writer(root);
   put(
     ".gitignore",
     "apps/web/.cloudflare/\npackages/wasm/\n.env*\nartifacts/\n*.gen.ts\n",
@@ -55,6 +64,14 @@ function fixture() {
     ],
     { cwd: root },
   );
+  template = root;
+  return root;
+}
+function fixture() {
+  const root = mkdtempSync(path.join(tmpdir(), "cubby-provenance-"));
+  roots.push(root);
+  cpSync(committedTemplate(), root, { recursive: true });
+  const put = writer(root);
   put("apps/web/.cloudflare/output/v0/config.json", '{"version":0}');
   put(
     "apps/web/.cloudflare/output/v0/workers/default/worker.config.json",

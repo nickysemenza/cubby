@@ -12,6 +12,7 @@ import type {
   UnparsedStartOperationData,
 } from "~/server/operation-runtime/start-operation.contract";
 
+import { readPerformance } from "./read-performance";
 import {
   measureOperationRead,
   summarizeOperationReads,
@@ -301,8 +302,6 @@ describe("operation performance evidence", () => {
 });
 
 it("writes public and private CLI artifacts without raw input even on RPC failure", async () => {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
   const { mkdir, mkdtemp, writeFile, readFile, rm } =
     await import("node:fs/promises");
   const { resolve } = await import("node:path");
@@ -332,42 +331,30 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
     );
     const code = await serve(
       (response) => response.end(JSON.stringify(superjson.serialize(failure))),
-      async (origin) => {
-        try {
-          await promisify(execFile)(
-            process.execPath,
-            [
-              "--import",
-              "tsx",
-              "tooling/checks/read-performance.ts",
-              "--origin",
-              origin.href,
-              "--mode",
-              "operations",
-              "--samples",
-              "1",
-              "--first-invocation",
-              "--input",
-              `${directory}/input.json`,
-              "--context",
-              `${directory}/context.json`,
-              "--output",
-              `${directory}/public.json`,
-              "--raw-output",
-              `${directory}/private.json`,
-            ],
-            {
-              env: {
-                ...process.env,
-                CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
-              },
-            },
-          );
-          return 0;
-        } catch (error) {
-          return (error as { code: number }).code;
-        }
-      },
+      (origin) =>
+        readPerformance(
+          [
+            "--origin",
+            origin.href,
+            "--mode",
+            "operations",
+            "--samples",
+            "1",
+            "--first-invocation",
+            "--input",
+            `${directory}/input.json`,
+            "--context",
+            `${directory}/context.json`,
+            "--output",
+            `${directory}/public.json`,
+            "--raw-output",
+            `${directory}/private.json`,
+          ],
+          {
+            ...process.env,
+            CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
+          },
+        ),
     );
     expect(code).toBe(1);
     for (const name of ["public", "private"]) {
@@ -389,8 +376,6 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
 it.each([false, true])(
   "reports actual progressive phases when rows exist: %s",
   async (hasRows) => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
     const { mkdtemp, writeFile, readFile, rm } =
       await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
@@ -414,13 +399,9 @@ it.each([false, true])(
           response.setHeader("content-type", "application/json");
           response.end(JSON.stringify(body));
         },
-        async (origin) => {
-          await promisify(execFile)(
-            process.execPath,
+        (origin) =>
+          readPerformance(
             [
-              "--import",
-              "tsx",
-              "tooling/checks/read-performance.ts",
               "--origin",
               origin.href,
               "--mode",
@@ -436,13 +417,10 @@ it.each([false, true])(
               join(directory, "public.json"),
             ],
             {
-              env: {
-                ...process.env,
-                CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
-              },
+              ...process.env,
+              CUBBY_READ_AUTHORIZATION: "synthetic-private-credential",
             },
-          );
-        },
+          ),
       );
       const text = await readFile(join(directory, "public.json"), "utf8");
       const artifact = JSON.parse(text);

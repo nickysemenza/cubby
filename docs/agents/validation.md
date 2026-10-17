@@ -71,10 +71,12 @@ test databases. Keep the existing CI Playwright HTML reports and traces, and
 local native `sim-e2e` artifacts; no custom bundle is required for every E2E
 journey or runtime acquisition.
 
-Run one affected E2E scenario when it exposes the behavior. For an isolated web
-contract, run `pnpm test:file src/...` from the repository root; paths are
-relative to `apps/web`. For PostgreSQL contracts use `pnpm test:postgres
-src/...`. Read failed tests from
+Run one affected E2E scenario when it exposes the behavior. While iterating on
+web code, run `pnpm test:related src/...` for the fast-tier tests that import
+the edited files, or `pnpm test:changed` for everything changed since
+`origin/main`; `pnpm test:file src/...` runs named test files. Run them from
+the repository root; paths are relative to `apps/web`. For PostgreSQL
+contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
 Local Vitest runs share that report path, including runs from different
@@ -124,8 +126,9 @@ The server client-version gate test is relevant when changing compatibility
 behavior, not merely because generated Swift changed.
 
 CI selects broad tiers from their declared inputs; avoid repeating the full
-PostgreSQL, fast, lint, Knip, or build suites locally as a gate. Use scoped lint
-while iterating; the commit hook owns staged lint/format. Run Knip for changed
+PostgreSQL, fast, lint, Knip, or build suites locally as a gate. While
+iterating, lint the edited paths with `pnpm exec oxlint <paths>` rather than
+`pnpm lint`; the commit hook owns staged lint/format. Run Knip for changed
 entry points/dependencies, generator validation for changed declarations, and
 `actionlint` for CI workflow changes. CI starts every Linux lane and replays
 unchanged tasks from the Nx cache; that is not an instruction to run those

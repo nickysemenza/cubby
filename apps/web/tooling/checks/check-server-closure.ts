@@ -175,16 +175,11 @@ export function findSentryOrchestrionInjection(root: string): string[] {
   );
 }
 
-const invokedPath = process.argv[1]
-  ? pathToFileURL(path.resolve(process.argv[1])).href
-  : undefined;
-if (invokedPath === import.meta.url) {
-  const serverRoot = getWorkerBundleDir(process.cwd());
+/** Logs the closure sizes; throws on a leaked test seam or an exceeded budget. */
+export function checkServerClosure(cwd: string, previewBuild: boolean) {
+  const serverRoot = getWorkerBundleDir(cwd);
   // Local fixture routes belong to preview builds, whose provenance is separate.
-  const faker =
-    process.env.CUBBY_DEV_PREVIEW_BUILD === "true"
-      ? []
-      : findBundledFaker(serverRoot);
+  const faker = previewBuild ? [] : findBundledFaker(serverRoot);
   if (faker.length > 0)
     throw new Error(
       `@faker-js/faker reached the Worker bundle (${faker.join(", ")}). It is for tests and dev seeding only; keep tooling/factories and *.fixtures imports out of src/ production code.`,
@@ -235,3 +230,12 @@ if (invokedPath === import.meta.url) {
     );
   }
 }
+
+const invokedPath = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : undefined;
+if (invokedPath === import.meta.url)
+  checkServerClosure(
+    process.cwd(),
+    process.env.CUBBY_DEV_PREVIEW_BUILD === "true",
+  );

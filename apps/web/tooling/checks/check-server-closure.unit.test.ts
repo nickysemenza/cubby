@@ -1,11 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  checkServerClosure,
   findBundledFaker,
   findSentryOrchestrionInjection,
   measureServerClosure,
@@ -37,23 +36,10 @@ describe("measureServerClosure", () => {
       ".cloudflare/output/v0/workers/default/bundle/assets/fixtures-1.js":
         "export const weightedArrayElement=1;export const fromRegExp=1;",
     });
-    const run = (preview: boolean) =>
-      spawnSync(
-        process.execPath,
-        [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
-        {
-          cwd,
-          encoding: "utf8",
-          env: { ...process.env, CUBBY_DEV_PREVIEW_BUILD: String(preview) },
-        },
-      );
-    const production = run(false);
-    expect(production.status).not.toBe(0);
-    expect(production.stderr).toContain(
+    expect(() => checkServerClosure(cwd, false)).toThrow(
       "@faker-js/faker reached the Worker bundle",
     );
-    const preview = run(true);
-    expect(preview.status).toBe(0);
+    expect(() => checkServerClosure(cwd, true)).not.toThrow();
     writeFileSync(
       path.join(
         cwd,
@@ -61,9 +47,7 @@ describe("measureServerClosure", () => {
       ),
       "globalThis.__SENTRY_ORCHESTRION_INJECT__=1;",
     );
-    const injected = run(true);
-    expect(injected.status).not.toBe(0);
-    expect(injected.stderr).toContain(
+    expect(() => checkServerClosure(cwd, true)).toThrow(
       "Sentry build-time instrumentation reached the Worker bundle",
     );
   });
@@ -74,13 +58,9 @@ describe("measureServerClosure", () => {
       ".cloudflare/output/v0/workers/default/bundle/assets/api-adapter-1.js":
         "export const adapter=1;",
     });
-    const result = spawnSync(
-      process.execPath,
-      [fileURLToPath(new URL("./check-server-closure.ts", import.meta.url))],
-      { cwd, encoding: "utf8" },
+    expect(() => checkServerClosure(cwd, false)).toThrow(
+      "Browser dispatch chunk was not reached",
     );
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("Browser dispatch chunk was not reached");
   });
   it("counts the request path through the server entry and router chunk, not other lazy chunks", () => {
     const report = measureServerClosure(
