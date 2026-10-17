@@ -15,6 +15,7 @@ import type {
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
+import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import {
   and,
   count,
@@ -108,10 +109,13 @@ const ACTIVE_RUN_STATUSES = [
   "paused_approval",
 ] as const;
 
+const newestOrderAt = (cursor: unknown) =>
+  vendorAccountCursor.safeParse(cursor).data?.newestOrderAt ?? "";
+
 const laterCursor = (
   a: typeof vendorAccount.$inferSelect.cursor,
   b: typeof vendorAccount.$inferSelect.cursor,
-) => ((b.newestOrderAt ?? "") > (a.newestOrderAt ?? "") ? b : a);
+) => (newestOrderAt(b) > newestOrderAt(a) ? b : a);
 
 /**
  * A Vendor merge's `fold-member-accounts`: each loser account moves to the

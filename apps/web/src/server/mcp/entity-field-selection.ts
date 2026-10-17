@@ -122,6 +122,7 @@ const isChildCollection = (value: ListReadRow[string]) =>
   value.some((entry) => typeof entry === "object" && entry !== null);
 
 const nested = listReadRowSchema.omit({ id: true });
+type NestedRow = z.infer<typeof nested>;
 
 function selectItem(row: ListReadRow, selection: ReadSelection): ListReadRow {
   const output: ListReadRow = { id: row.id };
@@ -138,7 +139,7 @@ function selectItem(row: ListReadRow, selection: ReadSelection): ListReadRow {
       source = parsed.success ? parsed.data[key] : undefined;
     }
     if (source === undefined) continue;
-    let target: ListReadRow = output;
+    let target: NestedRow = output;
     for (const key of path.slice(0, -1)) {
       const parsed = nested.safeParse(target[key]);
       const next = parsed.success ? parsed.data : {};

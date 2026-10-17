@@ -6,6 +6,11 @@ import type {
 } from "@cubby/schemas/purchase-import";
 import { arrayContains, and, eq } from "drizzle-orm";
 
+import {
+  distinctSenderDomain,
+  SHARED_SENDER_DOMAINS,
+  vendorWebsiteDomain,
+} from "~/lib/vendor-domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
@@ -14,12 +19,6 @@ import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-
-import {
-  distinctSenderDomain,
-  SHARED_SENDER_DOMAINS,
-  vendorWebsiteDomain,
-} from "./gmail/vendor-identity";
 
 type Db = Database | DrizzleTransaction;
 

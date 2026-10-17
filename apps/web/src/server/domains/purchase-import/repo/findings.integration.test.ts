@@ -369,7 +369,7 @@ describe("arrived finding follows stock tracking", () => {
   async function importDelivered(
     key: string,
     lines: Line[],
-    seller: Parameters<typeof memberImportWorld>[2]["vendor"] = {},
+    seller: NonNullable<Parameters<typeof memberImportWorld>[2]>["vendor"] = {},
   ) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: `Synthetic delivered vendor ${key}`, ...seller },

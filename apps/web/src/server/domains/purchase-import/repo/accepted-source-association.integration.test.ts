@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
@@ -1084,7 +1085,7 @@ describe("reviewed accepted source Product association", () => {
     await w.db
       .update(runTable)
       .set({ vendorId: w.vendor.id, vendorAccountId: loserAccount.id })
-      .where(eq(runTable.id, claim.firstRunId!));
+      .where(eq(runTable.id, parseEntityId("run", claim.firstRunId!)));
     const mail = await retainedMailFixture(ctx.db, {
       ledgerPartyId: w.party.id,
       messageId: "synthetic-merged-vendor-mail",
@@ -1130,7 +1131,7 @@ describe("reviewed accepted source Product association", () => {
         vendorAccountId: runTable.vendorAccountId,
       })
       .from(runTable)
-      .where(eq(runTable.id, claim.firstRunId!));
+      .where(eq(runTable.id, parseEntityId("run", claim.firstRunId!)));
     expect(movedRun).toEqual({
       vendorId: keeper.id,
       vendorAccountId: keeperAccount.id,

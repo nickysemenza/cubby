@@ -373,7 +373,9 @@ describe("finance.book_transaction", () => {
       ).output.id;
     return { vendor, purchase, income };
   }
-  const reimbursements = (purchaseId: string) =>
+  const reimbursements = (
+    purchaseId: NonNullable<typeof expense.$inferSelect.purchaseId>,
+  ) =>
     getDb(ctx.db)
       .select({
         cost: expense.cost,
