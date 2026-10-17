@@ -952,7 +952,33 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
-    derived: { merchant: { type: "text" } },
+    derived: {
+      merchant: { type: "text" },
+      // Allocated to a live Purchase (not the mirror column, which is NULL
+      // for a transaction split across two purchases).
+      purchase: { via: "purchase" },
+      itemization: {
+        type: "enum",
+        options: [
+          "bare",
+          "lump",
+          "itemized_match",
+          "itemized_mismatch",
+          "shared",
+        ],
+      },
+      // The allocation-integrity data-quality gap.
+      allocationIntegrity: { type: "enum", options: ["defect"] },
+      sourceRefs: {
+        predicate: "multiselect",
+        reason:
+          "Matches a live settlement reference's source, together with externalId on the same reference",
+      },
+      externalId: {
+        predicate: "multiselect",
+        reason: "Matches the external id of any live settlement reference",
+      },
+    },
     sort: {
       fields: [
         "transactionDate",
@@ -1108,6 +1134,7 @@ export default defineEntity({
       {
         columnId: "allocationIntegrity",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter allocation integrity...",
         urlOnly: true,
       },
@@ -1177,17 +1204,22 @@ export default defineEntity({
         placeholder: "Filter by account...",
         optionsKey: "account",
         brandRef: { entity: "financialAccount" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "purchaseId",
-        kind: "multiselect",
+        kind: "idMulti",
         placeholder: "Filter by purchase...",
+        brandRef: { entity: "purchase" },
         urlOnly: true,
+        derived: "purchase",
       },
       {
         columnId: "purchasePresence",
         field: "purchasePresenceFilter",
         kind: "presence",
+        derived: "purchase",
         placeholder: "Filter purchase links...",
         options: [
           { value: "has", label: "Has purchase", meta: true },
@@ -1197,6 +1229,7 @@ export default defineEntity({
       {
         columnId: "itemization",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter itemization...",
         options: [
           { value: "bare", label: "No purchase" },
@@ -1212,12 +1245,14 @@ export default defineEntity({
         urlKey: "source",
         wire: { kind: "param", name: "source" },
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by source...",
         optionsKey: "source",
       },
       {
         columnId: "externalId",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter by external id...",
         urlOnly: true,
       },

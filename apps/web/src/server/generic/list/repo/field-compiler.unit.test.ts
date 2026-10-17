@@ -76,6 +76,15 @@ describe("list field compiler", () => {
     expect(renderWhereSql(clause)).not.toContain('"InventoryEntry" lf0');
   });
 
+  // Purchase's other declared derived fields, which these sorts never read.
+  const purchaseFilterOnly = {
+    pricedExpenseTotal: sql`0`,
+    expenseStatus: sql`0`,
+    hasDocuments: sql`false`,
+    financialReconciliation: sql`0`,
+    reconciliation: () => undefined,
+  };
+
   it("keeps a part's declared NULL placement and fixed direction", () => {
     const scaffold = listScaffold("purchase", purchase, {
       derived: {
@@ -87,6 +96,7 @@ describe("list field compiler", () => {
         expenseCount: sql`0`,
         expenseTotal: sql`0`,
         documentCount: sql`0`,
+        ...purchaseFilterOnly,
       },
     });
     const render = (direction: "asc" | "desc") =>
@@ -128,6 +138,7 @@ describe("list field compiler", () => {
         expenseCount: sql`0`,
         expenseTotal: sql`0`,
         documentCount: sql`0`,
+        ...purchaseFilterOnly,
       },
     });
     const clauses = scaffold.orderBy([

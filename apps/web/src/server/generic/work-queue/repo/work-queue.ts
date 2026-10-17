@@ -212,8 +212,7 @@ async function workQueueProjection(
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseSourceOwners(sql`"Purchase".id`),
-        where: await buildPurchaseWhereClause(
-          db,
+        where: buildPurchaseWhereClause(
           purchaseFiltersSchema.parse(purchaseGaps),
         ),
         details: research,
@@ -289,7 +288,7 @@ async function workQueueProjection(
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseOwners(sql`"Purchase".id`),
-        where: sql`(${await buildPurchaseWhereClause(db, purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
+        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
         AND NOT (${gapCondition("purchase", "settlement_mismatch")})`,
         details: {
           source: "reconciliation",
@@ -340,10 +339,7 @@ async function workQueueProjection(
           id: sql`"Purchase".shortcode`,
           name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
           owners: workPurchaseOwners(sql`"Purchase".id`),
-          where: await buildPurchaseWhereClause(
-            db,
-            purchaseFiltersSchema.parse(filters),
-          ),
+          where: buildPurchaseWhereClause(purchaseFiltersSchema.parse(filters)),
           details: settlementDetails,
           key: definition.key,
         }),

@@ -10,6 +10,8 @@ import type {
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
+  financialTransactionAllocationIntegrity,
+  financialTransactionFiltersSchema,
   financialTransactionKind,
   financialTransactionOut,
   financialTransactionSettlementViolation,
@@ -19,7 +21,11 @@ import {
   type FinancialTransactionShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import {
+  oneOrManyValues,
+  type PaginationParams,
+  type SortParams,
+} from "@cubby/schemas/pagination";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
@@ -29,11 +35,10 @@ import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  anyOfCondition,
   buildPartialUpdateValues,
-  eqAny,
   getDb,
   type ListReadIntent,
+  matchesStringValues,
   notDeleted,
   touchUpdatedAt,
   unwrapDb,
@@ -89,6 +94,7 @@ import {
   type SettlementRef,
   settlementRefsFor,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -99,34 +105,9 @@ import {
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-/** "This transaction settles at least one Purchase" — allocation-aware. */
-const hasAnyAllocation = () => sql`EXISTS (
-  SELECT 1 FROM "FinancialTransactionAllocation" fta
-  WHERE fta."transactionId" = "FinancialTransaction"."id"
-    AND fta."deletedAt" IS NULL
-)`;
-
-/**
- * "This transaction settles any of these Purchases" — allocation-aware.
- *
- * `IN (…)` over a joined list of bound parameters rather than `= ANY(array)`:
- * drizzle turns an interpolated JS array into a row constructor, which postgres
- * rejects outright.
- */
-const allocatedToAny = (purchaseIds: readonly string[]) => sql`EXISTS (
-  SELECT 1 FROM "FinancialTransactionAllocation" fta
-  WHERE fta."transactionId" = "FinancialTransaction"."id"
-    AND fta."deletedAt" IS NULL
-    AND fta."purchaseId" IN (${sql.join(
-      purchaseIds.map((id) => sql`${id}`),
-      sql`, `,
-    )})
-)`;
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -381,58 +362,30 @@ const hydrateTransactionsRead = async (
 };
 
 /**
- * "Carries a live settlement reference matching the filters". Both filters
- * constrain the SAME reference row, so a transaction that took its source
- * from one reference and its externalId from another does not match.
- *
- * Emptiness is normalized on `.length`, NOT nullishness: `oneOrMany`'s array
- * branch has no `.min(1)`, so `[]` is valid input and is not nullish. An empty
- * list means "no constraint on that field", never "no constraint at all".
+ * "Carries a live settlement reference matching the filters". `sourceRefs`
+ * and `externalId` constrain the SAME reference row, so a transaction that
+ * took its source from one reference and its externalId from another does
+ * not match.
  */
 const refsCondition = (
-  sources?: string[],
-  externalIds?: string[],
-): SQL | undefined => {
-  const src = sources?.length ? sources : undefined;
-  const ext = externalIds?.length ? externalIds : undefined;
-  if (!src && !ext) return undefined;
-  return sql`EXISTS (
-    SELECT 1 FROM "EntityExternalId" fx
-    WHERE fx."entityId" = "FinancialTransaction"."id"
-      AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
-      ${
-        src
-          ? sql`AND fx."source" IN (${sql.join(
-              src.map((value) => sql`${value}`),
-              sql`, `,
-            )})`
-          : sql``
-      }
-      ${
-        ext
-          ? sql`AND fx."externalId" IN (${sql.join(
-              ext.map((value) => sql`${value}`),
-              sql`, `,
-            )})`
-          : sql``
-      }
-  )`;
-};
+  sources: readonly string[] | undefined,
+  externalIds: readonly string[] | undefined,
+): SQL => sql`EXISTS (
+  SELECT 1 FROM "EntityExternalId" fx
+  WHERE fx."entityId" = "FinancialTransaction"."id"
+    AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+    AND ${matchesStringValues(sql`fx."source"`, sources && [...sources])}
+    AND ${matchesStringValues(sql`fx."externalId"`, externalIds && [...externalIds])}
+)`;
 
-// These are filters built from user-supplied codes, not a write target: a
-// mixed batch (some valid, some bogus) should narrow to what exists rather
-// than 404 the whole list, matching the same-shaped filters in
-// locationList/productList. `resolveAllPresent` is the helper that makes
-// that choice explicit instead of leaving it implicit in a hand-rolled
-// resolve-then-filter.
-async function toIds(
-  db: Database,
-  codes: string[] | undefined,
-  entity: "financialAccount" | "purchase",
-) {
-  if (!codes) return undefined;
-  return resolveAllPresent(db, entity, codes);
-}
+// A `source` filter matches `externalId` on the same reference, so it reads
+// that sibling filter.
+const refExternalIds = listPrepare(async (_db, filters) =>
+  oneOrManyValues(
+    financialTransactionFiltersSchema.pick({ externalId: true }).parse(filters)
+      .externalId,
+  ),
+);
 
 const financialTransactionScaffold = listScaffold(
   "financialTransaction",
@@ -441,62 +394,31 @@ const financialTransactionScaffold = listScaffold(
     derived: {
       // An unnamed merchant leads a descending list.
       merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },
+      itemization: sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')}`,
+      allocationIntegrity: sql`CASE WHEN ${gapCondition(
+        "financialTransaction",
+        "financial_transaction_allocation_integrity",
+        financialTransaction,
+      )} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
+      sourceRefs: refExternalIds.predicate((externalIds, { values }) =>
+        refsCondition(values, externalIds),
+      ),
+      externalId: ({ values }) => refsCondition(undefined, values),
     },
   },
 );
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export async function buildFinancialTransactionWhere(
+export const buildFinancialTransactionWhere = async (
   db: Database,
   filters: FinancialTransactionFilters,
-): Promise<SQL | undefined> {
-  const accountIds = await toIds(
-    db,
-    filters.accountId ? [filters.accountId].flat() : undefined,
-    "financialAccount",
-  );
-  const purchaseIds = await toIds(
-    db,
-    filters.purchaseId ? [filters.purchaseId].flat() : undefined,
-    "purchase",
-  );
-  // These filters name specific public ids. When supplied codes resolve to no
-  // ids, the semantic result is an empty set; eqAny([], by design) means "no
-  // constraint" and would otherwise expose the entire transaction roster.
-  if (accountIds?.length === 0 || purchaseIds?.length === 0) return sql`false`;
-  // `kind`, `status`, `merchant`, and `postedDate` are declared stored
-  // filters — applied by `financialTransactionScaffold.where` before the
-  // conditions below.
-  return financialTransactionScaffold.where(filters, [
-    eqAny(financialTransaction.accountId, accountIds),
-    // Allocations, not the mirror column: a transaction split across two
-    // purchases has a NULL mirror, so filtering on it would hide the split
-    // row from BOTH purchases — including the linked-transactions table on
-    // each purchase's detail page, which is exactly where it must appear.
-    purchaseIds ? allocatedToAny(purchaseIds) : undefined,
-    filters.purchasePresenceFilter === "has"
-      ? hasAnyAllocation()
-      : filters.purchasePresenceFilter === "none"
-        ? sql`NOT ${hasAnyAllocation()}`
-        : undefined,
-    anyOfCondition(
-      filters.itemization,
-      (itemization) =>
-        sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')} = ${itemization}`,
-    ),
-    anyOfCondition(filters.allocationIntegrity, () =>
-      gapCondition(
-        "financialTransaction",
-        "financial_transaction_allocation_integrity",
-        financialTransaction,
-      ),
-    ),
-    refsCondition(
-      filters.source ? [filters.source].flat() : undefined,
-      filters.externalId ? [filters.externalId].flat() : undefined,
-    ),
-  ]);
-}
+): Promise<SQL | undefined> =>
+  financialTransactionScaffold.where(filters, [], {
+    context: await financialTransactionScaffold.context(db, {
+      filters,
+      readIntent: "count",
+    }),
+  });
 
 export const listFinancialTransactionsRead = async (
   db: Database,
@@ -510,7 +432,6 @@ export const listFinancialTransactionsRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      where: await buildFinancialTransactionWhere(db, filters),
       select: (page) =>
         selectTransactionsRead(db, projection)
           .where(page.where)

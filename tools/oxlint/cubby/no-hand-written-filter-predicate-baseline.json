@@ -1,7 +1,5 @@
 {
   "apps/web/src/server/domains/expense/repo/lookup.ts": 15,
-  "apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts": 6,
   "apps/web/src/server/domains/location/repo/crud.ts": 14,
-  "apps/web/src/server/domains/purchase/repo/purchase.ts": 9,
   "apps/web/src/server/domains/task/repo/lookup.ts": 10
 }

@@ -134,6 +134,35 @@ describe("buildFinancialTransactionWhere", () => {
       renderWhereSql,
     );
 
+  it("matches source and external id on the same settlement reference", async () => {
+    const rendered = await where({
+      source: "bank-export",
+      externalId: "ext-1",
+    });
+    expect(rendered).toMatch(
+      /fx\."source" = \$\d+\s+AND fx\."externalId" = \$\d+/,
+    );
+  });
+
+  it("filters purchases through live allocations, not the mirror column", async () => {
+    const rendered = await where({
+      purchaseId: [parseShortcodeFor("purchase", "PUR-2345")],
+    });
+    expect(rendered).toContain('"FinancialTransactionAllocation"');
+    expect(rendered).not.toContain('"FinancialTransaction"."purchaseId"');
+    expect(await where({ purchasePresenceFilter: "none" })).toMatch(
+      /NOT EXISTS \(SELECT 1 FROM "FinancialTransaction"/,
+    );
+  });
+
+  it("resolves account codes inside the query", async () => {
+    expect(
+      await where({
+        accountId: [parseShortcodeFor("financialAccount", "FAC-2345")],
+      }),
+    ).toMatch(/"accountId" in \(select ref\."id" from "FinancialAccount" ref/i);
+  });
+
   it("matches merchant OR raw description (declared stored text filter)", async () => {
     // Regression: the hand-written version ANDed the two columns, so a term
     // had to appear in both to match.
@@ -236,7 +265,44 @@ describe("buildLedgerPartyWhere", () => {
 
 describe("buildPurchaseWhereClause", () => {
   const where = (filters: PurchaseFilters) =>
-    buildPurchaseWhereClause(mockWhereDatabase(), filters).then(renderWhereSql);
+    Promise.resolve(renderWhereSql(buildPurchaseWhereClause(filters)));
+
+  it("resolves vendor codes against live vendors inside the query", async () => {
+    expect(
+      await where({ vendorId: [parseShortcodeFor("vendor", "VEN-2345")] }),
+    ).toMatch(/"vendorId" in \(select ref\."id" from "Vendor" ref/i);
+  });
+
+  it("bounds the expense total of priced purchases only", async () => {
+    expect(await where({ expenseTotalMin: 100 })).toMatch(
+      /CASE WHEN .* > .* THEN .* END >= \$\d+/s,
+    );
+  });
+
+  it.each([
+    {
+      name: "orderId",
+      filters: { orderId: "A-1" },
+      contains: '"orderId" = $1',
+    },
+    {
+      name: "expenseStatus",
+      filters: { expenseStatus: "empty" as const },
+      contains: "= 0 THEN $1::text",
+    },
+    {
+      name: "documentPresenceFilter",
+      filters: { documentPresenceFilter: "none" as const },
+      contains: "NOT COALESCE(",
+    },
+    {
+      name: "financialReconciliation",
+      filters: { financialReconciliation: "mismatch" as const },
+      contains: "::text END IN (",
+    },
+  ])("compiles $name from its declaration", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
 
   it("searches order id or label (declared stored)", async () => {
     const rendered = await where({ search: "order" });
