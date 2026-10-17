@@ -132,7 +132,27 @@ describe("fitMailRead minimum response", () => {
       kind: "linked",
     }));
     expect(() => fitMailRead({ content, purchaseAssociations })).toThrow(
-      /response cap/,
+      expect.objectContaining({
+        name: "AppError",
+        code: "BAD_REQUEST",
+        reason: "MAIL_READ_TOO_LARGE",
+      }),
     );
+  });
+
+  it("continues a shortened multibyte HTML page without losing characters", () => {
+    const html = `<table>${"<td>€5 日本 🧾</td>".repeat(9_000)}</table>`;
+    const content = mailReadContent(mail(html), { includeHtml: true });
+    const fitted = fitMailRead({ content, attachments: descriptors });
+    expect(fitted.content.bodyShortened).toBe(true);
+    const parts = [fitted.content.bodyHtml ?? ""];
+    let offset = fitted.content.nextOffset;
+    while (offset !== null) {
+      const page = mailReadContent(mail(html), { includeHtml: true, offset });
+      expect(page.nextOffset === null || page.nextOffset > offset).toBe(true);
+      parts.push(page.bodyHtml ?? "");
+      offset = page.nextOffset;
+    }
+    expect(parts.join("")).toBe(html);
   });
 });
