@@ -321,7 +321,11 @@ export const runChildren = [
         unique: true,
         on: ["runId", "operationId"],
       },
-      { name: "RunOperation_run_state_idx", on: ["runId", "state"] },
+      {
+        // The liveness audit needs receipt IDs, not the retained JSON payload.
+        name: "RunOperation_run_state_idx",
+        on: ["runId", "state", "id"],
+      },
     ],
     checks: [
       {
