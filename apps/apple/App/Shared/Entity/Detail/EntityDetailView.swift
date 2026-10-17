@@ -439,10 +439,10 @@ struct EntityDetailContent: View {
                     Array(
                         groupedSources(
                             sources,
-                            identity: { source in
+                            record: { source in
                                 source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
-                                    ?? source.url
-                            }
+                            },
+                            url: \.url
                         ).enumerated()), id: \.offset
                 ) { _, group in
                     if let first = group.first {
