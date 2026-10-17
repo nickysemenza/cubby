@@ -19,13 +19,13 @@ import type { Trade } from "@cubby/schemas/project";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { categoryFeatureSql } from "~/server/db/computed/product-category-sql";
 import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
 import {
   effectiveExpenseSpendingCategorySql,
   fallbackExpenseSpendingCategorySql,
   expenseSpendingCategoryResolutionSql,
 } from "~/server/domains/expense/repo/expense-category-resolution";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { effectiveProjectTradeSql } from "~/server/domains/task/repo/task-project-inheritance";
 import { createAppError } from "~/server/errors/app-error";

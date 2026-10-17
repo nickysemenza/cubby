@@ -34,10 +34,7 @@ import { buildSearchConditions, getDb, notDeleted } from "~/server/db/helpers";
 import { project, task } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import {
-  effectiveProjectLocationsSql,
-  effectiveTaskProjectSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 
@@ -56,7 +53,7 @@ export function dashboardKindLocationConditions(
     // SQL-valued inherited arrays need an explicit PostgreSQL text[] operand;
     // passing a JS array to a raw expression becomes a row constructor.
     filters.locations && filters.locations.length > 0
-      ? sql`${effectiveProjectLocationsSql(sql`${project.id}`)} && ARRAY[${sql.join(
+      ? sql`${effectiveFieldSql("project", "locations", { id: sql`${project.id}` })} && ARRAY[${sql.join(
           filters.locations.map((value) => sql`${value}`),
           sql`, `,
         )}]::text[]`
@@ -102,17 +99,17 @@ const qb = new QueryBuilder();
  *    review to keep it here.
  *  - **Nullable FK.** `task.projectId` is nullable and a NULL inside a
  *    `NOT IN` list makes the whole predicate UNKNOWN, so without
- *    `isNotNull(effectiveTaskProjectSql())` `buildUndatedProjectWhere` would count zero
+ *    `isNotNull(effectiveFieldSql("task", "projectId"))` `buildUndatedProjectWhere` would count zero
  *    rows instead of the genuinely undated ones.
  */
 function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
   return qb
-    .select({ projectId: effectiveTaskProjectSql() })
+    .select({ projectId: effectiveFieldSql("task", "projectId") })
     .from(task)
     .where(
       and(
         notDeleted(task),
-        isNotNull(effectiveTaskProjectSql()),
+        isNotNull(effectiveFieldSql("task", "projectId")),
         isNotNull(task.dueDate),
         dateTo ? lte(task.dueDate, dateTo) : undefined,
         dateFrom ? gte(effectiveTaskDueDateSql(), dateFrom) : undefined,

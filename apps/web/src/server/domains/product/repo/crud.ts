@@ -42,10 +42,7 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import {
-  productCategoryFeature,
-  type ProductCategorySummary,
-} from "@cubby/schemas/product-category-fields";
+import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import { taskStatusSchema } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -77,8 +74,6 @@ import {
 import {
   categorySummarySql,
   categoryStockTrackingSql,
-  categoryFeatureInSql,
-  categoryFeatureSql,
   productStockTrackedSql,
 } from "~/server/db/computed/product-category-sql";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
@@ -94,7 +89,6 @@ import {
   type ListReadIntent,
   mapImages,
   notDeleted,
-  presenceCondition,
   relations,
   textArrayMatches,
   updateLiveAndReturn,
@@ -133,6 +127,7 @@ import {
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
+import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import {
   resolveProductCategory,
   loadCategorySummaries,
@@ -146,7 +141,6 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
-import { effectiveTaskSubjectProductSql } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   resolveEntityDisplayImageLists,
   resolveEntityDisplayImages,
@@ -166,6 +160,7 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   listPrepare,
@@ -376,12 +371,12 @@ const productHasTask = ({
   return inArray(
     product.id,
     qb
-      .select({ productId: effectiveTaskSubjectProductSql() })
+      .select({ productId: effectiveFieldSql("task", "subjectProductId") })
       .from(task)
       .where(
         and(
           notDeleted(task),
-          isNotNull(effectiveTaskSubjectProductSql()),
+          isNotNull(effectiveFieldSql("task", "subjectProductId")),
           taskStatusFilter.length > 0
             ? inArray(task.status, taskStatusFilter)
             : undefined,
@@ -511,19 +506,6 @@ const productScaffold = listScaffold("product", product, {
     effectiveOwner: ownedProducts.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(product.id, ids),
     ),
-    categoryFeature: ({ values, presence }) =>
-      or(
-        values.length === 0
-          ? undefined
-          : categoryFeatureInSql(
-              sql`${product.categoryId}`,
-              values.flatMap((value) => {
-                const feature = productCategoryFeature.safeParse(value);
-                return feature.success ? [feature.data] : [];
-              }),
-            ),
-        presenceCondition(product.categoryId, presence),
-      ),
     externalIdSource: ({ values, presence }) =>
       or(
         values.length === 0

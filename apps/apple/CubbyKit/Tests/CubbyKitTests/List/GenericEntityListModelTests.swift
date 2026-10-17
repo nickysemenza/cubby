@@ -71,10 +71,10 @@ struct GenericEntityListModelTests {
         #expect(model.filters["search"] == nil)
         await model.apply(savedView: unassigned)
         #expect(model.filters["assigneeId"] == nil)
-        #expect(model.filters["assigneePresenceFilter"] == ["none"])
+        #expect(model.filters["assigneeIdPresenceFilter"] == ["none"])
         #expect(requests.withLock { $0.count } == 2)
         let unassignedFilters = requests.withLock { $0[1] }
-        #expect(unassignedFilters["assigneePresenceFilter"] == "none")
+        #expect(unassignedFilters["assigneeIdPresenceFilter"] == "none")
         #expect(unassignedFilters["assigneeId"] == nil)
         await model.apply(filters: EntityFilterState())
         #expect(model.activeSavedView == nil)

@@ -485,8 +485,8 @@ describe("buildProductWhere", () => {
       contains: '"categoryId"',
     },
     {
-      name: "category presence",
-      filters: { categoryPresenceFilter: "none" } as const,
+      name: "category feature presence",
+      filters: { categoryFeaturePresenceFilter: "none" } as const,
       contains: '"categoryId"',
     },
     {
@@ -776,14 +776,14 @@ describe("buildTaskWhere", () => {
 
   it("matches the inherited project, with sub-projects unless the toggle is off", async () => {
     const rendered = await where({ projectId: [project] });
-    expect(rendered).toContain('parent."projectId"');
-    expect(rendered).toContain("WITH RECURSIVE");
+    expect(rendered).toContain('"projectMode"');
+    expect(rendered).toContain("WITH RECURSIVE descendants");
     expect(
       await where({ projectId: [project], includeSubProjects: false }),
-    ).not.toContain("WITH RECURSIVE");
+    ).not.toContain("WITH RECURSIVE descendants");
     expect(
-      await where({ projectId: [project], projectPresenceFilter: "none" }),
-    ).toMatch(/ or \(?\s*CASE WHEN/i);
+      await where({ projectId: [project], projectIdPresenceFilter: "none" }),
+    ).toMatch(/ or not exists/i);
   });
 
   it.each([

@@ -67,7 +67,7 @@ describe("project list declared filters", () => {
       [{ search: "backyard" }, [w.shed, w.roof, w.shingles]],
       [{ location: ["Backyard"] }, [w.shed, w.roof, w.shingles]],
       [{ assigneeId: [w.member.id] }, [w.shed, w.roof, w.shingles]],
-      [{ assigneePresenceFilter: "none" }, [w.desk]],
+      [{ assigneeIdPresenceFilter: "none" }, [w.desk]],
       [{ parentPresenceFilter: "none" }, [w.shed, w.desk]],
       // The generated toggle is on by default: every descendant, never the
       // selected parent itself; off is direct children only.

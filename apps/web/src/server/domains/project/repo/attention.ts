@@ -58,7 +58,7 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { readTaskActionability } from "~/server/domains/task/repo/actionable";
-import { effectiveTaskProjectSql } from "~/server/domains/task/repo/task-project-inheritance";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 
 import {
   loadProjectSubtreeRollups,
@@ -175,7 +175,7 @@ export async function computeAttentionItems(
         id: task.id,
         shortcode: task.shortcode,
         name: task.name,
-        projectId: effectiveTaskProjectSql(),
+        projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
         dueDate: task.dueDate,
         dueEndDate: task.dueEndDate,
       })
@@ -185,7 +185,9 @@ export async function computeAttentionItems(
           notDeleted(task),
           ne(task.status, "done"),
           isNull(task.parentTaskId),
-          scopedOrInbox(effectiveTaskProjectSql()),
+          scopedOrInbox(
+            effectiveFieldSql<ProjectId | null>("task", "projectId"),
+          ),
         ),
       ),
     options?.preloaded ?? loadProjectSubtreeRollups(db),

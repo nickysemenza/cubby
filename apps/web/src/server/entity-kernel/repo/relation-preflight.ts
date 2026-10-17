@@ -38,12 +38,12 @@ import { projectResourceFeatures } from "@cubby/schemas/product-category-relatio
 import type { AppErrorReason } from "@cubby/shared";
 import { inArray, sql } from "drizzle-orm";
 
-import { categoryFeatureInSql } from "~/server/db/computed/product-category-sql";
 import {
   type RepositoryQueryClient as DrizzleClient,
   type RepositoryQueryTransaction as DrizzleTransaction,
 } from "~/server/db/repository-access.boundary";
 import { product } from "~/server/db/retained-tables";
+import { categoryFeatureInSql } from "~/server/domains/product-category/repo/category-feature";
 import { createBlockedError } from "~/server/errors/app-error";
 
 /**

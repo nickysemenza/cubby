@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest";
 import { product } from "~/server/db/schema";
 import * as schema from "~/server/db/schema";
 
-import { categoryFeatureSql } from "./product-category-sql";
+import { categoryFeatureSql } from "./category-feature";
 
 /**
- * ⚠️ REGRESSION GUARD: `categoryFeatureSql`/`categorySummarySql` inline their
- * depth/feature constants with `sql.raw` instead of `.inlineParams()` because
+ * ⚠️ REGRESSION GUARD: `categoryFeatureSql` (through `effectiveFieldSql`) and
+ * `categorySummarySql` inline their depth/feature constants with `sql.raw`
+ * instead of `.inlineParams()` because
  * drizzle's relational `extras` path (`mapColumnsInSQLToAlias`, alias.js)
  * rebuilds nested SQL via `sql.join(...)`, which silently drops the inline
  * flag `.inlineParams()` relies on. Under `db.select`, the bug never surfaces
@@ -27,8 +28,8 @@ describe("categoryFeatureSql", () => {
       .from(product)
       .toSQL();
 
-    expect(built.sql).toContain("a.depth < 2");
-    expect(built.sql).toContain(`"feature" IN ('food')`);
+    expect(built.sql).toContain('"ih_depth" < 2');
+    expect(built.sql).toContain(`IN ('food')`);
     expect(built.params).toEqual([]);
   });
 
@@ -42,8 +43,8 @@ describe("categoryFeatureSql", () => {
       })
       .toSQL();
 
-    expect(built.sql).toContain("a.depth < 2");
-    expect(built.sql).toContain(`"feature" IN ('food')`);
+    expect(built.sql).toContain('"ih_depth" < 2');
+    expect(built.sql).toContain(`IN ('food')`);
     // A relational findFirst may still bind its own LIMIT param — only the
     // depth (2) and feature ("food") literals must be absent from params.
     expect(built.params).not.toContain(2);

@@ -192,14 +192,20 @@ export const textArrayMatches = (
  * parens are load-bearing because `presenceCondition` negates the clause.
  */
 export const arrayOverlapOrPresence = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   values: readonly string[] | undefined,
   presence: PresenceFilter,
   nullable: boolean,
 ): SQL | undefined =>
   or(
     values !== undefined && values.length > 0
-      ? arrayOverlaps(column, [...values])
+      ? // Against an expression drizzle binds the list as one scalar.
+        column instanceof SQL
+        ? sql`${column} && ARRAY[${sql.join(
+            values.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]`
+        : arrayOverlaps(column, [...values])
       : undefined,
     presenceCondition(
       column,
@@ -595,7 +601,7 @@ export const shortcodeSetCondition = (
  * unaffected; the redundant parens are free.
  */
 export const presenceCondition = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   presence: PresenceFilter,
   emptyWhen?: SQL,
 ): SQL | undefined =>

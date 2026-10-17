@@ -48,11 +48,8 @@ import {
   wish,
 } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-import {
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   getOrphanedSearchDocumentRefs,
@@ -193,7 +190,7 @@ export async function findTaskEmbeddingRefsForProducts(
   if (productIds.length === 0) return [];
   const result = await unwrapDb(db).execute<SearchableEntityRef>(sql`
     SELECT 'task' AS "entityKind", t."id"::text AS "entityId" FROM "Task" t
-    WHERE t."deletedAt" IS NULL AND ${effectiveTaskSubjectProductSql("t")} = ANY(${uuidArrayParam(productIds)})
+    WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "subjectProductId", "t")} = ANY(${uuidArrayParam(productIds)})
     UNION ALL
     SELECT 'expense', e."id"::text FROM "Expense" e WHERE e."deletedAt" IS NULL AND e."productId" = ANY(${uuidArrayParam(productIds)})
   `);
@@ -363,7 +360,7 @@ export async function findTrackerEmbeddingRefsForProjects(
     )
     SELECT 'project' AS "entityKind", p."id"::text AS "entityId" FROM "Project" p JOIN affected a ON a."id" = p."id" WHERE p."deletedAt" IS NULL
     UNION ALL
-    SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveTaskProjectSql("t")} IN (SELECT "id" FROM affected)
+    SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "projectId", "t")} IN (SELECT "id" FROM affected)
     UNION ALL
     SELECT DISTINCT 'expense', allocation."expenseId"::text FROM (${expenseDerivedReadSql("projects")}) allocation WHERE allocation."projectId" IN (SELECT "id" FROM affected)
   `);
@@ -556,13 +553,24 @@ export async function selectRecentlySoftDeletedSearchRefs(
   };
 }
 
-export async function findChildTaskEmbeddingRefs(
+/**
+ * Every live task below the changed ones: task fields inherit from the
+ * nearest deciding ancestor (`resolution.inherit`), so any descendant's
+ * projection can change, not only a direct child's.
+ */
+export async function findDescendantTaskEmbeddingRefs(
   db: Database | DrizzleTransaction,
   parentIds: TaskId[],
 ): Promise<SearchableEntityRef[]> {
   if (parentIds.length === 0) return [];
   const rows = await unwrapDb(db).query.task.findMany({
-    where: and(inArray(task.parentTaskId, parentIds), notDeleted(task)),
+    where: and(
+      inArray(
+        task.id,
+        hierarchyDescendantsSql("task", parentIds, { descendantsOnly: true }),
+      ),
+      notDeleted(task),
+    ),
     columns: { id: true },
   });
   return rows.map((row) => ({ entityKind: "task", entityId: row.id }));

@@ -77,6 +77,7 @@ import { entityLink, project, task } from "~/server/db/schema";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { effectiveFieldSql } from "~/server/generic/inheritance/repo/effective-field";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import {
   type EntityRef,
@@ -85,10 +86,7 @@ import {
 
 import { taskSubtaskCounts } from "./crud";
 import { taskList } from "./lookup";
-import {
-  effectiveTaskProjectSql,
-  hydrateTaskInheritanceRows,
-} from "./task-project-inheritance";
+import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
 type OpenTaskNode = {
@@ -439,7 +437,7 @@ export async function readTaskActionability(db: Database) {
         shortcode: task.shortcode,
         name: task.name,
         status: task.status,
-        projectId: effectiveTaskProjectSql(),
+        projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
         parentTaskId: task.parentTaskId,
       })
       .from(task)

@@ -9,9 +9,9 @@ import * as schema from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
-  effectiveTaskProjectSql,
-  effectiveTaskSubjectProductSql,
-} from "~/server/domains/task/repo/task-project-inheritance";
+  effectiveFieldSql,
+  inheritedFieldOfColumn,
+} from "~/server/generic/inheritance/repo/effective-field";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -136,7 +136,25 @@ export const invertPath = (
       direction: step.direction === "incoming" ? "outgoing" : "incoming",
     }));
 
-/** Relationship discovery follows effective assignment, including shared charges. */
+/** The inherited field an edge's foreign key stores, if any. */
+const inheritedEdge = (
+  edge: EdgeSpec,
+): { entity: Entity; field: string } | null => {
+  const entity = allEntities.find(
+    (candidate) => entityManifest[candidate].dbTable === edge.sourceTable,
+  );
+  const field =
+    entity === undefined
+      ? null
+      : inheritedFieldOfColumn(entity, edge.sourceColumn);
+  return entity === undefined || field === null ? null : { entity, field };
+};
+
+/**
+ * Relationship discovery follows effective values: an inherited reference
+ * (`resolution.inherit`) joins on its effective value, and shared charges on
+ * their allocations.
+ */
 function edgeCondition(
   edge: EdgeSpec,
   sourceAlias: string,
@@ -144,12 +162,9 @@ function edgeCondition(
   productScopedExpense: boolean,
 ): SQL {
   const target = sql.raw(`${targetAlias}."id"`);
-  // The task helpers quote their alias; a correlated root arrives quoted.
-  const taskAlias = sourceAlias.replace(/^"(.*)"$/, "$1");
-  if (edge.edgeKey === "Task.projectId")
-    return sql`${effectiveTaskProjectSql(taskAlias)} = ${target}`;
-  if (edge.edgeKey === "Task.subjectProductId")
-    return sql`${effectiveTaskSubjectProductSql(taskAlias)} = ${target}`;
+  const inherited = inheritedEdge(edge);
+  if (inherited !== null)
+    return sql`${effectiveFieldSql(inherited.entity, inherited.field, sourceAlias)} = ${target}`;
   // The database requires a product-linked Expense to be principal. For a
   // product-scoped path, allocation is therefore the scalar effective project.
   if (edge.edgeKey === "Expense.projectId" && productScopedExpense)
