@@ -71,6 +71,9 @@ export function MailImportCard() {
   const queryClient = useQueryClient();
   const status = useQuery({
     ...run.mailImport.queryOptions({}),
+    // Vendor writes don't invalidate this query, so a cached "all done" result
+    // would otherwise keep polling off after targets change.
+    refetchOnMount: true,
     refetchInterval: (query) => mailImportRefetchInterval(query.state.data),
   });
   const toggle = useActionMutation({
