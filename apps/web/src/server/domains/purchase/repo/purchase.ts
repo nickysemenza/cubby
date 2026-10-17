@@ -101,6 +101,7 @@ import {
   vendorExpenseTotalSql,
   vendorExpenseCountSql,
   vendorUnpricedExpenseCountSql,
+  vendorExpenseAggregateSql,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   applyAllocationChanges,
@@ -570,29 +571,24 @@ const syncPurchaseImages = async (
  * excepted mismatch has no verdict.
  */
 const reconciliationSql = (): SQL => {
-  const toleranceInCents = cents(RECONCILIATION_TOLERANCE);
-  const gapInCents = sql`abs(
-    floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
-    floor((${purchaseVendorExpenseTotal} * 100)::numeric + 0.5)
-  )`;
-  const deltaInCents = sql`(
-    floor((${purchaseVendorExpenseTotal} * 100)::numeric + 0.5) -
-    floor((${purchase.statedTotal} * 100)::numeric + 0.5)
-  )`;
-  const refundInCents = sql`floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5)`;
-  // Mirrors the zero-expense guard in `reconcilePurchase`: once the totals fail
-  // to match, a purchase with no lines is `unknown` rather than a mismatch, so
-  // the filter agrees with the verdict the hydrated purchase carries.
-  const comparable = sql`${purchase.statedTotal} IS NOT NULL
-    AND (${gapInCents} <= ${toleranceInCents} OR ${purchaseVendorExpenseCount} > 0)`;
-  return sql`CASE
-    WHEN ${purchase.statedTotal} IS NULL OR NOT (${comparable}) THEN ${purchaseReconciliation.enum.unknown}::text
-    WHEN ${gapInCents} <= ${toleranceInCents} THEN ${purchaseReconciliation.enum.match}::text
-    WHEN ${purchaseVendorUnpricedExpenseCount} = 0
-      AND ${deltaInCents} < ${-toleranceInCents}
-      AND ${refundInCents} = ${deltaInCents} THEN ${purchaseReconciliation.enum.refund_adjusted}::text
+  const tolerance = cents(RECONCILIATION_TOLERANCE);
+  // One vendor-expense scan feeds every verdict; the delta and refund are
+  // whole cents, as `reconcilePurchase` compares them. Mirrors its
+  // zero-expense guard: once the totals fail to match, a purchase with no
+  // lines is `unknown` rather than a mismatch.
+  return sql`(SELECT CASE
+    WHEN verdict.stated IS NULL OR NOT (abs(verdict.delta) <= ${tolerance} OR verdict."expenseCount" > 0) THEN ${purchaseReconciliation.enum.unknown}::text
+    WHEN abs(verdict.delta) <= ${tolerance} THEN ${purchaseReconciliation.enum.match}::text
+    WHEN verdict."unpricedCount" = 0 AND verdict.delta < ${-tolerance}
+      AND verdict.refund = verdict.delta THEN ${purchaseReconciliation.enum.refund_adjusted}::text
     WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase)} THEN ${purchaseReconciliation.enum.mismatch}::text
-  END`;
+  END FROM (
+    SELECT ${purchase.statedTotal} AS stated,
+      floor((agg.total * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5) AS delta,
+      agg."expenseCount", agg."unpricedCount",
+      floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5) AS refund
+    FROM (${sql.raw(vendorExpenseAggregateSql('"Purchase"'))}) agg
+  ) verdict)`;
 };
 
 const purchaseScaffold = listScaffold("purchase", purchase, {

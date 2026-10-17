@@ -436,8 +436,9 @@ const productScaffold = listScaffold("product", product, {
         ),
         inArray(product.id, productIdsWithExpenses),
         comparableQuantityHistoryFilterSql(product.id),
-      )} THEN CASE WHEN ${onHand} = ${expected} THEN ${productQuantityVarianceState.enum.matched}::text
-        WHEN ${onHand} <> ${expected} THEN ${productQuantityVarianceState.enum.mismatched}::text END END`;
+      )} THEN CASE ${onHand} = ${expected}
+        WHEN true THEN ${productQuantityVarianceState.enum.matched}::text
+        WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`;
     }),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
