@@ -49,7 +49,6 @@ export {
   eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
-  anyOfCondition,
   flagCondition,
   formatSearchTerm,
   householdDayRangeConditions,
