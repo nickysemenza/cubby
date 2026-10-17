@@ -246,7 +246,7 @@ export async function cashFlowProjection(
     const totalCents = series.reduce((sum, value) => sum + value, 0);
     const irregular = activeMonths < IRREGULAR_BELOW_ACTIVE_MONTHS;
     // The mean (trailing total ÷ 12), so the baseline reconciles to trailing
-    // spend: a median zeroes any category idle in half the months, however
+    // spend: a median zeroes any category idle in more than half the months, however
     // large its spend. Grouped and separate modes sum these same whole-cent
     // figures, so they reconcile exactly.
     const monthlyCents = Math.round(totalCents / BASELINE_MONTHS);
