@@ -100,6 +100,7 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
           ok: true as const,
         })),
     ),
+    settled: async () => [],
   } satisfies StoredSuggestionOperations;
 }
 
@@ -122,6 +123,7 @@ function setup(
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
     list: vi.fn(async () => stored),
+    settled: async () => [],
     ...mutations,
   };
   const liveOperations: EntitySuggestionsOperations = {

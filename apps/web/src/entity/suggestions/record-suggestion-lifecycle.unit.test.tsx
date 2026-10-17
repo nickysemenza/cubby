@@ -60,6 +60,7 @@ const stored: StoredSuggestionOperations = {
     applied: intent === "apply",
   }),
   reviewBatch: async () => [],
+  settled: async () => [],
 };
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

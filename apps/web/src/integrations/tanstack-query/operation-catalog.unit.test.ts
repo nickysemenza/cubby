@@ -86,6 +86,36 @@ describe("operation catalog", () => {
     ]);
   });
 
+  it("keeps call metadata out of the key while still sending it", async () => {
+    const adapter = vi.fn(async (_request: { input: unknown }) => ({
+      items: ["meal"],
+    }));
+    const suggest = defineOperationDomain(
+      defineContract("ai", {
+        suggestFields: query({
+          input: z.object({ basis: z.string(), runKey: z.string().optional() }),
+          output: z.object({ items: z.array(z.string()) }),
+          queryKeyOmit: ["runKey"],
+        }),
+      }),
+    ).suggestFields.withTransport(adapter);
+    const first = suggest.queryOptions({ basis: "oats", runKey: "mount-1" });
+    const second = suggest.queryOptions({ basis: "oats", runKey: "mount-2" });
+    expect(first.queryKey).toEqual(second.queryKey);
+    expect(first.queryKey).toEqual([
+      "operation",
+      "ai.suggestFields",
+      { input: { basis: "oats" } },
+    ]);
+    const client = new QueryClient();
+    await client.fetchQuery(first);
+    await client.fetchQuery({ ...second, staleTime: Infinity });
+    expect(adapter).toHaveBeenCalledTimes(1);
+    expect(adapter.mock.calls[0]?.[0]).toMatchObject({
+      input: { basis: "oats", runKey: "mount-1" },
+    });
+  });
+
   it("uses an explicit adapter, parses output, and retains policy metadata", async () => {
     const adapter = vi.fn(async () => ({ items: ["meal"] }));
     const operation = calendar.range.withTransport(adapter);

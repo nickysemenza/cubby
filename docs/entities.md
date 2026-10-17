@@ -2353,7 +2353,14 @@ Pending Suggestions and confident live answers both appear in those cells as the
 same shared suggestion-mode pill; one tap accepts. Each live suggestion
 question is keyed by one target's declared basis, current assignment, and relevant
 resolution context. Deferred sibling projections and unrelated assignments do not
-restart it. The page batches stored Suggestion reads and retains completed rows
+restart it. The page-mount Run key attributes calls but is not part of that key,
+so remounts within the cache window reuse answers. A live decline (`none`) or
+`no_signal` answer is remembered per basis and the field's decision-policy
+stamps; the page reads remembered questions alongside its stored Suggestions and
+asks only changed bases. Questions that read saved record context, pinned-model
+replays, and declines a member marked as a miss are always asked again;
+vocabulary changes under an unchanged basis are left to AI refresh discovery.
+The page batches stored Suggestion reads and retains completed rows
 while an expanded roster loads; only newly seen rows wait. Pending state and read
 errors belong to the affected field, and background refreshes retain usable answers.
 Acceptance immediately shows the proposed value with a saving indicator in that

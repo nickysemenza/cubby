@@ -363,10 +363,26 @@ const descriptorMeta = <
 
 type OperationKeyPayload<Input> = { entity?: string; input: Input };
 
-const keyPayload = <Input>(entity: string | undefined, input: Input) => {
-  const payload: OperationKeyPayload<Input> = { input };
+const keyPayload = <Input>(
+  entity: string | undefined,
+  input: Input,
+  omit: readonly string[] = [],
+) => {
+  const payload: OperationKeyPayload<Input> = {
+    input: omitKeyInput(input, omit),
+  };
   if (entity) payload.entity = entity;
   return payload;
+};
+
+const omitKeyInput = <Input>(input: Input, omit: readonly string[]): Input => {
+  if (omit.length === 0 || typeof input !== "object" || input === null)
+    return input;
+  // SAFETY: `queryKeyOmit` names optional attribution keys, so the remaining
+  // object is still a valid parsed input for key equality.
+  return Object.fromEntries(
+    Object.entries(input).filter(([key]) => !omit.includes(key)),
+  ) as Input;
 };
 
 function isSubscriptionOperationId(
@@ -524,7 +540,7 @@ function buildQueryDescriptor<
   ): OperationQueryKey<z.output<Input>> => [
     "operation",
     id,
-    keyPayload(entity, input),
+    keyPayload(entity, input, definition.queryKeyOmit),
   ];
   type QueryPolicy = {
     meta: CubbyOperationMeta;
@@ -578,7 +594,7 @@ function buildQueryDescriptor<
         "operation",
         id,
         "infinite",
-        keyPayload(entity, parsedInput),
+        keyPayload(entity, parsedInput, definition.queryKeyOmit),
       ];
       return infiniteQueryOptions<
         z.output<Output>,

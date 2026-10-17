@@ -19,6 +19,8 @@ import {
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   fieldSuggestionsReviewOut,
+  settledSuggestionQuestionsInput,
+  settledSuggestionQuestionsOut,
   suggestionReviewListInput,
   suggestionReviewListOut,
   suggestionCountsInput,
@@ -138,6 +140,7 @@ export const aiContract = defineContract("ai", {
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
     cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
   }),
   suggestFieldsReview: query({
     mcp: {
@@ -150,6 +153,18 @@ export const aiContract = defineContract("ai", {
     output: fieldSuggestionsReviewOut,
     transport: "post",
     native: "Reviewed manifest field suggestions with nullable proposals",
+    cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
+  }),
+  settledSuggestionQuestions: query({
+    mcp: {
+      omit: "client_view",
+      note: "List pages skip re-asking declined suggestion questions",
+    },
+    input: settledSuggestionQuestionsInput,
+    output: settledSuggestionQuestionsOut,
+    readPolicy: "strong",
+    transport: "post",
     cache: { profile: "stable" },
   }),
   listSuggestionReviewQueue: query({
@@ -209,6 +224,7 @@ export const aiContract = defineContract("ai", {
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
     cache: { profile: "stable" },
+    queryKeyOmit: ["runKey"],
   }),
   usageFilterOptions: query({
     mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },

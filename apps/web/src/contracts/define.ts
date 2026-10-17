@@ -117,6 +117,12 @@ export interface QueryContract<
   readonly readPolicy?: "strong";
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
   readonly cache?: QueryCachePolicy;
+  /**
+   * Top-level input keys that attribute a call (a page-mount `runKey`) without
+   * changing its answer. They still ride the request but stay out of the
+   * browser query key, so a remount reuses the cached answer.
+   */
+  readonly queryKeyOmit?: readonly string[];
 }
 
 export interface MutationContract<
