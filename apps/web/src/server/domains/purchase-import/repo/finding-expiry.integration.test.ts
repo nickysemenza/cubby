@@ -16,6 +16,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { activeFindingSql } from "./finding-expiry";
 import { resolveRunFinding } from "./findings";
 
 const now = new Date("2026-09-20T12:00:00.000Z");
@@ -37,6 +38,28 @@ describe("finding expiry", () => {
       userId: ctx.actor.userId,
       name: "Synthetic finding owner",
     });
+
+  it("keeps SQL expiry independent of the session time zone at the deadline", async () => {
+    const open = "open";
+    const dismissed = "dismissed";
+    const rows = await withTransaction(ctx.db, async (tx) => {
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      await tx.execute(sql`SET LOCAL TIME ZONE 'America/Los_Angeles'`);
+      return (
+        await tx.execute(sql`
+        SELECT label FROM (VALUES
+          (${"past"}, ${open}, (now() AT TIME ZONE 'UTC') - interval '1 minute'),
+          (${"deadline"}, ${open}, now() AT TIME ZONE 'UTC'),
+          (${"future"}, ${open}, (now() AT TIME ZONE 'UTC') + interval '1 minute'),
+          (${"none"}, ${open}, NULL::timestamp),
+          (${"resolved"}, ${dismissed}, NULL::timestamp)
+        ) finding(label, status, "expiresAt")
+        WHERE ${activeFindingSql("finding")} ORDER BY label
+      `)
+      ).rows;
+    });
+    expect(rows).toEqual([{ label: "future" }, { label: "none" }]);
+  });
 
   it("reads exact active findings in a read-only transaction without changing history", async () => {
     const party = await owner();

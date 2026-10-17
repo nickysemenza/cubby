@@ -1687,6 +1687,10 @@ Problems read has run. Expired findings remain visible in Run history and can
 still be explicitly dismissed; reports offer no Apply action for them. An
 already-applied idempotent reconciliation remains governed by its existing
 receipt contract, rather than becoming invalid when its old deadline passes.
+The retained open-evidence unique key depends on stored status, not expiry.
+A writer introducing finding deadlines must dismiss an expired holder of the
+same evidence key inside its write transaction before inserting fresh evidence;
+ordinary reads never perform that transition.
 
 Independent entity-predicate, diagnostic-backed and statement-import account
 branches share the existing bounded Problems scheduler with four concurrent

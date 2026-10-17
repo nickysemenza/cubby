@@ -13,7 +13,7 @@ export const findingHasExpired = (
 /** Read eligibility never changes the finding's retained resolution history. */
 export const activeFindingSql = (
   alias: string,
-  at: Date | SQL = sql`now()`,
+  at: Date | SQL = sql`(now() AT TIME ZONE 'UTC')`,
 ): SQL => {
   const column = (name: string) =>
     sql`${sql.identifier(alias)}.${sql.identifier(name)}`;
