@@ -153,13 +153,16 @@ same outcome without prescribing an agent runtime.
 ## Vendor export
 
 1. Resolve the Vendor (`vendorId`, or `vendor.name`). A name resolves by
-   Sender proof first (a mail source from an exact sender address one Vendor
-   records, which also saves the name as a Vendor alias), then by the Vendor's
-   exact name or alias ignoring case; only an unmatched name creates a Vendor,
-   and a name two Vendors share is refused. A similar name or shared domain
-   never matches: merge real duplicates, which keeps the merged names as
-   aliases. Sender proof refuses a merchant name another Vendor already answers
-   to; pass that order's `vendorId`. `entity.resolve {entity:"vendor", names}`
+   Sender proof first (an exact sender address one Vendor records, or a sender
+   at the website domain of exactly one Vendor; either saves the name as a
+   Vendor alias), then by the Vendor's exact name or alias ignoring case. A
+   shared mail, storefront, payment or relay domain never matches, and a name
+   two Vendors share is refused. A new Vendor beside a similar-name or
+   same-domain candidate is refused until `vendor.distinctFrom` names each
+   with a Source; prepare returns them as `vendorCandidates`. Merge real
+   duplicates, which keeps the merged names as aliases. Sender proof refuses a
+   merchant name another Vendor already answers to; pass that order's
+   `vendorId`. `entity.resolve {entity:"vendor", names}`
    shows a name's Vendor without creating one.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,

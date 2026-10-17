@@ -23,6 +23,10 @@ const MCP_TOOL_PREFIX = "mcp__cubby__";
 // Cubby's MCP handler serves only the modern era. A pin fails loudly instead
 // of falling back to the `initialize` handshake the handler rejects.
 const MCP_PROTOCOL_VERSION = "2026-07-28";
+// `imports_read.mail` returns an Email's compact text (bounded by
+// MAIL_READ_TEXT_MAX_BYTES) or a raw HTML page; pi's default 50 KB head cap
+// would cut a long order's last item lines and totals.
+const EMAIL_READ_OUTPUT_LIMITS = { maxBytes: 200_000, maxLines: 10_000 };
 
 /** The private Cubby MCP server's transport for one run. */
 function cubbyMcpFetch(services: () => RunServices): typeof fetch {
@@ -124,6 +128,9 @@ export function cubbyMcpExtension(
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: Type.Unsafe<JsonObject>(tool.inputSchema),
         replay: "safe",
+        ...(tool.name === "imports_read"
+          ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
+          : {}),
         execute: async (args, api, context) =>
           toolResult(
             await (

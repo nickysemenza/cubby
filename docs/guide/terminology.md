@@ -740,7 +740,7 @@ A member's purchasing relationship with one Vendor, including guest checkout and
 _Avoid_: vendor login, payment account
 
 **Sender proof**:
-An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A shared domain alone is not Sender proof.
+An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A sender at the registrable website domain of exactly one Vendor also proves it; a shared mail, storefront, payment or relay domain never does.
 _Avoid_: domain match
 
 **Research queue**:

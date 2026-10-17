@@ -8,7 +8,8 @@ import {
   basisValueOf,
   requiresSuggestionReview,
 } from "@cubby/schemas/field-suggestion";
-import type { RunId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
   suggestionSweepRunInput,
   suggestionSweepRunProgress,
@@ -35,6 +36,7 @@ import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
+import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-import/repo/findings";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -69,6 +71,8 @@ type SweepInput = {
   fields: string[];
   filters: Record<string, SuggestionValue>;
 };
+/** Who started the sweep: a member (`manual`) or follow-up work (`scheduled`). */
+type SweepTrigger = Extract<RunTrigger, "manual" | "scheduled">;
 export type SuggestionSweepPorts = {
   /** Entity operations need the authenticated request's kernel services. */
   context: EntityKernelContext;
@@ -508,6 +512,15 @@ export async function executeSuggestionSweepTarget(
     );
     return { outcome, diagnostics };
   });
+  // A Product's applied category can make it not stock-tracked (ADR 0013),
+  // which settles an import's open arrival prompt; checked fresh, so a
+  // queued or unchanged category is a no-op.
+  if (input.entity === "product" && target.field === "categoryId")
+    await settleArrivedFindingsForProduct(
+      db,
+      parseEntityId("product", target.entityId),
+      ports.context.actorContext,
+    );
 }
 
 /** Publishes one target's proposals; the field's catalog policy decides set ordering. */
@@ -562,7 +575,7 @@ export async function resumeSuggestionSweep(
 }
 export async function startSuggestionSweep(
   db: Database,
-  input: SweepInput,
+  { trigger = "manual", ...input }: SweepInput & { trigger?: SweepTrigger },
   ports: SuggestionSweepPorts,
 ) {
   const decisionModel = ports.decisionModel?.() ?? selectDecisionModel();
@@ -585,7 +598,7 @@ export async function startSuggestionSweep(
   const runId = await withRunTransaction(db, async (tx) => {
     const runId = await ensureRun(tx, actor, {
       purpose: "suggestion_sweep",
-      trigger: "manual",
+      trigger,
       status: "running",
       input: storedInput,
       progress: initialProgress,

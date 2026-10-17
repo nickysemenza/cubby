@@ -300,7 +300,7 @@ describe("member prepare and commit identity fences", () => {
     expect((await vendorRows()).map(({ id }) => id)).toEqual([vendor.id]);
   });
 
-  it("does not treat a shared sender domain as Sender proof", async () => {
+  it("does not treat another address at a sender's domain as Sender proof", async () => {
     const { party, vendor } = await senderVendor();
     const mail = await orderMail(party.id, "promotions@hardware.example");
     await memberImport(ctx.db, ctx.actor, {
@@ -309,7 +309,16 @@ describe("member prepare and commit identity fences", () => {
       orders: [
         {
           stableOrderId: "shared-domain",
-          vendor: { name: "Synthetic Hardware Outlet" },
+          vendor: {
+            name: "Synthetic Hardware Outlet",
+            distinctFrom: [
+              {
+                vendorId: vendor.shortcode,
+                url: "https://outlet.example/about",
+                quote: "The outlet is a separately owned clearance store.",
+              },
+            ],
+          },
           source: mailSource(mail),
           extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
         },
@@ -318,6 +327,106 @@ describe("member prepare and commit identity fences", () => {
     const rows = await vendorRows();
     expect(rows).toHaveLength(2);
     expect(rows.find(({ id }) => id === vendor.id)?.aliases).toEqual([]);
+  });
+
+  // Failures: an order named by a short merchant name from an address at an
+  // existing Vendor's own website domain creates a duplicate Vendor; a shared
+  // storefront or relay domain picks some Vendor hosted there; a near-named
+  // new Vendor is created beside an existing one without a reviewed decision.
+  describe("Vendor create-or-match", () => {
+    const guestServices = () =>
+      insertWithShortcode(ctx.db, "vendor", {
+        name: "Example Guest Services",
+        website: "https://example.test",
+      });
+    const prepareNamed = (
+      key: string,
+      mail: Awaited<ReturnType<typeof orderMail>>,
+      vendor: MemberImportOrder["vendor"],
+    ) =>
+      prepareMemberImport(ctx.db, ctx.actor, {
+        key,
+        orders: [
+          {
+            stableOrderId: key,
+            vendor,
+            source: mailSource(mail),
+            extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+          },
+        ],
+      });
+
+    it("reuses the one Vendor whose website domain sent the order", async () => {
+      const { party } = await memberImportWorld(ctx.db, ctx.actor);
+      const existing = await guestServices();
+      const mail = await orderMail(party.id, "Example <guest@example.test>");
+      const prepared = await prepareNamed("website-domain", mail, {
+        name: "Example",
+      });
+      expect(prepared.prepared.orders[0]?.vendorCandidates).toEqual([
+        expect.objectContaining({
+          vendorId: existing.shortcode,
+          websiteDomainMatch: true,
+        }),
+      ]);
+      expect(await vendorRows()).toEqual([
+        { id: existing.id, name: existing.name, aliases: ["Example"] },
+      ]);
+    });
+
+    it("never matches a shared storefront or relay domain", async () => {
+      const { party } = await memberImportWorld(ctx.db, ctx.actor);
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: "Alpha Pottery",
+        website: "https://shopifyemail.com/stores/alpha",
+      });
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: "Beta Candles",
+        website: "https://beta-candles.myshopify.com",
+      });
+      const mail = await orderMail(party.id, "store@shopifyemail.com");
+      await prepareNamed("shared-storefront", mail, { name: "Gamma Goods" });
+      expect((await vendorRows()).map(({ name }) => name).sort()).toEqual([
+        "Alpha Pottery",
+        "Beta Candles",
+        "Gamma Goods",
+      ]);
+    });
+
+    it("refuses a new Vendor beside a similar name until it is marked distinct", async () => {
+      const { party } = await memberImportWorld(ctx.db, ctx.actor);
+      const existing = await guestServices();
+      const mail = await orderMail(party.id, "desk@other-host.example");
+      await expect(
+        prepareNamed("similar-name", mail, { name: "Example" }),
+      ).rejects.toThrow(new RegExp(`${existing.shortcode}.*distinctFrom`));
+      expect(await vendorRows()).toHaveLength(1);
+
+      await prepareNamed("similar-name-distinct", mail, {
+        name: "Example",
+        distinctFrom: [
+          {
+            vendorId: existing.shortcode,
+            url: "https://other-host.example/about",
+            quote: "Example is an independent bakery, not a guest service.",
+          },
+        ],
+      });
+      const created = (await vendorRows()).find(
+        ({ name }) => name === "Example",
+      );
+      expect(created).toBeDefined();
+      const sources = await getDb(ctx.db)
+        .select({ url: entitySource.url, quote: entitySource.quote })
+        .from(entitySource)
+        .where(eq(entitySource.entityId, created!.id));
+      expect(sources).toEqual([
+        {
+          url: "https://other-host.example/about",
+          quote: "Example is an independent bakery, not a guest service.",
+        },
+      ]);
+    });
   });
 
   it("refuses to learn a merchant name another Vendor already answers to", async () => {

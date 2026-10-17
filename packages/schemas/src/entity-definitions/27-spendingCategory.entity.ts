@@ -208,6 +208,22 @@ export default defineEntity({
         },
       },
       {
+        // Gates only the import arrival prompt for Products whose own stock
+        // tracking is undecided (ADR 0013); a category without a decision
+        // inherits the nearest live ancestor's.
+        key: "stockTracked",
+        kind: "boolean",
+        nullable: true,
+        labelOverride: "Stock tracking",
+        control: { kind: "checkbox" },
+        display: { detail: true },
+        validation: {
+          read: z.boolean().nullable(),
+          create: z.boolean().nullable().optional(),
+          update: z.boolean().nullable().optional(),
+        },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: { read: code, create: null, update: null },
@@ -242,6 +258,7 @@ export default defineEntity({
         specialized: "enum:productExpectation",
         defaultValue: "unknown",
       },
+      "stockTracked",
       "createdAt",
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -253,6 +270,7 @@ export default defineEntity({
       "parentId",
       "itemizationExpectation",
       "productExpectation",
+      "stockTracked",
     ],
     update: [
       "emoji",
@@ -261,6 +279,7 @@ export default defineEntity({
       "parentId",
       "itemizationExpectation",
       "productExpectation",
+      "stockTracked",
     ],
     bulk: [],
     audit: [
@@ -269,6 +288,7 @@ export default defineEntity({
       "parentId",
       "itemizationExpectation",
       "productExpectation",
+      "stockTracked",
     ],
     output: [
       "productCategories",
@@ -279,6 +299,7 @@ export default defineEntity({
       "parentId",
       "itemizationExpectation",
       "productExpectation",
+      "stockTracked",
       "createdAt",
       "updatedAt",
     ],
@@ -298,6 +319,7 @@ export default defineEntity({
           "parentId",
           "itemizationExpectation",
           "productExpectation",
+          "stockTracked",
         ],
       },
       create: ["capture", "full"],

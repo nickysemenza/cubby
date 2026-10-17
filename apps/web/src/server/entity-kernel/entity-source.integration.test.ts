@@ -312,6 +312,35 @@ describe("entity sources", () => {
     );
   });
 
+  // Failure: a Source that names both the Cubby record it came through (an
+  // Email) and the external page it quotes is refused or loses one target.
+  it("keeps both a Cubby record and an external url on one Source", async () => {
+    const via = await createProduct("Citation via record");
+    const cited = await createProduct("Cited by both");
+    await executeEntity(context(), {
+      action: "update",
+      entity: "product",
+      id: parseShortcodeFor("product", cited.code),
+      data: { model: "SW-300" },
+      sources: [
+        {
+          fieldPath: "model",
+          sourceEntity: parseShortcodeFor("product", via.code),
+          url: "https://example.test/spec-sheet",
+          quote: "Model SW-300",
+        },
+      ],
+    });
+    expect(await detailSources(cited.code)).toEqual([
+      expect.objectContaining({
+        fieldPath: "model",
+        url: "https://example.test/spec-sheet",
+        sourceEntity: expect.objectContaining({ entityId: via.code }),
+        quote: "Model SW-300",
+      }),
+    ]);
+  });
+
   it("normalizes internal URLs into typed citations, preserves external URLs, and follows target lifecycle", async () => {
     const keeper = await createProduct("Citation keeper");
     const loser = await createProduct("Citation loser");

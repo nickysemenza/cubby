@@ -606,7 +606,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
-          "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
+          "Read one retained Email: headers, body as compact text (HTML converted when richer than the text part; `compacted`, `truncated`, `htmlBytes` report it), cue-first links, attachments and checksum. Raw HTML is never returned by default; pass includeHtml with offset/maxBytes to page it. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
       }),
       mail_triage_preview: mcpAction({
         op: purchaseImportContract.ops.mailTriagePreview,
@@ -812,7 +812,7 @@ export const MCP_TOOLS = defineMcpTools({
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,
         description:
-          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse or create an exact-name Vendor) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
+          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
       }),
       commit: mcpAction({
         op: purchaseImportContract.ops.commit,

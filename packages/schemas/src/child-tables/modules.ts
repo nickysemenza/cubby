@@ -88,10 +88,6 @@ export const modulesChildren = [
         sql: "({sourceEntityId} IS NULL) = ({sourceEntityKind} IS NULL)",
       },
       {
-        name: "EntitySource_one_target_check",
-        sql: "{url} IS NULL OR {sourceEntityId} IS NULL",
-      },
-      {
         name: "EntitySource_target_or_quote_check",
         sql: "{url} IS NOT NULL OR {sourceEntityId} IS NOT NULL OR {quote} IS NOT NULL",
       },

@@ -30,7 +30,6 @@ import {
 } from "@cubby/schemas/vendor-import-fields";
 import {
   and,
-  arrayContains,
   asc,
   desc,
   eq,
@@ -51,7 +50,6 @@ import {
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
-  unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
@@ -65,7 +63,6 @@ import { assertReviewedSpendingClassification } from "~/server/domains/spending-
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
-import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -716,82 +713,6 @@ export const findOrCreateVendor = async (
     }),
   });
   return row.id;
-};
-
-/** The bare address of a From header such as `"Store" <orders@store.example>`. */
-const senderAddress = (sender: string | null): string | null => {
-  const address = (/<([^>]+)>/u.exec(sender ?? "")?.[1] ?? sender ?? "")
-    .trim()
-    .toLowerCase();
-  return address.includes("@") ? address : null;
-};
-
-/**
- * An imported order's Vendor (terminology "Sender proof", "Vendor alias"): an
- * Email from an exact sender address one Vendor records proves that Vendor,
- * and the merchant name it shows becomes an alias with the Email as its
- * Source. Otherwise the exact name or alias, else a new Vendor. A shared
- * domain is never proof.
- */
-export const resolveImportVendor = async (
-  db: Database | DrizzleTransaction,
-  input: { name: string; sender: string | null; evidence: string | null },
-  actor: ActorContext,
-): Promise<VendorId> => {
-  const name = input.name.trim();
-  const address = senderAddress(input.sender);
-  const proven = address
-    ? await unwrapDb(db)
-        .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
-        .from(vendor)
-        .where(
-          and(
-            notDeleted(vendor),
-            arrayContains(vendor.orderEmailSenders, [address]),
-          ),
-        )
-    : [];
-  const [owner] = proven;
-  if (!owner || proven.length > 1) return findOrCreateVendor(db, name);
-  const known = [owner.name, ...owner.aliases].map((value) =>
-    value.toLowerCase(),
-  );
-  if (known.includes(name.toLowerCase())) return owner.id;
-  // Sender proof never takes a name another Vendor already answers to: that
-  // alias would make the name ambiguous (or misroute it) for every later lookup.
-  const [named] = await resolveNames(db, "vendor", [{ name }], {
-    create: false,
-  });
-  const others = named?.row ? [named.row, ...named.candidates] : [];
-  if (others.length > 0)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `The order Email from ${address} proves Vendor "${owner.name}", but the merchant name "${name}" belongs to ${others
-        .map(({ shortcode }) => shortcode)
-        .join(", ")}; name the order's vendorId explicitly.`,
-    );
-  const aliases = [...owner.aliases, name];
-  await unwrapDb(db)
-    .update(vendor)
-    .set({ aliases })
-    .where(eq(vendor.id, owner.id));
-  await logAuditEntry(db, actor, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    action: "update",
-    changes: { aliases: { from: owner.aliases, to: aliases } },
-  });
-  await recordEntitySources(db, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    sources: [
-      {
-        quote: `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`,
-      },
-    ],
-    recorder: actor,
-  });
-  return owner.id;
 };
 
 export const createVendor = async (

@@ -28,6 +28,7 @@ import {
   reclassifyEmails,
   rerunEmailPreview,
 } from "~/server/domains/purchase-import/service/gmail/reclassify";
+import { sweepImportedProductCategories } from "~/server/domains/purchase-import/service/import-category-sweep";
 import { emailAccuracyViewReport } from "~/server/generic/entity-report/repo/email";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -65,7 +66,10 @@ export const purchaseImportHandlers = implementOperationDomain(
     prepare: (context, input) =>
       preparePurchaseImport(context.db, input, context.actorContext),
     commit: (context, input) =>
-      commitPurchaseImport(context.db, input, context.actorContext),
+      commitPurchaseImport(context.db, input, context.actorContext, undefined, {
+        onProductsCreated: (productIds) =>
+          sweepImportedProductCategories(context, productIds),
+      }),
     operationStatus: (context, input) =>
       purchaseImportOperationStatus(context.db, input, context.actorContext),
     confirmMerchantVendor: (context, input) =>
