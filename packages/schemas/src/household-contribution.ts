@@ -96,6 +96,11 @@ export const householdContributionLedgerOut = z.object({
       initiallyOutlaid: money,
       transfersSent: money,
       transfersReceived: money,
+      /** Ledger Transfers from this party to itself; excluded from sent/received. */
+      internalMoves: z.object({
+        count: z.number().int().nonnegative(),
+        amount: money,
+      }),
       netContribution: money,
       position: money,
     }),
@@ -167,6 +172,9 @@ export const financialTransferPairSuggestionsOut = z.object({
       candidates: z.array(
         z.object({
           transactionId: financialTransactionShortcode,
+          /** The positive leg; with `inflowTransactionId`, the accept input. */
+          outflowTransactionId: financialTransactionShortcode,
+          inflowTransactionId: financialTransactionShortcode,
           fromAccountId: financialAccountShortcode,
           toAccountId: financialAccountShortcode,
           from: ledgerReportPartyOut.nullable(),
@@ -182,4 +190,37 @@ export const financialTransferPairSuggestionsOut = z.object({
 });
 export type FinancialTransferPairSuggestionsOut = z.infer<
   typeof financialTransferPairSuggestionsOut
+>;
+
+/** One reviewed suggestion: the positive (outflow) and negative (inflow) legs. */
+export const acceptFinancialTransferPairInput = z.object({
+  outflowTransactionId: financialTransactionShortcode,
+  inflowTransactionId: financialTransactionShortcode,
+});
+export type AcceptFinancialTransferPairInput = z.infer<
+  typeof acceptFinancialTransferPairInput
+>;
+
+/**
+ * A refused precondition is data, not an error: MCP clients reject
+ * `structuredContent` on `isError`, and the reason names the record to fix.
+ */
+export const acceptFinancialTransferPairOut = z.discriminatedUnion(
+  "canProceed",
+  [
+    z.object({
+      canProceed: z.literal(true),
+      transferId: ledgerTransferShortcode,
+      fromPartyId: ledgerPartyShortcode,
+      toPartyId: ledgerPartyShortcode,
+      amount: money,
+      date: plainDate,
+      /** Same sending and receiving party; reported apart from sent/received. */
+      internalMove: z.boolean(),
+    }),
+    z.object({ canProceed: z.literal(false), reason: z.string() }),
+  ],
+);
+export type AcceptFinancialTransferPairOut = z.infer<
+  typeof acceptFinancialTransferPairOut
 >;

@@ -64,6 +64,13 @@ const ATTENTION_GROUPS: Array<{
     title: (n) => `${countLabel(n, "project")} missing a cost estimate`,
   },
   {
+    type: "spend_below_estimate",
+    icon: CurrencyDollarIcon,
+    iconClassName: "size-3.5 text-muted-foreground",
+    title: (n) =>
+      `${countLabel(n, "done project")} with spend under 10% of estimate`,
+  },
+  {
     type: "unclassified_expense",
     icon: TagIcon,
     iconClassName: "size-3.5 text-muted-foreground",

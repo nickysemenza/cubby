@@ -516,6 +516,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation.",
       }),
+      accept_transfer_pair: mcpAction({
+        op: financialTransactionContract.ops.acceptTransferPair,
+        description:
+          "Accept one reviewed finance_read.transfer_pairs suggestion: pass the positive (outflow) and negative (inflow) FTX- legs. In one transaction it creates a Ledger Transfer from the outflow account's owner to the inflow account's owner for the absolute amount, dated the earlier leg, and links both legs as its evidence. A same-owner pair is recorded as an internal move. Refuses as data (canProceed false with the reason naming the record) unless the signs are opposite, the amounts equal, the accounts differ, both accounts have an owner, and neither leg already evidences a transfer; a refusal writes nothing.",
+      }),
       converge: mcpAction({
         op: financialTransactionContract.ops.converge,
         description:
@@ -557,7 +562,7 @@ export const MCP_TOOLS = defineMcpTools({
       transfer_pairs: mcpAction({
         op: householdContributionContract.ops.transferPairs,
         description:
-          "A candidate worklist pairing selected Financial Transaction evidence with opposite-signed, different-account matches. Suggestions never create Ledger Transfers, attach evidence, or decide a match; review each candidate before using standard mutations.",
+          "A candidate worklist pairing selected Financial Transaction evidence with opposite-signed, different-account matches. Suggestions never create Ledger Transfers, attach evidence, or decide a match; review each candidate, then pass its outflowTransactionId and inflowTransactionId to finance.accept_transfer_pair.",
       }),
       contribution_ledger: mcpAction({
         op: householdContributionContract.ops.ledger,

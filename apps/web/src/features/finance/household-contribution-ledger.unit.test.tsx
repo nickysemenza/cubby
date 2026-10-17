@@ -30,6 +30,7 @@ const ledger = {
       initiallyOutlaid: 0,
       transfersSent: 0,
       transfersReceived: 0,
+      internalMoves: { count: 0, amount: 0 },
       netContribution: 0,
       position: -60,
     },
@@ -43,6 +44,7 @@ const ledger = {
       initiallyOutlaid: 0,
       transfersSent: 40,
       transfersReceived: 0,
+      internalMoves: { count: 0, amount: 0 },
       netContribution: 40,
       position: 0,
     },
@@ -56,6 +58,7 @@ const ledger = {
       initiallyOutlaid: 100,
       transfersSent: 0,
       transfersReceived: 40,
+      internalMoves: { count: 1, amount: 25 },
       netContribution: 60,
       position: 60,
     },
@@ -103,6 +106,9 @@ describe("HouseholdContributionLedgerReport", () => {
     }
     expect(within(partyRow).getByText("$60.00")).toBeVisible();
     expect(within(partyRow).getAllByText("Household")).toHaveLength(2);
+    // Internal moves render only for the party that has them.
+    expect(screen.getAllByText(/internal move/)).toHaveLength(1);
+    expect(screen.getByText(/1 internal move · \$25\.00/)).toBeVisible();
 
     expect(screen.getByText("Transfer net")).toBeVisible();
     expect(

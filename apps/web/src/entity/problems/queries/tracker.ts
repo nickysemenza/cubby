@@ -69,6 +69,24 @@ export const trackerProblemQueries = [
     },
   }),
   defineProblem({
+    key: "projectsSpendBelowEstimate",
+    problemClass: "defect",
+    executionLane: "tracker",
+    freshness: { kind: "live" },
+    continuation: { kind: "entity-list" },
+    title: "Done projects with spend below estimate",
+    description:
+      "Done projects whose subtree spend is under 10% of their own estimate: spend was recorded elsewhere or the estimate is wrong.",
+    emptyMessage: "Every done project's recorded spend is near its estimate.",
+    source: {
+      kind: "entity",
+      entity: "project",
+      filters: [{ id: "attention", value: "spend_below_estimate" }],
+      sort: [{ id: "costEstimate", desc: true }],
+      columnVisibility: { costEstimate: true, status: true },
+    },
+  }),
+  defineProblem({
     key: "blockedWorkProjects",
     problemClass: "defect",
     executionLane: "tracker",

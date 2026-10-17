@@ -56,6 +56,14 @@ export function attentionEvidence(item: ProjectAttentionItem): string {
         `${formatCurrency(facts.spend, 0)} in spend · no cost estimate`,
     )
     .with(
+      { type: "spend_below_estimate" },
+      ({ facts }) =>
+        `${formatCurrency(facts.actualSpend, 0)} recorded · ${formatCurrency(
+          facts.costEstimate,
+          0,
+        )} estimate · spend recorded elsewhere or estimate wrong`,
+    )
+    .with(
       { type: "unclassified_expense" },
       ({ facts }) =>
         `${facts.date ? `Dated ${d(facts.date)}` : "Date unknown"} · no trade, no cost`,

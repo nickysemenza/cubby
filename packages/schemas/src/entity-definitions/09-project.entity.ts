@@ -1056,6 +1056,7 @@ Rules:
         options: [
           { value: "stalled", label: "Stalled" },
           { value: "missing_budget", label: "Missing budget" },
+          { value: "spend_below_estimate", label: "Spend below estimate" },
           {
             value: "blocked_no_next_action",
             label: "Blocked with no next action",

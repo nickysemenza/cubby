@@ -1428,6 +1428,10 @@ export const projectAttentionTypeValues = [
   "overdue_task",
   "stalled_project",
   "missing_budget",
+  // A finished project whose recorded subtree spend is far below its own
+  // estimate: spend landed elsewhere or the estimate was wrong. Diagnostic
+  // only; it never scales a forecast.
+  "spend_below_estimate",
   "past_due_planned_expense",
   "unclassified_expense",
   "blocked_work",
@@ -1464,6 +1468,11 @@ const attentionFacts = {
     spend: money,
     actualSpend: money,
     committedSpend: money,
+  }),
+  spend_below_estimate: z.object({
+    costEstimate: money,
+    actualSpend: money,
+    thresholdPercent: z.number().positive(),
   }),
   past_due_planned_expense: z.object({
     plannedFor: plainDate,
@@ -1549,6 +1558,7 @@ export const projectAttentionItemSchema = z.discriminatedUnion("type", [
   attentionMember("overdue_task"),
   attentionMember("stalled_project"),
   attentionMember("missing_budget"),
+  attentionMember("spend_below_estimate"),
   attentionMember("past_due_planned_expense"),
   attentionMember("unclassified_expense"),
   attentionMember("blocked_work"),
@@ -1603,6 +1613,8 @@ export const describeAttentionItem = (
       return `${name} has had no project, task, or expense activity in ${item.facts.thresholdDays}+ days`;
     case "missing_budget":
       return `${name} has $${item.facts.spend.toFixed(0)} in spend but no budget estimate`;
+    case "spend_below_estimate":
+      return `${name} is done with $${item.facts.actualSpend.toFixed(0)} recorded against a $${item.facts.costEstimate.toFixed(0)} estimate (under ${item.facts.thresholdPercent}%): spend was recorded elsewhere or the estimate is wrong`;
     case "past_due_planned_expense":
       return `${name} was planned for ${item.facts.plannedFor} but hasn't been logged as spent`;
     case "unclassified_expense":

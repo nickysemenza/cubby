@@ -1,4 +1,5 @@
 import { type HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { XCircleIcon } from "@phosphor-icons/react/dist/csr/XCircle";
@@ -178,6 +179,12 @@ export function HouseholdContributionLedgerReport({
                     {renderOptionCell(
                       row.party.kind,
                       fieldEnumOptions("ledgerParty", "kind"),
+                    )}
+                    {row.internalMoves.count > 0 && (
+                      <span className="text-2xs text-muted-foreground tabular-nums">
+                        {countLabel(row.internalMoves.count, "internal move")} ·{" "}
+                        {formatCurrency(row.internalMoves.amount)}
+                      </span>
                     )}
                   </Stack>
                 </TableCell>

@@ -67,6 +67,14 @@ export function buildFinancialTransferPairSuggestions(
                   "financialTransaction",
                   candidate.shortcode,
                 ),
+                outflowTransactionId: parseShortcodeFor(
+                  "financialTransaction",
+                  positive.shortcode,
+                ),
+                inflowTransactionId: parseShortcodeFor(
+                  "financialTransaction",
+                  negative.shortcode,
+                ),
                 amount: Math.abs(transaction.amount),
                 dateDistanceDays: daysBetween(
                   transaction.date!,
