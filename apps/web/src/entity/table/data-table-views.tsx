@@ -43,8 +43,12 @@ interface SavedViewsMenuProps {
   onResetPage?: () => void;
   /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
   onApplyLayout?: (layout: SavedLayout) => void;
-  /** Sets the list view (`?view=`) and grouping (`?groupBy=`) a saved view opens with. */
-  onApplyListSearch?: (patch: { view?: string; groupBy?: string }) => void;
+  /** Sets the list view (`?view=`) and grouping (`?groupBy=`, `?groupLevel=`) a saved view opens with. */
+  onApplyListSearch?: (patch: {
+    view?: string;
+    groupBy?: string;
+    groupLevel?: number;
+  }) => void;
 }
 
 /**
@@ -161,7 +165,9 @@ function SavedViewsMenuItems({
     // matching; a view that declares neither leaves them as they are.
     const listSearch = {
       ...(view.view ? { view: view.view } : {}),
-      ...(view.groupBy ? { groupBy: view.groupBy } : {}),
+      ...(view.groupBy
+        ? { groupBy: view.groupBy, groupLevel: view.groupLevel }
+        : {}),
     };
     if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
     onResetPage?.();

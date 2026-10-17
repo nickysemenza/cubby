@@ -93,7 +93,9 @@ type GroupValue =
 /**
  * One `model.grouping` choice. `value` is null exactly when `reason` says why
  * the field cannot group. `filter` is the column filter a section header
- * applies (the same path), and whether it can select the no-value section.
+ * applies (the same path), whether it can select the no-value section, and
+ * its generated "Include sub-…" toggle. `levels` counts the hierarchy levels
+ * (1 = top) the choice can group at; 0 exactly when `levelReason` says why.
  */
 type CompiledGroupChoice = Readonly<{
   key: string;
@@ -101,8 +103,20 @@ type CompiledGroupChoice = Readonly<{
   noValueLabel: string;
   reason: string | null;
   value: GroupValue | null;
-  filter: Readonly<{ columnId: string; noValue: boolean }> | null;
+  filter: Readonly<{
+    columnId: string;
+    noValue: boolean;
+    subtree: string | null;
+  }> | null;
+  levels: number;
+  levelReason: string | null;
 }>;
+
+/**
+ * Group by menus offer this many hierarchy levels at most. Deeper levels hold
+ * few enough records that grouping by the exact value reads the same.
+ */
+const GROUP_LEVEL_CHOICES = 3;
 
 export type CompiledEntityListFields = Readonly<{
   derived: Readonly<Record<string, CompiledListField>>;
@@ -360,6 +374,33 @@ const compileGroupChoice = (
       ? byKey.get(bound.target)?.inspector.singular
       : undefined) ??
     humanize(key);
+  /**
+   * The levels a section key can group at: a related record whose entity
+   * declares `model.hierarchy` groups under its ancestor at a level.
+   */
+  const levelsOf = (
+    value: GroupValue | null,
+    reason: string | null,
+  ): Pick<CompiledGroupChoice, "levels" | "levelReason"> => {
+    if (value === null)
+      return { levels: 0, levelReason: reason ?? `${label} cannot group.` };
+    if (value.kind !== "record")
+      return {
+        levels: 0,
+        levelReason: `${label} is a value, not a record with parents, so it has no levels.`,
+      };
+    const target = byKey.get(value.target);
+    const hierarchy = target?.fieldModel.hierarchy ?? null;
+    if (target === undefined || hierarchy === null)
+      return {
+        levels: 0,
+        levelReason: `${target === undefined ? humanize(value.target) : pluralOf(target)} don't nest, so ${label} has no levels.`,
+      };
+    return {
+      levels: Math.min(hierarchy.maxDepth + 1, GROUP_LEVEL_CHOICES),
+      levelReason: null,
+    };
+  };
   const choice = (
     value: GroupValue | null,
     reason: string | null,
@@ -377,7 +418,9 @@ const compileGroupChoice = (
           : {
               columnId: descriptor.columnId,
               noValue: Boolean(descriptor.nullable),
+              subtree: descriptor.subtree,
             },
+      ...levelsOf(value, reason),
     };
   };
   const viaValue = (via: Extract<CompiledListField, { shape: "via" }>) => {
@@ -471,7 +514,8 @@ const compileGroupChoice = (
 };
 
 /**
- * Every saved view's `groupBy` names a choice the list can group by.
+ * Every saved view's `groupBy` names a choice the list can group by, and its
+ * `groupLevel` a level that choice offers.
  */
 const validateSavedViewGrouping = (
   entity: CompiledEntity,
@@ -479,11 +523,21 @@ const validateSavedViewGrouping = (
   context: string,
 ) => {
   for (const view of entity.inspector.list.savedViews) {
-    if (view.groupBy === null) continue;
+    if (view.groupBy === null) {
+      if (view.groupLevel !== null)
+        throw new EntityDeclarationError(
+          `${context}.presentation.list.savedViews[${view.id}].groupLevel needs a groupBy.`,
+        );
+      continue;
+    }
     const choice = grouping.find(({ key }) => key === view.groupBy);
     if (choice === undefined || choice.reason !== null)
       throw new EntityDeclarationError(
         `${context}.presentation.list.savedViews[${view.id}].groupBy ${view.groupBy} is not a model.grouping choice this list can group by${choice?.reason ? `: ${choice.reason}` : ""}.`,
+      );
+    if (view.groupLevel !== null && view.groupLevel > choice.levels)
+      throw new EntityDeclarationError(
+        `${context}.presentation.list.savedViews[${view.id}].groupLevel ${view.groupLevel}: ${choice.levelReason ?? `${choice.label} offers levels 1–${choice.levels}`}.`,
       );
   }
 };

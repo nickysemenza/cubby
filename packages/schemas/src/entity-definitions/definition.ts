@@ -847,8 +847,9 @@ const buildMetadataSchemas = () => {
 
   /**
    * A self-reference that makes the entity a tree. Filters on a reference to
-   * it include descendants, walking at most `maxDepth` levels below each
-   * selected record.
+   * it include every descendant (cycle-guarded, not depth-capped). `maxDepth`
+   * is the depth a well-formed tree reaches: it bounds tree displays and the
+   * hierarchy levels Group by offers.
    */
   const entityHierarchyMetadataSchema = z
     .object({
@@ -1358,6 +1359,17 @@ const buildMetadataSchemas = () => {
                   view: nonEmptyString().nullable().optional().default(null),
                   /** The `model.grouping` field the view opens grouped by. */
                   groupBy: nonEmptyString().nullable().optional().default(null),
+                  /**
+                   * The hierarchy level (1 = top) `groupBy` groups at, for a
+                   * field whose target declares `model.hierarchy`.
+                   */
+                  groupLevel: z
+                    .number()
+                    .int()
+                    .positive()
+                    .nullable()
+                    .optional()
+                    .default(null),
                   /**
                    * A shortcut on another surface. `home` lists the view in
                    * the home "Your views" row on web and Apple, by `order`.

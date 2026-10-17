@@ -64,6 +64,8 @@ export type ListQueryOptionsFn<
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
+  /** The hierarchy level (1 = top) `groupBy` groups at. */
+  groupLevel?: number;
   /** A declared tree's scope; omitted reads the flat list. */
   nesting?: ListNesting;
 }) => ListQueryPlan<TData, TPage>;
@@ -77,6 +79,7 @@ interface UsePaginatedTableCoreOptions<
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;
   groupBy?: string;
+  groupLevel?: number;
 }
 
 export function usePaginatedTableCore<
@@ -88,6 +91,7 @@ export function usePaginatedTableCore<
   buildFilters,
   tableState,
   groupBy,
+  groupLevel,
 }: UsePaginatedTableCoreOptions<TFilters, TData, TPage>) {
   const filters = useMemo(
     () => buildFilters(tableState),
@@ -107,12 +111,14 @@ export function usePaginatedTableCore<
     };
     if (!searching || tableState.hasExplicitSort) params.sort = sortParams;
     if (groupBy) params.groupBy = groupBy;
+    if (groupBy && groupLevel) params.groupLevel = groupLevel;
     return params;
   }, [
     sortParams,
     pagination,
     filters,
     groupBy,
+    groupLevel,
     searching,
     tableState.hasExplicitSort,
   ]);

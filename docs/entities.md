@@ -783,8 +783,10 @@ unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing hierarchy is declared once:
 `model.hierarchy` (`parentField`, `maxDepth`) names a readable single
-reference to the entity itself and the depth its descendant expansion stops
-at ([Filters and search](#filters-and-search)). `presentation.list.tree` opts
+reference to the entity itself and the depth a well-formed tree reaches,
+which bounds tree displays and the Group by levels; filter descendant
+expansion is cycle-guarded but not depth-capped, since writes do not enforce
+`maxDepth` ([Filters and search](#filters-and-search)). `presentation.list.tree` opts
 a hierarchy into tree nesting and requires it; location, task, and project
 declare a hierarchy without a tree. Nesting is a server scope, never client stitching: every list
 read of a tree entity (`entity.listBase`, `entity_read.list`, HTTP) accepts
@@ -971,6 +973,20 @@ match, so it disables Group by with that reason while searching and restores
 the choice afterwards. A section header's "Filter to this" sets
 the section's value (and turns an "Include sub-…" toggle off) as the field's
 include filter, and exists only when the choice declares a filter.
+
+A choice whose section key is a related record of an entity that declares
+`model.hierarchy` can group at a level (`groupLevel`, 1 = top, absolute from
+the root): each row groups under its ancestor at that level, a row whose value
+sits above that level groups under itself, and no value stays last. The
+choice's `levels` (at most three, fewer for a shallower hierarchy) bounds the
+level; any other choice carries a `levelReason` derived from the declaration,
+which clients show on the disabled Level choices and the kernel returns when
+it rejects the level. `hierarchyAncestorSql` walks up the same hierarchy the
+descendant filter walks down, so a level section counts its key's
+descendants, and its summary's `subtree` flag tells "Filter to this" to keep
+"Include sub-…" on: the filtered list is that one section. Level rides beside
+`groupBy` in the URL (`?groupLevel=`), the list request, Apple's view state,
+and a saved view's `groupLevel`; changing Group by clears it.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields

@@ -1,6 +1,7 @@
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
+  type ListGroupBy,
   type ListNesting,
   listNestingSchema,
   normalizeSorts,
@@ -66,8 +67,16 @@ export const parseGroupBy = <
 >(
   binding: EntityKernelCoreBinding<E, S>,
   groupBy: string | undefined,
-) => {
-  if (groupBy === undefined) return undefined;
+  groupLevel?: number,
+): ListGroupBy | undefined => {
+  if (groupBy === undefined) {
+    if (groupLevel !== undefined)
+      throw createAppError(
+        "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+        `groupLevel ${groupLevel} needs a groupBy for ${binding.entity}`,
+      );
+    return undefined;
+  }
   const choices = generatedEntityListFields[binding.entity].grouping;
   const choice = choices.find(({ key }) => key === groupBy);
   // A declared choice the compiler cannot group by (several values per row,
@@ -88,7 +97,24 @@ export const parseGroupBy = <
           .join(", ") || "none (the list declares no model.grouping)"
       }`,
     );
-  return choice.key;
+  if (groupLevel === undefined) return { key: choice.key };
+  // A level groups each row under its ancestor; a field with no hierarchy is
+  // rejected with the reason the Group by menus show beside its levels.
+  if (choice.levelReason)
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `Cannot group ${binding.entity} by "${groupBy}" at a level: ${choice.levelReason}`,
+    );
+  if (
+    !Number.isInteger(groupLevel) ||
+    groupLevel < 1 ||
+    groupLevel > choice.levels
+  )
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `Cannot group ${binding.entity} by "${groupBy}" at level ${groupLevel}: ${choice.label} offers levels 1–${choice.levels}`,
+    );
+  return { key: choice.key, level: groupLevel };
 };
 
 /**

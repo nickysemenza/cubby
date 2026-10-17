@@ -583,7 +583,9 @@ describe("productList location subtree filter", () => {
     expect(await listAt(a.id)).toEqual([item.id]);
   });
 
-  it("stops at the shared tree depth cap", async () => {
+  // Writes do not enforce maxDepth, so a filter reaches every descendant; a
+  // level-grouped section counts these rows and its header filter must too.
+  it("includes descendants deeper than the declared tree depth", async () => {
     const root = await place("Depth root", TEST_HOME_SHORTCODE, "room");
     const chain = [root];
     for (let level = 1; level <= 12; level += 1) {
@@ -593,7 +595,7 @@ describe("productList location subtree filter", () => {
     const farItem = await stock("Far widget", [chain[12]!]);
     const ids = await listAt(root.id);
     expect(ids).toContain(nearItem.id);
-    expect(ids).not.toContain(farItem.id);
+    expect(ids).toContain(farItem.id);
   });
 });
 

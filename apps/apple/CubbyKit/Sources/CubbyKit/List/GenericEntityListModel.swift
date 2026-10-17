@@ -84,6 +84,9 @@ public final class GenericEntityListModel {
     /// The `model.grouping` choice the declared list is grouped by, kept with the view state; a
     /// saved view's `groupBy` sets it. Nil is a flat list.
     public private(set) var groupBy: String?
+    /// The hierarchy level (1 = top) `groupBy` groups at; nil groups by the exact value. Kept
+    /// across Group by changes only while the new choice offers it.
+    public private(set) var groupLevel: Int?
     public private(set) var timeline: EntityTimelineOut?
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
@@ -129,11 +132,28 @@ public final class GenericEntityListModel {
         groupByUnavailableReason == nil ? descriptor.groupChoice(groupBy) : nil
     }
 
+    /// The level the request groups at: `groupLevel` when the active choice offers it.
+    public var activeGroupLevel: Int? {
+        guard let choice = groupChoice, let groupLevel, groupLevel <= choice.levels else { return nil }
+        return groupLevel
+    }
+
+    /// Why the list cannot group at a level right now, shown under the level choices: the
+    /// reason Group by is unavailable, no Group by choice, or the choice's declared reason.
+    public var groupLevelUnavailableReason: String? {
+        if let reason = groupByUnavailableReason { return reason }
+        guard let choice = groupChoice else { return "Group by a field first." }
+        return choice.levelReason
+    }
+
     /// The loaded base rows in the server's sections, or nil when the list is not grouped.
     public var sections: [EntityListSection]? {
         guard groupChoice != nil, let groups = meta?.groups else { return nil }
         return EntityListSection.sections(
-            rows: rows, groups: groups.map { (key: $0.key, label: $0.label, count: $0.count) })
+            rows: rows,
+            groups: groups.map {
+                (key: $0.key, label: $0.label, count: $0.count, subtree: $0.subtree ?? false)
+            })
     }
 
     public var activeSavedView: SavedView? {
@@ -163,6 +183,7 @@ public final class GenericEntityListModel {
         filters: EntityFilterState = EntityFilterState(),
         view: ListView? = nil,
         groupBy: String? = nil,
+        groupLevel: Int? = nil,
         progressive: Bool = true,
         searchLoader: EntityListSearchModel.PageLoader? = nil,
         searchDebounceNanoseconds: UInt64 = 250_000_000
@@ -178,6 +199,7 @@ public final class GenericEntityListModel {
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
         self.groupBy = descriptor.groupChoice(groupBy)?.id
+        self.groupLevel = self.groupBy == nil ? nil : groupLevel
         self.searchModel =
             searchLoader.map {
                 EntityListSearchModel(
@@ -281,19 +303,26 @@ public final class GenericEntityListModel {
     }
 
     /// Apply filters, ordering and grouping together so a saved view never sends an
-    /// intermediate scope. A view that declares no `groupBy` keeps the current grouping.
+    /// intermediate scope. A view that declares no `groupBy` keeps the current grouping; one
+    /// that does sets its `groupLevel` too.
     public func apply(savedView: SavedView) async {
         guard source == nil else { return }
         let newFilters = savedView.filterState
         let newSort = savedView.sortParameter
-        let newGroupBy = descriptor.groupChoice(savedView.groupBy)?.id ?? groupBy
+        let declared = descriptor.groupChoice(savedView.groupBy)?.id
+        let newGroupBy = declared ?? groupBy
+        let newGroupLevel = declared == nil ? groupLevel : savedView.groupLevel
         // The view mode is not part of active-view matching (`activeSavedView`): switching it
         // never changes the query, so it must not depend on whether the query changed.
         if let newView = savedView.listView(in: descriptor) { await select(view: newView) }
-        guard filters != newFilters || sort != newSort || groupBy != newGroupBy else { return }
+        guard
+            filters != newFilters || sort != newSort || groupBy != newGroupBy
+                || groupLevel != newGroupLevel
+        else { return }
         filters = newFilters
         sort = newSort
         groupBy = newGroupBy
+        groupLevel = newGroupLevel
         await refreshQuery()
     }
 
@@ -304,6 +333,16 @@ public final class GenericEntityListModel {
         let resolved = descriptor.groupChoice(newGroupBy)?.id
         guard resolved == newGroupBy, resolved != groupBy else { return }
         groupBy = resolved
+        groupLevel = nil
+        await refreshQuery()
+    }
+
+    /// Groups each row under its ancestor at `level` (1 = top), or by the exact value with nil.
+    /// A level the active choice does not offer is ignored.
+    public func apply(groupLevel level: Int?) async {
+        guard source == nil, let choice = groupChoice, level != groupLevel else { return }
+        if let level, !(1...max(1, choice.levels)).contains(level) || choice.levels == 0 { return }
+        groupLevel = level
         await refreshQuery()
     }
 
@@ -485,16 +524,17 @@ public final class GenericEntityListModel {
         let sort = sort
         let filters = filters
         let groupBy = groupBy
+        let groupLevel = activeGroupLevel
         let standard = progressive && (view == .table || view == .shelf)
         return { page in
             if standard {
                 return try await client.progressiveList(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                    groupBy: groupBy)
+                    groupBy: groupBy, groupLevel: groupLevel)
             }
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: groupBy)
+                groupBy: groupBy, groupLevel: groupLevel)
         }
     }
 

@@ -103,7 +103,7 @@ describe("manifestFilterConfig", () => {
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
-  it("keeps Inventory detail cohorts exact and URL-only", () => {
+  it("keeps Inventory's product cohort URL-only and its location filter visible", () => {
     const filters = getEntityFilters("inventory");
 
     expect(
@@ -113,13 +113,13 @@ describe("manifestFilterConfig", () => {
       kind: "idMulti",
       urlOnly: true,
     });
-    expect(
-      filters.find((filter) => filter.columnId === "locationId"),
-    ).toMatchObject({
+    // Visible, so a Location section header can filter to its value.
+    const location = filters.find((filter) => filter.columnId === "locationId");
+    expect(location).toMatchObject({
       field: "locationIdFilter",
       kind: "idMulti",
-      urlOnly: true,
     });
+    expect(location?.urlOnly).toBeFalsy();
     expect(
       filters.find((filter) => filter.columnId === "product"),
     ).toMatchObject({ field: "productNameFilter", kind: "text" });

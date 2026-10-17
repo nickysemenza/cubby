@@ -15,7 +15,11 @@ import {
   generatedEntityListFields,
 } from "@cubby/schemas/entity-list-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
+import type {
+  ListGroupBy,
+  PresenceFilter,
+  SortParams,
+} from "@cubby/schemas/pagination";
 import { type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -24,6 +28,10 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
+import {
+  hierarchyAncestorSql,
+  hierarchyLevelSql,
+} from "~/server/generic/list/repo/hierarchy";
 import {
   compileTraversal,
   renderJoins,
@@ -443,12 +451,15 @@ export const derivedOrderBy = (
  * order that ranks sections. Each `order` part ascends with NULLS LAST, so
  * the no-value section is always last; `"key"`/`"label"` stand for those
  * expressions, letting the summary query order by its selected columns.
+ * `subtree`, on a level-grouped hierarchy, is true for a row grouped under
+ * an ancestor rather than its own value.
  */
 export interface ListGroupSql {
   readonly choice: GeneratedGroupChoice;
   readonly key: SQL;
   readonly label: SQL | null;
   readonly order: readonly (SQL | "key" | "label")[];
+  readonly subtree: SQL | null;
 }
 
 const optionOrder = (
@@ -467,11 +478,13 @@ const optionOrder = (
 
 /**
  * Compiles a `model.grouping` choice for `table`. A choice the declaration
- * cannot group by fails with its derived reason, unmasked.
+ * cannot group by fails with its derived reason, unmasked. At a `level`, a
+ * related record groups under its ancestor at that level (itself when it
+ * sits above it), so a section counts its key's descendants.
  */
 export const groupSql = (
   entity: Entity,
-  key: string,
+  { key, level }: ListGroupBy,
   derived: AnyDerivedSql,
   table: PgTable,
   context: ListContext,
@@ -490,13 +503,35 @@ export const groupSql = (
       choice.reason ?? `Cannot group ${entity} by "${key}"`,
     );
   const value = choice.value;
+  if (level !== undefined && (value.kind !== "record" || level > choice.levels))
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      choice.levelReason ??
+        `${choice.label} offers levels 1–${choice.levels}, not ${level}`,
+    );
   switch (value.kind) {
     case "record": {
+      if (level === undefined)
+        return {
+          choice,
+          key: relatedColumnSql(entity, value, table, "shortcode"),
+          label: relatedColumnSql(entity, value, table, value.titleColumn),
+          order: ["label", "key"],
+          subtree: null,
+        };
+      const id = relatedColumnSql(entity, value, table, "id");
+      const ancestor = hierarchyAncestorSql(value.target, id, level);
+      const { dbTable } = entityManifest[value.target];
+      if (dbTable === null)
+        throw new Error(`${value.target} has no table to group by`);
+      const column = (name: string) =>
+        sql`(SELECT a.${sql.identifier(name)} FROM ${sql.identifier(dbTable)} a WHERE a."id" = ${ancestor})`;
       return {
         choice,
-        key: relatedColumnSql(entity, value, table, "shortcode"),
-        label: relatedColumnSql(entity, value, table, value.titleColumn),
+        key: column("shortcode"),
+        label: column(value.titleColumn),
         order: ["label", "key"],
+        subtree: sql`${hierarchyLevelSql(value.target, id)} > ${level}::int`,
       };
     }
     case "column":
@@ -515,6 +550,7 @@ export const groupSql = (
         key: text,
         label: null,
         order: optionOrder(text, value.options),
+        subtree: null,
       };
     }
   }

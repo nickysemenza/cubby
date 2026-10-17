@@ -28,7 +28,10 @@ struct EntityManifestTests {
         #expect(wardrobe.groupBy == "category")
         let category = try #require(inventory.groupChoice(wardrobe.groupBy))
         #expect(category.noValueLabel == "No category")
-        #expect(category.filter == GroupChoiceFilter(columnId: "category", noValue: true))
+        #expect(
+            category.filter
+                == GroupChoiceFilter(
+                    columnId: "category", noValue: true, subtree: "includeSubProductCategories"))
         let tags = try #require(EntityCatalog[.product].grouping.first { $0.id == "tags" })
         #expect(tags.reason == "A record can have several Tags, so it would appear in more than one group.")
         #expect(EntityCatalog[.product].groupChoice("tags") == nil)

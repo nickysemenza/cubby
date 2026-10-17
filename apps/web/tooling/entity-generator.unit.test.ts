@@ -837,10 +837,14 @@ describe("typed entity compiler", () => {
     const compile = (
       extra: Partial<Extract<EntityDeclaration["model"], { fields: unknown }>>,
       filters: EntityDeclaration["filters"] = base.filters,
+      savedViews: readonly object[] = [],
     ) =>
       compileEntityDeclarations([
         {
           ...base,
+          ...(savedViews.length > 0
+            ? { presentation: { ...presentation, list: { savedViews } } }
+            : {}),
           relations,
           filters,
           model: {
@@ -943,7 +947,9 @@ describe("typed entity compiler", () => {
             target: "alpha",
             titleColumn: "name",
           },
-          filter: { columnId: "parentId", noValue: true },
+          filter: { columnId: "parentId", noValue: true, subtree: null },
+          levels: 0,
+          levelReason: "Alphas don't nest, so Parent has no levels.",
         },
         expect.objectContaining({
           key: "childName",
@@ -974,7 +980,7 @@ describe("typed entity compiler", () => {
             ],
           },
         ).listFields.grouping[0]?.filter,
-      ).toEqual({ columnId: "source", noValue: true });
+      ).toEqual({ columnId: "source", noValue: true, subtree: null });
       expect(() => compile({ grouping: ["name", "name"] })).toThrow(
         "model.grouping repeats a field",
       );
@@ -1021,6 +1027,60 @@ describe("typed entity compiler", () => {
           ({ columnId }) => columnId === "includeSubAlphas",
         ),
       ).toMatchObject({ kind: "boolean", label: "Include sub-alphas" });
+    });
+
+    it("offers hierarchy levels on a record choice whose entity nests, and checks a saved view's level", () => {
+      const descriptors = [
+        {
+          columnId: "parentId",
+          kind: "idMulti" as const,
+          placeholder: "Parent",
+          brandRef: { entity: "alpha" },
+          deriveSchema: true,
+          stored: true,
+        },
+      ];
+      const grouped = (groupLevel: number | null, maxDepth = 4) =>
+        compile(
+          {
+            hierarchy: { parentField: "parentId", maxDepth },
+            grouping: ["parentId", "name"],
+          },
+          { descriptors },
+          [
+            {
+              id: "nested",
+              label: "Nested",
+              description: "Grouped under ancestors.",
+              filters: [{ id: "parentId", value: ["ALP-1"] }],
+              groupBy: "parentId",
+              groupLevel,
+            },
+          ],
+        );
+      expect(grouped(null).listFields.grouping).toEqual([
+        expect.objectContaining({
+          key: "parentId",
+          filter: {
+            columnId: "parentId",
+            noValue: true,
+            subtree: "includeSubAlphas",
+          },
+          levels: 3,
+          levelReason: null,
+        }),
+        expect.objectContaining({
+          key: "name",
+          levels: 0,
+          levelReason:
+            "Name is a value, not a record with parents, so it has no levels.",
+        }),
+      ]);
+      // A shallow hierarchy offers only the levels it has.
+      expect(grouped(null, 1).listFields.grouping[0]?.levels).toBe(2);
+      expect(() => grouped(3, 1)).toThrow(
+        "savedViews[nested].groupLevel 3: Parent offers levels 1–2.",
+      );
     });
   });
 

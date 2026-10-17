@@ -70,9 +70,10 @@ extension EntityDescriptor {
     /// The kernel list body (`entity.list`, `entity.listBase`, `entity.listSummary`): flat
     /// filter names re-nested and typed from the catalog, a 1-based page as the 0-based
     /// `pageIndex`, `sort` (`name,-createdAt`) as `[{orderBy, direction}]`, and the
-    /// `model.grouping` choice as `groupBy`.
+    /// `model.grouping` choice as `groupBy`, at its hierarchy `groupLevel` (1 = top) if any.
     func listInput(
-        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState, groupBy: String? = nil
+        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState, groupBy: String? = nil,
+        groupLevel: Int? = nil
     ) throws -> JSONValue {
         var input: [String: JSONValue] = [
             "entity": .string(key.rawValue),
@@ -90,7 +91,10 @@ extension EntityDescriptor {
                     ])
                 })
         }
-        if let groupBy { input["groupBy"] = .string(groupBy) }
+        if let groupBy {
+            input["groupBy"] = .string(groupBy)
+            if let groupLevel { input["groupLevel"] = .number(Double(groupLevel)) }
+        }
         return .object(input)
     }
 
@@ -103,11 +107,12 @@ extension EntityDescriptor {
     /// One page of rows as the dynamic projection `EntityRow` reads.
     func listPage(
         client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
-        groupBy: String? = nil
+        groupBy: String? = nil, groupLevel: Int? = nil
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
         let body = try listInput(
-            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
+            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy,
+            groupLevel: groupLevel)
         let response = try JSONValue(
             encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }

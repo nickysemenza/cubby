@@ -275,15 +275,30 @@ export const buildTakeSkip = (pagination: PaginationParams) => {
 export type PaginationParams = z.infer<typeof paginationParams>;
 export type SortParams = z.infer<typeof sortParams>;
 
-/** Counts from the full filtered set, ordered as the grouped list is ordered. */
+/**
+ * Counts from the full filtered set, ordered as the grouped list is ordered.
+ * `subtree`, present when the list groups at a hierarchy level, says the
+ * section holds rows under its key's descendants, so its header filter
+ * includes sub-records.
+ */
 export const listGroupSummarySchema = z
   .object({
     key: z.string().min(1),
     label: z.string().min(1),
     count: z.number().int().positive(),
+    subtree: z.boolean().optional(),
   })
   .meta({ id: "ListGroupSummary" });
 export type ListGroupSummary = z.infer<typeof listGroupSummarySchema>;
+
+/**
+ * A validated Group by: the `model.grouping` key and, for a field whose
+ * records nest, the hierarchy level (1 = top) each row groups at.
+ */
+export interface ListGroupBy {
+  readonly key: string;
+  readonly level?: number;
+}
 
 /**
  * A tree list's scope (`list.tree`), applied after the filters: every

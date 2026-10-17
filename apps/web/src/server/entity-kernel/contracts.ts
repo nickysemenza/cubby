@@ -87,6 +87,14 @@ const listFields = {
     })
     .optional(),
   groupBy: z.string().min(1).optional(),
+  groupLevel: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "With groupBy on a field whose records nest (a category, a location): group each row under its ancestor at this level, 1 = top",
+    ),
   nesting: listNestingSchema
     .optional()
     .describe(
@@ -124,6 +132,7 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       sort: listFields.sort,
       pagination: mcpListPagination,
       groupBy: listFields.groupBy,
+      groupLevel: listFields.groupLevel,
       nesting: listFields.nesting,
       resultDetail,
     });

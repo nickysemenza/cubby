@@ -206,8 +206,9 @@ const pathsFor = async (
 
 /**
  * Live products in each category's subtree. One recursive walk seeded by
- * every requested id, with the same depth bound and visited-array guard as
- * `hierarchyDescendantsSql`, so a stored cycle cannot make a read loop.
+ * every requested id, bounded by the category depth writes enforce and by
+ * the visited-array guard `hierarchyDescendantsSql` also uses, so a stored
+ * cycle cannot make a read loop.
  */
 const productCountsFor = async (
   db: Database | DrizzleTransaction,
