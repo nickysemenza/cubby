@@ -38,6 +38,8 @@ export const expenseContract = defineContract("expense", {
     mcp: { omit: "client_view" },
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseFlowSankeyOut,
+    // Funders come from the contribution ledger (account owners, transfers).
+    cache: { tags: [["expense"], ["householdContribution"]] },
   }),
   facetCounts: query({
     mcp: { omit: "client_view" },

@@ -107,95 +107,99 @@ export function MoneyFlowSankey({
     };
   }, [data]);
 
+  const labels = view?.labels ?? new Map<string, string>();
+  // Listed outside the chart's ready/empty state: a refund-only scope has no
+  // positive link to draw but still has paths to reconcile.
   return (
-    <Visualization
-      state={visualization}
-      icon={FlowArrowIcon}
-      message="No positive money flow to chart."
-      height={420}
-    >
-      {data && view ? (
-        <figure aria-label={view.summary} className="space-y-3">
-          <figcaption className="sr-only">{view.summary}.</figcaption>
-          <div style={{ height: 420 }}>
-            <ResponsiveSankey
-              {...nivoMotion}
-              data={view.chart}
-              margin={{ top: 8, right: 168, bottom: 8, left: 168 }}
-              align="justify"
-              sort="descending"
-              colors={(node) =>
-                QUIET_BUCKETS.has(node.id)
-                  ? "var(--chart-neutral)"
-                  : COLUMN_COLOR[
-                      view.nodeById.get(node.id)?.column ?? "category"
-                    ]
-              }
-              nodeOpacity={1}
-              nodeThickness={12}
-              nodeSpacing={14}
-              nodeBorderWidth={0}
-              nodeBorderRadius={0}
-              linkOpacity={0.3}
-              linkHoverOpacity={0.55}
-              linkHoverOthersOpacity={0.12}
-              enableLinkGradient={false}
-              label={(node) => view.labels.get(node.id) ?? node.id}
-              labelPosition="outside"
-              labelPadding={8}
-              labelTextColor="var(--foreground)"
-              theme={nivoChartTheme}
-              valueFormat={(value) => formatCurrency(value, 0)}
-              onClick={(datum) => {
-                const filter =
-                  "source" in datum
-                    ? view.linkFilter.get(
-                        `${datum.source.id}\u0000${datum.target.id}`,
-                      )
-                    : view.nodeById.get(datum.id)?.filter;
-                if (filter) onOpenLedger(filter);
-              }}
-              nodeTooltip={({
-                node,
-              }: {
-                node: SankeyNodeDatum<DefaultNode, DefaultLink>;
-              }) => (
-                <ChartTooltip>
-                  <strong>{view.labels.get(node.id)}</strong> —{" "}
-                  {formatCurrency(node.value, 0)}
-                </ChartTooltip>
-              )}
-              linkTooltip={({
-                link,
-              }: {
-                link: SankeyLinkDatum<DefaultNode, DefaultLink>;
-              }) => (
-                <ChartTooltip>
-                  {view.labels.get(link.source.id)} →{" "}
-                  {view.labels.get(link.target.id)} —{" "}
-                  <strong>{formatCurrency(link.value, 0)}</strong>
-                </ChartTooltip>
-              )}
-            />
-          </div>
-          {data.nonPositivePaths.length > 0 ? (
-            <div className="text-xs text-muted-foreground">
-              <p>
-                Not drawn: paths netting to zero or below, totalling{" "}
-                {formatCurrency(data.totals.nonPositive, 2)}.
-              </p>
-              <ul className="mt-1 space-y-0.5 tabular-nums">
-                {data.nonPositivePaths.map((path) => (
-                  <li key={`${path.funder}|${path.project}|${path.category}`}>
-                    {pathLabel(path, view.labels)} ·{" "}
-                    {formatCurrency(path.net, 2)}
-                  </li>
-                ))}
-              </ul>
+    <div className="space-y-3">
+      <Visualization
+        state={visualization}
+        icon={FlowArrowIcon}
+        message="No positive money flow to chart."
+        height={420}
+      >
+        {data && view ? (
+          <figure aria-label={view.summary} className="space-y-3">
+            <figcaption className="sr-only">{view.summary}.</figcaption>
+            <div style={{ height: 420 }}>
+              <ResponsiveSankey
+                {...nivoMotion}
+                data={view.chart}
+                margin={{ top: 8, right: 168, bottom: 8, left: 168 }}
+                align="justify"
+                sort="descending"
+                colors={(node) =>
+                  QUIET_BUCKETS.has(node.id)
+                    ? "var(--chart-neutral)"
+                    : COLUMN_COLOR[
+                        view.nodeById.get(node.id)?.column ?? "category"
+                      ]
+                }
+                nodeOpacity={1}
+                nodeThickness={12}
+                nodeSpacing={14}
+                nodeBorderWidth={0}
+                nodeBorderRadius={0}
+                linkOpacity={0.3}
+                linkHoverOpacity={0.55}
+                linkHoverOthersOpacity={0.12}
+                enableLinkGradient={false}
+                label={(node) => view.labels.get(node.id) ?? node.id}
+                labelPosition="outside"
+                labelPadding={8}
+                labelTextColor="var(--foreground)"
+                theme={nivoChartTheme}
+                valueFormat={(value) => formatCurrency(value, 0)}
+                onClick={(datum) => {
+                  const filter =
+                    "source" in datum
+                      ? view.linkFilter.get(
+                          `${datum.source.id}\u0000${datum.target.id}`,
+                        )
+                      : view.nodeById.get(datum.id)?.filter;
+                  if (filter) onOpenLedger(filter);
+                }}
+                nodeTooltip={({
+                  node,
+                }: {
+                  node: SankeyNodeDatum<DefaultNode, DefaultLink>;
+                }) => (
+                  <ChartTooltip>
+                    <strong>{view.labels.get(node.id)}</strong> —{" "}
+                    {formatCurrency(node.value, 0)}
+                  </ChartTooltip>
+                )}
+                linkTooltip={({
+                  link,
+                }: {
+                  link: SankeyLinkDatum<DefaultNode, DefaultLink>;
+                }) => (
+                  <ChartTooltip>
+                    {view.labels.get(link.source.id)} →{" "}
+                    {view.labels.get(link.target.id)} —{" "}
+                    <strong>{formatCurrency(link.value, 0)}</strong>
+                  </ChartTooltip>
+                )}
+              />
             </div>
-          ) : null}
-        </figure>
+          </figure>
+        ) : null}
+      </Visualization>
+      {data && data.nonPositivePaths.length > 0 ? (
+        <div className="text-xs text-muted-foreground">
+          <p>
+            Not drawn: paths netting to zero or below, totalling{" "}
+            {formatCurrency(data.totals.nonPositive, 2)}.
+          </p>
+          <ul className="mt-1 space-y-0.5 tabular-nums">
+            {data.nonPositivePaths.map((path) => (
+              <li key={`${path.funder}|${path.project}|${path.category}`}>
+                {pathLabel(path, labels)} · {formatCurrency(path.net, 2)}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
-    </Visualization>
+    </div>
   );
 }

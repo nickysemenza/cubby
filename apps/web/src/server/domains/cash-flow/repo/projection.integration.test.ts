@@ -273,6 +273,20 @@ describe("cashFlowProjection", () => {
     );
   });
 
+  it("draws an envelope down by net spend, so a refund restores remaining", async () => {
+    const refunded = await projectRow("refunded", { costEstimate: 1000 });
+    await spend("refunded purchase", 500, "2026-05-10", {
+      projectId: refunded.id,
+    });
+    await spend("refunded credit", -200, "2026-06-10", {
+      projectId: refunded.id,
+    });
+    const out = await project6();
+    expect(out.unscheduled).toEqual([
+      expect.objectContaining({ id: refunded.shortcode, remaining: 700 }),
+    ]);
+  });
+
   it("expands once and monthly scenarios within the horizon and nets them", async () => {
     await fixture();
     const out = await project6({

@@ -344,9 +344,11 @@ export async function cashFlowProjection(
     const subtree = subtreeRollups.get(row.id);
     const actual = subtree?.actualSpent ?? 0;
     const committed = subtree?.committedSpent ?? 0;
+    // Net spend (decision 15): `spent` already includes committed and nets
+    // credits, so a refund restores the envelope.
     const remainingCents = Math.max(
       0,
-      cents(row.costEstimate) - cents(actual) - cents(committed),
+      cents(row.costEstimate) - cents(subtree?.spent ?? 0),
     );
     const endDate = dateWindows.get(row.id)?.effectiveEnd ?? null;
     const base = {

@@ -10,9 +10,13 @@ import { and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expense, ledgerParty, project } from "~/server/db/schema";
-import { prepareExpenseDerivedRead } from "~/server/domains/expense/repo/expense-derived-read";
+import {
+  expenseDerivedReadSql,
+  prepareExpenseDerivedRead,
+} from "~/server/domains/expense/repo/expense-derived-read";
+import { expenseAllocationScopeConditionSql } from "~/server/domains/expense/repo/expense-project-allocation";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 
 import {
@@ -38,16 +42,16 @@ type Funder = { key: string; label: string; weight: bigint };
 
 /**
  * Split `cents` across weights in whole cents by largest remainder, ties to
- * the earlier key, so a path never gains or loses a cent of its share.
+ * the earlier weight, so a path never gains or loses a cent of its share.
  */
-const splitCents = (cents: bigint, funders: readonly Funder[]) => {
-  const total = funders.reduce((sum, funder) => sum + funder.weight, 0n);
+const splitCents = (cents: bigint, weights: readonly bigint[]) => {
+  const total = weights.reduce((sum, weight) => sum + weight, 0n);
   const sign = cents < 0n ? -1n : 1n;
   const amount = cents * sign;
-  const parts = funders.map((funder, index) => ({
+  const parts = weights.map((weight, index) => ({
     index,
-    base: (amount * funder.weight) / total,
-    remainder: (amount * funder.weight) % total,
+    base: (amount * weight) / total,
+    remainder: (amount * weight) % total,
   }));
   let leftover = amount - parts.reduce((sum, part) => sum + part.base, 0n);
   for (const part of [...parts].sort((a, b) =>
@@ -62,6 +66,33 @@ const splitCents = (cents: bigint, funders: readonly Funder[]) => {
     leftover -= 1n;
   }
   return parts.map((part) => part.base * sign);
+};
+
+/**
+ * Split one Expense's complete set of shares across its funders so each share
+ * keeps its cents AND each funder keeps its contribution-ledger cents. Each
+ * share draws from what the funders have left, so rounding a share never
+ * moves a cent between funders; scope filters apply only afterwards.
+ */
+const apportionFunders = (
+  shares: readonly bigint[],
+  weights: readonly bigint[],
+): bigint[][] => {
+  const total = shares.reduce((sum, cents) => sum + cents, 0n);
+  const sign = total < 0n ? -1n : 1n;
+  // Mixed-sign shares have no consistent drawdown; split each independently.
+  if (shares.some((cents) => cents * sign < 0n))
+    return shares.map((cents) => splitCents(cents, weights));
+  const remaining = splitCents(total * sign, weights);
+  return shares.map((cents) => {
+    if (remaining.every((left) => left === 0n))
+      return splitCents(cents, weights);
+    const parts = splitCents(cents * sign, remaining);
+    parts.forEach((part, index) => {
+      remaining[index] = (remaining[index] ?? 0n) - part;
+    });
+    return parts.map((part) => part * sign);
+  });
 };
 
 const dollars = (cents: bigint) => Number(cents) / 100;
@@ -105,6 +136,18 @@ export async function expenseFlowSankey(
   filters: ExpenseFilters,
 ): Promise<ExpenseFlowSankeyOut> {
   const read = await prepareExpenseDerivedRead(db, filters);
+  const condition = read.scope
+    ? expenseAllocationScopeConditionSql("allocation", read.scope)
+    : undefined;
+  const membership = read.scope?.membershipProjectIds;
+  // The complete joint allocation of each selected Expense, flagged by scope,
+  // so funder cents apportion over every share before the filter drops any.
+  const allocations = sql`(SELECT allocation.*, coalesce(${condition ?? sql`true`}${
+    membership === undefined
+      ? sql``
+      : sql` AND bool_or(allocation."projectId" = ANY(${uuidArrayParam(membership)})) OVER (PARTITION BY allocation."expenseId")`
+  }, false) AS "inScope"
+    FROM (${expenseDerivedReadSql("shares", { expenseIds: read.expenseIds })}) allocation) allocation`;
   const shareProject = alias(project, "flowShareProject");
   const { roots, root } = rootSpendingCategoryJoins;
   const shares = await unwrapDb(db)
@@ -114,10 +157,11 @@ export async function expenseFlowSankey(
       projectLabel: shareProject.name,
       categoryKey: rootSpendingCategoryKeySql,
       categoryLabel: rootSpendingCategoryLabelSql,
+      inScope: sql<boolean>`allocation."inScope"`,
       cents: sql<string>`sum(allocation."attributedCents"::bigint)::text`,
     })
     .from(expense)
-    .innerJoin(read.allocations, sql`allocation."expenseId" = ${expense.id}`)
+    .innerJoin(allocations, sql`allocation."expenseId" = ${expense.id}`)
     .leftJoin(
       shareProject,
       and(
@@ -134,9 +178,19 @@ export async function expenseFlowSankey(
       shareProject.name,
       rootSpendingCategoryKeySql,
       rootSpendingCategoryLabelSql,
+      sql`allocation."inScope"`,
     );
 
-  const expenseIds = [...new Set(shares.map((share) => share.expenseId))];
+  const sharesByExpense = new Map<
+    (typeof shares)[number]["expenseId"],
+    typeof shares
+  >();
+  for (const share of shares)
+    sharesByExpense.set(share.expenseId, [
+      ...(sharesByExpense.get(share.expenseId) ?? []),
+      share,
+    ]);
+  const expenseIds = [...sharesByExpense.keys()];
   const funderRows =
     expenseIds.length === 0
       ? []
@@ -194,6 +248,7 @@ export async function expenseFlowSankey(
   const projectTotals = new Map<string, { label: string; cents: bigint }>();
   const categoryTotals = new Map<string, { label: string; cents: bigint }>();
   for (const share of shares) {
+    if (!share.inScope) continue;
     const cents = BigInt(share.cents);
     if (share.projectKey && share.projectKey !== HOUSEHOLD_PROJECT_SHORTCODE)
       addTotal(
@@ -246,36 +301,46 @@ export async function expenseFlowSankey(
     string,
     { funder: string; project: string; category: string; cents: bigint }
   >();
-  for (const share of shares) {
-    const cents = BigInt(share.cents);
-    const projectNode = node(
-      "project",
-      projectBucket(share.projectKey, share.projectLabel),
-    );
-    const categoryNode = node(
-      "category",
-      categoryBucket(share.categoryKey, share.categoryLabel),
-    );
-    const funders = (fundersByExpense.get(share.expenseId) ?? []).filter(
+  const shareOrder = (share: (typeof shares)[number]) =>
+    `${share.projectKey ?? ""}\u0000${share.categoryKey}\u0000${share.inScope ? 1 : 0}`;
+  for (const [expenseId, expenseShares] of sharesByExpense) {
+    expenseShares.sort((a, b) => shareOrder(a).localeCompare(shareOrder(b)));
+    const funders = (fundersByExpense.get(expenseId) ?? []).filter(
       (funder) => funder.weight > 0n,
     );
     const split = funders.length > 0 ? funders : [unknownFunder];
-    splitCents(cents, split).forEach((part, index) => {
-      const funderOf = split[index]!;
-      const funder = node("funder", {
-        id: funderOf.key,
-        label: funderOf.label,
-        filter: null,
+    const parts = apportionFunders(
+      expenseShares.map((share) => BigInt(share.cents)),
+      split.map((funder) => funder.weight),
+    );
+    expenseShares.forEach((share, shareIndex) => {
+      if (!share.inScope) return;
+      const projectNode = node(
+        "project",
+        projectBucket(share.projectKey, share.projectLabel),
+      );
+      const categoryNode = node(
+        "category",
+        categoryBucket(share.categoryKey, share.categoryLabel),
+      );
+      split.forEach((funderOf, funderIndex) => {
+        const part = parts[shareIndex]?.[funderIndex] ?? 0n;
+        if (part === 0n) return;
+        const funder = node("funder", {
+          id: funderOf.key,
+          label: funderOf.label,
+          filter: null,
+        });
+        const key = `${funder}\u0000${projectNode}\u0000${categoryNode}`;
+        const path = paths.get(key) ?? {
+          funder,
+          project: projectNode,
+          category: categoryNode,
+          cents: 0n,
+        };
+        path.cents += part;
+        paths.set(key, path);
       });
-      const key = `${funder}\u0000${projectNode}\u0000${categoryNode}`;
-      const path = paths.get(key) ?? {
-        funder,
-        project: projectNode,
-        category: categoryNode,
-        cents: 0n,
-      };
-      path.cents += part;
-      paths.set(key, path);
     });
   }
 
@@ -307,13 +372,12 @@ export async function expenseFlowSankey(
       const [source = "", target = ""] = key.split("\u0000");
       const from = nodes.get(source);
       const to = nodes.get(target);
-      // A funder node narrows nothing the Ledger can express; a grouped
-      // bucket has no single filter, so its links open nothing.
+      // The Ledger has no funder filter, so funder links open nothing (plan
+      // §6); a grouped bucket has no single filter, so its links open nothing.
       const filter =
-        to?.filter == null ||
-        (from?.column !== "funder" && from?.filter == null)
+        from?.column === "funder" || from?.filter == null || to?.filter == null
           ? null
-          : { ...from?.filter, ...to.filter };
+          : { ...from.filter, ...to.filter };
       return { source, target, value: dollars(cents), filter };
     },
   );

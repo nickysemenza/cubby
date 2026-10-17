@@ -148,7 +148,30 @@ export function CashFlowChart({
       row.scenarioInflow = -month.scenarioInflow;
       return row;
     });
-    return { segments, byKey, rows, netLine: netLineLayer(rows) };
+    // The value scale must hold both signed stacks AND the net line, which
+    // can sit outside either stack (a net below a month's inflow bar).
+    const stack = (row: MonthDatum, sign: 1 | -1) =>
+      segments.reduce((sum, segment) => {
+        const value = Number(row[segment.key] ?? 0);
+        return value * sign > 0 ? sum + value : sum;
+      }, 0);
+    const extent = rows.flatMap((row) => [
+      stack(row, 1),
+      stack(row, -1),
+      row.net,
+    ]);
+    return {
+      segments,
+      byKey,
+      rows,
+      netLine: netLineLayer(rows),
+      valueScale: {
+        type: "linear" as const,
+        min: Math.min(0, ...extent),
+        max: Math.max(0, ...extent),
+        nice: true,
+      },
+    };
   }, [data]);
 
   const stride = Math.ceil(view.rows.length / 12);
@@ -160,6 +183,7 @@ export function CashFlowChart({
         indexBy="label"
         margin={{ top: 12, right: 16, bottom: 36, left: 64 }}
         padding={0.35}
+        valueScale={view.valueScale}
         colors={({ id }) =>
           view.byKey.get(String(id))?.color ?? "var(--chart-neutral)"
         }

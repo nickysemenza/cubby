@@ -10,7 +10,7 @@ import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import {
   CashFlowChart,
@@ -26,7 +26,7 @@ import { cashFlow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
@@ -66,29 +66,6 @@ function Choice<T extends string>({
         if (choice) onChange(choice.value);
       }}
     />
-  );
-}
-
-function Section({
-  title,
-  aside,
-  children,
-}: {
-  title: string;
-  aside?: ReactNode;
-  children: ReactNode;
-}) {
-  const id = useId();
-  return (
-    <section aria-labelledby={id}>
-      <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-foreground pb-1">
-        <h2 id={id} className="my-0 text-sm font-semibold">
-          {title}
-        </h2>
-        {aside}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -452,13 +429,10 @@ export function CashFlowView({
 
       <Section
         title="Monthly projection"
-        aside={
-          data ? (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Baseline from {data.baselineWindow.from} to{" "}
-              {data.baselineWindow.to}
-            </span>
-          ) : null
+        meta={
+          data
+            ? `Baseline from ${data.baselineWindow.from} to ${data.baselineWindow.to}`
+            : null
         }
       >
         <Visualization

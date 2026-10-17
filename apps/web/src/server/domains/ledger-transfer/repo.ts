@@ -319,6 +319,47 @@ async function resolvePartyIds(
   return { fromPartyId: fromParty!.id, toPartyId: toParty!.id };
 }
 
+/**
+ * Per-leg facts that decide whether a financial transaction may evidence a
+ * Ledger Transfer. Select them from `financialTransaction` joined to its
+ * `financialAccount`; `transferEvidenceLegProblem` reads them.
+ */
+export const transferEvidenceLegFields = {
+  status: financialTransaction.status,
+  accountShortcode: financialAccount.shortcode,
+  accountDeletedAt: financialAccount.deletedAt,
+  bookingLineCount: sql<number>`(SELECT count(*)::int FROM "Expense" booked_expense WHERE booked_expense."bookingTransactionCode" = "FinancialTransaction".shortcode AND booked_expense."deletedAt" IS NULL)`,
+  allocationCount: sql<number>`(
+        SELECT count(*)::int FROM "FinancialTransactionAllocation" allocation
+        WHERE allocation."transactionId" = "FinancialTransaction".id
+          AND allocation."deletedAt" IS NULL
+      )`,
+};
+
+type TransferEvidenceLeg = Pick<
+  typeof financialTransaction.$inferSelect,
+  "status"
+> & {
+  accountShortcode: string;
+  accountDeletedAt: Date | null;
+  bookingLineCount: number;
+  allocationCount: number;
+};
+
+/** Why a leg cannot evidence a transfer, as a clause after its shortcode. */
+export const transferEvidenceLegProblem = (
+  leg: TransferEvidenceLeg,
+): string | null =>
+  leg.accountDeletedAt !== null
+    ? `is on deleted account ${leg.accountShortcode}`
+    : leg.status !== "posted"
+      ? `is ${leg.status}; only posted transactions can evidence a transfer`
+      : leg.allocationCount > 0
+        ? `has ${leg.allocationCount} live allocation(s) to a Purchase; remove them before using it as transfer evidence`
+        : leg.bookingLineCount > 0
+          ? `has ${leg.bookingLineCount} live booked Expense(s); review the booked spending conversion before using it as transfer evidence`
+          : null;
+
 async function assertEvidenceSet(
   tx: DrizzleTransaction,
   transfer: {
@@ -336,14 +377,8 @@ async function assertEvidenceSet(
       accountId: financialTransaction.accountId,
       ledgerTransferId: financialTransaction.ledgerTransferId,
       amount: financialTransaction.amount,
-      status: financialTransaction.status,
       ledgerPartyId: financialAccount.ledgerPartyId,
-      bookingLineCount: sql<number>`(SELECT count(*)::int FROM "Expense" booked_expense WHERE booked_expense."bookingTransactionCode" = "FinancialTransaction".shortcode AND booked_expense."deletedAt" IS NULL)`,
-      allocationCount: sql<number>`(
-        SELECT count(*)::int FROM "FinancialTransactionAllocation" allocation
-        WHERE allocation."transactionId" = "FinancialTransaction".id
-          AND allocation."deletedAt" IS NULL
-      )`,
+      ...transferEvidenceLegFields,
     })
     .from(financialTransaction)
     .innerJoin(
@@ -366,10 +401,8 @@ async function assertEvidenceSet(
   if (
     rows.some(
       (row) =>
-        row.status !== "posted" ||
-        cents(Math.abs(row.amount)) !== cents(transfer.amount) ||
-        row.allocationCount > 0 ||
-        row.bookingLineCount > 0,
+        transferEvidenceLegProblem(row) !== null ||
+        cents(Math.abs(row.amount)) !== cents(transfer.amount),
     )
   )
     throw createAppError(

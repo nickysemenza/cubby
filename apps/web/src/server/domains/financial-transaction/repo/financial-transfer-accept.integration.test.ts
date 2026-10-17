@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
+  financialAccount,
   financialTransaction,
+  financialTransactionAllocation,
   ledgerTransfer,
 } from "~/server/db/schema";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
@@ -43,11 +45,12 @@ describe("acceptFinancialTransferPair", () => {
     amount: number,
     date: string,
     ledgerTransferId: EntityId<"ledgerTransfer"> | null = null,
+    status: "posted" | "pending" = "posted",
   ) => {
     const row = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId,
       kind: "account_transfer",
-      status: "posted",
+      status,
       amount,
       transactionDate: date,
       postedDate: date,
@@ -111,6 +114,80 @@ describe("acceptFinancialTransferPair", () => {
       const result = await acceptFinancialTransferPair(
         ctx.db,
         { outflowTransactionId, inflowTransactionId },
+        ctx.actor,
+      );
+      expect(result.canProceed).toBe(false);
+      if (result.canProceed) continue;
+      expect(result.reason).toMatch(reason);
+    }
+    expect(await liveTransferCount()).toBe(transfersBefore);
+    expect(await linkedTransactionCount()).toBe(linkedBefore);
+  });
+
+  it("refuses legs that cannot evidence a transfer, naming the record, and persists nothing", async () => {
+    const memberA = await party("Synthetic evidence A", "member");
+    const memberB = await party("Synthetic evidence B", "member");
+    const [accountA, accountB, closed] = await Promise.all([
+      account("Synthetic evidence checking A", memberA.id),
+      account("Synthetic evidence checking B", memberB.id),
+      account("Synthetic closed checking", memberB.id),
+    ]);
+    const out = await transaction(accountA.id, 60, "2026-05-02");
+    const pendingIn = await transaction(
+      accountB.id,
+      -60,
+      "2026-05-03",
+      null,
+      "pending",
+    );
+    const allocatedIn = await transaction(accountB.id, -60, "2026-05-03");
+    const bookedIn = await transaction(accountB.id, -60, "2026-05-03");
+    const closedIn = await transaction(closed.id, -60, "2026-05-03");
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic evidence vendor",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-05-03",
+    });
+    const [allocatedRow] = await unwrapDb(ctx.db)
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(eq(financialTransaction.shortcode, allocatedIn));
+    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: allocatedRow!.id,
+      purchaseId: purchase.id,
+      amount: -60,
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic booked refund",
+      cost: -60,
+      date: "2026-05-03",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      bookingTransactionCode: bookedIn,
+    });
+    await unwrapDb(ctx.db)
+      .update(financialAccount)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialAccount.id, closed.id));
+
+    const transfersBefore = await liveTransferCount();
+    const linkedBefore = await linkedTransactionCount();
+    const cases: Array<[typeof out, RegExp]> = [
+      [pendingIn, new RegExp(`${pendingIn} is pending`)],
+      [allocatedIn, new RegExp(`${allocatedIn} has 1 live allocation`)],
+      [bookedIn, new RegExp(`${bookedIn} has 1 live booked Expense`)],
+      [
+        closedIn,
+        new RegExp(`${closedIn} is on deleted account ${closed.shortcode}`),
+      ],
+    ];
+    for (const [inflowTransactionId, reason] of cases) {
+      const result = await acceptFinancialTransferPair(
+        ctx.db,
+        { outflowTransactionId: out, inflowTransactionId },
         ctx.actor,
       );
       expect(result.canProceed).toBe(false);

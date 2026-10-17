@@ -19,7 +19,11 @@ import {
   financialTransaction,
   ledgerParty,
 } from "~/server/db/schema";
-import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
+import {
+  createLedgerTransfer,
+  transferEvidenceLegFields,
+  transferEvidenceLegProblem,
+} from "~/server/domains/ledger-transfer/repo";
 
 const refuse = (reason: string): AcceptFinancialTransferPairOut => ({
   canProceed: false,
@@ -55,8 +59,8 @@ export async function acceptFinancialTransferPair(
           >`COALESCE(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,
           ledgerTransferId: financialTransaction.ledgerTransferId,
           accountId: financialTransaction.accountId,
-          accountShortcode: financialAccount.shortcode,
           accountName: financialAccount.name,
+          ...transferEvidenceLegFields,
           partyShortcode: ledgerParty.shortcode,
         })
         .from(financialTransaction)
@@ -107,6 +111,12 @@ export async function acceptFinancialTransferPair(
         return refuse(
           `${outflow.shortcode} and ${inflow.shortcode} are both on account ${outflow.accountShortcode}; a transfer pair spans two accounts.`,
         );
+      // The same evidence rules createLedgerTransfer enforces, rechecked under
+      // the row lock so a fixable leg is refused as data instead of thrown.
+      for (const leg of [outflow, inflow]) {
+        const problem = transferEvidenceLegProblem(leg);
+        if (problem) return refuse(`${leg.shortcode} ${problem}.`);
+      }
       for (const leg of [outflow, inflow])
         if (!leg.partyShortcode)
           return refuse(

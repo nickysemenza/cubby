@@ -9,6 +9,7 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations.server";
+import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { expenseFlowSankey } from "./flow-sankey";
@@ -139,6 +140,16 @@ describe("expenseFlowSankey", () => {
         sankey.nonPositivePaths.reduce((sum, path) => sum + path.net, 0),
     ).toBe(filteredNet);
 
+    // Plan §6: funder links are not filterable; the Ledger has no funder filter.
+    expect(
+      sankey.links
+        .filter((link) => link.source.startsWith("funder:"))
+        .map((link) => link.filter),
+    ).toEqual(
+      sankey.links
+        .filter((link) => link.source.startsWith("funder:"))
+        .map(() => null),
+    );
     expect(
       sankey.links.find((link) => link.target === homeNode)?.filter,
     ).toEqual({
@@ -147,5 +158,75 @@ describe("expenseFlowSankey", () => {
       spendingCategory: home.shortcode,
       includeSubSpendingCategories: "true",
     });
+  });
+
+  it("keeps each Expense's ledger funder cents when one share rounds across paths", async () => {
+    const funders = await Promise.all(
+      ["LPY-FL11", "LPY-FL12"].map((shortcode, index) =>
+        insertAndReturn(ctx.db, ledgerParty, {
+          name: `Synthetic split funder ${index + 1}`,
+          shortcode,
+          kind: "member",
+        }),
+      ),
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic flow vendor",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-20",
+    });
+    for (const name of ["Synthetic split tools", "Synthetic split food"]) {
+      const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+        name,
+      });
+      await insertWithShortcode(ctx.db, "expense", {
+        name: `${name} line`,
+        cost: 10,
+        spendingCategoryId: category.id,
+        purchaseId: purchase.id,
+        date: "2026-09-20",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+      });
+    }
+    // 2 cents of tax round to 1 cent per category path.
+    const tax = await insertWithShortcode(ctx.db, "expense", {
+      name: "synthetic flow split tax",
+      cost: 0.02,
+      purchaseId: purchase.id,
+      date: "2026-09-20",
+      costType: "materials",
+      trade: "other",
+      lineKind: "tax",
+    });
+    await unwrapDb(ctx.db)
+      .insert(expenseAttribution)
+      .values(
+        funders.map((funder) => ({
+          expenseId: tax.id,
+          role: "funder" as const,
+          ledgerPartyId: funder!.id,
+          weight: 1,
+        })),
+      );
+
+    const ledger = (
+      await loadExpenseAllocations(ctx.db, { expenseIds: [tax.id] })
+    ).filter((row) => row.role === "funder");
+    expect(ledger.map((row) => [row.allocationKey, row.cents]).sort()).toEqual([
+      ["LPY-FL11", 1n],
+      ["LPY-FL12", 1n],
+    ]);
+
+    const sankey = await expenseFlowSankey(ctx.db, {
+      search: "synthetic flow split tax",
+    });
+    expect(linkValue(sankey, "funder:LPY-FL11", "project:none")).toBe(0.01);
+    expect(linkValue(sankey, "funder:LPY-FL12", "project:none")).toBe(0.01);
+    expect(sankey.totals).toEqual({ net: 0.02, linked: 0.02, nonPositive: 0 });
   });
 });

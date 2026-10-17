@@ -53,7 +53,7 @@ table, stores a balance, or introduces a time series.
 | 12  | Multi-funder expenses     | Split by the contribution ledger's funder weights; Unknown funder is an explicit node.                                                                                                                                                                                                                              |
 | 13  | Baseline                  | Per root category, median of the trailing 12 complete months of landed spend not attributed to a project other than the Household project, excluding `future`; empty months count as $0. Carried forward flat.                                                                                                      |
 | 14  | Irregular categories      | A category with spend in fewer than 3 of the 12 months is **Irregular** and carries its mean (whole-cent trailing total ÷ 12), since its median is almost always $0. `irregular=grouped\|separate` (default grouped) shows them as one row or their own rows; both sum the same figures, so they reconcile exactly. |
-| 15  | Envelopes                 | Remaining = `max(0, estimate − subtree actual − subtree committed)`, spread evenly from the current month to a future `endDate`; otherwise **unscheduled**.                                                                                                                                                         |
+| 15  | Envelopes                 | Remaining = `max(0, estimate − subtree net spend)` (`spent`: actual + committed − credits), spread evenly from the current month to a future `endDate`; otherwise **unscheduled**.                                                                                                                                  |
 | 16  | Which projects count      | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only with an estimate. A project under an ancestor with an estimate is excluded.                                                                                                                                                 |
 | 17  | Scenarios                 | URL state only, `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`, up to 20. Inflows exist only as scenarios. Structural presets are declared views.                                                                                                                     |
 | 18  | Forward Sankey            | Rejected: a Sankey over forecast figures hides timing, which is the point of the page.                                                                                                                                                                                                                              |
@@ -133,8 +133,9 @@ become `beyondHorizon`.
 
 Committed `future` expenses land in their own month; one dated before the
 current month lands in the current month as overdue, and one past the horizon
-is reported as `committedBeyondHorizon`. Committed rows are already subtracted
-from envelope remaining, so nothing is counted twice. Scenarios outside the
+is reported as `committedBeyondHorizon`. Envelope remaining subtracts the
+subtree's net spend, which already includes committed rows and nets credits, so
+nothing is counted twice and a refund restores the envelope. Scenarios outside the
 horizon are ignored; a monthly one starting earlier begins in the current month.
 
 The `/cash-flow` route sits in the Finance domain: monthly stacked bars
