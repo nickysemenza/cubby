@@ -1,7 +1,10 @@
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import { productMovementKind } from "./product-movement-kind";
-import { financialTransactionOut } from "./financial-transaction";
+import {
+  financialTransactionOut,
+  SETTLEMENT_CANDIDATE_LIMIT,
+} from "./financial-transaction";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { uniqueBy } from "./base-entity";
@@ -101,10 +104,12 @@ export const purchaseSettlementCandidatesOut = z.object({
     ),
   /** Why there is nothing to review, or why the list is empty; null when there are candidates. */
   message: z.string().nullable(),
-  candidates: z.array(purchaseSettlementCandidate).max(10),
+  candidates: z
+    .array(purchaseSettlementCandidate)
+    .max(SETTLEMENT_CANDIDATE_LIMIT),
   /**
-   * The candidates tied at the top deterministic rank, or empty unless two or more are tied. Only
-   * then is "Suggest a match" offered.
+   * The candidates tied at the top deterministic rank, or empty unless two or
+   * more are tied. Explanation metadata; model availability uses the full set.
    */
   tiedTransactionIds: z.array(financialTransactionShortcode),
   /** What to say before a suggestion is asked for; null when none is offered. */
@@ -125,8 +130,8 @@ function settlementTier(candidate: {
  * The candidates tied at the top deterministic tier, or `[]` unless two or
  * more are tied. Days-apart only breaks ties inside the repo ordering, so it
  * does not separate a tier: a person has no better reason to prefer the
- * nearer of two equally plausible charges. Both the server (before it spends
- * a model call) and the review UI (before it offers the button) use this.
+ * nearer of two equally plausible charges. This describes deterministic rank;
+ * the advisory model can compare the entire bounded candidate set.
  */
 export function tiedTopSettlementCandidates<
   T extends { exactAmount: boolean; merchantMatches: boolean },
@@ -156,7 +161,7 @@ export const purchaseSettlementSuggestOut = z.discriminatedUnion("status", [
     advisory: z
       .literal(true)
       .describe(
-        "A ranking of the tied candidates only; it never allocates settlement evidence.",
+        "An advisory ranking over the bounded candidate set; it never allocates settlement evidence.",
       ),
     selectedTransactionId: financialTransactionShortcode
       .nullable()
@@ -170,8 +175,8 @@ export const purchaseSettlementSuggestOut = z.discriminatedUnion("status", [
           badge: z.string(),
         }),
       )
-      .max(10),
-    // Every candidate in the order to show: tied ones by probability, then the rest as listed.
+      .max(SETTLEMENT_CANDIDATE_LIMIT),
+    // Every bounded candidate in the suggested display order.
     displayOrder: z.array(financialTransactionShortcode),
     note: z.string(),
   }),

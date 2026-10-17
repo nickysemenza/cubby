@@ -37,7 +37,8 @@ import {
 } from "./order-import.fixtures";
 
 // A consolidated message must expose each order separately. Raw source keys,
-// Emails another Run admitted, and newer raw bytes must not change scope.
+// Unrelated Emails another Run admitted and newer raw bytes must not change
+// scope. Invalid source bytes fail before any source judgment can spend.
 describe("retained mail source associations", () => {
   const ctx = withTestDb();
 
@@ -125,6 +126,24 @@ describe("retained mail source associations", () => {
       primaryDocumentImageId: null,
       screenshotImageId: null,
     }));
+    const sourceJudgments = vi.fn<DecisionPort>(async (input) => {
+      const choice = "admitted" in JSON.parse(input.state) ? "c1" : "c0";
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice,
+            confidence: 0.97,
+            probabilities: Object.fromEntries(
+              Object.keys(input.questions.selection.criteria).map((key) => [
+                key,
+                key === choice ? 0.97 : 0.015,
+              ]),
+            ),
+          },
+        },
+      };
+    });
     for (const [source, refusal] of [
       [
         {
@@ -143,7 +162,7 @@ describe("retained mail source associations", () => {
           externalKey: `gmail:${other.mailboxId}:${other.messageId}`,
           checksum: other.rawChecksum,
         },
-        "did not admit that Email",
+        "same purchase",
       ],
       // A non-mail kind must not sidestep the admitted-Email check.
       [
@@ -165,9 +184,11 @@ describe("retained mail source associations", () => {
             ],
           },
           ctx.actor,
+          sourceJudgments,
         ),
       ).rejects.toThrow(refusal);
     }
+    expect(sourceJudgments).toHaveBeenCalledTimes(2);
     const prepared = await preparePurchaseImport(
       ctx.db,
       {
@@ -175,6 +196,7 @@ describe("retained mail source associations", () => {
         orders,
       },
       ctx.actor,
+      sourceJudgments,
     );
     expect(prepared.orders).toHaveLength(2);
   });

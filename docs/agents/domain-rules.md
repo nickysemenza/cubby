@@ -223,6 +223,10 @@ Calendar days are household days (`America/Los_Angeles`), and Workers run in
 UTC. A plain date (`YYYY-MM-DD`: due dates, expense and purchase dates) is
 shifted and compared only with `shiftPlainDate`/`plainDateDaysBetween`; the day
 an instant happened on is `householdLocalDate(instant)` (`~/lib/household-date`).
+Calendar-day wire contracts use the shared `plainDate` pattern, with a refinement
+when strict calendar validity is needed. Do not advertise `z.iso.date()`'s
+`format: date`: MCP clients reject that format. Preserve runtime validation
+without changing the advertised calendar-day shape.
 Timestamp columns are `timestamp without time zone` holding UTC wall time, so
 SQL `::date` and `date_trunc('day', …)` on them are UTC days: use
 `householdDaySql` and bound day filters with `householdDayRangeConditions`

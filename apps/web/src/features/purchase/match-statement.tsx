@@ -88,7 +88,7 @@ export function MatchStatementDialog({
   const update = useMutation(
     financeOperations.allocateSettlement.mutationOptions(),
   );
-  // Advisory only: the result reorders and badges tied candidates, and never
+  // Advisory only: the result reorders and badges bounded candidates, and never
   // selects or allocates on the person's behalf.
   const suggest = useMutation(
     purchaseOperations.suggestSettlementMatch.mutationOptions(),

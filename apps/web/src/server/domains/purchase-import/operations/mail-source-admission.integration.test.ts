@@ -6,7 +6,7 @@
  * second-guessed; a supporting original of the same purchase cannot be
  * imported, or one of another purchase joins the roster; equivalent original
  * and forwarded copies of one order book spending twice in either arrival
- * order.
+ * order. Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
@@ -220,15 +220,13 @@ describe("Mail import source admission", () => {
       "Order OTHER-1 from another merchant",
     );
     const owner = await mailRun(party, [mail], "foreground");
-    await getDb(ctx.db)
-      .insert(account)
-      .values({
-        id: crypto.randomUUID(),
-        accountId: mailboxId,
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
     const ref = await issueExecutionAuthorization(
       ctx.db,
       ctx.actor,

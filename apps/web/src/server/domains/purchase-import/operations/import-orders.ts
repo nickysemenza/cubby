@@ -67,6 +67,7 @@ import {
   parseMailSourceKey,
   type RetainedMailSource,
   retainedMailSource,
+  readUnchangedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
 import {
   MODEL_STYLE_MATCH_REASON,
@@ -527,6 +528,16 @@ export async function preparePurchaseImport(
     async (ledger) => {
       const recorded = await ledger.replay(getDb(db), preparePurchaseImportOut);
       if (recorded) return recorded;
+      // Invalid keys or altered originals never reach paid source judgments.
+      // The writer repeats these checks under its transaction after admission.
+      if (scope.purpose === "mail_import")
+        for (const order of input.orders)
+          await readUnchangedMailSource(
+            db,
+            scope,
+            order.source,
+            order.evidenceChecksum,
+          );
       const admissions =
         scope.purpose === "mail_import"
           ? await prepareMailSourceAdmissions(

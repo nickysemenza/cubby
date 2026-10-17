@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
+import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
 
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -13,15 +14,18 @@ import {
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
-test("finds settlement beyond 200 newer nonmatches and allocates only after review", async ({
+// Failure modes: a generic transaction-page limit hides the best evidence,
+// broad candidates overflow the wire schema, residual allocations disappear,
+// exhausted unrelated payments reappear, or advisory reads change the ledger.
+test("bounds broad settlement candidates after ranking and allocates only after review", async ({
   page,
 }) => {
   test.setTimeout(60_000);
   const merchant = `Synthetic Outfitters ${Date.now()}`;
   const seed = await seedSplitSettlementPrerequisite(page, merchant);
   const { db } = await createEvidenceHarnessContext(page);
-  // These irrelevant rows sort ahead of the actual charge in the generic
-  // transaction list. Candidate predicates must run before the result limit.
+  // These weaker candidates sort ahead of the actual charge in the generic
+  // transaction list. Eligibility and rank must run before the advisory limit.
   for (let offset = 0; offset < 208; offset += 8)
     await Promise.all(
       Array.from({ length: 8 }, (_, index) =>
@@ -43,7 +47,7 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     merchant: "Synthetic date fallback merchant",
     transactionDate: "2026-09-10",
   });
-  await insertWithShortcode(db, "financialTransaction", {
+  const exactCharge = await insertWithShortcode(db, "financialTransaction", {
     accountId: seed.transaction.accountId,
     kind: "purchase",
     status: "posted",
@@ -51,7 +55,7 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     merchant: `${merchant} exact charge`,
     postedDate: "2026-09-13",
   });
-  await insertWithShortcode(db, "financialTransaction", {
+  const refund = await insertWithShortcode(db, "financialTransaction", {
     accountId: seed.transaction.accountId,
     kind: "refund",
     status: "posted",
@@ -59,20 +63,23 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     merchant: `${merchant} refund`,
     postedDate: "2026-09-14",
   });
+  const excluded = [];
   for (const [name, kind, date, deletedAt] of [
     ["transfer", "account_transfer", "2026-09-10", null],
     ["outside window", "purchase", "2026-07-01", null],
     ["deleted", "purchase", "2026-09-10", new Date()],
   ] as const)
-    await insertWithShortcode(db, "financialTransaction", {
-      accountId: seed.transaction.accountId,
-      kind,
-      status: "posted",
-      amount: 42.5,
-      merchant: `${merchant} ${name}`,
-      postedDate: date,
-      deletedAt,
-    });
+    excluded.push(
+      await insertWithShortcode(db, "financialTransaction", {
+        accountId: seed.transaction.accountId,
+        kind,
+        status: "posted",
+        amount: 42.5,
+        merchant: `${merchant} ${name}`,
+        postedDate: date,
+        deletedAt,
+      }),
+    );
   const allocated = await insertWithShortcode(db, "financialTransaction", {
     accountId: seed.transaction.accountId,
     kind: "purchase",
@@ -83,16 +90,38 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
   });
   await getDb(db).execute(sql`
     INSERT INTO "FinancialTransactionAllocation" ("transactionId", "purchaseId", amount)
-    VALUES (${allocated.id}, ${seed.first.id}, 42.5)
+    VALUES (${allocated.id}, ${seed.second.id}, 42.5)
   `);
-  await insertWithShortcode(db, "financialTransaction", {
+  excluded.push(allocated);
+  const partial = await insertWithShortcode(db, "financialTransaction", {
     accountId: seed.transaction.accountId,
     kind: "purchase",
-    status: "void",
-    amount: 42.5,
-    merchant: `${merchant} void`,
-    postedDate: "2026-09-10",
+    status: "posted",
+    amount: 57.5,
+    merchant: "Synthetic processor alias",
+    postedDate: "2026-10-20",
   });
+  await getDb(db).execute(sql`
+    INSERT INTO "FinancialTransactionAllocation" ("transactionId", "purchaseId", amount)
+    VALUES (${partial.id}, ${seed.second.id}, 15)
+  `);
+  excluded.push(
+    await insertWithShortcode(db, "financialTransaction", {
+      accountId: seed.transaction.accountId,
+      kind: "purchase",
+      status: "void",
+      amount: 42.5,
+      merchant: `${merchant} void`,
+      postedDate: "2026-09-10",
+    }),
+  );
+  const acceptedAllocations = () =>
+    getDb(db).execute(sql`
+    SELECT "transactionId", "purchaseId", amount FROM "FinancialTransactionAllocation"
+    WHERE "transactionId" IN (${allocated.id}, ${partial.id}) AND "deletedAt" IS NULL
+    ORDER BY "transactionId", "purchaseId"
+  `);
+  const acceptedBefore = await acceptedAllocations();
   await gotoDetailActions(
     page,
     `/purchases/${seed.first.shortcode}`,
@@ -129,6 +158,33 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     page.getByRole("button", { name: "Match statement activity" }).click(),
   ]);
   expect(data.advisory).toBe(true);
+  expect(data.candidates).toHaveLength(SETTLEMENT_CANDIDATE_LIMIT);
+  expect(
+    data.candidates.slice(0, 5).map((candidate) => candidate.transaction.id),
+  ).toEqual([
+    exactCharge.shortcode,
+    undatedPosting.shortcode,
+    partial.shortcode,
+    seed.transaction.shortcode,
+    refund.shortcode,
+  ]);
+  const candidateIds = data.candidates.map(
+    (candidate) => candidate.transaction.id,
+  );
+  for (const transaction of excluded)
+    expect(candidateIds).not.toContain(transaction.shortcode);
+  const partialCandidate = data.candidates.find(
+    (candidate) => candidate.transaction.id === partial.shortcode,
+  );
+  expect(partialCandidate).toMatchObject({
+    days: 40,
+    merchantMatches: false,
+    exactAmount: true,
+    proposedAllocations: [
+      { purchaseId: seed.second.shortcode, amount: "15.00" },
+      { purchaseId: seed.first.shortcode, amount: "42.50" },
+    ],
+  });
   const dialog = page.getByRole("dialog", { name: "Match statement activity" });
   await expect(dialog.getByText("$91.00")).toBeVisible();
   await expect(
@@ -136,15 +192,24 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
   ).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: /Synthetic unrelated merchant/ }),
-  ).toHaveCount(0);
+  ).toHaveCount(SETTLEMENT_CANDIDATE_LIMIT - 5);
+  // Reviewing residual money keeps the already accepted allocation intact.
+  await dialog
+    .getByRole("button", { name: /Synthetic processor alias/ })
+    .click();
   await expect(
-    dialog.getByRole("button").filter({ hasText: /Synthetic/ }),
-  ).toHaveText([
-    /exact charge/,
-    /Synthetic date fallback merchant/,
-    new RegExp(merchant),
-    /refund/,
-  ]);
+    dialog.getByRole("textbox", { name: "Purchase code 1", exact: true }),
+  ).toHaveValue(seed.second.shortcode);
+  await expect(
+    dialog.getByRole("spinbutton", { name: "Amount 1", exact: true }),
+  ).toHaveValue("15.00");
+  await expect(
+    dialog.getByRole("textbox", { name: "Purchase code 2", exact: true }),
+  ).toHaveValue(seed.first.shortcode);
+  await expect(
+    dialog.getByRole("spinbutton", { name: "Amount 2", exact: true }),
+  ).toHaveValue("42.50");
+  expect((await acceptedAllocations()).rows).toEqual(acceptedBefore.rows);
   const allocationsBeforeApproval = await getDb(db).execute(sql`
     SELECT count(*)::int AS count FROM "FinancialTransactionAllocation"
     WHERE "transactionId" IN (${seed.transaction.id}, ${undatedPosting.id})
@@ -189,4 +254,5 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
       AND "deletedAt" IS NULL
   `);
   expect(ledgerAfterApproval.rows).toEqual(ledgerBeforeApproval.rows);
+  expect((await acceptedAllocations()).rows).toEqual(acceptedBefore.rows);
 });

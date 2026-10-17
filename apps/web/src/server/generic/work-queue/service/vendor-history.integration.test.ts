@@ -27,6 +27,7 @@ import { readRecordWorkQueue, readWorkQueue } from "./work-queue-read";
 
 // Missing-domain approval must survive a lost wake, start only after research,
 // freeze its queries once, and never reopen an explicitly paused generation.
+// A recovered wake keeps the same Vendor scope and lifetime allowance.
 describe("authorized Vendor history continuation", () => {
   const ctx = withTestDb();
   it("recovers research readiness once without broadening or overriding pause", async () => {
@@ -38,15 +39,13 @@ describe("authorized Vendor history continuation", () => {
     const store = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic history store",
     });
-    await getDb(ctx.db)
-      .insert(account)
-      .values({
-        id: crypto.randomUUID(),
-        accountId: "synthetic-history-mailbox",
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-history-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
     const ref = await issueExecutionAuthorization(
       ctx.db,
       ctx.actor,

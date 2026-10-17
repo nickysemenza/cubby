@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { plainDate } from "./base-entity";
 
 import {
   ledgerPartyId,
@@ -12,6 +13,11 @@ import {
 const microUSD = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const fingerprint = z.string().regex(/^[a-f0-9]{64}$/u);
 const mailboxId = z.string().min(1);
+// Calendar days advertise a pattern on the wire, while retaining ISO day validation.
+const calendarDate = plainDate.refine(
+  (value) => z.iso.date().safeParse(value).success,
+  "expected a valid calendar date",
+);
 
 export const executionAuthorizationOwner = z.strictObject({
   userId,
@@ -69,8 +75,8 @@ const vendorBackfill = z.strictObject({
       "Approved Vendors must be distinct.",
     ),
   senderPolicy: z.literal("verified_at_first_start"),
-  receivedAfter: z.iso.date().nullable(),
-  receivedBefore: z.iso.date(),
+  receivedAfter: calendarDate.nullable(),
+  receivedBefore: calendarDate,
   candidateLimit: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   productLimit: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 });

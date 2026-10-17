@@ -5,6 +5,11 @@ CSV never creates spending implicitly. Booking either
 links recorded Expenses or creates an aggregate allocation line. Purchases
 created from bank evidence have no invented order identifier or printed total.
 
+Mail preparation validates source kind, owned original identity and exact
+checksums before any paid attribution or relationship judgment. Admission
+decisions cannot repair altered bytes; the writer repeats those checks and
+requires roster membership inside its transaction.
+
 `finance.converge` is the explicit automatic path for a genuine purchase payment.
 The server rechecks posted transaction identity, stable provider references,
 live account funding and exact Vendor identity. An existing Purchase requires
