@@ -515,12 +515,17 @@ sets carry app-computed data (§3.1, §3.5).
 - **Presence.** On a row-set field, Any value joins the shared row like a
   picked value (`col IS NOT NULL`). No value matches a record when a row in
   the shared `EXISTS` has the column NULL (with the sibling conditions), **or**
-  when the record has no row at all. The first half keeps today's
+  when the record has no row at all and the whole same-row group still holds
+  against one NULL row. So the empty-set branch applies only when every
+  sibling include condition in the group also admits absence (each is No
+  value). An account with no aliases does not match
+  `source = Plaid AND externalAccountId = No value`. The first half keeps today's
   allocation-share semantics: an expense with one assigned and one unassigned
   share matches No project
   (`expense/repo/expense-project-allocation.ts:284-293`). The second half keeps
   "has no identifier" for a NOT NULL column (product `externalIdSource`).
-  Equivalence fixtures include mixed-share expenses. Inherited fields read
+  Equivalence fixtures include mixed-share expenses, plus an empty row set
+  with a picked sibling and with an Any value sibling. Inherited fields read
   presence on the effective value (see Q3 for product `categoryFeature`).
 - **Match all.** On a row-set field, each picked value gets its own `EXISTS`,
   and each carries the sibling include conditions, so "external ids `ACME-1` and
