@@ -6,11 +6,13 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import { runFinding } from "~/server/db/schema";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
+import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { findOpenRunFindings } from "./detectors-import";
 
@@ -94,6 +96,18 @@ describe("SQL-backed finding diagnostic intent", () => {
     expect(sample.count).toBe(16);
     expect(sample.items).toEqual(
       ordered.slice(0, 3).map(({ id }) => expect.objectContaining({ id })),
+    );
+    const clients = createTestRequestContext(ctx.db);
+    const focused = await findProblemByType(
+      ctx.db,
+      "runFindings",
+      clients.upcLookupClient,
+      clients.usdaClient,
+    );
+    expect(focused.type).toBe("runFindings");
+    expect(focused.total).toBe(16);
+    expect(focused.items).toEqual(
+      ordered.slice(0, 12).map(({ id }) => expect.objectContaining({ id })),
     );
     const empty = await runDiagnostic(
       ctx.db,

@@ -609,9 +609,8 @@ const presentProblemRows = (
 };
 
 /**
- * Run a registered Problem through its one canonical source declaration.
- * Entity membership compiles to the ordinary list path; derived membership is
- * delegated only by typed DiagnosticKey, never a callback in the manifest.
+ * Entity-backed execution uses the ordinary list reader and registered card
+ * presenter; the canonical executor selects this branch before loading it.
  */
 export const executeEntityProblem = async (
   db: Database,
