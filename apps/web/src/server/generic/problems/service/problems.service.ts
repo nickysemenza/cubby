@@ -108,6 +108,7 @@ import {
   type UpcLookupBatchPort,
   runDiagnostic,
 } from "~/server/generic/problems/service/problem-diagnostics.service";
+import { executeProblem } from "~/server/generic/problems/service/problem-execution.service";
 import {
   byManufacturer,
   locationBadges,
@@ -117,10 +118,7 @@ import {
   selectedProblemCard,
   textBadge,
 } from "~/server/generic/problems/service/problem-rows";
-import {
-  countViewProblem,
-  executeProblem,
-} from "~/server/generic/problems/service/problem-views.service";
+import { countViewProblem } from "~/server/generic/problems/service/problem-views.service";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceAll, traceAllBounded } from "~/server/observability/tracing";
 
@@ -1726,7 +1724,7 @@ export const findProblemCounts = async (
 };
 
 /** Execute only one registry entry for focused MCP/problem consumers. */
-export const findProblemByType = async (
+export const findEntityProblemByType = async (
   db: Database,
   key: ProblemKey,
   upcLookupClient: UpcLookupBatchPort,

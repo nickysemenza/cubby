@@ -14,6 +14,10 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  executeProblem,
+  findProblemByType,
+} from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -69,13 +73,9 @@ import {
   reparseStaleWorkflow,
 } from "../operations/problem-workflows.server";
 import { runDiagnostic } from "../service/problem-diagnostics.service";
-import {
-  executeProblem,
-  findViewProblems,
-} from "../service/problem-views.service";
+import { findViewProblems } from "../service/problem-views.service";
 import {
   findFastProblems,
-  findProblemByType,
   findTrackerProblems,
 } from "../service/problems.service";
 import { findEntitiesMissingEmbeddings } from "./detectors-embedding";

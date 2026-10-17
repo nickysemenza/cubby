@@ -24,6 +24,8 @@ const problemWorkflows = () =>
   import("~/server/generic/problems/operations/problem-workflows.server");
 const problemDetectors = () =>
   import("~/server/generic/problems/service/problems.service");
+const problemExecution = () =>
+  import("~/server/generic/problems/service/problem-execution.service");
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {
@@ -80,7 +82,6 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     ),
   report: async (context, input) => {
     if (problemReportWantsCounts(input)) return readProblemCounts(context);
-    const detectors = await problemDetectors();
     if (input.type !== undefined) {
       const { expectedProblemKeys, problemQuery } =
         await import("~/entity/problems/problem-registry");
@@ -93,7 +94,9 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       const definition = problemQuery(key.data);
       if (!definition) throw new Error("Problem query registry is incomplete");
       return pageProblemTypeSlice(
-        await detectors.findProblemByType(
+        await (
+          await problemExecution()
+        ).findProblemByType(
           context.db,
           definition.key,
           context.upcLookupClient,
@@ -102,6 +105,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
         input,
       );
     }
+    const detectors = await problemDetectors();
     const [fast, coverage, upc, tracker, views] = await Promise.all([
       detectors.findFastProblems(context.db),
       detectors.findCoverageProblems(context.db, context.usdaClient),
@@ -155,7 +159,7 @@ export const integrityProblemsHandlers = implementOperationDomain(
     getByType: async (context, input) =>
       integrityProblemsContract.ops.getByType.output.parse(
         await (
-          await problemDetectors()
+          await problemExecution()
         ).findProblemByType(
           context.db,
           input.key,

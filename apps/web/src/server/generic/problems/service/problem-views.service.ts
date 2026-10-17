@@ -34,7 +34,6 @@ import type {
   EntityProblemSource,
   FilterAssembly,
   ProblemFreshness,
-  ProblemSource,
 } from "~/entity/problems/problem-query";
 import {
   problemQuery,
@@ -92,8 +91,15 @@ import { selectedListProjection } from "~/server/generic/list/repo/list-projecti
 import {
   type DiagnosticRunOptions,
   diagnosticAdapters,
-  runDiagnostic,
 } from "~/server/generic/problems/service/problem-diagnostics.service";
+import {
+  executeProblem,
+  PROBLEM_SAMPLE_SIZE as SAMPLE_SIZE,
+  type ListRow,
+  type ProblemRunOptions,
+  type ProblemRunResult,
+  type ProblemRunStatus,
+} from "~/server/generic/problems/service/problem-execution.service";
 import {
   byManufacturer,
   locationBadges,
@@ -121,14 +127,11 @@ import { traceAllBounded } from "~/server/observability/tracing";
  * `totals`, not `rows.length`. That is what `sectionTotals` is for.
  */
 
-const SAMPLE_SIZE = 12;
-
 /**
  * Server adapters for the Problem read seam. The declaration registry remains
  * data-only; these wrappers localize each repo's concrete filter type instead
  * of erasing thirteen incompatible functions into one cast.
  */
-type ListRow = { id: string };
 type EntityReadKind = "sample" | "count";
 type EntityReadAdapter = {
   selected?: (
@@ -435,33 +438,6 @@ const entityProblemForKey = (key: ProblemKey): EntityProblemSource => {
   return definition.source;
 };
 
-/**
- * Execute one registered entity-grain Problem.  The result is deliberately
- * the list contract (exact count plus a page) so callers cannot accidentally
- * derive a total from the card sample.
- */
-type ProblemRunStatus =
-  | { state: "healthy" }
-  | {
-      state: "stale";
-      message: string;
-      projection?: ProductConversionCoverageFreshness;
-    }
-  | {
-      state: "unavailable";
-      message: string;
-      projection?: ProductConversionCoverageFreshness;
-    };
-
-export type ProblemRunResult = {
-  data: ListRow[];
-  items: readonly unknown[];
-  count: number;
-  source: ProblemSource;
-  status: ProblemRunStatus;
-  freshness?: Awaited<ReturnType<typeof runDiagnostic>>["freshness"];
-};
-
 const statusForFreshness = (freshness: ProblemFreshness): ProblemRunStatus =>
   freshness.kind === "external"
     ? {
@@ -637,59 +613,15 @@ const presentProblemRows = (
  * Entity membership compiles to the ordinary list path; derived membership is
  * delegated only by typed DiagnosticKey, never a callback in the manifest.
  */
-export const executeProblem = async (
+export const executeEntityProblem = async (
   db: Database,
   key: ProblemKey,
-  options: {
-    mode?: "sample" | "count";
-    pageIndex?: number;
-    sampleSize?: number;
-    diagnostic?: DiagnosticRunOptions;
-    projectionFreshness?: ProductConversionCoverageFreshness;
-    fields?: readonly string[];
-  } = {},
+  options: ProblemRunOptions,
 ): Promise<ProblemRunResult> => {
   const definition = problemQuery(key);
   if (!definition) throw new Error(`No registered Problem declares "${key}"`);
-  if (definition.source.kind === "derived") {
-    const offset =
-      (options.pageIndex ?? 0) * (options.sampleSize ?? SAMPLE_SIZE);
-    const diagnostic =
-      options.mode === "count"
-        ? await runDiagnostic(
-            db,
-            definition.source.diagnostic,
-            options.diagnostic ?? {},
-            { kind: "count" },
-          )
-        : await runDiagnostic(
-            db,
-            definition.source.diagnostic,
-            options.diagnostic,
-            {
-              kind: "sample",
-              limit: offset + (options.sampleSize ?? SAMPLE_SIZE),
-            },
-          );
-    const items =
-      "items" in diagnostic && Array.isArray(diagnostic.items)
-        ? diagnostic.items.slice(
-            offset,
-            offset + (options.sampleSize ?? SAMPLE_SIZE),
-          )
-        : [];
-    return {
-      // Derived rows intentionally have no common list row contract. Keeping
-      // this empty prevents entity presenters from treating a pair/group as an
-      // entity; consumers use `items` and the declared grain instead.
-      data: [],
-      items,
-      count: diagnostic.count,
-      source: definition.source,
-      status: diagnostic.status,
-      freshness: diagnostic.freshness,
-    };
-  }
+  if (definition.source.kind !== "entity")
+    throw new Error(`No entity Problem declares "${key}"`);
   const source = definition.source;
   const reader = entityReaderFor(source.entity);
   if (!reader) {
