@@ -4,13 +4,14 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { task } from "~/server/db/schema";
+import { email, task } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { listScaffold } from "./list";
 
 /** Failure modes: correlated filters/sorts disagree with count, relation loading
- * loses page order, deleted rows leak, or count/empty reads load graphs. */
+ * loses page order, deleted rows leak, or count/empty reads load graphs. A
+ * window count has no row on an out-of-range page, which must retain its total. */
 describe("list selection and relation loading", () => {
   const ctx = withTestDb();
   const scaffold = listScaffold("task", task, {
@@ -78,7 +79,7 @@ describe("list selection and relation loading", () => {
         { name: "Test Zulu", parent: "Test Parent" },
       ],
     });
-    expect(page.queryCount).toBe(3);
+    expect(page.queryCount).toBe(2);
     const count = await countTestDbQueries(() => read("count"));
     expect(count.result).toEqual({ count: 2, data: [] });
     expect(count.queryCount).toBe(1);
@@ -99,5 +100,42 @@ describe("list selection and relation loading", () => {
     );
     expect(page.count).toBe(1);
     expect(page.data.map((row) => row.name)).toEqual(["Test Aliased Task"]);
+  });
+
+  it("keeps quality aliases and exact totals when loading an ordered page", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      kind: "member",
+      name: "Synthetic quality reader",
+      userId: ctx.actor.userId,
+    });
+    for (let index = 0; index < 3; index++)
+      await insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-quality-reader",
+        messageId: `synthetic-quality-${index}`,
+        checksum: "a".repeat(64),
+        classification: "related",
+        classificationStage: "decision",
+        status: "pending",
+      });
+    const reader = listScaffold("email", email, {
+      derived: { linkState: sql`NULL` },
+    });
+    for (const pageIndex of [0, 1, 4]) {
+      const request = {
+        filters: { dataGap: ["email_original_missing"] },
+        sorts: [{ orderBy: "dataQuality", direction: "asc" as const }],
+        pagination: { pageIndex, pageSize: 2 },
+      };
+      const expected = await reader.list(ctx.db, request, {
+        hydrate: (rows) => rows.map((row) => row.shortcode),
+      });
+      const actual = await reader.list(ctx.db, request, {
+        load: (where) => getDb(ctx.db).select().from(email).where(where),
+        hydrate: (rows) => rows.map((row) => row.shortcode),
+      });
+      expect(actual).toEqual(expected);
+      expect(actual.count).toBe(3);
+    }
   });
 });

@@ -1273,6 +1273,14 @@ the inventory price-path card remains complete while its embedded product price
 contract is unresolved. Focused raw Problems consumers and count/continuation
 reads retain their existing contracts.
 
+The shared list scaffold selects relation-loaded page IDs with a window count,
+so a nonempty page evaluates its canonical filter once for both selection and
+the exact total. The ordered SQL rows determine graph-loading order. Empty and
+out-of-range pages run the canonical count separately because no window row
+carries a total. Count-only reads, custom selectors/counts and group summaries
+retain their existing paths. Tracing reports the combined page/count phase as
+`entity.list.core.pageWithCount`, without invented separate timings.
+
 MCP create/update summaries request `entityWriteSummaryFields` before response
 hydration through the kernel's `createRead`/`updateRead` repository ports. They
 share the complete mutation workflow, including validation, transactional
