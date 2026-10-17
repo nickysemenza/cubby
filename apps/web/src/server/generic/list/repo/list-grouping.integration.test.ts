@@ -260,6 +260,52 @@ describe("server list grouping", () => {
     }
   });
 
+  it("finds the real root of a hierarchy deeper than its declared maxDepth", async () => {
+    // Location declares maxDepth 10 but its writes do not enforce it. A new
+    // top-level location sits under the household root, so it is level 2.
+    const root = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Deep root", type: "room" }),
+      ctx.actor,
+    );
+    let parentId = root.id;
+    const chain = [];
+    for (let depth = 1; depth <= 11; depth += 1) {
+      const next = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: `Deep ${depth}`, type: "box", parentId }),
+        ctx.actor,
+      );
+      chain.push(next);
+      parentId = next.id;
+    }
+    const item = await product("Deep item", null);
+    const ids = [];
+    for (const place of chain.slice(-2)) {
+      const entry = await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: place.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      ids.push(entry.id);
+    }
+    const result = await executeEntity(kernel(), {
+      action: "list",
+      entity: "inventory",
+      filters: { ids },
+      groupBy: "location",
+      groupLevel: 2,
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(result.meta.groups).toEqual([
+      { key: root.id, label: "Deep root", count: 2, subtree: true },
+    ]);
+  });
+
   it("rejects a level on a field with no hierarchy, without a groupBy, or past its levels", async () => {
     const list = (groupBy: string | undefined, groupLevel: number) =>
       executeEntity(kernel(), {

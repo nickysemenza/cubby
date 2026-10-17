@@ -68,13 +68,14 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
 
 /**
  * Correlated scalar over the walk up `model.hierarchy` from the `entity`
- * record `id`: `up` holds the record (step 1) and each live ancestor, at most
- * `maxDepth` above it, so the walk agrees with `hierarchyDescendantsSql`
- * expanding from any ancestor it reaches. The visited guard stops a stored
- * cycle; an absent or soft-deleted record walks nothing.
+ * record `id`: `up` holds the record (step 1) and each live ancestor up to
+ * the root. Levels are absolute, so the walk is not capped at `maxDepth`
+ * (writes do not enforce it; a capped walk would take a mid-tree ancestor
+ * for the root). Only the visited guard bounds it, stopping a stored cycle;
+ * an absent or soft-deleted record walks nothing.
  */
 const ancestorWalkSql = (entity: Entity, id: SQL, select: SQL): SQL => {
-  const { table, column, maxDepth, softDelete } = hierarchyOf(entity);
+  const { table, column, softDelete } = hierarchyOf(entity);
   const name = sql.identifier(table);
   const parent = sql.identifier(column);
   const live = (alias: string) =>
@@ -87,8 +88,7 @@ const ancestorWalkSql = (entity: Entity, id: SQL, select: SQL): SQL => {
         UNION ALL
         SELECT p."id", p.${parent}, up.step + 1, up.visited || p."id"
         FROM up JOIN ${name} p ON p."id" = up.parent
-        WHERE up.step <= ${sql.raw(String(maxDepth))}
-          AND NOT p."id" = ANY(up.visited)${live("p")}
+        WHERE NOT p."id" = ANY(up.visited)${live("p")}
       ) SELECT ${select} FROM up
     )`;
 };
