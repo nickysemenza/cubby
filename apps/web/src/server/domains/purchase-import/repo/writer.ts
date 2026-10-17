@@ -12,6 +12,7 @@ import {
 import {
   importWriterInput,
   importWriterOutput,
+  type ExtractedPaymentEvidence,
   type ExtractedPurchaseLine,
   type ImportWriterInput,
   type ImportWriterOutput,
@@ -228,6 +229,32 @@ async function findPurchase(
       notDeleted(purchase),
     ),
   });
+}
+
+/**
+ * Tender is excluded from `sourceFinancialFacts`, so a re-read that only
+ * learns how an already-retained line was paid (an export naming the gift
+ * card) is not a financial disagreement. It fills an `unknown` tender in
+ * place; a known tender is never rewritten by a later read.
+ */
+async function recordLearnedTender(
+  tx: DrizzleTransaction,
+  retained: (typeof purchasePaymentEvidence.$inferSelect)[],
+  proposed: readonly ExtractedPaymentEvidence[],
+): Promise<void> {
+  for (const row of retained) {
+    const tender = proposed[row.evidenceIndex]?.tender;
+    if (
+      row.tender !== "unknown" ||
+      tender === undefined ||
+      tender === "unknown"
+    )
+      continue;
+    await tx
+      .update(purchasePaymentEvidence)
+      .set({ tender, updatedAt: new Date() })
+      .where(eq(purchasePaymentEvidence.id, row.id));
+  }
 }
 
 export async function existingExpenses(
@@ -1351,6 +1378,7 @@ export async function importVendorOrder(
         });
       }
       const purchaseId = parseEntityId("purchase", existingOrder.purchaseId);
+      await recordLearnedTender(tx, retainedPayments, candidate.payments);
       await attachEvidence(tx, purchaseId, input);
       await recordImportSourceAssociation(
         tx,
@@ -2097,6 +2125,7 @@ export async function importVendorOrder(
           amount: payment.amount,
           chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
           cardLastFour: payment.cardLastFour,
+          tender: payment.tender ?? "unknown",
           description: payment.description,
           evidenceIndex,
         });

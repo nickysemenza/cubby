@@ -1263,36 +1263,39 @@ export const ENTITY_EDGES = {
     }),
     ...linkEdgesFor("purchase"),
   },
-  financialAccount: edges({
-    "FinancialTransaction.accountId": {
-      column: financialTransaction.accountId,
-      role: "transaction",
-      label: "financial transactions",
-      description:
-        "A settlement-side event recorded by this financial account.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EmailFinancialAssociation.reviewedAccountId": {
-      column: emailFinancialAssociation.reviewedAccountId,
-      role: "history",
-      label: "reviewed Email associations",
-      description:
-        "The account a member confirmed when linking an Email to a settlement transaction; the review keeps naming it after the account is deleted.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+  financialAccount: {
+    ...edges({
+      "FinancialTransaction.accountId": {
+        column: financialTransaction.accountId,
+        role: "transaction",
+        label: "financial transactions",
+        description:
+          "A settlement-side event recorded by this financial account.",
+        liveness: { kind: "must-target-live" },
       },
-    },
-    "StatementRow.accountId": {
-      column: statementRow.accountId,
-      role: "reference",
-      label: "statement rows",
-      description:
-        "A provider statement line an agent judged to belong to this account. Evidence Cubby is reconciled against, not a settlement event: the row is what the export said, and assigning it an account is a human judgment rather than something the import derived.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+      "EmailFinancialAssociation.reviewedAccountId": {
+        column: emailFinancialAssociation.reviewedAccountId,
+        role: "history",
+        label: "reviewed Email associations",
+        description:
+          "The account a member confirmed when linking an Email to a settlement transaction; the review keeps naming it after the account is deleted.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+        },
+      },
+      "StatementRow.accountId": {
+        column: statementRow.accountId,
+        role: "reference",
+        label: "statement rows",
+        description:
+          "A provider statement line an agent judged to belong to this account. Evidence Cubby is reconciled against, not a settlement event: the row is what the export said, and assigning it an account is a human judgment rather than something the import derived.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("financialAccount"),
+  },
   financialTransaction: {
     ...edges({
       "EmailFinancialAssociation.transactionId": {

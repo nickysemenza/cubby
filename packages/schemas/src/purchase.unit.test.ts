@@ -274,7 +274,9 @@ describe("tiedTopSettlementCandidates", () => {
   const row = (id: string, exactAmount: boolean, merchantMatches: boolean) => ({
     id,
     exactAmount,
+    nearAmount: false,
     merchantMatches,
+    conflicts: [],
   });
 
   it("returns only the candidates sharing the top tier", () => {

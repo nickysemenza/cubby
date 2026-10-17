@@ -216,6 +216,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Product links are soft-deleted with the purchase; the Products themselves are not.",
   },
+  "EntityLink[purchasePaymentAccount].from": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Payment-account links are soft-deleted with the purchase; the accounts themselves are not.",
+  },
   "FinancialTransactionAllocation.purchaseId": {
     code: "soft-delete-allocations-of-affected-transactions",
     effect: "soft-delete",
@@ -264,6 +270,12 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
+  },
+  "EntityLink[purchasePaymentAccount].from": {
+    code: "move-dedupe-and-soft-delete-source",
+    effect: "move-dedupe",
+    description:
+      "The absorbed purchase's payment-account links move onto the survivor, skipping accounts already linked there, and the source links are soft-deleted.",
   },
   "FinancialTransactionAllocation.purchaseId": {
     code: "move-and-sum-amounts-then-soft-delete-source",

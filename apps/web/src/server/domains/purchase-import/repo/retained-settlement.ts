@@ -9,6 +9,10 @@ import {
   type LedgerPartyId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
+import {
+  paymentTender,
+  type PaymentTender,
+} from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
@@ -33,6 +37,7 @@ import {
   readAllocations,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   matchCompletePaymentSet,
   type SettlementCandidate,
@@ -62,6 +67,7 @@ type RetainedPayment = {
   amount: number;
   chargedAt: Date | null;
   cardLastFour: string | null;
+  tender: PaymentTender;
 };
 
 type Charge = SettlementCandidate & {
@@ -100,6 +106,7 @@ async function loadPaymentSet(
       amount: purchasePaymentEvidence.amount,
       chargedAt: purchasePaymentEvidence.chargedAt,
       cardLastFour: purchasePaymentEvidence.cardLastFour,
+      tender: purchasePaymentEvidence.tender,
     })
     .from(purchasePaymentEvidence)
     .where(eq(purchasePaymentEvidence.purchaseId, purchaseId))
@@ -118,9 +125,22 @@ async function loadPaymentSet(
     set.map(paymentKey).sort().join(";");
   const [first] = sets;
   if (!first) return [];
-  return sets.every((set) => signature(set) === signature(first))
-    ? first
-    : "conflicting_sources";
+  if (!sets.every((set) => signature(set) === signature(first)))
+    return "conflicting_sources";
+  // Agreeing sources may differ in what they say paid: an order page omits a
+  // tender that the export names. A known tender is never left as a wildcard.
+  const knownTender = new Map<string, PaymentTender>();
+  for (const payment of sets.flat())
+    if (payment.tender !== "unknown")
+      knownTender.set(paymentKey(payment), payment.tender);
+  return first.map((payment) =>
+    payment.tender === "unknown"
+      ? {
+          ...payment,
+          tender: knownTender.get(paymentKey(payment)) ?? "unknown",
+        }
+      : payment,
+  );
 }
 
 /**
@@ -152,6 +172,7 @@ async function settleableCharges(
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
       accountCardNumbers: financialAccount.cardNumbers,
+      accountIdentity: financialAccount.identity,
     })
     .from(financialTransaction)
     .innerJoin(
@@ -203,6 +224,7 @@ async function settleableCharges(
         kind,
         occurredAt: new Date(`${date}T12:00:00.000Z`),
         cardLastFours: cardLastFoursOn(row.accountCardNumbers, date),
+        storedValue: row.accountIdentity.kind === "stored_value",
       },
     ];
   });
@@ -213,6 +235,7 @@ const toPolicyPayments = (payments: RetainedPayment[]) =>
     amount: payment.amount,
     chargedAt: payment.chargedAt?.toISOString(),
     cardLastFour: payment.cardLastFour ?? undefined,
+    tender: payment.tender,
   }));
 
 /**
@@ -244,6 +267,9 @@ async function competingClaimants(
         // Both sides as UTC epochs, independent of the session time zone.
         sql`(${purchasePaymentEvidence.chargedAt} IS NULL
           OR abs(extract(epoch FROM ${purchasePaymentEvidence.chargedAt}) - ${epoch}) <= ${POSTING_WINDOW_DAYS * 86_400})`,
+        charge.storedValue
+          ? sql`${purchasePaymentEvidence.tender} <> ${paymentTender.enum.card}`
+          : sql`${purchasePaymentEvidence.tender} <> ${paymentTender.enum.stored_value}`,
         cards.length > 0
           ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
               OR ${purchasePaymentEvidence.cardLastFour} IN (${sql.join(
@@ -498,6 +524,15 @@ async function writePlan(
     .for("update");
   const before = await readAllocations(tx, chargeIds);
   if (chargeIds.some((id) => (before.get(id) ?? []).length > 0)) return false;
+  // Automatic settlement never writes a conflicting allocation; the member
+  // settles it by review (financial-transaction/repo/settlement-conflicts).
+  for (const entry of plan) {
+    const conflicts = await transactionSettlementConflicts(tx, {
+      transactionId: parseEntityId("financialTransaction", entry.charge.id),
+      purchaseIds: entry.next.map((row) => row.purchaseId),
+    });
+    if (conflicts.size > 0) return false;
+  }
   for (const entry of plan) {
     assertAllocationSetValid({
       transactionAmount: entry.charge.amount,

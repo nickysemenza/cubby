@@ -445,6 +445,12 @@ export const ripple = {
   /** A purchase-product link is visible from both ends, but it carries no
    * money or quantity — no spend, inventory, or calendar state. */
   purchaseProduct: rippleTags([["purchase"], ["product"], ["relatedData"]]),
+  /** Paying accounts feed the settlement conflict checks on the purchase. */
+  purchasePaymentAccount: rippleTags([
+    ["purchase"],
+    ["financialAccount"],
+    ["relatedData"],
+  ]),
 
   /** Finance entries are settlement evidence only, but changing one refreshes
    * the purchase settlement summary and advisory problems. */

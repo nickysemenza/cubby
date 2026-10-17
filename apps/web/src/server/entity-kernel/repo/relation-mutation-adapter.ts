@@ -57,6 +57,8 @@ export interface LinkRelationSpec<
 > {
   /** Short noun phrase naming the link rows in a plan ("kit components"). */
   label: string;
+  /** The target entity's display name in refusals; Product when omitted. */
+  target?: string;
   /** What an attach / a detach would do, for the advisory plan. */
   describe: { attach: string; detach: string };
   list: (db: Database, ownerId: EntityId<LinkFrom<K>>) => Promise<TRow[]>;
@@ -65,12 +67,12 @@ export interface LinkRelationSpec<
       dbc: DrizzleClient,
       ownerId: EntityId<LinkFrom<K>>,
       targetIds: readonly EntityId<LinkTo<K>>[],
-    ) => Promise<RelationPreflight>;
+    ) => Promise<RelationPreflight<EntityId<LinkTo<K>>>>;
     detach: (
       dbc: DrizzleClient,
       ownerId: EntityId<LinkFrom<K>>,
       targetIds: readonly EntityId<LinkTo<K>>[],
-    ) => Promise<RelationPreflight>;
+    ) => Promise<RelationPreflight<EntityId<LinkTo<K>>>>;
   };
   /** An attach plan richer than its preflight (project tool timelines). */
   previewAttach?: (
@@ -112,7 +114,11 @@ export const linkRelationAdapter = <
   const from = declaration.from as LinkFrom<K>;
   // SAFETY: as above, for the `to` endpoint.
   const to = declaration.to as LinkTo<K>;
-  const edge = { edgeKey: `EntityLink[${kind}].to`, label: spec.label };
+  const edge = {
+    edgeKey: `EntityLink[${kind}].to`,
+    label: spec.label,
+    target: spec.target,
+  };
   const resolveOwner = async (db: Database, shortcode: string) =>
     parseEntityId(from, await resolveOrThrow(db, from, shortcode));
   return {

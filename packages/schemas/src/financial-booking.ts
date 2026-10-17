@@ -75,6 +75,12 @@ export const financialSettlementAllocationInput = z.strictObject({
   transactionId: financialTransactionShortcode,
   priorAllocations: z.array(financialTransactionAllocationInput),
   allocations: z.array(financialTransactionAllocationInput),
+  acknowledgeConflicts: z
+    .strictObject({ note: z.string().trim().min(1).max(2_000) })
+    .optional()
+    .describe(
+      "Only after reviewing a refusal: allocate despite the charge's account conflicting with the order (another member's account, or one the order's payment evidence does not name). The note is recorded as the data exception on each conflicting Purchase.",
+    ),
 });
 export type FinancialSettlementAllocationInput = z.infer<
   typeof financialSettlementAllocationInput

@@ -20,6 +20,11 @@ const EXCEPTION_REASONS = {
   // reasoned, evidence-bound exception and reopens on any evidence change.
   settlement_mismatch: ["expected_mismatch"],
   paperwork_mismatch: ["expected_mismatch"],
+  // A member may genuinely pay for another member's order (a shared card, a
+  // gift); the order's own payment evidence may also omit a tender. Both are
+  // member assertions, recorded with the acknowledged write or afterwards.
+  settlement_party_conflict: ["confirmed_shared_use"],
+  settlement_tender_conflict: ["confirmed_tender"],
   amazon_asin: ["unavailable", "insufficient_detail"],
   // A check absent from this map admits no reason and cannot be excepted.
   // Unbranded components and separately uncatalogued kit parts may have no

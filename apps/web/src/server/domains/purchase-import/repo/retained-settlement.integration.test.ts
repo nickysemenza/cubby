@@ -63,7 +63,11 @@ describe("settlement from retained order evidence", () => {
     order: {
       orderId: string;
       total: number;
-      payments: { amount: number; chargedAt: string }[];
+      payments: {
+        amount: number;
+        chargedAt: string;
+        tender?: "card" | "stored_value" | "unknown";
+      }[];
       source?: string;
       /** The order page printed no grand total. */
       unprintedTotal?: boolean;
@@ -204,6 +208,77 @@ describe("settlement from retained order evidence", () => {
     await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
       allocated: 0,
     });
+  });
+
+  // Regression: a gift-card payment line has no card digits, and a missing
+  // last four used to match any same-amount card charge in the window.
+  it("settles a gift-card payment line only from the member's stored-value account", async () => {
+    const { party, vendor, card, run } = await world();
+    const giftCard = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Shop gift card",
+      identity: { kind: "stored_value", provider: "ForgeWear" },
+      providerVendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const purchaseId = await importOrder(run, {
+      orderId: "FW-1501",
+      total: 13.59,
+      payments: [
+        {
+          amount: 13.59,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+      ],
+    });
+    await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+
+    const debit = await charge(giftCard.id, {
+      amount: 13.59,
+      postedDate: "2026-09-02",
+    });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([
+      { transactionId: debit.id, purchaseId, amount: 13.59 },
+    ]);
+  });
+
+  it("learns a tender when the same source is read again, without a reconciliation finding", async () => {
+    const { card, run } = await world();
+    const purchaseId = await importOrder(run, {
+      orderId: "FW-1601",
+      total: 13.59,
+      payments: [{ amount: 13.59, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await importOrder(run, {
+      orderId: "FW-1601",
+      total: 13.59,
+      payments: [
+        {
+          amount: 13.59,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+      ],
+    });
+    const findings = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(
+        and(eq(runFinding.entityId, purchaseId), eq(runFinding.status, "open")),
+      );
+    expect(findings).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ tender: purchasePaymentEvidence.tender })
+        .from(purchasePaymentEvidence)
+        .where(eq(purchasePaymentEvidence.purchaseId, purchaseId)),
+    ).toEqual([{ tender: "stored_value" }]);
+    await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
   it("leaves a charge two unsettled orders could both claim for review", async () => {

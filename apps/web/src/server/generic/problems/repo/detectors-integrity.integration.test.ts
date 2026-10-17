@@ -1190,6 +1190,19 @@ const SOURCE_FACTORIES = {
     );
   },
 
+  "EntityLink[purchasePaymentAccount].to": async (db, targetId) => {
+    const p = await mkPurchase(db);
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "purchasePaymentAccount",
+        p.id,
+        parseEntityId("financialAccount", targetId),
+      ),
+    );
+  },
+
   "EntityLink[purchaseProduct].to": async (db, targetId) => {
     const p = await mkPurchase(db);
     return insertAndReturn(
@@ -1426,6 +1439,19 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
       purchaseId: parseEntityId("purchase", targetId),
     }),
+
+  "EntityLink[purchasePaymentAccount].from": async (db, targetId) => {
+    const account = await mkFinancialAccount(db);
+    return insertAndReturn(
+      db,
+      entityLink,
+      linkValues(
+        "purchasePaymentAccount",
+        parseEntityId("purchase", targetId),
+        account.id,
+      ),
+    );
+  },
 
   "EntityLink[purchaseProduct].from": async (db, targetId) => {
     const prod = await mkProduct(db);

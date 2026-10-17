@@ -81,6 +81,7 @@ export type RippleKey =
   | "vendorLogo"
   | "purchase"
   | "purchaseProduct"
+  | "purchasePaymentAccount"
   | "financialAccount"
   | "ledgerParty"
   | "ledgerTransfer"

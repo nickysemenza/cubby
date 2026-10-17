@@ -9,7 +9,10 @@ import {
   type FinancialTransactionOut,
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
-import { type PurchaseSettlementSuggestOut } from "@cubby/schemas/purchase";
+import {
+  type PurchaseSettlementSuggestOut,
+  type SettlementConflictKind,
+} from "@cubby/schemas/purchase";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
@@ -25,6 +28,7 @@ export interface SettlementRank {
   days: number;
   exactAmount: boolean;
   merchantMatches: boolean;
+  conflicts: readonly SettlementConflictKind[];
 }
 
 export interface SettlementSubject {
@@ -37,6 +41,7 @@ export interface SettlementSubject {
 interface TiedCandidate {
   id: string;
   transaction: FinancialTransactionOut;
+  conflicts: readonly SettlementConflictKind[];
 }
 
 const money = formatCurrency;
@@ -54,9 +59,9 @@ export function renderSettlementSubject(subject: SettlementSubject): string {
 export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
   feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
   rules:
-    "Choose the statement transaction most likely to be payment evidence for this vendor order. Compare literal amounts, residual money after accepted allocations, dates, account and merchant evidence. Split payments and processor names can differ permanently; amount or date equality alone is not identity proof. Preserve accepted allocations; never select by confidence alone. Use none when no listed transaction is supported. This is a review proposal, never write authority.",
+    "Choose the statement transaction most likely to be payment evidence for this vendor order. Compare literal amounts, residual money after accepted allocations, dates, account and merchant evidence. A line marked with an account conflict paid from another member's account or one the order's payment evidence does not name: prefer none over it. Split payments and processor names can differ permanently; amount or date equality alone is not identity proof. Preserve accepted allocations; never select by confidence alone. Use none when no listed transaction is supported. This is a review proposal, never write authority.",
   idOf: (candidate) => candidate.id,
-  renderLine: ({ transaction }) =>
+  renderLine: ({ transaction, conflicts }) =>
     [
       `${transaction.kind} ${money(transaction.amount)}`,
       `posted ${transaction.postedDate ?? "pending"}`,
@@ -64,6 +69,11 @@ export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
       `merchant "${transaction.merchant ?? transaction.displayName}"`,
       `account "${transaction.accountName ?? "unknown"}"`,
       `accepted allocations: ${transaction.allocations?.map((allocation) => `${allocation.purchaseId} ${money(allocation.amount)}`).join(", ") || "none"}`,
+      ...(conflicts.length > 0
+        ? [
+            `account conflict: ${conflicts.join(", ")} (cannot settle this order without a member's acknowledgement)`,
+          ]
+        : []),
     ].join(" | "),
   maxCandidates: SETTLEMENT_CANDIDATE_LIMIT,
 };
@@ -87,10 +97,11 @@ export async function suggestSettlementMatch(args: {
     };
 
   const candidates: TiedCandidate[] = [];
-  for (const { transactionId } of tied) {
+  for (const { transactionId, conflicts } of tied) {
     candidates.push({
       id: transactionId,
       transaction: await args.loadTransaction(transactionId),
+      conflicts,
     });
   }
 

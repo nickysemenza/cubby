@@ -103,7 +103,7 @@ struct StatementMatchSessionTests {
     ) -> String {
         """
         {"transaction":\(transaction(id, amount: amount, merchant: merchant)),"days":2,
-         "merchantMatches":true,"exactAmount":true,"title":"\(merchant)",
+         "merchantMatches":true,"exactAmount":true,"nearAmount":false,"conflicts":[],"title":"\(merchant)",
          "lines":["Charge","2026-03-04 · 2 days apart · vendor name matches"],
          "proposedAllocations":\(proposed)}
         """

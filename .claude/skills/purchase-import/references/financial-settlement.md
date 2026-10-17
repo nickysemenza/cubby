@@ -456,6 +456,18 @@ the whole payment set is unique. A subset that sums to `statedTotal`, a
 same-week cluster, the nearest date, or a model ranking is a candidate for
 review, never a settlement by itself.
 
+Before proposing any charge for an order, read the charge account's `notes`
+and the order's payment method. Cubby refuses an allocation whose account
+conflicts with the order (`settlement_party_conflict`: the account's people on
+the charge date do not include the order's vendor-account member;
+`settlement_tender_conflict`: the account is not among the order's paying
+accounts — its `paymentAccounts` links, else those derived from payment
+evidence). A refusal is evidence, not an obstacle: move to the order the
+account paid. Use `finance.allocate_settlement` with `acknowledgeConflicts`
+only for a confirmed shared card or gift, and say why in the note. A charge one
+cent off is a near miss, never "exact"; a unique amount+date match is a
+candidate for review, never a settlement.
+
 - **Amazon: the charge→order ledger is the only arbiter.** A subset of charges
   that sums exactly to `statedTotal`, uniquely in its window, is still not
   evidence — grocery orders bill in many small legs and coincidental sums are
@@ -513,6 +525,24 @@ account per card. A unique index allows one live account per provider and
 owner. To find the account a gift-card leg drew on, list `financialAccount`
 filtered by `providerVendorId` = the purchase's vendor and `ledgerPartyId` =
 the member of the purchase's vendor account; with no vendor account and more
-than one candidate, ask rather than pick. Where a vendor's phone/online support
+than one candidate, ask rather than pick.
+
+Record what paid each order line as `tender` on payment evidence: `card` with
+`cardLastFour` when shown, `stored_value` for gift card, account balance or
+store credit, `unknown` otherwise. A gift-card line is never a card with no
+digits. Amazon `Order History.csv` → `Payment Method Type` (parsed locally, as
+every export is):
+
+| `Payment Method Type`                   | Payment lines                                                                     |
+| --------------------------------------- | --------------------------------------------------------------------------------- |
+| `Gift Certificate/Card`                 | one `stored_value` line for the total                                             |
+| `Visa - 2505`                           | one `card` line, `cardLastFour: "2505"`                                           |
+| `Gift Certificate/Card and Visa - 2505` | `stored_value` + `card` lines; amounts from the order page's **Gift Card Amount** |
+| `Not Available`                         | `unknown`                                                                         |
+
+When evidence cannot name the account (two cards share a last four, or no
+stored-value account exists for that vendor and member), link the paying
+account with `entity.link` relation `paymentAccounts`; any link replaces the
+derived accounts. Where a vendor's phone/online support
 does nothing, a physical return desk can recall the original receipt and issue
 the refund directly.

@@ -42,6 +42,7 @@ export type PurchaseAuditRenderedBatch = readonly {
     amount: number;
     chargedAt: Date | null;
     cardLastFour: string | null;
+    tender: string;
     description: string | null;
   }[];
 }[];

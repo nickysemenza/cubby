@@ -59,6 +59,7 @@ type RelationKey<C> = C extends { entity: string; relation: string }
 const RELATION_RIPPLE = {
   "product:components": ripple.productComponent,
   "project:resources": ripple.projectResource,
+  "purchase:paymentAccounts": ripple.purchasePaymentAccount,
   "purchase:products": ripple.purchaseProduct,
 } satisfies Record<RelationKey<RelationCommand>, InvalidationTagSet>;
 

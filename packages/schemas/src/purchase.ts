@@ -10,6 +10,7 @@ import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.
 import { uniqueBy } from "./base-entity";
 import {
   expenseShortcode,
+  financialAccountShortcode,
   financialTransactionShortcode,
   imageShortcode,
   productShortcode,
@@ -75,6 +76,9 @@ export const purchaseSettlementAllocationCheckOut = z.object({
   reason: z.string().nullable(),
 });
 
+export const settlementConflictKind = z.enum(["party", "tender"]);
+export type SettlementConflictKind = z.infer<typeof settlementConflictKind>;
+
 export const purchaseSettlementCandidatesInput = z.object({
   purchaseId: purchaseShortcode,
 });
@@ -83,7 +87,16 @@ export const purchaseSettlementCandidate = z.object({
   transaction: financialTransactionOut,
   days: z.number().int().min(0).max(45),
   merchantMatches: z.boolean(),
+  /** A purchase charge equal to the stated total (or its unallocated residual) to the cent. */
   exactAmount: z.boolean(),
+  /** One cent off the stated total: a candidate, never an exact match. */
+  nearAmount: z.boolean(),
+  /**
+   * Why this charge's account cannot settle the order (another member's
+   * account, or not one the order's payment evidence names). Ranked last;
+   * saving it requires an acknowledged allocation.
+   */
+  conflicts: z.array(settlementConflictKind),
   title: z.string(),
   /** The description under the title, already worded. */
   lines: z.array(z.string()),
@@ -114,14 +127,23 @@ export const purchaseSettlementCandidatesOut = z.object({
   suggestHint: z.string().nullable(),
 });
 
-/** Deterministic rank tier: an exact stated-total charge outranks a vendor-name
- * match, which outranks a bare date-proximity hit (the repo orders by exactly
- * these two flags before days). */
-function settlementTier(candidate: {
+type SettlementRankFlags = {
   exactAmount: boolean;
+  nearAmount: boolean;
   merchantMatches: boolean;
-}): number {
-  return (candidate.exactAmount ? 2 : 0) + (candidate.merchantMatches ? 1 : 0);
+  conflicts: readonly SettlementConflictKind[];
+};
+
+/** Deterministic rank tier: a conflicting account ranks below everything; then
+ * an exact stated-total charge outranks a one-cent near miss, which outranks a
+ * vendor-name match, which outranks a bare date-proximity hit (the repo orders
+ * by exactly these flags before days). */
+function settlementTier(candidate: SettlementRankFlags): number {
+  return (
+    (candidate.conflicts.length > 0 ? -8 : 0) +
+    (candidate.exactAmount ? 4 : candidate.nearAmount ? 2 : 0) +
+    (candidate.merchantMatches ? 1 : 0)
+  );
 }
 
 /**
@@ -131,9 +153,9 @@ function settlementTier(candidate: {
  * nearer of two equally plausible charges. This describes deterministic rank;
  * the advisory model can compare the entire bounded candidate set.
  */
-export function tiedTopSettlementCandidates<
-  T extends { exactAmount: boolean; merchantMatches: boolean },
->(candidates: readonly T[]): T[] {
+export function tiedTopSettlementCandidates<T extends SettlementRankFlags>(
+  candidates: readonly T[],
+): T[] {
   const top = Math.max(-1, ...candidates.map(settlementTier));
   const tied = candidates.filter((c) => settlementTier(c) === top);
   return tied.length >= 2 ? tied : [];
@@ -682,6 +704,21 @@ export const purchaseProductOut = z.object({
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
+
+/** One account that paid an order: a member's explicit link, or derived from payment evidence. */
+export const purchasePaymentAccountOut = z.object({
+  accountId: financialAccountShortcode,
+  accountName: z.string(),
+  source: z
+    .enum(["link", "evidence"])
+    .describe(
+      "`link`: a member asserted it (entity.link); `evidence`: derived on read from the order's payment evidence because no link exists. Any link replaces every derived row.",
+    ),
+  linkAttachedAt,
+});
+export type PurchasePaymentAccountOut = z.infer<
+  typeof purchasePaymentAccountOut
+>;
 
 export const productPurchaseOut = z.object({
   purchaseId: purchaseShortcode,

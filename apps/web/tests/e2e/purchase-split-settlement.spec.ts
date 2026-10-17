@@ -180,6 +180,8 @@ test("bounds broad settlement candidates after ranking and allocates only after 
     days: 40,
     merchantMatches: false,
     exactAmount: true,
+    nearAmount: false,
+    conflicts: [],
     proposedAllocations: [
       { purchaseId: seed.second.shortcode, amount: "15.00" },
       { purchaseId: seed.first.shortcode, amount: "42.50" },

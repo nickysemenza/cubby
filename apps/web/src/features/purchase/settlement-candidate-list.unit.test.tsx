@@ -22,6 +22,8 @@ const candidate = (id: string, merchant: string): SettlementCandidate => ({
   }),
   days: 2,
   exactAmount: true,
+  nearAmount: false,
+  conflicts: [],
   merchantMatches: true,
   title: merchant,
   lines: ["Charge", "2026-03-04 · 2 days apart · vendor name matches"],

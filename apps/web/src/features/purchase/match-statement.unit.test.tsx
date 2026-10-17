@@ -43,6 +43,8 @@ const review = {
       days: 2,
       merchantMatches: true,
       exactAmount: true,
+      nearAmount: false,
+      conflicts: [],
       title: "Example Hardware",
       lines: ["Charge", "2026-03-04 · 2 days apart · vendor name matches"],
       proposedAllocations: [

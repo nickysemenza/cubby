@@ -1804,6 +1804,54 @@ export default defineEntity({
       },
     },
     {
+      key: "paymentAccounts",
+      label: "Payment accounts",
+      target: "financialAccount",
+      cardinality: "many",
+      sourceKey: "explicit",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "EntityLink[purchasePaymentAccount].from",
+            direction: "incoming",
+          },
+          {
+            edge: "EntityLink[purchasePaymentAccount].to",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "EntityLink[purchasePaymentAccount].to",
+            direction: "incoming",
+          },
+          {
+            edge: "EntityLink[purchasePaymentAccount].from",
+            direction: "outgoing",
+          },
+        ],
+      },
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "entityRelationReferenceItemSchema",
+        },
+        rowSchema: {
+          module: "@cubby/schemas/purchase",
+          export: "purchasePaymentAccountOut",
+        },
+        adapter: {
+          module: "~/server/domains/purchase/repo/purchase-payment-accounts",
+          export: "purchasePaymentAccountsRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
+    },
+    {
       key: "defaultProject",
       label: "Default project",
       target: "project",
@@ -1959,6 +2007,30 @@ export default defineEntity({
           label: "Settlement mismatch",
           message:
             "Settlement evidence differs from incurred Expenses. Review the ledger and source evidence, or record a reasoned expected mismatch.",
+        },
+        {
+          id: "settlement_party_conflict",
+          satisfiedLabel: "Settled by the order's member",
+          placement: { section: "financial-settlement" },
+          facet: "settlement",
+          kind: "defect",
+          weight: 2,
+          scoreCap: 49,
+          label: "Settled from another member's account",
+          message:
+            "A settling transaction's account is not one this order's vendor-account member could use on that date. Move the charge to its own order, or record confirmed shared use.",
+        },
+        {
+          id: "settlement_tender_conflict",
+          satisfiedLabel: "Settled by a paying account",
+          placement: { section: "financial-settlement" },
+          facet: "settlement",
+          kind: "defect",
+          weight: 2,
+          scoreCap: 49,
+          label: "Settled from an account that did not pay",
+          message:
+            "A settling transaction's account is not among the accounts this order's payment evidence or payment-account links name. Move the charge, link the paying account, or record the confirmed payment method.",
         },
       ],
     },

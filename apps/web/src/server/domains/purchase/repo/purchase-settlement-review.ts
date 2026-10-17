@@ -1,6 +1,7 @@
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import {
   type purchaseSettlementCandidatesOut,
+  type SettlementConflictKind,
   tiedTopSettlementCandidates,
 } from "@cubby/schemas/purchase";
 
@@ -11,6 +12,11 @@ type RankedCandidate = Omit<
   Review["candidates"][number],
   "title" | "lines" | "proposedAllocations"
 >;
+
+const conflictLine = {
+  party: "Account belongs to another member than this order's vendor account",
+  tender: "Account is not one this order's payment evidence names",
+} as const satisfies Record<SettlementConflictKind, string>;
 
 const dayCount = (days: number) =>
   `${Math.round(days)} ${Math.round(days) === 1 ? "day" : "days"}`;
@@ -37,7 +43,8 @@ export function composeSettlementReview(
         ? "No spending transaction within 45 days. You can still add a transaction manually."
         : null,
     candidates: ranked.map((candidate) => {
-      const { transaction, days, merchantMatches } = candidate;
+      const { transaction, days, merchantMatches, nearAmount, conflicts } =
+        candidate;
       return {
         ...candidate,
         title: transaction.merchant ?? transaction.displayName,
@@ -50,6 +57,8 @@ export function composeSettlementReview(
           `${transaction.postedDate ?? transaction.transactionDate} · ${dayCount(days)} apart · ${
             merchantMatches ? "vendor name matches" : "vendor differs"
           }`,
+          ...(nearAmount ? ["One cent off the stated total"] : []),
+          ...conflicts.map((kind) => conflictLine[kind]),
         ],
         proposedAllocations: proposeSettlementAllocations(
           purchase.id,

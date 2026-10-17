@@ -7,6 +7,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 
 import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
+import { purchaseSettlementConflictRawSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 
 /** Correlated to Purchase; inherited attribution is never persisted. */
 export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
@@ -50,7 +51,10 @@ export const purchasePurchaserSql = sql<LedgerPartyShortcode | null>`(
     WHEN (SELECT count(*) FROM payment_accounts) > 0
       AND (SELECT count(*) FROM payment_accounts) = (SELECT count(*) FROM sole_users)
       AND (SELECT count(DISTINCT shortcode) FROM sole_users) = 1
-      THEN (SELECT min(shortcode) FROM sole_users)
+      -- A settlement_party_conflict is a disagreement, not attribution.
+      THEN CASE WHEN ${sql.raw(purchaseSettlementConflictRawSql("party", '"Purchase"'))}
+        THEN NULL
+        ELSE (SELECT min(shortcode) FROM sole_users) END
     WHEN (SELECT count(*) FROM evidence_parties) = 1 THEN (SELECT min(shortcode) FROM evidence_parties)
     ELSE NULL END
 )`;

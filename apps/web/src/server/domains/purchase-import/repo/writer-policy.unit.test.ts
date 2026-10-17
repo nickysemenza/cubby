@@ -108,12 +108,14 @@ describe("purchase import writer policy", () => {
         amount: 12,
         occurredAt: new Date("2026-09-18T18:00:00Z"),
         cardLastFours: [],
+        storedValue: false,
       },
       {
         id: "txn-2",
         amount: 8,
         occurredAt: new Date("2026-09-19T18:00:00Z"),
         cardLastFours: [],
+        storedValue: false,
       },
     ];
 
@@ -138,6 +140,7 @@ describe("purchase import writer policy", () => {
       // Statement labels the account ...2125; the terminal saw the Apple Pay
       // device number 4700.
       cardLastFours: ["2125", "4700"],
+      storedValue: false,
     };
     const otherCard = {
       ...walletCharge,
@@ -154,6 +157,41 @@ describe("purchase import writer policy", () => {
         walletCharge,
         { ...walletCharge, id: "txn-twin" },
       ]),
+    ).toBeNull();
+  });
+
+  it("never settles a gift-card payment line against a card charge", () => {
+    const giftLine = {
+      amount: 13.59,
+      chargedAt: "2026-09-19T10:00:00.000Z",
+      tender: "stored_value" as const,
+    };
+    const giftCard = [giftLine];
+    const cardCharge = {
+      id: "txn-card",
+      amount: 13.59,
+      occurredAt: new Date("2026-09-19T18:00:00Z"),
+      cardLastFours: ["2125"],
+      storedValue: false,
+    };
+    const balanceDebit = {
+      ...cardCharge,
+      id: "txn-balance",
+      cardLastFours: [],
+      storedValue: true,
+    };
+
+    expect(matchCompletePaymentSet(giftCard, [cardCharge])).toBeNull();
+    expect(
+      matchCompletePaymentSet(giftCard, [cardCharge, balanceDebit]),
+    ).toEqual([
+      { transactionId: "txn-balance", paymentIndex: 0, amount: 13.59 },
+    ]);
+    expect(
+      matchCompletePaymentSet(
+        [{ ...giftLine, tender: "card" as const }],
+        [balanceDebit],
+      ),
     ).toBeNull();
   });
 });

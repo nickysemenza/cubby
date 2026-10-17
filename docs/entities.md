@@ -78,7 +78,11 @@ hand-write an ancestor walk or fallback for a declared field. Fields whose
 rule does not fit this shape (task trade, expense project, trade and
 spending category, inventory owner, product price, recipe servings,
 itemization expectation) keep their own resolution until #2616 declares a
-variant or records why not.
+variant or records why not. A set-valued fallback is outside `resolution.inherit`:
+Purchase `paymentAccounts` stores only explicit `purchasePaymentAccount` links
+and otherwise derives its accounts on read from payment evidence
+(`purchasePayingAccountIdsRawSql`), like derived funding beside explicit
+Expense attribution.
 
 A new field is complete when its normal reads and supported filters/sorts agree
 on the effective value, reset restores inheritance, and source changes update

@@ -154,6 +154,14 @@ export const extractedPurchaseLine = z.object({
 });
 export type ExtractedPurchaseLine = z.infer<typeof extractedPurchaseLine>;
 
+export const paymentTenderValues = ["card", "stored_value", "unknown"] as const;
+export const paymentTender = z
+  .enum(paymentTenderValues)
+  .describe(
+    "What paid this line: `card` (a card number, with cardLastFour when shown), `stored_value` (gift card, account balance or store credit), or `unknown`. A gift-card line is `stored_value`, never a card with no digits.",
+  );
+export type PaymentTender = z.infer<typeof paymentTender>;
+
 export const extractedPaymentEvidence = z.object({
   amount: money,
   chargedAt: z.iso.datetime().optional(),
@@ -161,6 +169,7 @@ export const extractedPaymentEvidence = z.object({
     .string()
     .regex(/^\d{4}$/)
     .optional(),
+  tender: paymentTender.optional(),
   description: z.string().trim().min(1).max(500).optional(),
 });
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
@@ -261,6 +270,7 @@ const extractedPaymentEvidenceModelOutput = z.object({
     .string()
     .regex(/^\d{4}$/)
     .nullable(),
+  tender: paymentTender.nullable(),
   description: z.string().trim().min(1).max(500).nullable(),
 });
 
@@ -320,6 +330,7 @@ export function normalizeImportExtractionModelOutput(
             normalized.chargedAt = payment.chargedAt;
           if (payment.cardLastFour !== null)
             normalized.cardLastFour = payment.cardLastFour;
+          if (payment.tender !== null) normalized.tender = payment.tender;
           if (payment.description !== null)
             normalized.description = payment.description;
           return normalized;

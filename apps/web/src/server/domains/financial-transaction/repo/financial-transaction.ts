@@ -65,6 +65,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { refuseSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
@@ -546,6 +547,10 @@ export async function createFinancialTransaction(
         kind: data.kind,
         next: requested,
       });
+      await refuseSettlementConflicts(tx, {
+        transactionId: created.id,
+        purchaseIds: requested.map((row) => row.purchaseId),
+      });
       await writeAllocationSet(tx, created.id, requested, new Map());
       await applyAllocationChanges(tx, {
         transactionIds: [created.id],
@@ -688,6 +693,7 @@ const applyUpdatedAllocations = async (
   data: FinancialTransactionUpdateData,
   state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
   actor: ActorContext,
+  options: FinancialTransactionUpdateOptions,
 ) => {
   const before = await readAllocations(tx, [id]);
   const next = await requestedUpdateAllocations(tx, id, data, state, before);
@@ -701,9 +707,25 @@ const applyUpdatedAllocations = async (
       kind: financialTransactionKind.parse(state.nextKind),
       next,
     });
+    // Only newly named purchases: an amount follow-up on an existing slice
+    // is not a new settlement judgment.
+    const held = new Set((before.get(id) ?? []).map((row) => row.purchaseId));
+    if (!options.acknowledgeSettlementConflicts)
+      await refuseSettlementConflicts(tx, {
+        transactionId: id,
+        purchaseIds: next
+          .map((row) => row.purchaseId)
+          .filter((purchaseId) => !held.has(purchaseId)),
+      });
     await writeAllocationSet(tx, id, next, before);
   }
   await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
+};
+
+/** Write-path options only `finance.allocate_settlement` sets. */
+export type FinancialTransactionUpdateOptions = {
+  /** The caller records the conflict's data exception in the same transaction. */
+  acknowledgeSettlementConflicts?: boolean;
 };
 
 export async function updateFinancialTransaction(
@@ -711,6 +733,7 @@ export async function updateFinancialTransaction(
   shortcode: FinancialTransactionShortcode,
   data: FinancialTransactionUpdateData,
   actor: ActorContext,
+  options: FinancialTransactionUpdateOptions = {},
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
@@ -846,7 +869,7 @@ export async function updateFinancialTransaction(
     //     slice for the whole amount", or clear it;
     //   • an amount change on a singly-allocated transaction, where the sole
     //     legal allocation value is the new amount.
-    await applyUpdatedAllocations(tx, id, data, state, actor);
+    await applyUpdatedAllocations(tx, id, data, state, actor, options);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.
@@ -960,7 +983,9 @@ export const financialTransactionRepository = defineRepository(
         projection,
       ),
     create: asActor(createFinancialTransaction),
-    update: asActor(updateFinancialTransaction),
+    update: asActor((db, shortcode, data, actor) =>
+      updateFinancialTransaction(db, shortcode, data, actor),
+    ),
     deleteHooks: {
       beforeDelete: refuseTransferEvidence,
       afterDelete: touchAllocatedPurchases,
