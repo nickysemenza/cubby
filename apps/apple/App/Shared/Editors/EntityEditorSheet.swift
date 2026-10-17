@@ -148,7 +148,21 @@ struct EntityEditorSheet: View {
         return model.draft != initialDraft || !selections.isEmpty || model.hasImageChanges
     }
 
+    private static let saveFailureID = "editor.saveFailure"
+
     private func form(_ model: GenericEntityEditModel) -> some View {
+        ScrollViewReader { proxy in
+            formContent(model)
+                // Save lives in the toolbar, so a refusal can arrive while the banner is
+                // scrolled out of view above the field being edited.
+                .onChange(of: model.bannerError) { _, banner in
+                    guard banner != nil else { return }
+                    proxy.scrollTo(Self.saveFailureID, anchor: .top)
+                }
+        }
+    }
+
+    private func formContent(_ model: GenericEntityEditModel) -> some View {
         Form {
             if let suggestionFeedbackError {
                 Text(suggestionFeedbackError)
@@ -166,6 +180,12 @@ struct EntityEditorSheet: View {
                             : "This record needs additional fields available on web to create it."
                     )
                     .foregroundStyle(.secondary)
+                    if case .update(let id) = mode {
+                        Link(destination: appModel.webURL(for: key, id: id)) {
+                            Label("Open on web", systemImage: "safari")
+                        }
+                        .accessibilityIdentifier("editor.\(key.rawValue).openOnWeb")
+                    }
                 }
             }
             if let banner = model.bannerError {
@@ -174,6 +194,7 @@ struct EntityEditorSheet: View {
                         startSave()
                     }
                 }
+                .id(Self.saveFailureID)
             }
             if model.isLoading {
                 LoadingIndicator(label: "Loading \(descriptor.singular)")

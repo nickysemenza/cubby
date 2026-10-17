@@ -199,16 +199,35 @@ struct EntityDetailView: View {
             case .idle, .loading:
                 LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
             case .unavailable(let message):
-                ContentUnavailableView(message, systemImage: entitySymbol(for: key))
+                missingRecord(message, systemImage: entitySymbol(for: key))
             case .failed(let message):
                 LoadFailureView(title: "Couldn't load \(descriptor.singular)", message: message) {
                     await setup()
                 }
             case .loaded:
-                ContentUnavailableView("Not found", systemImage: "questionmark.folder")
+                missingRecord("Not found", systemImage: "questionmark.folder")
             }
         } else {
             LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
+        }
+    }
+
+    /// A record this app cannot show still has two ways forward: search for it, or open the web
+    /// record, which may render what native does not.
+    private func missingRecord(_ title: String, systemImage: String) -> some View {
+        ContentUnavailableView {
+            Label(title, systemImage: systemImage)
+        } actions: {
+            Button("Search Cubby", systemImage: "magnifyingglass") {
+                appModel.navigator.pendingSearchQuery = id
+                appModel.navigator.open(.search)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("detail.\(key.rawValue).missing.search")
+            Link(destination: appModel.webURL(for: key, id: id)) {
+                Label("Open on web", systemImage: "safari")
+            }
+            .accessibilityIdentifier("detail.\(key.rawValue).missing.web")
         }
     }
 
