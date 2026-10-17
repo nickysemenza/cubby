@@ -29,7 +29,11 @@ known Vendor's verified receipt senders and website domain seed exact
 `from:`/domain searches; a Vendor name never becomes a free-text search, and a
 Vendor without a verified sender or website waits for research. Merchant
 descriptions on unallocated financial transactions seed one search per distinct
-merchant. Targets are recomputed on every pass; an unfinished search that is no
+merchant; a transaction without a provider merchant searches its bank
+descriptor instead, with the processor prefix (`SQ *`, `TST*`), store numbers
+and trailing city/state removed (`parseBankDescriptor`). The raw descriptor
+stays on the transaction, and the transaction list's processor filter derives
+from it on read. Targets are recomputed on every pass; an unfinished search that is no
 longer a target is dropped, and a Vendor that gains a verified sender
 joins history search automatically. Targeted pages alternate with new mail;
 there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared

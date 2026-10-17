@@ -84,7 +84,8 @@ describe("member discovery readiness through MCP", () => {
         mailDiscovery: {
           scope: {
             mailboxId: input.mailboxId,
-            scopedQueries: "scopedQueries" in input ? [] : null,
+            scopedQueries:
+              "scopedQueries" in input ? { total: 0, sample: [] } : null,
             executionPolicy: "executionPolicy" in input ? "import" : null,
           },
           emails: { coverage: "incomplete", items: [] },
@@ -135,7 +136,13 @@ describe("member discovery readiness through MCP", () => {
       version: 1,
       baselineHistoryId: "100",
       broad: { pageToken: "synthetic-next-page", completed: false },
-      scoped: [],
+      // More queries than a status read returns, the first two finished.
+      scoped: Array.from({ length: 12 }, (_, index) => ({
+        key: `merchant:synthetic shop ${index}`,
+        query: `"synthetic shop ${index}"`,
+        pageToken: null,
+        completed: index < 2,
+      })),
       history: { historyId: "110", pageToken: null, targetHistoryId: null },
       nextLane: "scan",
     });
@@ -153,6 +160,12 @@ describe("member discovery readiness through MCP", () => {
           phase: "listing",
           pagesDone: 3,
           saved: 7,
+          page: {
+            messageIds: ["synthetic-message-1", "synthetic-message-2"],
+            events: [],
+            startCoverage: coverage,
+            nextCoverage: coverage,
+          },
         }),
       })
       .where(eq(run.id, id));
@@ -207,11 +220,29 @@ describe("member discovery readiness through MCP", () => {
       mailDiscovery: {
         scope: {
           mailboxId,
-          scopedQueries: [],
+          scopedQueries: { total: 0, sample: [] },
           executionPolicy: "import",
         },
-        checkpoint: { attempt: 2, phase: "listing", pagesDone: 3, saved: 7 },
-        mailbox: { historyId: "110", coverage },
+        checkpoint: {
+          attempt: 2,
+          phase: "listing",
+          pagesDone: 3,
+          saved: 7,
+          page: { messageCount: 2, eventCount: 0 },
+        },
+        mailbox: {
+          historyId: "110",
+          coverage: {
+            baselineHistoryId: "100",
+            nextLane: "scan",
+            scoped: {
+              total: 12,
+              completed: 2,
+              pending: 10,
+              nextPending: coverage.scoped.slice(2),
+            },
+          },
+        },
         usage: {
           callCount: 2,
           retryCount: 1,

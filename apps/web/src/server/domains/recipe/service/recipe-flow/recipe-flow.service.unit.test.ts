@@ -149,7 +149,7 @@ class InMemoryRecipeFlowPorts {
       result.guidance = input.guidance;
       result.plan = input.plan;
       result.warnings = input.warnings;
-      result.model = input.feature.model;
+      result.model = input.answeredModel;
       result.promptVersion = input.feature.promptVersion;
       this.analyses.unshift({
         inputFingerprint: input.fingerprint,

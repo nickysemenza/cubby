@@ -56,7 +56,7 @@ describe("Gmail sync targets", () => {
     });
   });
 
-  it("searches each unallocated merchant once, regardless of case or spacing", async () => {
+  it("searches each unallocated merchant once, falling back to the cleaned descriptor", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic charge member",
       kind: "member",
@@ -75,10 +75,13 @@ describe("Gmail sync targets", () => {
       ledgerPartyId: party.shortcode,
       provisional: false,
     });
-    for (const [index, merchant] of [
-      "Synthetic Market",
-      "synthetic  market",
-      "Other Shop",
+    for (const [index, [merchant, rawDescription]] of [
+      ["Synthetic Market", "SQ *SYNTHETIC MARKET 0042"],
+      ["synthetic  market", null],
+      ["Other Shop", null],
+      // No provider merchant: the cleaned descriptor is searched instead.
+      [null, "TST* SYNTHETIC DINER #42 PORTLAND OR"],
+      [null, "SQ *12345"],
     ].entries())
       await createRepoEntity(ctx, "financialTransaction", {
         accountId: card.output.id,
@@ -88,6 +91,7 @@ describe("Gmail sync targets", () => {
         transactionDate: "2026-09-01",
         postedDate: "2026-09-02",
         merchant,
+        rawDescription,
         sourceRefs: [
           { source: "synthetic-bank", externalId: `synthetic-charge-${index}` },
         ],
@@ -101,6 +105,7 @@ describe("Gmail sync targets", () => {
     expect(target?.scopedQueries).toEqual([
       { key: "merchant:synthetic market", query: '"synthetic market"' },
       { key: "merchant:other shop", query: '"other shop"' },
+      { key: "descriptor:synthetic diner", query: '"synthetic diner"' },
     ]);
   });
 

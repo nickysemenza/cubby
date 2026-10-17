@@ -16,6 +16,7 @@ import {
   financialTransactionOut,
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
+import { descriptorProcessors } from "@cubby/schemas/financial-transaction-fields";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
@@ -387,6 +388,15 @@ const refExternalIds = listPrepare(async (_db, filters) =>
   ),
 );
 
+// Mirrors `parseBankDescriptor`: the same POSIX patterns, first match wins.
+const descriptorProcessorSql = sql`CASE ${sql.join(
+  descriptorProcessors.map(
+    (processor) =>
+      sql`WHEN ${financialTransaction.rawDescription} ~* ${processor.pattern} THEN ${processor.value}::text`,
+  ),
+  sql` `,
+)} END`;
+
 const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
@@ -400,6 +410,7 @@ const financialTransactionScaffold = listScaffold(
         "financial_transaction_allocation_integrity",
         financialTransaction,
       )} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
+      descriptorProcessor: descriptorProcessorSql,
       sourceRefs: refExternalIds.predicate((externalIds, { values }) =>
         refsCondition(values, externalIds),
       ),

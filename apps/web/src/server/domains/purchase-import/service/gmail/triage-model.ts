@@ -76,6 +76,7 @@ export const productionMailRelevance =
       throw new Error(
         "Classification-only Gmail Runs cannot use the relevance model.",
       );
+    let answeredModel: string = MAILBOX_RELEVANCE_FEATURE.model;
     const result = await runStructuredFeature(
       MAILBOX_RELEVANCE_FEATURE,
       request,
@@ -90,10 +91,13 @@ export const productionMailRelevance =
           runEntityId.parse(runId),
           MAILBOX_RELEVANCE_FEATURE.feature,
         ),
+        onAnswered: (model) => {
+          answeredModel = model;
+        },
       },
     );
     onCall?.({
-      model: MAILBOX_RELEVANCE_FEATURE.model,
+      model: answeredModel,
       promptVersion: MAILBOX_RELEVANCE_FEATURE.promptVersion,
       operation: "mailbox-relevance",
     });

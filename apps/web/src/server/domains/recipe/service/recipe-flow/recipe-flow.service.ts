@@ -28,6 +28,8 @@ import { validateRecipeFlowPlan } from "./validation";
 
 type PersistFlowArtifactInput = {
   feature: typeof RECIPE_FLOW_PRIMARY_FEATURE;
+  /** The model that produced the plan; the funding ladder may differ from the feature's. */
+  answeredModel: string;
   fingerprint: string;
   guidance: string | null;
   plan: RecipeFlowArtifact["plan"];
@@ -54,7 +56,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
       guidance: input.guidance,
       warnings: input.warnings,
       contentFingerprint: input.fingerprint,
-      model: input.feature.model,
+      model: input.answeredModel,
       promptVersion: input.feature.promptVersion,
       generatedAt: new Date(),
     });
@@ -176,6 +178,7 @@ export async function generateRecipeFlow(
     return current.result;
   }
 
+  let answeredModel: string = RECIPE_FLOW_PRIMARY_FEATURE.model;
   const candidate = await ports.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
@@ -196,6 +199,9 @@ export async function generateRecipeFlow(
       // `plan`/`warnings` this service needs to persist, from a candidate
       // the runner has already validated with this exact function.
       validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
+      onAnswered: (model) => {
+        answeredModel = model;
+      },
     },
   );
   const assessment = assessRecipeFlowCandidate(recipe, candidate);
@@ -213,6 +219,7 @@ export async function generateRecipeFlow(
     input.id,
     {
       feature: RECIPE_FLOW_PRIMARY_FEATURE,
+      answeredModel,
       fingerprint,
       guidance,
       plan: assessment.plan,

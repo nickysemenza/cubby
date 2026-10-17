@@ -86,3 +86,65 @@ export const merchantVendorInference = z.discriminatedUnion("status", [
     candidates: z.array(merchantVendorCandidate).min(2),
   }),
 ]);
+
+/**
+ * Payment processors recognized by a bank descriptor's prefix
+ * (`SQ *BLUE BOTTLE`, `TST* JOES PIZZA`). Each pattern is a POSIX regex that
+ * Postgres (`~*`) and JavaScript evaluate the same way, so the list filter
+ * and {@link parseBankDescriptor} cannot disagree. The raw descriptor stays
+ * the record; the processor is derived on read.
+ */
+export const descriptorProcessor = z.enum([
+  "square",
+  "toast",
+  "paypal",
+  "shopify",
+  "instacart",
+  "py",
+]);
+export const descriptorProcessors = [
+  { value: "square", label: "Square", pattern: "^(SQ|SQUARE) ?\\*" },
+  { value: "toast", label: "Toast", pattern: "^TST ?\\*" },
+  { value: "paypal", label: "PayPal", pattern: "^(PAYPAL|PP) ?\\*" },
+  { value: "shopify", label: "Shopify", pattern: "^SP " },
+  { value: "instacart", label: "Instacart", pattern: "^IC ?\\*" },
+  { value: "py", label: "PY", pattern: "^PY ?\\*" },
+] as const satisfies readonly {
+  value: z.infer<typeof descriptorProcessor>;
+  label: string;
+  pattern: string;
+}[];
+export type DescriptorProcessor = z.infer<typeof descriptorProcessor>;
+
+const US_STATE =
+  /^(A[KLRZ]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])$/u;
+
+/**
+ * Splits a bank descriptor into its processor and a searchable merchant
+ * phrase: the processor prefix, store and reference numbers, a trailing
+ * phone number, and a trailing `CITY ST` are removed. `merchant` is null
+ * when fewer than three letters remain.
+ */
+export function parseBankDescriptor(raw: string | null | undefined) {
+  let text = (raw ?? "").trim().replace(/\s+/gu, " ");
+  const matched = descriptorProcessors.find((processor) =>
+    new RegExp(processor.pattern, "iu").test(text),
+  );
+  if (matched) text = text.replace(new RegExp(matched.pattern, "iu"), "");
+  const words = text
+    .replace(/\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}\s*$/u, " ")
+    .replace(/#\s*\d+/gu, " ")
+    .replace(/\b\d{3,}\b/gu, " ")
+    .replace(/[*#]+/gu, " ")
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  // A trailing state code, and the city word before it, once a name remains.
+  if (words.length >= 3 && US_STATE.test(words.at(-1)?.toUpperCase() ?? ""))
+    words.splice(-2);
+  const merchant = words.join(" ").toLowerCase();
+  return {
+    processor: matched?.value ?? null,
+    merchant: (merchant.match(/\p{L}/gu)?.length ?? 0) >= 3 ? merchant : null,
+  };
+}

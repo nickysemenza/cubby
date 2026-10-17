@@ -107,6 +107,36 @@ function fakePorts(responses: readonly AssistantMessage[]) {
   return { calls, ports };
 }
 
+// Stored provenance names the model that answered, which the funding ladder
+// may choose over the feature's declared model.
+it("reports the answering model to the caller", async () => {
+  const { ports } = fakePorts([respondWith(PRODUCT_IDENTIFICATION_FIXTURE)]);
+  const answering: StructuredRunPorts = {
+    callTarget: (model, call, funded) => {
+      const target = ports.callTarget(model, call, funded);
+      return {
+        ...target,
+        complete: async (context, options) => ({
+          ...(await target.complete(context, options)),
+          model: "claude-opus-5-5",
+        }),
+      };
+    },
+  };
+  const answered: string[] = [];
+  await runStructuredFeature(
+    PRODUCT_IDENTIFICATION_FEATURE,
+    { systemPrompts: ["frame"], messages: [] },
+    {
+      runId,
+      operation: "suggestCategory",
+      onAnswered: (model) => answered.push(model),
+    },
+    answering,
+  );
+  expect(answered).toEqual(["claude-opus-5-5"]);
+});
+
 describe("planStructuredRun", () => {
   it("caches a structured feature for the gateway's full TTL", () => {
     const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {

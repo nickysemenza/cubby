@@ -34,6 +34,7 @@ import {
   generatedFinancialTransactionStatusValues,
 } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
+  descriptorProcessor,
   financialTransactionAllocation,
   financialTransactionItemization,
   financialTransactionNonZeroAmount as nonZeroAmount,
@@ -365,6 +366,7 @@ export const financialTransactionFilterFields = {
   allocationIntegrity: oneOrMany(
     financialTransactionAllocationIntegrity,
   ).optional(),
+  descriptorProcessor: oneOrMany(descriptorProcessor).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),
 };
