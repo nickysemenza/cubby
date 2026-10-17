@@ -29,6 +29,8 @@ import type {
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
+  purchaseExpenseStatus,
+  purchaseFinancialReconciliation,
   purchaseListItemOut,
   purchaseOut,
   RECONCILIATION_TOLERANCE,
@@ -56,16 +58,13 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  anyOfCondition,
   buildPartialUpdateValues,
   correlated,
-  eqAny,
   getDb,
   imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
-  presenceCondition,
   relations,
   touchUpdatedAt,
   unwrapDb,
@@ -571,27 +570,9 @@ const syncPurchaseImages = async (
   return detachedImageKeys;
 };
 
-const expenseStatusCondition = (
-  values: PurchaseFilters["expenseStatus"],
-): SQL | undefined => {
-  const selected = values ? [values].flat() : [];
-  if (selected.length === 0) return undefined;
-  return or(
-    selected.includes("empty") ? sql`${purchaseExpenseCount} = 0` : undefined,
-    selected.includes("unpriced")
-      ? sql`${purchaseUnpricedExpenseCount} > 0`
-      : undefined,
-    selected.includes("priced")
-      ? sql`${purchaseExpenseCount} > 0 AND ${purchaseUnpricedExpenseCount} = 0`
-      : undefined,
-  );
-};
-
 const reconciliationCondition = (
-  values: PurchaseFilters["reconciliation"],
+  selected: readonly string[],
 ): SQL | undefined => {
-  const selected = values ? [values].flat() : [];
-  if (selected.length === 0) return undefined;
   const toleranceInCents = cents(RECONCILIATION_TOLERANCE);
   const gapInCents = sql`abs(
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
@@ -629,15 +610,6 @@ const reconciliationCondition = (
   );
 };
 
-const documentPresenceCondition = (
-  value: PurchaseFilters["documentPresenceFilter"],
-): SQL | undefined =>
-  value === "has"
-    ? sql`${purchaseDocumentCount} > 0`
-    : value === "none"
-      ? sql`${purchaseDocumentCount} = 0`
-      : undefined;
-
 const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
@@ -646,62 +618,20 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
     expenseCount: purchaseExpenseCount,
     expenseTotal: purchaseExpenseTotal,
     documentCount: purchaseDocumentCount,
+    pricedExpenseTotal: sql`CASE WHEN ${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} THEN ${purchaseExpenseTotal} END`,
+    expenseStatus: sql`CASE
+      WHEN ${purchaseExpenseCount} = 0 THEN ${purchaseExpenseStatus.enum.empty}::text
+      WHEN ${purchaseUnpricedExpenseCount} > 0 THEN ${purchaseExpenseStatus.enum.unpriced}::text
+      ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
+    hasDocuments: sql`${purchaseDocumentCount} > 0`,
+    financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch")} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
+    reconciliation: ({ values }) => reconciliationCondition(values),
   },
 });
 
-/**
- * The complete WHERE for a purchase list, filters and all.
- *
- * The vendor resolve lives INSIDE rather than being handed in: a caller that
- * passed `undefined` would be restating "with no vendor filter there is no
- * vendor predicate", which is a fact this function derives from
- * `filters.vendorId`. `getEntityCounts` calls it with `{}` for exactly that
- * reason — see the registry in repo/dashboard.ts.
- */
-export const buildPurchaseWhereClause = async (
-  db: Database | DrizzleTransaction,
-  filters: PurchaseFilters,
-) => {
-  // An unknown code resolves to nothing and so matches nothing, which is what a
-  // filter naming a missing vendor should do — not throw. `vendorUuids` alone
-  // can't express that: `eqAny([])` is "no constraint" by design (see its doc
-  // in db/helpers/query.ts), so a requested-but-unresolved vendor has to
-  // become an explicit `sql`false`` here rather than being handed to `eqAny`
-  // and silently dropping the filter (which would return every purchase).
-  const vendorCodes = filters.vendorId ? [filters.vendorId].flat() : undefined;
-  const vendorUuids = vendorCodes
-    ? [...(await resolveShortcodes(db, vendorCodes)).values()]
-        .filter((ref) => ref.entity === "vendor")
-        .map((ref) => ref.id)
-    : undefined;
-  const vendorCondition = vendorCodes
-    ? vendorUuids && vendorUuids.length > 0
-      ? eqAny(purchase.vendorId, vendorUuids)
-      : sql`false`
-    : undefined;
-  // `search` (orderId ∪ displayLabel), `displayLabelSearch`, the
-  // `statedTotal` presence and the `date` bounds are declared stored
-  // filters — applied by `purchaseScaffold.where` before the conditions below.
-  return purchaseScaffold.where(filters, [
-    vendorCondition,
-    eqAny(purchase.orderId, filters.orderId),
-    presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
-    expenseStatusCondition(filters.expenseStatus),
-    reconciliationCondition(filters.reconciliation),
-    // The canonical settlement worklist: the raw financial mismatch minus an
-    // active, evidence-bound exception — exactly the check's gap condition.
-    anyOfCondition(filters.financialReconciliation, () =>
-      gapCondition("purchase", "settlement_mismatch"),
-    ),
-    documentPresenceCondition(filters.documentPresenceFilter),
-    filters.expenseTotalMin !== undefined
-      ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
-      : undefined,
-    filters.expenseTotalMax !== undefined
-      ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} <= ${filters.expenseTotalMax}`
-      : undefined,
-  ]);
-};
+/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
+  purchaseScaffold.where(filters);
 
 export const purchaseListRead = async (
   db: Database,
@@ -735,7 +665,6 @@ export const purchaseListRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      where: await buildPurchaseWhereClause(db, filters),
       select: (page) =>
         getDb(db)
           .select({
@@ -873,7 +802,7 @@ export const purchaseListSummary = async (
   db: Database,
   filters: PurchaseFilters,
 ) => {
-  const where = await buildPurchaseWhereClause(db, filters);
+  const where = buildPurchaseWhereClause(filters);
   // Each live ledger row contributes once, including credits, across the full filtered set.
   const [totals] = await getDb(db)
     .select({

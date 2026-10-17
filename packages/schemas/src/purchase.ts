@@ -16,12 +16,10 @@ import {
   projectShortcode,
   purchaseShortcode,
   spendingCategoryShortcode,
-  vendorShortcode,
 } from "./identifiers";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   createPaginatedResponseSchema,
-  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -271,16 +269,17 @@ export const primaryPurchaseDocumentKinds = [
   "receipt",
 ] as const satisfies readonly PurchaseDocumentKind[];
 
+/** The settlement-mismatch gap, the one state its filter selects. */
+export const purchaseFinancialReconciliation = z.enum(["mismatch"]);
+
 export const purchaseFilterFields = {
   ...purchaseBaseFilterFields,
-  vendorId: entityFilterList(vendorShortcode).optional(),
-  orderId: oneOrMany(z.string()).optional(),
-  /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
-  orderIdPresenceFilter: presenceFilter,
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
-  financialReconciliation: oneOrMany(z.enum(["mismatch"])).optional(),
+  financialReconciliation: oneOrMany(
+    purchaseFinancialReconciliation,
+  ).optional(),
   documentPresenceFilter: presenceFilter,
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);

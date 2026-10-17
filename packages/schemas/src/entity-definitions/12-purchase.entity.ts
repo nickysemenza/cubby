@@ -1175,6 +1175,17 @@ export default defineEntity({
       expenseCount: { type: "number" },
       expenseTotal: { type: "number" },
       documentCount: { type: "number" },
+      // The expense total of a purchase with at least one priced line.
+      pricedExpenseTotal: { type: "number" },
+      expenseStatus: { type: "enum", options: ["empty", "unpriced", "priced"] },
+      hasDocuments: { type: "boolean" },
+      // The settlement-mismatch gap, less an active evidence-bound exception.
+      financialReconciliation: { type: "enum", options: ["mismatch"] },
+      reconciliation: {
+        predicate: "multiselect",
+        reason:
+          "Needs review reads the paperwork_mismatch gap, which honours a recorded expected_mismatch exception, so the states are not one row value",
+      },
     },
     sort: {
       fields: [
@@ -1328,6 +1339,7 @@ export default defineEntity({
       {
         columnId: "financialReconciliation",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter financial reconciliation...",
         urlOnly: true,
       },
@@ -1359,11 +1371,15 @@ export default defineEntity({
         placeholder: "Filter by vendor...",
         optionsKey: "vendor",
         brandRef: { entity: "vendor" },
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "orderId",
         field: "orderIdPresenceFilter",
         kind: "presence",
+        deriveSchema: true,
+        stored: true,
         placeholder: "Filter by order id...",
         options: [
           { value: "has", label: "Has order id", meta: true },
@@ -1410,6 +1426,7 @@ export default defineEntity({
         field: "expenseStatus",
         urlKey: "lines",
         kind: "multiselect",
+        derived: "expenseStatus",
         placeholder: "Filter by expense status...",
         options: [
           { value: "empty", label: "No expenses" },
@@ -1421,6 +1438,7 @@ export default defineEntity({
         columnId: "expenseTotal",
         urlKey: "lineTotal",
         kind: "range",
+        derived: "pricedExpenseTotal",
         placeholder: "Filter by expense total...",
         deriveSchema: true,
         options: [
@@ -1449,6 +1467,7 @@ export default defineEntity({
       {
         columnId: "reconciliation",
         kind: "multiselect",
+        derived: true,
         placeholder: "Filter reconciliation...",
         options: [
           { value: "match", label: "Reconciles" },
@@ -1462,6 +1481,7 @@ export default defineEntity({
         field: "documentPresenceFilter",
         urlKey: "documents",
         kind: "presence",
+        derived: "hasDocuments",
         placeholder: "Filter by documents...",
         options: [
           { value: "has", label: "Has documents", meta: true },
@@ -1478,6 +1498,16 @@ export default defineEntity({
           { value: "has", label: "Has transactions", meta: true },
           { value: "none", label: "(none)", meta: true },
         ],
+      },
+      {
+        // An exact order id (the vendor's own), beside its presence filter.
+        columnId: "exactOrderId",
+        field: "orderId",
+        kind: "multiselect",
+        placeholder: "Filter by order id...",
+        urlOnly: true,
+        deriveSchema: true,
+        stored: { columns: ["orderId"] },
       },
       {
         columnId: "expenseTotalMin",

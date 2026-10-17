@@ -354,13 +354,17 @@ export type FinancialTransactionUpdateInput = z.infer<
   typeof financialTransactionUpdateInput
 >;
 
+/** The allocation-integrity gap, the one state its filter selects. */
+export const financialTransactionAllocationIntegrity = z.enum(["defect"]);
+
 export const financialTransactionFilterFields = {
   ...financialTransactionBaseFilterFields,
-  accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
   itemization: oneOrMany(financialTransactionItemization).optional(),
-  allocationIntegrity: oneOrMany(z.enum(["defect"])).optional(),
+  allocationIntegrity: oneOrMany(
+    financialTransactionAllocationIntegrity,
+  ).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),
 };
