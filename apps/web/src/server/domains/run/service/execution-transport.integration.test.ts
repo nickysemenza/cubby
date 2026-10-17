@@ -1,4 +1,5 @@
 import type { GatewayFetchRequest } from "@cubby/shared/ai/gateway-request";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -9,11 +10,20 @@ import {
   aiBudgetWindow,
   readAiBudget,
 } from "~/server/ai/budget";
+import {
+  ENTITY_EMBEDDING_FEATURE,
+  SEMANTIC_QUERY_FEATURE,
+} from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
+import {
+  embedTexts,
+  type EmbeddingPorts,
+} from "~/server/generic/embedding/service/semantic/embeddings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { ensureRun } from "../repo/ensure-run";
+import { resumeBudgetPausedImports } from "./ai-work";
 import { paidRunPreflight } from "./execution-transport";
 
 const chatRequest = (): GatewayFetchRequest => ({
@@ -71,7 +81,7 @@ describe("household AI budget at the paid transport boundary", () => {
   async function spend(
     runId: Awaited<ReturnType<typeof setup>>,
     usd: number,
-    options: { feature?: string; createdAt?: Date } = {},
+    options: { feature?: string; model?: string; createdAt?: Date } = {},
   ) {
     await getDb(ctx.db)
       .insert(aiUsage)
@@ -79,7 +89,7 @@ describe("household AI budget at the paid transport boundary", () => {
         runId,
         feature: options.feature ?? "purchase_import_agent",
         provider: "openai",
-        model: "gpt-6-luna",
+        model: options.model ?? "gpt-6-luna",
         operation: "agent.generation",
         durationMs: 1,
         chargedCost: usd,
@@ -95,16 +105,25 @@ describe("household AI budget at the paid transport boundary", () => {
         .where(eq(run.id, runId))
     )[0];
 
-  it("refuses paid chat once the window is spent and stops the import Run", async () => {
+  it("refuses paid chat once the window is spent and pauses the import Run for the next window", async () => {
     const runId = await setup("mail_import");
     await spend(runId, AI_BUDGET_LIMIT_USD);
     await expect(
       paidRunPreflight(ctx.db, runId, "purchase_import_agent")(chatRequest()),
     ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
     expect(await status(runId)).toEqual({
-      status: "needs_review",
+      status: "paused_auth",
       failureCode: "execution_limit",
     });
+    // Still spent: recovery leaves it waiting.
+    expect(await resumeBudgetPausedImports(ctx.db)).toBe(0);
+    await getDb(ctx.db)
+      .update(aiUsage)
+      .set({ createdAt: new Date(aiBudgetWindow().start.getTime() - 1) })
+      .where(eq(aiUsage.runId, runId));
+    expect(await resumeBudgetPausedImports(ctx.db)).toBe(1);
+    expect((await status(runId))?.failureCode).not.toBe("execution_limit");
+    expect((await status(runId))?.status).not.toBe("paused_auth");
   });
 
   it("pauses a reclassification Run for recovery in a later window", async () => {
@@ -138,6 +157,10 @@ describe("household AI budget at the paid transport boundary", () => {
       createdAt: new Date(window.start.getTime() - 1),
     });
     await spend(runId, 5, { feature: "mailbox-relevance" });
+    await spend(runId, 5, {
+      feature: "field-suggestion",
+      model: "typesafe/jev",
+    });
     await spend(runId, 0.25);
     expect((await readAiBudget(ctx.db)).spentUsd).toBeCloseTo(0.25);
     await paidRunPreflight(
@@ -145,6 +168,39 @@ describe("household AI budget at the paid transport boundary", () => {
       runId,
       "purchase_import_agent",
     )(chatRequest());
+  });
+
+  it("budgets background embedding indexing but not interactive search queries", async () => {
+    const runId = await setup("mail_import");
+    await spend(runId, AI_BUDGET_LIMIT_USD);
+    let transmissions = 0;
+    const ports: EmbeddingPorts = {
+      fetchFor: () => async () => {
+        transmissions += 1;
+        return Response.json({ data: [{ index: 0, embedding: [0.5] }] });
+      },
+      configured: () => true,
+      vectorStore: fromPartial({}),
+      config: () => ({
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1,
+      }),
+    };
+    await expect(
+      embedTexts(
+        ["Synthetic kettle"],
+        { db: ctx.db, runId, feature: ENTITY_EMBEDDING_FEATURE.feature },
+        ports,
+      ),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    expect(transmissions).toBe(0);
+    await embedTexts(
+      ["Synthetic kettle"],
+      { db: ctx.db, runId, feature: SEMANTIC_QUERY_FEATURE.feature },
+      ports,
+    );
+    expect(transmissions).toBe(1);
   });
 
   it("refuses paid work for a Run that is no longer executable", async () => {

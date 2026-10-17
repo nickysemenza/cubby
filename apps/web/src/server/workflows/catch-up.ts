@@ -69,6 +69,9 @@ export async function recoverMissedWork(
   await (
     await import("~/server/domains/run/service/ai-work")
   ).recoverManualAiWork(db);
+  await (
+    await import("~/server/domains/run/service/ai-work")
+  ).resumeBudgetPausedImports(db);
   const coordinators = getPurchaseImportRunAgentNamespace();
   const [
     image,

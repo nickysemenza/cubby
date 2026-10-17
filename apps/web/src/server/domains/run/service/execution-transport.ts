@@ -7,7 +7,11 @@ import {
 } from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
 
-import { AiBudgetExhaustedError, assertAiBudget } from "~/server/ai/budget";
+import {
+  AiBudgetExhaustedError,
+  aiBudgetExemptModel,
+  assertAiBudget,
+} from "~/server/ai/budget";
 import type { Database } from "~/server/db";
 import {
   assertSelectedMailSources,
@@ -112,9 +116,7 @@ export function paidRunPreflight(
     // Closed-set decision models are classification: never budgeted.
     if (
       request.endpoint.startsWith("run/") &&
-      ["typesafe/jev", "@cf/cloudflare/clef"].includes(
-        workersAiModel(request.endpoint),
-      )
+      aiBudgetExemptModel(workersAiModel(request.endpoint))
     )
       return;
     try {

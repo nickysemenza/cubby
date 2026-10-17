@@ -355,6 +355,14 @@ const aiBudgetSpent = async (db: Database) => {
   return budget.spentUsd >= budget.limitUsd;
 };
 
+/** Budget-paused agent imports resume once the current window has room. */
+export async function resumeBudgetPausedImports(db: Database) {
+  if (await aiBudgetSpent(db)) return 0;
+  return (
+    await import("~/server/domains/purchase-import/repo/run-service")
+  ).redispatchBudgetPausedImports(db);
+}
+
 export async function recoverManualAiWork(
   db: Database,
   launcher: WorkflowLauncher = productionWorkflowLauncher,

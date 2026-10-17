@@ -5,9 +5,10 @@ import { expect, it } from "vitest";
 import { migrateDatabase } from "./db-migrate";
 
 // Retiring execution approvals must keep approval-root Runs and their receipts
-// as history, strip only the stale reference keys strict inputs now refuse, and
-// close unfinished Vendor-history passes so none resumes or holds the
-// one-active-discovery slot. Completed history and unrelated input survive.
+// as history, strip only the stale reference keys strict inputs now refuse,
+// close unfinished discovery passes so none resumes under a retired scope or
+// holds the one-active-discovery slot, and drop legacy Vendor-name queries from
+// mailbox coverage without moving history or other query positions.
 it("strips approval references and retires unfinished Vendor history across the migration", async () => {
   return withMigrationDatabase(async (client) => {
     await migrateDatabase(drizzle(client), {
@@ -87,6 +88,56 @@ it("strips approval references and retires unfinished Vendor history across the 
         vendorHistory: { generation: "finished", resolvedAt: null },
       },
     );
+    await insertRun(
+      "00000000-0000-4000-8000-0000000000a5",
+      "RUN-6P7Q",
+      "mail_discovery",
+      "running",
+      {
+        mailboxId: "synthetic-second-mailbox",
+        scopedQueries: [],
+        executionPolicy: "classification_only",
+      },
+    );
+    const position = { pageToken: null, completed: false };
+    const history = {
+      historyId: "110",
+      pageToken: "synthetic-history-page",
+      targetHistoryId: "120",
+    };
+    await client.query(
+      `INSERT INTO "MailboxCursor" ("ledgerPartyId","mailboxId",coverage)
+        VALUES ($1,'synthetic-mailbox',$2)`,
+      [
+        party,
+        JSON.stringify({
+          version: 1,
+          baselineHistoryId: "100",
+          broad: position,
+          scoped: [
+            {
+              key: "vendor:00000000-0000-4000-8000-0000000000c1",
+              query: '{"Synthetic Shop" from:orders@shop.example.test}',
+              ...position,
+            },
+            {
+              key: "charge:00000000-0000-4000-8000-0000000000c2",
+              query: '"SYNTHETIC SHOP"',
+              pageToken: "synthetic-charge-page",
+              completed: false,
+            },
+            {
+              key: "vendor:00000000-0000-4000-8000-0000000000c1:from:orders@shop.example.test",
+              query: "from:orders@shop.example.test",
+              pageToken: null,
+              completed: true,
+            },
+          ],
+          history,
+          nextLane: "history",
+        }),
+      ],
+    );
     await client.query(
       `INSERT INTO "AiEvaluation" ("runId","workKey",feature,target,provenance,snapshot,"executionKind")
         VALUES ($1,'synthetic-work','mailbox-relevance','{}','{}',$2,'mail_reclassify')`,
@@ -133,7 +184,7 @@ it("strips approval references and retires unfinished Vendor history across the 
     );
     expect(runs["RUN-4E5F"]).toMatchObject({
       status: "completed",
-      failureCode: "vendor_history_retired",
+      failureCode: "discovery_policy_replaced",
       input: {
         mailboxId: "synthetic-mailbox",
         scopedQueries: [],
@@ -145,6 +196,27 @@ it("strips approval references and retires unfinished Vendor history across the 
       status: "completed",
       failureCode: null,
       input: { mailboxId: "synthetic-mailbox", scopedQueries: [] },
+    });
+    expect(runs["RUN-6P7Q"]).toMatchObject({
+      status: "completed",
+      failureCode: "discovery_policy_replaced",
+    });
+    const [cursor] = (
+      await client.query(`SELECT coverage FROM "MailboxCursor"`)
+    ).rows;
+    expect(cursor.coverage).toMatchObject({
+      baselineHistoryId: "100",
+      history,
+      nextLane: "history",
+    });
+    expect(
+      cursor.coverage.scoped.map((query: { key: string }) => query.key),
+    ).toEqual([
+      "charge:00000000-0000-4000-8000-0000000000c2",
+      "vendor:00000000-0000-4000-8000-0000000000c1:from:orders@shop.example.test",
+    ]);
+    expect(cursor.coverage.scoped[0]).toMatchObject({
+      pageToken: "synthetic-charge-page",
     });
     expect(
       (await client.query(`SELECT snapshot FROM "AiEvaluation"`)).rows,

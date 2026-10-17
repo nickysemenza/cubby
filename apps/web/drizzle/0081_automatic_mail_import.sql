@@ -7,13 +7,29 @@ UPDATE "AiEvaluation"
 SET "snapshot" = "snapshot" - 'executionAuthorization' - 'authorizationHistory' - 'minimumBudgetMicroUSD'
 WHERE jsonb_typeof("snapshot") = 'object'
   AND ("snapshot" ?| ARRAY['executionAuthorization', 'authorizationHistory', 'minimumBudgetMicroUSD']);--> statement-breakpoint
--- Per-Vendor history passes are replaced by automatic targeted discovery.
--- Close unfinished ones so none resumes or holds the one-active-discovery slot.
+-- Discovery now imports under the Mail import switch. Close unfinished
+-- passes (classification-only or per-Vendor history) so none resumes under its
+-- retired scope or holds the one-active-discovery slot; the next scheduled
+-- pass restarts from the mailbox cursor.
 UPDATE "Run"
 SET "status" = 'completed', "endedAt" = COALESCE("endedAt", now()),
-  "failureCode" = 'vendor_history_retired',
-  "dispatchError" = 'Vendor history was replaced by automatic Mail import.'
-WHERE "purpose" = 'mail_discovery' AND "input" ? 'vendorHistory'
+  "failureCode" = 'discovery_policy_replaced',
+  "dispatchError" = 'Discovery was replaced by automatic Mail import; the next scheduled pass restarts from the mailbox cursor.'
+WHERE "purpose" = 'mail_discovery'
   AND "status" NOT IN ('completed', 'failed', 'dispatch_failed');--> statement-breakpoint
 UPDATE "Run" SET "input" = "input" - 'vendorHistory'
-WHERE "purpose" = 'mail_discovery' AND "input" ? 'vendorHistory';
+WHERE "purpose" = 'mail_discovery' AND "input" ? 'vendorHistory';--> statement-breakpoint
+-- Legacy `vendor:<id>` scoped queries searched the Vendor name as free text.
+-- Drop them from mailbox coverage; literal sender/domain queries replace them
+-- on the next pass. History positions and other scoped queries are kept.
+UPDATE "MailboxCursor"
+SET "coverage" = jsonb_set("coverage", '{scoped}', COALESCE((
+  SELECT jsonb_agg(query ORDER BY position)
+  FROM jsonb_array_elements("coverage"->'scoped') WITH ORDINALITY AS scoped(query, position)
+  WHERE query->>'key' !~ '^vendor:[^:]+$'
+), '[]'::jsonb))
+WHERE jsonb_typeof("coverage"->'scoped') = 'array'
+  AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements("coverage"->'scoped') AS scoped(query)
+    WHERE query->>'key' ~ '^vendor:[^:]+$'
+  );

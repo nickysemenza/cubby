@@ -1,4 +1,5 @@
 import type { AiBudgetStatus } from "@cubby/schemas/mail-import-settings";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { and, gte, isNull, notInArray, sql } from "drizzle-orm";
 
 import { roundTo } from "~/lib/round-to";
@@ -15,12 +16,19 @@ import {
 export const AI_BUDGET_LIMIT_USD = 1;
 const WINDOW_MS = 6 * 60 * 60 * 1000;
 
-/** Classification never waits on the allowance and never counts against it. */
+/**
+ * Classification never waits on the allowance and never counts against it:
+ * mail triage and relevance, and every closed-set decision model call.
+ * Admission (`paidRunPreflight`) and accounting (`readAiBudget`) share these.
+ */
 const EXEMPT_FEATURES: readonly string[] = [
   MAILBOX_TRIAGE_FEATURE.feature,
   MAILBOX_RELEVANCE_FEATURE.feature,
 ];
+const EXEMPT_MODELS: readonly string[] = supportedDecisionModelSchema.options;
 const aiBudgetExempt = (feature: string) => EXEMPT_FEATURES.includes(feature);
+export const aiBudgetExemptModel = (model: string) =>
+  EXEMPT_MODELS.includes(model);
 
 export class AiBudgetExhaustedError extends Error {
   constructor(readonly status: AiBudgetStatus) {
@@ -56,6 +64,7 @@ export async function readAiBudget(
         gte(aiUsage.createdAt, window.start),
         isNull(aiUsage.deletedAt),
         notInArray(aiUsage.feature, [...EXEMPT_FEATURES]),
+        notInArray(aiUsage.model, [...EXEMPT_MODELS]),
       ),
     );
   return {

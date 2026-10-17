@@ -51,8 +51,10 @@ export async function pauseExecutionRun(
   runId: RunId,
   message: string,
 ): Promise<void> {
-  // Recovery resumes these purposes once a later window has budget.
-  const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep})`;
+  // Recovery resumes these purposes once a later window has budget: AI work
+  // through `recoverManualAiWork`, agent imports through
+  // `resumeBudgetPausedImports` (run/service/ai-work.ts).
+  const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory})`;
   await unwrapDb(db)
     .update(run)
     .set({

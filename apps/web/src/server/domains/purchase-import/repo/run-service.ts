@@ -998,6 +998,42 @@ export async function resumeAuthorizedRuns(
   });
 }
 
+/**
+ * Redispatch agent imports a spent AI budget window paused; the caller checks
+ * the current window has room. Each resumed Run gets a fresh dispatch generation.
+ */
+export async function redispatchBudgetPausedImports(db: Database) {
+  const resumed = await getDb(db)
+    .update(runTable)
+    .set({
+      status: "running",
+      dispatchEventId: sql`gen_random_uuid()`,
+      dispatchError: null,
+      failureCode: null,
+      endedAt: null,
+      coordinatorStartedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(runTable.status, "paused_auth"),
+        eq(runTable.failureCode, "execution_limit"),
+        inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+        notDeleted(runTable),
+      ),
+    )
+    .returning({
+      id: runTable.id,
+      purpose: runTable.purpose,
+      eventId: runTable.dispatchEventId,
+    });
+  const { dispatchStartedRun } = await import("./dispatch");
+  for (const run of resumed)
+    if (run.eventId)
+      await dispatchStartedRun(db, { ...run, eventId: run.eventId });
+  return resumed.length;
+}
+
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
   return getDb(db)
     .update(runTable)
